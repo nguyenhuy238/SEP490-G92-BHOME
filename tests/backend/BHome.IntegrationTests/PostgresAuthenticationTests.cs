@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using Npgsql;
 
 namespace BHome.IntegrationTests;
 
@@ -168,20 +169,53 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
 
 public sealed class AuthenticationDatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    private PostgreSqlContainer? database;
+    private string? nativeAdmin;
+    private string? nativeDatabase;
     public ApiFactory Factory { get; } = new();
 
     public async Task InitializeAsync()
     {
-        await database.StartAsync();
-        Factory.ConnectionString = database.GetConnectionString();
+        // Opt in only for a dedicated temporary local cluster, never the developer's bhome database.
+        var native = Environment.GetEnvironmentVariable("BHOME_AUTH_TEST_POSTGRES_ADMIN");
+        if (string.IsNullOrWhiteSpace(native))
+        {
+            database = new PostgreSqlBuilder("postgres:16-alpine").Build();
+            await database.StartAsync();
+            Factory.ConnectionString = database.GetConnectionString();
+        }
+        else
+        {
+            var settings = new NpgsqlConnectionStringBuilder(native);
+            if (settings.Host != "127.0.0.1" || settings.Port == 5432 || settings.Database != "postgres" ||
+                settings.Username != "bhome_test_runner")
+                throw new InvalidOperationException("Native auth tests require a dedicated loopback test cluster and test runner role.");
+            nativeAdmin = native;
+            nativeDatabase = "bhome_auth_test_" + Guid.NewGuid().ToString("N");
+            await using var connection = new NpgsqlConnection(nativeAdmin);
+            await connection.OpenAsync();
+            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{nativeDatabase}\"", connection);
+            await create.ExecuteNonQueryAsync();
+            settings.Database = nativeDatabase;
+            Factory.ConnectionString = settings.ConnectionString;
+        }
         await using var scope = Factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();
     }
 
     public async Task DisposeAsync()
     {
-        await Factory.DisposeAsync();
-        await database.DisposeAsync();
+        try { await Factory.DisposeAsync(); }
+        finally
+        {
+            if (database is not null) await database.DisposeAsync();
+            if (nativeAdmin is not null && nativeDatabase is not null)
+            {
+                await using var connection = new NpgsqlConnection(nativeAdmin);
+                await connection.OpenAsync();
+                await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{nativeDatabase}\" WITH (FORCE)", connection);
+                await drop.ExecuteNonQueryAsync();
+            }
+        }
     }
 }

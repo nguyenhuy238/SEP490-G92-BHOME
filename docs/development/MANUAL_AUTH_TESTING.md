@@ -1,4 +1,4 @@
-# Test JWT Authentication bằng Postman
+# Test JWT và Refresh Token bằng Postman
 
 Phạm vi FE-02 / UC-01/02, GBR-01/02, Security NFR. Chỉ dùng tài khoản tổng hợp.
 
@@ -49,8 +49,32 @@ Không gửi request sai password lặp nhiều lần: năm lần sai có thể 
 Nếu Postman báo chứng chỉ local chưa được tin cậy, cấu hình trust hoặc tạm tắt SSL certificate
 verification trong Settings của request localhost. Không thay cấu hình bảo mật server.
 
-## 4. Giới hạn
+## 4. Refresh Token: request 08–23 trong cùng collection
 
-Collection đơn giản kiểm tra login/validation/Bearer/logout; không thay thế backend tests về
+Vẫn dùng **một file**, không environment/biến và không tự lưu token. Mỗi request có hướng dẫn
+trong Description. Bấm Send theo thứ tự và tự dán các token:
+
+| Request | Thao tác                                                                           | Kỳ vọng                         |
+| ------- | ---------------------------------------------------------------------------------- | ------------------------------- |
+| 08      | Login mới, giữ accessToken A0 và refreshToken R0                                   | 200                             |
+| 09      | Body refreshToken = R0; giữ riêng token cũ R0 và token mới A1/R1                   | 200; sessionExpiresAt không đổi |
+| 10      | Bearer = A1                                                                        | 200                             |
+| 11      | Refresh lại đúng R0 cũ đã dùng                                                     | 401; cả session bị thu hồi      |
+| 12–13   | Thử A1 và R1 sau reuse                                                             | 401                             |
+| 14–15   | Refresh token không tồn tại hoặc Body {}                                           | 401                             |
+| 16–18   | Login mới → logout bằng access token mới → refresh bằng token của phiên vừa logout | 200 → 204 → 401                 |
+| 19–20   | Login hai lần cùng account, giữ token của session A và B riêng                     | 200                             |
+| 21      | Logout-all bằng access token B                                                     | 204                             |
+| 22–23   | Refresh bằng token A rồi B                                                         | 401                             |
+
+Refresh dùng **No Auth**, không dán access token vào Body refresh. Mỗi lần refresh thành công
+phải thay cả accessToken và refreshToken. Không dùng lại R0 ngoài request cố ý thử reuse.
+Logout-all ảnh hưởng mọi phiên của account TEST, bao gồm phiên UI/Postman khác của account đó.
+Phiên tối đa 7 ngày từ login; refresh không làm bắt đầu lại thời hạn 7 ngày. Không chờ 7 ngày
+trong Postman; ranh giới expiry được kiểm tra bằng clock kiểm thử trong backend.
+
+### Phạm vi chưa thay thế backend tests
+
+Collection đơn giản kiểm tra login/validation/Bearer/refresh/reuse/logout; không thay thế backend tests về
 token sai issuer/audience/expiry/algorithm, concurrency, database state changes hay Staff Location scope.
 Các collection/environment và bảng đối chiếu Postman cũ đã được thay bằng file đơn giản này.

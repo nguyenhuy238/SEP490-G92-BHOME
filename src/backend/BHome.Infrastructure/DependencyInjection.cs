@@ -40,8 +40,10 @@ public static class DependencyInjection
         }).AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<BHomeDbContext>().AddSignInManager().AddDefaultTokenProviders();
         services.AddSingleton(TimeProvider.System);
         services.AddOptions<SessionOptions>().Bind(configuration.GetSection("Sessions"))
-            .Validate(o => o.RefreshTokenDays is >= 1 and <= 30 && o.AbsoluteLifetimeDays is >= 1 and <= 30 &&
-                o.PasswordResetMinutes is >= 1 and <= 60, "Session lifetimes are outside supported bounds.").ValidateOnStart();
+            .Validate(o => o.RefreshTokenDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
+                o.AbsoluteLifetimeDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
+                o.PasswordResetMinutes is >= 1 and <= 60,
+                "Refresh/session lifetimes must be 1-7 days; password reset lifetime must be 1-60 minutes.").ValidateOnStart();
         services.AddOptions<DataProtectionTokenProviderOptions>().Configure<IOptions<SessionOptions>>((o, s) =>
             o.TokenLifespan = TimeSpan.FromMinutes(s.Value.PasswordResetMinutes));
 

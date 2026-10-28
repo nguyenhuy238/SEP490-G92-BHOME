@@ -166,3 +166,85 @@ it('preserves a session on a temporary refresh outage instead of pretending logo
   await expect(client.refresh()).rejects.toMatchObject({ status: 503 });
   expect(client.token).toBe('access-one');
 });
+
+it('stops after one refresh and one retry when the protected API still returns 401', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(json(session))
+    .mockResolvedValueOnce(json({}, 401))
+    .mockResolvedValueOnce(
+      json({ ...session, accessToken: 'access-two', refreshToken: 'refresh-two' }),
+    )
+    .mockResolvedValueOnce(json({}, 401));
+  vi.stubGlobal('fetch', fetchMock);
+  const client = new SessionClient('https://api.example.invalid', 'mobile');
+  await client.login('synthetic@example.invalid', 'test-password');
+  const api = createApiClient(
+    'https://api.example.invalid',
+    () => client.token,
+    client.clear,
+    client.refresh,
+  );
+  await expect(api('/api/v1/session')).rejects.toMatchObject({ status: 401 });
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(client.session).toBeNull();
+});
+
+it('does not retry an invalid refresh token or the original request after refresh returns 401', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(json(session))
+    .mockResolvedValueOnce(json({}, 401))
+    .mockResolvedValueOnce(json({}, 401));
+  vi.stubGlobal('fetch', fetchMock);
+  const client = new SessionClient('https://api.example.invalid', 'mobile');
+  await client.login('synthetic@example.invalid', 'test-password');
+  const api = createApiClient(
+    'https://api.example.invalid',
+    () => client.token,
+    client.clear,
+    client.refresh,
+  );
+  await expect(api('/api/v1/session')).rejects.toMatchObject({ status: 401 });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(client.session).toBeNull();
+});
+
+it('preserves credentials and does not retry the protected request on a refresh outage', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(json(session))
+    .mockResolvedValueOnce(json({}, 401))
+    .mockResolvedValueOnce(json({}, 503));
+  vi.stubGlobal('fetch', fetchMock);
+  const client = new SessionClient('https://api.example.invalid', 'mobile');
+  await client.login('synthetic@example.invalid', 'test-password');
+  const api = createApiClient(
+    'https://api.example.invalid',
+    () => client.token,
+    client.clear,
+    client.refresh,
+  );
+  await expect(api('/api/v1/session')).rejects.toMatchObject({ status: 503 });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(client.token).toBe('access-one');
+});
+
+it('never refreshes or clears the session for a 403 permission denial', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(json(session))
+    .mockResolvedValueOnce(json({}, 403));
+  vi.stubGlobal('fetch', fetchMock);
+  const client = new SessionClient('https://api.example.invalid', 'mobile');
+  await client.login('synthetic@example.invalid', 'test-password');
+  const api = createApiClient(
+    'https://api.example.invalid',
+    () => client.token,
+    client.clear,
+    client.refresh,
+  );
+  await expect(api('/api/v1/session')).rejects.toMatchObject({ status: 403 });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(client.token).toBe('access-one');
+});

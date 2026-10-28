@@ -62,11 +62,18 @@ expiry is enforced without skew. Old JWTs lacking session/stamp require a new lo
 
 Refresh tokens have 256 random bits and only SHA-256 hashes are persisted. A session ID is its token
 family ID. Refresh expiry defaults to 7 days and never exceeds the 7-day absolute session lifetime.
+The approved policy permits configuration only within 1-7 days; startup rejects longer or zero
+refresh/session lifetimes. The session deadline is fixed at login, not extended by rotation.
 Every successful refresh consumes the old token in a PostgreSQL transaction with a user-row lock;
 reuse revokes that family, including the access JWT. Concurrent reuse has at most one success and
 then revokes the family. Clients must serialize refresh, rather than retrying an old refresh token
 after an ambiguous network failure. Client code coalesces requests; supported browsers additionally
 use Web Locks for cookie changes across tabs. Other browsers need deployment/browser validation.
+
+Client behavior remains reactive: after a protected request returns 401, refresh once and retry
+the original request at most once. A denied refresh (401) clears the local session; a temporary
+network/503 error preserves it and surfaces the failure. A 403 permission denial never triggers
+refresh. See [refresh implementation and verification](../development/REFRESH_TOKEN_SESSIONS.md).
 
 Web opts in using `X-BHome-Client: web` on auth POSTs and browser `credentials: include`. The server
 returns `refreshToken: null` and a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,
