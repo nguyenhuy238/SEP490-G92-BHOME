@@ -10,6 +10,16 @@ public sealed class ResourceAccessTests
     private readonly IStaffLocationAccess assignments = Substitute.For<IStaffLocationAccess>();
 
     [Fact]
+    public async Task CancelledRequestDoesNotEvaluateOrGrantScope()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new ResourceAccess(user, assignments)
+            .CanAccessAsync(new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), null), [Roles.Staff], cancellation.Token));
+        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default, default);
+    }
+
+    [Fact]
     public async Task AnonymousIsDenied()
     {
         var access = new ResourceAccess(user, assignments);

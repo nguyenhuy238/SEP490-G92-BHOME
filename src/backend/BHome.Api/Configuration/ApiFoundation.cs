@@ -4,6 +4,8 @@ using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi.Models;
+using System.Threading.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace BHome.Api.Configuration;
 
@@ -13,6 +15,32 @@ public static class ApiFoundation
     {
         services.AddControllers();
         services.AddHttpContextAccessor();
+        services.AddScoped<AuthTransportFilter>();
+        services.AddOptions<AuthRateLimitOptions>().Bind(configuration.GetSection("AuthRateLimit"))
+            .Validate(o => o.PermitLimit is >= 1 and <= 10000 && o.WindowSeconds is >= 1 and <= 3600,
+                "Auth rate limit must be 1-10000 requests per 1-3600 seconds.").ValidateOnStart();
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("Auth", context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = context.RequestServices.GetRequiredService<IOptions<AuthRateLimitOptions>>().Value.PermitLimit,
+                    Window = TimeSpan.FromSeconds(context.RequestServices.GetRequiredService<IOptions<AuthRateLimitOptions>>().Value.WindowSeconds),
+                    QueueLimit = 0
+                }));
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry))
+                    context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retry.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                await context.HttpContext.RequestServices.GetRequiredService<IProblemDetailsService>().WriteAsync(new ProblemDetailsContext
+                {
+                    HttpContext = context.HttpContext,
+                    ProblemDetails = new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = 429, Title = "Too many requests." }
+                });
+            };
+        });
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddAuthorization(options =>
         {
@@ -23,8 +51,8 @@ public static class ApiFoundation
         {
             var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
             if (origins.Length > 0) policy.WithOrigins(origins).WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
-                .WithHeaders("Content-Type", "Authorization", "X-Correlation-ID", "Idempotency-Key")
-                .WithExposedHeaders("X-Correlation-ID");
+                .WithHeaders("Content-Type", "Authorization", "X-Correlation-ID", "Idempotency-Key", "X-BHome-Client")
+                .WithExposedHeaders("X-Correlation-ID").AllowCredentials();
         }));
         services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
         {

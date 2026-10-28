@@ -5,6 +5,7 @@ import { MobileLayout } from '../layouts/MobileLayout';
 import { OwnerHome } from '../features/owner/OwnerHome';
 import { StaffHome } from '../features/staff/StaffHome';
 import { TenantHome } from '../features/tenant/TenantHome';
+import { LoginPanel } from '@bhome/client-core/LoginPanel.tsx';
 
 export function MobileRoutes() {
   return (
@@ -16,7 +17,7 @@ export function MobileRoutes() {
             <main>
               <h1>BHOME trên thiết bị di động</h1>
               <p>Dành cho chủ nhà, nhân viên và người thuê.</p>
-              <p>Chức năng đăng nhập sẽ được bổ sung trong giai đoạn tiếp theo.</p>
+              <LoginPanel />
             </main>
           }
         />

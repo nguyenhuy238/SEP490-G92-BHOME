@@ -53,6 +53,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
     [InlineData("no-role")]
     [InlineData("two-factor")]
     [InlineData("unsupported-role")]
+    [InlineData("inactive")]
     public async Task UnsupportedOrFailedSignInReturnsSameGenericDenial(string scenario)
     {
         var user = await CreateUserAsync(scenario == "no-role" ? null : Roles.Staff);
@@ -65,6 +66,11 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
                 Assert.True((await users.SetLockoutEndDateAsync(stored, DateTimeOffset.UtcNow.AddMinutes(15))).Succeeded);
             if (scenario == "two-factor")
                 Assert.True((await users.SetTwoFactorEnabledAsync(stored, true)).Succeeded);
+            if (scenario == "inactive")
+            {
+                stored.IsActive = false;
+                Assert.True((await users.UpdateAsync(stored)).Succeeded);
+            }
             if (scenario == "unsupported-role")
             {
                 var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();

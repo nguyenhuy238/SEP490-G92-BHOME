@@ -7,7 +7,8 @@ namespace BHome.Application.UnitTests.IdentityAccess;
 public sealed class LoginServiceTests
 {
     private readonly ICredentialVerifier credentials = Substitute.For<ICredentialVerifier>();
-    private readonly IAccessTokenIssuer tokens = Substitute.For<IAccessTokenIssuer>();
+    private readonly IAuthenticationSessions sessions = Substitute.For<IAuthenticationSessions>();
+    private readonly ISecurityAudit audit = Substitute.For<ISecurityAudit>();
 
     [Fact]
     public async Task VerifiedIdentityIssuesTokenWithOnlyStoredDistinctRoles()
@@ -16,16 +17,16 @@ public sealed class LoginServiceTests
         var expires = DateTimeOffset.UtcNow.AddMinutes(15);
         credentials.VerifyAsync("staff", "test-password", Arg.Any<CancellationToken>())
             .Returns(new VerifiedIdentity(id, [Roles.Staff, Roles.Staff]));
-        tokens.Issue(id, Arg.Any<IReadOnlyCollection<string>>()).Returns(new AccessToken("verified-token", expires));
+        sessions.CreateAsync(Arg.Any<VerifiedIdentity>(), null, Arg.Any<CancellationToken>()).Returns(new LoginResult(id, [Roles.Staff], "verified-token", expires, Guid.NewGuid(), "test-refresh", expires.AddDays(7)));
 
-        var result = await new LoginService(credentials, tokens).LoginAsync("staff", "test-password");
+        var result = await new LoginService(credentials, sessions, audit).LoginAsync("staff", "test-password");
 
         Assert.NotNull(result);
         Assert.Equal(id, result.UserId);
         Assert.Equal([Roles.Staff], result.Roles);
         Assert.Equal("verified-token", result.AccessToken);
         Assert.Equal(expires, result.ExpiresAt);
-        tokens.Received(1).Issue(id, Arg.Is<IReadOnlyCollection<string>>(roles => roles.SequenceEqual(new[] { Roles.Staff })));
+        await sessions.Received(1).CreateAsync(Arg.Is<VerifiedIdentity>(identity => identity.UserId == id && identity.Roles.All(role => role == Roles.Staff)), null, Arg.Any<CancellationToken>());
     }
 
     [Theory]
@@ -37,9 +38,9 @@ public sealed class LoginServiceTests
     [InlineData("user", " ")]
     public async Task InvalidInputDoesNotVerifyCredentials(string? name, string? password)
     {
-        Assert.Null(await new LoginService(credentials, tokens).LoginAsync(name, password));
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync(name, password));
         await credentials.DidNotReceiveWithAnyArgs().VerifyAsync(default!, default!, default);
-        tokens.DidNotReceiveWithAnyArgs().Issue(default, default!);
+        await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
     [Theory]
@@ -47,7 +48,7 @@ public sealed class LoginServiceTests
     [InlineData(false)]
     public async Task OversizedInputDoesNotVerifyCredentials(bool oversizedName)
     {
-        Assert.Null(await new LoginService(credentials, tokens).LoginAsync(
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync(
             oversizedName ? new string('u', LoginService.MaxUserNameLength + 1) : "user",
             oversizedName ? "password" : new string('p', LoginService.MaxPasswordLength + 1)));
         await credentials.DidNotReceiveWithAnyArgs().VerifyAsync(default!, default!, default);
@@ -56,8 +57,8 @@ public sealed class LoginServiceTests
     [Fact]
     public async Task FailedVerificationNeverIssuesToken()
     {
-        Assert.Null(await new LoginService(credentials, tokens).LoginAsync("user", "wrong-password"));
-        tokens.DidNotReceiveWithAnyArgs().Issue(default, default!);
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync("user", "wrong-password"));
+        await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
     [Theory]
@@ -76,8 +77,8 @@ public sealed class LoginServiceTests
         };
         credentials.VerifyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new VerifiedIdentity(scenario == "empty-id" ? Guid.Empty : Guid.NewGuid(), roles));
-        Assert.Null(await new LoginService(credentials, tokens).LoginAsync("user", "password"));
-        tokens.DidNotReceiveWithAnyArgs().Issue(default, default!);
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync("user", "password"));
+        await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
     [Fact]
@@ -86,9 +87,9 @@ public sealed class LoginServiceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new LoginService(credentials, tokens).LoginAsync("user", "password", cancellation.Token));
+            new LoginService(credentials, sessions, audit).LoginAsync("user", "password", cancellation.Token));
         await credentials.DidNotReceiveWithAnyArgs().VerifyAsync(default!, default!, default);
-        tokens.DidNotReceiveWithAnyArgs().Issue(default, default!);
+        await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
     [Fact]
@@ -101,7 +102,7 @@ public sealed class LoginServiceTests
             return new VerifiedIdentity(Guid.NewGuid(), [Roles.Owner]);
         });
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new LoginService(credentials, tokens).LoginAsync("user", "password", cancellation.Token));
-        tokens.DidNotReceiveWithAnyArgs().Issue(default, default!);
+            new LoginService(credentials, sessions, audit).LoginAsync("user", "password", cancellation.Token));
+        await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 }

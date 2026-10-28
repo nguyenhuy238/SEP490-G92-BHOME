@@ -37,7 +37,13 @@ public static class DependencyInjection
             options.User.RequireUniqueEmail = true;
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        }).AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<BHomeDbContext>().AddSignInManager();
+        }).AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<BHomeDbContext>().AddSignInManager().AddDefaultTokenProviders();
+        services.AddSingleton(TimeProvider.System);
+        services.AddOptions<SessionOptions>().Bind(configuration.GetSection("Sessions"))
+            .Validate(o => o.RefreshTokenDays is >= 1 and <= 30 && o.AbsoluteLifetimeDays is >= 1 and <= 30 &&
+                o.PasswordResetMinutes is >= 1 and <= 60, "Session lifetimes are outside supported bounds.").ValidateOnStart();
+        services.AddOptions<DataProtectionTokenProviderOptions>().Configure<IOptions<SessionOptions>>((o, s) =>
+            o.TokenLifespan = TimeSpan.FromMinutes(s.Value.PasswordResetMinutes));
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.Section))
             .Validate(o => Encoding.UTF8.GetByteCount(o.SigningKey) >= 32 &&
@@ -67,10 +73,30 @@ public static class DependencyInjection
                     NameClaimType = "sub",
                     RoleClaimType = "role"
                 };
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var principal = context.Principal!;
+                        var stamp = principal.FindFirst("sstamp")?.Value;
+                        if (!Guid.TryParse(principal.FindFirst("sub")?.Value, out var userId) || userId == Guid.Empty ||
+                            !Guid.TryParse(principal.FindFirst("sid")?.Value, out var sessionId) || sessionId == Guid.Empty ||
+                            string.IsNullOrWhiteSpace(stamp) || string.IsNullOrWhiteSpace(principal.FindFirst("jti")?.Value) ||
+                            !await context.HttpContext.RequestServices.GetRequiredService<IAuthenticationSessions>().ValidateAsync(
+                                new SessionIdentity(userId, sessionId, principal.FindAll("role").Select(x => x.Value).ToArray()),
+                                stamp, context.HttpContext.RequestAborted))
+                            context.Fail("Session is unavailable.");
+                    }
+                };
             });
         services.AddScoped<IAccessTokenIssuer, JwtTokenIssuer>();
         services.AddScoped<ICredentialVerifier, IdentityCredentialVerifier>();
         services.AddScoped<LoginService>();
+        services.AddScoped<IdentitySecurityStore>();
+        services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
+        services.AddScoped<IPasswordService, IdentityPasswordService>();
+        services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
+        services.AddScoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>();
         services.AddScoped<IStaffLocationAccess, UnconfiguredStaffLocationAccess>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();

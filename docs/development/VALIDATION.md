@@ -97,3 +97,80 @@ Both temporary API hosts were stopped. The HTTPS development certificate remains
 machine-wide trust change was made. Docker, existing MinIO and the new development database remain
 running. No real OCR/provider, client login UI, provisioning/activation, refresh or business-schema
 work is claimed complete. Latest Plan/SRS/SDS are absent; subsequent persistence remains blocked.
+
+## Authentication/session security completion — 28 October 2026
+
+Historical entries above describe their earlier snapshots. Reports 3/4 now exist and were checked.
+The current source, audit matrix, full file list, configuration/migration instructions and remaining
+blockers are documented in [AUTH_SECURITY_AUDIT.md](AUTH_SECURITY_AUDIT.md).
+
+Final checks: forced backend build 0 warnings/errors; 101 backend tests passed (1 Domain, 26
+Application, 74 Integration including real disposable PostgreSQL); 23 frontend tests passed; lint,
+strict TypeScript/Vite builds, changed-file formatting and model-drift checks passed. No test failed
+or skipped. NuGet vulnerable-package scan and npm production audit reported no current advisories.
+Owner retains a >500 kB bundle warning. New migrations were applied only to disposable test databases;
+local database metadata was queried read-only. No production/local-user schema update, commit, push,
+merge, branch switch or credential modification occurred. Browser HTTPS/native/provider/coverage/load
+checks remain NOT RUN. Location/tenancy models, real reset delivery, MFA and native secure persistence
+remain blocked as described in the audit; no full business compliance or production readiness claimed.
+
+## Native local Development configuration — 28 October 2026
+
+The user selected the existing native PostgreSQL server managed in pgAdmin 4. Read-only inspection
+verified localhost:5432, bhome, postgres, server 18.6, one initial migration, zero users/jobs and three
+fixed roles. Reused the valid credential from ignored .env.local without printing it; .env and
+.env.local now both use the native database and include the new auth options. Existing JWT/MinIO
+credentials and .env.compose remain intact. Secret-bearing files/backups are ignored by Git.
+
+Created an ignored custom-format backup, then applied only pending AuthenticationSessions migration
+using EF tooling. Verification: two applied migrations, 13 public tables, IsActive and security
+triggers present, zero users. The real default Start-Api launcher ran successfully in Development;
+HTTPS liveness/readiness 200, anonymous protected session 401, empty login input 400. Only loopback
+curl disabled certificate verification; machine trust remained unchanged. Temporary API host stopped.
+The earlier 101-test suite used PostgreSQL 16; native PostgreSQL 18.6 received migration/runtime smoke
+checks, not the entire suite. No application accounts, external integrations or native token storage
+were added. No password or connection-string secret was printed, tracked or copied into documentation.
+
+## Manual Postman/UI testing kit — 28 October 2026
+
+Added MANUAL_AUTH_TESTING.md, a Postman collection with 30 requests and an environment containing
+empty credentials, plus New-LocalTestUsers.ps1 and tools/BHome.LocalDevelopment. The local tool
+uses existing Identity hashing/roles and a transaction, requires Development + loopback + bhome,
+requires applied migrations, and refuses to change any existing name/password/role. Password is
+entered via secure prompt and passed in the invoking process only; no password is written to files
+or command-line arguments. This is an explicit test fixture tool, not production account provisioning.
+
+Verification: forced solution build zero warnings/errors; full backend suite **109 passed, 0 failed,
+0 skipped** (Domain 1, Application 26, Integration 82). Eight new tests cover local target guards,
+Identity hashing/roles, name collision without privilege escalation, weak password failure and
+transaction rollback of earlier users/audit on later email collision. Docker tests use disposable
+PostgreSQL 16 databases, never the native developer database. Existing API Docker build restores
+only API project, so the developer/test tool is not deployed with API.
+
+Parsed 30 Postman requests and compiled 73 script blocks; verified payload JSON escaping, empty
+secret templates and HTTPS loopback guard. Windows PowerShell 5 parsing passed after ensuring UTF-8
+BOM for Vietnamese prompt text. The real wrapper was tested with a synthetic secure prompt and a
+stubbed dotnet command, without database mutation. Native account creation is intentionally left to
+the user running the prompt and choosing their password; no synthetic users were seeded on native
+PostgreSQL in this preparation. Postman Desktop import/Send and real browser UI remain NOT RUN.
+No schema/API/provider changes in this follow-up. Manual guide notes HTTP Owner frontend versus
+HTTPS API cookie limitations, mobile memory-only sessions, and missing email/MFA/business models.
+
+## Pre-commit review — 28 October 2026
+
+Rechecked the current working tree, including the LocalDevelopment project now explicitly in the
+solution. Release restore/build passed with zero warnings/errors; Release tests passed **109/109**
+(Domain 1, Application 26, Integration 82), no skips/failures. Full solution `dotnet format
+--verify-no-changes --no-restore` passed. Frontend lint, 23 tests and all production builds passed
+with an explicit HTTPS test API URL. Example Docker Compose config and git diff whitespace checks
+passed. Postman secret fields are empty. An exact-match scan of changed text files against local
+DB/JWT/storage secret values found no matches; sensitive values were not printed. Environment files,
+backups and build outputs are ignored and untracked. This is not a comprehensive external secret scan.
+
+**Outstanding pre-existing CI check:** `npm run format:check` fails on AGENTS.md. The file is
+unchanged from HEAD; piping the committed HEAD version through Prettier reproduces exit code 1.
+No unrelated formatting or ignore-rule bypass was applied. Changed/new auth documentation and
+frontend/Postman files are formatted. A local progress commit can record this result, but the PR
+cannot claim every CI-equivalent check is green until the baseline formatting issue is resolved.
+Current branch remains init/project-setup/QHuy; AGENTS.md requires a personal member/<name> branch
+for commits and a reviewed PR to develop. No staging, commit, push or branch switch was performed.

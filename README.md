@@ -3,10 +3,20 @@
 BHOME - Nền tảng quản lý và vận hành chuỗi nhà trọ thông minh.
 
 Project hiện có nền tảng backend ASP.NET Core 8, ba ứng dụng React/TypeScript và API đăng nhập
-Identity/JWT cho tài khoản đã tồn tại. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản, màn hình đăng
-nhập và tích hợp nhà cung cấp bên ngoài chưa hoàn thiện. Migration không tạo tài khoản demo.
+Identity/JWT cho tài khoản đã tồn tại, phiên phía server, refresh xoay vòng, đăng xuất và đổi mật khẩu.
+Owner Web/Mobile có màn hình đăng nhập. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản và tích hợp
+nhà cung cấp bên ngoài chưa hoàn thiện. Migration không tạo tài khoản demo.
+
+Máy Development hiện dùng PostgreSQL native qua pgAdmin 4: `localhost:5432`, database `bhome`,
+user `postgres`. `.env` mặc định và `.env.local` đã trỏ tới database này. Chỉ chạy dịch vụ MinIO
+bằng `docker compose up -d minio` nếu cần storage; PostgreSQL native đang sử dụng port 5432.
+Xem [cấu hình native local](docs/development/LOCAL_DEVELOPMENT.md#native-postgresql-on-this-workstation).
 
 ## Hướng dẫn nhanh khi mới clone
+
+Để test Authentication bằng Postman hoặc giao diện, làm theo
+[hướng dẫn test bằng tay](docs/development/MANUAL_AUTH_TESTING.md). Có công cụ tạo ba tài khoản
+tổng hợp local bằng Identity và collection Postman 30 request; bạn tự đặt mật khẩu ở prompt ẩn.
 
 Hướng dẫn dùng **Windows PowerShell**, chạy lệnh tại **thư mục gốc repository** sau khi clone.
 Các port bên dưới là giá trị local mặc định.
@@ -190,10 +200,12 @@ Production build cần cấu hình rõ `VITE_API_BASE_URL` bằng địa chỉ H
 | Public Web     | http://localhost:5175               | Mở được ứng dụng                                                  |
 | MinIO Console  | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`               |
 
-API hiện hỗ trợ `POST /api/v1/auth/login` cho tài khoản Identity đã tồn tại. Chưa có tài khoản demo,
-luồng tạo/kích hoạt tài khoản hoặc màn hình đăng nhập; xem
+API hỗ trợ login/refresh/logout/logout-all/me/change-password và lõi reset mật khẩu.
+Chưa có tài khoản demo hay luồng tạo/kích hoạt tài khoản. Gửi email reset/MFA và lưu token native
+an toàn còn cần tích hợp. Owner Web dùng cookie Secure nên cần HTTPS và cùng site với API;
+đặt `AuthWeb__AllowedOrigins__0` đúng origin Owner Web (khác với danh sách CORS chung). Xem
 [hợp đồng API đăng nhập](docs/api/API_CONVENTIONS.md#existing-account-login) và
-[báo cáo kiểm tra ngày 28/10](docs/development/SPRINT_2_AUDIT.md).
+[báo cáo kiểm toán bảo mật](docs/development/AUTH_SECURITY_AUDIT.md).
 
 ## Những lần chạy tiếp theo
 
