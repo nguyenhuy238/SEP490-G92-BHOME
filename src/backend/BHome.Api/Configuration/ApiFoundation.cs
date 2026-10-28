@@ -45,7 +45,10 @@ public static class ApiFoundation
         services.AddAuthorization(options =>
         {
             options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-            foreach (var role in Roles.All) options.AddPolicy(role, policy => policy.RequireRole(role));
+            foreach (var role in Roles.All)
+                options.AddPolicy(role, policy => policy.RequireAuthenticatedUser().RequireRole(role));
+            foreach (var permission in RolePermissions.All)
+                options.AddPolicy(permission.Key, policy => policy.RequireAuthenticatedUser().RequireRole(permission.Value));
         });
         services.AddCors(options => options.AddPolicy("Clients", policy =>
         {

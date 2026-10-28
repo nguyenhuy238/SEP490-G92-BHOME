@@ -36,6 +36,14 @@ payloads return 400. Forgot/reset-password retain their existing `userName` cont
 
 ## Sessions, refresh and credentials
 
+Authenticated account/session actions now declare fixed permissions: `account.view-own` for me
+and the session probe, `account.change-password` for password change, `sessions.revoke-own` for
+logout/logout-all. All three business roles retain these own-account actions. Login/refresh and
+password recovery entry points retain their explicit anonymous access and credential validation.
+New business actions use `[Authorize(Policy = Permissions.<Module>.<Action>)]` plus service-layer
+`PermissionAccess.CanAccessAsync` with server-loaded scope. Permission grants are fixed in Domain,
+not accepted from request/JWT permission claims. See the [catalog and integration guide](../development/FIXED_ROLE_PERMISSIONS.md).
+
 | Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                                              |
 | ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                                          |

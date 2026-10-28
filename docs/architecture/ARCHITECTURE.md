@@ -89,7 +89,11 @@ See [security audit](../development/AUTH_SECURITY_AUDIT.md) for traceability, li
 
 API fallback authorization requires authentication. Public controllers must explicitly opt into
 `AllowAnonymous` and return approved, non-sensitive DTOs. Role policies are registered from central
-constants. Resource authorization is a second check after the role check:
+constants. Fixed action permissions live in Domain `Permissions` / `RolePermissions`; API policies
+and Application `PermissionAccess` use the same immutable grants. Owner has no automatic Staff/Tenant
+inheritance. Unknown permissions receive no service grant; no permission claims or dynamic tables
+are used. See [fixed-role permissions](../development/FIXED_ROLE_PERMISSIONS.md).
+Resource authorization is a second check after the function permission:
 
 - Owner must own the resource's chain (`OwnerUserId` equality), not every chain in the deployment.
 - Staff must have an authoritative assignment for the resource's owner and Location.
@@ -102,6 +106,12 @@ operation to all three roles: each use case first restricts the allowed roles, t
 Its required `allowedRoles` argument ensures a multi-role user cannot satisfy an Owner/Staff-only
 operation through their Tenant scope. List queries must apply equivalent predicates in SQL before
 pagination, not filter afterward.
+
+New resource use cases should call `PermissionAccess.CanAccessAsync(permission, serverLoadedScope)`
+to derive allowed roles from the catalog rather than passing a broad `Roles.All`. This preserves
+the operation's role boundary for multi-role users. Role permissions do not replace task assignee,
+signer, business-state or least-privilege DTO checks. The existing account/session endpoints now
+declare their own-account permissions explicitly; public authentication entry points are unchanged.
 
 Frontend route guards are UX only. Access tokens stay in memory; Owner Web refresh uses a protected
 cookie plus exact Origin/custom-header checks. Mobile refresh stays in memory; the secure token-store

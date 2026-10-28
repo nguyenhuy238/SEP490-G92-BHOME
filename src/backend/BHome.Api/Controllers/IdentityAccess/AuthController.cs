@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using BHome.Application.IdentityAccess;
+using BHome.Domain.IdentityAccess;
 using BHome.Api.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,15 +40,19 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     }
 
     [HttpPost("logout")]
+    [Authorize(Policy = Permissions.Sessions.RevokeOwn)]
     public Task<IActionResult> Logout(CancellationToken cancellationToken) => Revoke(false, cancellationToken);
 
     [HttpPost("logout-all")]
+    [Authorize(Policy = Permissions.Sessions.RevokeOwn)]
     public Task<IActionResult> LogoutAll(CancellationToken cancellationToken) => Revoke(true, cancellationToken);
 
     [HttpGet("me")]
+    [Authorize(Policy = Permissions.Account.ViewOwn)]
     public ActionResult<SessionIdentity> Me() => Ok(new SessionIdentity(UserId, SessionId, User.FindAll("role").Select(x => x.Value).ToArray()));
 
     [HttpPost("change-password")]
+    [Authorize(Policy = Permissions.Account.ChangePassword)]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
     {
         if (!await passwords.ChangeAsync(UserId, SessionId, request.CurrentPassword!, request.NewPassword!, cancellationToken))

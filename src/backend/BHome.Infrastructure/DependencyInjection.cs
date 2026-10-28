@@ -101,6 +101,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>();
         services.AddScoped<IStaffLocationAccess, UnconfiguredStaffLocationAccess>();
         services.AddScoped<ResourceAccess>();
+        services.AddScoped<PermissionAccess>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
