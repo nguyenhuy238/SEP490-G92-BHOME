@@ -20,6 +20,7 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.ConfigureCapture();
         builder.Entity<ApplicationUser>().Property(x => x.IsActive).HasDefaultValue(true);
         builder.ApplyConfigurationsFromAssembly(typeof(BHomeDbContext).Assembly);
         builder.Entity<IdentityRole<Guid>>().HasData(

@@ -45,6 +45,8 @@ public sealed class SecurityAuditRecord
     public string Event { get; set; } = "";
     public bool Succeeded { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
+    public string? TargetType { get; set; }
+    public Guid? TargetId { get; set; }
 }
 
 internal sealed class AuthenticationSessionConfiguration : IEntityTypeConfiguration<AuthenticationSession>
@@ -89,6 +91,7 @@ internal sealed class SecurityAuditConfiguration : IEntityTypeConfiguration<Secu
     {
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Event).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.TargetType).HasMaxLength(50);
         builder.HasIndex(x => new { x.UserId, x.OccurredAt });
         // No cascading FK: retain security history independently of account lifecycle.
     }
