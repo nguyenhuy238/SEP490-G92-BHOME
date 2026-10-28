@@ -21,4 +21,9 @@ export default tseslint.config(
     files: ['packages/client-core/src/auth.tsx'],
     rules: { 'react-refresh/only-export-components': 'off' },
   },
+  {
+    // Expo Metro uses React Native Fast Refresh, not the Vite-only export restriction.
+    files: ['src/mobile/**/*.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 );

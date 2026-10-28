@@ -1,4 +1,5 @@
 using BHome.Application.Common;
+using BHome.Application.Ocr;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +12,11 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         var status = exception switch
         {
             IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
+            OcrAccessException => StatusCodes.Status404NotFound,
+            CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
+            CaptureValidationException => StatusCodes.Status400BadRequest,
+            OcrInputException { Code: "image_too_large" } => StatusCodes.Status413PayloadTooLarge,
+            OcrInputException => StatusCodes.Status400BadRequest,
             BadHttpRequestException { StatusCode: >= 400 and < 500 } request => request.StatusCode,
             _ => StatusCodes.Status500InternalServerError
         };
@@ -24,6 +30,14 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
             "Request {CorrelationId} failed with {ErrorCode}", context.TraceIdentifier, exception.GetType().Name);
         context.Response.StatusCode = status;
+        context.Response.ContentType = "application/problem+json";
+        var code = exception switch
+        {
+            CaptureConflictException conflict => conflict.Code,
+            CaptureValidationException validation => validation.Code,
+            OcrInputException input => input.Code,
+            _ => null
+        };
         await problems.WriteAsync(new ProblemDetailsContext
         {
             HttpContext = context,
@@ -32,6 +46,8 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
                 Status = status,
                 Title = title,
                 Type = $"https://httpstatuses.com/{status}"
+                ,
+                Extensions = code is null ? new Dictionary<string, object?>() : new Dictionary<string, object?> { ["code"] = code }
             }
         });
         return true;

@@ -91,6 +91,25 @@ tracked EF mutations are also rejected. Retention requires an approved privilege
 
 See [audit, migration and verification](../development/AUTH_SECURITY_AUDIT.md).
 
+## Internal OCR proposals
+
+`POST /api/v1/ocr/identity/{residentId}/front`, `/back` and
+`POST /api/v1/ocr/meter-tasks/{taskId}` accept bounded binary PNG/JPEG bodies with Bearer
+authentication. They return human-review proposals only, never confirmation or persistence.
+Resource lookup now uses Chain/Location/Room/Resident/Meter/OperationalTask and effective Staff
+assignments in PostgreSQL. Every request checks server-loaded ownership/assignment; a missing or
+out-of-scope resource returns 404, a closed workflow 409, and unavailable model/resource lookup 503.
+Do not use caller-supplied ownership or Location IDs as authorization. See
+[current mobile setup, confirmation APIs and limitations](../development/OCR_MOBILE_DELIVERY.md).
+
+Development-only OCR harness: `GET /api/v1/ocr/diagnostics` checks availability and
+`POST /api/v1/ocr/diagnostics/{profile}` runs the same OCR pipeline without a business resource
+or persistence. Requires authenticated Owner/Staff and both `Development` environment and
+`MobileDevelopment:Enabled=true`; otherwise 404. Profiles: `identity-front`, `identity-back`,
+`electricity-mechanical`, `electricity-digital`, `water-mechanical`, `water-digital`.
+Binary JPEG/PNG <=5 MiB; returns `{ proposal, elapsedMilliseconds }` with no-store.
+This harness does not authorize any business read, confirmation, or evidence storage.
+
 ## Contracts and status codes
 
 JSON properties use camelCase. Use explicit request/response DTOs, never EF entities. Require and

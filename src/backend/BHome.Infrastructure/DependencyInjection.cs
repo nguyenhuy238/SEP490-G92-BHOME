@@ -9,6 +9,7 @@ using BHome.Infrastructure.Integrations;
 using BHome.Infrastructure.Jobs;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Storage;
+using BHome.Infrastructure.Ocr;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -97,12 +98,27 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
         services.AddScoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>();
-        services.AddScoped<IStaffLocationAccess, UnconfiguredStaffLocationAccess>();
+        services.AddScoped<CaptureScope>();
+        services.AddScoped<IStaffLocationAccess>(p => p.GetRequiredService<CaptureScope>());
         services.AddScoped<ResourceAccess>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
-        services.AddScoped<IOcrService, UnconfiguredOcrService>();
+        services.AddOptions<OcrOptions>().Bind(configuration.GetSection("Ocr"))
+            .Validate(o => o.IsValid(), "OCR limits or profiles are outside supported bounds.").ValidateOnStart();
+        services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);
+        services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
+        services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
+        services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
+        services.AddSingleton<IOcrService, LocalOcrService>();
+        services.AddHostedService<OcrWarmup>();
+        services.AddScoped<IOcrWorkflowResources, CaptureWorkflowResources>();
+        services.AddScoped<OcrWorkflowService>();
+        services.AddScoped<ICaptureRepository, CaptureRepository>();
+        services.AddScoped<CaptureService>();
+        services.AddHostedService<MeterEvidenceCleanup>();
+        services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
+        services.AddSingleton<IIdentityProtection, IdentityProtection>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
         services.AddScoped<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))

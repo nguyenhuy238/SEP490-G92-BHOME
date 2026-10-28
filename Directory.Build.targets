@@ -1,0 +1,9 @@
+<Project>
+  <!-- OpenCvSharp's optional analyzer targets Roslyn 4.14; .NET 8 uses 4.11.
+       Filter only this analyzer, including transitive tools/tests. Keep all SDK analyzers. -->
+  <Target Name="RemoveIncompatibleOpenCvAnalyzer" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Analyzer.Filename)' == 'OpenCvSharp.Analyzers'" />
+    </ItemGroup>
+  </Target>
+</Project>

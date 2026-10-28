@@ -34,3 +34,17 @@ an appropriate operations boundary. Review/pin image digests in the release proc
 
 No infrastructure container was started during initialization because the local Docker daemon was
 stopped. Compose syntax validation does not prove image build/runtime behavior.
+
+# Internal OCR CPU smoke
+
+Tải model có pin/checksum bằng `scripts/Get-OcrModels.ps1`, sau đó chạy từ repository root:
+
+```powershell
+docker compose -f deploy/docker/compose.ocr-smoke.yml build
+docker compose -f deploy/docker/compose.ocr-smoke.yml run --rm smoke
+```
+
+Container chạy non-root, không có mạng, 2 CPU/768 MiB và model mount read-only.
+Exit 1 nghĩa là có ca so khớp ảnh tổng hợp thất bại; không được coi build/inference thành công
+là accuracy đạt yêu cầu. API mặc định tắt OCR, và chưa có repository nghiệp vụ để cấp scope thật.
+Xem [tài liệu OCR](../../docs/development/INTERNAL_OCR.md) về cấu hình, API và các phần chưa tích hợp.
