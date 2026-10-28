@@ -17,7 +17,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["ConnectionStrings:Database"] = ConnectionString,
             ["Jwt:SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)),
             ["Api:UseHttpsRedirection"] = "false",
-            ["Jobs:Enabled"] = "false"
+            ["Jobs:Enabled"] = "false",
+            ["AuthRateLimit:PermitLimit"] = "10000"
         }));
         builder.ConfigureServices(services => services.AddControllers().AddApplicationPart(typeof(TestProbeController).Assembly));
     }

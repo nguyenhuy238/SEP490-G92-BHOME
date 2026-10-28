@@ -8,20 +8,25 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace BHome.Infrastructure.IdentityAccess;
 
-internal sealed class JwtTokenIssuer(IOptions<JwtOptions> options) : IAccessTokenIssuer
+internal sealed class JwtTokenIssuer(IOptions<JwtOptions> options, TimeProvider clock) : IAccessTokenIssuer
 {
-    public AccessToken Issue(Guid userId, IReadOnlyCollection<string> roles)
+    public AccessToken Issue(Guid userId, IReadOnlyCollection<string> roles, Guid sessionId, string securityStamp, DateTimeOffset sessionExpiresAt)
     {
-        if (userId == Guid.Empty || roles.Count == 0 || roles.Any(role => !Roles.All.Contains(role)))
+        if (userId == Guid.Empty || sessionId == Guid.Empty || string.IsNullOrWhiteSpace(securityStamp) ||
+            roles.Count == 0 || roles.Any(role => !Roles.All.Contains(role)))
             throw new ArgumentException("A verified user and supported business roles are required.");
 
         var settings = options.Value;
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         var expires = now.AddMinutes(settings.LifetimeMinutes);
+        if (expires > sessionExpiresAt) expires = sessionExpiresAt;
+        if (expires <= now) throw new ArgumentException("Session must not be expired.");
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId.ToString()),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new("sid", sessionId.ToString()),
+            new("sstamp", securityStamp)
         };
         claims.AddRange(roles.Distinct().Select(role => new Claim("role", role)));
         var token = new JwtSecurityToken(settings.Issuer, settings.Audience, claims,

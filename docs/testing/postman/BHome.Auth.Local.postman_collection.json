@@ -1,0 +1,1129 @@
+{
+  "info": {
+    "_postman_id": "4f78bb74-584d-4e8e-bd67-7ebfa61ef6c6",
+    "name": "BHOME — Local Authentication Manual Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "FE-02 / UC-01/02/03 / GBR-01/02/13. Dùng riêng tài khoản tổng hợp do New-LocalTestUsers.ps1 tạo. Import environment kèm theo; tự nhập password và newPassword ở local. Chạy request theo thứ tự từng folder. Nếu chạy tất cả bằng Runner đặt delay 2500 ms để tránh limit 30/phút. Không thêm X-BHome-Client:web: collection dùng mobile JSON transport. Folder đổi mật khẩu thay mật khẩu account TEST và tự cập nhật environment. Không chia sẻ/export token hoặc mật khẩu đã điền. Xem docs/development/MANUAL_AUTH_TESTING.md."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 — Login → me → refresh → logout",
+      "item": [
+        {
+          "name": "00 Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/ready",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01 Login A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Me A",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) pm.test(\u0027Đúng user đang test\u0027, function () { pm.expect(pm.response.json().userId === pm.environment.get(\u0027userId\u0027)).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Refresh A — lưu token mới",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const refreshToken = pm.environment.get(\u0027refreshToken\u0027);",
+                  "if (!refreshToken) throw new Error(\u0027Hãy login/refresh theo thứ tự trước.\u0027);",
+                  "pm.environment.set(\u0027retiredRefreshToken\u0027, refreshToken);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({refreshToken}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Me sau refresh",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) pm.test(\u0027Đúng user đang test\u0027, function () { pm.expect(pm.response.json().userId === pm.environment.get(\u0027userId\u0027)).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Logout A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 204\u0027, function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 JWT cũ bị chặn sau logout",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Reuse thu hồi phiên (chạy đúng thứ tự)",
+      "item": [
+        {
+          "name": "01 Login phiên mới",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Xoay refresh token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const refreshToken = pm.environment.get(\u0027refreshToken\u0027);",
+                  "if (!refreshToken) throw new Error(\u0027Hãy login/refresh theo thứ tự trước.\u0027);",
+                  "pm.environment.set(\u0027retiredRefreshToken\u0027, refreshToken);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({refreshToken}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Dùng lại token cũ — thu hồi cả phiên",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const refreshToken = pm.environment.get(\u0027retiredRefreshToken\u0027);",
+                  "if (!refreshToken) throw new Error(\u0027Hãy login/refresh theo thứ tự trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({refreshToken}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 JWT của phiên reuse bị chặn",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Nhiều thiết bị / logout-all",
+      "item": [
+        {
+          "name": "01 Login A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Login B",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessTokenB\u0027, data.accessToken);\n \n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Login C",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessTokenC\u0027, data.accessToken);\n \n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Logout A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 204\u0027, function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 A bị chặn",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 B vẫn hợp lệ",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenB}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) pm.test(\u0027Đúng user đang test\u0027, function () { pm.expect(pm.response.json().userId === pm.environment.get(\u0027userId\u0027)).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 C vẫn hợp lệ",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenC}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) pm.test(\u0027Đúng user đang test\u0027, function () { pm.expect(pm.response.json().userId === pm.environment.get(\u0027userId\u0027)).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 Logout-all bằng B",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout-all",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 204\u0027, function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 B bị chặn",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenB}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 C cũng bị chặn",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenC}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Đổi mật khẩu thật của tài khoản TEST",
+      "item": [
+        {
+          "name": "01 Login bằng mật khẩu hiện tại",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Login thiết bị B",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessTokenB\u0027, data.accessToken);\n \n}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Change password — nhập newPassword trước",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/change-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const currentPassword = pm.environment.get(\u0027password\u0027);",
+                  "const newPassword = pm.environment.get(\u0027newPassword\u0027);",
+                  "if (!currentPassword || !newPassword || currentPassword === newPassword) throw new Error(\u0027Nhập password và newPassword khác nhau trong Environment.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({currentPassword, newPassword}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 204\u0027, function () { pm.response.to.have.status(204); });",
+                  "if (pm.response.code === 204) { pm.environment.set(\u0027password\u0027, pm.environment.get(\u0027newPassword\u0027)); pm.environment.unset(\u0027newPassword\u0027); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 A bị thu hồi",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 B cũng bị thu hồi",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessTokenB}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Login bằng mật khẩu mới (đã cập nhật Environment)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const password = pm.environment.get(\u0027password\u0027);",
+                  "if (!password) throw new Error(\u0027Nhập password tài khoản test trong Environment trước.\u0027);",
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027), password, device: \u0027Postman local\u0027}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {\n const data = pm.response.json();\n pm.test(\u0027Có token và session hợp lệ\u0027, function () { pm.expect(Boolean(data.accessToken \u0026\u0026 data.refreshToken \u0026\u0026 data.sessionId \u0026\u0026 data.userId)).to.eql(true); });\n pm.environment.set(\u0027accessToken\u0027, data.accessToken);\n pm.environment.set(\u0027refreshToken\u0027, data.refreshToken); pm.environment.set(\u0027userId\u0027, data.userId); pm.environment.set(\u0027sessionId\u0027, data.sessionId);\n}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Lỗi và tích hợp chưa có",
+      "item": [
+        {
+          "name": "01 Login thiếu input",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 400\u0027, function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Me không có Bearer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Forgot password — chưa có email provider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/forgot-password",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\u0027requestBody\u0027, JSON.stringify({userName: pm.environment.get(\u0027userName\u0027)}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\u0027HTTP 503\u0027, function () { pm.response.to.have.status(503); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "script": {
+        "exec": [
+          "const url = pm.variables.replaceIn(pm.request.url.toString());",
+          "if (!/^https:\\/\\/(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?\\//.test(url)) throw new Error(\u0027Collection chỉ gửi request tới HTTPS loopback local.\u0027);"
+        ],
+        "type": "text/javascript"
+      },
+      "listen": "prerequest"
+    }
+  ]
+}

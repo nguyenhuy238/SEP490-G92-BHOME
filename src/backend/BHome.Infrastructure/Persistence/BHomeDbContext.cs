@@ -1,4 +1,5 @@
 using BHome.Domain.Common;
+using BHome.Infrastructure.IdentityAccess;
 using BusinessRoles = BHome.Domain.IdentityAccess.Roles;
 using BHome.Infrastructure.Jobs;
 using Microsoft.AspNetCore.Identity;
@@ -11,10 +12,15 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
     internal DbSet<BackgroundJobRecord> BackgroundJobs => Set<BackgroundJobRecord>();
+    public DbSet<AuthenticationSession> AuthenticationSessions => Set<AuthenticationSession>();
+    public DbSet<RefreshTokenRecord> RefreshTokens => Set<RefreshTokenRecord>();
+    public DbSet<PasswordResetGrant> PasswordResetGrants => Set<PasswordResetGrant>();
+    public DbSet<SecurityAuditRecord> SecurityAudit => Set<SecurityAuditRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<ApplicationUser>().Property(x => x.IsActive).HasDefaultValue(true);
         builder.ApplyConfigurationsFromAssembly(typeof(BHomeDbContext).Assembly);
         builder.Entity<IdentityRole<Guid>>().HasData(
             new IdentityRole<Guid>(BusinessRoles.Owner) { Id = Guid.Parse("00000000-0000-0000-0000-000000000001"), NormalizedName = BusinessRoles.Owner.ToUpperInvariant() },
@@ -36,6 +42,8 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
 
     private void StampEntities()
     {
+        if (ChangeTracker.Entries<SecurityAuditRecord>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Security audit is append-only.");
         var now = DateTimeOffset.UtcNow;
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>()
             .Where(e => e.State is EntityState.Added or EntityState.Modified))

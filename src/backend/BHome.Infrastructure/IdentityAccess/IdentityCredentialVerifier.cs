@@ -11,7 +11,7 @@ internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> us
     {
         cancellationToken.ThrowIfCancellationRequested();
         var user = await users.FindByNameAsync(userName);
-        if (user is null) return null;
+        if (user is null || !user.IsActive) return null;
 
         // Password verification alone must never bypass a configured second factor.
         if (await users.GetTwoFactorEnabledAsync(user)) return null;
@@ -20,6 +20,6 @@ internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> us
 
         var roles = await users.GetRolesAsync(user);
         cancellationToken.ThrowIfCancellationRequested();
-        return new VerifiedIdentity(user.Id, roles.ToArray());
+        return new VerifiedIdentity(user.Id, roles.ToArray(), user.SecurityStamp ?? "");
     }
 }

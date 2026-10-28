@@ -4,9 +4,9 @@ import { useAuth } from '@bhome/client-core/auth.tsx';
 import { apiBaseUrl } from './config';
 
 export function useApi() {
-  const { session, clearSession } = useAuth();
+  const { client, clearSession } = useAuth();
   return useMemo(
-    () => createApiClient(apiBaseUrl, () => session?.accessToken, clearSession),
-    [session, clearSession],
+    () => createApiClient(apiBaseUrl, () => client.token, clearSession, client.refresh),
+    [client, clearSession],
   );
 }

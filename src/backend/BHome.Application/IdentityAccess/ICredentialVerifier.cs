@@ -1,6 +1,6 @@
 namespace BHome.Application.IdentityAccess;
 
-public sealed record VerifiedIdentity(Guid UserId, IReadOnlyCollection<string> Roles);
+public sealed record VerifiedIdentity(Guid UserId, IReadOnlyCollection<string> Roles, string SecurityStamp = "");
 
 public interface ICredentialVerifier
 {

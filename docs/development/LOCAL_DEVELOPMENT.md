@@ -41,8 +41,16 @@ dotnet run --project src/backend/BHome.Api
 
 Replace placeholders before running; avoid shared-terminal history with real credentials. No test
 user is seeded. `POST /api/v1/auth/login` verifies an existing Identity username/password and returns
-the token needed by the session probe. Account provisioning/activation and client login screens are
-not implemented. Tests create synthetic accounts only in disposable PostgreSQL containers and
+the token needed by the session probe. Owner/Mobile now have login/logout/change-password UI.
+Account provisioning/activation remains unimplemented. Configure `AuthWeb:AllowedOrigins` separately
+from CORS for the Owner origin; HTTPS/same-site cookie requirements apply (HTTP frontend + HTTPS API
+is not a reliable Strict-cookie development topology). Mobile keeps credentials only in memory.
+
+For manual auth testing only, explicitly run `scripts/New-LocalTestUsers.ps1` to create synthetic
+`owner.dev`, `staff.dev`, `tenant.dev` users with a password entered at a secure prompt. This does
+not implement production provisioning or create business assignments/contracts. Existing accounts
+are never reset or granted additional roles. See [manual Postman/UI steps](MANUAL_AUTH_TESTING.md).
+Tests create synthetic accounts only in disposable PostgreSQL containers and
 generate isolated signing keys in memory. See [the login contract](../api/API_CONVENTIONS.md#existing-account-login).
 
 ## Data services and migrations
@@ -66,12 +74,28 @@ database or volume to resolve a port conflict.
 
 The native PostgreSQL 18 service on `localhost:5432` has a development database named `bhome`,
 owned by `postgres`. Its schema is managed by the repository's EF migrations. The ignored
-`.env.local` contains the native connection and retains the existing local JWT/storage settings;
-credentials are not stored in tracked configuration. This file is workstation-specific.
+`.env` (default launcher) and `.env.local` both contain the verified native connection and retain
+existing local JWT/storage settings; credentials are not stored in tracked configuration.
+The supplied local credential was already present in `.env.local` and was reused without printing it.
+These files are workstation-specific. `POSTGRES_*` variables remain Docker Compose configuration;
+the API uses `ConnectionStrings__Database`. `.env.compose` remains a separate opt-in Docker database.
+
+On 28 October 2026, the native server reported PostgreSQL **18.6**. The user selected this existing
+native installation for Development; the Report 4 baseline remains PostgreSQL 16 and the disposable
+automated test suite ran on 16. Native 18.6 migration/readiness smoke checks passed; the entire suite
+was not rerun against 18.6. No framework/provider/server version was changed.
+
+Before applying auth migration, a custom-format native database backup was created at ignored
+`.tools/auth-audit/bhome-before-auth-migration.dump`. Only initial migration existed; user/job counts
+were zero. After `dotnet ef database update --no-build --project src/backend/BHome.Infrastructure
+--startup-project src/backend/BHome.Api`, both migrations are applied, all 13 public tables exist,
+`AspNetUsers.IsActive` and account/role/audit triggers exist. No application accounts were seeded.
 
 Start the API from the repository root with:
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1
+# Optional explicit selection of the same native database:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env.local
 ```
 
@@ -91,6 +115,11 @@ dotnet ef database update --project src/backend/BHome.Infrastructure --startup-p
 In pgAdmin, refresh **PostgreSQL 18 > Databases**, then open
 **bhome > Schemas > public > Tables**. Identity roles are seeded by the foundation migration;
 application users are not seeded. Storage operations still require MinIO separately.
+
+Verified the real default launcher using Development HTTPS on port 7240: live/ready 200,
+anonymous session 401, invalid login input 400. The temporary host was stopped afterwards.
+The HTTPS probe bypassed certificate verification only for its loopback curl process; machine trust
+was not changed. Cookie/browser HTTPS end-to-end and real account login remain separate checks.
 
 ### Previous isolated database on the audit workstation
 

@@ -20,7 +20,24 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 app.UseCors("Clients");
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.Pragma = "no-cache";
+    }
+    await next(context);
+    if (context.Response.StatusCode == StatusCodes.Status403Forbidden && context.User.Identity?.IsAuthenticated == true)
+    {
+        var userId = Guid.TryParse(context.User.FindFirst("sub")?.Value, out var user) ? user : (Guid?)null;
+        var sessionId = Guid.TryParse(context.User.FindFirst("sid")?.Value, out var session) ? session : (Guid?)null;
+        await context.RequestServices.GetRequiredService<BHome.Application.IdentityAccess.ISecurityAudit>()
+            .ForbiddenAsync(userId, sessionId, context.RequestAborted);
+    }
+});
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).AllowAnonymous();

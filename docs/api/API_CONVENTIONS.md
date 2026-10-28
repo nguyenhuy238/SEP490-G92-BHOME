@@ -14,20 +14,82 @@ UserName; it does not define the final SRS email/phone/login-identifier or tenan
 Passwords are passed unchanged to Identity. Kestrel limits this endpoint's request body to 16 KiB.
 Oversized bodies return sanitized HTTP 413 ProblemDetails; the global handler preserves that status.
 
-On success, HTTP 200 returns `userId`, `roles`, `accessToken`, and ISO-8601 `expiresAt`. Roles come
+On success, HTTP 200 returns `userId`, `roles`, `accessToken`, ISO-8601 `expiresAt`, `sessionId`,
+`refreshToken` and `sessionExpiresAt`. An optional `device` label is bounded to 256 characters and
+never used as an authorization signal. Roles come
 only from Identity persistence; extra request properties cannot select roles. Responses use
 `Cache-Control: no-store` and `Pragma: no-cache`. Send the token as Bearer authorization for the
 session probe and future protected operations.
 
 Invalid input returns validation ProblemDetails (400). Invalid credentials, unknown accounts,
-lockout, unsupported/no roles, and accounts requiring an unsupported second factor all return
+lockout, inactive accounts, unsupported/no roles, and accounts requiring an unsupported second factor all return
 generic ProblemDetails (401, title `Sign-in failed.`). Identity's existing five-failure/15-minute
 lockout applies. Database/provider failures remain sanitized server errors; they are not reported as
 successful logins. Generic error bodies do not guarantee identical response timing.
 
-No users are seeded or created by login. Provisioning, activation, password recovery, second-factor
-challenges, refresh/revocation, and login UI are not implemented. The token expires under the existing
-JWT lifetime configuration; role changes do not immediately revoke an issued token.
+No users are seeded or created by login. Provisioning/activation workflows and second-factor challenges
+remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing and `userName` identifiers are preserved.
+
+## Sessions, refresh and credentials
+
+| Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| POST `login`                   | Anonymous; `userName`, `password`, optional `device`                                      | 200 session or generic 401                                                                          |
+| POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                                                  |
+| POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                                         |
+| POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                                     |
+| GET `me`                       | Bearer                                                                                    | 200 `{userId,sessionId,roles}`                                                                      |
+| POST `change-password`         | Bearer; `currentPassword`, `newPassword`                                                  | 204 + revoke all sessions; generic 400 on failure                                                   |
+| POST `forgot-password`         | Anonymous; `userName`                                                                     | 202 generic response when delivery adapter is ready; uniformly 503 with current unavailable adapter |
+| POST `reset-password`          | Anonymous; `userName`, `token` (max 4096), `newPassword`                                  | 204 + revoke all sessions; generic 400 on failure                                                   |
+
+All auth bodies are limited to 16 KiB; bounded validation failures return 400. New passwords use
+Identity's existing policy: at least 12 characters with uppercase, lowercase, digit and non-alphanumeric.
+All auth responses are no-store, including errors. Source-based auth rate limit defaults to 30 per
+60 seconds with 429 ProblemDetails/Retry-After, in addition to Identity account lockout. Rate counters
+are per API instance; clustered deployment also needs a shared ingress limit. Untrusted forwarded
+headers do not select a new source partition.
+
+JWT includes `sub`, `role`, `jti`, `sid`, `sstamp`; no Location/identity fields. Every protected request
+validates signature/HS256/issuer/audience/expiry, then current active account, lockout, second-factor
+state, session expiry/revocation, stamp and current stored roles. JWT default remains the existing
+15 minutes (Report 4's configurable baseline is 30); clock skew remains 30 seconds. Absolute session
+expiry is enforced without skew. Old JWTs lacking session/stamp require a new login after deployment.
+
+Refresh tokens have 256 random bits and only SHA-256 hashes are persisted. A session ID is its token
+family ID. Refresh expiry defaults to 7 days and never exceeds the 7-day absolute session lifetime.
+Every successful refresh consumes the old token in a PostgreSQL transaction with a user-row lock;
+reuse revokes that family, including the access JWT. Concurrent reuse has at most one success and
+then revokes the family. Clients must serialize refresh, rather than retrying an old refresh token
+after an ambiguous network failure. Client code coalesces requests; supported browsers additionally
+use Web Locks for cookie changes across tabs. Other browsers need deployment/browser validation.
+
+Web opts in using `X-BHome-Client: web` on auth POSTs and browser `credentials: include`. The server
+returns `refreshToken: null` and a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,
+host-only, path `/api/v1/auth`. Cookie writes/reads require the custom header and an exact Origin in
+`AuthWeb:AllowedOrigins` or the API's own origin. CORS also needs the Owner origin explicitly allowed.
+General CORS origins (including Public Web) do not automatically qualify for auth cookie transport.
+Do not use wildcard origins. Cookie alone never authenticates a protected API: these use Bearer only.
+Use HTTPS and a same-site deployment (local HTTPS frontend or same-origin reverse proxy); cross-site
+web/API domains will intentionally fail Strict cookie refresh. Configure proxies explicitly, without
+trusting arbitrary forwarded headers. Mobile default transport uses JSON refresh and `credentials: omit`;
+credentials remain in memory until a reviewed native secure-storage adapter is integrated.
+
+Reset uses Identity's real Data Protection token provider plus a persisted SHA-256 grant, TTL default
+15 minutes. Only the latest grant for an active, confirmed-email account can be consumed once under
+the user lock. No token is returned to anonymous callers. Delivery is a dedicated unavailable port;
+setting a notification URL/key does not implement email. A test-only capturing adapter verifies the
+core, but is never registered in production. Persist/share and protect the Data Protection key ring
+across replicas/restarts before enabling real delivery. OTP/MFA is not represented as complete.
+
+Account deactivation, security-stamp/2FA changes and role-assignment mutations revoke sessions in DB
+triggers, including direct Identity/SQL changes. Reactivation/restoring roles does not revive tokens.
+These direct changes have an audit target and unknown actor (`userId: null`); future UC-08 management
+must supply authenticated actor/reason through its application workflow. There is no unscoped admin
+endpoint in this change. Security audit UPDATE/DELETE/TRUNCATE is rejected by the DB trigger and
+tracked EF mutations are also rejected. Retention requires an approved privileged archival policy.
+
+See [audit, migration and verification](../development/AUTH_SECURITY_AUDIT.md).
 
 ## Contracts and status codes
 

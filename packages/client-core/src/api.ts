@@ -17,6 +17,7 @@ export function createApiClient(
   baseUrl: string,
   getToken: () => string | undefined = () => undefined,
   onUnauthorized: () => void = () => {},
+  refresh?: () => Promise<string | undefined>,
 ) {
   return async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!path.startsWith('/api/v1/') || path.includes('..') || path.includes('://')) {
@@ -33,6 +34,18 @@ export function createApiClient(
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
       throw new ApiError(0);
+    }
+    if (response.status === 401 && refresh && token) {
+      const nextToken = getToken() !== token ? getToken() : await refresh();
+      if (nextToken) {
+        headers.set('Authorization', 'Bearer ' + nextToken);
+        try {
+          response = await fetch(baseUrl + path, { ...init, headers, credentials: 'omit' });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') throw error;
+          throw new ApiError(0);
+        }
+      }
     }
     if (!response.ok) {
       if (response.status === 401) onUnauthorized();

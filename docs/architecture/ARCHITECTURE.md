@@ -72,7 +72,7 @@ ASP.NET Core Identity persists password hashes, security stamps, users and roles
 The initial migration seeds only the fixed Owner, Staff and Tenant roles from Domain constants.
 No password, account or demo JWT is seeded. The existing-account login slice follows Controller
 -> Application `LoginService` -> `ICredentialVerifier` -> Infrastructure Identity/EF. Identity verifies
-passwords with lockout enabled; the service validates stored roles before calling `IAccessTokenIssuer`.
+passwords with lockout enabled; the service validates stored roles before calling `IAuthenticationSessions`.
 Invalid credentials, lockout, roleless/unsupported-role accounts and accounts requiring a second factor
 receive the same generic denial. No second-factor challenge flow is implemented. Account provisioning,
 tenant activation and the final SRS login identifier remain separate requirements.
@@ -80,8 +80,11 @@ tenant activation and the final SRS login identifier remain separate requirement
 JWT bearer authentication validates signature, issuer, audience, lifetime and HS256 algorithm.
 The signing key must contain at least 32 random bytes; startup rejects missing/example keys. Access
 tokens last 15 minutes by default (maximum configured lifetime: 60 minutes), include no sensitive
-identity data and are not logged. Rotation, revocation/security-stamp checking and refresh sessions
-belong to the real identity feature; a role change does not revoke an already-issued JWT immediately.
+identity data and are not logged. PostgreSQL sessions/hashed refresh tokens enforce rotation,
+absolute expiry and reuse detection. JWT bearer validation checks session/stamp/current roles/account
+on every request. Mutating session/password operations use a transaction and common user-row lock.
+Account/role changes revoke sessions through DB triggers. Security audit is append-only in EF and DB.
+See [security audit](../development/AUTH_SECURITY_AUDIT.md) for traceability, limitations and deployment.
 
 API fallback authorization requires authentication. Public controllers must explicitly opt into
 `AllowAnonymous` and return approved, non-sensitive DTOs. Role policies are registered from central
@@ -99,14 +102,15 @@ Its required `allowedRoles` argument ensures a multi-role user cannot satisfy an
 operation through their Tenant scope. List queries must apply equivalent predicates in SQL before
 pagination, not filter afterward.
 
-Frontend route guards are UX only. Session tokens stay in memory. A secure mobile token-store
-contract exists but has no insecure persistence fallback. Native Keychain/Keystore persistence and
-browser refresh/login behavior must be reviewed when implemented.
+Frontend route guards are UX only. Access tokens stay in memory; Owner Web refresh uses a protected
+cookie plus exact Origin/custom-header checks. Mobile refresh stays in memory; the secure token-store
+contract has no insecure persistence fallback. Keychain/Keystore integration remains pending.
 
 ## Data storage
 
 `Infrastructure/Persistence/BHomeDbContext` is an Identity EF context with Npgsql. The migration
-contains Identity and job infrastructure tables only. `BHomeDbContextFactory` supports EF tooling
+baseline contains Identity and jobs; the auth migration adds sessions, refresh hashes, reset grants,
+append-only security audit and active-account status. `BHomeDbContextFactory` supports EF tooling
 without starting HTTP, jobs, or integrations. Use reviewed EF migrations; no `EnsureCreated` or
 automatic startup migration is used. Apply migrations explicitly during development/release.
 
