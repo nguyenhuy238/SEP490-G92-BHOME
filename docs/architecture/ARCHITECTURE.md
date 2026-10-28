@@ -75,11 +75,12 @@ No password, account or demo JWT is seeded. The existing-account login slice fol
 passwords with lockout enabled; the service validates stored roles before calling `IAuthenticationSessions`.
 Invalid credentials, lockout, roleless/unsupported-role accounts and accounts requiring a second factor
 receive the same generic denial. No second-factor challenge flow is implemented. Account provisioning,
-tenant activation and the final SRS login identifier remain separate requirements.
+tenant activation remain separate requirements. Email-only login was approved on 28 October 2026;
+Identity normalizes email, and ambiguous legacy email matches are denied.
 
 JWT bearer authentication validates signature, issuer, audience, lifetime and HS256 algorithm.
 The signing key must contain at least 32 random bytes; startup rejects missing/example keys. Access
-tokens last 15 minutes by default (maximum configured lifetime: 60 minutes), include no sensitive
+tokens last 30 minutes by default (maximum configured lifetime: 60 minutes), include no sensitive
 identity data and are not logged. PostgreSQL sessions/hashed refresh tokens enforce rotation,
 absolute expiry and reuse detection. JWT bearer validation checks session/stamp/current roles/account
 on every request. Mutating session/password operations use a transaction and common user-row lock.
@@ -88,7 +89,11 @@ See [security audit](../development/AUTH_SECURITY_AUDIT.md) for traceability, li
 
 API fallback authorization requires authentication. Public controllers must explicitly opt into
 `AllowAnonymous` and return approved, non-sensitive DTOs. Role policies are registered from central
-constants. Resource authorization is a second check after the role check:
+constants. Fixed action permissions live in Domain `Permissions` / `RolePermissions`; API policies
+and Application `PermissionAccess` use the same immutable grants. Owner has no automatic Staff/Tenant
+inheritance. Unknown permissions receive no service grant; no permission claims or dynamic tables
+are used. See [fixed-role permissions](../development/FIXED_ROLE_PERMISSIONS.md).
+Resource authorization is a second check after the function permission:
 
 - Owner must own the resource's chain (`OwnerUserId` equality), not every chain in the deployment.
 - Staff must have an authoritative assignment for the resource's owner and Location.
@@ -101,6 +106,12 @@ operation to all three roles: each use case first restricts the allowed roles, t
 Its required `allowedRoles` argument ensures a multi-role user cannot satisfy an Owner/Staff-only
 operation through their Tenant scope. List queries must apply equivalent predicates in SQL before
 pagination, not filter afterward.
+
+New resource use cases should call `PermissionAccess.CanAccessAsync(permission, serverLoadedScope)`
+to derive allowed roles from the catalog rather than passing a broad `Roles.All`. This preserves
+the operation's role boundary for multi-role users. Role permissions do not replace task assignee,
+signer, business-state or least-privilege DTO checks. The existing account/session endpoints now
+declare their own-account permissions explicitly; public authentication entry points are unchanged.
 
 Frontend route guards are UX only. Access tokens stay in memory; Owner Web refresh uses a protected
 cookie plus exact Origin/custom-header checks. Mobile refresh stays in memory; the secure token-store

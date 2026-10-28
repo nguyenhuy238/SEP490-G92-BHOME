@@ -45,10 +45,10 @@ export class SessionClient {
     for (const listener of this.listeners) listener(session);
   }
 
-  async login(userName: string, password: string) {
+  async login(email: string, password: string) {
     if (this.pendingRefresh) await this.pendingRefresh.catch(() => undefined);
     const version = ++this.revision;
-    const response = await this.send<SessionResponse>('login', { userName, password });
+    const response = await this.send<SessionResponse>('login', { email: email.trim(), password });
     if (version === this.revision) this.publish(response);
   }
 

@@ -24,15 +24,21 @@ it('logs in and clears credentials after server logout through the Vietnamese UI
       <LoginPanel />
     </AuthProvider>,
   );
-  fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: 'synthetic' } });
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: 'synthetic@example.invalid' },
+  });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), {
     target: { value: 'Synthetic!Password-493' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
   await screen.findByText('Đã đăng nhập.');
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+    email: 'synthetic@example.invalid',
+    password: 'Synthetic!Password-493',
+  });
   expect(screen.queryByText('Synthetic!Password-493')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Đăng xuất' }));
-  await screen.findByLabelText('Tên đăng nhập');
+  await screen.findByLabelText('Email');
   expect((screen.getByLabelText('Mật khẩu') as HTMLInputElement).value).toBe('');
   expect(fetchMock.mock.calls[1][0]).toBe('https://api.example.invalid/api/v1/auth/logout');
 });
@@ -44,7 +50,9 @@ it('shows a generic login failure and removes the password from the form', async
       <LoginPanel />
     </AuthProvider>,
   );
-  fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: 'synthetic' } });
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: 'synthetic@example.invalid' },
+  });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'wrong-secret' } });
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Không thể đăng nhập.'));

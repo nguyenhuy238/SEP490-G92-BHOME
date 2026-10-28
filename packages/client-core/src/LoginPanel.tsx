@@ -4,7 +4,7 @@ import { ApiError } from './api';
 
 export function LoginPanel() {
   const { session, client } = useAuth();
-  const [userName, setUserName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -15,7 +15,7 @@ export function LoginPanel() {
     setBusy(true);
     setMessage('');
     try {
-      await client.login(userName, password);
+      await client.login(email, password);
     } catch (error) {
       setMessage(
         error instanceof ApiError && error.status === 429
@@ -103,13 +103,14 @@ export function LoginPanel() {
       ) : (
         <form onSubmit={(event) => void login(event)}>
           <label>
-            Tên đăng nhập
+            Email
             <input
+              type="email"
               autoComplete="username"
-              value={userName}
+              value={email}
               maxLength={256}
               required
-              onChange={(event) => setUserName(event.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
             />
           </label>
           <label>

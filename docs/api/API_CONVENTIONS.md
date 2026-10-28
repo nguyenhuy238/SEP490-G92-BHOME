@@ -8,9 +8,12 @@ from finalized requirements.
 
 ## Existing-account login
 
-`POST /api/v1/auth/login` allows anonymous JSON requests with required `userName` (maximum 256
-characters) and `password` (maximum 1024 characters). This foundation uses the existing Identity
-UserName; it does not define the final SRS email/phone/login-identifier or tenant-activation workflow.
+`POST /api/v1/auth/login` allows anonymous JSON requests with required `email` (maximum 256
+characters, email format) and `password` (maximum 1024 characters). Email-only login was approved
+on 28 October 2026 (FE-02 / UC-01). Identity normalizes the trimmed email for a case-insensitive
+lookup; passwords remain unchanged. UserName and phone login are not accepted. Ambiguous legacy
+normalized emails receive the generic 401 denial without issuing a session. Account provisioning
+and tenant activation remain separate workflows.
 Passwords are passed unchanged to Identity. Kestrel limits this endpoint's request body to 16 KiB.
 Oversized bodies return sanitized HTTP 413 ProblemDetails; the global handler preserves that status.
 
@@ -28,13 +31,22 @@ lockout applies. Database/provider failures remain sanitized server errors; they
 successful logins. Generic error bodies do not guarantee identical response timing.
 
 No users are seeded or created by login. Provisioning/activation workflows and second-factor challenges
-remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing and `userName` identifiers are preserved.
+remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing is preserved. Login clients must now send `email`; legacy `userName`-only login
+payloads return 400. Forgot/reset-password retain their existing `userName` contract for a later step.
 
 ## Sessions, refresh and credentials
 
+Authenticated account/session actions now declare fixed permissions: `account.view-own` for me
+and the session probe, `account.change-password` for password change, `sessions.revoke-own` for
+logout/logout-all. All three business roles retain these own-account actions. Login/refresh and
+password recovery entry points retain their explicit anonymous access and credential validation.
+New business actions use `[Authorize(Policy = Permissions.<Module>.<Action>)]` plus service-layer
+`PermissionAccess.CanAccessAsync` with server-loaded scope. Permission grants are fixed in Domain,
+not accepted from request/JWT permission claims. See the [catalog and integration guide](../development/FIXED_ROLE_PERMISSIONS.md).
+
 | Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                                              |
 | ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| POST `login`                   | Anonymous; `userName`, `password`, optional `device`                                      | 200 session or generic 401                                                                          |
+| POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                                          |
 | POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                                                  |
 | POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                                         |
 | POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                                     |
@@ -52,17 +64,24 @@ headers do not select a new source partition.
 
 JWT includes `sub`, `role`, `jti`, `sid`, `sstamp`; no Location/identity fields. Every protected request
 validates signature/HS256/issuer/audience/expiry, then current active account, lockout, second-factor
-state, session expiry/revocation, stamp and current stored roles. JWT default remains the existing
-15 minutes (Report 4's configurable baseline is 30); clock skew remains 30 seconds. Absolute session
+state, session expiry/revocation, stamp and current stored roles. JWT default is now
+30 minutes as approved and aligned with Report 4; clock skew remains 30 seconds. Absolute session
 expiry is enforced without skew. Old JWTs lacking session/stamp require a new login after deployment.
 
 Refresh tokens have 256 random bits and only SHA-256 hashes are persisted. A session ID is its token
 family ID. Refresh expiry defaults to 7 days and never exceeds the 7-day absolute session lifetime.
+The approved policy permits configuration only within 1-7 days; startup rejects longer or zero
+refresh/session lifetimes. The session deadline is fixed at login, not extended by rotation.
 Every successful refresh consumes the old token in a PostgreSQL transaction with a user-row lock;
 reuse revokes that family, including the access JWT. Concurrent reuse has at most one success and
 then revokes the family. Clients must serialize refresh, rather than retrying an old refresh token
 after an ambiguous network failure. Client code coalesces requests; supported browsers additionally
 use Web Locks for cookie changes across tabs. Other browsers need deployment/browser validation.
+
+Client behavior remains reactive: after a protected request returns 401, refresh once and retry
+the original request at most once. A denied refresh (401) clears the local session; a temporary
+network/503 error preserves it and surfaces the failure. A 403 permission denial never triggers
+refresh. See [refresh implementation and verification](../development/REFRESH_TOKEN_SESSIONS.md).
 
 Web opts in using `X-BHome-Client: web` on auth POSTs and browser `credentials: include`. The server
 returns `refreshToken: null` and a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,

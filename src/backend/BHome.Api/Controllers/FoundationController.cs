@@ -1,4 +1,6 @@
 using BHome.Application.IdentityAccess;
+using BHome.Domain.IdentityAccess;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BHome.Api.Controllers;
@@ -9,6 +11,7 @@ namespace BHome.Api.Controllers;
 public sealed class FoundationController(ICurrentUser user) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = Permissions.Account.ViewOwn)]
     public ActionResult<SessionResponse> Get() => Ok(new SessionResponse(user.UserId));
 }
 

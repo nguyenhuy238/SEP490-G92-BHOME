@@ -40,7 +40,7 @@ dotnet run --project src/backend/BHome.Api
 ```
 
 Replace placeholders before running; avoid shared-terminal history with real credentials. No test
-user is seeded. `POST /api/v1/auth/login` verifies an existing Identity username/password and returns
+user is seeded. `POST /api/v1/auth/login` verifies an existing Identity email/password and returns
 the token needed by the session probe. Owner/Mobile now have login/logout/change-password UI.
 Account provisioning/activation remains unimplemented. Configure `AuthWeb:AllowedOrigins` separately
 from CORS for the Owner origin; HTTPS/same-site cookie requirements apply (HTTP frontend + HTTPS API

@@ -6,5 +6,5 @@ public sealed class JwtOptions
     public string Issuer { get; set; } = "BHome";
     public string Audience { get; set; } = "BHome.Clients";
     public string SigningKey { get; set; } = "";
-    public int LifetimeMinutes { get; set; } = 15;
+    public int LifetimeMinutes { get; set; } = 30;
 }

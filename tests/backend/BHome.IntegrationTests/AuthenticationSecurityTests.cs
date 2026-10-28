@@ -34,7 +34,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(user, Roles.Owner)).Succeeded);
         using var client = fixture.Factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password })).StatusCode);
         await WithDb(async db => Assert.False((await db.Users.FindAsync(id))!.IsActive));
     }
 
@@ -201,6 +201,9 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
         Bearer(client, other);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/session")).StatusCode);
+        client.DefaultRequestHeaders.Authorization = null;
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/refresh", new { rotated.RefreshToken })).StatusCode);
+        await Refresh(client, other.RefreshToken!);
         await WithDb(async db =>
         {
             Assert.True(await db.SecurityAudit.AnyAsync(x => x.SessionId == first.SessionId && x.Event == "RefreshTokenReuse"));
@@ -225,6 +228,12 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
             Assert.Equal(1, await db.RefreshTokens.CountAsync(x => x.SessionId == session.SessionId && x.ConsumedAt != null));
             Assert.NotNull((await db.AuthenticationSessions.FindAsync(session.SessionId))?.RevokedAt);
         });
+        var winner = (await responses.Single(x => x.StatusCode == HttpStatusCode.OK).Content.ReadFromJsonAsync<LoginResult>())!;
+        Bearer(firstClient, winner);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await firstClient.GetAsync("/api/v1/auth/me")).StatusCode);
+        firstClient.DefaultRequestHeaders.Authorization = null;
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await firstClient.PostAsJsonAsync("/api/v1/auth/refresh", new { winner.RefreshToken })).StatusCode);
     }
 
     [Theory]
@@ -291,6 +300,73 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
     }
 
     [Fact]
+    public async Task RefreshNearSevenDayDeadlineCannotExtendOrReviveTheSession()
+    {
+        var clock = new SessionTestClock(DateTimeOffset.UtcNow);
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton<TimeProvider>(clock)));
+        using var client = host.CreateClient();
+        var session = await Login(client, await CreateUser());
+        clock.UtcNow = session.SessionExpiresAt.AddMinutes(-1);
+        var rotated = await Refresh(client, session.RefreshToken!);
+        Assert.Equal(session.SessionExpiresAt, rotated.SessionExpiresAt);
+        Assert.Equal(session.SessionExpiresAt, rotated.ExpiresAt);
+        await WithDb(async db =>
+        {
+            var tokens = await db.RefreshTokens.Where(x => x.SessionId == session.SessionId).ToArrayAsync();
+            Assert.Equal(2, tokens.Length);
+            Assert.All(tokens, token => Assert.Equal(session.SessionExpiresAt, token.ExpiresAt));
+        });
+        clock.UtcNow = session.SessionExpiresAt;
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.PostAsJsonAsync("/api/v1/auth/refresh", new { rotated.RefreshToken })).StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpiredAccessTokenCanRefreshOnceAndUseTheNewAccessToken()
+    {
+        using var client = fixture.Factory.CreateClient();
+        var session = await Login(client, await CreateUser());
+        using var scope = fixture.Factory.Services.CreateScope();
+        var settings = scope.ServiceProvider.GetRequiredService<IOptions<JwtOptions>>().Value;
+        var original = new JwtSecurityTokenHandler().ReadJwtToken(session.AccessToken);
+        var claims = original.Claims.Where(x => x.Type is "sub" or "role" or "sid" or "sstamp" or "jti");
+        var expired = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
+            settings.Issuer, settings.Audience, claims, DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddMinutes(-1),
+            new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.SigningKey)), SecurityAlgorithms.HmacSha256)));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", expired);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
+        client.DefaultRequestHeaders.Authorization = null;
+        var refreshed = await Refresh(client, session.RefreshToken!);
+        Assert.Equal(session.SessionExpiresAt, refreshed.SessionExpiresAt);
+        Assert.NotEqual(session.RefreshToken, refreshed.RefreshToken);
+        Bearer(client, refreshed);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("synthetic-unknown-refresh-token")]
+    public async Task InvalidRefreshCredentialDoesNotConsumeOrRevokeAValidSession(string? token)
+    {
+        using var client = fixture.Factory.CreateClient();
+        var session = await Login(client, await CreateUser());
+        var response = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = token });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(session.RefreshToken!, body);
+        await WithDb(async db =>
+        {
+            Assert.Null((await db.AuthenticationSessions.FindAsync(session.SessionId))?.RevokedAt);
+            Assert.Null((await db.RefreshTokens.SingleAsync(x => x.SessionId == session.SessionId)).ConsumedAt);
+        });
+        await Refresh(client, session.RefreshToken!);
+    }
+
+    [Fact]
     public async Task RefreshConcurrentWithLogoutCannotLeaveValidFamily()
     {
         using var client = fixture.Factory.CreateClient();
@@ -303,6 +379,15 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Assert.Equal(HttpStatusCode.NoContent, responses[0].StatusCode);
         Assert.Contains(responses[1].StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Unauthorized });
         await WithDb(async db => Assert.NotNull((await db.AuthenticationSessions.FindAsync(session.SessionId))?.RevokedAt));
+        if (responses[1].StatusCode == HttpStatusCode.OK)
+        {
+            var result = (await responses[1].Content.ReadFromJsonAsync<LoginResult>())!;
+            Bearer(rotating, result);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await rotating.GetAsync("/api/v1/auth/me")).StatusCode);
+            rotating.DefaultRequestHeaders.Authorization = null;
+            Assert.Equal(HttpStatusCode.Unauthorized,
+                (await rotating.PostAsJsonAsync("/api/v1/auth/refresh", new { result.RefreshToken })).StatusCode);
+        }
     }
 
     [Theory]
@@ -329,8 +414,8 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         {
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
             client.DefaultRequestHeaders.Authorization = null;
-            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password })).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = NewPassword })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password })).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = NewPassword })).StatusCode);
         }
     }
 
@@ -344,7 +429,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         // Factory client defaults to http; configure same origin explicitly for this transport test.
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://localhost");
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var session = (await response.Content.ReadFromJsonAsync<LoginResult>())!;
         Assert.Null(session.RefreshToken);
@@ -399,7 +484,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Bearer(client, session);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
         client.DefaultRequestHeaders.Authorization = null;
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = NewPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = NewPassword })).StatusCode);
         await WithDb(async db =>
         {
             var grant = await db.PasswordResetGrants.FindAsync(user.Id);
@@ -499,7 +584,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
 
     private static async Task<LoginResult> Login(HttpClient client, ApplicationUser user)
     {
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<LoginResult>())!;
     }
@@ -517,6 +602,12 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         await test(scope.ServiceProvider.GetRequiredService<BHomeDbContext>());
+    }
+
+    private sealed class SessionTestClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset UtcNow { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     // Test-only delivery boundary: never registered by the shipped application.

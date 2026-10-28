@@ -19,6 +19,22 @@ public sealed class TestProbeController : ControllerBase
     [Authorize(Policy = Roles.Owner)]
     public IActionResult Owner() => Ok();
 
+    [HttpGet("permission-owner")]
+    [Authorize(Policy = Permissions.StaffAccounts.Manage)]
+    public IActionResult OwnerPermission() => Ok();
+
+    [HttpGet("permission-staff")]
+    [Authorize(Policy = Permissions.MeterReadings.Confirm)]
+    public IActionResult StaffPermission() => Ok();
+
+    [HttpGet("permission-tenant")]
+    [Authorize(Policy = Permissions.InvoiceAdjustments.Request)]
+    public IActionResult TenantPermission() => Ok();
+
+    [HttpGet("permission-shared")]
+    [Authorize(Policy = Permissions.Account.ViewOwn)]
+    public IActionResult SharedPermission() => Ok();
+
     [HttpGet("error")]
     [AllowAnonymous]
     public IActionResult Error() => throw new InvalidOperationException("PRIVATE_TEST_DETAIL");

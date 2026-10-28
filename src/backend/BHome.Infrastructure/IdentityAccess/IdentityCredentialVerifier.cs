@@ -1,17 +1,22 @@
 using BHome.Application.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn)
     : ICredentialVerifier
 {
-    public async Task<VerifiedIdentity?> VerifyAsync(string userName, string password, CancellationToken cancellationToken)
+    public async Task<VerifiedIdentity?> VerifyAsync(string email, string password, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var user = await users.FindByNameAsync(userName);
-        if (user is null || !user.IsActive) return null;
+        var normalizedEmail = users.NormalizeEmail(email.Trim());
+        // Legacy/imported data can bypass Identity's unique-email validator. Never pick an arbitrary account.
+        var matches = await users.Users.Where(user => user.NormalizedEmail == normalizedEmail)
+            .Take(2).ToArrayAsync(cancellationToken);
+        if (matches.Length != 1 || !matches[0].IsActive) return null;
+        var user = matches[0];
 
         // Password verification alone must never bypass a configured second factor.
         if (await users.GetTwoFactorEnabledAsync(user)) return null;
