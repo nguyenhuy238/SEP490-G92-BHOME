@@ -249,7 +249,11 @@ export default function PublicContentPage() {
               >
                 <CardMedia
                   component="img"
-                  image={rows[0].attributes.imageUrl || def.images[def.images.length - 1] || def.images[0]}
+                  image={
+                    rows[0].attributes.imageUrl ||
+                    def.images[def.images.length - 1] ||
+                    def.images[0]
+                  }
                   alt="Phòng minh họa"
                   sx={{ height: '100%', objectFit: 'cover' }}
                 />

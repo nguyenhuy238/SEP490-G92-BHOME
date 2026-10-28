@@ -19,6 +19,9 @@ internal sealed class CaptureWorkflowResources(BHomeDbContext db, CaptureScope s
                 r.VerificationStatus == IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront)).SingleOrDefaultAsync(token);
         }
         catch (Npgsql.NpgsqlException) { throw new BHome.Application.Common.IntegrationUnavailableException("OCR resource lookup"); }
+        // EF Core wraps transient connection failures when retry-on-failure is disabled.
+        catch (InvalidOperationException ex) when (ex.InnerException is Npgsql.NpgsqlException)
+        { throw new BHome.Application.Common.IntegrationUnavailableException("OCR resource lookup"); }
     }
     public async Task<OcrWorkflowResource?> FindMeterTaskAsync(Guid id, CancellationToken token)
     {
@@ -31,6 +34,8 @@ internal sealed class CaptureWorkflowResources(BHomeDbContext db, CaptureScope s
                 : (t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalElectricity : OcrDocumentKind.DigitalElectricity))).SingleOrDefaultAsync(token);
         }
         catch (Npgsql.NpgsqlException) { throw new BHome.Application.Common.IntegrationUnavailableException("OCR resource lookup"); }
+        catch (InvalidOperationException ex) when (ex.InnerException is Npgsql.NpgsqlException)
+        { throw new BHome.Application.Common.IntegrationUnavailableException("OCR resource lookup"); }
     }
     public async Task RecordMeterProposalAsync(Guid id, OcrProposal proposal, CancellationToken token)
     {

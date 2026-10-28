@@ -172,16 +172,23 @@ public sealed class OcrApiTests
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await client.SendAsync(mime)).StatusCode);
     }
 
-    [Fact]
-    public async Task DefaultProductionResourceAdapterFailsClosed()
+    [Theory]
+    [InlineData("identity/{0}/front")]
+    [InlineData("meter-tasks/{0}")]
+    public async Task ProductionResourceAdapterFailsClosedWhenDatabaseIsUnavailable(string route)
     {
-        using var root = new ApiFactory();
+        using var root = new ApiFactory
+        {
+            ConnectionString = "Host=127.0.0.1;Port=1;Database=bhome_tests;Username=unconfigured;Timeout=1;Pooling=false"
+        };
         using var factory = root.WithWebHostBuilder(builder => builder.ConfigureTestServices(AddTestAuthentication));
         using var client = factory.CreateClient();
-        using var request = Request($"identity/{Guid.NewGuid()}/front", Roles.Staff, []);
+        using var request = Request(string.Format(route, Guid.NewGuid()), Roles.Staff, []);
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
         Assert.DoesNotContain("resource lookup", await response.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("bhome_tests", await response.Content.ReadAsStringAsync());
     }
 
     private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Configure(ApiFactory root, TestResources resources, TestAssignments assignments,

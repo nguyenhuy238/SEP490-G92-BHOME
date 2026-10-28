@@ -88,10 +88,10 @@ fullName/dateOfBirth. Lệnh smoke exit 1 được giữ nguyên; không đổi 
 Kiểm chứng cho màn thử mới (28/10/2026):
 
 - `dotnet test tests/backend/BHome.Application.UnitTests/BHome.Application.UnitTests.csproj
-  --artifacts-path .tools/ocr-diagnostics-unit`: **44 PASS**.
+--artifacts-path .tools/ocr-diagnostics-unit`: **44 PASS**.
 - `dotnet test tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj
-  --artifacts-path .tools/ocr-diagnostics-build --filter
-  'FullyQualifiedName~OcrApiTests|FullyQualifiedName~LocalOcrTests|FullyQualifiedName~IdentityProtectionTests'`:
+--artifacts-path .tools/ocr-diagnostics-build --filter
+'FullyQualifiedName~OcrApiTests|FullyQualifiedName~LocalOcrTests|FullyQualifiedName~IdentityProtectionTests'`:
   **31 PASS**. Bao gồm login/role, production/opt-in guard, sáu profile, input/MIME/size và
   fallback không giả thành nhận dạng thành công. Principal trong các test API là test-only;
   không lấy đó làm chứng cứ xác minh JWT thật.
@@ -291,7 +291,7 @@ Kết quả kiểm tra lần sửa này (28/10/2026):
 
 - `dotnet build src/backend/BHome.sln --no-restore`: PASS, 0 warning/error.
 - `npm run test --workspace ./src/mobile`: PASS, 12 tests; `npm run typecheck --workspace
-  ./src/mobile` và `npm run lint --workspace ./src/mobile`: PASS (Node 22 local).
+./src/mobile` và `npm run lint --workspace ./src/mobile`: PASS (Node 22 local).
 - Probe Node HTTPS với CA public chỉ định, giữ kiểm tra TLS và hostname: LAN readiness
   `200 Healthy`, capture locations chưa xác thực `401`; tải CA qua HTTP khớp file public local.
 - Kiểm tra script tự động local: chạy prepare lại giữ nguyên hash `.env`, mobile env, PFX và
@@ -470,3 +470,56 @@ Kiểm tra ngoài phạm vi: `npm run build` toàn repo FAIL ở Public Web
 v3; audit đề xuất downgrade Expo major không tương thích nên không chạy `audit fix --force`.
 Đây là issue tooling đang ghi nhận, không công bố production-ready. Cần review SDK-compatible
 dependency patch trước release.
+
+## Sửa lỗi GitHub CI (29/10/2026)
+
+Truy vết: BF-03/UC-13, BF-05/UC-20, GBR-02/07/13 và NFR privacy/manual fallback;
+FE-02/UC-01 cho fixture đăng nhập; FE-09/UC-37 chỉ sửa kiểu prop giao diện public.
+Nguồn đối chiếu: SRS tại `docs/reports`, ghi chú phạm vi/decision trong tài liệu này,
+workflow `.github/workflows/ci.yml`, API login hiện tại và các test OCR thực tế.
+Không thay quyền, trạng thái nghiệp vụ, schema, migration hoặc chính sách đang mở.
+
+Nguyên nhân và thay đổi:
+
+- Frontend lint áp rule TypeScript lên `scripts/inspect-owner-stitch.cjs`, thiếu Node globals.
+  Thêm override CommonJS chỉ cho `scripts/**/*.cjs`; vẫn lint script và giữ rule TypeScript.
+- Runner mới chưa có `bhome/minio-local:2025-10-15`, trong khi fixture dùng image này.
+  CI build từ Dockerfile/source MinIO đã pin của repo trước khi chạy Testcontainers;
+  không đổi provider, bỏ test hoặc phụ thuộc image local có sẵn.
+- EF Core bọc lỗi kết nối Npgsql tạm thời trong `InvalidOperationException`, nên catch cũ
+  bỏ sót và API trả 500. Adapter OCR xử lý đúng wrapper có inner Npgsql exception, trả 503.
+  Test hai route identity/meter dùng endpoint DB không khả dụng, kiểm 503/no-store và không
+  lộ tên database/chi tiết lookup. Đã tái hiện 2 FAIL trước sửa, sau sửa 2 PASS.
+- Fixture capture còn gửi `userName` thay vì `email` theo contract login hiện tại, dẫn đến
+  400 khi vượt qua bước khởi tạo MinIO. Sửa cả hai chỗ login; cleanup chịu được khởi tạo
+  chưa hoàn tất và vẫn dispose các tài nguyên còn lại.
+  Test `LoginPage.test.tsx` của Owner cũng còn assertion `userName`; cập nhật theo
+  `AuthController.LoginRequest` và `SessionClient.login` hiện tại, dùng email tổng hợp.
+- Public Web `Typography` chuyển `fontWeight` vào `sx`, khắc phục lỗi build đã ghi nhận ở
+  phần trước. Các file frontend/script có format lỗi được Prettier định dạng lại;
+  giữ nguyên văn bản AGENTS.md và bỏ qua báo cáo Visual Studio sinh tự động trong formatter.
+
+Tiêu chí chấp nhận: CI tạo đủ dependency trước test; lỗi DB trả 503 thay vì 500;
+test capture dùng login contract đúng; vẫn kiểm scope/negative/concurrency/private storage;
+lint, test, build, format phải được chạy và ghi nhận riêng. Không nới lỏng quyền để test qua.
+
+Kiểm chứng local Windows, SDK 8.0.427, Docker Desktop Linux containers:
+
+- `docker build -f deploy/docker/Minio.Dockerfile -t bhome/minio-local:2025-10-15 .`: PASS
+  (build stage Go có cache; runtime stage được build lại).
+- `dotnet build src/backend/BHome.sln -c Release --no-restore -m:1 -nodeReuse:false`: PASS,
+  0 warning/error.
+- `dotnet test src/backend/BHome.sln -c Release --no-build -m:1 -nodeReuse:false --logger trx`:
+  PASS **272 tests** (Application 71, Domain 37, Integration 164), fail 0, skip 0;
+  có PostgreSQL/MinIO disposable và migration trên DB test, không migrate DB người dùng.
+- `dotnet format src/backend/BHome.sln --verify-no-changes --no-restore`: PASS.
+- `docker compose --env-file .env.example config --quiet`: PASS.
+- Frontend Node 22.23.4: `npm ci --no-fund --no-audit`, `npm run lint`, `npm run build`,
+  `npm run format:check`: PASS. Cài dependencies từ lockfile, không đổi phiên bản/lockfile.
+- `npm test`: PASS **63 tests** theo scripts hiện tại (Owner Web 46, Mobile 17).
+  Lượt đầu sau cài dependencies có 1 FAIL do assertion login cũ; đã sửa và chạy lại toàn bộ.
+- `git diff --check`: PASS. Frontend test/build trong sandbox ban đầu bị `spawn EPERM`;
+  kết quả PASS trên được chạy lại ngoài sandbox. Không tính lần bị chặn là test thành công.
+
+Đây là kết quả local; chưa push hoặc chạy lại GitHub Actions trên runner Ubuntu.
+Các cảnh báo Node runtime của GitHub Actions trong ảnh log không phải bước gây exit code 1.

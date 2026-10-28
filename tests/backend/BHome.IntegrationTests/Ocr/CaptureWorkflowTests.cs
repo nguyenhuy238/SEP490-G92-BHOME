@@ -43,7 +43,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
             Assert.True((await users.CreateAsync(u, Password)).Succeeded); Assert.True((await users.AddToRoleAsync(u, role)).Succeeded);
         }
         var client = fixture.Factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { userName = name, password = Password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = name + "@example.invalid", password = Password });
         response.EnsureSuccessStatusCode(); var session = await response.Content.ReadFromJsonAsync<LoginResult>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
         return (client, id);
@@ -178,8 +178,9 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var failing = new FailingPutStorage(realStorage);
         using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<IObjectStorage>(failing)));
         using var client = host.CreateClient();
-        var username = (await db.Users.SingleAsync(u => u.Id == w.StaffId)).UserName;
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { userName = username, password = Password });
+        var email = (await db.Users.SingleAsync(u => u.Id == w.StaffId)).Email;
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
+        login.EnsureSuccessStatusCode();
         var session = await login.Content.ReadFromJsonAsync<LoginResult>(); client.DefaultRequestHeaders.Authorization = new("Bearer", session!.AccessToken);
         using var content = new ByteArrayContent(Image()); content.Headers.ContentType = new("image/png");
         Assert.Equal(HttpStatusCode.InternalServerError, (await client.PutAsync($"/api/v1/capture/meter-tasks/{task}/evidence", content)).StatusCode);
@@ -205,8 +206,8 @@ public sealed class CaptureFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
     private readonly string storagePassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-    private IContainer minio = null!;
-    private ApiFactory root = null!;
+    private IContainer? minio;
+    private ApiFactory? root;
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public string StorageUrl { get; private set; } = "";
     public async Task InitializeAsync()
@@ -234,5 +235,25 @@ public sealed class CaptureFixture : IAsyncLifetime
         await using var scope = Factory.Services.CreateAsyncScope(); await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();
     }
     public async Task DisposeAsync()
-    { await Factory.DisposeAsync(); await root.DisposeAsync(); await minio.DisposeAsync(); await postgres.DisposeAsync(); }
+    {
+        try
+        {
+            if (Factory is not null) await Factory.DisposeAsync();
+        }
+        finally
+        {
+            try
+            {
+                if (root is not null) await root.DisposeAsync();
+            }
+            finally
+            {
+                try
+                {
+                    if (minio is not null) await minio.DisposeAsync();
+                }
+                finally { await postgres.DisposeAsync(); }
+            }
+        }
+    }
 }
