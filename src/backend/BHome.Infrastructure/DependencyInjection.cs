@@ -69,6 +69,8 @@ public static class DependencyInjection
                 };
             });
         services.AddScoped<IAccessTokenIssuer, JwtTokenIssuer>();
+        services.AddScoped<ICredentialVerifier, IdentityCredentialVerifier>();
+        services.AddScoped<LoginService>();
         services.AddScoped<IStaffLocationAccess, UnconfiguredStaffLocationAccess>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();

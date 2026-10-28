@@ -1,9 +1,33 @@
 # API conventions
 
-Use HTTPS, REST, JSON and `/api/v1/<resource>` routes. The only initial controller route is the
-authenticated `GET /api/v1/session` foundation probe. It returns a minimal `userId` DTO and has no
-login/token issuance workflow. `/health/live`, `/health/ready` and development Swagger are operational
-exceptions to the prefix. Business endpoints are added from finalized requirements.
+Use HTTPS, REST, JSON and `/api/v1/<resource>` routes. `GET /api/v1/session` is an authenticated
+foundation probe returning a minimal `userId` DTO. `POST /api/v1/auth/login` verifies existing Identity
+accounts. `/health/live`, `/health/ready` and development Swagger are operational exceptions to the
+prefix. Readiness requires connectivity and no pending EF migrations. Business endpoints are added
+from finalized requirements.
+
+## Existing-account login
+
+`POST /api/v1/auth/login` allows anonymous JSON requests with required `userName` (maximum 256
+characters) and `password` (maximum 1024 characters). This foundation uses the existing Identity
+UserName; it does not define the final SRS email/phone/login-identifier or tenant-activation workflow.
+Passwords are passed unchanged to Identity. Kestrel limits this endpoint's request body to 16 KiB.
+Oversized bodies return sanitized HTTP 413 ProblemDetails; the global handler preserves that status.
+
+On success, HTTP 200 returns `userId`, `roles`, `accessToken`, and ISO-8601 `expiresAt`. Roles come
+only from Identity persistence; extra request properties cannot select roles. Responses use
+`Cache-Control: no-store` and `Pragma: no-cache`. Send the token as Bearer authorization for the
+session probe and future protected operations.
+
+Invalid input returns validation ProblemDetails (400). Invalid credentials, unknown accounts,
+lockout, unsupported/no roles, and accounts requiring an unsupported second factor all return
+generic ProblemDetails (401, title `Sign-in failed.`). Identity's existing five-failure/15-minute
+lockout applies. Database/provider failures remain sanitized server errors; they are not reported as
+successful logins. Generic error bodies do not guarantee identical response timing.
+
+No users are seeded or created by login. Provisioning, activation, password recovery, second-factor
+challenges, refresh/revocation, and login UI are not implemented. The token expires under the existing
+JWT lifetime configuration; role changes do not immediately revoke an issued token.
 
 ## Contracts and status codes
 

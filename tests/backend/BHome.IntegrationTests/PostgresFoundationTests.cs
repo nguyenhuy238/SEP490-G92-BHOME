@@ -16,14 +16,15 @@ public sealed class PostgresFoundationTests : IAsyncLifetime
     {
         await database.StartAsync();
         factory.ConnectionString = database.GetConnectionString();
-        await using var scope = factory.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();
     }
 
     [Fact]
-    public async Task ApiReadinessUsesIsolatedMigratedPostgres()
+    public async Task ApiReadinessRequiresAppliedMigrations()
     {
         using var client = factory.CreateClient();
+        Assert.Equal(System.Net.HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/health/ready")).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();
         Assert.True((await client.GetAsync("/health/ready")).IsSuccessStatusCode);
     }
 
@@ -31,6 +32,7 @@ public sealed class PostgresFoundationTests : IAsyncLifetime
     public async Task RepeatedEnqueueCreatesOneDurableJob()
     {
         await using var scope = factory.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();
         var queue = scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>();
         var job = new JobSubmission("test", Guid.NewGuid().ToString(), "{}");
         await queue.EnqueueAsync(job, default);

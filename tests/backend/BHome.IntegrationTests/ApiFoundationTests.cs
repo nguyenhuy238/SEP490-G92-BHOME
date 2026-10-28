@@ -27,6 +27,13 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task ReadinessRejectsUnavailableDatabase()
+    {
+        var response = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ProtectedControllerRejectsAnonymousWithProblemDetails()
     {
         var response = await client.GetAsync("/api/v1/session");
@@ -69,6 +76,7 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
     [Theory]
     [InlineData("/test-probes/error", HttpStatusCode.InternalServerError)]
     [InlineData("/test-probes/ocr", HttpStatusCode.ServiceUnavailable)]
+    [InlineData("/test-probes/oversized", HttpStatusCode.RequestEntityTooLarge)]
     public async Task ErrorsAreSanitizedAndCorrelated(string path, HttpStatusCode expected)
     {
         var correlation = Guid.NewGuid().ToString();

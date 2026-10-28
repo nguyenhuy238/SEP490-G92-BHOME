@@ -61,3 +61,39 @@ Start Docker Desktop's Linux engine, run the complete backend test suite, build/
 apply migrations and create the private storage bucket. Trust the development HTTPS certificate.
 Real providers/OCR, native projects, session/login/refresh flows, recurrence planning and business
 schema/use cases remain intentionally outside this initialization.
+
+## Follow-up audit and authentication slice — 28 October 2026
+
+The initialization results above are historical. The follow-up inspected the clean committed
+foundation on `init/project-setup/QHuy` and made the scoped changes documented in
+[SPRINT_2_AUDIT.md](SPRINT_2_AUDIT.md). No commit/push or branch change was performed.
+
+| Command/check                 | Result | Evidence/limits                                                                                                                                               |
+| ----------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend restore/build         | PASS   | All seven projects; local SDK 8.0.426; zero warnings/errors                                                                                                   |
+| Complete backend tests        | PASS   | 57 passed, zero failures/skips: Domain 1, Application 25, API/architecture/PostgreSQL 31                                                                      |
+| C# formatting                 | PASS   | `dotnet format ... --verify-no-changes --no-restore` after correcting test whitespace                                                                         |
+| EF model drift                | PASS   | No model changes since existing foundation migration; no new migration generated                                                                              |
+| Frontend lint/tests/build     | PASS   | 13 tests; all strict TypeScript/Vite builds; existing Owner size warning                                                                                      |
+| Docker/Compose                | PASS   | Engine started; default/example/alternate env configurations parse                                                                                            |
+| Original native PostgreSQL    | FAIL   | TCP reachable on 5432; configured password rejected with SQLSTATE 28P01; original data/configuration untouched                                                |
+| Isolated developer PostgreSQL | PASS   | New `bhome-local-db` project on 5433 with separate volume; uses existing local Compose credentials via ignored `.env.compose`                                 |
+| EF database update            | PASS   | Existing foundation migration applied only to the new isolated developer database; direct-driver check: one applied, zero pending                             |
+| PostgreSQL tests              | PASS   | Disposable Testcontainers databases; real migrations, readiness before/after migration, durable enqueue, Identity password/role/lockout behavior              |
+| MinIO                         | PASS   | Existing container resumed healthy; provisioned missing local private bucket; real adapter upload/download equality, anonymous read 403, probe object deleted |
+| API launcher                  | PASS   | `Start-Api.ps1 -EnvironmentFile .env.compose`; default `.env` behavior retained                                                                               |
+| Live Kestrel probes           | PASS   | Liveness/readiness 200; protected session 401; invalid login 400; unknown login 401; oversized login 413                                                      |
+| Secrets/data/Git              | PASS   | `.env` preserved; `.env.compose`, tools/probe outputs ignored; no developer accounts seeded; no history/remote operations                                     |
+
+The original Docker tests first failed while the engine was stopped. New authentication fixtures
+initially failed because required unique emails were missing and account mutations crossed EF scopes;
+both fixture issues were corrected. Live Kestrel revealed that the global handler changed body-limit
+rejections from 413 to 500; fixed the mapping, added a sanitized-error regression case, and repeated
+the affected checks successfully. Initial EF migration-list output was incorrectly interpreted as
+proof of native database readiness; the direct-driver/live-host check corrected that finding.
+
+Smoke probes used loopback HTTP with HTTPS redirection disabled only in the temporary process.
+Both temporary API hosts were stopped. The HTTPS development certificate remains untrusted; no
+machine-wide trust change was made. Docker, existing MinIO and the new development database remain
+running. No real OCR/provider, client login UI, provisioning/activation, refresh or business-schema
+work is claimed complete. Latest Plan/SRS/SDS are absent; subsequent persistence remains blocked.

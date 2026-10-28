@@ -39,9 +39,11 @@ dotnet dev-certs https --trust
 dotnet run --project src/backend/BHome.Api
 ```
 
-Replace placeholders before running; avoid shared-terminal history with real credentials. No login
-feature or test user is provided. The protected session probe requires a valid token issued by a
-future verified Identity login service. Tests generate isolated synthetic signing keys in memory.
+Replace placeholders before running; avoid shared-terminal history with real credentials. No test
+user is seeded. `POST /api/v1/auth/login` verifies an existing Identity username/password and returns
+the token needed by the session probe. Account provisioning/activation and client login screens are
+not implemented. Tests create synthetic accounts only in disposable PostgreSQL containers and
+generate isolated signing keys in memory. See [the login contract](../api/API_CONVENTIONS.md#existing-account-login).
 
 ## Data services and migrations
 
@@ -54,6 +56,67 @@ dotnet tool restore
 $env:ConnectionStrings__Database = '<your local PostgreSQL connection string>'
 dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
 ```
+
+If a native PostgreSQL service already owns port 5432, keep using its configured database and start
+only storage with `docker compose up -d --build minio`. Alternatively choose a free `POSTGRES_PORT`
+and deliberately update the backend connection string to match. Do not replace/reset an existing
+database or volume to resolve a port conflict.
+
+### Native PostgreSQL on this workstation
+
+The native PostgreSQL 18 service on `localhost:5432` has a development database named `bhome`,
+owned by `postgres`. Its schema is managed by the repository's EF migrations. The ignored
+`.env.local` contains the native connection and retains the existing local JWT/storage settings;
+credentials are not stored in tracked configuration. This file is workstation-specific.
+
+Start the API from the repository root with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env.local
+```
+
+The launcher selects the repository's portable .NET 8 SDK when present. The global .NET 10 SDK
+alone does not meet `global.json`. Plain `dotnet run` does not load `.env.local`.
+
+For later migration updates, load the same connection explicitly in PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass
+. ./scripts/Use-LocalTools.ps1
+$connectionLine = Get-Content .env.local | Where-Object { $_ -like 'ConnectionStrings__Database=*' }
+$env:ConnectionStrings__Database = $connectionLine.Substring('ConnectionStrings__Database='.Length)
+dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
+```
+
+In pgAdmin, refresh **PostgreSQL 18 > Databases**, then open
+**bhome > Schemas > public > Tables**. Identity roles are seeded by the foundation migration;
+application users are not seeded. Storage operations still require MinIO separately.
+
+### Previous isolated database on the audit workstation
+
+At the time of the audit, the native service accepted TCP connections on 5432 but rejected the
+password configured in the original `.env` (PostgreSQL SQLSTATE `28P01`). Its applied-migration
+state was unverified. The audit
+left that service, its credentials/data and `.env` untouched. A separate Compose project
+`bhome-local-db` now owns a PostgreSQL container on 5433 and its own persistent named volume.
+The existing foundation migration was applied there; no users were seeded.
+
+Ignored `.env.compose` is a local copy of `.env` with `POSTGRES_PORT=5433` and a matching backend
+connection using the existing Compose database/user/password settings. It contains secrets: never
+print or commit it. On another workstation, create this optional file only if absent and configure
+matching database/port values deliberately; the file is not distributed in Git.
+
+```powershell
+docker compose -p bhome-local-db --env-file .env.compose up -d postgres
+# Existing MinIO remains in the original project, with the same storage credentials.
+docker compose up -d minio
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env.compose
+```
+
+The launcher accepts an explicit environment-file path and defaults to `.env`. It does not rewrite
+either file. Use the same environment file when exporting `ConnectionStrings__Database` for EF tools;
+do not paste the value into shared output. To stop only this additional database while retaining its
+volume: `docker compose -p bhome-local-db --env-file .env.compose stop postgres`.
 
 `postgres:16-alpine` persists in a named volume. MinIO builds official pinned community source because
 its current distribution is source-only. Its first build downloads Go modules and can be slow.
@@ -119,7 +182,8 @@ settings. Maestro flows belong in `tests/mobile/maestro`; none are fabricated be
 - Docker unavailable: start Docker Desktop's Linux engine. `docker compose config --quiet` validates
   syntax without a daemon. PostgreSQL Testcontainers tests require the daemon.
 - API startup failure: provide a database connection and random JWT key. It does not need PostgreSQL
-  to start with jobs disabled; `/health/ready` reports 503 until a database is reachable.
+  to start with jobs disabled; `/health/ready` reports 503 until the database is reachable and all
+  application EF migrations are applied. The readiness check never applies migrations itself.
 - Storage failure: provision the private bucket and correct credentials; no fake success fallback exists.
 - Browser network failure: trust the local HTTPS certificate, check exact API URL and CORS origin.
 - Background jobs: disabled by default; migrate, register handlers, and follow the operational guide

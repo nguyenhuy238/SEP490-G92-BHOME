@@ -1,4 +1,5 @@
 using BHome.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace BHome.Api.Configuration;
@@ -11,8 +12,11 @@ internal sealed class DatabaseHealthCheck(IServiceScopeFactory scopeFactory) : I
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-            return await db.Database.CanConnectAsync(cancellationToken)
-                ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy("Database unavailable.");
+            if (!await db.Database.CanConnectAsync(cancellationToken))
+                return HealthCheckResult.Unhealthy("Database unavailable.");
+            if ((await db.Database.GetPendingMigrationsAsync(cancellationToken)).Any())
+                return HealthCheckResult.Unhealthy("Database migrations pending.");
+            return HealthCheckResult.Healthy();
         }
         catch (Exception) { return HealthCheckResult.Unhealthy("Database unavailable."); }
     }

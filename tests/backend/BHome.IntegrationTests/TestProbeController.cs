@@ -2,6 +2,7 @@ using BHome.Application.Ocr;
 using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 
 namespace BHome.IntegrationTests;
@@ -21,6 +22,10 @@ public sealed class TestProbeController : ControllerBase
     [HttpGet("error")]
     [AllowAnonymous]
     public IActionResult Error() => throw new InvalidOperationException("PRIVATE_TEST_DETAIL");
+
+    [HttpGet("oversized")]
+    [AllowAnonymous]
+    public IActionResult Oversized() => throw new BadHttpRequestException("PRIVATE_TEST_DETAIL", StatusCodes.Status413PayloadTooLarge);
 
     [HttpGet("ocr")]
     [AllowAnonymous]

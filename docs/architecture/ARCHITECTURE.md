@@ -70,9 +70,12 @@ empty classes. Add focused DI extension methods as modules grow; `Program.cs` re
 
 ASP.NET Core Identity persists password hashes, security stamps, users and roles in PostgreSQL.
 The initial migration seeds only the fixed Owner, Staff and Tenant roles from Domain constants.
-No password, account, demo JWT or login endpoint is seeded. Identity password and lockout settings
-are prepared; a future login service must verify credentials through Identity with lockout enabled,
-use stored roles, avoid account enumeration, and call `IAccessTokenIssuer` only after verification.
+No password, account or demo JWT is seeded. The existing-account login slice follows Controller
+-> Application `LoginService` -> `ICredentialVerifier` -> Infrastructure Identity/EF. Identity verifies
+passwords with lockout enabled; the service validates stored roles before calling `IAccessTokenIssuer`.
+Invalid credentials, lockout, roleless/unsupported-role accounts and accounts requiring a second factor
+receive the same generic denial. No second-factor challenge flow is implemented. Account provisioning,
+tenant activation and the final SRS login identifier remain separate requirements.
 
 JWT bearer authentication validates signature, issuer, audience, lifetime and HS256 algorithm.
 The signing key must contain at least 32 random bytes; startup rejects missing/example keys. Access

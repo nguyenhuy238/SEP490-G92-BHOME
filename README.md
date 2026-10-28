@@ -2,8 +2,9 @@
 
 BHOME - Smart Boarding House Chain Management and Operations Platform
 
-Initial development foundation following the BHOME Report 4 architecture. Business use cases,
-provider implementations, login workflows, and the finalized business schema are future work.
+Development foundation following the BHOME Report 4 architecture, with verified Identity/JWT login
+for existing accounts. Business workflows, account provisioning/activation, provider implementations,
+and the finalized business schema are future work.
 
 ## Architecture
 
@@ -46,6 +47,12 @@ They are not distributed in Git and no machine-wide installation is performed by
 
 Run commands from the repository root unless a command specifies another directory.
 
+On the audit workstation, native PostgreSQL owns 5432 but rejects the credentials in the original
+`.env`. An isolated development database now runs on **5433** using ignored `.env.compose` and Compose
+project `bhome-local-db`; start the API with `scripts/Start-Api.ps1 -EnvironmentFile .env.compose`.
+See [the local database alternative](docs/development/LOCAL_DEVELOPMENT.md#isolated-database-on-the-audit-workstation)
+before using the generic clean-clone commands below. The original `.env` and native service were preserved.
+
 ```powershell
 dotnet --list-sdks
 node --version
@@ -85,7 +92,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1
 ```
 
 API: `https://localhost:7240`, development Swagger: `https://localhost:7240/swagger`,
-liveness: `/health/live`, database connectivity: `/health/ready`.
+liveness: `/health/live`, database connectivity and applied migrations: `/health/ready`.
 Alternatively configure `.NET user-secrets` and use `dotnet run --project src/backend/BHome.Api`;
 see [local development](docs/development/LOCAL_DEVELOPMENT.md).
 
@@ -102,7 +109,10 @@ npm run dev --workspace @bhome/public-web
 
 Owner Web uses port **5173**, Mobile browser development **5174**, Public Website **5175**.
 Every `VITE_*` value is public browser configuration. Production builds require an explicit HTTPS
-`VITE_API_BASE_URL`. No login or demo token is fabricated; protected pages await the identity feature.
+`VITE_API_BASE_URL`. Client login screens are not implemented. The backend accepts existing Identity
+accounts at `POST /api/v1/auth/login`; no demo accounts or tokens are seeded. See the
+[login contract](docs/api/API_CONVENTIONS.md#existing-account-login) and
+[28 October audit](docs/development/SPRINT_2_AUDIT.md).
 
 ## Tests and quality checks
 
