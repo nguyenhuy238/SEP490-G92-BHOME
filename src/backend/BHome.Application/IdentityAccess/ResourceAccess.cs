@@ -17,6 +17,7 @@ public sealed class ResourceAccess(ICurrentUser user, IStaffLocationAccess staff
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (user.UserId is not { } id || id == Guid.Empty) return false;
+        if (scope.OwnerUserId == Guid.Empty || scope.LocationId == Guid.Empty || scope.TenantUserId == Guid.Empty) return false;
         // Scope must be satisfied through a role permitted for THIS use case, even for multi-role users.
         bool HasRole(string role) => allowedRoles.Contains(role) && user.IsInRole(role);
         if (HasRole(Roles.Owner) && scope.OwnerUserId == id) return true;

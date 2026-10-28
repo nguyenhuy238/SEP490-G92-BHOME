@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using Npgsql;
 
 namespace BHome.IntegrationTests;
 
@@ -28,7 +29,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         // An extra client-supplied role must not influence the issued JWT.
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            userName = user.UserName,
+            email = user.Email,
             password = TestPassword,
             roles = new[] { Roles.Owner }
         });
@@ -38,7 +39,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         Assert.NotNull(session);
         Assert.Equal(user.Id, session.UserId);
         Assert.Equal([role], session.Roles);
-        Assert.InRange(session.ExpiresAt, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(16));
+        Assert.InRange(session.ExpiresAt, DateTimeOffset.UtcNow.AddMinutes(29), DateTimeOffset.UtcNow.AddMinutes(30));
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         var current = await client.GetFromJsonAsync<SessionIdentity>("/api/v1/session");
@@ -83,7 +84,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         using var client = fixture.Factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            userName = scenario == "unknown" ? Guid.NewGuid().ToString() : user.UserName,
+            email = scenario == "unknown" ? $"{Guid.NewGuid():N}@example.invalid" : user.Email,
             password = scenario == "wrong-password" ? "wrong-password" : TestPassword
         });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -101,16 +102,54 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         using var client = fixture.Factory.CreateClient();
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { userName = user.UserName, password = "wrong-password" });
+            var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = "wrong-password" });
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
-        var correctPassword = await client.PostAsJsonAsync("/api/v1/auth/login", new { userName = user.UserName, password = TestPassword });
+        var correctPassword = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = TestPassword });
         Assert.Equal(HttpStatusCode.Unauthorized, correctPassword.StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var stored = await users.FindByIdAsync(user.Id.ToString());
         Assert.NotNull(stored);
         Assert.True(await users.IsLockedOutAsync(stored));
+    }
+
+    [Fact]
+    public async Task EmailLookupUsesIdentityNormalizationAndNeverFallsBackToUserName()
+    {
+        var user = await CreateUserAsync(Roles.Staff);
+        using var client = fixture.Factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { email = user.Email!.ToUpperInvariant(), password = TestPassword });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(user.Id, (await response.Content.ReadFromJsonAsync<LoginResult>())!.UserId);
+
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var misleadingName = $"{Guid.NewGuid():N}@example.invalid";
+        var stored = (await users.FindByIdAsync(user.Id.ToString()))!;
+        Assert.True((await users.SetUserNameAsync(stored, misleadingName)).Succeeded);
+        var rejected = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { email = misleadingName, password = TestPassword });
+        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
+    }
+
+    [Fact]
+    public async Task DuplicateLegacyNormalizedEmailsAreDeniedWithoutIssuingASession()
+    {
+        var first = await CreateUserAsync(Roles.Owner);
+        var second = await CreateUserAsync(Roles.Staff);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var user = (await db.Users.FindAsync(second.Id))!;
+        user.Email = first.Email;
+        user.NormalizedEmail = first.Email!.ToUpperInvariant();
+        await db.SaveChangesAsync();
+        using var client = fixture.Factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { email = first.Email, password = TestPassword });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.False(await db.AuthenticationSessions.AnyAsync(x => x.UserId == first.Id || x.UserId == second.Id));
     }
 
     private async Task<ApplicationUser> CreateUserAsync(string? role)
@@ -130,20 +169,53 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
 
 public sealed class AuthenticationDatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    private PostgreSqlContainer? database;
+    private string? nativeAdmin;
+    private string? nativeDatabase;
     public ApiFactory Factory { get; } = new();
 
     public async Task InitializeAsync()
     {
-        await database.StartAsync();
-        Factory.ConnectionString = database.GetConnectionString();
+        // Opt in only for a dedicated temporary local cluster, never the developer's bhome database.
+        var native = Environment.GetEnvironmentVariable("BHOME_AUTH_TEST_POSTGRES_ADMIN");
+        if (string.IsNullOrWhiteSpace(native))
+        {
+            database = new PostgreSqlBuilder("postgres:16-alpine").Build();
+            await database.StartAsync();
+            Factory.ConnectionString = database.GetConnectionString();
+        }
+        else
+        {
+            var settings = new NpgsqlConnectionStringBuilder(native);
+            if (settings.Host != "127.0.0.1" || settings.Port == 5432 || settings.Database != "postgres" ||
+                settings.Username != "bhome_test_runner")
+                throw new InvalidOperationException("Native auth tests require a dedicated loopback test cluster and test runner role.");
+            nativeAdmin = native;
+            nativeDatabase = "bhome_auth_test_" + Guid.NewGuid().ToString("N");
+            await using var connection = new NpgsqlConnection(nativeAdmin);
+            await connection.OpenAsync();
+            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{nativeDatabase}\"", connection);
+            await create.ExecuteNonQueryAsync();
+            settings.Database = nativeDatabase;
+            Factory.ConnectionString = settings.ConnectionString;
+        }
         await using var scope = Factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();
     }
 
     public async Task DisposeAsync()
     {
-        await Factory.DisposeAsync();
-        await database.DisposeAsync();
+        try { await Factory.DisposeAsync(); }
+        finally
+        {
+            if (database is not null) await database.DisposeAsync();
+            if (nativeAdmin is not null && nativeDatabase is not null)
+            {
+                await using var connection = new NpgsqlConnection(nativeAdmin);
+                await connection.OpenAsync();
+                await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{nativeDatabase}\" WITH (FORCE)", connection);
+                await drop.ExecuteNonQueryAsync();
+            }
+        }
     }
 }

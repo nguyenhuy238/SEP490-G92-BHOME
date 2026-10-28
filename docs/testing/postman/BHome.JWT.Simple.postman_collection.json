@@ -1,0 +1,863 @@
+{
+  "info": {
+    "_postman_id": "95bb127b-ef91-4786-9ab4-9c9f18c41614",
+    "name": "BHOME — JWT và Refresh Token đơn giản",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "FE-02 / UC-01/02 / GBR-01/02/13. Một collection, không environment, không biến, không tự lưu token. Tự điền email/password trong Body và accessToken trong Authorization. Send từng request theo thứ tự; không Run tự động khi chưa điền. 01–07: JWT; 08–15: rotation/reuse; 16–18: logout; 19–23: logout-all. Giữ refresh token cũ R0 riêng để test reuse; token mới là R1. Refresh token và session tối đa 7 ngày, refresh không kéo dài session. Refresh không cần Bearer. Không gửi lặp password sai. Nếu 429, chờ Retry-After. Chỉ dùng account test."
+  },
+  "item": [
+    {
+      "name": "01 — Đăng nhập email đúng → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Điền email và mật khẩu test thật vào Body. Gửi request, copy accessToken từ response. expiresAt phải khoảng 30 phút sau thời điểm cấp. Nguồn: PostgresAuthenticationTests.LoginVerifiesStoredPasswordAndRolesThenAuthenticatesSession.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Xem phiên với token → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Authorization → Bearer Token: thay DAN_ACCESS_TOKEN_VAO_DAY bằng accessToken của request 01. Kiểm tra userId/sessionId/roles đúng account."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Không có token → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Giữ Authorization = No Auth. Server phải từ chối. Nguồn: ApiFoundationTests.ProtectedControllerRejectsAnonymousWithProblemDetails."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Email sai định dạng → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Giữ email sai định dạng. Kỳ vọng validation ProblemDetails 400. Nguồn: LoginApiTests.InvalidInputReturnsValidationProblemBeforeCredentialLookup.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"khong-phai-email\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Mật khẩu sai → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Điền email test đang tồn tại, giữ password khác mật khẩu thật. Chỉ thử một lần. Nguồn: PostgresAuthenticationTests.UnsupportedOrFailedSignInReturnsSameGenericDenial(wrong-password).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"MAT_KHAU_SAI_DE_TEST\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 — Đăng xuất → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/logout",
+        "description": "Dán cùng accessToken của request 01 vào Authorization → Bearer Token. Body giữ {}. Nguồn: AuthenticationSecurityTests.LogoutCurrentAndAllDevicesApplyCorrectScope.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 — Token cũ sau logout → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Dán chính token vừa dùng logout ở request 06. Không login lại trước bước này. Server phải từ chối dù token chưa hết hạn. Nguồn: AuthenticationSecurityTests.LoginRefreshLogoutPersistsOnlyHashAndImmediatelyRejectsAccessToken."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 — Login để thử refresh → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Lưu riêng accessToken A0 và refreshToken R0 của response. Không dùng token của request 01 đã logout.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 — Refresh hợp lệ → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Dán R0 từ request 08. Response có accessToken mới A1 và refreshToken mới R1. Giữ riêng R0 để dùng ở request 11; không ghi đè. sessionExpiresAt phải bằng request 08, không kéo dài quá 7 ngày.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_R0_TU_REQUEST_08\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 — Access token mới A1 → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Authorization: dán accessToken A1 từ response request 09. Đây là token mới sau refresh."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 — Dùng lại R0 cũ → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Dán đúng R0 đã dùng ở request 09. Reuse thu hồi toàn bộ session này. Không dùng R1 ở bước này.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_LAI_REFRESH_TOKEN_R0_TU_REQUEST_08\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 — A1 bị thu hồi sau reuse → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Authorization: dán chính A1 từ request 09. Phải bị từ chối dù access token chưa hết hạn."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 — R1 cũng bị thu hồi → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Dán R1 mới của request 09. Session đã bị thu hồi do reuse R0 nên R1 cũng không dùng được.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_R1_TU_REQUEST_09\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 — Refresh token không tồn tại → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Giữ token tổng hợp không hợp lệ; không dùng token thật ở request này.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"SYNTHETIC_REFRESH_TOKEN_KHONG_TON_TAI\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 — Không có refresh token → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Body giữ {}. No Auth. Thiếu refresh credential phải bị từ chối.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 — Login mới để thử logout → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Login mới. Copy accessToken A2 và refreshToken R2. Session ở request 08 đã bị thu hồi.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 — Logout session A2 → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/logout",
+        "description": "Authorization: dán A2 từ request 16. Body giữ {}.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 — R2 không refresh được sau logout → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Dán R2 từ request 16. Logout phải thu hồi cả khả năng refresh.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_R2_TU_REQUEST_16\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 — Login session A → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Lưu accessToken A và refreshToken RA. Không dùng token từ những request trước.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 — Login thêm session B → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Dùng cùng email/password với request 19. Lưu accessToken B và refreshToken RB riêng, không ghi đè RA.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 — Logout-all bằng B → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/logout-all",
+        "description": "Authorization: dán accessToken B từ request 20. Thu hồi mọi session của account TEST, bao gồm các tab/thiết bị khác.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 — RA bị thu hồi sau logout-all → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Dán refreshToken RA của session A từ request 19.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_RA_TU_REQUEST_19\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 — RB bị thu hồi sau logout-all → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/refresh",
+        "description": "Dán refreshToken RB của session B từ request 20.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_RB_TU_REQUEST_20\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    }
+  ]
+}
