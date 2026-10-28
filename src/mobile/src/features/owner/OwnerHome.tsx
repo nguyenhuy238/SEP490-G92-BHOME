@@ -1,9 +1,0 @@
-import { roles, roleLabels } from '@bhome/client-core/roles.ts';
-export function OwnerHome() {
-  return (
-    <main>
-      <h1>Không gian {roleLabels[roles.owner].toLowerCase()}</h1>
-      <p>Các tính năng sẽ được bổ sung tại đây.</p>
-    </main>
-  );
-}
