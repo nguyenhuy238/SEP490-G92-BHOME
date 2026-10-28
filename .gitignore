@@ -6,6 +6,7 @@
 **/build/
 **/coverage/
 .tools/
+.tmp/
 TestResults/
 **/TestResults/
 *.user

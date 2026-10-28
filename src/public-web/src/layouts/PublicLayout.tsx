@@ -1,15 +1,36 @@
-import { Link, Outlet } from 'react-router-dom';
-export function PublicLayout() {
+
+import { AppBar, Toolbar, Typography, Box, Container } from '@mui/material';
+import { Outlet, Link } from 'react-router';
+
+export default function PublicLayout() {
   return (
     <>
-      <header>
-        <strong>BHOME</strong>
-        <nav aria-label="Điều hướng chính">
-          <Link to="/">Trang chủ</Link>
-        </nav>
-      </header>
-      <Outlet />
-      <footer>BHOME · Thông tin nhà trọ dành cho cộng đồng</footer>
+      <AppBar position="static">
+        <Toolbar>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            BHOME
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 3 }}>
+            <Link to="/" style={{ color: 'white' }}>
+              Trang chủ
+            </Link>
+            <Link to="/locations" style={{ color: 'white' }}>
+              Cơ sở
+            </Link>
+          </Box>
+        </Toolbar>
+      </AppBar>
+
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Outlet />
+      </Container>
+
+      <Box component="footer" sx={{ py: 3, textAlign: 'center' }}>
+        <Typography variant="body2">
+          © BHOME - Smart Boarding House Management
+        </Typography>
+      </Box>
     </>
   );
 }
