@@ -14,12 +14,12 @@ public sealed class LoginServiceTests
     public async Task VerifiedIdentityIssuesTokenWithOnlyStoredDistinctRoles()
     {
         var id = Guid.NewGuid();
-        var expires = DateTimeOffset.UtcNow.AddMinutes(15);
-        credentials.VerifyAsync("staff", "test-password", Arg.Any<CancellationToken>())
+        var expires = DateTimeOffset.UtcNow.AddMinutes(30);
+        credentials.VerifyAsync("staff@example.invalid", "test-password", Arg.Any<CancellationToken>())
             .Returns(new VerifiedIdentity(id, [Roles.Staff, Roles.Staff]));
         sessions.CreateAsync(Arg.Any<VerifiedIdentity>(), null, Arg.Any<CancellationToken>()).Returns(new LoginResult(id, [Roles.Staff], "verified-token", expires, Guid.NewGuid(), "test-refresh", expires.AddDays(7)));
 
-        var result = await new LoginService(credentials, sessions, audit).LoginAsync("staff", "test-password");
+        var result = await new LoginService(credentials, sessions, audit).LoginAsync("staff@example.invalid", "test-password");
 
         Assert.NotNull(result);
         Assert.Equal(id, result.UserId);
@@ -33,9 +33,12 @@ public sealed class LoginServiceTests
     [InlineData(null, "password")]
     [InlineData("", "password")]
     [InlineData(" ", "password")]
-    [InlineData("user", null)]
-    [InlineData("user", "")]
-    [InlineData("user", " ")]
+    [InlineData("username-only", "password")]
+    [InlineData("0900000000", "password")]
+    [InlineData("invalid@@example.invalid", "password")]
+    [InlineData("user@example.invalid", null)]
+    [InlineData("user@example.invalid", "")]
+    [InlineData("user@example.invalid", " ")]
     public async Task InvalidInputDoesNotVerifyCredentials(string? name, string? password)
     {
         Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync(name, password));
@@ -49,7 +52,7 @@ public sealed class LoginServiceTests
     public async Task OversizedInputDoesNotVerifyCredentials(bool oversizedName)
     {
         Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync(
-            oversizedName ? new string('u', LoginService.MaxUserNameLength + 1) : "user",
+            oversizedName ? new string('u', LoginService.MaxEmailLength + 1) : "user@example.invalid",
             oversizedName ? "password" : new string('p', LoginService.MaxPasswordLength + 1)));
         await credentials.DidNotReceiveWithAnyArgs().VerifyAsync(default!, default!, default);
     }
@@ -57,7 +60,16 @@ public sealed class LoginServiceTests
     [Fact]
     public async Task FailedVerificationNeverIssuesToken()
     {
-        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync("user", "wrong-password"));
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync("user@example.invalid", "wrong-password"));
+        await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task EmailIsTrimmedWithoutChangingThePassword()
+    {
+        await new LoginService(credentials, sessions, audit).LoginAsync("  User@example.invalid  ", " password ");
+        await credentials.Received(1).VerifyAsync("User@example.invalid", " password ", Arg.Any<CancellationToken>());
+        await audit.Received(1).LoginFailedAsync(Arg.Any<CancellationToken>());
         await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
@@ -77,7 +89,7 @@ public sealed class LoginServiceTests
         };
         credentials.VerifyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new VerifiedIdentity(scenario == "empty-id" ? Guid.Empty : Guid.NewGuid(), roles));
-        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync("user", "password"));
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync("user@example.invalid", "password"));
         await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
@@ -87,7 +99,7 @@ public sealed class LoginServiceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new LoginService(credentials, sessions, audit).LoginAsync("user", "password", cancellation.Token));
+            new LoginService(credentials, sessions, audit).LoginAsync("user@example.invalid", "password", cancellation.Token));
         await credentials.DidNotReceiveWithAnyArgs().VerifyAsync(default!, default!, default);
         await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
@@ -102,7 +114,7 @@ public sealed class LoginServiceTests
             return new VerifiedIdentity(Guid.NewGuid(), [Roles.Owner]);
         });
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new LoginService(credentials, sessions, audit).LoginAsync("user", "password", cancellation.Token));
+            new LoginService(credentials, sessions, audit).LoginAsync("user@example.invalid", "password", cancellation.Token));
         await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 }

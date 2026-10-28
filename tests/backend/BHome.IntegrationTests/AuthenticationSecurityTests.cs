@@ -34,7 +34,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(user, Roles.Owner)).Succeeded);
         using var client = fixture.Factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password })).StatusCode);
         await WithDb(async db => Assert.False((await db.Users.FindAsync(id))!.IsActive));
     }
 
@@ -329,8 +329,8 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         {
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
             client.DefaultRequestHeaders.Authorization = null;
-            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password })).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = NewPassword })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password })).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = NewPassword })).StatusCode);
         }
     }
 
@@ -344,7 +344,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         // Factory client defaults to http; configure same origin explicitly for this transport test.
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://localhost");
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var session = (await response.Content.ReadFromJsonAsync<LoginResult>())!;
         Assert.Null(session.RefreshToken);
@@ -399,7 +399,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Bearer(client, session);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
         client.DefaultRequestHeaders.Authorization = null;
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = NewPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = NewPassword })).StatusCode);
         await WithDb(async db =>
         {
             var grant = await db.PasswordResetGrants.FindAsync(user.Id);
@@ -499,7 +499,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
 
     private static async Task<LoginResult> Login(HttpClient client, ApplicationUser user)
     {
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { user.UserName, password = Password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<LoginResult>())!;
     }

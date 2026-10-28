@@ -1,5 +1,8 @@
 # Kiểm toán Authentication / Authorization — 28/10/2026
 
+> Login identifier and JWT lifetime decisions in this historical audit are superseded by
+> [JWT email authentication](JWT_EMAIL_AUTHENTICATION.md). Other evidence retains its original scope.
+
 ## Nguồn và phạm vi
 
 Đã đọc bản gốc `docs/reports/BHome_Report-3_Software Requirement Specification (2).docx`

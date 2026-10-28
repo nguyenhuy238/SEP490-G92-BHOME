@@ -8,9 +8,12 @@ from finalized requirements.
 
 ## Existing-account login
 
-`POST /api/v1/auth/login` allows anonymous JSON requests with required `userName` (maximum 256
-characters) and `password` (maximum 1024 characters). This foundation uses the existing Identity
-UserName; it does not define the final SRS email/phone/login-identifier or tenant-activation workflow.
+`POST /api/v1/auth/login` allows anonymous JSON requests with required `email` (maximum 256
+characters, email format) and `password` (maximum 1024 characters). Email-only login was approved
+on 28 October 2026 (FE-02 / UC-01). Identity normalizes the trimmed email for a case-insensitive
+lookup; passwords remain unchanged. UserName and phone login are not accepted. Ambiguous legacy
+normalized emails receive the generic 401 denial without issuing a session. Account provisioning
+and tenant activation remain separate workflows.
 Passwords are passed unchanged to Identity. Kestrel limits this endpoint's request body to 16 KiB.
 Oversized bodies return sanitized HTTP 413 ProblemDetails; the global handler preserves that status.
 
@@ -28,13 +31,14 @@ lockout applies. Database/provider failures remain sanitized server errors; they
 successful logins. Generic error bodies do not guarantee identical response timing.
 
 No users are seeded or created by login. Provisioning/activation workflows and second-factor challenges
-remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing and `userName` identifiers are preserved.
+remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing is preserved. Login clients must now send `email`; legacy `userName`-only login
+payloads return 400. Forgot/reset-password retain their existing `userName` contract for a later step.
 
 ## Sessions, refresh and credentials
 
 | Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                                              |
 | ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| POST `login`                   | Anonymous; `userName`, `password`, optional `device`                                      | 200 session or generic 401                                                                          |
+| POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                                          |
 | POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                                                  |
 | POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                                         |
 | POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                                     |
@@ -52,8 +56,8 @@ headers do not select a new source partition.
 
 JWT includes `sub`, `role`, `jti`, `sid`, `sstamp`; no Location/identity fields. Every protected request
 validates signature/HS256/issuer/audience/expiry, then current active account, lockout, second-factor
-state, session expiry/revocation, stamp and current stored roles. JWT default remains the existing
-15 minutes (Report 4's configurable baseline is 30); clock skew remains 30 seconds. Absolute session
+state, session expiry/revocation, stamp and current stored roles. JWT default is now
+30 minutes as approved and aligned with Report 4; clock skew remains 30 seconds. Absolute session
 expiry is enforced without skew. Old JWTs lacking session/stamp require a new login after deployment.
 
 Refresh tokens have 256 random bits and only SHA-256 hashes are persisted. A session ID is its token

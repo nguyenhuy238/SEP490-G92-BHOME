@@ -1,5 +1,8 @@
 # Repository audit and authentication slice — 28 October 2026
 
+> Login identifier and JWT lifetime decisions in this historical audit are superseded by
+> [JWT email authentication](JWT_EMAIL_AUTHENTICATION.md). Other evidence retains its original scope.
+
 This records inspection of the actual working tree before source changes, followed by the scoped
 setup fixes and existing-account login slice. Dates and Sprint scope below come from the supplied
 task: Sprint 1 was 12–25 October; Sprint 2 is 26 October–8 November; Sprint 3 is 9–22 November 2026.

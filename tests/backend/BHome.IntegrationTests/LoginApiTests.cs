@@ -32,7 +32,7 @@ public sealed class LoginApiTests
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
             {
-                Content = JsonContent.Create(new { userName = "synthetic", password = "wrong-password" })
+                Content = JsonContent.Create(new { email = "synthetic@example.invalid", password = "wrong-password" })
             };
             request.Headers.Add("X-Forwarded-For", $"192.0.2.{attempt + 1}");
             var response = await client.SendAsync(request);
@@ -51,9 +51,12 @@ public sealed class LoginApiTests
     [InlineData(null, "password")]
     [InlineData("", "password")]
     [InlineData(" ", "password")]
-    [InlineData("user", null)]
-    [InlineData("user", "")]
-    public async Task InvalidInputReturnsValidationProblemBeforeCredentialLookup(string? userName, string? password)
+    [InlineData("username-only", "password")]
+    [InlineData("0900000000", "password")]
+    [InlineData("invalid@@example.invalid", "password")]
+    [InlineData("user@example.invalid", null)]
+    [InlineData("user@example.invalid", "")]
+    public async Task InvalidInputReturnsValidationProblemBeforeCredentialLookup(string? email, string? password)
     {
         using var factory = new ApiFactory();
         var credentials = new DeniedCredentials();
@@ -64,7 +67,7 @@ public sealed class LoginApiTests
         }));
         using var client = host.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { userName, password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -83,15 +86,25 @@ public sealed class LoginApiTests
         }));
         using var client = host.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { userName = "private-name", password = "private-password" });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "private@example.invalid", password = "private-password" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("Sign-in failed.", body);
         Assert.Contains(response.Headers.GetValues("X-Correlation-ID").Single(), body);
-        Assert.DoesNotContain("private-name", body);
+        Assert.DoesNotContain("private@example.invalid", body);
         Assert.DoesNotContain("private-password", body);
+    }
+
+    [Fact]
+    public async Task LegacyUserNamePayloadCannotSelectAnAccount()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { userName = "synthetic@example.invalid", password = "synthetic-password" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private sealed class TestSecurityAudit : ISecurityAudit
@@ -103,7 +116,7 @@ public sealed class LoginApiTests
     private sealed class DeniedCredentials : ICredentialVerifier
     {
         public int Calls { get; private set; }
-        public Task<VerifiedIdentity?> VerifyAsync(string userName, string password, CancellationToken cancellationToken)
+        public Task<VerifiedIdentity?> VerifyAsync(string email, string password, CancellationToken cancellationToken)
         {
             Calls++;
             return Task.FromResult<VerifiedIdentity?>(null);

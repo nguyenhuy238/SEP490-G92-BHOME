@@ -25,7 +25,7 @@ it('serializes web cookie mutations with Web Locks and retries logout after expi
       .mockResolvedValueOnce(new Response(null, { status: 204 })),
   );
   const client = new SessionClient('https://api.example.invalid', 'web');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   await client.logout();
   expect(lock).toHaveBeenCalledTimes(4);
   expect(client.session).toBeNull();
@@ -36,8 +36,12 @@ it('keeps web refresh credentials in cookie transport and access tokens out of s
   const fetchMock = vi.fn().mockResolvedValue(json({ ...session, refreshToken: null }));
   vi.stubGlobal('fetch', fetchMock);
   const client = new SessionClient('https://api.example.invalid', 'web');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   const init = fetchMock.mock.calls[0][1] as RequestInit;
+  expect(JSON.parse(init.body as string)).toEqual({
+    email: 'synthetic@example.invalid',
+    password: 'test-password',
+  });
   expect(init.credentials).toBe('include');
   expect(new Headers(init.headers).get('X-BHome-Client')).toBe('web');
   expect(storage).not.toHaveBeenCalled();
@@ -57,7 +61,7 @@ it('coalesces simultaneous mobile refresh and rotates the in-memory token', asyn
     );
   vi.stubGlobal('fetch', fetchMock);
   const client = new SessionClient('https://api.example.invalid', 'mobile');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   const first = client.refresh();
   const second = client.refresh();
   expect(first).toBe(second);
@@ -85,7 +89,7 @@ it('retries protected requests once with the shared refreshed access token', asy
     .mockResolvedValueOnce(json({ userId: session.userId }));
   vi.stubGlobal('fetch', fetchMock);
   const client = new SessionClient('https://api.example.invalid', 'mobile');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   const api = createApiClient(
     'https://api.example.invalid',
     () => client.token,
@@ -104,7 +108,7 @@ it('clears local credentials when refresh is revoked', async () => {
     vi.fn().mockResolvedValueOnce(json(session)).mockResolvedValueOnce(json({}, 401)),
   );
   const client = new SessionClient('https://api.example.invalid', 'mobile');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   await expect(client.refresh()).rejects.toMatchObject({ status: 401 });
   expect(client.session).toBeNull();
 });
@@ -124,7 +128,7 @@ it('does not resurrect a cleared session when an older refresh finishes', async 
       ),
   );
   const client = new SessionClient('https://api.example.invalid', 'mobile');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   const pending = client.refresh();
   client.clear();
   complete(json({ ...session, accessToken: 'stale-access' }));
@@ -141,7 +145,7 @@ it('refreshes an expired access token before completing server logout and cleari
     .mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal('fetch', fetchMock);
   const client = new SessionClient('https://api.example.invalid', 'mobile');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   await client.logout();
   expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
     'https://api.example.invalid/api/v1/auth/login',
@@ -158,7 +162,7 @@ it('preserves a session on a temporary refresh outage instead of pretending logo
     vi.fn().mockResolvedValueOnce(json(session)).mockResolvedValueOnce(json({}, 503)),
   );
   const client = new SessionClient('https://api.example.invalid', 'mobile');
-  await client.login('synthetic', 'test-password');
+  await client.login('synthetic@example.invalid', 'test-password');
   await expect(client.refresh()).rejects.toMatchObject({ status: 503 });
   expect(client.token).toBe('access-one');
 });

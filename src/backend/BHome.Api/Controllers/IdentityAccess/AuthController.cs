@@ -21,7 +21,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
-        var session = await login.LoginAsync(request.UserName, request.Password, cancellationToken, request.Device);
+        var session = await login.LoginAsync(request.Email, request.Password, cancellationToken, request.Device);
         return session is null
             ? Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Sign-in failed.")
             : Ok(Transport(session));
@@ -95,7 +95,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
 }
 
 public sealed record LoginRequest(
-    [Required, StringLength(LoginService.MaxUserNameLength)] string? UserName,
+    [Required, EmailAddress, StringLength(LoginService.MaxEmailLength)] string? Email,
     [Required, StringLength(LoginService.MaxPasswordLength)] string? Password,
     [StringLength(256)] string? Device = null);
 

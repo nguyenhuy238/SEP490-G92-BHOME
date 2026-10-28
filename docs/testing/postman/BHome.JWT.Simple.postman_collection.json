@@ -1,0 +1,255 @@
+{
+  "info": {
+    "_postman_id": "95bb127b-ef91-4786-9ab4-9c9f18c41614",
+    "name": "BHOME — JWT đơn giản",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "FE-02 / UC-01/02. Không environment, không biến, không tự lưu token. Tự sửa email/password trong Body và dán accessToken ở Authorization → Bearer Token của request 02, 06, 07. Bấm Send từng request; không Run toàn bộ trước khi điền token. Chỉ dùng account test. URL mặc định https://localhost:7240. Request 05 cố ý sai password, không gửi lặp nhiều lần để tránh lockout."
+  },
+  "item": [
+    {
+      "name": "01 — Đăng nhập email đúng → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Điền email và mật khẩu test thật vào Body. Gửi request, copy accessToken từ response. expiresAt phải khoảng 30 phút sau thời điểm cấp. Nguồn: PostgresAuthenticationTests.LoginVerifiesStoredPasswordAndRolesThenAuthenticatesSession.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Xem phiên với token → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Authorization → Bearer Token: thay DAN_ACCESS_TOKEN_VAO_DAY bằng accessToken của request 01. Kiểm tra userId/sessionId/roles đúng account."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Không có token → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Giữ Authorization = No Auth. Server phải từ chối. Nguồn: ApiFoundationTests.ProtectedControllerRejectsAnonymousWithProblemDetails."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Email sai định dạng → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Giữ email sai định dạng. Kỳ vọng validation ProblemDetails 400. Nguồn: LoginApiTests.InvalidInputReturnsValidationProblemBeforeCredentialLookup.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"khong-phai-email\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Mật khẩu sai → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "https://localhost:7240/api/v1/auth/login",
+        "description": "Điền email test đang tồn tại, giữ password khác mật khẩu thật. Chỉ thử một lần. Nguồn: PostgresAuthenticationTests.UnsupportedOrFailedSignInReturnsSameGenericDenial(wrong-password).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"MAT_KHAU_SAI_DE_TEST\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 — Đăng xuất → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/logout",
+        "description": "Dán cùng accessToken của request 01 vào Authorization → Bearer Token. Body giữ {}. Nguồn: AuthenticationSecurityTests.LogoutCurrentAndAllDevicesApplyCorrectScope.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 — Token cũ sau logout → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "https://localhost:7240/api/v1/auth/me",
+        "description": "Dán chính token vừa dùng logout ở request 06. Không login lại trước bước này. Server phải từ chối dù token chưa hết hạn. Nguồn: AuthenticationSecurityTests.LoginRefreshLogoutPersistsOnlyHashAndImmediatelyRejectsAccessToken."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    }
+  ]
+}
