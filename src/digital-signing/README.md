@@ -100,24 +100,44 @@ trang web tạm để thử toàn bộ luồng ký. Sandbox **không bao giờ �
 powershell -ExecutionPolicy Bypass -File src/digital-signing/run-sandbox.ps1
 ```
 
-Sau đó mở **http://localhost:5280**. Trang gồm 3 bước:
+Sau đó mở **http://localhost:5280**.
 
-1. **Chọn vai** Owner/Staff/Tenant (đăng nhập giả lập, không cần mật khẩu), rồi **khai báo chứng thư**
-   bằng mã thuê bao. Ở chế độ giả lập, mã mặc định là `079000000001`; mã nào cũng được, hệ thống tự
-   sinh khóa RSA và chứng thư thử cho mã đó.
-2. **Chọn file PDF**, xem trước từng trang, **bấm lên trang để đặt ô chữ ký**, chỉnh độ rộng, rồi bấm
-   "Gửi yêu cầu ký".
-3. **Theo dõi trạng thái**: trang tự hỏi lại mỗi 2 giây. Bấm **Xác nhận/Từ chối** ở khung
-   "Điện thoại giả lập", hoặc **quét mã QR bằng điện thoại thật** (cùng Wi-Fi) để mở `phone.html`,
-   một trang giả làm app MySign. Ký xong thì xem trước và tải PDF đã ký.
+### Ký thật bằng Viettel MySign
+
+1. Ở vai **Owner**, mục **"Tài khoản ký số Viettel MySign"** ở đầu trang: nhập **Client ID** và
+   **Client Secret** do Viettel cấp cho phần mềm (người giữ tài khoản gửi riêng, **không** đưa vào
+   repo hay nhóm chat chung), bấm **Lưu tài khoản**. Huy hiệu góc trên chuyển thành
+   "Viettel MySign thật".
+2. Nhập mã thuê bao MySign của mình (thường là **số CCCD**) rồi bấm **Kiểm tra kết nối**: chỉ đăng nhập
+   Viettel, không ký gì, không gửi gì tới điện thoại.
+3. Khai báo chứng thư bằng mã thuê bao đó; tên trên chứng thư do Viettel trả về.
+4. Ký như bên dưới; yêu cầu ký về **app MySign trên điện thoại** (4G cũng được). Mỗi lần ký tốn một
+   lượt ký trong gói MySign.
+
+Tài khoản chỉ lưu trên máy đang chạy sandbox, trong `%LOCALAPPDATA%\BHome\DigitalSigningSandbox\`
+(secret mã hóa bằng một khóa sinh riêng cho máy đó), nên còn sau khi tắt/bật nhưng mỗi người tự khai
+báo trên máy mình. Đây không phải nơi cất secret cho môi trường thật: khóa nằm cạnh dữ liệu nó bảo vệ.
+"Xóa tài khoản đã lưu" đưa trang về Viettel giả lập. Chứng thư khai báo ở chế độ giả lập không ký thật
+được: gỡ và khai báo lại sau khi đổi chế độ.
+
+### Các bước trên trang
+
+1. **Chứng thư số:** chọn vai Owner/Staff/Tenant (đăng nhập giả lập, không cần mật khẩu), rồi khai báo
+   chứng thư bằng mã thuê bao. Ở chế độ giả lập, mã mặc định là `079000000001` (mã nào cũng được, hệ
+   thống tự sinh khóa RSA và chứng thư thử cho mã đó; có ô điền họ tên để chứng thư mang đúng tên).
+2. **Ảnh chữ ký:** tải PNG nền trong suốt hoặc bấm "Tạo từ họ tên".
+3. **Ký số:** chọn file PDF; trang cuối mở sẵn, **kéo ảnh chữ ký** tới chỗ muốn ký, chỉnh cỡ, bấm
+   **Ký số**. Trang tự hỏi lại mỗi 2 giây. Ở chế độ giả lập, bấm **Xác nhận/Từ chối** ở khung
+   "Điện thoại giả lập" hoặc quét mã QR bằng điện thoại thật (cùng Wi-Fi) để mở `phone.html`, một
+   trang giả làm app MySign. Ký xong thì xem trước và tải PDF đã ký.
 
 Cuối trang có **nhật ký gọi API** (method, đường dẫn, mã HTTP, thời gian, JSON trả về), để cả nhóm
 thấy đúng các request mà app mobile sau này sẽ gọi. Swagger ở `/swagger`.
 
-| Cấu hình           | Mặc định                                                   | Đổi sang                                                                                                                                                       |
-| ------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sandbox:Provider` | `Fake`: Viettel giả lập, ký bằng khóa RSA tạo trong bộ nhớ | `Viettel`: Viettel thật (`run-sandbox.ps1 -Viettel`, cần `DigitalSigning__Viettel__ClientId` và `DigitalSigning__Viettel__ClientSecret` trong biến môi trường) |
-| `Sandbox:Storage`  | `Memory`: không cần database, mất dữ liệu khi tắt          | `Postgres`: cần `ConnectionStrings__Database` và chạy `sql/001-digital-signing.sql`                                                                            |
+| Cấu hình           | Mặc định                                                                                                    | Đổi sang                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `Sandbox:Provider` | `Auto`: Viettel thật khi đã có tài khoản (lưu trên trang hoặc biến môi trường), Viettel giả lập khi chưa có | `Fake` (`run-sandbox.ps1 -Fake`): luôn giả lập · `Viettel` (`-Viettel`): luôn Viettel thật |
+| `Sandbox:Storage`  | `Memory`: không cần database, mất dữ liệu khi tắt                                                           | `Postgres`: cần `ConnectionStrings__Database` và chạy `sql/001-digital-signing.sql`        |
 
 Ở chế độ giả lập, **phần PDF và chữ ký là thật**: chữ ký được xác minh toàn vẹn bằng iText trước khi
 lưu. Chỉ có chứng thư là tự ký, nên Adobe/Foxit sẽ báo chứng thư "không tin cậy". Đây là điều bình
