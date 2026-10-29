@@ -168,13 +168,14 @@ services with `docker compose stop`; named volumes persist. No setup script remo
 
 From root, `npm ci` installs all applications/shared tooling with the committed lockfile. Copy each
 web client `.env.example` to its `.env.local`; the web clients use `VITE_API_BASE_URL=https://localhost:7240`.
-The current Expo mobile demo has no backend connection and needs no environment file.
+Mobile đã kết nối backend qua HTTPS; dùng launcher tự chọn mạng, không cấu hình IP riêng:
+[hướng dẫn mobile cho team](MOBILE_NETWORK_DEVELOPMENT.md).
 Every Vite environment value is visible to the browser. Native device builds need a reachable HTTPS
 API address and trusted certificate; a device's `localhost` refers to the device, not the developer PC.
 
 ```powershell
 npm run dev --workspace @bhome/owner-web
-npm.cmd run mobile
+npm.cmd run mobile:dev
 npm run dev --workspace @bhome/public-web
 ```
 
@@ -186,25 +187,25 @@ it per app and strict TypeScript also checks it separately.
 
 ## Expo mobile
 
-The current `src/mobile/package.json` uses Expo SDK 58 and React Native. Its entry point is
-`src/mobile/index.ts`, which registers `src/mobile/App.tsx`. Older Capacitor instructions and
-browser-based mobile tests refer to the previous client and do not validate this Expo demo.
+`src/mobile/package.json` dùng Expo SDK 58/React Native và entry `expo-router/entry`, các màn hình
+ở `src/mobile/src/app`. Các chỉ dẫn Capacitor và test mobile trên trình duyệt cũ không xác minh
+ứng dụng native hiện tại.
 
 From the repository root:
 
 ```powershell
-npm.cmd run mobile
+npm.cmd run mobile:dev
 # Reset Metro's cache if needed:
-npm.cmd run mobile -- --clear
+npm.cmd run mobile:dev -- -Clear
 ```
 
 Alternatively, run `npx.cmd expo start` from `src/mobile`. Do not run it without a project path at
 the repository root: Expo would use the root package instead of the mobile entry point and load
 the root backend environment files. Stop that server with Ctrl+C before restarting correctly.
 
-Scan the terminal QR code with a compatible Expo Go version on a device on the same network.
-Metro normally uses port 8081; use the address printed in the terminal. This demo currently shows
-sample data only. Native device UI and backend authentication require separate verification.
+Quét QR bằng Expo Go trên điện thoại cùng mạng. Launcher chọn IP cho API/Metro, tự cập nhật TLS
+và restart Metro khi mạng đổi; quét QR mới để điện thoại tải manifest hiện tại. Mỗi máy mới cần
+trust CA trên điện thoại một lần. Xem `MOBILE_NETWORK_DEVELOPMENT.md` để biết điều kiện và kiểm chứng.
 
 To verify Android bundling without a device, run from `src/mobile`:
 

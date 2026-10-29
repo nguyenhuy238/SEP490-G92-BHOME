@@ -144,10 +144,32 @@ tổng hợp/ẩn danh trong kiểm thử tự động. Không yêu cầu gửi 
 
 ## Chạy trên iPhone với Expo Go
 
+**Luồng hiện tại cho cả team, không cấu hình IP:** từ repository root chạy
+`npm.cmd run mobile:dev`, rồi quét QR. Launcher tự chọn mạng, chuẩn bị HTTPS, dùng lại hoặc
+khởi chạy API và cập nhật khi IP đổi. Đổi Wi-Fi thì quét QR mới; không sửa `.env.local`.
+Xem [cách dùng, bước trust CA một lần và kiểm chứng](MOBILE_NETWORK_DEVELOPMENT.md).
+Các bước khởi chạy tách biệt bên dưới chỉ dành cho nhu cầu debug riêng.
+
 Địa chỉ LAN kiểm tra ngày 28/10/2026: API `https://192.168.0.106:7240`, Expo
 `exp://192.168.0.106:8081`. Đây là địa chỉ LAN tại lúc thiết lập, không phải hosting public.
+**Không dùng lại IP này khi đổi mạng.** Luôn dùng IP do script in ra trong lần chạy hiện tại.
 Nếu IP máy tính đổi, chạy lại script với `-LanIp <IPv4 trong Wi-Fi của bạn>`.
 Người dùng đã xác nhận Safari trên iPhone tải được chứng chỉ từ máy tính.
+
+Khi cần chuẩn bị cấu hình Visual Studio riêng (launcher mới đã tự làm bước này):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Prepare-OcrMobile.ps1 -SkipDatabase
+```
+
+Script cập nhật `.env`, chứng chỉ server và User Secrets theo IP mới,
+giữ CA hiện có nếu còn phù hợp. Khởi động lại API trong Visual Studio; dừng Metro cũ bằng Ctrl+C,
+rồi chạy `scripts/Start-OcrMobileApp.ps1 -Clear` bằng lệnh ở bước 4 và quét lại QR.
+Trên iPhone cùng mạng, mở `https://<LAN_IP>:7240/health/ready` bằng Safari; phải thấy `Healthy`
+trước khi đăng nhập. Nếu Safari không kết nối được, kiểm tra IP, quyền mạng nội bộ, firewall
+và mạng Wi-Fi có chặn các thiết bị truy cập nhau hay không. Không tắt kiểm chứng HTTPS để né lỗi.
+Màn hình đăng nhập dùng **email**, ví dụ tài khoản local Owner là `owner.dev@example.invalid`;
+`owner.dev` là username cũ, không phải định danh đăng nhập được API hiện tại chấp nhận.
 
 1. Bật Docker Desktop và dịch vụ dữ liệu: `docker compose up -d`.
 2. Nếu dùng Visual Studio để chạy backend, chuẩn bị từ repository root rồi nhấn F5 trong IDE:
@@ -176,7 +198,7 @@ Người dùng đã xác nhận Safari trên iPhone tải được chứng chỉ
    được in ra hoặc đưa vào Git. Script không sửa Windows firewall/trusted-root store.
 
 3. Trên iPhone cùng mạng, Safari mở
-   `http://192.168.0.106:5240/development/mobile-ca.cer`, cài profile **BHOME Local Mobile CA**.
+   `http://<LAN_IP>:5240/development/mobile-ca.cer`, cài profile **BHOME Local Mobile CA**.
    **Tải về chưa phải đã cài:** mở **Cài đặt → Đã tải về hồ sơ → BHOME Local Mobile CA → Cài đặt**,
    nhập mã khóa iPhone và hoàn tất các bước xác nhận. Nếu không thấy hồ sơ đã tải, tải lại bằng
    Safari rồi cài ngay; Apple cho biết hồ sơ chưa cài sẽ tự bị xóa sau 8 phút:
@@ -185,7 +207,7 @@ Người dùng đã xác nhận Safari trên iPhone tải được chứng chỉ
    → Giới thiệu → Cài đặt tin cậy chứng nhận**. Apple xác nhận profile tự cài cần bật trust TLS
    riêng: https://support.apple.com/en-us/102390 . Địa chỉ HTTP này chỉ tải chứng chỉ public
    trong Development có opt-in; mọi API dữ liệu dùng HTTPS. Không dùng `-k`/bỏ kiểm chứng TLS
-   trên mobile. Sau khi tin cậy, mở `https://192.168.0.106:7240/health/ready` và kiểm tra Healthy.
+   trên mobile. Sau khi tin cậy, mở `https://<LAN_IP>:7240/health/ready` và kiểm tra Healthy.
 
 4. Terminal mobile:
 
@@ -194,21 +216,23 @@ Người dùng đã xác nhận Safari trên iPhone tải được chứng chỉ
    ```
 
    Script chọn Node 22 trong `.tools` nếu đã cài, chạy Expo LAN từ workspace mobile. Dùng
-   QR trong terminal hoặc mở `exp://192.168.0.106:8081` trên iPhone để vào Expo Go. Nếu dùng
+   QR trong terminal hoặc mở `exp://<LAN_IP>:8081` trên iPhone để vào Expo Go. Nếu dùng
    terminal Expo không có QR, mở URL này trong Safari để chuyển sang Expo Go. Cấp quyền
-   mạng nội bộ/camera khi được hỏi. Màn hình đăng nhập đã lấy API URL từ `.env.local` của mobile.
-   Script kiểm tra IP API còn thuộc máy tính và cổng HTTPS đang lắng nghe trên LAN trước khi mở
-   Expo. `npx expo start` chỉ mở Metro, không khởi động API hoặc cập nhật IP/chứng chỉ.
+   mạng nội bộ/camera khi được hỏi. Màn hình đăng nhập tự lấy API URL từ host trong Expo manifest
+   ở chế độ development, không cần IP trong `.env.local`. Script tự chuẩn bị HTTPS và kiểm tra API
+   trước khi mở Expo; `npx expo start` riêng chỉ mở Metro, không cập nhật IP/chứng chỉ.
    Script yêu cầu Node `>=22.13 <23`, từ chối mở thêm Metro nếu cổng 8081 đã có tiến trình.
    Dừng terminal cũ bằng Ctrl+C; chỉ dùng `-Port 8082` khi chủ động cần cổng khác.
    `-Clear` xóa cache Metro theo Expo CLI, hữu ích sau khi đổi phiên bản Node; lần chạy thường
    có thể bỏ cờ này. Không chạy `npm ci` khi Metro còn đang chạy.
    Trên iPhone thật, Expo Go và Expo CLI cần đăng nhập cùng tài khoản Expo. Kiểm tra bằng
    `npx expo whoami`; nếu cần thì dùng `npx expo login` và tự đăng nhập trong terminal/browser.
-   Tài khoản Expo khác với tài khoản BHOME `owner.dev`. Xem
+   Tài khoản Expo khác với tài khoản BHOME `owner.dev@example.invalid`. Xem
    [hướng dẫn Expo Go sign-in](https://docs.expo.dev/troubleshooting/expo-go-sign-in-required/).
 
-5. Đăng nhập Owner. Môi trường local đã tạo `owner.dev`, `staff.dev`, `tenant.dev` bằng công cụ
+5. Đăng nhập Owner bằng email. Môi trường local đã tạo các username `owner.dev`, `staff.dev`,
+   `tenant.dev` với email tương ứng `owner.dev@example.invalid`, `staff.dev@example.invalid`,
+   `tenant.dev@example.invalid` bằng công cụ
    fixture, với mật khẩu ngẫu nhiên chỉ nằm trong `.tools/ocr-mobile-test-login.txt` (ignored).
    Không dùng các tài khoản này ngoài local. `staff.dev` chưa gắn Owner/Location nên không có
    quyền OCR; Owner tạo Staff mới theo bước dưới. Lần thiết lập mới có thể dùng:
@@ -423,7 +447,8 @@ nó sẽ xóa bảng nghiệp vụ mới. Giữ backup/keys, forward-fix hoặc 
 ## Mobile: phiên đăng nhập và dữ liệu tạm
 
 Expo Router với các route `index`, `setup`, `resident`, `identity`, `meter`; thay entry demo cũ.
-API URL cấu hình bằng `EXPO_PUBLIC_API_BASE_URL`, chỉ chấp nhận origin HTTPS. Access token
+Development lấy API từ host của Expo manifest; release/standalone dùng `EXPO_PUBLIC_API_BASE_URL`,
+chỉ chấp nhận origin HTTPS. Access token
 ở RAM; refresh credential và API binding ở SecureStore/Keychain `WHEN_UNLOCKED_THIS_DEVICE_ONLY`.
 Coalesce refresh/restore, serialize Keychain writes, chặn refresh đến muộn phục hồi phiên đã
 logout; đổi API không gửi credential của host cũ sang host mới. Không retry refresh bị lỗi mạng
@@ -523,3 +548,51 @@ Kiểm chứng local Windows, SDK 8.0.427, Docker Desktop Linux containers:
 
 Đây là kết quả local; chưa push hoặc chạy lại GitHub Actions trên runner Ubuntu.
 Các cảnh báo Node runtime của GitHub Actions trong ảnh log không phải bước gây exit code 1.
+
+## Sửa đăng nhập mobile sau đổi mạng/pull code (29/10/2026)
+
+Truy vết: FE-02 / UC-01, GBR-01/02/13, NFR HTTPS; SRS tại `docs/reports`, Report 4
+Authentication/Authorization và quyết định email tại `JWT_EMAIL_AUTHENTICATION.md`.
+Không thay đổi quyền, nghiệp vụ, schema hoặc migration.
+
+Nguyên nhân kiểm chứng tại máy phát triển:
+
+- IP Wi-Fi đổi từ `192.168.0.106` sang `10.33.59.31`, nhưng `.env.local`/chứng chỉ còn theo IP cũ.
+- Mobile vẫn gửi `{ userName, password }`, trong khi `AuthController.LoginRequest` yêu cầu
+  `{ email, password }` theo quyết định đã được duyệt. Đây là lỗi tiếp theo sau khi sửa kết nối.
+- Metro đang chạy vẫn giữ IP cũ trong bundle sau khi `.env.local` đã đổi; cần restart Metro.
+
+Thay đổi: form `index.tsx` dùng Email và lấy URL từ session hiện tại nếu chưa chỉnh tay;
+`MobileSessions.login` gửi email đã trim, giữ nguyên mật khẩu; lỗi 401 lúc đăng nhập hiển thị
+thông báo email/mật khẩu chung. Thông báo lỗi mạng hướng dẫn kiểm tra IP khi đổi Wi-Fi.
+Tests bao phủ payload đúng, 400/401/mất mạng không retry hoặc lưu phiên, từ chối HTTP trước khi
+gửi credential, và đổi origin không gửi refresh token cũ sang server mới; giữ test refresh đồng thời.
+
+Cấu hình local đã chạy:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Prepare-OcrMobile.ps1 -LanIp 10.33.59.31 -SkipDatabase
+```
+
+Giữ CA cũ; không migrate DB, sửa firewall hoặc tắt kiểm chứng TLS. API đang debug đã nạp được
+chứng chỉ mới; không dừng API. Restart riêng Metro bằng `Start-OcrMobileApp.ps1 -Clear`.
+Lần gọi trực tiếp script đầu tiên bị PowerShell ExecutionPolicy chặn; lệnh ở trên thành công,
+không thay ExecutionPolicy toàn máy.
+
+Kiểm chứng thực tế trong lần sửa này:
+
+- `npm.cmd run test --workspace src/mobile`: PASS **22 tests**, fail 0.
+- `npm.cmd run typecheck --workspace src/mobile`: PASS.
+- `npm.cmd run lint --workspace src/mobile`: PASS; ESLint riêng test thay đổi cũng PASS.
+- Prettier kiểm tra 5 file thay đổi và `git diff --check`: PASS.
+- HTTPS `/health/ready` ở IP mới: **200 Healthy**, kiểm chứng bằng CA local. curl Schannel
+  ban đầu không tra được revocation của CA local; lần kiểm tra dùng `--ssl-revoke-best-effort`
+  vẫn kiểm tra chain/hostname. Smoke Node bên dưới cũng xác minh TLS, không dùng `-k`.
+- Bundle iOS từ Metro: HTTP 200, chứa IP mới và payload email, không chứa IP cũ/payload username.
+- Smoke local dùng chính `MobileSessions` đã bundle, tài khoản tổng hợp sẵn có và CA local:
+  email login PASS, `/api/v1/auth/me` PASS, `/api/v1/capture/locations` PASS, logout/thu hồi phiên PASS.
+  Credential chỉ xử lý trong bộ nhớ; không in mật khẩu/token. Harness tại `.tools` (ignored).
+
+Chưa xác minh: Safari/Expo Go trên iPhone thật với mạng mới, cấu hình cách ly thiết bị của Wi-Fi,
+quyền mạng nội bộ/chứng chỉ trên iPhone, E2E OCR. Không build/test lại backend vì không sửa C#;
+không tuyên bố lần kiểm tra này thay thế toàn bộ backend suite hay E2E thiết bị.

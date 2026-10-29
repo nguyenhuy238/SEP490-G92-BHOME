@@ -14,6 +14,7 @@
     "src/public-web"
   ],
   "scripts": {
+    "mobile:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-OcrMobileApp.ps1",
     "mobile": "npm run start --workspace ./src/mobile --",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present -- --run",
