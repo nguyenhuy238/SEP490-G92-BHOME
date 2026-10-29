@@ -1,15 +1,13 @@
 param([string]$LanIp, [switch]$SkipDatabase)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
+. (Join-Path $PSScriptRoot 'MobileNetwork.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 $configurationPath = Join-Path $repo '.env'
 if (-not (Test-Path -LiteralPath $configurationPath)) { throw 'Run scripts/Initialize-Local.ps1 first.' }
-if (-not $LanIp) {
-    $LanIp = Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' -and $_.NetAdapter.InterfaceDescription -notmatch 'Hyper-V|Docker|VPN' } | ForEach-Object { $_.IPv4Address.IPAddress } | Select-Object -First 1
-}
-$parsedIp = $null
-if (-not [Net.IPAddress]::TryParse($LanIp, [ref]$parsedIp) -or $parsedIp.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or
-    -not ($LanIp -match '^192\.168\.' -or $LanIp -match '^10\.' -or $LanIp -match '^172\.(1[6-9]|2[0-9]|3[01])\.')) { throw 'Supply -LanIp with the private IPv4 address on the same LAN as the iPhone.' }
+if (-not $LanIp) { $LanIp = Get-MobileLanIp }
+if (-not (Test-MobilePrivateIpv4 $LanIp)) { throw 'Supply -LanIp with the private IPv4 address on the same LAN as the iPhone.' }
+if ($LanIp -notin @(Get-NetIPAddress -AddressFamily IPv4 | Select-Object -ExpandProperty IPAddress)) { throw 'Selected LAN IP is not assigned to this computer.' }
 function New-Secret32 {
     $bytes = New-Object byte[] 32; $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($bytes); return [Convert]::ToBase64String($bytes) } finally { $rng.Dispose() }
@@ -32,7 +30,16 @@ $tlsDir = Join-Path $repo '.tools/mobile-tls'
 New-Item -ItemType Directory -Path $tlsDir -Force | Out-Null
 $pfxPath = Join-Path $tlsDir 'api.pfx'; $caPath = Join-Path $tlsDir 'root-ca.cer'; $ipPath = Join-Path $tlsDir 'lan-ip.txt'
 $existingPassword = [regex]::Match($configText, '(?m)^Kestrel__Certificates__Default__Password=([^\r\n]+)').Groups[1].Value
-if (-not (Test-Path -LiteralPath $pfxPath) -or -not (Test-Path -LiteralPath $ipPath) -or [IO.File]::ReadAllText($ipPath).Trim() -ne $LanIp -or -not $existingPassword) {
+$renewCertificate = -not (Test-Path -LiteralPath $pfxPath) -or -not (Test-Path -LiteralPath $caPath) -or
+    -not (Test-Path -LiteralPath $ipPath) -or [IO.File]::ReadAllText($ipPath).Trim() -ne $LanIp -or -not $existingPassword
+if (-not $renewCertificate) {
+    try {
+        $currentCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxPath, $existingPassword)
+        $renewCertificate = $currentCertificate.NotAfter -le (Get-Date).AddDays(7)
+        $currentCertificate.Dispose()
+    } catch { $renewCertificate = $true }
+}
+if ($renewCertificate) {
     # Certificates go to the current user's personal store, never auto-install into a trust store.
     # An IP change only requires a new server certificate. Keep the CA already trusted on iPhone.
     $ca = $null
@@ -60,13 +67,10 @@ Set-Setting 'MobileDevelopment__RootCertificate' $caPath
 Set-Setting 'AllowedHosts' "localhost;127.0.0.1;$LanIp"
 [IO.File]::WriteAllText($configurationPath, $configText, [Text.UTF8Encoding]::new($false))
 foreach ($line in ($configText -split '\r?\n')) {
-    if ($line -match '^((?:ConnectionStrings|IdentityProtection|Ocr|Kestrel|MobileDevelopment)__[^=]+|AllowedHosts)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
+    if ($line -match '^(ConnectionStrings__[^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
 }
-$mobileEnv = Join-Path $repo 'src/mobile/.env.local'
-$mobileText = if (Test-Path -LiteralPath $mobileEnv) { [IO.File]::ReadAllText($mobileEnv) } else { '' }
-$urlSetting = "EXPO_PUBLIC_API_BASE_URL=https://${LanIp}:7240"
-if ($mobileText -match '(?m)^EXPO_PUBLIC_API_BASE_URL=.*$') { $mobileText = [regex]::Replace($mobileText, '(?m)^EXPO_PUBLIC_API_BASE_URL=.*$', $urlSetting) } else { $mobileText = $mobileText.TrimEnd() + "`n$urlSetting`n" }
-[IO.File]::WriteAllText($mobileEnv, $mobileText, [Text.UTF8Encoding]::new($false))
+# Mobile development derives its API from the Expo manifest, not an IP baked into .env.local.
+# Preserve explicit environment configuration for standalone/staging builds.
 # Visual Studio does not load .env. Keep its Development-only user secrets aligned
 # with the mobile launcher, including explicit endpoints that override localhost launch URLs.
 # Pipe JSON through stdin so certificate passwords/identity keys never appear in process arguments.
@@ -77,6 +81,8 @@ foreach ($line in ($configText -split '\r?\n')) {
     }
 }
 $mobileSettings['Kestrel:Endpoints:MobileHttps:Url'] = 'https://0.0.0.0:7240'
+$mobileSettings['Kestrel:Endpoints:MobileHttps:Certificate:Path'] = $pfxPath
+$mobileSettings['Kestrel:Endpoints:MobileHttps:Certificate:Password'] = $existingPassword
 $mobileSettings['Kestrel:Endpoints:MobileHttp:Url'] = 'http://0.0.0.0:5240'
 $apiProject = [xml][IO.File]::ReadAllText((Join-Path $repo 'src/backend/BHome.Api/BHome.Api.csproj'))
 $secretsId = [string]$apiProject.Project.PropertyGroup.UserSecretsId

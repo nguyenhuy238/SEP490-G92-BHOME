@@ -7,8 +7,9 @@ import { errorMessage, type MeterTask, type Named, type Resident } from '../lib/
 import { useSession } from '../lib/SessionProvider';
 export default function Home() {
   const { api, session, ready, baseUrl, login, logout } = useSession();
-  const [base, setBase] = useState(baseUrl);
-  const [name, setName] = useState('');
+  const [baseOverride, setBase] = useState<string | null>(null);
+  const base = baseOverride ?? baseUrl;
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -61,11 +62,11 @@ export default function Home() {
       <Page>
         <Text variant="headlineMedium">Đăng nhập BHOME</Text>
         <Text>
-          Đăng nhập bằng tài khoản Owner hoặc Staff. API phải dùng HTTPS và iPhone đã tin cậy chứng
-          chỉ.
+          Đăng nhập bằng email tài khoản Owner hoặc Staff. API phải dùng HTTPS và iPhone đã tin cậy
+          chứng chỉ.
         </Text>
         <Field label="Địa chỉ API HTTPS" value={base} onChange={setBase} />
-        <Field label="Tên đăng nhập" value={name} onChange={setName} />
+        <Field label="Email" value={email} onChange={setEmail} />
         <Field label="Mật khẩu" value={password} onChange={setPassword} secure />
         <Button
           mode="contained"
@@ -75,7 +76,7 @@ export default function Home() {
             setBusy(true);
             setError('');
             try {
-              await login(base, name, password);
+              await login(base, email, password);
               setPassword('');
             } catch (e) {
               setError(errorMessage(e));

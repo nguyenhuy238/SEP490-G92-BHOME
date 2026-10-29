@@ -173,7 +173,7 @@ npm.cmd run dev --workspace @bhome/owner-web
 
 ```powershell
 # Terminal Mobile (Expo Go)
-npm.cmd run mobile
+npm.cmd run mobile:dev
 ```
 
 ```powershell
@@ -181,12 +181,12 @@ npm.cmd run mobile
 npm.cmd run dev --workspace @bhome/public-web
 ```
 
-Mobile hiện là ứng dụng Expo/React Native demo, chưa kết nối backend và chưa cần file môi trường.
-Lệnh `npm.cmd run mobile` tự chạy Expo trong `src/mobile`. Quét mã QR bằng Expo Go trên điện thoại
-cùng mạng với máy tính. Có thể truyền tùy chọn, ví dụ `npm.cmd run mobile -- --clear` để xóa cache Metro.
-Nếu chạy trực tiếp, dùng `cd src/mobile` rồi `npx.cmd expo start`; không chạy `npx expo start` ở thư mục
-gốc vì Expo sẽ tìm entry point sai và nạp các file môi trường backend tại đó. Xem
-[hướng dẫn Expo mobile](docs/development/LOCAL_DEVELOPMENT.md#expo-mobile).
+Mobile dùng Expo Router, đã kết nối đăng nhập email và luồng OCR với backend.
+Lệnh `npm.cmd run mobile:dev` tự chọn IP, chuẩn bị HTTPS, dùng lại hoặc mở API rồi chạy Expo.
+Quét QR trên điện thoại cùng mạng; đổi Wi-Fi thì quét QR mới, không sửa IP trong cấu hình.
+Các thành viên dùng cùng lệnh trên máy riêng. Điện thoại cần tin cậy CA của từng máy một lần.
+Xem [hướng dẫn kết nối tự động](docs/development/MOBILE_NETWORK_DEVELOPMENT.md).
+`npm.cmd run mobile` và `npx expo start` chỉ mở Metro; dùng khi chủ động chuẩn bị API/HTTPS riêng.
 
 Chỉ cần chạy frontend đang làm việc. Với hai ứng dụng web, nếu thay API URL, cập nhật
 `VITE_API_BASE_URL` rồi khởi động lại Vite. Production build cần cấu hình rõ biến này bằng địa chỉ
