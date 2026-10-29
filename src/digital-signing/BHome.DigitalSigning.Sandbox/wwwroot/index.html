@@ -369,6 +369,11 @@
         font-size: 14px;
         margin-top: 10px;
       }
+      .account-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0 16px;
+      }
     </style>
   </head>
   <body>
@@ -386,6 +391,58 @@
     </header>
 
     <main>
+      <section class="wide" id="accountBox" hidden>
+        <h2>⚙ Tài khoản ký số Viettel MySign (Owner)</h2>
+        <p class="hint" style="margin-top: 0">
+          Tài khoản Viettel cấp cho phần mềm để gọi API ký từ xa. Có tài khoản thì trang này ký bằng
+          <b>Viettel thật</b> (yêu cầu ký về app MySign); chưa có thì dùng Viettel giả lập. Tài
+          khoản chỉ lưu trên máy đang chạy sandbox, không nằm trong code; secret được mã hóa và
+          không bao giờ hiện lại.
+        </p>
+        <div id="accountState" class="hint"></div>
+        <div class="account-grid">
+          <div>
+            <label for="accBaseUrl">Địa chỉ cổng ký số</label>
+            <input
+              type="text"
+              id="accBaseUrl"
+              autocomplete="off"
+              placeholder="https://remotesigning.viettel.vn"
+            />
+          </div>
+          <div>
+            <label for="accClientId">Client ID</label>
+            <input
+              type="text"
+              id="accClientId"
+              autocomplete="off"
+              placeholder="Ví dụ: ABCXYZ_0123456789"
+            />
+          </div>
+          <div>
+            <label for="accSecret">Client Secret</label>
+            <input type="password" id="accSecret" autocomplete="new-password" />
+          </div>
+          <div>
+            <label for="accProfile">Profile ID (không bắt buộc)</label>
+            <input type="text" id="accProfile" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row">
+          <button class="primary" id="accSave">Lưu tài khoản</button>
+          <input
+            type="text"
+            id="accTestUser"
+            autocomplete="off"
+            placeholder="Mã thuê bao MySign để thử (CCCD)"
+            style="width: 260px"
+          />
+          <button id="accTest">Kiểm tra kết nối</button>
+          <button id="accReset">Xóa tài khoản đã lưu</button>
+        </div>
+        <div id="accResult"></div>
+      </section>
+
       <section>
         <h2><span class="step">1</span>Chứng thư số</h2>
         <div id="certs"></div>
@@ -570,8 +627,108 @@
         $('mode').textContent = fake ? 'Viettel giả lập' : 'Viettel MySign thật';
         $('mode').className = 'badge ' + (fake ? 'b-warn' : 'b-ok');
         if (fake && !$('subscriber').value) $('subscriber').value = '079000000001';
+        if (!fake && $('subscriber').value === '079000000001') $('subscriber').value = '';
         $('fakeNameBox').hidden = !fake;
       }
+
+      // ---- Viettel account (Owner only) ----
+      const SOURCES = {
+        DATABASE: 'đã lưu trên máy này',
+        CONFIGURATION: 'từ cấu hình máy chủ',
+        NONE: 'chưa có',
+      };
+      async function loadAccount() {
+        $('accountBox').hidden = state.user !== 'owner';
+        if (state.user !== 'owner') return;
+        try {
+          const view = await api('GET', `${API}/settings/viettel`);
+          $('accBaseUrl').value = view.baseUrl;
+          $('accClientId').value = view.clientId;
+          $('accProfile').value = view.profileId;
+          $('accSecret').value = '';
+          $('accSecret').placeholder = view.secretSet
+            ? `Đã lưu (…${view.secretHint || '****'}) — để trống để giữ nguyên`
+            : 'Chưa có';
+          const real = state.info?.provider === 'viettel';
+          $('accountState').innerHTML =
+            `Đang ký bằng: <span class="badge ${real ? 'b-ok' : 'b-warn'}">${real ? 'Viettel MySign thật' : 'Viettel giả lập'}</span>` +
+            ` · Client ID ${SOURCES[view.clientIdSource]} · Secret ${SOURCES[view.secretSource]}` +
+            (view.secretUnreadable ? ' · <b>secret đã lưu không đọc được, nhập lại</b>' : '');
+        } catch (e) {
+          accountResult('bad', e.message);
+        }
+      }
+      function accountResult(kind, html) {
+        $('accResult').innerHTML = html ? `<div class="progress ${kind}">${html}</div>` : '';
+      }
+      async function afterAccountChange(wasReal) {
+        await loadInfo();
+        await loadAccount();
+        await loadCertificates();
+        const real = state.info.provider === 'viettel';
+        if (real !== wasReal && state.certs.length)
+          accountResult(
+            'info',
+            real
+              ? 'Đã chuyển sang <b>Viettel thật</b>. Chứng thư khai báo ở chế độ giả lập không ký thật được: gỡ chúng và khai báo lại bằng mã thuê bao MySign thật (thường là số CCCD).'
+              : 'Đã chuyển về <b>Viettel giả lập</b>.',
+          );
+      }
+      $('accSave').onclick = async () => {
+        accountResult('', '');
+        const wasReal = state.info?.provider === 'viettel';
+        try {
+          await api('PUT', `${API}/settings/viettel`, {
+            baseUrl: $('accBaseUrl').value,
+            clientId: $('accClientId').value,
+            profileId: $('accProfile').value,
+            clientSecret: $('accSecret').value,
+            clearSecret: false,
+          });
+          await afterAccountChange(wasReal);
+          if (!$('accResult').innerHTML)
+            accountResult(
+              'ok',
+              '✔ Đã lưu tài khoản. Bấm "Kiểm tra kết nối" để chắc Viettel chấp nhận.',
+            );
+        } catch (e) {
+          accountResult('bad', esc(e.message));
+        }
+      };
+      $('accTest').onclick = async () => {
+        const userId = $('accTestUser').value.trim() || $('subscriber').value.trim();
+        if (!userId)
+          return accountResult(
+            'bad',
+            'Nhập mã thuê bao MySign (thường là số CCCD) của một người ký để thử đăng nhập.',
+          );
+        accountResult(
+          'info',
+          'Đang thử đăng nhập Viettel… (không ký gì, không gửi gì tới điện thoại)',
+        );
+        try {
+          const result = await api('POST', `${API}/settings/viettel/test`, { userId });
+          accountResult(
+            result.ok ? 'ok' : 'bad',
+            result.ok
+              ? `✔ Viettel chấp nhận tài khoản (${result.milliseconds} ms).`
+              : '✘ Viettel từ chối: ' + esc(result.message),
+          );
+        } catch (e) {
+          accountResult('bad', esc(e.message));
+        }
+      };
+      $('accReset').onclick = async () => {
+        if (!confirm('Xóa tài khoản Viettel đã lưu trên máy này?')) return;
+        const wasReal = state.info?.provider === 'viettel';
+        try {
+          await api('DELETE', `${API}/settings/viettel`);
+          accountResult('', '');
+          await afterAccountChange(wasReal);
+        } catch (e) {
+          accountResult('bad', esc(e.message));
+        }
+      };
       $('roles').addEventListener('click', (event) => {
         const user = event.target.dataset.user;
         if (!user || state.busy) return;
@@ -583,6 +740,7 @@
         stopPolling();
         $('progress').innerHTML = '';
         $('phoneBox').hidden = true;
+        loadAccount();
         loadCertificates();
         loadPicture();
       });
@@ -994,7 +1152,7 @@
         poll();
       }
 
-      loadInfo().then(() => Promise.all([loadCertificates(), loadPicture()]));
+      loadInfo().then(() => Promise.all([loadAccount(), loadCertificates(), loadPicture()]));
     </script>
   </body>
 </html>

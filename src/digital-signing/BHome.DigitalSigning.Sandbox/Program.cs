@@ -11,11 +11,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // Sandbox host: the cloned signing module behind a demo sign-in and a test page, so the team can try remote signing
-// before BHome's mobile/web UI exists. Sandbox:Provider = Fake (default, no Viettel account needed) or Viettel.
+// before BHome's mobile/web UI exists. Sandbox:Provider = Auto (default: the real Viettel MySign once an Owner saves an
+// account on the page, the fake one until then), Fake or Viettel.
 // Sandbox:Storage = Memory (default, nothing to install) or Postgres (ConnectionStrings:Database + sql/ script).
 var builder = WebApplication.CreateBuilder(args);
-var useFakeProvider = !string.Equals(builder.Configuration["Sandbox:Provider"], "Viettel", StringComparison.OrdinalIgnoreCase);
 var useMemory = !string.Equals(builder.Configuration["Sandbox:Storage"], "Postgres", StringComparison.OrdinalIgnoreCase);
+// The saved client secret is encrypted with a key of this machine's own unless one is configured.
+if (string.IsNullOrWhiteSpace(builder.Configuration["DigitalSigning:SecretKey"]))
+    builder.Configuration["DigitalSigning:SecretKey"] = SandboxData.SecretKey();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
@@ -23,14 +26,16 @@ builder.Services.AddDigitalSigning(builder.Configuration);
 if (useMemory)
 {
     builder.Services.Replace(ServiceDescriptor.Singleton<IDigitalSigningStore, MemorySigningStore>());
-    builder.Services.Replace(ServiceDescriptor.Singleton<ISigningSettingsStore, MemorySettingsStore>());
+    builder.Services.Replace(ServiceDescriptor.Singleton<ISigningSettingsStore>(
+        new FileSettingsStore(Path.Combine(SandboxData.Folder, "viettel-account.json"))));
     builder.Services.Replace(ServiceDescriptor.Singleton<ISignatureImageStore, MemorySignatureImageStore>());
 }
-if (useFakeProvider)
-{
-    builder.Services.AddSingleton<FakeMySign>();
-    builder.Services.Replace(ServiceDescriptor.Scoped<ISigningProvider>(provider => provider.GetRequiredService<FakeMySign>()));
-}
+// The real Viettel provider stays registered under its own type; every call picks it or the fake one.
+var realProvider = builder.Services.Single(service => service.ServiceType == typeof(ISigningProvider)).ImplementationType!;
+builder.Services.AddScoped(realProvider);
+builder.Services.AddSingleton<FakeMySign>();
+builder.Services.AddSingleton(new SandboxMode(builder.Configuration["Sandbox:Provider"], realProvider));
+builder.Services.Replace(ServiceDescriptor.Scoped<ISigningProvider, SandboxSigningProvider>());
 
 builder.Services.AddAuthentication(DemoAuthenticationHandler.SchemeName)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DemoAuthenticationHandler>(
@@ -62,14 +67,15 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.MapGet("/sandbox/info", (HttpContext context) => new
+app.MapGet("/sandbox/info", async (HttpContext context, IViettelAccountSource accounts, SandboxMode mode,
+    CancellationToken cancellationToken) => new
 {
-    provider = useFakeProvider ? "fake" : "viettel",
+    provider = await mode.UsesViettelAsync(accounts, cancellationToken) ? "viettel" : "fake",
+    mode = mode.Setting,
     storage = useMemory ? "memory" : "postgres",
     phoneUrls = LanAddresses().Select(address => $"http://{address}:{context.Connection.LocalPort}/phone.html").ToList()
 });
 
-if (useFakeProvider)
 {
     // The fake MySign app (phone.html). Anonymous on purpose: it plays Viettel's app, not a BHome user.
     var phone = app.MapGroup("/sandbox/phone");
