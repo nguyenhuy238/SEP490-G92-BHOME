@@ -1,0 +1,1000 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BHome ký số sandbox</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --card: #ffffff;
+        --text: #1d2733;
+        --muted: #5d6b7a;
+        --line: #dde3ea;
+        --sunk: #eef1f4;
+        --accent: #0b6bcb;
+        --accent-soft: #e6f0fb;
+        --ok: #1e8e3e;
+        --ok-soft: #e6f4ea;
+        --bad: #c5221f;
+        --bad-soft: #fce8e6;
+        --warn: #b06000;
+        --warn-soft: #fef3e0;
+        --mono: ui-monospace, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #11161c;
+          --card: #1a2129;
+          --text: #e4e9ee;
+          --muted: #9aa7b4;
+          --line: #2c3743;
+          --sunk: #141a20;
+          --accent: #5ea8f2;
+          --accent-soft: #1b2c3f;
+          --ok: #6cc788;
+          --ok-soft: #173024;
+          --bad: #f28b82;
+          --bad-soft: #3a1d1b;
+          --warn: #f2b45e;
+          --warn-soft: #3a2b14;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.5 system-ui,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      header {
+        padding: 14px 24px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 20px 16px 48px;
+        display: grid;
+        gap: 16px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px 18px;
+        min-width: 0;
+      }
+      .wide {
+        grid-column: 1 / -1;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      h2 .step {
+        background: var(--accent);
+        color: #fff;
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
+        display: inline-grid;
+        place-items: center;
+        font-size: 12px;
+        flex: none;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin: 10px 0 4px;
+      }
+      input[type='text'],
+      input[type='file'],
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        font: inherit;
+      }
+      select {
+        width: auto;
+        padding: 4px 8px;
+      }
+      button {
+        font: inherit;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--text);
+        padding: 7px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.ok {
+        background: var(--ok);
+        border-color: var(--ok);
+        color: #fff;
+      }
+      button.bad {
+        background: var(--bad);
+        border-color: var(--bad);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 10px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 6px 0 0;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .b-info {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .b-ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .b-bad {
+        background: var(--bad-soft);
+        color: var(--bad);
+      }
+      .b-warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      .roles {
+        display: flex;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .roles button {
+        border: 0;
+        border-radius: 0;
+      }
+      .roles button.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .cert {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 8px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+        background: var(--card);
+      }
+      .cert.selected {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .cert .meta {
+        flex: 1;
+        min-width: 0;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+      .cert .meta b {
+        font-size: 14px;
+      }
+      .picture {
+        height: 120px;
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: repeating-conic-gradient(var(--sunk) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+      }
+      .picture img {
+        max-height: 104px;
+        max-width: 100%;
+        object-fit: contain;
+      }
+      .signer {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+        gap: 16px;
+      }
+      @media (max-width: 900px) {
+        .signer {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px 14px;
+      }
+      .frame {
+        position: relative;
+        width: 100%;
+        margin: 8px auto 0;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+        background: #fff;
+        touch-action: none;
+      }
+      .frame canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .mark {
+        position: absolute;
+        border: 2px dashed var(--accent);
+        background: rgba(11, 107, 203, 0.06);
+        cursor: move;
+        touch-action: none;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        color: #c5221f;
+        font: 600 11px/1.3 serif;
+        text-align: center;
+      }
+      .mark img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+      }
+      .progress {
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 14px;
+        margin-top: 12px;
+      }
+      .progress.info {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .progress.ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .progress.bad {
+        background: var(--bad-soft);
+        color: var(--bad);
+      }
+      .phone {
+        border: 2px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+        margin-top: 12px;
+        background: var(--sunk);
+      }
+      .qr {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .qr #qrcode img,
+      .qr #qrcode canvas {
+        background: #fff;
+        padding: 6px;
+        border-radius: 6px;
+      }
+      #log {
+        font-family: var(--mono);
+        font-size: 12px;
+        max-height: 260px;
+        overflow: auto;
+        margin: 0;
+        white-space: pre-wrap;
+        background: var(--sunk);
+        border-radius: 6px;
+        padding: 10px;
+      }
+      iframe {
+        width: 100%;
+        height: 560px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        margin-top: 10px;
+        background: #fff;
+      }
+      .error {
+        color: var(--bad);
+        font-size: 13px;
+        margin-top: 8px;
+        min-height: 1em;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-size: 14px;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>BHome · Thử ký số từ xa Viettel MySign</h1>
+      <div class="row" style="margin: 0">
+        <span id="mode" class="badge b-info">…</span>
+        <span class="hint" style="margin: 0">Đang dùng vai:</span>
+        <div class="roles" id="roles">
+          <button data-user="owner" class="active">Owner</button>
+          <button data-user="staff">Staff</button>
+          <button data-user="tenant">Tenant</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2><span class="step">1</span>Chứng thư số</h2>
+        <div id="certs"></div>
+        <details id="declareBox">
+          <summary>+ Khai báo chứng thư</summary>
+          <label for="subscriber">Mã thuê bao MySign (số CCCD, MST hoặc mã Viettel cấp)</label>
+          <input type="text" id="subscriber" autocomplete="off" />
+          <div id="fakeNameBox" hidden>
+            <label for="holder"
+              >Họ tên trên chứng thư (chỉ ở chế độ giả lập — Viettel thật tự trả tên đã đăng
+              ký)</label
+            >
+            <input
+              type="text"
+              id="holder"
+              autocomplete="off"
+              placeholder="Ví dụ: NGUYỄN QUANG HUY"
+            />
+          </div>
+          <label for="serial">Số serial (để trống nếu thuê bao chỉ có một chứng thư)</label>
+          <input type="text" id="serial" autocomplete="off" />
+          <div class="row"><button class="primary" id="declare">Khai báo</button></div>
+        </details>
+        <div class="error" id="certError"></div>
+      </section>
+
+      <section>
+        <h2><span class="step">2</span>Ảnh chữ ký</h2>
+        <p class="hint" style="margin-top: 0">
+          Hiển thị tại vị trí chữ ký trên bản PDF. PNG nền trong suốt, tối đa 1 MB.
+        </p>
+        <div class="picture" id="picture"><span class="hint">Chưa có ảnh</span></div>
+        <label for="givenName">Họ tên (để tạo ảnh chữ ký từ tên)</label>
+        <input type="text" id="givenName" placeholder="Ví dụ: Nguyễn Quang Huy" />
+        <div class="row">
+          <button id="fromName">Tạo từ họ tên</button>
+          <button id="uploadPicture">Tải ảnh PNG…</button>
+          <button id="removePicture">Xóa ảnh</button>
+          <input type="file" id="pictureFile" accept="image/png" hidden />
+        </div>
+        <div class="error" id="pictureError"></div>
+      </section>
+
+      <section class="wide">
+        <h2><span class="step">3</span>Ký số tài liệu</h2>
+        <label for="file">Tệp PDF cần ký (tối đa 10 MB)</label>
+        <input type="file" id="file" accept="application/pdf" />
+        <div class="signer" id="signer" hidden>
+          <div style="display: grid; gap: 12px; align-content: start">
+            <div class="card">
+              <h3>Phương thức ký</h3>
+              <div id="methods"></div>
+            </div>
+            <div class="card">
+              <h3>Nội dung hiện trên điện thoại</h3>
+              <input
+                type="text"
+                id="description"
+                maxlength="200"
+                placeholder="Ví dụ: Ký hợp đồng thuê phòng 101"
+              />
+            </div>
+            <button class="ok" id="sign" style="padding: 10px">Ký số</button>
+            <div id="progress"></div>
+            <div class="phone" id="phoneBox" hidden>
+              <h3>📱 Điện thoại giả lập (thay cho app MySign)</h3>
+              <div class="hint" id="phoneText">Đang chờ yêu cầu tới điện thoại…</div>
+              <div class="row" id="phoneButtons" hidden>
+                <button class="ok" id="approve">Xác nhận</button>
+                <button class="bad" id="reject">Từ chối</button>
+              </div>
+              <div class="qr" id="qrWrap" hidden>
+                <div id="qrcode"></div>
+                <div class="hint">
+                  Hoặc quét bằng điện thoại thật (cùng Wi-Fi):<br />
+                  <span id="phoneUrl" style="font-family: var(--mono)"></span>
+                </div>
+              </div>
+            </div>
+            <div class="error" id="signError"></div>
+          </div>
+          <div class="card">
+            <div class="row" style="margin: 0; justify-content: space-between">
+              <h3 style="margin: 0">Vị trí chữ ký</h3>
+              <label style="margin: 0; display: flex; gap: 6px; align-items: center"
+                >Trang
+                <select id="pageSelect"></select>
+                / <span id="pageCount"></span
+              ></label>
+            </div>
+            <div class="frame" id="frame">
+              <canvas id="canvas"></canvas>
+              <div class="mark" id="mark"></div>
+            </div>
+            <label style="display: flex; gap: 10px; align-items: center"
+              >Cỡ chữ ký
+              <input type="range" id="size" min="8" max="50" value="25" style="flex: 1" />
+              <span id="sizeText" style="width: 40px; text-align: right">25%</span></label
+            >
+            <p class="hint">
+              Kéo khung chữ ký tới vị trí mong muốn, hoặc dùng phím mũi tên (Shift để bước lớn).
+            </p>
+          </div>
+        </div>
+        <div id="result" hidden>
+          <div class="row" id="resultActions"></div>
+          <iframe id="preview" title="PDF đã ký"></iframe>
+        </div>
+      </section>
+
+      <section class="wide">
+        <h2>Nhật ký gọi API</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const API = '/api/v1/digital-signing';
+      const TEXT_BOX_PT = 2 * 14 * 1.35 + 12; // the "Ký bởi / Ngày ký" box at 14pt, when there is no picture
+      const $ = (id) => document.getElementById(id);
+      const state = {
+        user: 'owner',
+        info: null,
+        certs: [],
+        certificateId: null,
+        picture: null,
+        pictureUrl: null, // { width, height } of the signer's picture
+        pdf: null,
+        pages: [], // pages[i] = { w, h } in PDF points
+        place: null, // { page, x, y, width } fractions from the top-left
+        txId: null,
+        timer: null,
+        signedUrl: null,
+        busy: false,
+      };
+
+      // ---- API helper: every call is logged so the team sees the real HTTP flow ----
+      async function api(method, path, body, form) {
+        const started = performance.now();
+        const headers = { 'X-Demo-User': state.user };
+        if (body && !form) headers['Content-Type'] = 'application/json';
+        const response = await fetch(path, {
+          method,
+          headers,
+          body: form ? body : body ? JSON.stringify(body) : undefined,
+        });
+        const ms = Math.round(performance.now() - started);
+        const type = response.headers.get('content-type') || '';
+        let data = null;
+        if (type.includes('json')) data = await response.json();
+        else if (type.includes('pdf') || type.includes('image')) data = await response.blob();
+        log(
+          `${method.padEnd(6)} ${path}  →  ${response.status}  (${ms} ms)` +
+            (data && !(data instanceof Blob)
+              ? '\n        ' + JSON.stringify(data).slice(0, 400)
+              : ''),
+        );
+        if (!response.ok)
+          throw new Error((data && (data.title || data.detail)) || `HTTP ${response.status}`);
+        return data;
+      }
+      function log(line) {
+        $('log').textContent =
+          `[${new Date().toLocaleTimeString('vi-VN')}] ${line}\n` + $('log').textContent;
+      }
+      const esc = (text) =>
+        String(text ?? '').replace(
+          /[&<>"]/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
+        );
+      const commonName = (subject) => (/CN=([^,]+)/.exec(subject || '') || [])[1] || subject;
+      const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+
+      // ---- Mode and role ----
+      async function loadInfo() {
+        state.info = await (await fetch('/sandbox/info')).json();
+        const fake = state.info.provider === 'fake';
+        $('mode').textContent = fake ? 'Viettel giả lập' : 'Viettel MySign thật';
+        $('mode').className = 'badge ' + (fake ? 'b-warn' : 'b-ok');
+        if (fake && !$('subscriber').value) $('subscriber').value = '079000000001';
+        $('fakeNameBox').hidden = !fake;
+      }
+      $('roles').addEventListener('click', (event) => {
+        const user = event.target.dataset.user;
+        if (!user || state.busy) return;
+        state.user = user;
+        document
+          .querySelectorAll('#roles button')
+          .forEach((b) => b.classList.toggle('active', b.dataset.user === user));
+        state.certificateId = null;
+        stopPolling();
+        $('progress').innerHTML = '';
+        $('phoneBox').hidden = true;
+        loadCertificates();
+        loadPicture();
+      });
+
+      // ---- 1. Certificates ----
+      async function loadCertificates() {
+        $('certError').textContent = '';
+        try {
+          state.certs = await api('GET', `${API}/certificates`);
+          if (!state.certs.some((c) => c.id === state.certificateId && c.usable))
+            state.certificateId = state.certs.find((c) => c.usable)?.id ?? null;
+          $('declareBox').open = state.certs.length === 0;
+          $('certs').innerHTML = state.certs.length
+            ? ''
+            : '<p class="hint">Vai này chưa khai báo chứng thư nào.</p>';
+          for (const c of state.certs) {
+            const div = document.createElement('div');
+            div.className = 'cert';
+            const status = c.locked
+              ? '<span class="badge b-bad">Đang khóa</span>'
+              : c.usable
+                ? '<span class="badge b-ok">Đang hiệu lực</span>'
+                : '<span class="badge b-warn">Hết hạn</span>';
+            div.innerHTML = `<div class="meta"><b>${esc(commonName(c.subject))}</b> ${status}<br>
+          Serial ${esc(c.serialNumber)} · thuê bao ***${esc(c.providerUserIdHint)}<br>
+          Hiệu lực đến ${new Date(c.validTo).toLocaleDateString('vi-VN')}</div>
+          <div class="row" style="margin:0"><button data-act="lock">${c.locked ? 'Mở khóa' : 'Khóa'}</button>
+          <button data-act="remove">Gỡ</button></div>`;
+            div.querySelector('[data-act=lock]').onclick = async () => {
+              await api('POST', `${API}/certificates/${c.id}/lock`, { locked: !c.locked });
+              loadCertificates();
+            };
+            div.querySelector('[data-act=remove]').onclick = async () => {
+              if (confirm('Gỡ chứng thư này khỏi tài khoản?')) {
+                await api('DELETE', `${API}/certificates/${c.id}`);
+                loadCertificates();
+              }
+            };
+            $('certs').appendChild(div);
+          }
+          if (!$('givenName').value && state.certs[0])
+            $('givenName').value = commonName(state.certs[0].subject);
+        } catch (e) {
+          $('certError').textContent = e.message;
+        }
+        renderMethods();
+      }
+      $('declare').onclick = async () => {
+        $('certError').textContent = '';
+        $('declare').disabled = true;
+        try {
+          if (state.info?.provider === 'fake' && $('holder').value.trim()) {
+            const response = await fetch('/sandbox/fake-signers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: $('subscriber').value, name: $('holder').value }),
+            });
+            log(
+              `POST   /sandbox/fake-signers  →  ${response.status}   (đặt tên cho chứng thư giả lập)`,
+            );
+          }
+          const declared = await api('POST', `${API}/certificates`, {
+            providerUserId: $('subscriber').value,
+            serialNumber: $('serial').value || null,
+          });
+          state.certificateId = declared.id;
+          await loadCertificates();
+        } catch (e) {
+          $('certError').textContent = e.message;
+        }
+        $('declare').disabled = false;
+      };
+
+      // ---- 2. Signature picture ----
+      async function loadPicture() {
+        $('pictureError').textContent = '';
+        try {
+          const view = await api('GET', `${API}/signature-image`);
+          if (state.pictureUrl) URL.revokeObjectURL(state.pictureUrl);
+          state.picture = view.present ? { width: view.width, height: view.height } : null;
+          state.pictureUrl = view.present
+            ? URL.createObjectURL(await api('GET', `${API}/signature-image/content`))
+            : null;
+        } catch (e) {
+          $('pictureError').textContent = e.message;
+          state.picture = null;
+          state.pictureUrl = null;
+        }
+        $('picture').innerHTML = state.pictureUrl
+          ? `<img src="${state.pictureUrl}" alt="Ảnh chữ ký">`
+          : '<span class="hint">Chưa có ảnh — ô chữ ký sẽ ghi tên và thời gian ký</span>';
+        drawMark();
+      }
+      async function savePicture(blob) {
+        $('pictureError').textContent = '';
+        const form = new FormData();
+        form.append('file', blob, 'chu-ky.png');
+        try {
+          await api('PUT', `${API}/signature-image`, form, true);
+          await loadPicture();
+        } catch (e) {
+          $('pictureError').textContent = e.message;
+        }
+      }
+      // A picture written from a name: the given name (the last word, as Vietnamese names are read), blue italic.
+      $('fromName').onclick = async () => {
+        const words = $('givenName')
+          .value.trim()
+          .split(/\s+/)
+          .filter((word) => /\p{L}/u.test(word));
+        if (!words.length) {
+          $('pictureError').textContent = 'Nhập họ tên trước.';
+          return;
+        }
+        const given = words[words.length - 1];
+        const font = 'italic 600 120px "Times New Roman", Times, serif';
+        const canvas = document.createElement('canvas');
+        const measure = canvas.getContext('2d');
+        measure.font = font;
+        canvas.width = Math.ceil(measure.measureText(given).width) + 80;
+        canvas.height = 200;
+        const pen = canvas.getContext('2d');
+        pen.font = font;
+        pen.fillStyle = '#0b3fa8';
+        pen.textBaseline = 'middle';
+        pen.fillText(given, 40, canvas.height / 2);
+        canvas.toBlob((blob) => savePicture(blob), 'image/png');
+      };
+      $('uploadPicture').onclick = () => $('pictureFile').click();
+      $('pictureFile').onchange = () => {
+        const file = $('pictureFile').files[0];
+        $('pictureFile').value = '';
+        if (file) savePicture(file);
+      };
+      $('removePicture').onclick = async () => {
+        await api('DELETE', `${API}/signature-image`);
+        loadPicture();
+      };
+
+      // ---- 3. Sign: method, placement on the page, then the request ----
+      function renderMethods() {
+        const usable = state.certs.filter((c) => c.usable);
+        $('methods').innerHTML = usable.length
+          ? ''
+          : '<p class="hint">Bạn chưa có chứng thư số đang hiệu lực nên chưa ký số được. Khai báo ở bước 1.</p>';
+        for (const c of usable) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'cert' + (c.id === state.certificateId ? ' selected' : '');
+          button.innerHTML = `<span style="font-size:20px">📱</span><span class="meta"><b>Ký số từ xa (Viettel MySign)</b><br>
+        ${esc(commonName(c.subject))}<br>✔ Hiệu lực đến ${new Date(c.validTo).toLocaleDateString('vi-VN')} ·
+        Xác nhận trên điện thoại</span>`;
+          button.onclick = () => {
+            if (!state.busy) {
+              state.certificateId = c.id;
+              renderMethods();
+            }
+          };
+          $('methods').appendChild(button);
+        }
+        $('sign').disabled = state.busy || !state.certificateId || !state.pdf;
+      }
+
+      $('file').onchange = async () => {
+        const file = $('file').files[0];
+        state.pdf = null;
+        state.place = null;
+        $('result').hidden = true;
+        $('progress').innerHTML = '';
+        if (!file) {
+          $('signer').hidden = true;
+          return;
+        }
+        try {
+          state.pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+            .promise;
+          state.pages = [];
+          for (let n = 1; n <= state.pdf.numPages; n++) {
+            const viewport = (await state.pdf.getPage(n)).getViewport({ scale: 1 });
+            state.pages.push({ w: viewport.width, h: viewport.height });
+          }
+          $('pageSelect').innerHTML = state.pages
+            .map((_, i) => `<option value="${i + 1}">${i + 1}</option>`)
+            .join('');
+          $('pageCount').textContent = state.pages.length;
+          // As in the Hưng Yên flow: the last page opens, the signature at its foot, right of centre.
+          const last = state.pages.length;
+          const width = clamp(150 / state.pages[last - 1].w, 0.08, 0.5);
+          state.place = { page: last, x: 0.55, y: 0.78, width };
+          fitPlace();
+          $('signer').hidden = false;
+          await renderPage();
+        } catch (e) {
+          $('signError').textContent = 'Không đọc được tệp PDF: ' + e.message;
+        }
+        renderMethods();
+      };
+      $('pageSelect').onchange = async () => {
+        state.place.page = Number($('pageSelect').value);
+        fitPlace();
+        await renderPage();
+      };
+      $('size').oninput = () => {
+        state.place.width = Number($('size').value) / 100;
+        fitPlace();
+        drawMark();
+      };
+
+      // The box's height as a share of the page: a picture keeps its proportions, text needs its lines.
+      function markHeight() {
+        const page = state.pages[state.place.page - 1];
+        return state.picture
+          ? (state.place.width * (state.picture.height / state.picture.width) * page.w) / page.h
+          : TEXT_BOX_PT / page.h;
+      }
+      function fitPlace() {
+        const place = state.place;
+        place.x = clamp(place.x, 0, 1 - place.width);
+        place.y = clamp(place.y, 0, 1 - markHeight());
+      }
+      async function renderPage() {
+        const page = await state.pdf.getPage(state.place.page);
+        const size = state.pages[state.place.page - 1];
+        const frame = $('frame');
+        frame.style.aspectRatio = `${size.w} / ${size.h}`;
+        frame.style.maxWidth = `calc(70vh * ${size.w / size.h})`;
+        const scale = Math.min(2.5, 1100 / size.w);
+        const viewport = page.getViewport({ scale });
+        const canvas = $('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        $('pageSelect').value = String(state.place.page);
+        drawMark();
+      }
+      function drawMark() {
+        if (!state.place || !state.pages.length) return;
+        fitPlace();
+        const mark = $('mark');
+        mark.style.left = state.place.x * 100 + '%';
+        mark.style.top = state.place.y * 100 + '%';
+        mark.style.width = state.place.width * 100 + '%';
+        mark.style.height = markHeight() * 100 + '%';
+        mark.innerHTML = state.pictureUrl
+          ? `<img src="${state.pictureUrl}" alt="">`
+          : 'Ký bởi: …<br>Ngày ký: …';
+        $('size').value = Math.round(state.place.width * 100);
+        $('sizeText').textContent = Math.round(state.place.width * 100) + '%';
+      }
+      // Dragging and arrow keys move the box; it never leaves the page.
+      (() => {
+        const mark = $('mark');
+        let grab = null;
+        mark.tabIndex = 0;
+        mark.addEventListener('pointerdown', (event) => {
+          if (state.busy) return;
+          const box = $('frame').getBoundingClientRect();
+          grab = {
+            dx: (event.clientX - box.left) / box.width - state.place.x,
+            dy: (event.clientY - box.top) / box.height - state.place.y,
+          };
+          mark.setPointerCapture(event.pointerId);
+        });
+        mark.addEventListener('pointermove', (event) => {
+          if (!grab) return;
+          const box = $('frame').getBoundingClientRect();
+          state.place.x = (event.clientX - box.left) / box.width - grab.dx;
+          state.place.y = (event.clientY - box.top) / box.height - grab.dy;
+          drawMark();
+        });
+        mark.addEventListener('pointerup', () => {
+          grab = null;
+        });
+        mark.addEventListener('keydown', (event) => {
+          if (state.busy) return;
+          const step = event.shiftKey ? 0.05 : 0.01;
+          const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+          const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+          if (!dx && !dy) return;
+          event.preventDefault();
+          state.place.x += dx;
+          state.place.y += dy;
+          drawMark();
+        });
+      })();
+
+      $('sign').onclick = async () => {
+        $('signError').textContent = '';
+        const form = new FormData();
+        form.append('certificateId', state.certificateId);
+        form.append('file', $('file').files[0]);
+        if ($('description').value) form.append('description', $('description').value);
+        form.append('page', state.place.page);
+        form.append('x', state.place.x.toFixed(4));
+        form.append('y', state.place.y.toFixed(4));
+        form.append('width', state.place.width.toFixed(4));
+        setBusy(true);
+        progress('info', 'Đang chuẩn bị tệp và gửi yêu cầu ký…');
+        try {
+          const view = await api('POST', `${API}/transactions`, form, true);
+          state.txId = view.id;
+          follow(view);
+          startPolling();
+        } catch (e) {
+          setBusy(false);
+          progress('bad', e.message);
+        }
+      };
+      function setBusy(busy) {
+        state.busy = busy;
+        $('sign').textContent = busy ? 'Đang ký…' : 'Ký số';
+        renderMethods();
+      }
+      function progress(kind, text) {
+        $('progress').innerHTML = `<div class="progress ${kind}">${text}</div>`;
+      }
+
+      // ---- Waiting for the phone, then the result ----
+      function follow(view) {
+        if (view.status === 'pending' || view.status === 'signing') {
+          const left = Math.max(0, Math.round((new Date(view.expiresAt) - Date.now()) / 1000));
+          progress(
+            'info',
+            `⏳ Đã gửi yêu cầu ký. Xác nhận trên ứng dụng <b>MySign</b> của bạn
+        (còn ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')})…`,
+          );
+          $('phoneBox').hidden = state.info?.provider !== 'fake';
+          return;
+        }
+        stopPolling();
+        setBusy(false);
+        $('phoneBox').hidden = true;
+        if (view.status === 'signed') {
+          progress(
+            'ok',
+            '✔ Ký số thành công. Chữ ký đã được gắn vào bản PDF và xác minh lại trước khi lưu.',
+          );
+          showSigned(view);
+        } else {
+          const reasons = {
+            rejected: 'Người ký đã từ chối trên điện thoại.',
+            expired: 'Hết thời gian chờ xác nhận. Bấm Ký số để gửi lại.',
+          };
+          progress('bad', esc(view.errorMessage || reasons[view.status] || 'Ký thất bại.'));
+        }
+      }
+      async function showSigned(view) {
+        const blob = await api('GET', `${API}/transactions/${view.id}/document`);
+        if (state.signedUrl) URL.revokeObjectURL(state.signedUrl);
+        state.signedUrl = URL.createObjectURL(blob);
+        $('preview').src = state.signedUrl;
+        $('resultActions').innerHTML = '';
+        const link = document.createElement('a');
+        link.href = state.signedUrl;
+        link.download = view.documentName.replace(/\.pdf$/i, '') + '-da-ky.pdf';
+        link.innerHTML = '<button class="primary">Tải PDF đã ký</button>';
+        $('resultActions').appendChild(link);
+        $('result').hidden = false;
+      }
+      function startPolling() {
+        stopPolling();
+        state.timer = setInterval(poll, 2000);
+      }
+      function stopPolling() {
+        if (state.timer) clearInterval(state.timer);
+        state.timer = null;
+      }
+      async function poll() {
+        try {
+          const view = await api('GET', `${API}/transactions/${state.txId}`);
+          follow(view);
+          if (view.status === 'pending' && state.info?.provider === 'fake') await refreshPhone();
+        } catch (e) {
+          stopPolling();
+          setBusy(false);
+          progress('bad', e.message);
+        }
+      }
+
+      // ---- The fake MySign phone, inline (Fake mode only) ----
+      async function refreshPhone() {
+        const response = await fetch(
+          `/sandbox/phone/requests?userId=${encodeURIComponent($('subscriber').value)}`,
+        );
+        const pending = response.ok ? await response.json() : [];
+        const request = pending[pending.length - 1];
+        $('phoneButtons').hidden = !request;
+        $('phoneText').innerHTML = request
+          ? `Yêu cầu ký số: <b>${esc(request.description)}</b><br>Mã tài liệu ${esc(request.documentId)}`
+          : 'Đang chờ yêu cầu tới điện thoại… (mã thuê bao ở bước 1 phải đúng mã đã khai báo)';
+        if (request) {
+          $('approve').onclick = () => answerPhone(request.id, 'approve');
+          $('reject').onclick = () => answerPhone(request.id, 'reject');
+        }
+        const url = state.info.phoneUrls?.[0];
+        if (url && !$('qrcode').dataset.url) {
+          new QRCode($('qrcode'), { text: url, width: 120, height: 120 });
+          $('qrcode').dataset.url = url;
+          $('phoneUrl').textContent = url;
+          $('qrWrap').hidden = false;
+        }
+      }
+      async function answerPhone(id, action) {
+        const response = await fetch(`/sandbox/phone/requests/${id}/${action}`, { method: 'POST' });
+        log(
+          `POST   /sandbox/phone/requests/${id}/${action}  →  ${response.status}   (điện thoại giả lập)`,
+        );
+        $('phoneButtons').hidden = true;
+        poll();
+      }
+
+      loadInfo().then(() => Promise.all([loadCertificates(), loadPicture()]));
+    </script>
+  </body>
+</html>
