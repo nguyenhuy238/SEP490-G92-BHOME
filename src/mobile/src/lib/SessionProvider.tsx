@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
+import { resolveApiEndpoint } from './apiEndpoint';
 import { clearAbandonedCaptures } from './captureFiles';
 import { MobileSessions, type SessionView } from './sessions';
 
@@ -19,7 +21,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             }),
           remove: () => SecureStore.deleteItemAsync(KEY),
         },
-        process.env.EXPO_PUBLIC_API_BASE_URL || '',
+        resolveApiEndpoint({
+          development: __DEV__,
+          hostUri: Constants.expoConfig?.hostUri,
+          configuredUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
+        }),
+        undefined,
+        __DEV__ ? process.env.EXPO_PUBLIC_DEV_SERVER_ID : undefined,
       ),
   );
   const [view, setView] = useState(manager.snapshot);

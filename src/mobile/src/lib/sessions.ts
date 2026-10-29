@@ -24,6 +24,7 @@ export class MobileSessions {
     private store: CredentialStore,
     private configuredBase = '',
     private transport: typeof fetch = fetch,
+    private serverId?: string,
   ) {
     this.value = { session: null, baseUrl: configuredBase, ready: false, api: null };
   }
@@ -81,7 +82,11 @@ export class MobileSessions {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!response.ok) throw new MobileApiError(response.status);
+      if (!response.ok)
+        throw new MobileApiError(
+          response.status,
+          route === 'login' && response.status === 401 ? 'invalid_credentials' : undefined,
+        );
       return (await response.json()) as Session;
     } catch (error) {
       if (error instanceof MobileApiError) throw error;
@@ -96,9 +101,16 @@ export class MobileSessions {
       try {
         const encoded = await this.store.read();
         if (encoded) {
-          const saved = JSON.parse(encoded) as { base: string; refreshToken: string };
+          const saved = JSON.parse(encoded) as {
+            base: string;
+            refreshToken: string;
+            serverId?: string;
+          };
           const base = apiBaseUrl(saved.base);
-          if (this.configuredBase && apiBaseUrl(this.configuredBase) !== base) {
+          if (
+            (this.configuredBase && apiBaseUrl(this.configuredBase) !== base) ||
+            saved.serverId !== this.serverId
+          ) {
             await this.clear();
             return;
           }
@@ -124,7 +136,10 @@ export class MobileSessions {
       try {
         const next = await this.auth(base, 'refresh', { refreshToken: previous });
         if (epoch !== this.epoch) return undefined;
-        await this.persist(epoch, JSON.stringify({ base, refreshToken: next.refreshToken }));
+        await this.persist(
+          epoch,
+          JSON.stringify({ base, refreshToken: next.refreshToken, serverId: this.serverId }),
+        );
         if (epoch !== this.epoch) return undefined;
         this.credential = next.refreshToken;
         this.emit({ session: next, api: this.value.api || this.api(base) });
@@ -138,13 +153,20 @@ export class MobileSessions {
     })();
     return this.refreshTask;
   }
-  async login(input: string, userName: string, password: string) {
+  async login(input: string, email: string, password: string) {
     const base = apiBaseUrl(input);
     await this.clear();
     const epoch = this.epoch;
-    const next = await this.auth(base, 'login', { userName, password, device: 'BHOME Mobile' });
+    const next = await this.auth(base, 'login', {
+      email: email.trim(),
+      password,
+      device: 'BHOME Mobile',
+    });
     if (epoch !== this.epoch) return;
-    await this.persist(epoch, JSON.stringify({ base, refreshToken: next.refreshToken }));
+    await this.persist(
+      epoch,
+      JSON.stringify({ base, refreshToken: next.refreshToken, serverId: this.serverId }),
+    );
     if (epoch !== this.epoch) return;
     this.credential = next.refreshToken;
     this.emit({ baseUrl: base, session: next, api: this.api(base), ready: true });

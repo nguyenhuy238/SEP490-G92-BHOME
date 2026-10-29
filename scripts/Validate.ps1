@@ -13,6 +13,7 @@ try {
     npm.cmd ci --no-fund --no-audit; Assert-Success
     npm.cmd run lint; Assert-Success
     npm.cmd test; Assert-Success
+    powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/MobileDevelopment.Tests.ps1; Assert-Success
     # Build-time, browser-visible validation URL only.
     if (-not $env:VITE_API_BASE_URL) { $env:VITE_API_BASE_URL = 'https://localhost:7240' }
     npm.cmd run build; Assert-Success

@@ -66,6 +66,7 @@ export function errorMessage(error: unknown): string {
   if (!(error instanceof MobileApiError))
     return 'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.';
   const messages: Record<string, string> = {
+    invalid_credentials: 'Email hoặc mật khẩu không đúng, hoặc tài khoản chưa thể đăng nhập.',
     human_confirmation_required: 'Bạn cần xác nhận đã kiểm tra dữ liệu.',
     duplicate_or_conflicting_record:
       'Dữ liệu bị trùng hoặc đã thay đổi. Hãy tải lại danh sách; hệ thống không tự gộp hồ sơ.',
@@ -84,7 +85,7 @@ export function errorMessage(error: unknown): string {
     (error.code && messages[error.code]) ||
     (
       {
-        0: 'Không kết nối được API. Kiểm tra Wi-Fi, địa chỉ HTTPS và chứng chỉ trên iPhone.',
+        0: 'Không kết nối được API. Kiểm tra máy chủ đang chạy, iPhone cùng mạng và chứng chỉ HTTPS. Nếu vừa đổi Wi-Fi, hãy quét mã QR Expo mới trong terminal.',
         400: 'Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường rồi thử lại.',
         401: 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.',
         403: 'Tài khoản không được phép thực hiện thao tác này.',
