@@ -105,7 +105,8 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     {
         var w = await Workspace(); var otherOwner = await User(Roles.Owner); var otherStaff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         var path = $"/api/v1/capture/residents/{w.Resident}/confirm";
-        Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.PostAsJsonAsync(path, Identity())).StatusCode);
+        // Owner has chain-wide visibility, but identity confirmation remains a Staff operation.
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherOwner.Client.PostAsJsonAsync(path, Identity())).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await otherStaff.Client.PostAsJsonAsync(path, Identity())).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.Client.GetAsync("/api/v1/capture/meter-tasks")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/locations/{w.Location}/residents")).StatusCode);
@@ -144,7 +145,8 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var reading = await replies[0].Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Equal(25.5m, reading!.Consumption);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data with { ConfirmedValue = 126 })).StatusCode);
         var file = await w.Staff.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence"); Assert.Equal(Image(), await file.Content.ReadAsByteArrayAsync());
-        var stranger = await User(Roles.Owner); Assert.Equal(HttpStatusCode.NotFound, (await stranger.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
+        // Every Owner has chain-wide access, including private evidence through the authorized API.
+        var otherOwner = await User(Roles.Owner); Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
         Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == periodic)).Status);
