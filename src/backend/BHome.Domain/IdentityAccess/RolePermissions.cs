@@ -16,6 +16,7 @@ public static class RolePermissions
             [Permissions.StaffAccounts.Manage] = Allow(Roles.Owner),
             [Permissions.StaffAssignments.Manage] = Allow(Roles.Owner),
             [Permissions.Locations.Manage] = Allow(Roles.Owner),
+            [Permissions.Locations.ViewAssigned] = Allow(Roles.Staff),
             [Permissions.Rooms.View] = Allow(Roles.Owner, Roles.Staff, Roles.Tenant),
             [Permissions.Rooms.Manage] = Allow(Roles.Owner),
             [Permissions.Assets.UpdateCondition] = Allow(Roles.Owner, Roles.Staff),

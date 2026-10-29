@@ -112,6 +112,13 @@ See [audit, migration and verification](../development/AUTH_SECURITY_AUDIT.md).
 
 ## Contracts and status codes
 
+Location assignment endpoints follow the fixed Owner/Staff scope described in
+[Staff Location assignments](../development/STAFF_LOCATION_ASSIGNMENTS.md). Owner creates a minimal
+Location and manages inclusive dated assignments; Staff reads only Locations assigned on the current
+Vietnam business date. Assignment mutations send `locationId` in the JSON body; assignment-history
+reads use a query parameter rather than a GET body. Every Owner can manage every Location and assign
+any active Staff account. Overlapping assignments return 409 and unknown Location IDs return 404.
+
 JSON properties use camelCase. Use explicit request/response DTOs, never EF entities. Require and
 validate bounded string lengths, supported enum values, sizes and page parameters at the API edge;
 application services enforce business invariants and authorization. Do not expose private fields

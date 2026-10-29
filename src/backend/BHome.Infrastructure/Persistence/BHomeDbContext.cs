@@ -2,6 +2,7 @@ using BHome.Domain.Common;
 using BHome.Infrastructure.IdentityAccess;
 using BusinessRoles = BHome.Domain.IdentityAccess.Roles;
 using BHome.Infrastructure.Jobs;
+using BHome.Domain.Locations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,8 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     public DbSet<RefreshTokenRecord> RefreshTokens => Set<RefreshTokenRecord>();
     public DbSet<PasswordResetGrant> PasswordResetGrants => Set<PasswordResetGrant>();
     public DbSet<SecurityAuditRecord> SecurityAudit => Set<SecurityAuditRecord>();
+    public DbSet<Location> Locations => Set<Location>();
+    public DbSet<StaffLocationAssignment> StaffLocationAssignments => Set<StaffLocationAssignment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

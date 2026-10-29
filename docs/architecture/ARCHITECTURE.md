@@ -95,13 +95,15 @@ inheritance. Unknown permissions receive no service grant; no permission claims 
 are used. See [fixed-role permissions](../development/FIXED_ROLE_PERMISSIONS.md).
 Resource authorization is a second check after the function permission:
 
-- Owner must own the resource's chain (`OwnerUserId` equality), not every chain in the deployment.
-- Staff must have an authoritative assignment for the resource's owner and Location.
+- Owner is the highest global management role and may manage every Location in this BHOME deployment.
+- Staff must have an authoritative assignment for the Location.
 - Tenant must own the server-loaded tenancy resource.
 
 `ResourceAccess` implements this decision boundary. Its resource scope must be constructed from
-server-side data, never request-supplied owner/tenant IDs. `IStaffLocationAccess` deliberately denies
-access until the finalized assignment model exists. This generic scope check does not grant every
+server-side data, never request-supplied tenant IDs or JWT Location claims. `IStaffLocationAccess` queries inclusive
+dated assignments in PostgreSQL on every request using the Vietnam business date; Location scope is
+never frozen into the JWT. PostgreSQL also prevents overlapping Staff ranges for one Location. See
+[Staff Location assignments](../development/STAFF_LOCATION_ASSIGNMENTS.md). This generic scope check does not grant every
 operation to all three roles: each use case first restricts the allowed roles, then checks scope.
 Its required `allowedRoles` argument ensures a multi-role user cannot satisfy an Owner/Staff-only
 operation through their Tenant scope. List queries must apply equivalent predicates in SQL before
