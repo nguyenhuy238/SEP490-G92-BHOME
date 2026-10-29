@@ -9,6 +9,11 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ['scripts/**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs', globals: globals.node },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
@@ -19,6 +24,11 @@ export default tseslint.config(
   },
   {
     files: ['packages/client-core/src/auth.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
+    // Expo Metro uses React Native Fast Refresh, not the Vite-only export restriction.
+    files: ['src/mobile/**/*.{ts,tsx}'],
     rules: { 'react-refresh/only-export-components': 'off' },
   },
 );

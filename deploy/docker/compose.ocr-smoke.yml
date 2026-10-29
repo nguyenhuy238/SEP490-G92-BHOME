@@ -1,0 +1,17 @@
+name: bhome-ocr-smoke
+services:
+  smoke:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/OcrSmoke.Dockerfile
+    image: bhome/ocr-smoke:local
+    platform: linux/amd64
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 2
+    mem_limit: 768m
+    pids_limit: 128
+    volumes:
+      - ../../.tools/ocr-models:/models:ro

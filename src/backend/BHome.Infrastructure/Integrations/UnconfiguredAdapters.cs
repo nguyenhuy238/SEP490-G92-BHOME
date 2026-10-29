@@ -1,6 +1,5 @@
 using BHome.Application.Common;
 using BHome.Application.Integrations;
-using BHome.Application.Ocr;
 using Microsoft.Extensions.Logging;
 
 namespace BHome.Infrastructure.Integrations;
@@ -40,15 +39,5 @@ internal sealed class UnconfiguredElectronicContractProvider(ILogger<Unconfigure
         cancellationToken.ThrowIfCancellationRequested();
         logger.LogWarning("Electronic contract provider is unconfigured; signing is unavailable");
         throw new IntegrationUnavailableException("electronic contracts");
-    }
-}
-
-internal sealed class UnconfiguredOcrService(ILogger<UnconfiguredOcrService> logger) : IOcrService
-{
-    public Task<OcrProposal> ExtractAsync(Stream temporaryInput, OcrInputKind kind, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        logger.LogWarning("Internal OCR engine is unconfigured; no proposed fields were produced");
-        throw new IntegrationUnavailableException("internal OCR");
     }
 }

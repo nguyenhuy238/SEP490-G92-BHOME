@@ -10,7 +10,9 @@ internal sealed class LocationConfiguration : IEntityTypeConfiguration<Location>
     public void Configure(EntityTypeBuilder<Location> builder)
     {
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.Address).HasMaxLength(1000);
         builder.HasIndex(x => x.Name);
+        builder.HasOne(x => x.Chain).WithMany().HasForeignKey(x => x.ChainId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

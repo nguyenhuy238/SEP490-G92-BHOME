@@ -30,7 +30,7 @@ function setup() {
 
 function fillLogin() {
   fireEvent.change(screen.getByLabelText('Email hoặc Số điện thoại'), {
-    target: { value: ' synthetic-owner ' },
+    target: { value: ' synthetic-owner@example.invalid ' },
   });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), {
     target: { value: ' Synthetic!Password-493 ' },
@@ -70,7 +70,7 @@ it('uses the confirmed web contract, preserves password whitespace and clears cr
   const [url, options] = fetchMock.mock.calls[0];
   expect(url).toBe('/api/v1/auth/login');
   expect(JSON.parse(options.body)).toEqual({
-    userName: 'synthetic-owner',
+    email: 'synthetic-owner@example.invalid',
     password: ' Synthetic!Password-493 ',
   });
   expect(options.credentials).toBe('include');
@@ -134,7 +134,9 @@ it('reports unavailable reset delivery without claiming an email was sent', asyn
   setup();
   fillLogin();
   fireEvent.click(screen.getByRole('button', { name: 'Quên mật khẩu?' }));
-  expect(screen.getByRole('textbox', { name: /Tên đăng nhập/ })).toHaveValue(' synthetic-owner ');
+  expect(screen.getByRole('textbox', { name: /Tên đăng nhập/ })).toHaveValue(
+    ' synthetic-owner@example.invalid ',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Gửi hướng dẫn' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Chưa thể gửi hướng dẫn');
   expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/auth/forgot-password');

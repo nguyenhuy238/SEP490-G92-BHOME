@@ -1,4 +1,5 @@
 using BHome.Domain.Common;
+using BHome.Domain.PropertyManagement;
 
 namespace BHome.Domain.Locations;
 
@@ -11,5 +12,9 @@ public sealed class Location : AuditableEntity
         Name = name;
     }
 
-    public string Name { get; private set; } = "";
+    public Guid? ChainId { get; set; }
+    public Chain? Chain { get; set; }
+    public string Name { get; set; } = "";
+    public string Address { get; set; } = "";
+    public bool IsActive { get; set; } = true;
 }

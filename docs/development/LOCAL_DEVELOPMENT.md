@@ -167,43 +167,54 @@ services with `docker compose stop`; named volumes persist. No setup script remo
 ## Clients
 
 From root, `npm ci` installs all applications/shared tooling with the committed lockfile. Copy each
-client `.env.example` to its `.env.local`; all clients use `VITE_API_BASE_URL=https://localhost:7240`.
+web client `.env.example` to its `.env.local`; the web clients use `VITE_API_BASE_URL=https://localhost:7240`.
+The current Expo mobile demo has no backend connection and needs no environment file.
 Every Vite environment value is visible to the browser. Native device builds need a reachable HTTPS
 API address and trusted certificate; a device's `localhost` refers to the device, not the developer PC.
 
 ```powershell
 npm run dev --workspace @bhome/owner-web
-npm run dev --workspace @bhome/mobile
+npm.cmd run mobile
 npm run dev --workspace @bhome/public-web
 ```
 
-Ports are 5173/5174/5175 with strict port selection so CORS matches. Existing dev config permits
+Web ports are 5173/5175 with strict port selection so CORS matches. Existing dev config permits
 these local origins and Capacitor defaults only. Configure exact deployed origins via environment
 arrays; do not use wildcard CORS or arbitrary proxy trust. Set `VITE_API_BASE_URL` to the actual
 HTTPS endpoint before production builds. The shared client library is source-consumed; Vite bundles
 it per app and strict TypeScript also checks it separately.
 
-## Capacitor platforms
+## Expo mobile
 
-`src/mobile/capacitor.config.ts` points to Vite's `dist`. The initial repository intentionally omits
-generated Android/iOS folders so the team can choose native tooling/plugins and ownership first.
-The app already runs in browser mode. When a platform is selected:
+The current `src/mobile/package.json` uses Expo SDK 58 and React Native. Its entry point is
+`src/mobile/index.ts`, which registers `src/mobile/App.tsx`. Older Capacitor instructions and
+browser-based mobile tests refer to the previous client and do not validate this Expo demo.
+
+From the repository root:
 
 ```powershell
-npm install @capacitor/android@8 --workspace @bhome/mobile
-# On macOS for iOS instead: npm install @capacitor/ios@8 --workspace @bhome/mobile
-npm run build --workspace @bhome/mobile
-Set-Location src/mobile
-npx cap add android
-npx cap sync
-npx cap open android
+npm.cmd run mobile
+# Reset Metro's cache if needed:
+npm.cmd run mobile -- --clear
 ```
 
-Keep all Capacitor packages on the same major. Intentionally remove the relevant native folder
-ignore rule if the team decides to version native projects (recommended once configured); keep
-signing files and local SDK paths ignored. Use a reviewed Keychain/Keystore implementation of
-`SecureTokenStorage` before persistent authentication. `PreferenceStorage` is only for non-sensitive
-settings. Maestro flows belong in `tests/mobile/maestro`; none are fabricated before a real flow exists.
+Alternatively, run `npx.cmd expo start` from `src/mobile`. Do not run it without a project path at
+the repository root: Expo would use the root package instead of the mobile entry point and load
+the root backend environment files. Stop that server with Ctrl+C before restarting correctly.
+
+Scan the terminal QR code with a compatible Expo Go version on a device on the same network.
+Metro normally uses port 8081; use the address printed in the terminal. This demo currently shows
+sample data only. Native device UI and backend authentication require separate verification.
+
+To verify Android bundling without a device, run from `src/mobile`:
+
+```powershell
+npx.cmd expo export --platform android --output-dir ../../.tools/mobile-export-check
+npx.cmd tsc --noEmit
+```
+
+Run `npm.cmd run lint` at the repository root for the shared lint configuration. Expo caches
+(`.expo/`) and the validation export under `.tools/` are ignored by Git.
 
 ## Troubleshooting and validation
 

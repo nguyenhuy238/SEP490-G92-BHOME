@@ -155,11 +155,10 @@ Copy các file dưới đây **một lần**, khi chưa có `.env.local` trong t
 
 ```powershell
 Copy-Item src/owner-web/.env.example src/owner-web/.env.local
-Copy-Item src/mobile/.env.example src/mobile/.env.local
 Copy-Item src/public-web/.env.example src/public-web/.env.local
 ```
 
-Mặc định cả ba file đều có:
+Mặc định hai ứng dụng web đều có:
 
 ```dotenv
 VITE_API_BASE_URL=https://localhost:7240
@@ -173,8 +172,8 @@ npm.cmd run dev --workspace @bhome/owner-web
 ```
 
 ```powershell
-# Terminal Mobile trên trình duyệt
-npm.cmd run dev --workspace @bhome/mobile
+# Terminal Mobile (Expo Go)
+npm.cmd run mobile
 ```
 
 ```powershell
@@ -182,23 +181,29 @@ npm.cmd run dev --workspace @bhome/mobile
 npm.cmd run dev --workspace @bhome/public-web
 ```
 
-Chỉ cần chạy frontend đang làm việc. Nếu thay API URL, cập nhật `VITE_API_BASE_URL` rồi khởi động
-lại Vite. Khi chạy trên điện thoại thật, dùng địa chỉ HTTPS mà thiết bị truy cập được và chứng chỉ
-được tin cậy; `localhost` trên điện thoại trỏ về chính điện thoại. Xem
-[hướng dẫn mobile native](docs/development/LOCAL_DEVELOPMENT.md#capacitor-platforms).
-Production build cần cấu hình rõ `VITE_API_BASE_URL` bằng địa chỉ HTTPS của API triển khai.
+Mobile hiện là ứng dụng Expo/React Native demo, chưa kết nối backend và chưa cần file môi trường.
+Lệnh `npm.cmd run mobile` tự chạy Expo trong `src/mobile`. Quét mã QR bằng Expo Go trên điện thoại
+cùng mạng với máy tính. Có thể truyền tùy chọn, ví dụ `npm.cmd run mobile -- --clear` để xóa cache Metro.
+Nếu chạy trực tiếp, dùng `cd src/mobile` rồi `npx.cmd expo start`; không chạy `npx expo start` ở thư mục
+gốc vì Expo sẽ tìm entry point sai và nạp các file môi trường backend tại đó. Xem
+[hướng dẫn Expo mobile](docs/development/LOCAL_DEVELOPMENT.md#expo-mobile).
+
+Chỉ cần chạy frontend đang làm việc. Với hai ứng dụng web, nếu thay API URL, cập nhật
+`VITE_API_BASE_URL` rồi khởi động lại Vite. Production build cần cấu hình rõ biến này bằng địa chỉ
+HTTPS của API triển khai. Khi tích hợp mobile với API trên điện thoại thật, dùng địa chỉ HTTPS mà
+thiết bị truy cập được và chứng chỉ được tin cậy; `localhost` trên điện thoại trỏ về chính điện thoại.
 
 ## 7. Địa chỉ kiểm tra
 
-| Thành phần     | Địa chỉ mặc định                    | Kết quả cần kiểm tra                                              |
-| -------------- | ----------------------------------- | ----------------------------------------------------------------- |
-| Swagger API    | https://localhost:7240/swagger      | Mở được tài liệu API                                              |
-| API liveness   | https://localhost:7240/health/live  | API đang chạy                                                     |
-| API readiness  | https://localhost:7240/health/ready | HTTP 200 khi kết nối database được và migration đã áp dụng đầy đủ |
-| Owner Web      | http://localhost:5173               | Mở được ứng dụng                                                  |
-| Mobile browser | http://localhost:5174               | Mở được ứng dụng                                                  |
-| Public Web     | http://localhost:5175               | Mở được ứng dụng                                                  |
-| MinIO Console  | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`               |
+| Thành phần    | Địa chỉ mặc định                    | Kết quả cần kiểm tra                                              |
+| ------------- | ----------------------------------- | ----------------------------------------------------------------- |
+| Swagger API   | https://localhost:7240/swagger      | Mở được tài liệu API                                              |
+| API liveness  | https://localhost:7240/health/live  | API đang chạy                                                     |
+| API readiness | https://localhost:7240/health/ready | HTTP 200 khi kết nối database được và migration đã áp dụng đầy đủ |
+| Owner Web     | http://localhost:5173               | Mở được ứng dụng                                                  |
+| Mobile Expo   | Địa chỉ và mã QR trong terminal     | Expo Go tải được ứng dụng demo                                    |
+| Public Web    | http://localhost:5175               | Mở được ứng dụng                                                  |
+| MinIO Console | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`               |
 
 API hỗ trợ login/refresh/logout/logout-all/me/change-password và lõi reset mật khẩu.
 Chưa có tài khoản demo hay luồng tạo/kích hoạt tài khoản. Gửi email reset/MFA và lưu token native
@@ -243,7 +248,7 @@ src/backend/
   BHome.Domain/          Định nghĩa domain
   BHome.Infrastructure/  EF/Identity/JWT, storage, jobs, integration adapters
 src/owner-web/           React + Vite + Ant Design
-src/mobile/              React + Vite + Capacitor
+src/mobile/              Expo + React Native
 src/public-web/          React + Vite
 packages/client-core/    API/auth/localization dùng chung
 tests/                  Test backend và client

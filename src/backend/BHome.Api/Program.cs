@@ -13,7 +13,9 @@ app.UseMiddleware<CorrelationMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 if (!app.Environment.IsDevelopment()) app.UseHsts();
-if (app.Configuration.GetValue("Api:UseHttpsRedirection", true)) app.UseHttpsRedirection();
+if (app.Configuration.GetValue("Api:UseHttpsRedirection", true))
+    app.UseWhen(context => !(app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("MobileDevelopment:Enabled") &&
+        context.Request.Path == "/development/mobile-ca.cer"), branch => branch.UseHttpsRedirection());
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -22,7 +24,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("Clients");
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";

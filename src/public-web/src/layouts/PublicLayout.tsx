@@ -1,4 +1,3 @@
-
 import { AppBar, Toolbar, Typography, Box, Container } from '@mui/material';
 import { Outlet, Link } from 'react-router';
 
@@ -27,9 +26,7 @@ export default function PublicLayout() {
       </Container>
 
       <Box component="footer" sx={{ py: 3, textAlign: 'center' }}>
-        <Typography variant="body2">
-          © BHOME - Smart Boarding House Management
-        </Typography>
+        <Typography variant="body2">© BHOME - Smart Boarding House Management</Typography>
       </Box>
     </>
   );
