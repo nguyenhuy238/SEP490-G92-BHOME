@@ -40,6 +40,8 @@ Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi 
 | locations.view-assigned     | Không | Có    | Không  | BF-02 / UC-08, chỉ Location có Assignment đang hiệu lực                             |
 | rooms.view                  | Có    | Có    | Có     | UC-04/07, toàn hệ thống / assigned Location / own Room                              |
 | rooms.manage                | Có    | Không | Không  | UC-04, chain của Owner                                                              |
+| assets.view                 | Có    | Có    | Không  | UC-05, Owner toàn hệ thống / Staff assigned Location                                |
+| assets.manage               | Có    | Không | Không  | UC-05, Owner tạo/sửa/giao/thanh lý tài sản                                          |
 | assets.update-condition     | Có    | Có    | Không  | UC-05, toàn hệ thống / assigned Location                                            |
 | operational-tasks.manage    | Có    | Không | Không  | UC-10/12, tạo/giao/theo dõi, theo state của use case                                |
 | operational-tasks.execute   | Không | Có    | Không  | UC-11, task được giao và đúng Location                                              |
@@ -54,6 +56,9 @@ Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi 
 | invoice-adjustments.request | Không | Không | Có     | UC-24, own Invoice                                                                  |
 | invoice-adjustments.approve | Có    | Không | Không  | UC-24 / GBR-03, Owner quyết định theo workflow                                      |
 | incidents.report            | Không | Có    | Có     | UC-26, Staff trong scope / Tenant của Room                                          |
+| incidents.view              | Có    | Có    | Có     | UC-26/28, Owner toàn hệ thống / Staff assigned Location / Tenant báo cáo của mình   |
+| incidents.respond-emergency | Có    | Có    | Không  | UC-27, xác nhận đã nhận + hành động khẩn cấp trong scope                            |
+| incidents.review            | Có    | Không | Không  | UC-28/30, Owner duyệt, phân loại, giao/hủy Work Order, lịch sử bảo trì              |
 | work-orders.approve-plan    | Có    | Không | Không  | BF-07 / GBR-12, Owner duyệt kế hoạch/chi phí                                        |
 | work-orders.execute         | Không | Có    | Không  | BF-07, Work Order được giao và đúng state                                           |
 | work-orders.verify          | Có    | Không | Không  | BF-07 / GBR-12, Owner xác minh kết quả                                              |

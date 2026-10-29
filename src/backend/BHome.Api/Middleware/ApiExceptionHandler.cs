@@ -1,4 +1,6 @@
 using BHome.Application.Common;
+using BHome.Application.IncidentMaintenance;
+using BHome.Domain.IncidentMaintenance;
 using BHome.Application.Ocr;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -12,9 +14,9 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         var status = exception switch
         {
             IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
-            OcrAccessException => StatusCodes.Status404NotFound,
-            CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
-            CaptureValidationException => StatusCodes.Status400BadRequest,
+            OcrAccessException or MaintenanceNotFoundException => StatusCodes.Status404NotFound,
+            CaptureConflictException or OcrWorkflowStateException or MaintenanceStateException => StatusCodes.Status409Conflict,
+            CaptureValidationException or MaintenanceValidationException => StatusCodes.Status400BadRequest,
             OcrInputException { Code: "image_too_large" } => StatusCodes.Status413PayloadTooLarge,
             OcrInputException => StatusCodes.Status400BadRequest,
             BadHttpRequestException { StatusCode: >= 400 and < 500 } request => request.StatusCode,
@@ -36,6 +38,8 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,
+            MaintenanceStateException state => state.Code,
+            MaintenanceValidationException invalid => invalid.Code,
             _ => null
         };
         await problems.WriteAsync(new ProblemDetailsContext

@@ -39,6 +39,8 @@ public static class Permissions
 
     public static class Assets
     {
+        public const string View = "assets.view";
+        public const string Manage = "assets.manage";
         public const string UpdateCondition = "assets.update-condition";
     }
 
@@ -77,6 +79,9 @@ public static class Permissions
     public static class Incidents
     {
         public const string Report = "incidents.report";
+        public const string View = "incidents.view";
+        public const string RespondEmergency = "incidents.respond-emergency";
+        public const string Review = "incidents.review";
     }
 
     public static class WorkOrders

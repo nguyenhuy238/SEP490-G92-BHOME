@@ -12,6 +12,7 @@ using BHome.Infrastructure.Locations;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Storage;
 using BHome.Infrastructure.Ocr;
+using BHome.Infrastructure.Modules.IncidentMaintenance;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -132,6 +133,7 @@ public static class DependencyInjection
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<IBackgroundJobQueue, PostgresJobQueue>();
         services.AddHostedService<PostgresJobWorker>();
+        services.AddIncidentMaintenance(configuration);
         return services;
     }
 }
