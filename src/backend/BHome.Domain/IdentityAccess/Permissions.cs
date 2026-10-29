@@ -28,6 +28,7 @@ public static class Permissions
     public static class Locations
     {
         public const string Manage = "locations.manage";
+        public const string ViewAssigned = "locations.view-assigned";
     }
 
     public static class Rooms

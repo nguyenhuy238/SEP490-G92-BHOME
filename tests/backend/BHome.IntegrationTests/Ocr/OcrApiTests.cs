@@ -228,15 +228,15 @@ public sealed class OcrApiTests
         public bool Open { get; set; } = true;
         private readonly Guid locationId = Guid.NewGuid();
         public Task<OcrWorkflowResource?> FindIdentityAsync(Guid id, CancellationToken token)
-            => Task.FromResult(id == ResidentId ? new OcrWorkflowResource(new(UserId, locationId, null), Open, OcrDocumentKind.IdentityFront) : null);
+            => Task.FromResult(id == ResidentId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.IdentityFront) : null);
         public Task<OcrWorkflowResource?> FindMeterTaskAsync(Guid id, CancellationToken token)
-            => Task.FromResult(id == TaskId ? new OcrWorkflowResource(new(UserId, locationId, null), Open, OcrDocumentKind.DigitalWater) : null);
+            => Task.FromResult(id == TaskId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.DigitalWater) : null);
     }
 
     private sealed class TestAssignments : IStaffLocationAccess
     {
         public bool Assigned { get; set; }
-        public Task<bool> IsAssignedAsync(Guid staff, Guid owner, Guid location, CancellationToken token) => Task.FromResult(Assigned);
+        public Task<bool> IsAssignedAsync(Guid staff, Guid location, CancellationToken token) => Task.FromResult(Assigned);
     }
     private sealed class TestEngine : IOcrEngine
     {

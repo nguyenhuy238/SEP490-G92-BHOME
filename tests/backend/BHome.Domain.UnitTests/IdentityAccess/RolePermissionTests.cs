@@ -15,6 +15,7 @@ public sealed class RolePermissionTests
         { Permissions.StaffAccounts.Manage, [Roles.Owner] },
         { Permissions.StaffAssignments.Manage, [Roles.Owner] },
         { Permissions.Locations.Manage, [Roles.Owner] },
+        { Permissions.Locations.ViewAssigned, [Roles.Staff] },
         { Permissions.Rooms.View, [Roles.Owner, Roles.Staff, Roles.Tenant] },
         { Permissions.Rooms.Manage, [Roles.Owner] },
         { Permissions.Assets.UpdateCondition, [Roles.Owner, Roles.Staff] },

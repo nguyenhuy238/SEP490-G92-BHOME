@@ -198,9 +198,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AssignedStaffUserId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateOnly?>("BillingPeriod")
                         .HasColumnType("date");
 
@@ -243,7 +240,7 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Purpose\" = 0 AND \"Status\" <> 3");
 
-                    b.HasIndex("AssignedStaffUserId", "Status");
+                    b.HasIndex("Status");
 
                     b.HasIndex("MeterId", "BillingPeriod")
                         .IsUnique()
@@ -253,6 +250,81 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_Task_Period", "(\"Purpose\" = 0 AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)");
                         });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Locations.Location", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("ChainId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChainId");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("Locations");
+                });
+
+            modelBuilder.Entity("BHome.Domain.Locations.StaffLocationAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("StaffUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("StaffUserId", "StartDate", "EndDate");
+
+                    b.ToTable("StaffLocationAssignments");
                 });
 
             modelBuilder.Entity("BHome.Domain.PropertyManagement.Chain", b =>
@@ -269,52 +341,12 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
-                    b.Property<Guid>("OwnerUserId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("OwnerUserId");
 
                     b.ToTable("Chains", (string)null);
-                });
-
-            modelBuilder.Entity("BHome.Domain.PropertyManagement.Location", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid>("ChainId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChainId");
-
-                    b.ToTable("Locations", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.PropertyManagement.Room", b =>
@@ -343,43 +375,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Rooms", (string)null);
-                });
-
-            modelBuilder.Entity("BHome.Domain.StaffOperations.StaffLocationAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("StaffUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LocationId");
-
-                    b.HasIndex("StaffUserId", "LocationId", "EffectiveFrom")
-                        .IsUnique();
-
-                    b.ToTable("StaffLocationAssignments", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Assignment_Dates", "\"EffectiveTo\" IS NULL OR \"EffectiveTo\" >= \"EffectiveFrom\"");
-                        });
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.Resident", b =>
@@ -667,9 +662,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("ManagingOwnerId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -698,8 +690,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ManagingOwnerId");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -916,12 +906,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("BHome.Domain.Billing.OperationalTask", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedStaffUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("BHome.Domain.Billing.Meter", "Meter")
                         .WithMany()
                         .HasForeignKey("MeterId")
@@ -931,40 +915,25 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Navigation("Meter");
                 });
 
-            modelBuilder.Entity("BHome.Domain.PropertyManagement.Chain", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("OwnerUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("BHome.Domain.PropertyManagement.Location", b =>
+            modelBuilder.Entity("BHome.Domain.Locations.Location", b =>
                 {
                     b.HasOne("BHome.Domain.PropertyManagement.Chain", "Chain")
                         .WithMany()
                         .HasForeignKey("ChainId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Chain");
                 });
 
-            modelBuilder.Entity("BHome.Domain.PropertyManagement.Room", b =>
+            modelBuilder.Entity("BHome.Domain.Locations.StaffLocationAssignment", b =>
                 {
-                    b.HasOne("BHome.Domain.PropertyManagement.Location", "Location")
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("LocationId")
+                        .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Location");
-                });
-
-            modelBuilder.Entity("BHome.Domain.StaffOperations.StaffLocationAssignment", b =>
-                {
-                    b.HasOne("BHome.Domain.PropertyManagement.Location", "Location")
+                    b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -973,6 +942,15 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.Room", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1031,14 +1009,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("BHome.Infrastructure.Persistence.ApplicationUser", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("ManagingOwnerId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

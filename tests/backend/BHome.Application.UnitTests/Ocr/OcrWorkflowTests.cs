@@ -9,21 +9,21 @@ public sealed class OcrWorkflowTests
 {
     [Theory]
     [InlineData(Roles.Owner, true, true)]
-    [InlineData(Roles.Owner, false, false)]
+    [InlineData(Roles.Owner, false, true)]
     [InlineData(Roles.Staff, true, true)]
     [InlineData(Roles.Staff, false, false)]
     [InlineData(Roles.Tenant, true, false)]
     public async Task IdentityRequiresServerLoadedOwnershipOrCurrentAssignment(string role, bool inScope, bool allowed)
     {
         var user = Substitute.For<ICurrentUser>();
-        var userId = Guid.NewGuid(); var owner = role == Roles.Owner && inScope ? userId : Guid.NewGuid();
+        var userId = Guid.NewGuid();
         user.UserId.Returns(userId); user.IsInRole(role).Returns(true);
         var assignments = Substitute.For<IStaffLocationAccess>();
-        assignments.IsAssignedAsync(userId, owner, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(inScope);
+        assignments.IsAssignedAsync(userId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(inScope);
         var resources = Substitute.For<IOcrWorkflowResources>();
         var resident = Guid.NewGuid();
         resources.FindIdentityAsync(resident, Arg.Any<CancellationToken>()).Returns(
-            new OcrWorkflowResource(new ResourceScope(owner, Guid.NewGuid(), userId), true, OcrDocumentKind.IdentityFront));
+            new OcrWorkflowResource(new ResourceScope(Guid.NewGuid(), null), true, OcrDocumentKind.IdentityFront));
         var ocr = Substitute.For<IOcrService>();
         var expected = new OcrProposal(new Dictionary<string, string>(), "test");
         ocr.ExtractAsync(Arg.Any<Stream>(), OcrDocumentKind.IdentityFront, Arg.Any<CancellationToken>()).Returns(expected);
@@ -42,7 +42,7 @@ public sealed class OcrWorkflowTests
     {
         var user = Substitute.For<ICurrentUser>(); user.UserId.Returns(Guid.NewGuid()); user.IsInRole(Roles.Staff).Returns(true);
         var assignments = Substitute.For<IStaffLocationAccess>();
-        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
         var resources = Substitute.For<IOcrWorkflowResources>();
         var id = Guid.NewGuid();
         var ocr = Substitute.For<IOcrService>();
@@ -50,7 +50,7 @@ public sealed class OcrWorkflowTests
         using var input = new MemoryStream();
         await Assert.ThrowsAsync<OcrAccessException>(() => service.MeterAsync(id, input, default));
         resources.FindMeterTaskAsync(id, Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(
-            new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), null), false, OcrDocumentKind.MechanicalWater));
+            new ResourceScope(Guid.NewGuid(), null), false, OcrDocumentKind.MechanicalWater));
         await Assert.ThrowsAsync<OcrWorkflowStateException>(() => service.MeterAsync(id, input, default));
         await ocr.DidNotReceive().ExtractAsync(Arg.Any<Stream>(), Arg.Any<OcrDocumentKind>(), Arg.Any<CancellationToken>());
     }

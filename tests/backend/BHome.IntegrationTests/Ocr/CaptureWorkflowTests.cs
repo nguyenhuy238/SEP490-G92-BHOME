@@ -7,7 +7,7 @@ using BHome.Application.Ocr;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
-using BHome.Domain.StaffOperations;
+using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Ocr;
 using BHome.Infrastructure.Persistence;
@@ -33,13 +33,13 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private readonly CaptureFixture fixture;
     public CaptureWorkflowTests(CaptureFixture fixture) => this.fixture = fixture;
     private const string Password = "Synthetic-Test-Password!123";
-    private async Task<(HttpClient Client, Guid UserId)> User(string role, Guid? owner = null)
+    private async Task<(HttpClient Client, Guid UserId)> User(string role)
     {
         var name = Guid.NewGuid().ToString(); var id = Guid.NewGuid();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var u = new ApplicationUser { Id = id, UserName = name, Email = name + "@example.invalid", ManagingOwnerId = owner, LockoutEnabled = true };
+            var u = new ApplicationUser { Id = id, UserName = name, Email = name + "@example.invalid", LockoutEnabled = true };
             Assert.True((await users.CreateAsync(u, Password)).Succeeded); Assert.True((await users.AddToRoleAsync(u, role)).Succeeded);
         }
         var client = fixture.Factory.CreateClient();
@@ -56,11 +56,11 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     }
     private async Task<(HttpClient Owner, HttpClient Staff, Guid OwnerId, Guid StaffId, Guid Location, Guid Room, Guid Resident, Guid Meter)> Workspace()
     {
-        var owner = await User(Roles.Owner); var staff = await User(Roles.Staff, owner.UserId);
+        var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var chain = await Create(owner.Client, "chains", new ChainInput("Synthetic Chain"));
         var location = await Create(owner.Client, "locations", new LocationInput(chain, "Synthetic Location", "Synthetic Address"));
         var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01"));
-        await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), null));
+        await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), Today.AddDays(365)));
         var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant));
         var meter = await Create(owner.Client, "meters", new MeterInput(room, "SYNTHETIC-METER", UtilityType.Water, MeterDisplay.Digital, 2, Today.AddDays(-20)));
         return (owner.Client, staff.Client, owner.UserId, staff.UserId, location, room, resident, meter);
@@ -101,19 +101,20 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.DoesNotContain("IdentityData", listing); Assert.DoesNotContain("000000000000", listing);
     }
     [Fact]
-    public async Task CrossOwnerOtherStaffExpiredAssignmentAndTenantCannotConfirmOrDownload()
+    public async Task GlobalOwnerOtherStaffExpiredAssignmentAndTenantAuthorizationIsEnforced()
     {
-        var w = await Workspace(); var otherOwner = await User(Roles.Owner); var otherStaff = await User(Roles.Staff, w.OwnerId); var tenant = await User(Roles.Tenant);
+        var w = await Workspace(); var otherOwner = await User(Roles.Owner); var otherStaff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         var path = $"/api/v1/capture/residents/{w.Resident}/confirm";
+        // Owner has chain-wide visibility, but identity confirmation remains a Staff operation.
         Assert.Equal(HttpStatusCode.Forbidden, (await otherOwner.Client.PostAsJsonAsync(path, Identity())).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await otherStaff.Client.PostAsJsonAsync(path, Identity())).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.Client.GetAsync("/api/v1/capture/meter-tasks")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await otherOwner.Client.GetAsync($"/api/v1/capture/locations/{w.Location}/residents")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/locations/{w.Location}/residents")).StatusCode);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-            var assignment = await db.Set<StaffLocationAssignment>().SingleAsync(a => a.LocationId == w.Location && a.StaffUserId == w.StaffId);
-            assignment.EffectiveTo = Today.AddDays(-1); await db.SaveChangesAsync();
+            await db.Set<StaffLocationAssignment>().Where(a => a.LocationId == w.Location && a.StaffUserId == w.StaffId)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.EndDate, Today.AddDays(-1)));
         }
         Assert.Equal(HttpStatusCode.NotFound, (await w.Staff.PostAsJsonAsync(path, Identity())).StatusCode);
     }
@@ -130,13 +131,13 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     public async Task MeterEvidenceStoredPrivatelyConfirmationIsIdempotentAndOnlyConfirmedUsageIsReturned()
     {
         var w = await Workspace();
-        var initial = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, w.StaffId, ReadingPurpose.Initial, Today.AddDays(-10), null));
+        var initial = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today.AddDays(-10), null));
         var initialEvidence = await Evidence(w.Staff, initial);
         var response = await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{initial}/confirm", new MeterConfirmation(true, 100, initialEvidence));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var baseline = await response.Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Null(baseline!.Consumption);
         var period = new DateOnly(Today.Year, Today.Month, 1);
-        var periodic = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, w.StaffId, ReadingPurpose.Periodic, Today, period));
+        var periodic = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Periodic, Today, period));
         var evidence = await Evidence(w.Staff, periodic);
         var data = new MeterConfirmation(true, 125.5m, evidence);
         var replies = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data)));
@@ -144,7 +145,8 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var reading = await replies[0].Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Equal(25.5m, reading!.Consumption);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data with { ConfirmedValue = 126 })).StatusCode);
         var file = await w.Staff.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence"); Assert.Equal(Image(), await file.Content.ReadAsByteArrayAsync());
-        var stranger = await User(Roles.Owner); Assert.Equal(HttpStatusCode.NotFound, (await stranger.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
+        // Every Owner has chain-wide access, including private evidence through the authorized API.
+        var otherOwner = await User(Roles.Owner); Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
         Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == periodic)).Status);
@@ -156,7 +158,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     public async Task MissingBaselineWrongEvidenceAndUnconfirmedOrNegativeReadingCannotCompleteTask()
     {
         var w = await Workspace();
-        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, w.StaffId, ReadingPurpose.Periodic, Today, new(Today.Year, Today.Month, 1)));
+        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Periodic, Today, new(Today.Year, Today.Month, 1)));
         var evidence = await Evidence(w.Staff, task); var route = $"/api/v1/capture/meter-tasks/{task}/confirm";
         Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(false, 10, evidence))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, -1, evidence))).StatusCode);
@@ -170,7 +172,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     public async Task PartialStorageFailureLeavesDurableCleanupIntentAndCannotCreateConfirmedReading()
     {
         var w = await Workspace();
-        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, w.StaffId, ReadingPurpose.Initial, Today, null));
+        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
         await using var services = fixture.Factory.Services.CreateAsyncScope();
         var db = services.ServiceProvider.GetRequiredService<BHomeDbContext>();
         var realStorage = services.ServiceProvider.GetRequiredService<IObjectStorage>();

@@ -24,7 +24,6 @@ public sealed class OperationalTask : AuditableEntity
 {
     public Guid MeterId { get; set; }
     public Meter Meter { get; set; } = null!;
-    public Guid AssignedStaffUserId { get; set; }
     public ReadingPurpose Purpose { get; set; }
     public DateOnly ReadingDate { get; set; }
     public DateOnly? BillingPeriod { get; set; }
