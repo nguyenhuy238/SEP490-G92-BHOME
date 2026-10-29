@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BHome.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class CaptureWorkflows : Migration
+    public partial class CaptureWorkflowsMerged : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -24,18 +24,32 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 maxLength: 50,
                 nullable: true);
 
+            migrationBuilder.AddColumn<string>(
+                name: "Address",
+                table: "Locations",
+                type: "character varying(1000)",
+                maxLength: 1000,
+                nullable: false,
+                defaultValue: "");
+
             migrationBuilder.AddColumn<Guid>(
-                name: "ManagingOwnerId",
-                table: "AspNetUsers",
+                name: "ChainId",
+                table: "Locations",
                 type: "uuid",
                 nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "IsActive",
+                table: "Locations",
+                type: "boolean",
+                nullable: false,
+                defaultValue: false);
 
             migrationBuilder.CreateTable(
                 name: "Chains",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OwnerUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -43,35 +57,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Chains", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Chains_AspNetUsers_OwnerUserId",
-                        column: x => x.OwnerUserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Locations",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ChainId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    Address = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Locations", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Locations_Chains_ChainId",
-                        column: x => x.ChainId,
-                        principalTable: "Chains",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -89,36 +74,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     table.PrimaryKey("PK_Rooms", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Rooms_Locations_LocationId",
-                        column: x => x.LocationId,
-                        principalTable: "Locations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "StaffLocationAssignments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    StaffUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LocationId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "date", nullable: false),
-                    EffectiveTo = table.Column<DateOnly>(type: "date", nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_StaffLocationAssignments", x => x.Id);
-                    table.CheckConstraint("CK_Assignment_Dates", "\"EffectiveTo\" IS NULL OR \"EffectiveTo\" >= \"EffectiveFrom\"");
-                    table.ForeignKey(
-                        name: "FK_StaffLocationAssignments_AspNetUsers_StaffUserId",
-                        column: x => x.StaffUserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_StaffLocationAssignments_Locations_LocationId",
                         column: x => x.LocationId,
                         principalTable: "Locations",
                         principalColumn: "Id",
@@ -199,7 +154,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     MeterId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AssignedStaffUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Purpose = table.Column<int>(type: "integer", nullable: false),
                     ReadingDate = table.Column<DateOnly>(type: "date", nullable: false),
                     BillingPeriod = table.Column<DateOnly>(type: "date", nullable: true),
@@ -215,12 +169,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_OperationalTasks", x => x.Id);
                     table.CheckConstraint("CK_Task_Period", "(\"Purpose\" = 0 AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)");
-                    table.ForeignKey(
-                        name: "FK_OperationalTasks_AspNetUsers_AssignedStaffUserId",
-                        column: x => x.AssignedStaffUserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_OperationalTasks_Meters_MeterId",
                         column: x => x.MeterId,
@@ -312,16 +260,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AspNetUsers_ManagingOwnerId",
-                table: "AspNetUsers",
-                column: "ManagingOwnerId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Chains_OwnerUserId",
-                table: "Chains",
-                column: "OwnerUserId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Locations_ChainId",
                 table: "Locations",
                 column: "ChainId");
@@ -377,11 +315,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 filter: "\"IsActive\"");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OperationalTasks_AssignedStaffUserId_Status",
-                table: "OperationalTasks",
-                columns: new[] { "AssignedStaffUserId", "Status" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_OperationalTasks_MeterId",
                 table: "OperationalTasks",
                 column: "MeterId",
@@ -394,6 +327,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 columns: new[] { "MeterId", "BillingPeriod" },
                 unique: true,
                 filter: "\"Purpose\" = 1 AND \"Status\" <> 3");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OperationalTasks_Status",
+                table: "OperationalTasks",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Residents_ConfirmedByUserId",
@@ -418,22 +356,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 columns: new[] { "LocationId", "RoomNumber" },
                 unique: true);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_StaffLocationAssignments_LocationId",
-                table: "StaffLocationAssignments",
-                column: "LocationId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_StaffLocationAssignments_StaffUserId_LocationId_EffectiveFr~",
-                table: "StaffLocationAssignments",
-                columns: new[] { "StaffUserId", "LocationId", "EffectiveFrom" },
-                unique: true);
-
             migrationBuilder.AddForeignKey(
-                name: "FK_AspNetUsers_AspNetUsers_ManagingOwnerId",
-                table: "AspNetUsers",
-                column: "ManagingOwnerId",
-                principalTable: "AspNetUsers",
+                name: "FK_Locations_Chains_ChainId",
+                table: "Locations",
+                column: "ChainId",
+                principalTable: "Chains",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
         }
@@ -442,17 +369,17 @@ namespace BHome.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_AspNetUsers_AspNetUsers_ManagingOwnerId",
-                table: "AspNetUsers");
+                name: "FK_Locations_Chains_ChainId",
+                table: "Locations");
+
+            migrationBuilder.DropTable(
+                name: "Chains");
 
             migrationBuilder.DropTable(
                 name: "MeterReadings");
 
             migrationBuilder.DropTable(
                 name: "Residents");
-
-            migrationBuilder.DropTable(
-                name: "StaffLocationAssignments");
 
             migrationBuilder.DropTable(
                 name: "MeterEvidence");
@@ -466,15 +393,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
             migrationBuilder.DropTable(
                 name: "Rooms");
 
-            migrationBuilder.DropTable(
-                name: "Locations");
-
-            migrationBuilder.DropTable(
-                name: "Chains");
-
             migrationBuilder.DropIndex(
-                name: "IX_AspNetUsers_ManagingOwnerId",
-                table: "AspNetUsers");
+                name: "IX_Locations_ChainId",
+                table: "Locations");
 
             migrationBuilder.DropColumn(
                 name: "TargetId",
@@ -485,8 +406,16 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 table: "SecurityAudit");
 
             migrationBuilder.DropColumn(
-                name: "ManagingOwnerId",
-                table: "AspNetUsers");
+                name: "Address",
+                table: "Locations");
+
+            migrationBuilder.DropColumn(
+                name: "ChainId",
+                table: "Locations");
+
+            migrationBuilder.DropColumn(
+                name: "IsActive",
+                table: "Locations");
         }
     }
 }

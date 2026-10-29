@@ -15,7 +15,7 @@ Nguồn: SRS v1.3 §I.4.4 Permission Matrix, GBR-01/02/03/04/07/13/17,
 | Quyền cố định theo role    | Domain Permissions / RolePermissions             | Mỗi permission có grant tường minh; case-sensitive, không wildcard/role kế thừa   |
 | Khai báo quyền tại API     | ApiFoundation policies / Authorize               | Chưa đăng nhập 401; đúng role được qua; sai role 403                              |
 | Cùng quy tắc trong service | Application PermissionAccess                     | Dùng cùng RolePermissions, không tự chép bảng role vào từng service               |
-| Quyền không thay scope     | PermissionAccess → ResourceAccess                | Owner khác owner, Staff không assignment, Tenant khác tenancy bị từ chối          |
+| Quyền không thay scope     | PermissionAccess → ResourceAccess                | Owner toàn hệ thống; Staff cần assignment; Tenant cần đúng tenancy                |
 | Chống vượt quyền đa role   | Allowed roles được lấy theo permission           | Có thêm role Tenant không vượt Owner-only/Staff-only scope                        |
 | Danh tính đáng tin         | HttpCurrentUser + JWT/session validation hiện có | Claims của principal chưa authenticated bị bỏ qua; role vẫn được revalidate từ DB |
 
@@ -34,16 +34,17 @@ Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi 
 | account.update-own          | Có    | Có    | Có     | UC-03, chỉ field được phép; không đổi role/assignment                               |
 | account.change-password     | Có    | Có    | Có     | Account hiện tại và xác minh mật khẩu/session                                       |
 | sessions.revoke-own         | Có    | Có    | Có     | UC-02, current/all của chính user                                                   |
-| staff-accounts.manage       | Có    | Không | Không  | UC-08, Staff thuộc chain của Owner                                                  |
-| staff-assignments.manage    | Có    | Không | Không  | UC-08, Location thuộc chain của Owner                                               |
+| staff-accounts.manage       | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Staff                                                  |
+| staff-assignments.manage    | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Location Assignment                                    |
 | locations.manage            | Có    | Không | Không  | BF-01 / UC-04, chain của Owner                                                      |
-| rooms.view                  | Có    | Có    | Có     | UC-04/07, own chain / assigned Location / own Room                                  |
+| locations.view-assigned     | Không | Có    | Không  | BF-02 / UC-08, chỉ Location có Assignment đang hiệu lực                             |
+| rooms.view                  | Có    | Có    | Có     | UC-04/07, toàn hệ thống / assigned Location / own Room                              |
 | rooms.manage                | Có    | Không | Không  | UC-04, chain của Owner                                                              |
-| assets.update-condition     | Có    | Có    | Không  | UC-05, own chain / assigned Location                                                |
+| assets.update-condition     | Có    | Có    | Không  | UC-05, toàn hệ thống / assigned Location                                            |
 | operational-tasks.manage    | Có    | Không | Không  | UC-10/12, tạo/giao/theo dõi, theo state của use case                                |
 | operational-tasks.execute   | Không | Có    | Không  | UC-11, task được giao và đúng Location                                              |
 | operational-tasks.verify    | Có    | Không | Không  | UC-12, Owner xác minh theo workflow                                                 |
-| contracts.prepare           | Có    | Có    | Không  | BF-03 / Permission Matrix, own chain / assigned Location                            |
+| contracts.prepare           | Có    | Có    | Không  | BF-03 / Permission Matrix, toàn hệ thống / assigned Location                        |
 | contracts.activate          | Có    | Không | Không  | GBR-03, đầy đủ signing/financial conditions                                         |
 | contracts.sign              | Có    | Không | Có     | GBR-04, đúng signer và provider workflow                                            |
 | meter-readings.confirm      | Không | Có    | Không  | UC-20 / GBR-07, Staff đúng assignment, meter và period                              |
@@ -80,19 +81,19 @@ Các quyền View chung không cho mọi role cùng response DTO; service phải
 ```csharp
 var canConfirm = await permissionAccess.CanAccessAsync(
     Permissions.MeterReadings.Confirm,
-    new ResourceScope(ownerIdFromDatabase, locationIdFromDatabase, null),
+    new ResourceScope(locationIdFromDatabase, null),
     cancellationToken);
 ```
 
-Các biến `ownerIdFromDatabase` và `locationIdFromDatabase` trong ví dụ là ID được service tra từ
-resource, không phải DTO hoặc Location claim. Nếu `canConfirm` false, use case phải dừng trước
+Biến `locationIdFromDatabase` trong ví dụ là ID được service tra từ resource,
+không phải DTO hoặc Location claim. Nếu `canConfirm` false, use case phải dừng trước
 write/download/export và trả kết quả từ chối theo contract của module. Không bỏ qua bool kết quả.
 
 4. Kiểm tra các điều kiện ngoài generic scope: Staff được giao đúng task/Work Order, Tenant là
    signer phù hợp, meter/contract/invoice đúng trạng thái và DTO không lộ field nhạy cảm.
 5. Với list/search/count/export, áp dụng các predicate scope tương đương trong SQL trước pagination.
    Helper bool không tự viết hoặc lọc truy vấn. Không tải toàn bảng rồi lọc trong memory.
-6. Thêm test đúng/sai role, cross-owner/Location/Tenant, ID tampering, trạng thái và failure paths.
+6. Thêm test đúng/sai role, cross-Location/Tenant, ID tampering, trạng thái và failure paths.
 
 Scope chỉ được đáp ứng thông qua role có grant cho **chính permission đó**. Không kiểm tra
 HasPermission rồi gọi ResourceAccess với Roles.All vì có thể tạo đường vượt scope cho user đa role.
@@ -126,7 +127,7 @@ hiện tại; không thêm request tới endpoint giả chỉ để có kết qu
 ## Kiểm chứng
 
 Domain tests đối chiếu grant với ma trận SRS, bảo đảm constants/catalog khớp và unknown permission
-không có grant. Application tests kiểm tra quyền chức năng cùng scope: cross-owner/Location/Tenant,
+không có grant. Application tests kiểm tra quyền chức năng cùng scope: global Owner, cross-Location/Tenant,
 multi-role bypass, cancellation và ID rỗng. Các assignment-positive tests dùng mock port, không
 được hiểu là đã có Staff assignment persistence.
 

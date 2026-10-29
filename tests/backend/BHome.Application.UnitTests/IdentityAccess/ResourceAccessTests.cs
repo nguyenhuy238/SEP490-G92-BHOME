@@ -15,27 +15,25 @@ public sealed class ResourceAccessTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new ResourceAccess(user, assignments)
-            .CanAccessAsync(new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), null), [Roles.Staff], cancellation.Token));
-        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default, default);
+            .CanAccessAsync(new ResourceScope(Guid.NewGuid(), null), [Roles.Staff], cancellation.Token));
+        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default);
     }
 
     [Fact]
     public async Task AnonymousIsDenied()
     {
         var access = new ResourceAccess(user, assignments);
-        Assert.False(await access.CanAccessAsync(new ResourceScope(Guid.NewGuid(), null, null), Roles.All));
+        Assert.False(await access.CanAccessAsync(new ResourceScope(null, null), Roles.All));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task OwnerCanOnlyAccessOwnChain(bool ownsChain)
+    [Fact]
+    public async Task OwnerHasGlobalBusinessResourceScope()
     {
         var id = Guid.NewGuid();
         user.UserId.Returns(id);
         user.IsInRole(Roles.Owner).Returns(true);
         var access = new ResourceAccess(user, assignments);
-        Assert.Equal(ownsChain, await access.CanAccessAsync(new ResourceScope(ownsChain ? id : Guid.NewGuid(), null, null), [Roles.Owner]));
+        Assert.True(await access.CanAccessAsync(new ResourceScope(null, null), [Roles.Owner]));
     }
 
     [Theory]
@@ -44,12 +42,11 @@ public sealed class ResourceAccessTests
     public async Task StaffMustHaveServerSideLocationAssignment(bool assigned)
     {
         var id = Guid.NewGuid();
-        var owner = Guid.NewGuid();
         var location = Guid.NewGuid();
         user.UserId.Returns(id);
         user.IsInRole(Roles.Staff).Returns(true);
-        assignments.IsAssignedAsync(id, owner, location, Arg.Any<CancellationToken>()).Returns(assigned);
-        Assert.Equal(assigned, await new ResourceAccess(user, assignments).CanAccessAsync(new ResourceScope(owner, location, null), [Roles.Staff]));
+        assignments.IsAssignedAsync(id, location, Arg.Any<CancellationToken>()).Returns(assigned);
+        Assert.Equal(assigned, await new ResourceAccess(user, assignments).CanAccessAsync(new ResourceScope(location, null), [Roles.Staff]));
     }
 
     [Theory]
@@ -61,19 +58,19 @@ public sealed class ResourceAccessTests
         user.UserId.Returns(id);
         user.IsInRole(Roles.Tenant).Returns(true);
         Assert.Equal(ownsData, await new ResourceAccess(user, assignments).CanAccessAsync(
-            new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), ownsData ? id : Guid.NewGuid()), [Roles.Tenant]));
+            new ResourceScope(Guid.NewGuid(), ownsData ? id : Guid.NewGuid()), [Roles.Tenant]));
     }
 
     [Theory]
-    [InlineData(Roles.Owner)]
-    [InlineData(Roles.Staff)]
-    public async Task AdditionalTenantRoleCannotBypassAnotherOperationsScope(string operationRole)
+    [InlineData(Roles.Owner, true)]
+    [InlineData(Roles.Staff, false)]
+    public async Task AdditionalTenantRoleUsesOnlyTheOperationsRoleScope(string operationRole, bool expected)
     {
         var id = Guid.NewGuid();
         user.UserId.Returns(id);
         user.IsInRole(operationRole).Returns(true);
         user.IsInRole(Roles.Tenant).Returns(true);
-        var scope = new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), id);
-        Assert.False(await new ResourceAccess(user, assignments).CanAccessAsync(scope, [operationRole]));
+        var scope = new ResourceScope(Guid.NewGuid(), id);
+        Assert.Equal(expected, await new ResourceAccess(user, assignments).CanAccessAsync(scope, [operationRole]));
     }
 }

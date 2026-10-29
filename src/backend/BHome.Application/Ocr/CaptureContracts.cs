@@ -16,7 +16,7 @@ public sealed record StaffInput([Required, StringLength(100)] string UserName, [
 public sealed record ResidentInput(Guid RoomId, [Required, StringLength(150)] string DisplayLabel, ResidentType ResidentType);
 public sealed record MeterInput(Guid RoomId, [Required, StringLength(80)] string Code,
     UtilityType UtilityType, MeterDisplay Display, [Range(0, 4)] int DecimalPlaces, DateOnly InstalledOn);
-public sealed record MeterTaskInput(Guid MeterId, Guid StaffUserId, ReadingPurpose Purpose, DateOnly ReadingDate, DateOnly? BillingPeriod);
+public sealed record MeterTaskInput(Guid MeterId, ReadingPurpose Purpose, DateOnly ReadingDate, DateOnly? BillingPeriod);
 public sealed record IdentityConfirmation(
     bool HumanConfirmed, [Required, StringLength(12, MinimumLength = 12)] string CitizenIdentityNumber,
     [Required, StringLength(150)] string FullName, DateOnly DateOfBirth,

@@ -3,11 +3,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using BHome.Application.Ocr;
+using BHome.Application.IdentityAccess;
+using BHome.Application.Locations;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
-using BHome.Domain.StaffOperations;
+using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
@@ -19,7 +21,8 @@ using OpenCvSharp;
 namespace BHome.Infrastructure.Ocr;
 
 internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, IIdentityProtection protection,
-    IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock) : ICaptureRepository
+    IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock,
+    ILocationAssignments locationAssignments) : ICaptureRepository
 {
     private Guid Actor => scope.UserId;
     private void Audit(string action, string type, Guid id) => db.SecurityAudit.Add(new SecurityAuditRecord
@@ -35,7 +38,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         { throw new CaptureConflictException("duplicate_or_conflicting_record"); }
     }
     public async Task<IReadOnlyList<NamedResource>> ChainsAsync(CancellationToken t) => await db.Set<Chain>().AsNoTracking()
-        .Where(c => c.OwnerUserId == Actor).OrderBy(c => c.Name).Take(100).Select(c => new NamedResource(c.Id, c.Name, null)).ToListAsync(t);
+        .OrderBy(c => c.Name).Take(100).Select(c => new NamedResource(c.Id, c.Name, null)).ToListAsync(t);
     public async Task<IReadOnlyList<NamedResource>> LocationsAsync(CancellationToken t) => await scope.VisibleLocations.AsNoTracking()
         .OrderBy(l => l.Name).Take(100).Select(l => new NamedResource(l.Id, l.Name, l.ChainId)).ToListAsync(t);
     public async Task<IReadOnlyList<NamedResource>> RoomsAsync(Guid id, CancellationToken t)
@@ -45,14 +48,14 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
             .Select(r => new NamedResource(r.Id, r.RoomNumber, r.LocationId)).ToListAsync(t);
     }
     public async Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t) => await db.Users.AsNoTracking()
-        .Where(u => u.ManagingOwnerId == Actor && u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
+        .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
             db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))).OrderBy(u => u.UserName).Take(100)
         .Select(u => new NamedResource(u.Id, u.UserName!, null)).ToListAsync(t);
     public async Task<IdResult> CreateStaffAsync(StaffInput x, CancellationToken t)
     {
         Validate(x);
         await using var tx = await db.Database.BeginTransactionAsync(t);
-        var u = new ApplicationUser { UserName = x.UserName.Trim(), Email = x.Email.Trim(), ManagingOwnerId = Actor, LockoutEnabled = true };
+        var u = new ApplicationUser { UserName = x.UserName.Trim(), Email = x.Email.Trim(), LockoutEnabled = true };
         if (!(await users.CreateAsync(u, x.Password)).Succeeded) throw new CaptureValidationException("staff_account_not_created");
         if (!(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
         Audit("StaffCreated", "User", u.Id); await Save(t); await tx.CommitAsync(t); return new(u.Id);
@@ -60,33 +63,35 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     public async Task<IdResult> CreateChainAsync(ChainInput x, CancellationToken t)
     {
         Validate(x); if (string.IsNullOrWhiteSpace(x.Name)) throw new CaptureValidationException("name_required");
-        var c = new Chain { Name = x.Name.Trim(), OwnerUserId = Actor }; db.Add(c); Audit("ChainCreated", "Chain", c.Id); await Save(t); return new(c.Id);
+        var c = new Chain { Name = x.Name.Trim() }; db.Add(c); Audit("ChainCreated", "Chain", c.Id); await Save(t); return new(c.Id);
     }
     public async Task<IdResult> CreateLocationAsync(LocationInput x, CancellationToken t)
     {
         Validate(x); if (string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Address)) throw new CaptureValidationException("location_required");
-        if (!await db.Set<Chain>().AnyAsync(c => c.Id == x.ChainId && c.OwnerUserId == Actor, t)) throw new OcrAccessException();
-        var l = new Location { ChainId = x.ChainId, Name = x.Name.Trim(), Address = x.Address.Trim() }; db.Add(l); Audit("LocationCreated", "Location", l.Id); await Save(t); return new(l.Id);
+        if (!await db.Set<Chain>().AnyAsync(c => c.Id == x.ChainId, t)) throw new OcrAccessException();
+        var l = new Location(x.Name.Trim()) { ChainId = x.ChainId, Address = x.Address.Trim() }; db.Add(l); Audit("LocationCreated", "Location", l.Id); await Save(t); return new(l.Id);
     }
     public async Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t)
     {
         Validate(x); if (string.IsNullOrWhiteSpace(x.RoomNumber)) throw new CaptureValidationException("room_required");
-        if (!await scope.VisibleLocations.AnyAsync(l => l.Id == x.LocationId && l.Chain.OwnerUserId == Actor, t)) throw new OcrAccessException();
+        if (!await scope.VisibleLocations.AnyAsync(l => l.Id == x.LocationId, t)) throw new OcrAccessException();
         var r = new Room { LocationId = x.LocationId, RoomNumber = x.RoomNumber.Trim() }; db.Add(r); Audit("RoomCreated", "Room", r.Id); await Save(t); return new(r.Id);
     }
     public async Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t)
     {
-        if (x.EffectiveFrom == default || x.EffectiveTo < x.EffectiveFrom) throw new CaptureValidationException("invalid_assignment_dates");
-        if (!await scope.VisibleLocations.AnyAsync(l => l.Id == x.LocationId && l.Chain.OwnerUserId == Actor, t) ||
-            !await db.Users.AnyAsync(u => u.Id == x.StaffUserId && u.ManagingOwnerId == Actor && u.IsActive, t)) throw new OcrAccessException();
-        var row = new StaffLocationAssignment { LocationId = x.LocationId, StaffUserId = x.StaffUserId, EffectiveFrom = x.EffectiveFrom, EffectiveTo = x.EffectiveTo };
-        db.Add(row); Audit("StaffAssigned", "Assignment", row.Id); await Save(t); return new(row.Id);
+        if (x.EffectiveFrom == default || x.EffectiveTo is null || x.EffectiveTo < x.EffectiveFrom)
+            throw new CaptureValidationException("invalid_assignment_dates");
+        var result = await locationAssignments.CreateAssignmentAsync(Actor, x.LocationId, x.StaffUserId,
+            x.EffectiveFrom, x.EffectiveTo.Value, t);
+        if (result.Status == CreateAssignmentStatus.DateRangeOverlaps) throw new CaptureConflictException("duplicate_or_conflicting_record");
+        if (result.Status != CreateAssignmentStatus.Created || result.Assignment is null) throw new OcrAccessException();
+        Audit("StaffAssigned", "Assignment", result.Assignment.Id); await Save(t); return new(result.Assignment.Id);
     }
     public async Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t)
     {
         Validate(x); if (!Enum.IsDefined(x.ResidentType) || string.IsNullOrWhiteSpace(x.DisplayLabel)) throw new CaptureValidationException("invalid_resident");
-        var room = await scope.VisibleRooms.Where(r => r.Id == x.RoomId).Select(r => new { Owner = r.Location.Chain.OwnerUserId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
-        var r = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = room.Owner };
+        if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId, t)) throw new OcrAccessException();
+        var r = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
         db.Add(r); Audit("ResidentCreated", "Resident", r.Id); await Save(t); return new(r.Id);
     }
     public async Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid locationId, CancellationToken t)
@@ -139,7 +144,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     public async Task<IdResult> CreateMeterAsync(MeterInput x, CancellationToken t)
     {
         Validate(x); if (!Enum.IsDefined(x.UtilityType) || !Enum.IsDefined(x.Display) || x.InstalledOn == default || string.IsNullOrWhiteSpace(x.Code)) throw new CaptureValidationException("invalid_meter");
-        if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId && r.Location.Chain.OwnerUserId == Actor, t)) throw new OcrAccessException();
+        if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId, t)) throw new OcrAccessException();
         var m = new Meter { RoomId = x.RoomId, Code = x.Code.Trim(), UtilityType = x.UtilityType, Display = x.Display, DecimalPlaces = x.DecimalPlaces, InstalledOn = x.InstalledOn };
         db.Add(m); Audit("MeterCreated", "Meter", m.Id); await Save(t); return new(m.Id);
     }
@@ -152,11 +157,10 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     public async Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t)
     {
         if (!Enum.IsDefined(x.Purpose) || x.ReadingDate == default || (x.Purpose == ReadingPurpose.Periodic && (x.BillingPeriod is null || x.BillingPeriod.Value.Day != 1 || x.ReadingDate.Year != x.BillingPeriod.Value.Year || x.ReadingDate.Month != x.BillingPeriod.Value.Month)) || (x.Purpose == ReadingPurpose.Initial && x.BillingPeriod != null)) throw new CaptureValidationException("invalid_reading_period");
-        var meter = await db.Set<Meter>().Where(m => m.Id == x.MeterId && m.IsActive && scope.VisibleRooms.Any(r => r.Id == m.RoomId && r.Location.Chain.OwnerUserId == Actor))
-            .Select(m => new { m.InstalledOn, m.Room.LocationId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+        var meter = await db.Set<Meter>().Where(m => m.Id == x.MeterId && m.IsActive && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
+            .Select(m => new { m.InstalledOn }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         if (x.ReadingDate < meter.InstalledOn) throw new CaptureValidationException("reading_before_installation");
-        if (!await scope.IsAssignedAsync(x.StaffUserId, Actor, meter.LocationId, t)) throw new CaptureConflictException("staff_not_currently_assigned");
-        var task = new OperationalTask { MeterId = x.MeterId, AssignedStaffUserId = x.StaffUserId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod };
+        var task = new OperationalTask { MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod };
         db.Add(task); Audit("MeterTaskAssigned", "Task", task.Id); await Save(t); return new(task.Id);
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => await scope.VisibleTasks.AsNoTracking()
@@ -167,7 +171,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
 
     public async Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken t)
     {
-        if (!await scope.VisibleTasks.AnyAsync(x => x.Id == taskId && x.AssignedStaffUserId == Actor && x.Meter.IsActive && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t)) throw new OcrAccessException();
+        if (!await scope.VisibleTasks.AnyAsync(x => x.Id == taskId && x.Meter.IsActive && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t)) throw new OcrAccessException();
         var buffer = new byte[5 * 1024 * 1024 + 1]; var length = 0;
         try
         {
@@ -200,10 +204,10 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     {
         if (!x.HumanConfirmed || x.ConfirmedValue < 0 || x.ConfirmedValue >= 100_000_000_000_000m) throw new CaptureValidationException("invalid_reading_value");
         await using var tx = await db.Database.BeginTransactionAsync(t);
-        var meterId = await scope.VisibleTasks.Where(task => task.Id == taskId && task.AssignedStaffUserId == Actor).Select(task => (Guid?)task.MeterId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+        var meterId = await scope.VisibleTasks.Where(task => task.Id == taskId).Select(task => (Guid?)task.MeterId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         var meter = await db.Set<Meter>().FromSqlInterpolated($"SELECT * FROM \"Meters\" WHERE \"Id\" = {meterId} FOR UPDATE").SingleAsync(t);
         var task = await db.Set<OperationalTask>().FromSqlInterpolated($"SELECT * FROM \"OperationalTasks\" WHERE \"Id\" = {taskId} FOR UPDATE").SingleAsync(t);
-        if (!await scope.VisibleTasks.AnyAsync(a => a.Id == taskId && a.AssignedStaffUserId == Actor, t)) throw new OcrAccessException();
+        if (!await scope.VisibleTasks.AnyAsync(a => a.Id == taskId, t)) throw new OcrAccessException();
         var existing = await db.Set<MeterReading>().SingleOrDefaultAsync(r => r.TaskId == taskId, t);
         if (existing is not null)
         {

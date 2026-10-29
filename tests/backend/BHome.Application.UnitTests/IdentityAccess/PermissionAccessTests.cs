@@ -42,21 +42,19 @@ public sealed class PermissionAccessTests
         user.UserId.Returns(Guid.NewGuid());
         user.IsInRole(Arg.Any<string>()).Returns(true);
         Assert.False(Access.HasPermission(permission));
-        Assert.False(await Access.CanAccessAsync(permission, new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), null)));
-        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default, default);
+        Assert.False(await Access.CanAccessAsync(permission, new ResourceScope(Guid.NewGuid(), null)));
+        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task OwnerFunctionPermissionDoesNotGrantAnotherOwnersData(bool ownsResource)
+    [Fact]
+    public async Task OwnerFunctionPermissionHasGlobalResourceScope()
     {
         var id = Guid.NewGuid();
         user.UserId.Returns(id);
         user.IsInRole(Roles.Owner).Returns(true);
         Assert.True(Access.HasPermission(Permissions.Rooms.Manage));
-        Assert.Equal(ownsResource, await Access.CanAccessAsync(Permissions.Rooms.Manage,
-            new ResourceScope(ownsResource ? id : Guid.NewGuid(), Guid.NewGuid(), null)));
+        Assert.True(await Access.CanAccessAsync(Permissions.Rooms.Manage,
+            new ResourceScope(Guid.NewGuid(), null)));
     }
 
     [Theory]
@@ -65,13 +63,12 @@ public sealed class PermissionAccessTests
     public async Task StaffFunctionPermissionStillRequiresCurrentLocationAssignment(bool assigned)
     {
         var staff = Guid.NewGuid();
-        var owner = Guid.NewGuid();
         var location = Guid.NewGuid();
         user.UserId.Returns(staff);
         user.IsInRole(Roles.Staff).Returns(true);
-        assignments.IsAssignedAsync(staff, owner, location, Arg.Any<CancellationToken>()).Returns(assigned);
+        assignments.IsAssignedAsync(staff, location, Arg.Any<CancellationToken>()).Returns(assigned);
         Assert.True(Access.HasPermission(Permissions.MeterReadings.Confirm));
-        Assert.Equal(assigned, await Access.CanAccessAsync(Permissions.MeterReadings.Confirm, new ResourceScope(owner, location, null)));
+        Assert.Equal(assigned, await Access.CanAccessAsync(Permissions.MeterReadings.Confirm, new ResourceScope(location, null)));
     }
 
     [Theory]
@@ -83,36 +80,31 @@ public sealed class PermissionAccessTests
         user.UserId.Returns(id);
         user.IsInRole(Roles.Tenant).Returns(true);
         Assert.Equal(ownTenancy, await Access.CanAccessAsync(Permissions.InvoiceAdjustments.Request,
-            new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), ownTenancy ? id : Guid.NewGuid())));
+            new ResourceScope(Guid.NewGuid(), ownTenancy ? id : Guid.NewGuid())));
     }
 
     [Theory]
-    [InlineData(Roles.Owner, Permissions.Contracts.Activate)]
-    [InlineData(Roles.Staff, Permissions.MeterReadings.Confirm)]
-    public async Task AdditionalTenantRoleCannotBypassTheOperationsScope(string role, string permission)
+    [InlineData(Roles.Owner, Permissions.Contracts.Activate, true)]
+    [InlineData(Roles.Staff, Permissions.MeterReadings.Confirm, false)]
+    public async Task AdditionalTenantRoleUsesOnlyTheOperationsRoleScope(string role, string permission, bool expected)
     {
         var id = Guid.NewGuid();
         user.UserId.Returns(id);
         user.IsInRole(role).Returns(true);
         user.IsInRole(Roles.Tenant).Returns(true);
         Assert.True(Access.HasPermission(permission));
-        Assert.False(await Access.CanAccessAsync(permission, new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), id)));
+        Assert.Equal(expected, await Access.CanAccessAsync(permission, new ResourceScope(Guid.NewGuid(), id)));
     }
 
-    [Theory]
-    [InlineData("owner")]
-    [InlineData("location")]
-    [InlineData("tenant")]
-    public async Task InvalidResourceIdentifiersNeverGrantAccess(string invalid)
+    [Fact]
+    public async Task InvalidLocationIdentifierNeverGrantsStaffAccess()
     {
         var id = Guid.NewGuid();
         user.UserId.Returns(id);
-        user.IsInRole(Arg.Any<string>()).Returns(true);
-        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
-        var scope = new ResourceScope(invalid == "owner" ? Guid.Empty : id,
-            invalid == "location" ? Guid.Empty : Guid.NewGuid(), invalid == "tenant" ? Guid.Empty : id);
-        Assert.False(await Access.CanAccessAsync(Permissions.Rooms.View, scope));
-        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default, default);
+        user.IsInRole(Roles.Staff).Returns(true);
+        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        Assert.False(await Access.CanAccessAsync(Permissions.Rooms.View, new ResourceScope(Guid.Empty, null)));
+        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default);
     }
 
     [Fact]
@@ -120,11 +112,11 @@ public sealed class PermissionAccessTests
     {
         user.UserId.Returns(Guid.NewGuid());
         user.IsInRole(Roles.Staff).Returns(true);
-        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
-        var scope = new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), null);
+        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        var scope = new ResourceScope(Guid.NewGuid(), null);
         Assert.False(Access.HasPermission(Permissions.Invoices.View));
         Assert.False(await Access.CanAccessAsync(Permissions.Invoices.View, scope));
-        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default, default);
+        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default);
         Assert.True(await Access.CanAccessAsync(Permissions.Invoices.ViewOperational, scope));
     }
 
@@ -134,7 +126,7 @@ public sealed class PermissionAccessTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Access.CanAccessAsync(Permissions.MeterReadings.Confirm,
-            new ResourceScope(Guid.NewGuid(), Guid.NewGuid(), null), cancellation.Token));
-        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default, default);
+            new ResourceScope(Guid.NewGuid(), null), cancellation.Token));
+        await assignments.DidNotReceiveWithAnyArgs().IsAssignedAsync(default, default, default);
     }
 }
