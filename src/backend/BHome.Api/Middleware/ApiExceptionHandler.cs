@@ -1,8 +1,8 @@
 using BHome.Application.Common;
 using BHome.Application.Contracts;
+using BHome.Application.PropertyManagement;
 using BHome.DigitalSigning.Application;
 using BHome.Application.Ocr;
-using BHome.Application.PropertyManagement;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -57,18 +57,26 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             OcrInputException input => input.Code,
             _ => null
         };
-        await problems.WriteAsync(new ProblemDetailsContext
+        var problem = new ProblemDetailsContext
         {
             HttpContext = context,
             ProblemDetails = new ProblemDetails
             {
                 Status = status,
                 Title = title,
-                Type = $"https://httpstatuses.com/{status}"
-                ,
+                Type = $"https://httpstatuses.com/{status}",
                 Extensions = code is null ? new Dictionary<string, object?>() : new Dictionary<string, object?> { ["code"] = code }
             }
-        });
+        };
+        if (!await problems.TryWriteAsync(problem))
+        {
+            // A private-file client requests PDF/octet-stream, but rejected downloads still use
+            // the API error contract. Content negotiation must not turn a valid 4xx into a 500.
+            problem.ProblemDetails.Extensions["correlationId"] = context.TraceIdentifier;
+            await context.Response.WriteAsJsonAsync(problem.ProblemDetails,
+                options: (System.Text.Json.JsonSerializerOptions?)null,
+                contentType: "application/problem+json", cancellationToken: cancellationToken);
+        }
         return true;
     }
 }

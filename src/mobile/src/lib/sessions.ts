@@ -1,4 +1,11 @@
-import { MobileApi, MobileApiError, apiBaseUrl, type Session } from './api';
+import {
+  MobileApi,
+  MobileApiError,
+  apiBaseUrl,
+  errorMessage,
+  mobileResponse,
+  type Session,
+} from './api';
 
 export interface CredentialStore {
   read(): Promise<string | null>;
@@ -10,6 +17,7 @@ export interface SessionView {
   baseUrl: string;
   ready: boolean;
   api: MobileApi | null;
+  restoreError?: string;
 }
 // Refresh, restore and Keychain writes are serialized, including React Strict Mode/remounts.
 export class MobileSessions {
@@ -50,62 +58,78 @@ export class MobileSessions {
           else await this.store.write(value);
         }
       });
-    this.writes = work;
-    return work;
+    const protectedWork = work.catch(() => {
+      throw new MobileApiError(0, 'secure_storage_unavailable');
+    });
+    this.writes = protectedWork;
+    return protectedWork;
   }
   async clear() {
     const epoch = ++this.epoch;
     this.credential = undefined;
-    this.emit({ session: null, api: null });
+    this.emit({ session: null, api: null, restoreError: undefined });
     await this.persist(epoch, null);
   }
   private api(base: string) {
+    const epoch = this.epoch;
     return new MobileApi(
       base,
-      () => this.value.session?.accessToken,
-      () => this.refresh(),
+      () => (epoch === this.epoch ? this.value.session?.accessToken : undefined),
+      () => (epoch === this.epoch ? this.refresh() : Promise.resolve(undefined)),
       () => {
-        void this.clear().catch(() => {});
+        if (epoch === this.epoch) void this.clear().catch(() => {});
       },
       this.transport,
     );
   }
   private async auth(base: string, route: string, body: unknown): Promise<Session> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await this.transport(base + '/api/v1/auth/' + route, {
-        method: 'POST',
-        signal: controller.signal,
-        credentials: 'omit',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok)
-        throw new MobileApiError(
-          response.status,
-          route === 'login' && response.status === 401 ? 'invalid_credentials' : undefined,
-        );
-      return (await response.json()) as Session;
+      return await mobileResponse(
+        base,
+        '/api/v1/auth/' + route,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        this.transport,
+        async (response) => {
+          const value: unknown = await response.json();
+          if (!value || typeof value !== 'object') throw new Error('Invalid session');
+          const result = value as Session;
+          if (
+            ![result.userId, result.accessToken, result.refreshToken].every(
+              (field) => typeof field === 'string' && field.trim().length > 0,
+            ) ||
+            !Array.isArray(result.roles) ||
+            !result.roles.length ||
+            !result.roles.every((role) => typeof role === 'string')
+          )
+            throw new Error('Invalid session');
+          return result;
+        },
+      );
     } catch (error) {
-      if (error instanceof MobileApiError) throw error;
-      throw new MobileApiError(0);
-    } finally {
-      clearTimeout(timeout);
+      if (error instanceof MobileApiError && route === 'login' && error.status === 401)
+        error.code = 'invalid_credentials';
+      throw error;
     }
   }
   restore() {
     if (this.restoreTask) return this.restoreTask;
+    const epoch = this.epoch;
     this.restoreTask = (async () => {
       try {
         const encoded = await this.store.read();
+        if (epoch !== this.epoch) return;
         if (encoded) {
           const saved = JSON.parse(encoded) as {
             base: string;
             refreshToken: string;
             serverId?: string;
           };
+          if (typeof saved.refreshToken !== 'string' || !saved.refreshToken.trim())
+            throw new MobileApiError(502, 'invalid_response');
           const base = apiBaseUrl(saved.base);
           if (
             (this.configuredBase && apiBaseUrl(this.configuredBase) !== base) ||
@@ -118,8 +142,11 @@ export class MobileSessions {
           this.emit({ baseUrl: base });
           await this.refresh();
         }
-      } catch {
-        await this.clear();
+      } catch (error) {
+        if (this.epoch === epoch || !this.value.session) {
+          await this.clear().catch(() => {});
+          this.emit({ restoreError: errorMessage(error) });
+        }
       } finally {
         this.emit({ ready: true });
       }
@@ -129,10 +156,10 @@ export class MobileSessions {
   refresh() {
     if (this.refreshTask) return this.refreshTask;
     const previous = this.credential;
+    if (!previous) return Promise.resolve(undefined);
     const epoch = this.epoch;
     const base = this.value.baseUrl;
     this.refreshTask = (async () => {
-      if (!previous) return undefined;
       try {
         const next = await this.auth(base, 'refresh', { refreshToken: previous });
         if (epoch !== this.epoch) return undefined;
@@ -144,9 +171,9 @@ export class MobileSessions {
         this.credential = next.refreshToken;
         this.emit({ session: next, api: this.value.api || this.api(base) });
         return next.accessToken;
-      } catch {
+      } catch (error) {
         if (epoch === this.epoch) await this.clear();
-        return undefined;
+        throw error;
       } finally {
         this.refreshTask = null;
       }
@@ -156,6 +183,7 @@ export class MobileSessions {
   async login(input: string, email: string, password: string) {
     const base = apiBaseUrl(input);
     await this.clear();
+    this.emit({ baseUrl: base, restoreError: undefined });
     const epoch = this.epoch;
     const next = await this.auth(base, 'login', {
       email: email.trim(),

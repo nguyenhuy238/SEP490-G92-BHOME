@@ -15,6 +15,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 name: "CK_Task_Period",
                 table: "OperationalTasks");
 
+            // Rooms.Status belongs to the preceding PropertyConfiguration migration.
+            // Preserve its four-state values and safe default; Contract only changes values at runtime.
+
             migrationBuilder.AddColumn<Guid>(
                 name: "ContractId",
                 table: "OperationalTasks",
@@ -607,6 +610,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
             migrationBuilder.DropCheckConstraint(
                 name: "CK_Task_Period",
                 table: "OperationalTasks");
+
+            // Rolling back Contract must retain the Property-owned room state column.
 
             migrationBuilder.DropColumn(
                 name: "ContractId",

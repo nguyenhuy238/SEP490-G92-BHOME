@@ -13,6 +13,11 @@ public sealed record ContractDraftInput(Guid RoomId, Guid OwnerSignerId, Guid Te
 public sealed record RenewalInput(DateOnly EndDate, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent,
     [Required, StringLength(12000, MinimumLength = 1)] string Terms);
 public sealed record ContractId(Guid Id);
+public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
+    string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent);
+public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page, int PageSize, int TotalCount);
+public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
 public sealed record SigningInput(Guid CertificateId);
 public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1)] string BankTransactionReference,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, [Required, StringLength(2000, MinimumLength = 1)] string VerificationReason);
@@ -30,7 +35,8 @@ public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Stat
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, string Terms, Guid? PreviousContractId,
     IReadOnlyList<Guid> ResidentIds, IReadOnlyList<SignatureView> Signatures, DateTimeOffset? ActivatedAt,
     Guid OwnerSignerId, Guid TenantUserId, Guid RepresentativeResidentId, Guid? HoldingContractId,
-    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AppliedHoldingDeposit);
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AppliedHoldingDeposit,
+    Guid LocationId = default);
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
 public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, string Reason,
@@ -91,6 +97,7 @@ public interface IContractHoldingLedger
 
 public interface IContractRepository
 {
+    Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t);
     Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t);
     Task FlushAsync(CancellationToken t);
     Task<Contract?> FindAsync(Guid id, CancellationToken t);

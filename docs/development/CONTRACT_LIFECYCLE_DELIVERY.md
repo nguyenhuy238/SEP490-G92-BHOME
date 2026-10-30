@@ -1,5 +1,10 @@
 # D011 + D012 — Bàn giao backend Contract Activation và Lifecycle
 
+> Kết quả bên dưới thuộc lượt bàn giao backend ban đầu. Xem
+> [CONTRACT_STABILIZATION.md](CONTRACT_STABILIZATION.md) cho baseline mới, kết quả hồi quy,
+> kiểm chứng snapshot/schema và kiểm thử client với API thật. Các dependency MySign/PDF/Holding/
+> Settlement chưa được phê duyệt hoặc tích hợp đầy đủ vẫn phải chặn chuyển trạng thái.
+
 Ngày kiểm chứng: 30/10/2026. Nhánh: `member/QHuy`. Không commit, push hoặc merge.
 
 **Trạng thái tổng thể: Partial.** Có mã nghiệp vụ, persistence, phân quyền, migration và kiểm thử

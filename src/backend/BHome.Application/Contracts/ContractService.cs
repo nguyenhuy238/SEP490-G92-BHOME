@@ -73,10 +73,26 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
         c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
         c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(s => new SignatureView(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt)).ToArray(), c.ActivatedAt,
-        c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit);
+        c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId);
     private static MoveOutView View(ContractMoveOut m) => new(m.Id, m.Status.ToString(), m.ProposedDate, m.Reason, m.InspectionScheduledAt, m.PendingReason,
         m.InspectionNotes, m.InspectedAt, m.ElectricityReadingId, m.WaterReadingId, []);
     public async Task<ContractView> GetAsync(Guid id, CancellationToken t) => View(await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t));
+
+    public Task<ContractPage> ListAsync(int page, int pageSize, Guid? locationId, string? status, CancellationToken t)
+    {
+        Role(Roles.Owner, Roles.Staff, Roles.Tenant);
+        if (page < 1 || pageSize is < 1 or > 100 || page > int.MaxValue / pageSize || locationId == Guid.Empty)
+            throw ContractException.Invalid("invalid_contract_pagination");
+        ContractStatus? filter = null;
+        if (status is not null)
+        {
+            if (!Enum.TryParse<ContractStatus>(status, out var parsed) || !Enum.IsDefined(parsed))
+                throw ContractException.Invalid("invalid_contract_status");
+            filter = parsed;
+        }
+        return repository.ListAsync(new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), Today),
+            page, pageSize, locationId, filter, t);
+    }
 
     public async Task<ContractId> CreateAsync(ContractDraftInput x, Guid key, CancellationToken t)
     {

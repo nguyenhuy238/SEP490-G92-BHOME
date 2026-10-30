@@ -17,6 +17,7 @@ export default function MeterScreen() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedReadingId, setSavedReadingId] = useState('');
   const lock = useRef(false);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -47,6 +48,10 @@ export default function MeterScreen() {
       <Page>
         <Text variant="headlineSmall">Đã lưu chỉ số và ảnh minh chứng</Text>
         <Text>Tác vụ đã hoàn thành. Chỉ số đã xác nhận sẵn sàng cho bước lập hóa đơn.</Text>
+        {!!savedReadingId && <Text selectable>Mã chỉ số đã xác nhận: {savedReadingId}</Text>}
+        {task?.purpose === 2 && (
+          <Text>Dùng mã chỉ số này để lập biên bản trả phòng cho đúng hợp đồng.</Text>
+        )}
       </Page>
     );
   return (
@@ -59,7 +64,11 @@ export default function MeterScreen() {
           </Text>
           <Text>
             {task.utilityType === 0 ? 'Điện (kWh)' : 'Nước (m³)'} ·{' '}
-            {task.purpose === 0 ? 'Chỉ số ban đầu' : task.billingPeriod}
+            {task.purpose === 0
+              ? 'Chỉ số ban đầu'
+              : task.purpose === 2
+                ? 'Chỉ số chốt trả phòng'
+                : task.billingPeriod}
           </Text>
           <Text>
             Ngày ghi: {task.readingDate.split('-').reverse().join('/')} · Tối đa{' '}
@@ -151,11 +160,12 @@ export default function MeterScreen() {
           const controller = new AbortController();
           abort.current = controller;
           try {
-            await api.json(
+            const result = await api.json<{ id: string }>(
               `/api/v1/capture/meter-tasks/${taskId}/confirm`,
               { humanConfirmed: true, confirmedValue: normalized, evidenceId: evidence },
               controller.signal,
             );
+            setSavedReadingId(result.id);
             setSaved(true);
           } catch (e) {
             setError(errorMessage(e));
