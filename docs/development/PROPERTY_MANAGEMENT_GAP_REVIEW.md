@@ -22,12 +22,12 @@ Không đồng nghĩa đã hoàn tất toàn bộ UC-04..07 hoặc luồng cho t
 
 ## Khoảng trống liên thông cần làm trước khi vận hành đầy đủ
 
-| Mục | Hiện trạng trong code | Cần bổ sung | Nguồn |
-| --- | --- | --- | --- |
-| Trạng thái Room theo nghĩa vụ thật | Chỉ cấu hình Available/Unavailable, dự phòng OnHold/Occupied; bảo vệ dựa vào trạng thái và sự tồn tại Resident | Contract/holding/occupancy có thời gian/vòng đời, chống trùng nghĩa vụ, activation/move-out tự chuyển trạng thái và kiểm tra nghĩa vụ trước ngừng | UC-04 A2; UC-07; DBR-02 |
-| Phân biệt đang ở/đã rời và sức chứa | Resident hiện chưa có vòng đời cư trú; capture tạo Resident không kiểm tra tổng người ở so với capacity | Tích hợp onboarding/occupancy để kiểm tra số người đang ở và giải phóng đúng phụ thuộc sau move-out, không xóa hồ sơ lịch sử | UC-04 capacity; GBR-05; UC-13..19 |
-| Giá thực sự được dùng cho Invoice | RecordUsage/FirstUsedAt tồn tại nhưng chưa có caller billing, Invoice/InvoiceLine hoặc FK/snapshot tham chiếu policy | Lấy giá theo ngày/cơ sở hợp đồng, ghi snapshot và đánh dấu dùng trong cùng transaction/khóa; regression race giữa xuất hóa đơn và sửa giá | UC-06 A4; GBR-08/09; UC-21 |
-| Asset và bảo trì | Lưu Asset/condition/status; chặn ghi đè UnderRepair, có audit cấu hình | Work Order/inspection/handover, lịch sử sửa chữa/thay thế và chi phí; Owner xác minh để đưa Asset từ UnderRepair về trạng thái đúng | UC-05 A3/A4; UC-17; GBR-12 |
+| Mục                                 | Hiện trạng trong code                                                                                                | Cần bổ sung                                                                                                                                       | Nguồn                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Trạng thái Room theo nghĩa vụ thật  | Chỉ cấu hình Available/Unavailable, dự phòng OnHold/Occupied; bảo vệ dựa vào trạng thái và sự tồn tại Resident       | Contract/holding/occupancy có thời gian/vòng đời, chống trùng nghĩa vụ, activation/move-out tự chuyển trạng thái và kiểm tra nghĩa vụ trước ngừng | UC-04 A2; UC-07; DBR-02           |
+| Phân biệt đang ở/đã rời và sức chứa | Resident hiện chưa có vòng đời cư trú; capture tạo Resident không kiểm tra tổng người ở so với capacity              | Tích hợp onboarding/occupancy để kiểm tra số người đang ở và giải phóng đúng phụ thuộc sau move-out, không xóa hồ sơ lịch sử                      | UC-04 capacity; GBR-05; UC-13..19 |
+| Giá thực sự được dùng cho Invoice   | RecordUsage/FirstUsedAt tồn tại nhưng chưa có caller billing, Invoice/InvoiceLine hoặc FK/snapshot tham chiếu policy | Lấy giá theo ngày/cơ sở hợp đồng, ghi snapshot và đánh dấu dùng trong cùng transaction/khóa; regression race giữa xuất hóa đơn và sửa giá         | UC-06 A4; GBR-08/09; UC-21        |
+| Asset và bảo trì                    | Lưu Asset/condition/status; chặn ghi đè UnderRepair, có audit cấu hình                                               | Work Order/inspection/handover, lịch sử sửa chữa/thay thế và chi phí; Owner xác minh để đưa Asset từ UnderRepair về trạng thái đúng               | UC-05 A3/A4; UC-17; GBR-12        |
 
 Các mục trên là luồng tương lai đã được hoãn trong đợt API cấu hình, không phải lỗi chứng minh
 CRUD đang hỏng. Riêng không được sử dụng FirstUsedAt như bằng chứng đã tích hợp Invoice thực.

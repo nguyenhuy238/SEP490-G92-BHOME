@@ -12,14 +12,14 @@ và Report 4 `Report-4_Software Design Specification (5).docx` trong `docs/repor
 Các quyết định bên dưới giải quyết phạm vi chưa thống nhất trong màn hình SRS và schema thiết kế;
 không khẳng định đã triển khai toàn bộ BF-01 hoặc billing.
 
-| Yêu cầu | Nguồn | Dữ liệu và xử lý | Kiểm thử chấp nhận |
-| --- | --- | --- | --- |
-| Location → Room Type → Room | BF-01; UC-04; Report 4 §3.1–3.4 | Location, RoomType, Room; PropertyService; FK cùng Location | Tạo/cập nhật; thiếu Chain/type; type sai Location; ngừng hoạt động có phòng đang vận hành |
-| Owner toàn hệ thống; Staff đọc Location hiện được phân công | GBR-01..03; DBR-01; quyết định global Owner đã có | property.view / property.manage; PermissionAccess; query lọc trước count/paging | Guest 401; Tenant 403; Staff ngoài phạm vi 404; phân công hết hạn có hiệu lực với JWT cũ |
-| Từng tài sản tại phòng hoặc khu chung | UC-05; Report 4 §3.5 | Asset; FK cùng Location; lịch sử cấu hình | Sai vị trí; trùng mã; Staff không sửa; chặn ghi đè trạng thái UnderRepair |
-| Giá có phiên bản và ngày hiệu lực | UC-06; GBR-08; Report 4 §3.20 | BillingPolicy; transaction; exclusion constraint | Giá âm/hồi tố; trùng kỳ; hai request đồng thời; rollback thay giá lỗi |
-| Trạng thái phòng không được thay nghĩa vụ hợp đồng | UC-04 A2; DBR-02 | Chỉ Available ↔ Unavailable khi được phép | Cấm nhập tay OnHold/Occupied; cấm đóng phòng có Resident |
-| Lưu lịch sử cấu hình | UC-04..06; GBR-13; DBR-13 | PropertyChanges chứa actor/UTC/reason/before/after; SecurityAudit tham chiếu cùng transaction | Snapshot, actor, stale version; DB chặn UPDATE/DELETE/TRUNCATE lịch sử |
+| Yêu cầu                                                     | Nguồn                                             | Dữ liệu và xử lý                                                                              | Kiểm thử chấp nhận                                                                        |
+| ----------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Location → Room Type → Room                                 | BF-01; UC-04; Report 4 §3.1–3.4                   | Location, RoomType, Room; PropertyService; FK cùng Location                                   | Tạo/cập nhật; thiếu Chain/type; type sai Location; ngừng hoạt động có phòng đang vận hành |
+| Owner toàn hệ thống; Staff đọc Location hiện được phân công | GBR-01..03; DBR-01; quyết định global Owner đã có | property.view / property.manage; PermissionAccess; query lọc trước count/paging               | Guest 401; Tenant 403; Staff ngoài phạm vi 404; phân công hết hạn có hiệu lực với JWT cũ  |
+| Từng tài sản tại phòng hoặc khu chung                       | UC-05; Report 4 §3.5                              | Asset; FK cùng Location; lịch sử cấu hình                                                     | Sai vị trí; trùng mã; Staff không sửa; chặn ghi đè trạng thái UnderRepair                 |
+| Giá có phiên bản và ngày hiệu lực                           | UC-06; GBR-08; Report 4 §3.20                     | BillingPolicy; transaction; exclusion constraint                                              | Giá âm/hồi tố; trùng kỳ; hai request đồng thời; rollback thay giá lỗi                     |
+| Trạng thái phòng không được thay nghĩa vụ hợp đồng          | UC-04 A2; DBR-02                                  | Chỉ Available ↔ Unavailable khi được phép                                                     | Cấm nhập tay OnHold/Occupied; cấm đóng phòng có Resident                                  |
+| Lưu lịch sử cấu hình                                        | UC-04..06; GBR-13; DBR-13                         | PropertyChanges chứa actor/UTC/reason/before/after; SecurityAudit tham chiếu cùng transaction | Snapshot, actor, stale version; DB chặn UPDATE/DELETE/TRUNCATE lịch sử                    |
 
 Hoãn: copy Location, ảnh, nội dung public, UC-07 lịch sử cư trú, bộ tài sản mặc định theo Room Type,
 chuyển tài sản, billing, hợp đồng, thuế, bậc thang, theo người và chia tiền theo ngày.
@@ -38,15 +38,15 @@ Lỗi dùng ProblemDetails và `correlationId`; lỗi nghiệp vụ thêm `code`
 409: trùng, chồng kỳ, stale version hoặc phụ thuộc nghiệp vụ. Không có DELETE.
 Request tối đa 32 KiB cho các controller quản lý tài sản/cấu hình. Response thành công không cache.
 
-| Method | Route | Hành vi |
-| --- | --- | --- |
-| GET, POST | `/locations`, `/room-types`, `/rooms`, `/assets`, `/billing-policies` | Danh sách có phân trang / tạo mới |
-| GET | `/{resource}/{id}` | Chi tiết |
-| PUT | `/locations/{id}`, `/room-types/{id}`, `/rooms/{id}`, `/assets/{id}` | Thay cấu hình, gửi version hiện tại |
-| GET | `/rooms/{id}/prices?effectiveOn=YYYY-MM-DD` | Giá từng khoản theo ngày, kèm khoản bắt buộc còn thiếu |
-| POST | `/billing-policies/{id}/replacement` | Kết thúc bản trước và tạo bản kế tiếp trong cùng transaction |
-| PUT | `/billing-policies/{id}` | Sửa tên/giá/kỳ của policy tương lai chưa sử dụng, giữ ID |
-| POST | `/billing-policies/{id}/end` | Kết thúc hiệu lực tương lai, giữ lịch sử |
+| Method    | Route                                                                 | Hành vi                                                      |
+| --------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| GET, POST | `/locations`, `/room-types`, `/rooms`, `/assets`, `/billing-policies` | Danh sách có phân trang / tạo mới                            |
+| GET       | `/{resource}/{id}`                                                    | Chi tiết                                                     |
+| PUT       | `/locations/{id}`, `/room-types/{id}`, `/rooms/{id}`, `/assets/{id}`  | Thay cấu hình, gửi version hiện tại                          |
+| GET       | `/rooms/{id}/prices?effectiveOn=YYYY-MM-DD`                           | Giá từng khoản theo ngày, kèm khoản bắt buộc còn thiếu       |
+| POST      | `/billing-policies/{id}/replacement`                                  | Kết thúc bản trước và tạo bản kế tiếp trong cùng transaction |
+| PUT       | `/billing-policies/{id}`                                              | Sửa tên/giá/kỳ của policy tương lai chưa sử dụng, giữ ID     |
+| POST      | `/billing-policies/{id}/end`                                          | Kết thúc hiệu lực tương lai, giữ lịch sử                     |
 
 POST trả 201 và Location trỏ tới GET chi tiết; PUT/end trả 200. Gửi lại request tạo trùng hoặc
 version cũ trả 409; không tự retry một mutation sau lỗi mạng mơ hồ. Đọc lại trạng thái trước khi thử lại.
@@ -57,12 +57,12 @@ hoặc offset vượt int32. Response `{ items, page, pageSize, totalCount }`.
 Thứ tự ổn định: `createdAt ASC, id ASC`. Lọc Staff thực hiện trước count/pagination.
 `search` tối đa 200 ký tự, tìm chuỗi phân biệt hoa/thường theo collation DB.
 
-| Resource | Bộ lọc được hỗ trợ |
-| --- | --- |
-| locations | isActive, search (tên/địa chỉ); không có locationId |
-| room-types | locationId, roomTypeId, isActive, search (tên) |
-| rooms | locationId, roomTypeId, roomId, roomStatus, search (số phòng) |
-| assets | locationId, roomId, assetStatus, search (tên/mã) |
+| Resource         | Bộ lọc được hỗ trợ                                                           |
+| ---------------- | ---------------------------------------------------------------------------- |
+| locations        | isActive, search (tên/địa chỉ); không có locationId                          |
+| room-types       | locationId, roomTypeId, isActive, search (tên)                               |
+| rooms            | locationId, roomTypeId, roomId, roomStatus, search (số phòng)                |
+| assets           | locationId, roomId, assetStatus, search (tên/mã)                             |
 | billing-policies | locationId, roomTypeId, roomId, chargeCategory, effectiveOn, search (mã/tên) |
 
 `GET /locations` liệt kê mọi Location trong phạm vi quyền theo từng trang; không lọc theo ID.
@@ -164,12 +164,12 @@ không tự đổi nội dung ở giữa. Ngừng sử dụng không giải phó
 }
 ```
 
-| Category JSON | ChargeCode | Method JSON | Đơn vị |
-| --- | --- | --- | --- |
-| Rent = 0 | RENT | FixedPerRoomPerMonth = 0 | VND/phòng/tháng |
-| Electricity = 1 | ELECTRICITY | Metered = 1 | VND/kWh |
-| Water = 2 | WATER | Metered = 1 | VND/m³ |
-| ServiceFee = 3 | Mã riêng, ví dụ INTERNET | FixedPerRoomPerMonth = 0 | VND/phòng/tháng |
+| Category JSON   | ChargeCode               | Method JSON              | Đơn vị          |
+| --------------- | ------------------------ | ------------------------ | --------------- |
+| Rent = 0        | RENT                     | FixedPerRoomPerMonth = 0 | VND/phòng/tháng |
+| Electricity = 1 | ELECTRICITY              | Metered = 1              | VND/kWh         |
+| Water = 2       | WATER                    | Metered = 1              | VND/m³          |
+| ServiceFee = 3  | Mã riêng, ví dụ INTERNET | FixedPerRoomPerMonth = 0 | VND/phòng/tháng |
 
 Mã được trim và chuyển hoa; chỉ ASCII chữ/số/gạch ngang/gạch dưới, tối đa 80 ký tự.
 Ba mã RENT/ELECTRICITY/WATER được dành riêng. Cho phép nhiều mã phí dịch vụ cùng lúc và mức 0

@@ -8,14 +8,14 @@ Import hai file:
 Chọn Environment **BHOME Local** ở góc trên bên phải Postman. `baseUrl` mặc định là
 `https://localhost:7240`, không có dấu `/` cuối; sửa nếu API chạy địa chỉ khác.
 
-| Biến | Cách lấy |
-| --- | --- |
-| `ownerAccessToken` | Request **24** đăng nhập thành công bằng Owner tự lưu accessToken |
-| `staffAccessToken` | Request **25** đăng nhập thành công bằng Staff tự lưu accessToken |
-| `staffUserId` | Request **25** tự lưu userId của Staff |
-| `locationId` | Request **26** tạo Location thành công tự lưu id |
-| `chainVersion` | Request **25a/25b** tự lưu version cấu hình tên Chain |
-| `futurePolicyId`, `futurePolicyVersion` | Request **60a/60b/60c** tự lưu để test sửa phí tương lai |
+| Biến                                    | Cách lấy                                                          |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| `ownerAccessToken`                      | Request **24** đăng nhập thành công bằng Owner tự lưu accessToken |
+| `staffAccessToken`                      | Request **25** đăng nhập thành công bằng Staff tự lưu accessToken |
+| `staffUserId`                           | Request **25** tự lưu userId của Staff                            |
+| `locationId`                            | Request **26** tạo Location thành công tự lưu id                  |
+| `chainVersion`                          | Request **25a/25b** tự lưu version cấu hình tên Chain             |
+| `futurePolicyId`, `futurePolicyVersion` | Request **60a/60b/60c** tự lưu để test sửa phí tương lai          |
 
 Điền email/mật khẩu test trong Body của 24 và 25, rồi Send từng request. Tiếp theo chạy
 **25a** để xem Chain chung, tùy chọn **25b** để đổi tên, rồi gửi **26** để tạo Location.

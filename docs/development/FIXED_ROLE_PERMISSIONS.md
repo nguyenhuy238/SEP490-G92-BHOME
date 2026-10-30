@@ -28,40 +28,40 @@ hành động có quyền rõ trong SRS; permission chưa khai báo không đư�
 Domain giữ constants tại `Permissions.cs`; bảng grant bất biến tại `RolePermissions.cs`.
 Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi được grant.
 
-| Permission                  | Owner | Staff | Tenant | Nguồn / giới hạn                                                                    |
-| --------------------------- | ----- | ----- | ------ | ----------------------------------------------------------------------------------- |
-| account.view-own            | Có    | Có    | Có     | UC-03, chính account hiện tại                                                       |
-| account.update-own          | Có    | Có    | Có     | UC-03, chỉ field được phép; không đổi role/assignment                               |
-| account.change-password     | Có    | Có    | Có     | Account hiện tại và xác minh mật khẩu/session                                       |
-| sessions.revoke-own         | Có    | Có    | Có     | UC-02, current/all của chính user                                                   |
-| staff-accounts.manage       | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Staff                                                  |
-| staff-assignments.manage    | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Location Assignment                                    |
-| locations.manage            | Có    | Không | Không  | BF-01 / UC-04, chain của Owner                                                      |
-| locations.view-assigned     | Không | Có    | Không  | BF-02 / UC-08, chỉ Location có Assignment đang hiệu lực                             |
-| property.view               | Có    | Có    | Không  | UC-04..06, DTO quản trị Location/Room Type/Room/Asset/giá; Staff chỉ assigned Location |
+| Permission                  | Owner | Staff | Tenant | Nguồn / giới hạn                                                                            |
+| --------------------------- | ----- | ----- | ------ | ------------------------------------------------------------------------------------------- |
+| account.view-own            | Có    | Có    | Có     | UC-03, chính account hiện tại                                                               |
+| account.update-own          | Có    | Có    | Có     | UC-03, chỉ field được phép; không đổi role/assignment                                       |
+| account.change-password     | Có    | Có    | Có     | Account hiện tại và xác minh mật khẩu/session                                               |
+| sessions.revoke-own         | Có    | Có    | Có     | UC-02, current/all của chính user                                                           |
+| staff-accounts.manage       | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Staff                                                          |
+| staff-assignments.manage    | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Location Assignment                                            |
+| locations.manage            | Có    | Không | Không  | BF-01 / UC-04, chain của Owner                                                              |
+| locations.view-assigned     | Không | Có    | Không  | BF-02 / UC-08, chỉ Location có Assignment đang hiệu lực                                     |
+| property.view               | Có    | Có    | Không  | UC-04..06, DTO quản trị Location/Room Type/Room/Asset/giá; Staff chỉ assigned Location      |
 | property.manage             | Có    | Không | Không  | UC-04..06, cấu hình và phiên bản giá theo quyết định 29/10/2026; xem PROPERTY_MANAGEMENT.md |
-| rooms.view                  | Có    | Có    | Có     | UC-04/07, toàn hệ thống / assigned Location / own Room                              |
-| rooms.manage                | Có    | Không | Không  | UC-04, chain của Owner                                                              |
-| assets.update-condition     | Có    | Có    | Không  | UC-05, toàn hệ thống / assigned Location                                            |
-| operational-tasks.manage    | Có    | Không | Không  | UC-10/12, tạo/giao/theo dõi, theo state của use case                                |
-| operational-tasks.execute   | Không | Có    | Không  | UC-11, task được giao và đúng Location                                              |
-| operational-tasks.verify    | Có    | Không | Không  | UC-12, Owner xác minh theo workflow                                                 |
-| contracts.prepare           | Có    | Có    | Không  | BF-03 / Permission Matrix, toàn hệ thống / assigned Location                        |
-| contracts.activate          | Có    | Không | Không  | GBR-03, đầy đủ signing/financial conditions                                         |
-| contracts.sign              | Có    | Không | Có     | GBR-04, đúng signer và provider workflow                                            |
-| meter-readings.confirm      | Không | Có    | Không  | UC-20 / GBR-07, Staff đúng assignment, meter và period                              |
-| invoices.view               | Có    | Không | Không  | UC-21 / Permission Matrix, quản lý trong chain của Owner                            |
-| invoices.view-operational   | Không | Có    | Không  | UC-21 / Permission Matrix, chỉ DTO vận hành cần thiết trong Location được phân công |
-| invoices.view-own           | Không | Không | Có     | UC-21, Invoice thuộc tenancy của Tenant                                             |
-| invoice-adjustments.request | Không | Không | Có     | UC-24, own Invoice                                                                  |
-| invoice-adjustments.approve | Có    | Không | Không  | UC-24 / GBR-03, Owner quyết định theo workflow                                      |
-| incidents.report            | Không | Có    | Có     | UC-26, Staff trong scope / Tenant của Room                                          |
-| work-orders.approve-plan    | Có    | Không | Không  | BF-07 / GBR-12, Owner duyệt kế hoạch/chi phí                                        |
-| work-orders.execute         | Không | Có    | Không  | BF-07, Work Order được giao và đúng state                                           |
-| work-orders.verify          | Có    | Không | Không  | BF-07 / GBR-12, Owner xác minh kết quả                                              |
-| finance.view                | Có    | Không | Không  | FE-08, chain của Owner; không cấp dữ liệu tài chính sâu cho Staff                   |
-| notifications.read-own      | Có    | Có    | Có     | FE-07, chỉ thông báo của chính user                                                 |
-| public-content.publish      | Có    | Không | Không  | UC-37 / GBR-17, Owner phê duyệt nội dung được công bố                               |
+| rooms.view                  | Có    | Có    | Có     | UC-04/07, toàn hệ thống / assigned Location / own Room                                      |
+| rooms.manage                | Có    | Không | Không  | UC-04, chain của Owner                                                                      |
+| assets.update-condition     | Có    | Có    | Không  | UC-05, toàn hệ thống / assigned Location                                                    |
+| operational-tasks.manage    | Có    | Không | Không  | UC-10/12, tạo/giao/theo dõi, theo state của use case                                        |
+| operational-tasks.execute   | Không | Có    | Không  | UC-11, task được giao và đúng Location                                                      |
+| operational-tasks.verify    | Có    | Không | Không  | UC-12, Owner xác minh theo workflow                                                         |
+| contracts.prepare           | Có    | Có    | Không  | BF-03 / Permission Matrix, toàn hệ thống / assigned Location                                |
+| contracts.activate          | Có    | Không | Không  | GBR-03, đầy đủ signing/financial conditions                                                 |
+| contracts.sign              | Có    | Không | Có     | GBR-04, đúng signer và provider workflow                                                    |
+| meter-readings.confirm      | Không | Có    | Không  | UC-20 / GBR-07, Staff đúng assignment, meter và period                                      |
+| invoices.view               | Có    | Không | Không  | UC-21 / Permission Matrix, quản lý trong chain của Owner                                    |
+| invoices.view-operational   | Không | Có    | Không  | UC-21 / Permission Matrix, chỉ DTO vận hành cần thiết trong Location được phân công         |
+| invoices.view-own           | Không | Không | Có     | UC-21, Invoice thuộc tenancy của Tenant                                                     |
+| invoice-adjustments.request | Không | Không | Có     | UC-24, own Invoice                                                                          |
+| invoice-adjustments.approve | Có    | Không | Không  | UC-24 / GBR-03, Owner quyết định theo workflow                                              |
+| incidents.report            | Không | Có    | Có     | UC-26, Staff trong scope / Tenant của Room                                                  |
+| work-orders.approve-plan    | Có    | Không | Không  | BF-07 / GBR-12, Owner duyệt kế hoạch/chi phí                                                |
+| work-orders.execute         | Không | Có    | Không  | BF-07, Work Order được giao và đúng state                                                   |
+| work-orders.verify          | Có    | Không | Không  | BF-07 / GBR-12, Owner xác minh kết quả                                                      |
+| finance.view                | Có    | Không | Không  | FE-08, chain của Owner; không cấp dữ liệu tài chính sâu cho Staff                           |
+| notifications.read-own      | Có    | Có    | Có     | FE-07, chỉ thông báo của chính user                                                         |
+| public-content.publish      | Có    | Không | Không  | UC-37 / GBR-17, Owner phê duyệt nội dung được công bố                                       |
 
 Owner không tự kế thừa hành động Staff/Tenant: ví dụ xác nhận meter và yêu cầu adjustment là hai
 nhánh role riêng. Account có nhiều role nhận hợp các grant tường minh, không nhận wildcard.
