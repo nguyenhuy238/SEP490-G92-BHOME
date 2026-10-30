@@ -108,6 +108,15 @@ public static class DependencyInjection
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();
+        services.AddOptions<BHome.Application.StaffOperations.TaskEvidenceLimits>().Bind(configuration.GetSection("OperationalTasks:Evidence"))
+            .Validate(o => o.MaximumFilesPerTask is >= 1 and <= 50 && o.MaximumFileBytes is >= 1024 and <= 20 * 1024 * 1024,
+                "Task evidence limits must be 1-50 files and 1 KiB-20 MiB per file.").ValidateOnStart();
+        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.StaffOperations.TaskEvidenceLimits>>().Value);
+        services.AddScoped<BHome.Application.StaffOperations.IOperationalTaskRepository,
+            BHome.Infrastructure.Modules.StaffOperations.Persistence.PostgresOperationalTaskRepository>();
+        services.AddScoped<BHome.Application.StaffOperations.ITaskEvidenceFiles, BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceFiles>();
+        services.AddScoped<BHome.Application.StaffOperations.OperationalTaskService>();
+        services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
         services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();

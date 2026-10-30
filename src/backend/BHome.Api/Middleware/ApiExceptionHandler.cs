@@ -3,6 +3,7 @@ using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.DigitalSigning.Application;
 using BHome.Application.Ocr;
+using BHome.Application.PropertyManagement;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,6 +16,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         var status = exception switch
         {
             PropertyException property => property.Status,
+            BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
             ContractException contract => contract.Status,
             DigitalSigningException signing => signing.Error switch
             {
@@ -49,6 +51,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         var code = exception switch
         {
             PropertyException property => property.Code,
+            BHome.Application.StaffOperations.OperationalTaskException task => task.Code,
             ContractException contract => contract.Code,
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,

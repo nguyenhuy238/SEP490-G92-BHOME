@@ -55,6 +55,7 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
             db.Entry(assignment).State = EntityState.Detached;
             return new(CreateAssignmentStatus.DateRangeOverlaps);
         }
+        await transaction.CommitAsync(cancellationToken);
         return new(CreateAssignmentStatus.Created,
             new StaffAssignmentSummary(assignment.Id, assignment.StaffUserId, assignment.StartDate, assignment.EndDate));
     }

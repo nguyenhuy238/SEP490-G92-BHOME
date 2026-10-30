@@ -2,6 +2,7 @@ using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
+using BHome.Domain.StaffOperations;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Persistence;
@@ -36,6 +37,21 @@ internal static class CaptureConfiguration
         });
         b.Entity<OperationalTask>(e =>
         {
+            e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.AssignedStaffUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<StaffLocationAssignment>().WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.Property(x => x.Requirements).HasMaxLength(8000);
+            e.Property(x => x.Result).HasMaxLength(8000);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.LocationId, x.Status, x.DueAt });
+            e.ToTable("OperationalTasks", t =>
+            {
+                t.HasCheckConstraint("CK_Task_Kind", "\"Kind\" IN (0,1) AND ((\"Kind\" = 0 AND \"MeterId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)) OR (\"Kind\" = 1 AND \"MeterId\" IS NULL AND \"ContractId\" IS NULL AND \"BillingPeriod\" IS NULL AND \"DueAt\" IS NOT NULL AND length(trim(\"Title\")) > 0 AND length(trim(\"Requirements\")) > 0))");
+                t.HasCheckConstraint("CK_Task_State", "\"Status\" IN (0,1,2,3,4) AND \"Priority\" IN (0,1) AND \"Version\" > 0");
+                t.HasCheckConstraint("CK_Task_Verification", "\"Kind\" = 0 OR \"Status\" <> 2 OR (\"VerifiedAt\" IS NOT NULL AND \"VerifiedByUserId\" IS NOT NULL AND \"CompletedAt\" IS NOT NULL)");
+            });
             e.HasOne(x => x.Meter).WithMany().HasForeignKey(x => x.MeterId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.OcrProposedValue).HasPrecision(18, 4); e.Property(x => x.OcrImageHash).HasMaxLength(64); e.Property(x => x.OcrEngineVersion).HasMaxLength(150);

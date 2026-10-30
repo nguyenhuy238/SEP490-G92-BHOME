@@ -149,7 +149,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     {
         if (!Enum.IsDefined(x.Purpose) || x.ReadingDate == default || (x.Purpose == ReadingPurpose.Periodic && (x.BillingPeriod is null || x.BillingPeriod.Value.Day != 1 || x.ReadingDate.Year != x.BillingPeriod.Value.Year || x.ReadingDate.Month != x.BillingPeriod.Value.Month)) || (x.Purpose != ReadingPurpose.Periodic && x.BillingPeriod != null)) throw new CaptureValidationException("invalid_reading_period");
         var meter = await db.Set<Meter>().Where(m => m.Id == x.MeterId && m.IsActive && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
-            .Select(m => new { m.InstalledOn, m.RoomId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+            .Select(m => new { m.InstalledOn, m.RoomId, m.Room.LocationId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         if (x.ReadingDate < meter.InstalledOn) throw new CaptureValidationException("reading_before_installation");
         if (x.Purpose == ReadingPurpose.Final)
         {
@@ -158,12 +158,12 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
                 throw new CaptureConflictException("approved_contract_move_out_required");
         }
         else if (x.ContractId is not null) throw new CaptureValidationException("final_contract_reference_only");
-        var task = new OperationalTask { MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
+        var task = new OperationalTask { LocationId = meter.LocationId, Title = "Meter reading", MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
         db.Add(task); Audit("MeterTaskAssigned", "Task", task.Id); await Save(t); return new(task.Id);
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => await scope.VisibleTasks.AsNoTracking()
         .OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Take(100)
-        .Select(x => new MeterTaskSummary(x.Id, x.MeterId, x.Meter.Room.Location.Name, x.Meter.Room.RoomNumber, x.Meter.Code,
+        .Select(x => new MeterTaskSummary(x.Id, x.MeterId!.Value, x.Meter.Room.Location.Name, x.Meter.Room.RoomNumber, x.Meter.Code,
             x.Meter.UtilityType, x.Meter.Display, x.Meter.DecimalPlaces, x.Purpose, x.ReadingDate, x.BillingPeriod, x.Status,
             db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId).OrderByDescending(r => r.ConfirmedAt).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
             x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault())).ToListAsync(t);

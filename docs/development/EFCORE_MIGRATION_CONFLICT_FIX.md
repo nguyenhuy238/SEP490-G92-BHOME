@@ -48,14 +48,14 @@ dotnet ef migrations has-pending-model-changes --project src/backend/BHome.Infra
 git diff --check
 ```
 
-| Kiểm tra | Kết quả |
-| --- | --- |
-| Tool restore / build backend | PASS; build 0 warning, 0 error |
-| Metadata và PostgreSQL foundation | PASS: 7/7, không skip |
-| Contract service unit tests | PASS: 24/24, không skip |
-| EF kiểm tra model drift | PASS: không có thay đổi model chưa được phản ánh |
-| Diff whitespace | PASS |
-| Integration mở rộng Contract + Property | FAIL: 14 pass, 30 fail, không skip |
+| Kiểm tra                                | Kết quả                                          |
+| --------------------------------------- | ------------------------------------------------ |
+| Tool restore / build backend            | PASS; build 0 warning, 0 error                   |
+| Metadata và PostgreSQL foundation       | PASS: 7/7, không skip                            |
+| Contract service unit tests             | PASS: 24/24, không skip                          |
+| EF kiểm tra model drift                 | PASS: không có thay đổi model chưa được phản ánh |
+| Diff whitespace                         | PASS                                             |
+| Integration mở rộng Contract + Property | FAIL: 14 pass, 30 fail, không skip               |
 
 Các lỗi mở rộng còn tồn tại ngoài phạm vi hai lỗi migration:
 

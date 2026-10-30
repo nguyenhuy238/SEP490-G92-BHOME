@@ -28,15 +28,15 @@ SRS có đặc tả UC-16 độc lập. Trong SRS, tiêu đề BF-04A còn ghi H
 nội dung mô tả expiry/renewal/move-out; phần này được truy vết bằng UC-16/19 và nội dung luồng,
 không tạo thêm một luồng Holding trùng lặp.
 
-| Yêu cầu | Thực hiện | Tiêu chí chấp nhận / kiểm thử |
-| --- | --- | --- |
-| UC-15, GBR-01/02/05 | Draft từ Room, tài khoản Tenant có sẵn, Resident đã xác minh; chọn đại diện và co-occupants | Sai ngày, tiền lẻ/âm, Resident sai Room, sai vai trò hoặc Staff ngoài Location bị từ chối |
-| UC-15/16, GBR-04, DBR-03 | Hai bên ký nối tiếp; snapshot, digest, provider reference, file riêng tư | Gửi yêu cầu không đồng nghĩa đã ký; thiếu một bên hoặc sai toàn vẹn bị chặn |
-| UC-15, DBR-02, GBR-18 | Cọc, Owner activation, Room Occupied trong một transaction | T01–T07; kích hoạt song song chỉ một hợp đồng thắng; retry không cộng tiền/audit lần hai |
-| UC-16/19 | Renewal tạo phiên bản mới, giữ nguyên bản đã ký; Owner kích hoạt hoặc hủy renewal đang chờ | T08–T09; ngày sai, chưa ký, renewal trùng bị chặn; bản cũ còn nguyên |
-| UC-19, GBR-01/02 | Tenant yêu cầu, Owner phê duyệt; Staff inspection đúng Location | T10–T12, T16; gửi yêu cầu không đóng Contract/giải phóng Room |
-| UC-19; OQ-01/02/05 | Lưu quyết định Owner và lịch sử append-only; adapter tài chính xác nhận nghĩa vụ | T13–T14; thiếu dữ liệu/hoàn tiền/thu tiền hoặc ledger đổi thì không giải phóng phòng |
-| GBR-04/18; NFR bảo mật | Provider không sẵn sàng, retry, file riêng tư, cleanup intent | T15; không gửi lại yêu cầu ký có kết quả mơ hồ; upload lỗi không tạo signature trỏ tới file thiếu |
+| Yêu cầu                  | Thực hiện                                                                                   | Tiêu chí chấp nhận / kiểm thử                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| UC-15, GBR-01/02/05      | Draft từ Room, tài khoản Tenant có sẵn, Resident đã xác minh; chọn đại diện và co-occupants | Sai ngày, tiền lẻ/âm, Resident sai Room, sai vai trò hoặc Staff ngoài Location bị từ chối         |
+| UC-15/16, GBR-04, DBR-03 | Hai bên ký nối tiếp; snapshot, digest, provider reference, file riêng tư                    | Gửi yêu cầu không đồng nghĩa đã ký; thiếu một bên hoặc sai toàn vẹn bị chặn                       |
+| UC-15, DBR-02, GBR-18    | Cọc, Owner activation, Room Occupied trong một transaction                                  | T01–T07; kích hoạt song song chỉ một hợp đồng thắng; retry không cộng tiền/audit lần hai          |
+| UC-16/19                 | Renewal tạo phiên bản mới, giữ nguyên bản đã ký; Owner kích hoạt hoặc hủy renewal đang chờ  | T08–T09; ngày sai, chưa ký, renewal trùng bị chặn; bản cũ còn nguyên                              |
+| UC-19, GBR-01/02         | Tenant yêu cầu, Owner phê duyệt; Staff inspection đúng Location                             | T10–T12, T16; gửi yêu cầu không đóng Contract/giải phóng Room                                     |
+| UC-19; OQ-01/02/05       | Lưu quyết định Owner và lịch sử append-only; adapter tài chính xác nhận nghĩa vụ            | T13–T14; thiếu dữ liệu/hoàn tiền/thu tiền hoặc ledger đổi thì không giải phóng phòng              |
+| GBR-04/18; NFR bảo mật   | Provider không sẵn sàng, retry, file riêng tư, cleanup intent                               | T15; không gửi lại yêu cầu ký có kết quả mơ hồ; upload lỗi không tạo signature trỏ tới file thiếu |
 
 Không triển khai nhánh đang tranh chấp về công thức khấu trừ cọc, ngưỡng phê duyệt hoặc cách
 tính phí hư hỏng. Không thay ký provider bằng OTP/chữ ký vẽ nội bộ.
@@ -45,22 +45,22 @@ tính phí hư hỏng. Không thay ký provider bằng OTP/chữ ký vẽ nội 
 
 Các file mới chính:
 
-| File / thư mục | Vai trò |
-| --- | --- |
-| `src/backend/BHome.Domain/TenantContracts/Contract.cs` | Contract, phiên bản renewal, occupants, signing attempt, xác minh cọc, move-out, inspection evidence, settlement review, idempotency, upload intent |
-| `src/backend/BHome.Application/Contracts/ContractContracts.cs` | DTO, validation metadata, repository và các boundary provider/ledger/file |
-| `src/backend/BHome.Application/Contracts/ContractService.cs` | Kiểm tra vai trò/phạm vi, điều kiện chuyển trạng thái, signing saga, activation, renewal và move-out |
-| `src/backend/BHome.Infrastructure/Contracts/ContractRepository.cs` | EF queries, khóa Room, transaction, audit và đọc dữ liệu đã xác nhận |
-| `src/backend/BHome.Infrastructure/Contracts/ViettelMySignContractAdapter.cs` | MySign/PDF adapter, runtime account source, các dependency chưa được cấu hình |
-| `src/backend/BHome.Infrastructure/Contracts/ContractSigningCertificateStore.cs` | Tái sử dụng dịch vụ chứng thư của signing module với DbContext backend |
-| `src/backend/BHome.Infrastructure/Contracts/ContractFiles.cs` | Upload intent bền vững, kiểm tra ảnh, dọn orphan |
-| `src/backend/BHome.Infrastructure/Persistence/ContractConfiguration.cs` | Mapping, FK, precision, unique/check constraints |
-| `src/backend/BHome.Api/Controllers/ContractsController.cs` | API Contract và Lifecycle |
-| `src/backend/BHome.Api/Controllers/ContractSigningCertificatesController.cs` | Danh mục chứng thư của chính Owner/Tenant |
-| `src/digital-signing/BHome.DigitalSigning.MySign/` | Project chỉ biên dịch lại source MySign client hiện có, không tham chiếu iText |
-| `tests/backend/BHome.Application.UnitTests/Contracts/ContractServiceTests.cs` | Unit test nghiệp vụ |
-| `tests/backend/BHome.IntegrationTests/Contracts/ContractLifecycleApiTests.cs` | HTTP + PostgreSQL/MinIO; test adapter được đánh dấu rõ |
-| `src/backend/BHome.Infrastructure/Persistence/Migrations/20261029170352_ContractActivationLifecycle.cs` và `.Designer.cs` | Migration mới |
+| File / thư mục                                                                                                            | Vai trò                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/backend/BHome.Domain/TenantContracts/Contract.cs`                                                                    | Contract, phiên bản renewal, occupants, signing attempt, xác minh cọc, move-out, inspection evidence, settlement review, idempotency, upload intent |
+| `src/backend/BHome.Application/Contracts/ContractContracts.cs`                                                            | DTO, validation metadata, repository và các boundary provider/ledger/file                                                                           |
+| `src/backend/BHome.Application/Contracts/ContractService.cs`                                                              | Kiểm tra vai trò/phạm vi, điều kiện chuyển trạng thái, signing saga, activation, renewal và move-out                                                |
+| `src/backend/BHome.Infrastructure/Contracts/ContractRepository.cs`                                                        | EF queries, khóa Room, transaction, audit và đọc dữ liệu đã xác nhận                                                                                |
+| `src/backend/BHome.Infrastructure/Contracts/ViettelMySignContractAdapter.cs`                                              | MySign/PDF adapter, runtime account source, các dependency chưa được cấu hình                                                                       |
+| `src/backend/BHome.Infrastructure/Contracts/ContractSigningCertificateStore.cs`                                           | Tái sử dụng dịch vụ chứng thư của signing module với DbContext backend                                                                              |
+| `src/backend/BHome.Infrastructure/Contracts/ContractFiles.cs`                                                             | Upload intent bền vững, kiểm tra ảnh, dọn orphan                                                                                                    |
+| `src/backend/BHome.Infrastructure/Persistence/ContractConfiguration.cs`                                                   | Mapping, FK, precision, unique/check constraints                                                                                                    |
+| `src/backend/BHome.Api/Controllers/ContractsController.cs`                                                                | API Contract và Lifecycle                                                                                                                           |
+| `src/backend/BHome.Api/Controllers/ContractSigningCertificatesController.cs`                                              | Danh mục chứng thư của chính Owner/Tenant                                                                                                           |
+| `src/digital-signing/BHome.DigitalSigning.MySign/`                                                                        | Project chỉ biên dịch lại source MySign client hiện có, không tham chiếu iText                                                                      |
+| `tests/backend/BHome.Application.UnitTests/Contracts/ContractServiceTests.cs`                                             | Unit test nghiệp vụ                                                                                                                                 |
+| `tests/backend/BHome.IntegrationTests/Contracts/ContractLifecycleApiTests.cs`                                             | HTTP + PostgreSQL/MinIO; test adapter được đánh dấu rõ                                                                                              |
+| `src/backend/BHome.Infrastructure/Persistence/Migrations/20261029170352_ContractActivationLifecycle.cs` và `.Designer.cs` | Migration mới                                                                                                                                       |
 
 Các phần có sửa:
 
@@ -112,33 +112,33 @@ Các ID trong ví dụ là placeholder; phải thay bằng UUID của dữ liệ
 Tiền VND nhận chuỗi decimal hoặc số nguyên và trả **chuỗi decimal**, không có phần lẻ;
 precision lưu trữ `numeric(18,0)`. Ngày là `YYYY-MM-DD`, instant là UTC.
 
-| Method / route | Actor | Request ví dụ | Response / validation chính | Trạng thái |
-| --- | --- | --- | --- | --- |
-| POST `C` | Owner, Staff | D bên dưới | 201 `{id}`; Room khả dụng, Resident verified, đại diện hợp lệ, tài khoản signers đang hoạt động, ngày/tiền/terms hợp lệ | Done trực tiếp; Partial nếu dùng Holding |
-| GET `C/{id}` | Owner, Staff đúng Location, Tenant của Contract | Không body | 200 ContractView: loại, trạng thái, terms, period, residents, signer/status, holding application; không trả object key/credential | Done |
-| GET `C/{id}/activation-readiness` | Owner, Tenant của Contract | Không body | 200 R; blockers rõ ràng, không tự activate | Done |
-| POST `C/{id}/deposit-verifications` | Owner | P | 200 `{id}` của verification; amount > 0, reference duy nhất; Owner xác minh sao kê, không có payment giả | Done — manual fallback |
-| POST `C/{id}/signing` | Owner signer hoặc Tenant signer | `{"certificateId":"{certificateId}"}` | SignatureView; chứng thư thuộc chính actor, không khóa/hết hạn; 503 nếu capability thiếu | Partial — chờ PDF/template/config |
-| POST `C/{id}/signing/sync` | Chính signer | Không body | 200 ContractView; chỉ Signed sau khi PDF verifier thành công; gọi lặp không nhân đôi | Partial — chờ ký thật |
-| POST `C/{id}/signing/recover` | Chính signer | `{"providerReference":"{verified-provider-transaction-id}"}` | 200 ContractView; chỉ gắn lại attempt mơ hồ, vẫn Pending và phải sync | Done boundary; chưa xác minh provider thật |
-| GET `C/{id}/document` | Owner, Tenant của Contract | Không body | 200 PDF riêng tư; 409 nếu chưa có bản ký | Done storage; chờ PDF thật |
-| POST `C/{id}/activate` | Owner | Không body | 200 ContractView Active; đủ hai bằng chứng ký, cọc, residents, kỳ hiệu lực, không tranh chấp Room | Partial E2E — ký thật chưa sẵn sàng |
-| POST `C/{id}/renewals` | Owner, Staff đúng Location | `{"endDate":"2027-12-31","monthlyRent":"4000000","terms":"Điều khoản gia hạn đã thống nhất"}` | 201 `{id}`; parent Active, expiry mới lớn hơn cũ, không renewal/move-out xung đột | Done chuẩn bị; Partial ký/kích hoạt thật |
-| POST `C/{renewalId}/renewal-cancellation` | Owner | Không body | 200 Cancelled; chỉ renewal còn chờ, giữ parent và toàn bộ lịch sử | Done |
-| POST `C/{id}/termination-requests` | Tenant của Contract | `{"proposedDate":"2026-11-30","reason":"Lý do trả phòng"}` | 200 M Requested; ngày không trong quá khứ, trước expiry; Contract vẫn Active | Done |
-| POST `C/{id}/expiry-move-out` | Owner | `{"proposedDate":"2026-12-31","reason":"Không gia hạn khi hết hạn"}` | 200 M Requested; ngày từ expiry trở đi, không đóng phòng tự động | Done API; JOB-02 chưa tích hợp |
-| GET `C/{id}/move-out` | Owner, Staff đúng Location, Tenant của Contract | Không body | 200 M, inspection notes, final reading IDs và các evidence ID được phép xem | Done |
-| POST `C/{id}/move-out/approve` | Owner | Không body | 200 M Approved; không có nhánh Staff phê duyệt/Owner rejection tự tạo | Done |
-| POST `C/{id}/move-out/schedule` | Owner, Staff đúng Location | `{"scheduledAt":"2026-11-30T03:00:00Z"}` | 200 M; move-out Approved, thời điểm UTC không trong quá khứ | Done |
-| POST `C/{id}/move-out/evidence` | Staff đúng Location | Binary PNG/JPEG, Content-Type phù hợp | 200 `{id}`; tối đa 5 ảnh, mỗi ảnh ≤5 MiB; kiểm tra header/giải mã, key do server sinh | Done |
-| GET `C/{id}/move-out/evidence/{evidenceId}` | Owner, Staff đúng Location, Tenant của Contract | Không body | 200 binary; trước khi gắn inspection chỉ uploader được đọc | Done |
-| POST `C/{id}/move-out/inspection` | Staff đúng Location | I | 200 M Inspected; đã schedule, đến ngày trả phòng, final readings đúng Contract/Room/type/ngày, evidence thuộc uploader | Done; chưa có Asset/move-in baseline module |
-| POST `C/{id}/move-out/settlement` | Owner | `{"decision":"Nội dung quyết định và căn cứ của Owner"}` | 200 M PendingSettlement hoặc Settled; ghi journal, chỉ Settled khi ledger xác minh đủ nghĩa vụ/cọc/chuyển tiền | Partial — ledger/policy còn thiếu |
-| GET `C/{id}/move-out/settlement-history` | Owner, Tenant của Contract | Không body | 200 SettlementReviewView[] mới nhất trước, tối đa 100; Staff bị chặn | Done |
-| POST `C/{id}/move-out/complete` | Owner | `{"actualEndDate":"2026-11-30"}` | 200 ContractView Terminated; đọc lại ledger/version, inspection/final readings đầy đủ; Room Available cùng transaction | Partial — ledger thật chưa có |
-| GET `S` | Owner, Tenant | Không body | 200 CertificateView[] của chính actor; subscriber được che | Done |
-| POST `S` | Owner, Tenant | `{"providerUserId":"{own-mysign-subscriber}","serialNumber":"{serial-or-null}"}` | 201 CertificateView sau khi hỏi MySign; 503 nếu chưa cấu hình, không tự tạo chứng thư | Partial — cấu hình MySign thật |
-| POST `S/{certificateId}/lock` | Chủ chứng thư Owner/Tenant | `{"locked":true}` | 204; chứng thư người khác 404 | Done |
+| Method / route                              | Actor                                           | Request ví dụ                                                                                 | Response / validation chính                                                                                                       | Trạng thái                                  |
+| ------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| POST `C`                                    | Owner, Staff                                    | D bên dưới                                                                                    | 201 `{id}`; Room khả dụng, Resident verified, đại diện hợp lệ, tài khoản signers đang hoạt động, ngày/tiền/terms hợp lệ           | Done trực tiếp; Partial nếu dùng Holding    |
+| GET `C/{id}`                                | Owner, Staff đúng Location, Tenant của Contract | Không body                                                                                    | 200 ContractView: loại, trạng thái, terms, period, residents, signer/status, holding application; không trả object key/credential | Done                                        |
+| GET `C/{id}/activation-readiness`           | Owner, Tenant của Contract                      | Không body                                                                                    | 200 R; blockers rõ ràng, không tự activate                                                                                        | Done                                        |
+| POST `C/{id}/deposit-verifications`         | Owner                                           | P                                                                                             | 200 `{id}` của verification; amount > 0, reference duy nhất; Owner xác minh sao kê, không có payment giả                          | Done — manual fallback                      |
+| POST `C/{id}/signing`                       | Owner signer hoặc Tenant signer                 | `{"certificateId":"{certificateId}"}`                                                         | SignatureView; chứng thư thuộc chính actor, không khóa/hết hạn; 503 nếu capability thiếu                                          | Partial — chờ PDF/template/config           |
+| POST `C/{id}/signing/sync`                  | Chính signer                                    | Không body                                                                                    | 200 ContractView; chỉ Signed sau khi PDF verifier thành công; gọi lặp không nhân đôi                                              | Partial — chờ ký thật                       |
+| POST `C/{id}/signing/recover`               | Chính signer                                    | `{"providerReference":"{verified-provider-transaction-id}"}`                                  | 200 ContractView; chỉ gắn lại attempt mơ hồ, vẫn Pending và phải sync                                                             | Done boundary; chưa xác minh provider thật  |
+| GET `C/{id}/document`                       | Owner, Tenant của Contract                      | Không body                                                                                    | 200 PDF riêng tư; 409 nếu chưa có bản ký                                                                                          | Done storage; chờ PDF thật                  |
+| POST `C/{id}/activate`                      | Owner                                           | Không body                                                                                    | 200 ContractView Active; đủ hai bằng chứng ký, cọc, residents, kỳ hiệu lực, không tranh chấp Room                                 | Partial E2E — ký thật chưa sẵn sàng         |
+| POST `C/{id}/renewals`                      | Owner, Staff đúng Location                      | `{"endDate":"2027-12-31","monthlyRent":"4000000","terms":"Điều khoản gia hạn đã thống nhất"}` | 201 `{id}`; parent Active, expiry mới lớn hơn cũ, không renewal/move-out xung đột                                                 | Done chuẩn bị; Partial ký/kích hoạt thật    |
+| POST `C/{renewalId}/renewal-cancellation`   | Owner                                           | Không body                                                                                    | 200 Cancelled; chỉ renewal còn chờ, giữ parent và toàn bộ lịch sử                                                                 | Done                                        |
+| POST `C/{id}/termination-requests`          | Tenant của Contract                             | `{"proposedDate":"2026-11-30","reason":"Lý do trả phòng"}`                                    | 200 M Requested; ngày không trong quá khứ, trước expiry; Contract vẫn Active                                                      | Done                                        |
+| POST `C/{id}/expiry-move-out`               | Owner                                           | `{"proposedDate":"2026-12-31","reason":"Không gia hạn khi hết hạn"}`                          | 200 M Requested; ngày từ expiry trở đi, không đóng phòng tự động                                                                  | Done API; JOB-02 chưa tích hợp              |
+| GET `C/{id}/move-out`                       | Owner, Staff đúng Location, Tenant của Contract | Không body                                                                                    | 200 M, inspection notes, final reading IDs và các evidence ID được phép xem                                                       | Done                                        |
+| POST `C/{id}/move-out/approve`              | Owner                                           | Không body                                                                                    | 200 M Approved; không có nhánh Staff phê duyệt/Owner rejection tự tạo                                                             | Done                                        |
+| POST `C/{id}/move-out/schedule`             | Owner, Staff đúng Location                      | `{"scheduledAt":"2026-11-30T03:00:00Z"}`                                                      | 200 M; move-out Approved, thời điểm UTC không trong quá khứ                                                                       | Done                                        |
+| POST `C/{id}/move-out/evidence`             | Staff đúng Location                             | Binary PNG/JPEG, Content-Type phù hợp                                                         | 200 `{id}`; tối đa 5 ảnh, mỗi ảnh ≤5 MiB; kiểm tra header/giải mã, key do server sinh                                             | Done                                        |
+| GET `C/{id}/move-out/evidence/{evidenceId}` | Owner, Staff đúng Location, Tenant của Contract | Không body                                                                                    | 200 binary; trước khi gắn inspection chỉ uploader được đọc                                                                        | Done                                        |
+| POST `C/{id}/move-out/inspection`           | Staff đúng Location                             | I                                                                                             | 200 M Inspected; đã schedule, đến ngày trả phòng, final readings đúng Contract/Room/type/ngày, evidence thuộc uploader            | Done; chưa có Asset/move-in baseline module |
+| POST `C/{id}/move-out/settlement`           | Owner                                           | `{"decision":"Nội dung quyết định và căn cứ của Owner"}`                                      | 200 M PendingSettlement hoặc Settled; ghi journal, chỉ Settled khi ledger xác minh đủ nghĩa vụ/cọc/chuyển tiền                    | Partial — ledger/policy còn thiếu           |
+| GET `C/{id}/move-out/settlement-history`    | Owner, Tenant của Contract                      | Không body                                                                                    | 200 SettlementReviewView[] mới nhất trước, tối đa 100; Staff bị chặn                                                              | Done                                        |
+| POST `C/{id}/move-out/complete`             | Owner                                           | `{"actualEndDate":"2026-11-30"}`                                                              | 200 ContractView Terminated; đọc lại ledger/version, inspection/final readings đầy đủ; Room Available cùng transaction            | Partial — ledger thật chưa có               |
+| GET `S`                                     | Owner, Tenant                                   | Không body                                                                                    | 200 CertificateView[] của chính actor; subscriber được che                                                                        | Done                                        |
+| POST `S`                                    | Owner, Tenant                                   | `{"providerUserId":"{own-mysign-subscriber}","serialNumber":"{serial-or-null}"}`              | 201 CertificateView sau khi hỏi MySign; 503 nếu chưa cấu hình, không tự tạo chứng thư                                             | Partial — cấu hình MySign thật              |
+| POST `S/{certificateId}/lock`               | Chủ chứng thư Owner/Tenant                      | `{"locked":true}`                                                                             | 204; chứng thư người khác 404                                                                                                     | Done                                        |
 
 Ví dụ D — tạo Draft, header `Idempotency-Key: {new-guid}`:
 
@@ -273,18 +273,18 @@ Signed sau `IPdfSigner.Complete` xác minh PDF. Sandbox vẫn độc lập và b
 
 ## 5. Dependency còn thiếu và giới hạn cụ thể
 
-| Dependency / quyết định | Hành vi hiện tại | Tác động |
-| --- | --- | --- |
-| BF-03A Holding Contract/Payment chưa có | `IContractHoldingLedger` mặc định 503. Adapter tương lai phải xác minh Holding Active/đủ ký/chưa hết hạn/đúng Room và Tenant, phân bổ/convert cùng DbContext transaction. Kết quả lưu có unique keys | Holding → Main chưa chạy với dữ liệu thật; positive allocation được test qua adapter test |
-| Pricing/rates/fees module chưa có | Draft ghi rent/deposit/terms và cần Owner ký; không giả định đã tra được effective rate/fee policy | Chưa xác minh tích hợp giá/phí có hiệu lực |
-| Tenant account onboarding chưa có trong Contract slice | Chỉ link tài khoản Tenant đang hoạt động đã tồn tại | Không tự tạo credential hoặc gửi mật khẩu cho Tenant |
-| Invoice/Payment/refund/deposit-settlement module chưa có | `IContractSettlementLedger` mặc định trả chưa sẵn sàng; Owner decision giữ PendingSettlement | Không tạo final invoice giả, không tính/khấu trừ/hoàn tiền giả, không đóng hợp đồng thật khi chưa có ledger |
-| OQ-01/02/05 còn mở | Lưu từng lần review append-only và căn cứ; không hardcode công thức, ưu tiên phân bổ, ngưỡng hoặc hạn hoàn tiền | Team cần chốt cách xử lý nợ/hư hỏng/cọc, loại charge/adjustment, số tiền và bằng chứng chuyển khoản/refund |
-| Tích hợp ledger tương lai | Phải đối chiếu các reading đúng Contract, toàn bộ phiên bản tenancy/deposit, hóa đơn/nghĩa vụ và transfer đã verified; đọc/khóa nhất quán cùng transaction, trả reference/version ≤200 ký tự | Kết quả thay đổi sau approval chặn completion; Owner có thể review lại, lịch sử cũ được giữ |
-| Asset / move-in handover chưa có | Inspection giữ notes/ảnh và confirmed final readings; không sửa Resident identity hoặc baseline reading | Chưa so sánh tự động tài sản với biên bản ban đầu hoặc cập nhật Asset entity |
-| JOB-02 và persistent in-app notification chưa có handler nghiệp vụ tương ứng | Có API Owner khởi tạo expiry move-out; không đánh dấu đã gửi notification | Chưa có daily expiry reminder hoặc notification E2E |
-| Addendum không kéo dài kỳ thuê | Hiện hỗ trợ renewal phiên bản mới; chưa có policy cho các loại addendum khác | Không tự cho sửa PDF/các điều khoản đã ký |
-| UI | Chỉ backend và integration tests | Chưa có màn hình Contract lifecycle; client cần hỗ trợ mục đích meter Final mới |
+| Dependency / quyết định                                                      | Hành vi hiện tại                                                                                                                                                                                     | Tác động                                                                                                    |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| BF-03A Holding Contract/Payment chưa có                                      | `IContractHoldingLedger` mặc định 503. Adapter tương lai phải xác minh Holding Active/đủ ký/chưa hết hạn/đúng Room và Tenant, phân bổ/convert cùng DbContext transaction. Kết quả lưu có unique keys | Holding → Main chưa chạy với dữ liệu thật; positive allocation được test qua adapter test                   |
+| Pricing/rates/fees module chưa có                                            | Draft ghi rent/deposit/terms và cần Owner ký; không giả định đã tra được effective rate/fee policy                                                                                                   | Chưa xác minh tích hợp giá/phí có hiệu lực                                                                  |
+| Tenant account onboarding chưa có trong Contract slice                       | Chỉ link tài khoản Tenant đang hoạt động đã tồn tại                                                                                                                                                  | Không tự tạo credential hoặc gửi mật khẩu cho Tenant                                                        |
+| Invoice/Payment/refund/deposit-settlement module chưa có                     | `IContractSettlementLedger` mặc định trả chưa sẵn sàng; Owner decision giữ PendingSettlement                                                                                                         | Không tạo final invoice giả, không tính/khấu trừ/hoàn tiền giả, không đóng hợp đồng thật khi chưa có ledger |
+| OQ-01/02/05 còn mở                                                           | Lưu từng lần review append-only và căn cứ; không hardcode công thức, ưu tiên phân bổ, ngưỡng hoặc hạn hoàn tiền                                                                                      | Team cần chốt cách xử lý nợ/hư hỏng/cọc, loại charge/adjustment, số tiền và bằng chứng chuyển khoản/refund  |
+| Tích hợp ledger tương lai                                                    | Phải đối chiếu các reading đúng Contract, toàn bộ phiên bản tenancy/deposit, hóa đơn/nghĩa vụ và transfer đã verified; đọc/khóa nhất quán cùng transaction, trả reference/version ≤200 ký tự         | Kết quả thay đổi sau approval chặn completion; Owner có thể review lại, lịch sử cũ được giữ                 |
+| Asset / move-in handover chưa có                                             | Inspection giữ notes/ảnh và confirmed final readings; không sửa Resident identity hoặc baseline reading                                                                                              | Chưa so sánh tự động tài sản với biên bản ban đầu hoặc cập nhật Asset entity                                |
+| JOB-02 và persistent in-app notification chưa có handler nghiệp vụ tương ứng | Có API Owner khởi tạo expiry move-out; không đánh dấu đã gửi notification                                                                                                                            | Chưa có daily expiry reminder hoặc notification E2E                                                         |
+| Addendum không kéo dài kỳ thuê                                               | Hiện hỗ trợ renewal phiên bản mới; chưa có policy cho các loại addendum khác                                                                                                                         | Không tự cho sửa PDF/các điều khoản đã ký                                                                   |
+| UI                                                                           | Chỉ backend và integration tests                                                                                                                                                                     | Chưa có màn hình Contract lifecycle; client cần hỗ trợ mục đích meter Final mới                             |
 
 Contract cũ giữ nguyên end date/terms; renewal bắt đầu ngày kế tiếp và chỉ kích hoạt trong kỳ
 hiệu lực. Main Contract chưa hết nghĩa vụ tiếp tục giữ Room Occupied ngay cả khi đã qua expiry.
@@ -318,16 +318,16 @@ nghiệp vụ; không downgrade DB đã nhận Contract/evidence nếu chưa có
 Kết quả cuối đã được xác nhận sau thay đổi cuối. Test dùng dữ liệu tổng hợp,
 PostgreSQL 16 và MinIO qua Testcontainers; không reset DB người dùng.
 
-| Lệnh | Kết quả |
-| --- | --- |
-| `dotnet build src/backend/BHome.sln` | PASS, 0 warnings / 0 errors |
-| `dotnet test src/backend/BHome.sln --no-build` | PASS: Domain UT 38, Application UT 88, IT 183; tổng 309, fail 0, skip 0 |
-| `dotnet build src/digital-signing/BHome.DigitalSigning.sln` | PASS, 0 warnings / 0 errors |
-| `dotnet test src/digital-signing/BHome.DigitalSigning.sln --no-build` | PASS: 41, fail 0, skip 0 |
-| `dotnet format whitespace src/backend/BHome.sln --no-restore --include <các file Contract mới>` | PASS |
-| `dotnet ef migrations has-pending-model-changes --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Infrastructure` | PASS; không có model change thiếu migration |
-| `git diff --check` | PASS |
-| `dotnet list src/backend/BHome.Api/BHome.Api.csproj package --include-transitive` | Không có iText/BouncyCastle |
+| Lệnh                                                                                                                                           | Kết quả                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `dotnet build src/backend/BHome.sln`                                                                                                           | PASS, 0 warnings / 0 errors                                             |
+| `dotnet test src/backend/BHome.sln --no-build`                                                                                                 | PASS: Domain UT 38, Application UT 88, IT 183; tổng 309, fail 0, skip 0 |
+| `dotnet build src/digital-signing/BHome.DigitalSigning.sln`                                                                                    | PASS, 0 warnings / 0 errors                                             |
+| `dotnet test src/digital-signing/BHome.DigitalSigning.sln --no-build`                                                                          | PASS: 41, fail 0, skip 0                                                |
+| `dotnet format whitespace src/backend/BHome.sln --no-restore --include <các file Contract mới>`                                                | PASS                                                                    |
+| `dotnet ef migrations has-pending-model-changes --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Infrastructure` | PASS; không có model change thiếu migration                             |
+| `git diff --check`                                                                                                                             | PASS                                                                    |
+| `dotnet list src/backend/BHome.Api/BHome.Api.csproj package --include-transitive`                                                              | Không có iText/BouncyCastle                                             |
 
 Đã có 21 unit case Contract và 15 integration case Contract, bao phủ T01–T16 với giới hạn:
 ký/PDF và financial/holding boundaries thành công dùng adapter test; persistence, HTTP,

@@ -1,94 +1,973 @@
 import { useState } from 'react';
-import { Alert, Box, Button, Chip, Divider, Drawer, Stack, Step, StepLabel, Stepper, Tab, Tabs, TextField, Typography } from '@mui/material';
-import { ArrowRight, DoorOpen, Grid2X2, List, Plus, Users, X } from 'lucide-react';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Divider,
+  Drawer,
+  Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { ArrowRight, Grid2X2, List, Plus, Users, X } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { usePortal } from '../../app/PortalProvider';
 import { ConfirmDialog, KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import type { DemoDatabase, PortalRecord } from '../../types/portal';
-import { DataList, EditDrawer, ListView, Panel, PropertyBoundary, RoomBadge, Select, currency, dateLabel, matches } from './PropertyUI';
-import { generateRoomCodes, investmentSummary, roomStatus, roomStatuses, roomSummary } from './model';
+import {
+  DataList,
+  EditDrawer,
+  ListView,
+  Panel,
+  PropertyBoundary,
+  RoomBadge,
+  Select,
+} from './PropertyUI';
+import { currency, dateLabel, matches } from './propertyUtils';
+import {
+  generateRoomCodes,
+  investmentSummary,
+  roomStatus,
+  roomStatuses,
+  roomSummary,
+} from './model';
 import { usePropertyMutation } from './usePropertyMutation';
 
-export function Rooms() { return <PropertyBoundary>{db => <RoomsContent db={db} />}</PropertyBoundary>; }
-function RoomsContent({ db }: { db: DemoDatabase }) {
-  const portal = usePortal(), [params, setParams] = useSearchParams();
-  const location = params.get('location') || (portal.locationId === 'all' ? '' : portal.locationId);
-  const [floor, setFloor] = useState(''), [type, setType] = useState(''), [status, setStatus] = useState(''), [incident, setIncident] = useState(''), [occupancy, setOccupancy] = useState(''), [expiry, setExpiry] = useState(''), [debt, setDebt] = useState(''), [view, setView] = useState('grid'), [selected, setSelected] = useState('');
-  const scoped = db.records.rooms.filter(r => !location || r.locationId === location);
-  const rows = scoped.filter(r => {
-    const s = roomSummary(db, r);
-    return (!floor || r.attributes.floor === floor) && (!type || r.category === type) && (!status || roomStatus(r) === status) && matches(r.code + r.name, portal.search) &&
-      (!incident || (incident === 'emergency' ? s.incidents.some(i => i.category === 'Khẩn cấp') : incident === 'normal' ? s.incidents.some(i => i.category !== 'Khẩn cấp') : !s.incidents.length)) &&
-      (!occupancy || (occupancy === 'empty' ? !s.occupants.length : occupancy === 'full' ? s.occupants.length >= s.capacity : s.occupants.length > 0 && s.occupants.length < s.capacity)) &&
-      (!expiry || (s.expiryDays !== null && s.expiryDays >= 0 && s.expiryDays <= Number(expiry))) && (!debt || (debt === 'yes' ? s.debt > 0 : s.debt === 0));
-  });
-  const room = db.records.rooms.find(r => r.id === selected);
-  return <><PageHeader title="Quản lý phòng" subtitle="Theo dõi khai thác theo tầng. Cảnh báo vận hành độc lập với trạng thái phòng." actions={<><Button component={Link} to="/asset-allocation" variant="outlined">Cấp phát tài sản</Button><Button component={Link} to={`/rooms/new${location ? `?location=${location}` : ''}`} variant="contained" startIcon={<Plus size={16} />}>Tạo phòng</Button></>} />
-    <KPIGrid items={[{ label: 'Tổng số phòng', value: scoped.length }, ...Object.entries(roomStatuses).map(([key, s]) => ({ label: s.label, value: scoped.filter(r => roomStatus(r) === key).length })), { label: 'Cần chú ý', value: scoped.filter(r => roomSummary(db, r).alerts.length || roomSummary(db, r).requirements.some(q => q.missing)).length, danger: true }]} />
-    <Panel title="Bộ lọc phòng" actions={<Button onClick={() => { setParams({}); portal.setLocationId('all'); portal.setSearch(''); setFloor(''); setType(''); setStatus(''); setIncident(''); setOccupancy(''); setExpiry(''); setDebt(''); }}>Xóa bộ lọc</Button>}><Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4,1fr)' }, gap: 2 }}>
-      <Select label="Cơ sở" value={location} all="Tất cả cơ sở" options={db.records.locations} onChange={v => { portal.setLocationId(v || 'all'); setParams(v ? { location: v } : {}); setFloor(''); setType(''); }} />
-      <Select label="Tầng" value={floor} all="Tất cả tầng" options={[...new Set(scoped.map(r => r.attributes.floor))].sort((a, b) => Number(a) - Number(b)).map(id => ({ id, name: `Tầng ${id}` }))} onChange={setFloor} />
-      <Select label="Loại phòng" value={type} all="Tất cả loại phòng" options={db.records['room-types'].filter(t => !location || t.locationId === location)} onChange={setType} />
-      <Select label="Trạng thái phòng" value={status} all="Tất cả trạng thái" options={Object.entries(roomStatuses).map(([id, s]) => ({ id, name: s.label }))} onChange={setStatus} />
-      <Select label="Sự cố" value={incident} all="Tất cả" options={[{ id: 'emergency', name: 'Khẩn cấp' }, { id: 'normal', name: 'Thông thường đang mở' }, { id: 'none', name: 'Không có sự cố mở' }]} onChange={setIncident} />
-      <Select label="Số người ở" value={occupancy} all="Tất cả" options={[{ id: 'empty', name: 'Chưa có người ở' }, { id: 'partial', name: 'Chưa đủ sức chứa' }, { id: 'full', name: 'Đủ sức chứa' }]} onChange={setOccupancy} />
-      <Select label="Hết hạn hợp đồng" value={expiry} all="Tất cả" options={[{ id: '7', name: 'Trong 7 ngày' }, { id: '30', name: 'Trong 30 ngày' }]} onChange={setExpiry} />
-      <Select label="Công nợ" value={debt} all="Tất cả" options={[{ id: 'yes', name: 'Có dư nợ' }, { id: 'no', name: 'Không có dư nợ' }]} onChange={setDebt} />
-    </Box><Typography variant="caption" color="text.secondary"   sx={{ display: "block", mt: 2 }}>Hạn hợp đồng đối chiếu ngày demo 18/10/2024. Các khoảng 7/30 ngày là bộ lọc xem trước.</Typography></Panel>
-    <Panel title={`Danh sách phòng (${rows.length})`} actions={<Stack direction="row"><Button aria-pressed={view === 'grid'} onClick={() => setView('grid')} startIcon={<Grid2X2 size={16} />}>Theo tầng</Button><Button aria-pressed={view === 'table'} onClick={() => setView('table')} startIcon={<List size={16} />}>Dạng bảng</Button></Stack>}>
-      {view === 'table' ? <DataList rows={rows} noun="phòng" searchText={r => r.code + r.name} columns={[
-        { label: 'Phòng', value: r => <Button onClick={() => setSelected(r.id)}>{r.code}</Button> }, { label: 'Cơ sở / Tầng', value: r => `${db.records.locations.find(l => l.id === r.locationId)?.name} • ${r.attributes.floor}` }, { label: 'Loại phòng', value: r => db.records['room-types'].find(t => t.id === r.category)?.name }, { label: 'Trạng thái', value: r => <RoomBadge status={roomStatus(r)} /> }, { label: 'Giá cấu hình/tháng', value: r => currency(r.amount) }, { label: 'Người ở', value: r => `${roomSummary(db, r).occupants.length}/${roomSummary(db, r).capacity}` }, { label: 'Cảnh báo', value: r => <Alerts db={db} room={r} /> },
-      ]} /> : <ListView rows={rows} noun="phòng" searchText={r => r.code + r.name}>{page => <>{db.records.locations.filter(l => page.some(r => r.locationId === l.id)).map(l => <Box key={l.id}  sx={{ mb: 3 }}><Typography component="h3"   sx={{ fontWeight: 650, mb: 2 }}>{l.name}</Typography>{[...new Set(page.filter(r => r.locationId === l.id).map(r => r.attributes.floor))].sort((a, b) => Number(a) - Number(b)).map(f => <Box key={f}  sx={{ mb: 3 }}><Typography  color="text.secondary"  sx={{ fontSize: 12, mb: 1 }}>TẦNG {f}</Typography><Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', xl: 'repeat(3,1fr)' }, gap: 2 }}>{page.filter(r => r.locationId === l.id && r.attributes.floor === f).map(r => {
-        const s = roomSummary(db, r), badge = roomStatuses[roomStatus(r)];
-        return <Box key={r.id} component="button" onClick={() => setSelected(r.id)} aria-label={`Xem phòng ${r.code} tại ${l.name}`} sx={{ font: 'inherit', textAlign: 'left', cursor: 'pointer', bgcolor: 'white', border: '1px solid #e2e8f0', borderTop: `4px solid ${badge.color}`, borderRadius: 2, p: 2, '&:hover': { boxShadow: '0 6px 18px #0f172a12', borderColor: badge.color }, '&:focus-visible': { outline: '3px solid #93c5fd' } }}><Stack direction="row"   sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography component="span"   sx={{ fontWeight: 750, fontSize: 20 }}>{r.code}</Typography><RoomBadge status={roomStatus(r)} /></Stack><Typography color="text.secondary"   sx={{ fontSize: 12, mt: 1 }}>{db.records['room-types'].find(t => t.id === r.category)?.name}</Typography><Stack direction="row"   sx={{ justifyContent: "space-between", my: 2 }}><Typography component="span"  sx={{ fontWeight: 650 }}>{currency(r.amount)}<Typography component="span"  color="text.secondary" sx={{ fontSize: 11 }}> / tháng</Typography></Typography><Stack component="span" direction="row"  sx={{ gap: 0.5 }}><Users size={15} />{s.occupants.length}/{s.capacity}</Stack></Stack><Alerts db={db} room={r} />{s.requirements.some(q => q.missing) && <Typography  color="text.secondary"  sx={{ fontSize: 11, mt: 1 }}>Thiếu trang bị tiêu chuẩn</Typography>}</Box>;
-      })}</Box></Box>)}</Box>)}</>}</ListView>}
-    </Panel>
-    <Drawer anchor="right" open={!!room} onClose={() => setSelected('')} sx={{ '& .MuiDrawer-paper': { width: { xs: '100%', sm: 460 }, p: 3 } }}>{room && <><Stack direction="row"  sx={{ justifyContent: "space-between" }}><Typography component="h2"   sx={{ fontSize: 24, fontWeight: 700 }}>Phòng {room.code}</Typography><Button aria-label="Đóng chi tiết phòng" onClick={() => setSelected('')}><X size={18} /></Button></Stack><RoomOverview db={db} room={room} /><Button component={Link} to={`/rooms/${room.id}`} variant="contained" endIcon={<ArrowRight size={16} />}>Xem chi tiết đầy đủ</Button></>}</Drawer>
-  </>;
+export function Rooms() {
+  return <PropertyBoundary>{(db) => <RoomsContent db={db} />}</PropertyBoundary>;
 }
-function Alerts({ db, room }: { db: DemoDatabase; room: PortalRecord }) { const alerts = roomSummary(db, room).alerts; return <Stack direction="row"   sx={{ gap: 0.75, flexWrap: "wrap" }}>{alerts.map(a => <Typography key={a.label} component="span" sx={{ color: a.color, fontSize: 11, fontWeight: 550 }}>● {a.label}</Typography>)}{!alerts.length && <Typography component="span"  color="text.secondary" sx={{ fontSize: 11 }}>Không có cảnh báo vận hành</Typography>}</Stack>; }
+function RoomsContent({ db }: { db: DemoDatabase }) {
+  const portal = usePortal(),
+    [params, setParams] = useSearchParams();
+  const location = params.get('location') || (portal.locationId === 'all' ? '' : portal.locationId);
+  const [floor, setFloor] = useState(''),
+    [type, setType] = useState(''),
+    [status, setStatus] = useState(''),
+    [incident, setIncident] = useState(''),
+    [occupancy, setOccupancy] = useState(''),
+    [expiry, setExpiry] = useState(''),
+    [debt, setDebt] = useState(''),
+    [view, setView] = useState('grid'),
+    [selected, setSelected] = useState('');
+  const scoped = db.records.rooms.filter((r) => !location || r.locationId === location);
+  const rows = scoped.filter((r) => {
+    const s = roomSummary(db, r);
+    return (
+      (!floor || r.attributes.floor === floor) &&
+      (!type || r.category === type) &&
+      (!status || roomStatus(r) === status) &&
+      matches(r.code + r.name, portal.search) &&
+      (!incident ||
+        (incident === 'emergency'
+          ? s.incidents.some((i) => i.category === 'Khẩn cấp')
+          : incident === 'normal'
+            ? s.incidents.some((i) => i.category !== 'Khẩn cấp')
+            : !s.incidents.length)) &&
+      (!occupancy ||
+        (occupancy === 'empty'
+          ? !s.occupants.length
+          : occupancy === 'full'
+            ? s.occupants.length >= s.capacity
+            : s.occupants.length > 0 && s.occupants.length < s.capacity)) &&
+      (!expiry || (s.expiryDays !== null && s.expiryDays >= 0 && s.expiryDays <= Number(expiry))) &&
+      (!debt || (debt === 'yes' ? s.debt > 0 : s.debt === 0))
+    );
+  });
+  const room = db.records.rooms.find((r) => r.id === selected);
+  return (
+    <>
+      <PageHeader
+        title="Quản lý phòng"
+        subtitle="Theo dõi khai thác theo tầng. Cảnh báo vận hành độc lập với trạng thái phòng."
+        actions={
+          <>
+            <Button component={Link} to="/asset-allocation" variant="outlined">
+              Cấp phát tài sản
+            </Button>
+            <Button
+              component={Link}
+              to={`/rooms/new${location ? `?location=${location}` : ''}`}
+              variant="contained"
+              startIcon={<Plus size={16} />}
+            >
+              Tạo phòng
+            </Button>
+          </>
+        }
+      />
+      <KPIGrid
+        items={[
+          { label: 'Tổng số phòng', value: scoped.length },
+          ...Object.entries(roomStatuses).map(([key, s]) => ({
+            label: s.label,
+            value: scoped.filter((r) => roomStatus(r) === key).length,
+          })),
+          {
+            label: 'Cần chú ý',
+            value: scoped.filter(
+              (r) =>
+                roomSummary(db, r).alerts.length ||
+                roomSummary(db, r).requirements.some((q) => q.missing),
+            ).length,
+            danger: true,
+          },
+        ]}
+      />
+      <Panel
+        title="Bộ lọc phòng"
+        actions={
+          <Button
+            onClick={() => {
+              setParams({});
+              portal.setLocationId('all');
+              portal.setSearch('');
+              setFloor('');
+              setType('');
+              setStatus('');
+              setIncident('');
+              setOccupancy('');
+              setExpiry('');
+              setDebt('');
+            }}
+          >
+            Xóa bộ lọc
+          </Button>
+        }
+      >
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4,1fr)' },
+            gap: 2,
+          }}
+        >
+          <Select
+            label="Cơ sở"
+            value={location}
+            all="Tất cả cơ sở"
+            options={db.records.locations}
+            onChange={(v) => {
+              portal.setLocationId(v || 'all');
+              setParams(v ? { location: v } : {});
+              setFloor('');
+              setType('');
+            }}
+          />
+          <Select
+            label="Tầng"
+            value={floor}
+            all="Tất cả tầng"
+            options={[...new Set(scoped.map((r) => r.attributes.floor))]
+              .sort((a, b) => Number(a) - Number(b))
+              .map((id) => ({ id, name: `Tầng ${id}` }))}
+            onChange={setFloor}
+          />
+          <Select
+            label="Loại phòng"
+            value={type}
+            all="Tất cả loại phòng"
+            options={db.records['room-types'].filter((t) => !location || t.locationId === location)}
+            onChange={setType}
+          />
+          <Select
+            label="Trạng thái phòng"
+            value={status}
+            all="Tất cả trạng thái"
+            options={Object.entries(roomStatuses).map(([id, s]) => ({ id, name: s.label }))}
+            onChange={setStatus}
+          />
+          <Select
+            label="Sự cố"
+            value={incident}
+            all="Tất cả"
+            options={[
+              { id: 'emergency', name: 'Khẩn cấp' },
+              { id: 'normal', name: 'Thông thường đang mở' },
+              { id: 'none', name: 'Không có sự cố mở' },
+            ]}
+            onChange={setIncident}
+          />
+          <Select
+            label="Số người ở"
+            value={occupancy}
+            all="Tất cả"
+            options={[
+              { id: 'empty', name: 'Chưa có người ở' },
+              { id: 'partial', name: 'Chưa đủ sức chứa' },
+              { id: 'full', name: 'Đủ sức chứa' },
+            ]}
+            onChange={setOccupancy}
+          />
+          <Select
+            label="Hết hạn hợp đồng"
+            value={expiry}
+            all="Tất cả"
+            options={[
+              { id: '7', name: 'Trong 7 ngày' },
+              { id: '30', name: 'Trong 30 ngày' },
+            ]}
+            onChange={setExpiry}
+          />
+          <Select
+            label="Công nợ"
+            value={debt}
+            all="Tất cả"
+            options={[
+              { id: 'yes', name: 'Có dư nợ' },
+              { id: 'no', name: 'Không có dư nợ' },
+            ]}
+            onChange={setDebt}
+          />
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+          Hạn hợp đồng đối chiếu ngày demo 18/10/2024. Các khoảng 7/30 ngày là bộ lọc xem trước.
+        </Typography>
+      </Panel>
+      <Panel
+        title={`Danh sách phòng (${rows.length})`}
+        actions={
+          <Stack direction="row">
+            <Button
+              aria-pressed={view === 'grid'}
+              onClick={() => setView('grid')}
+              startIcon={<Grid2X2 size={16} />}
+            >
+              Theo tầng
+            </Button>
+            <Button
+              aria-pressed={view === 'table'}
+              onClick={() => setView('table')}
+              startIcon={<List size={16} />}
+            >
+              Dạng bảng
+            </Button>
+          </Stack>
+        }
+      >
+        {view === 'table' ? (
+          <DataList
+            rows={rows}
+            noun="phòng"
+            searchText={(r) => r.code + r.name}
+            columns={[
+              {
+                label: 'Phòng',
+                value: (r) => <Button onClick={() => setSelected(r.id)}>{r.code}</Button>,
+              },
+              {
+                label: 'Cơ sở / Tầng',
+                value: (r) =>
+                  `${db.records.locations.find((l) => l.id === r.locationId)?.name} • ${r.attributes.floor}`,
+              },
+              {
+                label: 'Loại phòng',
+                value: (r) => db.records['room-types'].find((t) => t.id === r.category)?.name,
+              },
+              { label: 'Trạng thái', value: (r) => <RoomBadge status={roomStatus(r)} /> },
+              { label: 'Giá cấu hình/tháng', value: (r) => currency(r.amount) },
+              {
+                label: 'Người ở',
+                value: (r) =>
+                  `${roomSummary(db, r).occupants.length}/${roomSummary(db, r).capacity}`,
+              },
+              { label: 'Cảnh báo', value: (r) => <Alerts db={db} room={r} /> },
+            ]}
+          />
+        ) : (
+          <ListView rows={rows} noun="phòng" searchText={(r) => r.code + r.name}>
+            {(page) => (
+              <>
+                {db.records.locations
+                  .filter((l) => page.some((r) => r.locationId === l.id))
+                  .map((l) => (
+                    <Box key={l.id} sx={{ mb: 3 }}>
+                      <Typography component="h3" sx={{ fontWeight: 650, mb: 2 }}>
+                        {l.name}
+                      </Typography>
+                      {[
+                        ...new Set(
+                          page.filter((r) => r.locationId === l.id).map((r) => r.attributes.floor),
+                        ),
+                      ]
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map((f) => (
+                          <Box key={f} sx={{ mb: 3 }}>
+                            <Typography color="text.secondary" sx={{ fontSize: 12, mb: 1 }}>
+                              TẦNG {f}
+                            </Typography>
+                            <Box
+                              sx={{
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                  xs: '1fr',
+                                  sm: 'repeat(2,1fr)',
+                                  xl: 'repeat(3,1fr)',
+                                },
+                                gap: 2,
+                              }}
+                            >
+                              {page
+                                .filter((r) => r.locationId === l.id && r.attributes.floor === f)
+                                .map((r) => {
+                                  const s = roomSummary(db, r),
+                                    badge = roomStatuses[roomStatus(r)];
+                                  return (
+                                    <Box
+                                      key={r.id}
+                                      component="button"
+                                      onClick={() => setSelected(r.id)}
+                                      aria-label={`Xem phòng ${r.code} tại ${l.name}`}
+                                      sx={{
+                                        font: 'inherit',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        bgcolor: 'white',
+                                        border: '1px solid #e2e8f0',
+                                        borderTop: `4px solid ${badge.color}`,
+                                        borderRadius: 2,
+                                        p: 2,
+                                        '&:hover': {
+                                          boxShadow: '0 6px 18px #0f172a12',
+                                          borderColor: badge.color,
+                                        },
+                                        '&:focus-visible': { outline: '3px solid #93c5fd' },
+                                      }}
+                                    >
+                                      <Stack
+                                        direction="row"
+                                        sx={{
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center',
+                                        }}
+                                      >
+                                        <Typography
+                                          component="span"
+                                          sx={{ fontWeight: 750, fontSize: 20 }}
+                                        >
+                                          {r.code}
+                                        </Typography>
+                                        <RoomBadge status={roomStatus(r)} />
+                                      </Stack>
+                                      <Typography
+                                        color="text.secondary"
+                                        sx={{ fontSize: 12, mt: 1 }}
+                                      >
+                                        {
+                                          db.records['room-types'].find((t) => t.id === r.category)
+                                            ?.name
+                                        }
+                                      </Typography>
+                                      <Stack
+                                        direction="row"
+                                        sx={{ justifyContent: 'space-between', my: 2 }}
+                                      >
+                                        <Typography component="span" sx={{ fontWeight: 650 }}>
+                                          {currency(r.amount)}
+                                          <Typography
+                                            component="span"
+                                            color="text.secondary"
+                                            sx={{ fontSize: 11 }}
+                                          >
+                                            {' '}
+                                            / tháng
+                                          </Typography>
+                                        </Typography>
+                                        <Stack component="span" direction="row" sx={{ gap: 0.5 }}>
+                                          <Users size={15} />
+                                          {s.occupants.length}/{s.capacity}
+                                        </Stack>
+                                      </Stack>
+                                      <Alerts db={db} room={r} />
+                                      {s.requirements.some((q) => q.missing) && (
+                                        <Typography
+                                          color="text.secondary"
+                                          sx={{ fontSize: 11, mt: 1 }}
+                                        >
+                                          Thiếu trang bị tiêu chuẩn
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  );
+                                })}
+                            </Box>
+                          </Box>
+                        ))}
+                    </Box>
+                  ))}
+              </>
+            )}
+          </ListView>
+        )}
+      </Panel>
+      <Drawer
+        anchor="right"
+        open={!!room}
+        onClose={() => setSelected('')}
+        sx={{ '& .MuiDrawer-paper': { width: { xs: '100%', sm: 460 }, p: 3 } }}
+      >
+        {room && (
+          <>
+            <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+              <Typography component="h2" sx={{ fontSize: 24, fontWeight: 700 }}>
+                Phòng {room.code}
+              </Typography>
+              <Button aria-label="Đóng chi tiết phòng" onClick={() => setSelected('')}>
+                <X size={18} />
+              </Button>
+            </Stack>
+            <RoomOverview db={db} room={room} />
+            <Button
+              component={Link}
+              to={`/rooms/${room.id}`}
+              variant="contained"
+              endIcon={<ArrowRight size={16} />}
+            >
+              Xem chi tiết đầy đủ
+            </Button>
+          </>
+        )}
+      </Drawer>
+    </>
+  );
+}
+function Alerts({ db, room }: { db: DemoDatabase; room: PortalRecord }) {
+  const alerts = roomSummary(db, room).alerts;
+  return (
+    <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+      {alerts.map((a) => (
+        <Typography
+          key={a.label}
+          component="span"
+          sx={{ color: a.color, fontSize: 11, fontWeight: 550 }}
+        >
+          ● {a.label}
+        </Typography>
+      ))}
+      {!alerts.length && (
+        <Typography component="span" color="text.secondary" sx={{ fontSize: 11 }}>
+          Không có cảnh báo vận hành
+        </Typography>
+      )}
+    </Stack>
+  );
+}
 function RoomOverview({ db, room }: { db: DemoDatabase; room: PortalRecord }) {
   const s = roomSummary(db, room);
-  return <Stack   sx={{ gap: 2, my: 2 }}><Typography color="text.secondary">{db.records.locations.find(l => l.id === room.locationId)?.name} • Tầng {room.attributes.floor}</Typography><Stack direction="row"   sx={{ gap: 1, alignItems: "center" }}><RoomBadge status={roomStatus(room)} /><Typography  sx={{ fontSize: 13 }}>{db.records['room-types'].find(t => t.id === room.category)?.name}</Typography></Stack><Typography   sx={{ fontSize: 24, fontWeight: 700 }}>{currency(room.amount)}<Typography component="span"  sx={{ fontSize: 12 }}> / tháng (giá cấu hình)</Typography></Typography><Typography>{room.attributes.area} m² • {s.occupants.length}/{s.capacity} người ở</Typography><Alerts db={db} room={room} /><Divider /><Typography>Hợp đồng: {s.contract ? `${s.contract.code} • ${dateLabel(s.contract.endDate)}` : 'Chưa có hợp đồng đang hiệu lực'}</Typography>{s.contract && <Typography>Tiền thuê theo hợp đồng: {currency(s.contract.amount)}/tháng</Typography>}<Typography>Đại diện: {db.records.tenants.find(t => t.id === s.contract?.tenantId)?.name || '—'}</Typography><Typography>{s.assets.reduce((sum, a) => sum + a.quantity, 0)} tài sản được cấp • {s.incidents.length} sự cố đang mở</Typography></Stack>;
+  return (
+    <Stack sx={{ gap: 2, my: 2 }}>
+      <Typography color="text.secondary">
+        {db.records.locations.find((l) => l.id === room.locationId)?.name} • Tầng{' '}
+        {room.attributes.floor}
+      </Typography>
+      <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}>
+        <RoomBadge status={roomStatus(room)} />
+        <Typography sx={{ fontSize: 13 }}>
+          {db.records['room-types'].find((t) => t.id === room.category)?.name}
+        </Typography>
+      </Stack>
+      <Typography sx={{ fontSize: 24, fontWeight: 700 }}>
+        {currency(room.amount)}
+        <Typography component="span" sx={{ fontSize: 12 }}>
+          {' '}
+          / tháng (giá cấu hình)
+        </Typography>
+      </Typography>
+      <Typography>
+        {room.attributes.area} m² • {s.occupants.length}/{s.capacity} người ở
+      </Typography>
+      <Alerts db={db} room={room} />
+      <Divider />
+      <Typography>
+        Hợp đồng:{' '}
+        {s.contract
+          ? `${s.contract.code} • ${dateLabel(s.contract.endDate)}`
+          : 'Chưa có hợp đồng đang hiệu lực'}
+      </Typography>
+      {s.contract && (
+        <Typography>Tiền thuê theo hợp đồng: {currency(s.contract.amount)}/tháng</Typography>
+      )}
+      <Typography>
+        Đại diện: {db.records.tenants.find((t) => t.id === s.contract?.tenantId)?.name || '—'}
+      </Typography>
+      <Typography>
+        {s.assets.reduce((sum, a) => sum + a.quantity, 0)} tài sản được cấp • {s.incidents.length}{' '}
+        sự cố đang mở
+      </Typography>
+    </Stack>
+  );
 }
 
-export function CreateRooms() { return <PropertyBoundary>{db => <RoomWizard db={db} />}</PropertyBoundary>; }
+export function CreateRooms() {
+  return <PropertyBoundary>{(db) => <RoomWizard db={db} />}</PropertyBoundary>;
+}
 function RoomWizard({ db }: { db: DemoDatabase }) {
-  const [params] = useSearchParams(), portal = usePortal(), navigate = useNavigate(), save = usePropertyMutation();
-  const [location, setLocation] = useState(params.get('location') || (portal.locationId !== 'all' ? portal.locationId : db.records.locations[0]?.id || '')), [type, setType] = useState(''), [step, setStep] = useState(0), [floors, setFloors] = useState('1'), [start, setStart] = useState('1'), [quantity, setQuantity] = useState('1'), [prefix, setPrefix] = useState('P.'), [error, setError] = useState(''), [busy, setBusy] = useState(false), [confirm, setConfirm] = useState(false), [done, setDone] = useState(false);
-  let codes: { code: string; floor: number }[] = [], validation = '';
+  const [params] = useSearchParams(),
+    portal = usePortal(),
+    navigate = useNavigate(),
+    save = usePropertyMutation();
+  const [location, setLocation] = useState(
+      params.get('location') ||
+        (portal.locationId !== 'all' ? portal.locationId : db.records.locations[0]?.id || ''),
+    ),
+    [type, setType] = useState(''),
+    [step, setStep] = useState(0),
+    [floors, setFloors] = useState('1'),
+    [start, setStart] = useState('1'),
+    [quantity, setQuantity] = useState('1'),
+    [prefix, setPrefix] = useState('P.'),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [confirm, setConfirm] = useState(false),
+    [done, setDone] = useState(false);
+  let codes: { code: string; floor: number }[] = [],
+    validation = '';
   try {
-    codes = generateRoomCodes(floors.split(',').map(f => Number(f.trim())), Number(start), Number(quantity), prefix);
-    if (codes.some(c => c.floor > Number(db.records.locations.find(l => l.id === location)?.attributes.floors))) validation = 'Tầng vượt cấu hình cơ sở.';
-    if (new Set(codes.map(c => c.code.toLowerCase())).size !== codes.length || codes.some(c => db.records.rooms.some(r => r.locationId === location && r.code.toLowerCase() === c.code.toLowerCase()))) validation = 'Mã phòng bị trùng trong cơ sở. Đổi tầng hoặc số bắt đầu.';
-  } catch (e) { validation = (e as Error).message; }
-  const selectedType = db.records['room-types'].find(t => t.id === type);
-  if (done) return <Panel title="Đã tạo phòng trong dữ liệu demo"><Alert severity="success">Đã tạo {codes.length} phòng, chưa phát sinh tài sản hoặc chi phí mua sắm.</Alert><Stack direction="row"   sx={{ gap: 2, mt: 3 }}><Button variant="contained" component={Link} to={`/asset-allocation?location=${location}`}>Tiếp tục cấp phát tài sản</Button><Button component={Link} to={`/rooms?location=${location}`}>Xem danh sách phòng</Button></Stack></Panel>;
-  return <><PageHeader title="Tạo phòng" subtitle="Tạo một phòng hoặc nhiều phòng trên các tầng; xem trước trước khi lưu." /><Panel title="Thiết lập phòng mới"><Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>{['Cơ sở & Loại phòng', 'Số phòng & Tầng', 'Kiểm tra cấu hình'].map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}</Stepper>
-    {step === 0 && <Stack  sx={{ gap: 3 }}><Select label="Cơ sở" value={location} options={db.records.locations} onChange={v => { setLocation(v); setType(''); }} /><Select label="Loại phòng" value={type} all="Chọn loại phòng" options={db.records['room-types'].filter(t => t.locationId === location && t.status === 'Đang áp dụng')} onChange={setType} /><Button component={Link} to="/room-types">Quản lý mẫu loại phòng</Button></Stack>}
-    {step === 1 && <><Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}><TextField label="Các tầng (cách nhau dấu phẩy)" value={floors} onChange={e => setFloors(e.target.value)} helperText="Ví dụ: 1,2,3" /><TextField label="Tiền tố mã phòng" value={prefix} onChange={e => setPrefix(e.target.value)} /><TextField label="Số thứ tự bắt đầu" type="number" value={start} onChange={e => setStart(e.target.value)} /><TextField label="Số phòng mỗi tầng" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} /></Box><Typography    sx={{ fontWeight: 650, mt: 3, mb: 1 }}>Xem trước {codes.length} mã phòng</Typography><Stack direction="row"   sx={{gap: 1, flexWrap: "wrap",  maxHeight: 220, overflowY: 'auto' }}>{codes.map((c, i) => <Chip key={i} label={c.code} />)}</Stack>{validation && <Alert severity="error" sx={{ mt: 2 }}>{validation}</Alert>}</>}
-    {step === 2 && <Stack  sx={{ gap: 2 }}><Typography>{db.records.locations.find(l => l.id === location)?.name} • {selectedType?.name}</Typography><Typography>{codes.length} phòng • {selectedType?.attributes.area} m² • tối đa {selectedType?.attributes.maxOccupants} người/phòng</Typography><Typography>Giá cấu hình: {currency(selectedType?.amount || 0)}/tháng</Typography><Typography>Tiện ích: {selectedType?.attributes.amenities || '—'}</Typography>{(db.property!.requirements[type] || []).map(r => <Typography key={r.catalogId}>{db.property!.catalog.find(c => c.id === r.catalogId)?.name} × {r.quantity}/phòng</Typography>)}<Alert severity="info">Các phòng mới ở trạng thái Trống khai thác. Yêu cầu trang bị được kế thừa từ mẫu; tài sản mua thực tế được cấp phát ở bước tiếp theo.</Alert></Stack>}
-    {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}<Stack direction="row"   sx={{ gap: 1, mt: 4 }}><Button disabled={busy} onClick={() => step ? setStep(step - 1) : navigate('/rooms')}>Quay lại</Button><Button variant="contained" disabled={busy || !selectedType || (step > 0 && !!validation)} onClick={() => step < 2 ? setStep(step + 1) : setConfirm(true)}>{step < 2 ? 'Tiếp tục' : `Tạo ${codes.length} phòng`}</Button></Stack>
-    <ConfirmDialog title="Xác nhận tạo phòng?" open={confirm} busy={busy} onClose={() => setConfirm(false)} onConfirm={() => { setBusy(true); void save({ kind: 'createRooms', locationId: location, typeId: type, codes }).then(() => setDone(true)).catch(e => { setError(e.message); setConfirm(false); }).finally(() => setBusy(false)); }}>Tạo {codes.length} phòng với mã và cấu hình đã xem trước.</ConfirmDialog>
-  </Panel></>;
+    codes = generateRoomCodes(
+      floors.split(',').map((f) => Number(f.trim())),
+      Number(start),
+      Number(quantity),
+      prefix,
+    );
+    if (
+      codes.some(
+        (c) =>
+          c.floor > Number(db.records.locations.find((l) => l.id === location)?.attributes.floors),
+      )
+    )
+      validation = 'Tầng vượt cấu hình cơ sở.';
+    if (
+      new Set(codes.map((c) => c.code.toLowerCase())).size !== codes.length ||
+      codes.some((c) =>
+        db.records.rooms.some(
+          (r) => r.locationId === location && r.code.toLowerCase() === c.code.toLowerCase(),
+        ),
+      )
+    )
+      validation = 'Mã phòng bị trùng trong cơ sở. Đổi tầng hoặc số bắt đầu.';
+  } catch (e) {
+    validation = (e as Error).message;
+  }
+  const selectedType = db.records['room-types'].find((t) => t.id === type);
+  if (done)
+    return (
+      <Panel title="Đã tạo phòng trong dữ liệu demo">
+        <Alert severity="success">
+          Đã tạo {codes.length} phòng, chưa phát sinh tài sản hoặc chi phí mua sắm.
+        </Alert>
+        <Stack direction="row" sx={{ gap: 2, mt: 3 }}>
+          <Button
+            variant="contained"
+            component={Link}
+            to={`/asset-allocation?location=${location}`}
+          >
+            Tiếp tục cấp phát tài sản
+          </Button>
+          <Button component={Link} to={`/rooms?location=${location}`}>
+            Xem danh sách phòng
+          </Button>
+        </Stack>
+      </Panel>
+    );
+  return (
+    <>
+      <PageHeader
+        title="Tạo phòng"
+        subtitle="Tạo một phòng hoặc nhiều phòng trên các tầng; xem trước trước khi lưu."
+      />
+      <Panel title="Thiết lập phòng mới">
+        <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>
+          {['Cơ sở & Loại phòng', 'Số phòng & Tầng', 'Kiểm tra cấu hình'].map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+        {step === 0 && (
+          <Stack sx={{ gap: 3 }}>
+            <Select
+              label="Cơ sở"
+              value={location}
+              options={db.records.locations}
+              onChange={(v) => {
+                setLocation(v);
+                setType('');
+              }}
+            />
+            <Select
+              label="Loại phòng"
+              value={type}
+              all="Chọn loại phòng"
+              options={db.records['room-types'].filter(
+                (t) => t.locationId === location && t.status === 'Đang áp dụng',
+              )}
+              onChange={setType}
+            />
+            <Button component={Link} to="/room-types">
+              Quản lý mẫu loại phòng
+            </Button>
+          </Stack>
+        )}
+        {step === 1 && (
+          <>
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
+            >
+              <TextField
+                label="Các tầng (cách nhau dấu phẩy)"
+                value={floors}
+                onChange={(e) => setFloors(e.target.value)}
+                helperText="Ví dụ: 1,2,3"
+              />
+              <TextField
+                label="Tiền tố mã phòng"
+                value={prefix}
+                onChange={(e) => setPrefix(e.target.value)}
+              />
+              <TextField
+                label="Số thứ tự bắt đầu"
+                type="number"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+              />
+              <TextField
+                label="Số phòng mỗi tầng"
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+            </Box>
+            <Typography sx={{ fontWeight: 650, mt: 3, mb: 1 }}>
+              Xem trước {codes.length} mã phòng
+            </Typography>
+            <Stack
+              direction="row"
+              sx={{ gap: 1, flexWrap: 'wrap', maxHeight: 220, overflowY: 'auto' }}
+            >
+              {codes.map((c, i) => (
+                <Chip key={i} label={c.code} />
+              ))}
+            </Stack>
+            {validation && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {validation}
+              </Alert>
+            )}
+          </>
+        )}
+        {step === 2 && (
+          <Stack sx={{ gap: 2 }}>
+            <Typography>
+              {db.records.locations.find((l) => l.id === location)?.name} • {selectedType?.name}
+            </Typography>
+            <Typography>
+              {codes.length} phòng • {selectedType?.attributes.area} m² • tối đa{' '}
+              {selectedType?.attributes.maxOccupants} người/phòng
+            </Typography>
+            <Typography>Giá cấu hình: {currency(selectedType?.amount || 0)}/tháng</Typography>
+            <Typography>Tiện ích: {selectedType?.attributes.amenities || '—'}</Typography>
+            {(db.property!.requirements[type] || []).map((r) => (
+              <Typography key={r.catalogId}>
+                {db.property!.catalog.find((c) => c.id === r.catalogId)?.name} × {r.quantity}/phòng
+              </Typography>
+            ))}
+            <Alert severity="info">
+              Các phòng mới ở trạng thái Trống khai thác. Yêu cầu trang bị được kế thừa từ mẫu; tài
+              sản mua thực tế được cấp phát ở bước tiếp theo.
+            </Alert>
+          </Stack>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+        <Stack direction="row" sx={{ gap: 1, mt: 4 }}>
+          <Button disabled={busy} onClick={() => (step ? setStep(step - 1) : navigate('/rooms'))}>
+            Quay lại
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy || !selectedType || (step > 0 && !!validation)}
+            onClick={() => (step < 2 ? setStep(step + 1) : setConfirm(true))}
+          >
+            {step < 2 ? 'Tiếp tục' : `Tạo ${codes.length} phòng`}
+          </Button>
+        </Stack>
+        <ConfirmDialog
+          title="Xác nhận tạo phòng?"
+          open={confirm}
+          busy={busy}
+          onClose={() => setConfirm(false)}
+          onConfirm={() => {
+            setBusy(true);
+            void save({ kind: 'createRooms', locationId: location, typeId: type, codes })
+              .then(() => setDone(true))
+              .catch((e) => {
+                setError(e.message);
+                setConfirm(false);
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          Tạo {codes.length} phòng với mã và cấu hình đã xem trước.
+        </ConfirmDialog>
+      </Panel>
+    </>
+  );
 }
 
-const detailTabs = ['Tổng quan', 'Khách thuê & Hợp đồng', 'Tài sản', 'Sự cố & Bảo trì', 'Điện nước & Hóa đơn', 'Lịch sử sử dụng', 'Đầu tư & Chi phí'];
-export function RoomDetail() { return <PropertyBoundary>{db => <RoomDetailContent db={db} />}</PropertyBoundary>; }
+const detailTabs = [
+  'Tổng quan',
+  'Khách thuê & Hợp đồng',
+  'Tài sản',
+  'Sự cố & Bảo trì',
+  'Điện nước & Hóa đơn',
+  'Lịch sử sử dụng',
+  'Đầu tư & Chi phí',
+];
+export function RoomDetail() {
+  return <PropertyBoundary>{(db) => <RoomDetailContent db={db} />}</PropertyBoundary>;
+}
 function RoomDetailContent({ db }: { db: DemoDatabase }) {
-  const { id } = useParams(), [tab, setTab] = useState(0), [availability, setAvailability] = useState(false), save = usePropertyMutation();
-  const room = db.records.rooms.find(r => r.id === id);
-  if (!room) return <Alert severity="warning">Không tìm thấy phòng. <Button component={Link} to="/rooms">Về danh sách</Button></Alert>;
-  const s = roomSummary(db, room), financial = investmentSummary(db, room.locationId, room.id);
-  const records = (title: string, rows: PortalRecord[]) => <Panel title={title}><DataList rows={rows} noun={title.toLowerCase()} searchText={r => r.code + r.name + r.status} columns={[{ label: 'Mã / Tên', value: r => <>{r.code}<Typography variant="body2">{r.name}</Typography></> }, { label: 'Trạng thái', value: r => r.status }, { label: 'Ngày', value: r => dateLabel(r.date) }, { label: 'Số tiền ghi nhận', value: r => r.amount ? currency(r.amount) : '—' }, { label: 'Ghi chú', value: r => r.description }]} /></Panel>;
-  return <><PageHeader title={`Phòng ${room.code}`} subtitle={`${db.records.locations.find(l => l.id === room.locationId)?.name} • Tầng ${room.attributes.floor}`} actions={<Button component={Link} to={`/rooms?location=${room.locationId}`}>Về danh sách phòng</Button>} /><Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ bgcolor: 'white', mb: 2 }}>{detailTabs.map(t => <Tab key={t} label={t} />)}</Tabs>
-    {tab === 0 && <Panel title="Thông tin phòng"><RoomOverview db={db} room={room} /><Alert severity="info">Giá cấu hình của phòng và tiền thuê trong hợp đồng được hiển thị riêng. Trạng thái Đang thuê / Đang giữ chỗ do quy trình hợp đồng và tiền cọc quyết định.</Alert>{['AVAILABLE', 'UNAVAILABLE'].includes(roomStatus(room)) && <Button sx={{ mt: 2 }} variant="outlined" onClick={() => setAvailability(true)}>Quản lý khai thác phòng</Button>}</Panel>}
-    {tab === 1 && <>{records('Người ở hiện tại', s.occupants)}{records('Hợp đồng liên quan', db.records.contracts.filter(c => c.roomId === room.id))}</>}
-    {tab === 2 && <Panel title="Trang bị & Tài sản" actions={<Button component={Link} to={`/asset-allocation?location=${room.locationId}&room=${room.id}`} variant="contained">Cấp phát từ kho</Button>}><DataList rows={s.requirements.map(r => ({ ...r, id: r.catalogId }))} noun="trang bị" searchText={r => r.name} columns={[{ label: 'Trang bị', value: r => r.name }, { label: 'Yêu cầu', value: r => r.quantity }, { label: 'Đã cấp', value: r => r.assigned }, { label: 'Còn thiếu', value: r => <Chip size="small" color={r.missing ? 'warning' : 'success'} label={r.missing} /> }]} /><DataList rows={s.assets} noun="tài sản đã cấp" searchText={a => db.records.assets.find(x => x.id === a.assetId)?.name || ''} columns={[{ label: 'Phiếu mua / Tài sản', value: a => `${db.records.assets.find(x => x.id === a.assetId)?.code} • ${db.records.assets.find(x => x.id === a.assetId)?.name}` }, { label: 'Số lượng', value: a => a.quantity }, { label: 'Ngày cấp', value: a => dateLabel(a.date) }]} /></Panel>}
-    {tab === 3 && <>{records('Sự cố', db.records.incidents.filter(i => i.roomId === room.id))}{records('Công việc bảo trì', db.records.maintenance.filter(w => w.roomId === room.id))}</>}
-    {tab === 4 && <>{records('Chỉ số điện nước', db.records.meters.filter(r => r.roomId === room.id))}{records('Hóa đơn', db.records.invoices.filter(r => r.roomId === room.id))}{records('Thanh toán minh họa', db.records.payments.filter(r => r.roomId === room.id))}</>}
-    {tab === 5 && <>{records('Lịch sử hợp đồng', db.records.contracts.filter(r => r.roomId === room.id))}<Panel title="Lịch sử cấp phát / thu hồi"><DataList rows={db.property!.allocations.filter(a => a.roomId === room.id)} noun="lịch sử" searchText={a => a.assetId} columns={[{ label: 'Tài sản', value: a => db.records.assets.find(r => r.id === a.assetId)?.name }, { label: 'Số lượng', value: a => a.quantity }, { label: 'Cấp ngày', value: a => dateLabel(a.date) }, { label: 'Thu hồi', value: a => a.returnedAt ? dateLabel(a.returnedAt) : 'Đang sử dụng' }]} /></Panel></>}
-    {tab === 6 && <><KPIGrid items={[{ label: 'Giá trị tài sản được cấp', value: currency(financial.roomValue) }, { label: 'Đầu tư khác cho phòng', value: currency(financial.other) }, { label: 'Chi phí vận hành', value: currency(financial.operating) }, { label: 'Trong đó: bảo trì', value: currency(financial.maintenance) }]} />{records('Khoản chi của phòng', db.records.expenses.filter(r => r.roomId === room.id))}<Button component={Link} to="/expenses">Xem đầu tư toàn cơ sở</Button></>}
-    {availability && <EditDrawer title="Khai thác phòng" initial={{ status: roomStatus(room) === 'AVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE', reason: '' }} fields={[{ key: 'status', label: 'Trạng thái', options: ['AVAILABLE', 'UNAVAILABLE'].map(id => ({ id, name: roomStatuses[id as 'AVAILABLE' | 'UNAVAILABLE'].label })) }, { key: 'reason', label: 'Lý do', required: true }]} onClose={() => setAvailability(false)} onSave={v => save({ kind: 'availability', roomId: room.id, status: v.status as 'AVAILABLE' | 'UNAVAILABLE', reason: v.reason })} />}
-  </>;
+  const { id } = useParams(),
+    [tab, setTab] = useState(0),
+    [availability, setAvailability] = useState(false),
+    save = usePropertyMutation();
+  const room = db.records.rooms.find((r) => r.id === id);
+  if (!room)
+    return (
+      <Alert severity="warning">
+        Không tìm thấy phòng.{' '}
+        <Button component={Link} to="/rooms">
+          Về danh sách
+        </Button>
+      </Alert>
+    );
+  const s = roomSummary(db, room),
+    financial = investmentSummary(db, room.locationId, room.id);
+  const records = (title: string, rows: PortalRecord[]) => (
+    <Panel title={title}>
+      <DataList
+        rows={rows}
+        noun={title.toLowerCase()}
+        searchText={(r) => r.code + r.name + r.status}
+        columns={[
+          {
+            label: 'Mã / Tên',
+            value: (r) => (
+              <>
+                {r.code}
+                <Typography variant="body2">{r.name}</Typography>
+              </>
+            ),
+          },
+          { label: 'Trạng thái', value: (r) => r.status },
+          { label: 'Ngày', value: (r) => dateLabel(r.date) },
+          { label: 'Số tiền ghi nhận', value: (r) => (r.amount ? currency(r.amount) : '—') },
+          { label: 'Ghi chú', value: (r) => r.description },
+        ]}
+      />
+    </Panel>
+  );
+  return (
+    <>
+      <PageHeader
+        title={`Phòng ${room.code}`}
+        subtitle={`${db.records.locations.find((l) => l.id === room.locationId)?.name} • Tầng ${room.attributes.floor}`}
+        actions={
+          <Button component={Link} to={`/rooms?location=${room.locationId}`}>
+            Về danh sách phòng
+          </Button>
+        }
+      />
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ bgcolor: 'white', mb: 2 }}
+      >
+        {detailTabs.map((t) => (
+          <Tab key={t} label={t} />
+        ))}
+      </Tabs>
+      {tab === 0 && (
+        <Panel title="Thông tin phòng">
+          <RoomOverview db={db} room={room} />
+          <Alert severity="info">
+            Giá cấu hình của phòng và tiền thuê trong hợp đồng được hiển thị riêng. Trạng thái Đang
+            thuê / Đang giữ chỗ do quy trình hợp đồng và tiền cọc quyết định.
+          </Alert>
+          {['AVAILABLE', 'UNAVAILABLE'].includes(roomStatus(room)) && (
+            <Button sx={{ mt: 2 }} variant="outlined" onClick={() => setAvailability(true)}>
+              Quản lý khai thác phòng
+            </Button>
+          )}
+        </Panel>
+      )}
+      {tab === 1 && (
+        <>
+          {records('Người ở hiện tại', s.occupants)}
+          {records(
+            'Hợp đồng liên quan',
+            db.records.contracts.filter((c) => c.roomId === room.id),
+          )}
+        </>
+      )}
+      {tab === 2 && (
+        <Panel
+          title="Trang bị & Tài sản"
+          actions={
+            <Button
+              component={Link}
+              to={`/asset-allocation?location=${room.locationId}&room=${room.id}`}
+              variant="contained"
+            >
+              Cấp phát từ kho
+            </Button>
+          }
+        >
+          <DataList
+            rows={s.requirements.map((r) => ({ ...r, id: r.catalogId }))}
+            noun="trang bị"
+            searchText={(r) => r.name}
+            columns={[
+              { label: 'Trang bị', value: (r) => r.name },
+              { label: 'Yêu cầu', value: (r) => r.quantity },
+              { label: 'Đã cấp', value: (r) => r.assigned },
+              {
+                label: 'Còn thiếu',
+                value: (r) => (
+                  <Chip size="small" color={r.missing ? 'warning' : 'success'} label={r.missing} />
+                ),
+              },
+            ]}
+          />
+          <DataList
+            rows={s.assets}
+            noun="tài sản đã cấp"
+            searchText={(a) => db.records.assets.find((x) => x.id === a.assetId)?.name || ''}
+            columns={[
+              {
+                label: 'Phiếu mua / Tài sản',
+                value: (a) =>
+                  `${db.records.assets.find((x) => x.id === a.assetId)?.code} • ${db.records.assets.find((x) => x.id === a.assetId)?.name}`,
+              },
+              { label: 'Số lượng', value: (a) => a.quantity },
+              { label: 'Ngày cấp', value: (a) => dateLabel(a.date) },
+            ]}
+          />
+        </Panel>
+      )}
+      {tab === 3 && (
+        <>
+          {records(
+            'Sự cố',
+            db.records.incidents.filter((i) => i.roomId === room.id),
+          )}
+          {records(
+            'Công việc bảo trì',
+            db.records.maintenance.filter((w) => w.roomId === room.id),
+          )}
+        </>
+      )}
+      {tab === 4 && (
+        <>
+          {records(
+            'Chỉ số điện nước',
+            db.records.meters.filter((r) => r.roomId === room.id),
+          )}
+          {records(
+            'Hóa đơn',
+            db.records.invoices.filter((r) => r.roomId === room.id),
+          )}
+          {records(
+            'Thanh toán minh họa',
+            db.records.payments.filter((r) => r.roomId === room.id),
+          )}
+        </>
+      )}
+      {tab === 5 && (
+        <>
+          {records(
+            'Lịch sử hợp đồng',
+            db.records.contracts.filter((r) => r.roomId === room.id),
+          )}
+          <Panel title="Lịch sử cấp phát / thu hồi">
+            <DataList
+              rows={db.property!.allocations.filter((a) => a.roomId === room.id)}
+              noun="lịch sử"
+              searchText={(a) => a.assetId}
+              columns={[
+                {
+                  label: 'Tài sản',
+                  value: (a) => db.records.assets.find((r) => r.id === a.assetId)?.name,
+                },
+                { label: 'Số lượng', value: (a) => a.quantity },
+                { label: 'Cấp ngày', value: (a) => dateLabel(a.date) },
+                {
+                  label: 'Thu hồi',
+                  value: (a) => (a.returnedAt ? dateLabel(a.returnedAt) : 'Đang sử dụng'),
+                },
+              ]}
+            />
+          </Panel>
+        </>
+      )}
+      {tab === 6 && (
+        <>
+          <KPIGrid
+            items={[
+              { label: 'Giá trị tài sản được cấp', value: currency(financial.roomValue) },
+              { label: 'Đầu tư khác cho phòng', value: currency(financial.other) },
+              { label: 'Chi phí vận hành', value: currency(financial.operating) },
+              { label: 'Trong đó: bảo trì', value: currency(financial.maintenance) },
+            ]}
+          />
+          {records(
+            'Khoản chi của phòng',
+            db.records.expenses.filter((r) => r.roomId === room.id),
+          )}
+          <Button component={Link} to="/expenses">
+            Xem đầu tư toàn cơ sở
+          </Button>
+        </>
+      )}
+      {availability && (
+        <EditDrawer
+          title="Khai thác phòng"
+          initial={{
+            status: roomStatus(room) === 'AVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE',
+            reason: '',
+          }}
+          fields={[
+            {
+              key: 'status',
+              label: 'Trạng thái',
+              options: ['AVAILABLE', 'UNAVAILABLE'].map((id) => ({
+                id,
+                name: roomStatuses[id as 'AVAILABLE' | 'UNAVAILABLE'].label,
+              })),
+            },
+            { key: 'reason', label: 'Lý do', required: true },
+          ]}
+          onClose={() => setAvailability(false)}
+          onSave={(v) =>
+            save({
+              kind: 'availability',
+              roomId: room.id,
+              status: v.status as 'AVAILABLE' | 'UNAVAILABLE',
+              reason: v.reason,
+            })
+          }
+        />
+      )}
+    </>
+  );
 }

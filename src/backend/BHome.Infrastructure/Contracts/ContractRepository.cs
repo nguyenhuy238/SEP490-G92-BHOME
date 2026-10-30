@@ -51,8 +51,11 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
     public async Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t)
         => await db.Set<Resident>().Where(r => r.RoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t);
     public Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t) =>
-        (from u in db.Users join ur in db.UserRoles on u.Id equals ur.UserId join r in db.Roles on ur.RoleId equals r.Id
-         where u.Id == id && u.IsActive && r.Name == role select u.Id).AnyAsync(t);
+        (from u in db.Users
+         join ur in db.UserRoles on u.Id equals ur.UserId
+         join r in db.Roles on ur.RoleId equals r.Id
+         where u.Id == id && u.IsActive && r.Name == role
+         select u.Id).AnyAsync(t);
     public Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t) =>
         db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from, t);
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
@@ -67,7 +70,8 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
     public async Task<IReadOnlyList<ContractSettlementReview>> SettlementReviewsAsync(Guid contractId, CancellationToken t) =>
         await db.Set<ContractSettlementReview>().AsNoTracking().Where(r => r.ContractId == contractId).OrderByDescending(r => r.ReviewedAt).ThenBy(r => r.Id).Take(100).ToArrayAsync(t);
     public Task<bool> ValidFinalReadingAsync(Guid readingId, Guid contractId, Guid roomId, UtilityType type, DateOnly readingDate, CancellationToken t) =>
-        (from r in db.Set<MeterReading>() join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
+        (from r in db.Set<MeterReading>()
+         join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
          join meter in db.Set<Meter>() on r.MeterId equals meter.Id
          join evidence in db.Set<MeterEvidence>() on r.EvidenceId equals evidence.Id
          where r.Id == readingId && task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && meter.UtilityType == type &&
