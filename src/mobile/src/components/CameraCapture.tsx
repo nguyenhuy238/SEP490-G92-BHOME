@@ -20,11 +20,15 @@ export function CameraCapture({
   disabled,
   onCapture,
   retainPreview = false,
+  reviewBeforeSubmit = false,
+  documentSide,
 }: {
   label: string;
   disabled: boolean;
   onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
   retainPreview?: boolean;
+  reviewBeforeSubmit?: boolean;
+  documentSide?: 'front' | 'back';
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
@@ -38,11 +42,13 @@ export function CameraCapture({
   const [zoom, setZoom] = useState(0);
   const [cameraGeneration, setCameraGeneration] = useState(0);
   const files = useRef(new Set<string>());
+  const pending = useRef('');
   const alive = useRef(true);
   const generation = useRef(0);
   const clearFiles = () => {
     for (const uri of files.current) remove(uri);
     files.current.clear();
+    pending.current = '';
   };
   useEffect(() => {
     alive.current = true;
@@ -102,6 +108,12 @@ export function CameraCapture({
       if (epoch !== generation.current || !alive.current) return;
       const file = new File(saved);
       if (file.size > 5 * 1024 * 1024) throw new Error('oversized');
+      if (reviewBeforeSubmit) {
+        pending.current = saved;
+        setPreview(saved);
+        setOpen(false);
+        return;
+      }
       const bytes = await file.bytes();
       setOpen(false);
       if (retainPreview) setPreview(saved);
@@ -113,13 +125,41 @@ export function CameraCapture({
     } catch {
       if (alive.current) setError('Không xử lý được ảnh. Bạn có thể chụp lại hoặc nhập thủ công.');
     } finally {
-      if (!retainPreview || !alive.current || epoch !== generation.current) {
+      if (
+        (!retainPreview && pending.current !== saved) ||
+        !alive.current ||
+        epoch !== generation.current
+      ) {
         if (saved) {
           remove(saved);
           files.current.delete(saved);
         }
       }
       if (alive.current) setWorking(false);
+    }
+  };
+  const submitPending = async () => {
+    if (!pending.current || working || disabled) return;
+    const uri = pending.current;
+    const epoch = generation.current;
+    setWorking(true);
+    try {
+      const bytes = await new File(uri).bytes();
+      try {
+        if (alive.current && epoch === generation.current) await onCapture(bytes);
+      } finally {
+        bytes.fill(0);
+      }
+    } catch {
+      if (alive.current) setError('Không xử lý được ảnh. Hãy chụp lại hoặc nhập thủ công.');
+    } finally {
+      remove(uri);
+      files.current.delete(uri);
+      if (pending.current === uri) pending.current = '';
+      if (alive.current) {
+        setWorking(false);
+        setPreview('');
+      }
     }
   };
   return (
@@ -149,29 +189,53 @@ export function CameraCapture({
       </Button>
       {open && (
         <>
-          <CameraView
-            key={`${cameraGeneration}:${lens || 'auto'}`}
-            ref={camera}
-            style={{ height: 300 }}
-            facing="back"
-            mode="picture"
-            // SDK 58: 'off' means CONTINUOUS auto focus; 'on' focuses once then locks.
-            autofocus="off"
-            selectedLens={Platform.OS === 'ios' && lens ? lens : undefined}
-            zoom={zoom}
-            onAvailableLensesChanged={
-              Platform.OS === 'ios'
-                ? ({ lenses: reported }) => {
-                    setLenses(captureLensOptions(reported));
-                  }
-                : undefined
-            }
-            onCameraReady={() => setReady(true)}
-            onMountError={() => {
-              setReady(false);
-              setError('Không mở được camera. Hãy thử lấy nét lại hoặc đóng rồi mở camera.');
-            }}
-          />
+          <View style={{ height: 300, overflow: 'hidden', borderRadius: 12 }}>
+            <CameraView
+              key={`${cameraGeneration}:${lens || 'auto'}`}
+              ref={camera}
+              style={{ height: 300 }}
+              facing="back"
+              mode="picture"
+              // SDK 58: 'off' means CONTINUOUS auto focus; 'on' focuses once then locks.
+              autofocus="off"
+              selectedLens={Platform.OS === 'ios' && lens ? lens : undefined}
+              zoom={zoom}
+              onAvailableLensesChanged={
+                Platform.OS === 'ios'
+                  ? ({ lenses: reported }) => {
+                      setLenses(captureLensOptions(reported));
+                    }
+                  : undefined
+              }
+              onCameraReady={() => setReady(true)}
+              onMountError={() => {
+                setReady(false);
+                setError('Không mở được camera. Hãy thử lấy nét lại hoặc đóng rồi mở camera.');
+              }}
+            />
+            {documentSide && (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 20,
+                  right: 20,
+                  top: 60,
+                  height: 180,
+                  borderWidth: 2,
+                  borderColor: '#94f5cf',
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  padding: 8,
+                }}
+              >
+                <Text style={{ color: 'white', backgroundColor: '#172b4d', padding: 4 }}>
+                  {documentSide === 'front' ? 'MẶT TRƯỚC CCCD' : 'MẶT SAU CCCD'} • Đủ 4 góc
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Button mode="contained" disabled={!ready || working} onPress={() => void take()}>
               Chụp ảnh
@@ -248,6 +312,42 @@ export function CameraCapture({
           resizeMode="contain"
           style={{ width: '100%', height: 200 }}
         />
+      )}
+      {reviewBeforeSubmit && !!preview && (
+        <View style={{ gap: 8 }}>
+          <Text>
+            Kiểm tra ảnh rõ chữ, không lóa. Ảnh chỉ nằm trong bộ nhớ đệm tạm thời và được xóa sau xử
+            lý hoặc khi rời ứng dụng.
+          </Text>
+          <Button
+            mode="contained"
+            disabled={disabled || working}
+            loading={working}
+            onPress={() => void submitPending()}
+          >
+            Dùng ảnh này để OCR
+          </Button>
+          <Button
+            disabled={working}
+            onPress={() => {
+              clearFiles();
+              setPreview('');
+              setReady(false);
+              setOpen(true);
+            }}
+          >
+            Chụp lại
+          </Button>
+          <Button
+            disabled={working}
+            onPress={() => {
+              clearFiles();
+              setPreview('');
+            }}
+          >
+            Xóa ảnh tạm
+          </Button>
+        </View>
       )}
       {!!error && <Text style={styles.error}>{error}</Text>}
     </View>

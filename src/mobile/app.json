@@ -35,7 +35,8 @@
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }
