@@ -92,8 +92,8 @@ function LocationContent({ db }: { db: DemoDatabase }) {
                       'Chưa phân công'}
                   </Typography>
                   <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mt: 3 }}>
-                    <Button component={Link} to={`/rooms?location=${l.id}`} variant="contained">
-                      Xem phòng
+                    <Button component={Link} to={`/locations/${l.id}/overview`} variant="contained">
+                      Mở workspace
                     </Button>
                     <Button onClick={() => setEditing({ record: structuredClone(l) })}>
                       Chỉnh sửa

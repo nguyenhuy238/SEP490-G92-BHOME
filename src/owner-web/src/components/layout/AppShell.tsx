@@ -87,13 +87,16 @@ const iconMap: Record<string, typeof Building2> = {
   'public-content': Globe,
 };
 const navGroups = [
-  ['Tổng quan', ['dashboard', 'notifications']],
-  ['Quản lý cơ sở', ['locations', 'rooms', 'room-types', 'assets', 'asset-allocation', 'pricing']],
+  ['Tổng quan', ['dashboard']],
+  ['Cơ sở & Phòng', ['locations']],
   ['Nhân sự & Vận hành', ['staff', 'schedules', 'tasks']],
   ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'handovers', 'temporary-residence']],
-  ['Tài chính & Hóa đơn', ['meters', 'invoices', 'payments', 'debts']],
+  [
+    'Tài chính & Hóa đơn',
+    ['meters', 'invoices', 'payments', 'debts', 'expenses', 'reports', 'what-if'],
+  ],
   ['Sự cố & Bảo trì', ['incidents', 'maintenance']],
-  ['Báo cáo & Phân tích', ['expenses', 'reports', 'what-if']],
+  ['Thông báo', ['notifications']],
   ['Hệ thống', ['public-content']],
 ] as const;
 const navLabels: Record<string, string> = {
@@ -133,6 +136,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const current = location.pathname.split('/')[1] || 'dashboard';
+  const workspaceParts = location.pathname.split('/');
+  const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
   const nav = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
       <Stack
@@ -288,7 +293,15 @@ export function AppShell() {
             size="small"
             aria-label="Chọn cơ sở"
             value={portal.locationId}
-            onChange={(e) => portal.setLocationId(e.target.value)}
+            onChange={(e) => {
+              const nextLocationId = e.target.value;
+              portal.setLocationId(nextLocationId);
+              portal.setSearch('');
+              if (inLocationWorkspace) {
+                if (nextLocationId === 'all') navigate('/locations');
+                else navigate(`/locations/${nextLocationId}/${workspaceParts[3] || 'overview'}`);
+              }
+            }}
             sx={{ minWidth: { xs: 115, sm: 180 }, maxWidth: 240 }}
           >
             <MenuItem value="all">Tất cả cơ sở ({data?.records.locations.length || 0})</MenuItem>

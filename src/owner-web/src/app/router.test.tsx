@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { ThemeProvider } from '@mui/material';
@@ -76,3 +76,39 @@ it.each(portalRoutes)(
   },
   15000,
 );
+
+it('keeps property functions inside the selected Location Workspace', async () => {
+  render(
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        <PortalProvider>
+          <MemoryRouter initialEntries={['/dashboard']}>
+            <AppRouter />
+          </MemoryRouter>
+        </PortalProvider>
+      </AuthProvider>
+    </ThemeProvider>,
+  );
+
+  const navigation = await screen.findByRole('navigation', { name: 'Điều hướng chính' });
+  expect(within(navigation).getByRole('link', { name: 'Cơ sở' })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('link', { name: 'Phòng' })).not.toBeInTheDocument();
+  expect(within(navigation).queryByRole('link', { name: 'Loại phòng' })).not.toBeInTheDocument();
+  expect(within(navigation).queryByRole('link', { name: 'Tài sản' })).not.toBeInTheDocument();
+  expect(
+    within(navigation).queryByRole('link', { name: 'Giá thuê & Biểu phí' }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(await screen.findByRole('link', { name: /BHOME Central 1 - Bạch Đằng/i }));
+  expect(
+    await screen.findByRole('heading', { name: 'BHOME Central 1 - Bạch Đằng' }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: 'Phòng & Sơ đồ tầng' })).toHaveAttribute(
+    'href',
+    '/locations/loc-1/rooms',
+  );
+  expect(screen.getByRole('tab', { name: 'Vốn & Chi phí' })).toHaveAttribute(
+    'href',
+    '/locations/loc-1/investment',
+  );
+}, 15000);

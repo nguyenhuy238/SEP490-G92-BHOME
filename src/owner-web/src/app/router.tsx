@@ -38,6 +38,16 @@ const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPa
 const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage'));
 const WhatIfPage = lazy(() => import('../features/what-if/pages/WhatIfPage'));
 const PublicContentPage = lazy(() => import('../features/public-content/pages/PublicContentPage'));
+const LocationWorkspace = lazy(() =>
+  import('../features/locations/pages/LocationWorkspace').then((module) => ({
+    default: module.LocationWorkspace,
+  })),
+);
+const LocationOverview = lazy(() =>
+  import('../features/locations/pages/LocationWorkspace').then((module) => ({
+    default: module.LocationOverview,
+  })),
+);
 export function AppRouter() {
   return (
     <Suspense fallback={<LoadingState />}>
@@ -48,6 +58,15 @@ export function AppRouter() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/locations" element={<LocationsPage />} />
+            <Route path="/locations/:locationId" element={<LocationWorkspace />}>
+              <Route index element={<Navigate to="overview" replace />} />
+              <Route path="overview" element={<LocationOverview />} />
+              <Route path="rooms" element={<RoomsPage />} />
+              <Route path="room-types" element={<RoomTypesPage />} />
+              <Route path="assets" element={<AssetsPage />} />
+              <Route path="pricing" element={<PricingPage />} />
+              <Route path="investment" element={<ExpensesPage />} />
+            </Route>
             <Route path="/rooms" element={<RoomsPage />} />
             <Route path="/rooms/new" element={<CreateRooms />} />
             <Route path="/rooms/:id" element={<RoomDetail />} />
