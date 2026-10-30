@@ -11,18 +11,23 @@ namespace BHome.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<Guid>(
-                name: "TargetId",
-                table: "SecurityAudit",
-                type: "uuid",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "TargetType",
-                table: "SecurityAudit",
-                type: "character varying(50)",
-                maxLength: 50,
-                nullable: true);
+            // The supported legacy migration already added these append-only audit fields.
+            // Reuse their exact types without updating or rebuilding any audit row.
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261028103339_CaptureWorkflows') THEN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+                            AND table_name='SecurityAudit' AND column_name='TargetId' AND data_type='uuid') OR
+                           NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+                            AND table_name='SecurityAudit' AND column_name='TargetType' AND data_type='character varying' AND character_maximum_length=50) THEN
+                            RAISE EXCEPTION 'Legacy audit columns do not match the supported migration';
+                        END IF;
+                    ELSE
+                        ALTER TABLE "SecurityAudit" ADD COLUMN "TargetId" uuid NULL;
+                        ALTER TABLE "SecurityAudit" ADD COLUMN "TargetType" character varying(50) NULL;
+                    END IF;
+                END $$;
+                """);
 
             migrationBuilder.AddColumn<string>(
                 name: "Address",

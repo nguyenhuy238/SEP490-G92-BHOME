@@ -1,4 +1,5 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
+import { ApiError, requestDiagnostic } from './api';
 export const contractStates = [
   'Draft',
   'PendingSigning',
@@ -119,11 +120,33 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
-    list: (page = 1, status = '', locationId = '', signal?: AbortSignal) =>
-      request<ContractPage>(
+    list: async (page = 1, status = '', locationId = '', signal?: AbortSignal) => {
+      const result = await request<ContractPage>(
         `${root}?${new URLSearchParams({ page: String(page), pageSize: '20', ...(status ? { status } : {}), ...(locationId ? { locationId } : {}) })}`,
         { signal },
-      ),
+      );
+      if (
+        !result ||
+        !Array.isArray(result.items) ||
+        !Number.isSafeInteger(result.totalCount) ||
+        result.totalCount < result.items.length ||
+        result.page !== page ||
+        result.pageSize !== 20 ||
+        result.items.some(
+          (item) =>
+            !item ||
+            typeof item.id !== 'string' ||
+            typeof item.roomNumber !== 'string' ||
+            typeof item.locationName !== 'string' ||
+            typeof item.status !== 'string' ||
+            typeof item.startDate !== 'string' ||
+            typeof item.endDate !== 'string' ||
+            typeof item.monthlyRent !== 'string',
+        )
+      )
+        throw new ApiError(502, { code: 'invalid_response' });
+      return result;
+    },
     get: (id: string, signal?: AbortSignal) => request<ContractView>(`${root}/${id}`, { signal }),
     readiness: (id: string, signal?: AbortSignal) =>
       request<Readiness>(`${root}/${id}/activation-readiness`, { signal }),
@@ -249,11 +272,29 @@ export const text = (value: string) =>
 export function contractError(error: unknown): string {
   if (error instanceof Error && error.name === 'AbortError')
     return 'Đã dừng chờ phản hồi. Hãy tải lại trước khi thử lại.';
-  const e = error as { status?: number; code?: string; problem?: { code?: string } } | null;
+  const e = error as {
+    status?: number;
+    code?: string;
+    requestPath?: string;
+    correlationId?: string;
+    method?: string;
+    problem?: { code?: string };
+  } | null;
   const code = e?.code ?? e?.problem?.code;
-  if (code && labels[code]) return labels[code];
+  const diagnostic = e ? requestDiagnostic(e) : '';
+  if (code === 'request_timeout')
+    return (
+      'Máy chủ không phản hồi trong 15 giây. Hãy tải lại để kiểm tra trước khi gửi lại.' +
+      diagnostic
+    );
+  if (code === 'invalid_response')
+    return (
+      'Phản hồi máy chủ không đúng định dạng BHOME. Hãy kiểm tra địa chỉ API và phiên bản ứng dụng.' +
+      diagnostic
+    );
+  if (code && labels[code]) return labels[code] + diagnostic;
   return (
-    (
+    ((
       {
         0: 'Không kết nối được máy chủ. Kết quả thao tác chưa được xác nhận. Hãy tải lại trước khi thử lại.',
         400: 'Dữ liệu chưa hợp lệ. Kiểm tra các trường và ngày thực hiện.',
@@ -262,9 +303,11 @@ export function contractError(error: unknown): string {
         404: 'Hợp đồng hoặc tài nguyên không khả dụng trong phạm vi của bạn.',
         409: 'Dữ liệu đã thay đổi hoặc chưa đủ điều kiện. Hãy tải lại trước khi thử lại.',
         413: 'Ảnh vượt quá 5 MB.',
+        500: 'Máy chủ gặp lỗi xử lý. Hãy tải lại và cung cấp mã truy vết nếu lỗi tiếp diễn.',
+        502: 'Phản hồi máy chủ không hợp lệ. Hãy kiểm tra địa chỉ API.',
         503: 'Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng. Hãy kiểm tra trạng thái trước khi thử lại.',
       } as Record<number, string>
-    )[e?.status ?? 0] ?? 'Chưa xác nhận thành công. Hãy tải lại để kiểm tra.'
+    )[e?.status ?? 0] ?? 'Chưa xác nhận thành công. Hãy tải lại để kiểm tra.') + diagnostic
   );
 }
 export function formatContractMoney(value: string) {

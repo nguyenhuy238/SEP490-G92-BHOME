@@ -196,6 +196,9 @@ describe('contract transport and safe retries', () => {
       fetcher,
     );
     const api = contractClient((path, init, type) => mobile.request(path, init, type));
+    fetcher.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [], page: 2, pageSize: 20, totalCount: 0 })),
+    );
     await api.list(2, 'Draft');
     expect(fetcher.mock.calls[0]![0]).toContain('page=2&pageSize=20&status=Draft');
     await api.mutate(id, 'deposit-verifications', { amount: '100' }, owner);

@@ -44,7 +44,8 @@ user is seeded. `POST /api/v1/auth/login` verifies an existing Identity email/pa
 the token needed by the session probe. Owner/Mobile now have login/logout/change-password UI.
 Account provisioning/activation remains unimplemented. Configure `AuthWeb:AllowedOrigins` separately
 from CORS for the Owner origin; HTTPS/same-site cookie requirements apply (HTTP frontend + HTTPS API
-is not a reliable Strict-cookie development topology). Mobile keeps credentials only in memory.
+is not a reliable Strict-cookie development topology). Mobile keeps access tokens in memory;
+refresh tokens use Expo SecureStore (iOS Keychain / Android secure storage), bound to the API origin.
 
 For manual auth testing only, explicitly run `scripts/New-LocalTestUsers.ps1` to create synthetic
 `owner.dev`, `staff.dev`, `tenant.dev` users with a password entered at a secure prompt. This does
@@ -54,6 +55,11 @@ Tests create synthetic accounts only in disposable PostgreSQL containers and
 generate isolated signing keys in memory. See [the login contract](../api/API_CONVENTIONS.md#existing-account-login).
 
 ## Data services and migrations
+
+If the local database still records `20261028103339_CaptureWorkflows`, use the guarded
+[legacy upgrade procedure](IPHONE_CONNECTIVITY.md#nâng-cấp-legacy-có-bảo-toàn-dữ-liệu).
+The normal merged migration chain otherwise fails with `Locations already exists`.
+Do not reset the database or manually mark those migrations as applied.
 
 ```powershell
 docker compose config --quiet

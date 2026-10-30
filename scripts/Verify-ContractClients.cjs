@@ -6,6 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const Module = require('node:module');
 const assert = require('node:assert/strict');
+const https = require('node:https');
 const root = path.resolve(__dirname, '..');
 
 function sourceModule(relative) {
@@ -30,6 +31,8 @@ async function main(settings) {
   assert.equal(new URL(settings.baseUrl).protocol, 'https:');
   assert.equal(new URL(settings.origin).hostname, 'localhost');
   const { MobileApi } = sourceModule('src/mobile/src/lib/api.ts');
+  const { MobileSessions } = sourceModule('src/mobile/src/lib/sessions.ts');
+  const { loadOwnerOverview } = sourceModule('src/mobile/src/services/ownerOverview.ts');
   const { SessionClient } = sourceModule('packages/client-core/src/sessionClient.ts');
   const { createApiClient } = sourceModule('packages/client-core/src/api.ts');
   const { contractClient, businessToday } = sourceModule('packages/client-core/src/contracts.ts');
@@ -51,6 +54,32 @@ async function main(settings) {
       assert.equal(e.status, status, `Expected HTTP ${status}, received ${e.status ?? e.name}`);
     }
   };
+  await check('HTTPS rejects an untrusted CA and a mismatched server name', async () => {
+    const probe = (options) =>
+      new Promise((resolve, reject) => {
+        const request = https.get(
+          settings.baseUrl + '/health/live',
+          { ...options, timeout: 5000 },
+          (response) => {
+            response.resume();
+            resolve(response.statusCode);
+          },
+        );
+        request.on('error', reject);
+        request.on('timeout', () => request.destroy(new Error('TLS probe timeout')));
+      });
+    await assert.rejects(probe({ ca: [] }), (error) =>
+      [
+        'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+        'SELF_SIGNED_CERT_IN_CHAIN',
+        'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+      ].includes(error.code),
+    );
+    await assert.rejects(
+      probe({ servername: 'synthetic-wrong-host.example.invalid' }),
+      (error) => error.code === 'ERR_TLS_CERT_ALTNAME_INVALID',
+    );
+  });
   const sessions = {};
   for (const [name, actor] of Object.entries(settings.actors)) {
     const auth = new SessionClient(settings.baseUrl, 'mobile');
@@ -129,6 +158,63 @@ async function main(settings) {
       assert.equal(probe.status, 404);
     },
   );
+  await check(
+    'Mobile Owner overview uses real authorized paginated counts; Staff and Tenant cannot read Owner data',
+    async () => {
+      assert.deepEqual(await loadOwnerOverview(owner.mobile, new AbortController().signal), {
+        locations: 1,
+        rooms: 1,
+        occupiedRooms: 0,
+        contracts: 0,
+      });
+      await denied(() => loadOwnerOverview(tenant.mobile, new AbortController().signal), 403);
+      await denied(() => sessions.otherStaff.mobile.request('/api/v1/rooms/' + room.id), 404);
+    },
+  );
+  await check(
+    'Mobile session login, rotation, secure-store restoration and logout reach real HTTPS auth',
+    async () => {
+      // This adapter stands in for Keychain only in the Node harness; native app uses SecureStore.
+      let stored = null;
+      const store = {
+        read: async () => stored,
+        write: async (value) => {
+          stored = value;
+        },
+        remove: async () => {
+          stored = null;
+        },
+      };
+      const manager = new MobileSessions(store, settings.baseUrl);
+      await denied(
+        () =>
+          manager.login(settings.baseUrl, settings.actors.owner.email, 'Synthetic!WrongPassword'),
+        401,
+      );
+      assert.equal(manager.snapshot.session, null);
+      await manager.login(
+        settings.baseUrl,
+        settings.actors.owner.email,
+        settings.actors.owner.password,
+      );
+      assert.equal(manager.snapshot.session.userId, settings.actors.owner.id);
+      assert.ok(!stored.includes(manager.snapshot.session.accessToken));
+      const token = manager.snapshot.session.accessToken;
+      await manager.refresh();
+      assert.notEqual(manager.snapshot.session.accessToken, token);
+      const restored = new MobileSessions(store, settings.baseUrl);
+      await restored.restore();
+      assert.equal(restored.snapshot.session.userId, settings.actors.owner.id);
+      assert.equal(
+        (await contractClient((...args) => restored.snapshot.api.request(...args)).list())
+          .totalCount,
+        0,
+      );
+      await restored.logout();
+      assert.equal(restored.snapshot.session, null);
+      assert.equal(stored, null);
+    },
+  );
   const artifacts = path.join(root, '.tools/contract-stabilization/live');
   mkdirSync(artifacts, { recursive: true });
   const playwright = require(path.join(root, '.tools/contract-browser/node_modules/playwright'));
@@ -154,7 +240,6 @@ async function main(settings) {
     await web.listen();
     browser = await playwright.chromium.launch({ channel: 'msedge', headless: true });
     const context = await browser.newContext({
-      ignoreHTTPSErrors: true,
       viewport: { width: 1440, height: 1000 },
     });
     const page = await context.newPage();

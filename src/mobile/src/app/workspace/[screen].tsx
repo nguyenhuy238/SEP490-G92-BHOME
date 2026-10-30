@@ -7,6 +7,7 @@ import { WorkspaceShell } from '../../components/WorkspaceShell';
 import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
 import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/workspace/navigation';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
+import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import {
   TenantHome,
@@ -95,6 +96,12 @@ export default function WorkspaceRoute() {
       </WorkspaceShell>
     );
   const Screen = screens[screen];
+  if (!preview && screen === 'owner-home')
+    return (
+      <WorkspaceShell screen={screen}>
+        <OwnerOverviewScreen />
+      </WorkspaceShell>
+    );
   if (
     !preview &&
     ['signing', 'contract', 'contract-request', 'prepare-contract', 'move-out'].includes(screen)
@@ -110,7 +117,7 @@ export default function WorkspaceRoute() {
     return (
       <WorkspaceShell screen={screen}>
         <Heading
-          title={screen === homeScreen[role] ? 'Chào mừng đến BHOME' : 'Dữ liệu chưa được kết nối'}
+          title={screen === homeScreen[role] ? 'Chào mừng đến BHOME' : 'Chức năng chưa triển khai'}
         />
         <Box>
           <Text>

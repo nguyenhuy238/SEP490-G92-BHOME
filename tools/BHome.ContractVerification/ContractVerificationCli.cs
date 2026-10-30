@@ -19,8 +19,13 @@ namespace BHome.ContractVerification;
 
 internal static class ContractVerificationCli
 {
-    public static async Task<int> Main()
+    public static async Task<int> Main(string[] args)
     {
+        if (!args.Contains("--allow-temporary-test-root", StringComparer.Ordinal))
+        {
+            Console.Error.WriteLine("Full browser verification requires temporary CurrentUser CA trust. Run interactively with --allow-temporary-test-root and accept Windows add/remove prompts. No trust store was modified.");
+            return 1;
+        }
         var root = Directory.GetCurrentDirectory();
         if (!File.Exists(Path.Combine(root, "src/backend/BHome.Api/BHome.Api.csproj")))
             throw new InvalidOperationException("Run this verification tool from the repository root.");
@@ -30,6 +35,8 @@ internal static class ContractVerificationCli
         var priorContentRoot = Environment.GetEnvironmentVariable(contentRootKey);
         Environment.SetEnvironmentVariable(contentRootKey, Path.Combine(root, "src/backend/BHome.Api"));
         Process? api = null;
+        X509Certificate2? browserTrustAnchor = null;
+        var exitCode = 0;
         var stage = "disposable infrastructure";
         try
         {
@@ -71,6 +78,14 @@ internal static class ContractVerificationCli
             caRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
             caRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, true));
             using var ca = caRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(2));
+            // The Windows browser and HttpClient must validate chain/hostname normally.
+            // Install only this ephemeral public CA in CurrentUser, and always remove it below.
+            browserTrustAnchor = new X509Certificate2(ca.Export(X509ContentType.Cert));
+            using (var trust = new X509Store(StoreName.Root, StoreLocation.CurrentUser))
+            {
+                trust.Open(OpenFlags.ReadWrite);
+                trust.Add(browserTrustAnchor);
+            }
             using var serverKey = RSA.Create(2048);
             var serverRequest = new CertificateRequest("CN=localhost", serverKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             serverRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
@@ -122,7 +137,7 @@ internal static class ContractVerificationCli
             // Drain output without publishing requests or credentials; clients record only safe check results.
             api.OutputDataReceived += (_, _) => { }; api.ErrorDataReceived += (_, _) => { };
             api.BeginOutputReadLine(); api.BeginErrorReadLine();
-            using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, c, _, _) => c?.Thumbprint == certificate.Thumbprint };
+            using var handler = new HttpClientHandler();
             using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
             var ready = false;
             for (var i = 0; i < 60 && !api.HasExited; i++)
@@ -150,7 +165,7 @@ internal static class ContractVerificationCli
             await node.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { baseUrl, origin, webPort, pfxPath, pfxPassword, temporary = temporary.FullName, actors }));
             node.StandardInput.Close();
             await node.WaitForExitAsync();
-            if (node.ExitCode != 0) return node.ExitCode;
+            if (node.ExitCode != 0) throw new InvalidOperationException("Real client verification failed.");
             await using var verification = fixture.Factory.Services.CreateAsyncScope();
             stage = "persisted effects";
             var db = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
@@ -161,16 +176,34 @@ internal static class ContractVerificationCli
                 await db.SecurityAudit.CountAsync(a => a.Event == "ContractDepositVerified") != 1)
                 throw new InvalidOperationException("Unexpected business effects after blocked signing/activation.");
             Console.WriteLine("PASS: persisted effects checked: 2 pending contracts, 1 synthetic manual deposit, no signature/activation/room occupancy.");
-            return 0;
         }
         catch (Exception e)
         {
             Console.Error.WriteLine($"Live verification failed at {stage} ({e.GetType().Name}); no credential/provider detail printed.");
             Console.Error.WriteLine(string.Join(Environment.NewLine, (e.StackTrace ?? "").Split(Environment.NewLine).Take(4)));
-            return 1;
+            exitCode = 1;
         }
         finally
         {
+            if (browserTrustAnchor is not null)
+            {
+                try
+                {
+                    using var trust = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+                    trust.Open(OpenFlags.ReadWrite);
+                    if (trust.Certificates.Find(X509FindType.FindByThumbprint, browserTrustAnchor.Thumbprint, false).Count != 0)
+                        trust.Remove(browserTrustAnchor);
+                    if (trust.Certificates.Find(X509FindType.FindByThumbprint, browserTrustAnchor.Thumbprint, false).Count != 0)
+                        throw new InvalidOperationException("Ephemeral test CA cleanup failed.");
+                    Console.WriteLine("PASS: ephemeral test CA removed from CurrentUser trust store.");
+                }
+                catch (Exception cleanupError) when (cleanupError is CryptographicException or InvalidOperationException)
+                {
+                    exitCode = 1;
+                    Console.Error.WriteLine($"CA cleanup requires Windows confirmation. Remove only BHOME disposable verification CA {browserTrustAnchor.Thumbprint} in certmgr.msc; other resource cleanup continues.");
+                }
+                finally { browserTrustAnchor.Dispose(); }
+            }
             if (api is { HasExited: false }) { api.Kill(entireProcessTree: true); await api.WaitForExitAsync(); }
             api?.Dispose();
             try { await fixture.DisposeAsync(); }
@@ -182,6 +215,7 @@ internal static class ContractVerificationCli
                     Directory.Delete(resolved, recursive: true);
             }
         }
+        return exitCode;
     }
 
     private static int FreePort()

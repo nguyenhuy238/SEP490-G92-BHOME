@@ -5,6 +5,21 @@ export interface ApiProblem {
   correlationId?: string;
   errors?: Record<string, string[]>;
 }
+export function requestDiagnostic(error: {
+  status?: number;
+  requestPath?: string;
+  correlationId?: string;
+  method?: string;
+}): string {
+  const path = error.requestPath?.split('?')[0];
+  const route = path && /^\/(?:api\/v1\/[a-zA-Z0-9/-]+|health\/ready)$/.test(path) ? path : '';
+  const id =
+    error.correlationId &&
+    /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(error.correlationId)
+      ? ` · Mã truy vết: ${error.correlationId}`
+      : '';
+  return `${route ? ` · ${/^(GET|POST|PUT|DELETE|PATCH)$/.test(error.method ?? '') ? error.method : 'GET'} ${route}` : ''}${error.status ? ` · HTTP ${error.status}` : ''}${id}`;
+}
 export class ApiError extends Error {
   constructor(
     public readonly status: number,

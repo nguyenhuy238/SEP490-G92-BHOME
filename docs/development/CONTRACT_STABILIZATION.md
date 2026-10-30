@@ -1,5 +1,10 @@
 # D011/D012 — Ổn định và kiểm chứng tích hợp
 
+> Cập nhật kết nối iPhone/TLS và nâng cấp DB legacy: [IPHONE_CONNECTIVITY.md](IPHONE_CONNECTIVITY.md).
+> Runner browser hiện xác minh TLS đầy đủ và cần chạy tương tác với
+> `--allow-temporary-test-root`; phải xác nhận thêm/gỡ CA test trong Windows.
+> Các kết quả bên dưới là bằng chứng lịch sử trước thay đổi này.
+
 Ngày: 30/10/2026. Nhánh `member/QHuy`; baseline `27f3702`. Không commit/push/merge.
 Working tree sạch trước khi bắt đầu. Bàn giao này bổ sung, không thay bằng chứng lịch sử ở
 `CONTRACT_LIFECYCLE_DELIVERY.md` và `CONTRACT_LIFECYCLE_UI.md`.

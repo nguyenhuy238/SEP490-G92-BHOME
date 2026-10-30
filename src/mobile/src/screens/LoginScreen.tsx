@@ -4,12 +4,12 @@ import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Action, Box, Row, ui } from '../components/WorkspaceKit';
 import { useSession } from '../lib/SessionProvider';
-import { errorMessage } from '../lib/api';
+import { checkApiConnection, errorMessage } from '../lib/api';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { roleLabel, type MobileRole } from '../features/workspace/navigation';
 import { colors as c } from '../theme/theme';
 export function LoginScreen() {
-  const { baseUrl, login } = useSession();
+  const { baseUrl, login, restoreError } = useSession();
   const { startPreview, unavailable } = useWorkspace();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,6 +18,8 @@ export function LoginScreen() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [connection, setConnection] = useState('');
+  const [checking, setChecking] = useState(false);
   const submit = async () => {
     if (busy) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || !password) {
@@ -107,9 +109,9 @@ export function LoginScreen() {
                 Quên mật khẩu?
               </Button>
             </Row>
-            {!!error && (
+            {!!(error || restoreError) && (
               <Text accessibilityRole="alert" style={ui.red}>
-                {error}
+                {error || restoreError}
               </Text>
             )}
             <Button
@@ -124,39 +126,41 @@ export function LoginScreen() {
               Đăng nhập
             </Button>
           </Box>
-          <Box style={{ backgroundColor: c.soft, borderWidth: 0 }}>
-            <Row spread>
-              <Text variant="titleSmall" style={ui.muted}>
-                XEM GIAO DIỆN MẪU
-              </Text>
+          {__DEV__ && (
+            <Box style={{ backgroundColor: c.soft, borderWidth: 0 }}>
+              <Row spread>
+                <Text variant="titleSmall" style={ui.muted}>
+                  XEM GIAO DIỆN MẪU
+                </Text>
+                <Text variant="labelSmall" style={ui.muted}>
+                  Không cần tài khoản
+                </Text>
+              </Row>
+              <View style={ui.wrap}>
+                {(['Owner', 'Staff', 'Tenant'] as MobileRole[]).map((role) => (
+                  <View key={role} style={{ flex: 1, minWidth: 85 }}>
+                    <Button
+                      mode="elevated"
+                      disabled={busy}
+                      onPress={() => {
+                        setPassword('');
+                        startPreview(role);
+                      }}
+                      buttonColor={c.white}
+                      textColor={role === 'Tenant' ? c.green : role === 'Staff' ? c.blue : c.navy}
+                      style={{ borderRadius: 10 }}
+                      labelStyle={{ fontSize: 12 }}
+                    >
+                      {roleLabel[role]}
+                    </Button>
+                  </View>
+                ))}
+              </View>
               <Text variant="labelSmall" style={ui.muted}>
-                Không cần tài khoản
+                Dữ liệu minh họa tách biệt với hệ thống thật. Không thay đổi quyền tài khoản.
               </Text>
-            </Row>
-            <View style={ui.wrap}>
-              {(['Owner', 'Staff', 'Tenant'] as MobileRole[]).map((role) => (
-                <View key={role} style={{ flex: 1, minWidth: 85 }}>
-                  <Button
-                    mode="elevated"
-                    disabled={busy}
-                    onPress={() => {
-                      setPassword('');
-                      startPreview(role);
-                    }}
-                    buttonColor={c.white}
-                    textColor={role === 'Tenant' ? c.green : role === 'Staff' ? c.blue : c.navy}
-                    style={{ borderRadius: 10 }}
-                    labelStyle={{ fontSize: 12 }}
-                  >
-                    {roleLabel[role]}
-                  </Button>
-                </View>
-              ))}
-            </View>
-            <Text variant="labelSmall" style={ui.muted}>
-              Dữ liệu minh họa tách biệt với hệ thống thật. Không thay đổi quyền tài khoản.
-            </Text>
-          </Box>
+            </Box>
+          )}
           <Button icon="cog-outline" onPress={() => setSettings(!settings)}>
             Cấu hình kết nối API
           </Button>
@@ -165,7 +169,11 @@ export function LoginScreen() {
               <TextInput
                 label="Địa chỉ API HTTPS"
                 value={base}
-                onChangeText={setBase}
+                onChangeText={(value) => {
+                  setBase(value);
+                  setConnection('');
+                }}
+                disabled={busy || checking}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="url"
@@ -174,6 +182,25 @@ export function LoginScreen() {
               <Text variant="bodySmall" style={ui.muted}>
                 Dùng địa chỉ API của môi trường phát triển hoặc triển khai BHOME.
               </Text>
+              <Button
+                loading={checking}
+                disabled={checking || busy}
+                onPress={async () => {
+                  setChecking(true);
+                  setConnection('');
+                  try {
+                    await checkApiConnection(base);
+                    setConnection('API HTTPS sẵn sàng. Hãy đăng nhập để xác minh tài khoản.');
+                  } catch (failure) {
+                    setConnection(errorMessage(failure));
+                  } finally {
+                    setChecking(false);
+                  }
+                }}
+              >
+                Kiểm tra kết nối HTTPS
+              </Button>
+              {!!connection && <Text accessibilityRole="alert">{connection}</Text>}
             </Box>
           )}
           <View style={styles.footer}>
