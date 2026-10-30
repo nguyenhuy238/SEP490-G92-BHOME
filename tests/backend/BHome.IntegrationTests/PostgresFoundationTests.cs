@@ -58,6 +58,52 @@ public sealed class PostgresFoundationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ContractMigrationPreservesRoomStatusesAcrossUpgradeDowngradeAndRetry()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var migrator = db.GetService<IMigrator>();
+        const string property = "20261029154537_PropertyConfiguration";
+        const string contract = "20261029170352_ContractActivationLifecycle";
+        await migrator.MigrateAsync(property);
+        var locationId = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Locations" ("Id", "Name", "Address", "IsActive", "CreatedAt", "UpdatedAt")
+            VALUES ({locationId}, 'Synthetic migration location', '', true, now(), now());
+            INSERT INTO "Rooms" ("Id", "LocationId", "RoomNumber", "Status", "CreatedAt", "UpdatedAt")
+            SELECT gen_random_uuid(), {locationId}, 'SYNTHETIC-' || value, value, now(), now()
+            FROM generate_series(0, 3) AS value;
+            """);
+
+        async Task AssertRoomStatuses()
+        {
+            var statuses = await db.Database.SqlQuery<int>($"""
+                SELECT "Status" AS "Value" FROM "Rooms" WHERE "LocationId" = {locationId} ORDER BY "Status"
+                """).ToArrayAsync();
+            Assert.Equal(new[] { 0, 1, 2, 3 }, statuses);
+        }
+
+        await migrator.MigrateAsync(contract);
+        await AssertRoomStatuses();
+        Assert.Equal(0, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM "Contracts"
+            """).SingleAsync());
+
+        await migrator.MigrateAsync(property);
+        await AssertRoomStatuses();
+        Assert.False(await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'Contracts') AS "Value"
+            """).SingleAsync());
+
+        await migrator.MigrateAsync();
+        await migrator.MigrateAsync();
+        await AssertRoomStatuses();
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
     public async Task RepeatedEnqueueCreatesOneDurableJob()
     {
         await using var scope = factory.Services.CreateAsyncScope();
