@@ -49,6 +49,7 @@ public static class Permissions
 
     public static class OperationalTasks
     {
+        public const string View = "operational-tasks.view";
         public const string Manage = "operational-tasks.manage";
         public const string Execute = "operational-tasks.execute";
         public const string Verify = "operational-tasks.verify";

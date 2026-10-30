@@ -97,4 +97,25 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
         Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body);
         Assert.DoesNotContain("stackTrace", body, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(403)]
+    [InlineData(404)]
+    [InlineData(409)]
+    public async Task PropertyErrorsPreserveStatusCodeAndPublicCodeWithoutExceptionDetails(int status)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/test-probes/property-error/{status}");
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(status, body.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("synthetic_property_rejection", body.RootElement.GetProperty("code").GetString());
+        Assert.Equal(correlation, body.RootElement.GetProperty("correlationId").GetString());
+        Assert.False(body.RootElement.TryGetProperty("exception", out _));
+        Assert.DoesNotContain("Property operation rejected.", body.RootElement.GetRawText());
+    }
 }

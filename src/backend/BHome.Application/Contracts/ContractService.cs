@@ -96,9 +96,18 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
             if (residents.Count != x.ResidentIds.Length || residents.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified))
                 throw ContractException.Invalid("verified_residents_required");
             if (await repository.ConflictsAsync(x.RoomId, Guid.Empty, x.StartDate, x.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
-            var c = new Contract { RoomId = x.RoomId, OwnerSignerId = x.OwnerSignerId, TenantUserId = x.TenantUserId,
-                RepresentativeResidentId = x.RepresentativeResidentId, StartDate = x.StartDate, EndDate = x.EndDate,
-                MonthlyRent = x.MonthlyRent, RequiredDeposit = x.RequiredDeposit, Terms = x.Terms.Trim() };
+            var c = new Contract
+            {
+                RoomId = x.RoomId,
+                OwnerSignerId = x.OwnerSignerId,
+                TenantUserId = x.TenantUserId,
+                RepresentativeResidentId = x.RepresentativeResidentId,
+                StartDate = x.StartDate,
+                EndDate = x.EndDate,
+                MonthlyRent = x.MonthlyRent,
+                RequiredDeposit = x.RequiredDeposit,
+                Terms = x.Terms.Trim()
+            };
             if (x.HoldingContractId is { } holdingId)
             {
                 var application = await holdings.ApplyAsync(holdingId, c.Id, c.RoomId, c.TenantUserId, c.RequiredDeposit, t);
@@ -108,8 +117,13 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
                     throw ContractException.Conflict("invalid_holding_deposit_allocation");
                 c.HoldingContractId = holdingId; c.AppliedHoldingDeposit = application.AppliedAmount; c.HoldingAllocationReference = application.AllocationReference;
             }
-            c.Residents = residents.Select(r => new ContractResident { ContractId = c.Id, ResidentId = r.Id,
-                Role = r.Id == x.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant, ResidenceFrom = c.StartDate }).ToList();
+            c.Residents = residents.Select(r => new ContractResident
+            {
+                ContractId = c.Id,
+                ResidentId = r.Id,
+                Role = r.Id == x.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant,
+                ResidenceFrom = c.StartDate
+            }).ToList();
             Seal(c); repository.Add(c); Audit("ContractDraftCreated", c.Id); Remember(key, "draft", x, c.Id); return new ContractId(c.Id);
         }, t);
     }
@@ -123,10 +137,20 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
             if (c.Status != ContractStatus.Active || x.EndDate <= c.EndDate || await repository.MoveOutAsync(c.Id, t) is not null)
                 throw ContractException.Conflict("contract_not_renewable");
             if (await repository.OpenRenewalAsync(c.Id, t)) throw ContractException.Conflict("renewal_already_pending");
-            var next = new Contract { RoomId = c.RoomId, OwnerSignerId = c.OwnerSignerId, TenantUserId = c.TenantUserId,
-                RepresentativeResidentId = c.RepresentativeResidentId, Kind = ContractKind.Renewal, PreviousContractId = c.Id,
-                StartDate = c.EndDate.AddDays(1), EndDate = x.EndDate, MonthlyRent = x.MonthlyRent,
-                RequiredDeposit = c.RequiredDeposit, Terms = x.Terms.Trim() };
+            var next = new Contract
+            {
+                RoomId = c.RoomId,
+                OwnerSignerId = c.OwnerSignerId,
+                TenantUserId = c.TenantUserId,
+                RepresentativeResidentId = c.RepresentativeResidentId,
+                Kind = ContractKind.Renewal,
+                PreviousContractId = c.Id,
+                StartDate = c.EndDate.AddDays(1),
+                EndDate = x.EndDate,
+                MonthlyRent = x.MonthlyRent,
+                RequiredDeposit = c.RequiredDeposit,
+                Terms = x.Terms.Trim()
+            };
             next.Residents = c.Residents.Select(r => new ContractResident { ContractId = next.Id, ResidentId = r.ResidentId, Role = r.Role, ResidenceFrom = next.StartDate }).ToList();
             Seal(next); repository.Add(next); Audit("ContractRenewalPrepared", next.Id); Remember(key, "renewal", new { id, x }, next.Id); return new ContractId(next.Id);
         }, t);
@@ -147,8 +171,15 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
                 if (existing.ContractId != id || existing.Amount != x.Amount) throw ContractException.Conflict("bank_transaction_already_allocated");
                 Remember(key, "deposit", new { id, x }, existing.Id); return new ContractId(existing.Id);
             }
-            var entry = new DepositVerification { ContractId = id, Amount = x.Amount, BankTransactionReference = reference,
-                VerificationReason = x.VerificationReason.Trim(), VerifiedByUserId = Actor, VerifiedAt = clock.GetUtcNow() };
+            var entry = new DepositVerification
+            {
+                ContractId = id,
+                Amount = x.Amount,
+                BankTransactionReference = reference,
+                VerificationReason = x.VerificationReason.Trim(),
+                VerifiedByUserId = Actor,
+                VerifiedAt = clock.GetUtcNow()
+            };
             repository.Add(entry); Audit("ContractDepositVerified", id); Remember(key, "deposit", new { id, x }, entry.Id); return new ContractId(entry.Id);
         }, t);
     }
@@ -235,12 +266,22 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
                 if (FileHash(previous) != last.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
             }
             var prepared = await signing.PrepareAsync(Document(c), x.CertificateId, previous, t);
-            var s = new ContractSignature { ContractId = id, SignerUserId = Actor, CertificateId = x.CertificateId,
-                SnapshotHash = c.SnapshotHash, SourceHash = FileHash(prepared.SourcePdf), FieldName = prepared.FieldName,
+            var s = new ContractSignature
+            {
+                ContractId = id,
+                SignerUserId = Actor,
+                CertificateId = x.CertificateId,
+                SnapshotHash = c.SnapshotHash,
+                SourceHash = FileHash(prepared.SourcePdf),
+                FieldName = prepared.FieldName,
                 PreparedHash = FileHash(prepared.PreparedPdf),
-                DocumentDigest = prepared.DocumentDigest, DataToSignDigest = prepared.DataToSignDigest,
-                CertificateChain = prepared.CertificateChain, ProviderUserId = prepared.ProviderUserId, CredentialId = prepared.CredentialId,
-                ExpiresAt = clock.GetUtcNow().AddMinutes(5) };
+                DocumentDigest = prepared.DocumentDigest,
+                DataToSignDigest = prepared.DataToSignDigest,
+                CertificateChain = prepared.CertificateChain,
+                ProviderUserId = prepared.ProviderUserId,
+                CredentialId = prepared.CredentialId,
+                ExpiresAt = clock.GetUtcNow().AddMinutes(5)
+            };
             s.PreparedObjectKey = $"contracts/{id:N}/signatures/{s.Id:N}/prepared.pdf";
             await files.PutAsync(c.RoomId, s.PreparedObjectKey, prepared.PreparedPdf, "application/pdf", t);
             repository.Add(s); c.Status = ContractStatus.PendingSigning; Audit("ContractSigningPrepared", id);
@@ -329,8 +370,15 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
             if (x.ProposedDate < Today || x.ProposedDate < c.StartDate || (!expiry && x.ProposedDate >= c.EndDate) || (expiry && x.ProposedDate < c.EndDate))
                 throw ContractException.Invalid("invalid_move_out_date");
             if (await repository.MoveOutAsync(id, t) is not null) throw ContractException.Conflict("move_out_already_requested");
-            var m = new ContractMoveOut { ContractId = id, ProposedDate = x.ProposedDate, Reason = x.Reason.Trim(),
-                RequestedByUserId = Actor, IsExpiry = expiry, Status = MoveOutStatus.Requested };
+            var m = new ContractMoveOut
+            {
+                ContractId = id,
+                ProposedDate = x.ProposedDate,
+                Reason = x.Reason.Trim(),
+                RequestedByUserId = Actor,
+                IsExpiry = expiry,
+                Status = MoveOutStatus.Requested
+            };
             repository.Add(m); Audit("ContractMoveOutRequested", id); Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, m.Id); return View(m);
         }, t);
     }
@@ -394,8 +442,15 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
                 m.SettlementLedgerReference = result.DecisionReference;
             }
             else m.PendingReason = "financial_ledger_and_deposit_policy";
-            repository.Add(new ContractSettlementReview { ContractId = id, Decision = m.SettlementDecision, LedgerReference = m.SettlementLedgerReference,
-                Settled = m.Status == MoveOutStatus.Settled, ReviewedByUserId = Actor, ReviewedAt = clock.GetUtcNow() });
+            repository.Add(new ContractSettlementReview
+            {
+                ContractId = id,
+                Decision = m.SettlementDecision,
+                LedgerReference = m.SettlementLedgerReference,
+                Settled = m.Status == MoveOutStatus.Settled,
+                ReviewedByUserId = Actor,
+                ReviewedAt = clock.GetUtcNow()
+            });
             Audit("ContractSettlementReviewed", id); Remember(key, "settlement", new { id, x }, m.Id); return View(m);
         }, t);
     }

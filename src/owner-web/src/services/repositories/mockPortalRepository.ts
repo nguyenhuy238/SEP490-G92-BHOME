@@ -171,7 +171,12 @@ export function createMockRepository(
       await delay();
       const db = load();
       applyPropertyCommand(db, command);
-      commit(db, 'rooms', 'property', `Mô phỏng: ${command.kind}${'reason' in command ? ` — ${command.reason}` : ''}`);
+      commit(
+        db,
+        'rooms',
+        'property',
+        `Mô phỏng: ${command.kind}${'reason' in command ? ` — ${command.reason}` : ''}`,
+      );
     },
     async read(signal) {
       await delay(signal);

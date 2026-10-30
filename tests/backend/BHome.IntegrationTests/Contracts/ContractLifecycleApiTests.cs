@@ -52,7 +52,9 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        var location = new Location("Synthetic Contract Location"); var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
+        // The existing single-Chain migration makes ChainId mandatory for every Location.
+        var chainId = await db.Set<Chain>().Select(x => x.Id).SingleAsync();
+        var location = new Location("Synthetic Contract Location") { ChainId = chainId }; var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
@@ -372,9 +374,17 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
             var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
             foreach (var (certId, actorId) in new[] { (ownerCert, w.Owner.Id), (tenantCert, w.Tenant.Id) }) db.Add(new BHome.DigitalSigning.Domain.SigningCertificate
             {
-                Id = certId, OwnerUserId = actorId, Provider = "viettel-mysign", ProviderUserId = "SYNTHETIC-SUBSCRIBER-" + certId,
-                CredentialId = "SYNTHETIC-CREDENTIAL", SerialNumber = certId.ToString(), Subject = "CN=Synthetic", Issuer = "CN=Synthetic CA",
-                ValidFrom = DateTimeOffset.UtcNow.AddDays(-1), ValidTo = DateTimeOffset.UtcNow.AddDays(10), CreatedAt = DateTimeOffset.UtcNow
+                Id = certId,
+                OwnerUserId = actorId,
+                Provider = "viettel-mysign",
+                ProviderUserId = "SYNTHETIC-SUBSCRIBER-" + certId,
+                CredentialId = "SYNTHETIC-CREDENTIAL",
+                SerialNumber = certId.ToString(),
+                Subject = "CN=Synthetic",
+                Issuer = "CN=Synthetic CA",
+                ValidFrom = DateTimeOffset.UtcNow.AddDays(-1),
+                ValidTo = DateTimeOffset.UtcNow.AddDays(10),
+                CreatedAt = DateTimeOffset.UtcNow
             });
             await db.SaveChangesAsync();
         }
@@ -403,14 +413,16 @@ public sealed class ContractFixture : IAsyncLifetime
     {
         await infrastructure.InitializeAsync();
         var testSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
-        Factory = infrastructure.Factory.WithWebHostBuilder(b => {
+        Factory = infrastructure.Factory.WithWebHostBuilder(b =>
+        {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey }));
             b.ConfigureTestServices(s =>
         {
             ProductionSigningProviderType = s.Last(d => d.ServiceType == typeof(IContractSigningProvider)).ImplementationType!;
             s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, TestOnlySigningProvider>();
             s.RemoveAll<IContractSettlementLedger>(); s.AddSingleton<IContractSettlementLedger>(Ledger);
-        }); });
+        });
+        });
     }
     public async Task DisposeAsync() { if (Factory is not null) await Factory.DisposeAsync(); await infrastructure.DisposeAsync(); }
 }

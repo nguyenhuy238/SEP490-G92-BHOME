@@ -1,5 +1,9 @@
 # API conventions
 
+Operational Task create/assign/update, Staff execution, Owner verification, private evidence and in-app
+notifications are documented in [Operational Tasks](OPERATIONAL_TASKS.md). The unified Task schema
+preserves legacy capture/meter routes and their UC-20 completion behavior.
+
 Use HTTPS, REST, JSON and `/api/v1/<resource>` routes. `GET /api/v1/session` is an authenticated
 foundation probe returning a minimal `userId` DTO. `POST /api/v1/auth/login` verifies existing Identity
 accounts. `/health/live`, `/health/ready` and development Swagger are operational exceptions to the

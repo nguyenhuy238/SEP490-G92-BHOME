@@ -22,6 +22,7 @@ public static class RolePermissions
             [Permissions.Rooms.View] = Allow(Roles.Owner, Roles.Staff, Roles.Tenant),
             [Permissions.Rooms.Manage] = Allow(Roles.Owner),
             [Permissions.Assets.UpdateCondition] = Allow(Roles.Owner, Roles.Staff),
+            [Permissions.OperationalTasks.View] = Allow(Roles.Owner, Roles.Staff),
             [Permissions.OperationalTasks.Manage] = Allow(Roles.Owner),
             [Permissions.OperationalTasks.Execute] = Allow(Roles.Staff),
             [Permissions.OperationalTasks.Verify] = Allow(Roles.Owner),

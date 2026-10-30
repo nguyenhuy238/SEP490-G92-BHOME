@@ -70,8 +70,13 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         var otherUser = await CreateUser();
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { user.UserName })).StatusCode);
         if (failure == "expired")
-            await WithDb(db => db.PasswordResetGrants.Where(x => x.UserId == user.Id)
-                .ExecuteUpdateAsync(update => update.SetProperty(x => x.ExpiresAt, DateTimeOffset.UtcNow)));
+        {
+            // Capture the application clock as a parameter. Translating UtcNow to SQL now()
+            // uses the container clock, which need not match the host on a Windows runner.
+            var expiredAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await WithDb(async db => Assert.Equal(1, await db.PasswordResetGrants.Where(x => x.UserId == user.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.ExpiresAt, expiredAt))));
+        }
         var response = await client.PostAsJsonAsync("/api/v1/auth/reset-password", new
         {
             userName = failure == "other-user" ? otherUser.UserName : user.UserName,

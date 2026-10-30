@@ -24,7 +24,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("Clients");
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture") || context.Request.Path.StartsWithSegments("/api/v1/contracts") || context.Request.Path.StartsWithSegments("/api/v1/digital-signing"))
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture") || context.Request.Path.StartsWithSegments("/api/v1/contracts") || context.Request.Path.StartsWithSegments("/api/v1/digital-signing") || context.Request.Path.StartsWithSegments("/api/v1/operational-tasks"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
