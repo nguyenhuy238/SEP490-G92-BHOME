@@ -216,22 +216,24 @@ export function generateRoomCodes(
   quantity: number,
   prefix = 'P.',
 ) {
+  const startSuffix = start >= 100 ? start % 100 : start;
   if (
     !floors.length ||
     floors.some((f) => !Number.isInteger(f) || f < 1 || f > 100) ||
     !Number.isInteger(start) ||
     start < 1 ||
+    startSuffix < 1 ||
     !Number.isInteger(quantity) ||
     quantity < 1 ||
     quantity > 50 ||
-    start + quantity > 100 ||
+    startSuffix + quantity - 1 > 99 ||
     floors.length * quantity > 200
   )
     throw new Error('Chọn tầng 1–100, số thứ tự 1–99, tối đa 50 phòng/tầng và 200 phòng mỗi lần.');
   return floors.flatMap((floor) =>
     Array.from({ length: quantity }, (_, i) => ({
       floor,
-      code: `${prefix.trim()}${floor}${String(start + i).padStart(2, '0')}`,
+      code: `${prefix.trim()}${floor}${String(startSuffix + i).padStart(2, '0')}`,
     })),
   );
 }
