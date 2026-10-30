@@ -24,6 +24,9 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
     {
         if (createdByUserId == Guid.Empty || locationId == Guid.Empty || staffUserId == Guid.Empty || startDate > endDate)
             return new(CreateAssignmentStatus.InvalidDateRange);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", cancellationToken);
         if (!await db.Locations.AsNoTracking().AnyAsync(x => x.Id == locationId, cancellationToken))
             return new(CreateAssignmentStatus.LocationNotFound);
 
@@ -49,6 +52,7 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
             db.Entry(assignment).State = EntityState.Detached;
             return new(CreateAssignmentStatus.DateRangeOverlaps);
         }
+        await transaction.CommitAsync(cancellationToken);
         return new(CreateAssignmentStatus.Created,
             new StaffAssignmentSummary(assignment.Id, assignment.StaffUserId, assignment.StartDate, assignment.EndDate));
     }

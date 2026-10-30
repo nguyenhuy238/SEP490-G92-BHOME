@@ -18,5 +18,5 @@ internal sealed class CaptureScope(BHomeDbContext db, ICurrentUser user, TimePro
             a.StartDate <= Today && a.EndDate >= Today))));
     public IQueryable<Room> VisibleRooms => db.Set<Room>().Where(r => VisibleLocations.Any(l => l.Id == r.LocationId));
     public IQueryable<OperationalTask> VisibleTasks => db.Set<OperationalTask>()
-        .Where(t => VisibleRooms.Any(r => r.Id == t.Meter.RoomId));
+        .Where(t => t.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && VisibleRooms.Any(r => r.Id == t.Meter.RoomId));
 }

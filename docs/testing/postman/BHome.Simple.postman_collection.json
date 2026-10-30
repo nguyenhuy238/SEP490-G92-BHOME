@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "95bb127b-ef91-4786-9ab4-9c9f18c41614",
-    "name": "BHOME — API đơn giản: Auth, Location, Room Type, Room, Asset và giá/phí",
+    "name": "BHOME — API đơn giản: Auth, Property và Operational Tasks",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "FE-02 / UC-01/02; BF-01 / UC-04..06 / GBR-01..03/08 / DBR-01/13. Có sẵn biến baseUrl, ownerAccessToken, staffAccessToken, staffUserId, locationId và chainVersion. Import thêm BHome.Local.postman_environment.json rồi chọn BHOME Local; nếu không chọn Environment thì dùng Collection Variables có sẵn. Request 24 tự lưu Owner token; 25 tự lưu Staff token + userId; 26 tự lưu Location ID khi response thành công và đúng role/dữ liệu. Các URL/Body/Authorization tham chiếu biến tự động. Send từng request; không Run toàn bộ khi chưa điền dữ liệu còn thiếu. 01–23: JWT/refresh/logout; 24–35: login Owner/Staff, xem/đổi tên Chain duy nhất (25a/25b), tạo Location và assignment; 36–50: Location/Room Type/Room/Asset; 51–63: giá/phí; 64–76: phân quyền/lỗi; 77–80: ngừng sử dụng. Áp dụng migration mới nhất, gồm 20261030023603_SingleSystemChain trên database test trước khi gọi API mới. baseUrl mặc định https://localhost:7240; sửa một lần trong Environment hoặc Collection Variables nếu API chạy địa chỉ khác. ROOM_TYPE_ID/ROOM_ID/ASSET_ID/POLICY_ID và version của các tài nguyên vẫn điền tay; Location ID và Staff ID dùng biến có sẵn. PUT phải lấy version mới nhất từ GET. D0 >= hôm nay theo Asia/Ho_Chi_Minh; D1 > hôm nay và > D0; D2 >= D1. Thay placeholder ngày trong Body và query bằng YYYY-MM-DD. Giá/phí là số giả lập kiểm thử, không phải quy định giá vận hành. Enum dùng số; không có DELETE. Dùng Location mới mỗi lượt test để tránh trùng số phòng/tên type/mã asset. Test script kiểm tra response và lưu token/ID và chainVersion khi thành công; không tự gửi request khác. Phần 01–23 kiểm thử JWT/refresh/logout vẫn giữ token riêng để tránh làm sai bài test reuse/thu hồi. Token hết hạn thì login lại đúng role; không dùng token đã logout. 08–15 test reuse R0 sẽ thu hồi session đó; giữ riêng token cũ. Nếu 429, chờ Retry-After. Chỉ dùng account/dữ liệu test. Chi tiết: docs/api/PROPERTY_MANAGEMENT.md. Collection chưa được chạy live trên server của người dùng. Hệ thống có một Chain duy nhất; Location tự thuộc Chain chung, không gửi chainId. Không có API tạo/xóa Chain. 25a/25b tự lưu chainVersion; chỉ Owner xem/đổi tên. Quyết định linh hoạt: 60a–60e test PUT sửa policy tương lai chưa sử dụng, có audit và kiểm tra version. Chỉ sửa name/rate/kỳ; không đổi scope/mã. Giá đã hiệu lực hoặc firstUsedAt có giá trị tiếp tục khóa. Repository chưa có luồng Invoice, mốc sử dụng dành cho tích hợp billing sau này. Áp dụng migration FlexibleFutureBillingPolicies trước khi test PUT."
+    "description": "FE-02 / UC-01/02; BF-01 / UC-04..06 / GBR-01..03/08 / DBR-01/13. Có sẵn biến baseUrl, ownerAccessToken, staffAccessToken, staffUserId, locationId và chainVersion. Import thêm BHome.Local.postman_environment.json rồi chọn BHOME Local; nếu không chọn Environment thì dùng Collection Variables có sẵn. Request 24 tự lưu Owner token; 25 tự lưu Staff token + userId; 26 tự lưu Location ID khi response thành công và đúng role/dữ liệu. Các URL/Body/Authorization tham chiếu biến tự động. Send từng request; không Run toàn bộ khi chưa điền dữ liệu còn thiếu. 01–23: JWT/refresh/logout; 24–35: login Owner/Staff, xem/đổi tên Chain duy nhất (25a/25b), tạo Location và assignment; 36–50: Location/Room Type/Room/Asset; 51–63: giá/phí; 64–76: phân quyền/lỗi; 77–80: ngừng sử dụng. Áp dụng migration mới nhất, gồm 20261030023603_SingleSystemChain trên database test trước khi gọi API mới. baseUrl mặc định https://localhost:7240; sửa một lần trong Environment hoặc Collection Variables nếu API chạy địa chỉ khác. ROOM_TYPE_ID/ROOM_ID/ASSET_ID/POLICY_ID và version của các tài nguyên vẫn điền tay; Location ID và Staff ID dùng biến có sẵn. PUT phải lấy version mới nhất từ GET. D0 >= hôm nay theo Asia/Ho_Chi_Minh; D1 > hôm nay và > D0; D2 >= D1. Thay placeholder ngày trong Body và query bằng YYYY-MM-DD. Giá/phí là số giả lập kiểm thử, không phải quy định giá vận hành. Enum dùng số; không có DELETE. Dùng Location mới mỗi lượt test để tránh trùng số phòng/tên type/mã asset. Test script kiểm tra response và lưu token/ID và chainVersion khi thành công; không tự gửi request khác. Phần 01–23 kiểm thử JWT/refresh/logout vẫn giữ token riêng để tránh làm sai bài test reuse/thu hồi. Token hết hạn thì login lại đúng role; không dùng token đã logout. 08–15 test reuse R0 sẽ thu hồi session đó; giữ riêng token cũ. Nếu 429, chờ Retry-After. Chỉ dùng account/dữ liệu test. Chi tiết: docs/api/PROPERTY_MANAGEMENT.md. Collection chưa được chạy live trên server của người dùng. Hệ thống có một Chain duy nhất; Location tự thuộc Chain chung, không gửi chainId. Không có API tạo/xóa Chain. 25a/25b tự lưu chainVersion; chỉ Owner xem/đổi tên. Quyết định linh hoạt: 60a–60e test PUT sửa policy tương lai chưa sử dụng, có audit và kiểm tra version. Chỉ sửa name/rate/kỳ; không đổi scope/mã. Giá đã hiệu lực hoặc firstUsedAt có giá trị tiếp tục khóa. Repository chưa có luồng Invoice, mốc sử dụng dành cho tích hợp billing sau này. Áp dụng migration FlexibleFutureBillingPolicies trước khi test PUT.\n\n81–118: BF-02 / UC-10–12 / DBR-01: Task create/assign/update, Staff execute, Owner verify/rework/cancel, evidence private, notifications và negative cases. Chạy 81–106 sau setup 24/25/26/28 và TRƯỚC bước 79 ngừng Location; 107–108 là nhánh hủy riêng, 109–118 là kiểm tra lỗi (111–113 cần dữ liệu/token tùy chọn). 81 tự tạo UUID idempotency và deadline test sau hiện tại nếu thiếu/hết hạn; 82 dùng lại key/payload để kiểm tra retry. Các mutation khác có UUID mới mỗi Send. 94: chọn file PNG/JPEG giả lập ở Body binary, không multipart; sau đó 95 lấy version mới. Token/ID runtime không commit. Task priority dùng Normal/High dạng chuỗi, khác enum số của Property API. Migration bắt buộc: ContractActivationLifecycle + UnifiedOperationalTasks. Hướng dẫn đầy đủ tại docs/api/OPERATIONAL_TASKS.md và docs/testing/postman/README.md."
   },
   "item": [
     {
@@ -3443,6 +3443,2372 @@
           }
         }
       ]
+    },
+    {
+      "name": "81 — Owner tạo Task và tự giao theo Location → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{taskCreateKey}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Chạy 24, 25, 26, 28 trước; assignment phải có hiệu lực hôm nay. Chạy trước khi ngừng Location ở 79. Mỗi Send 81 bắt đầu lượt Task mới, tạo key mới và lưu taskId/taskVersion; reset evidence/notification/cancel ID cũ. Deadline thiếu/hết hạn được đặt sau hiện tại 24 giờ, chỉ là dữ liệu test. Không tự chọn Staff.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');",
+              "const configured = String(scope.get('taskDueAt') || '');",
+              "if (!configured || !Number.isFinite(Date.parse(configured)) || Date.parse(configured) <= Date.now()) scope.set('taskDueAt', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());",
+              "scope.set('taskCreateDueAt', scope.get('taskDueAt'));",
+              "scope.set('taskCreateKey', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái Assigned', function () { pm.expect(body.status).to.eql('Assigned'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}",
+              "if (pm.response.code === 201) {",
+              "    const body = pm.response.json();",
+              "    if (typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        ['taskEvidenceId', 'taskNotificationId', 'taskPreviousVersion', 'taskCancelId'].forEach(function (key) { scope.unset(key); });",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "82 — Retry tạo Task cùng key và payload → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{taskCreateKey}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Giữ nguyên payload/key từ 81. Phải trả cùng ID, không tạo thêm Task. Không ghi đè version hiện tại bằng response snapshot cũ.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!uuid.test(String(scope.get('taskCreateKey') || ''))) throw new Error('Thiếu taskCreateKey: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) pm.test('Replay trả cùng taskId', function () { pm.expect(pm.response.json().id).to.eql((pm.environment.name ? pm.environment : pm.collectionVariables).get('taskId')); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "83 — Owner xem danh sách Task → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks?locationId={{locationId}}&page=1&pageSize=20",
+        "description": "BF-02 / UC-10–12 / DBR-01. Danh sách ad-hoc có phân trang; thêm status/priority/isOverdue/dueFrom/dueTo khi cần."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) pm.test('Có phân trang', function () { const b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.totalCount).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "84 — Owner lấy Task và version hiện tại → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Lưu taskVersion mới nhất; dùng lại sau khi thay đổi ngoài Postman hoặc sau retry snapshot."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "85 — Owner cập nhật Task → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Thực hiện trước start; lưu version cũ vào taskPreviousVersion để test 86. Không thay Location hoặc status. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"work\": {\n    \"title\": \"{{taskTitle}} — cập nhật\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"High\",\n    \"dueAt\": \"{{taskDueAt}}\",\n    \"evidenceRequired\": true\n  },\n  \"reason\": \"Điều chỉnh yêu cầu kiểm thử.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái Assigned', function () { pm.expect(body.status).to.eql('Assigned'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskPreviousVersion', String(scope.get('taskVersion')));",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "86 — Từ chối update bằng version cũ → 409",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Sau 85; response lỗi không thay taskVersion. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskPreviousVersion}},\n  \"work\": {\n    \"title\": \"{{taskTitle}} — cập nhật\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"High\",\n    \"dueAt\": \"{{taskDueAt}}\",\n    \"evidenceRequired\": true\n  },\n  \"reason\": \"Điều chỉnh yêu cầu kiểm thử.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskPreviousVersion') || ''))) throw new Error('Thiếu taskPreviousVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', function () { pm.response.to.have.status(409); });",
+              "if (pm.response.code === 409) pm.test('Mã lỗi stale_version', function () { pm.expect(pm.response.json().code).to.eql('stale_version'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "87 — Owner đồng bộ người phụ trách Location → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/assign",
+        "description": "BF-02 / UC-10–12 / DBR-01. Server tự route theo assignment. Nếu không đổi assignment thì no-op, không tăng version. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "88 — Staff xem My Tasks → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks?locationId={{locationId}}&page=1&pageSize=20",
+        "description": "BF-02 / UC-10–12 / DBR-01. Chỉ thấy Task tại Location đang phụ trách."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "89 — Staff bắt đầu Task → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/start",
+        "description": "BF-02 / UC-10–12 / DBR-01. Assigned → InProgress. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái InProgress', function () { pm.expect(body.status).to.eql('InProgress'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "90 — Staff ghi tiến độ → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/progress",
+        "description": "BF-02 / UC-10–12 / DBR-01. Progress append-only trong history. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Đã kiểm tra khu vực tầng trệt (giả lập).\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái InProgress', function () { pm.expect(body.status).to.eql('InProgress'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "91 — Staff ghi blocker → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/blockers",
+        "description": "BF-02 / UC-10–12 / DBR-01. Giữ InProgress và tạo thông báo cho Owner. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Thiếu vật tư vệ sinh (giả lập).\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái InProgress', function () { pm.expect(body.status).to.eql('InProgress'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "92 — Owner ghi hướng dẫn xử lý → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/coordinate",
+        "description": "BF-02 / UC-10–12 / DBR-01. Giữ trạng thái, lưu history, thông báo Staff. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Vật tư test đã được bổ sung, tiếp tục kiểm tra.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái InProgress', function () { pm.expect(body.status).to.eql('InProgress'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "93 — Chặn submit thiếu evidence bắt buộc → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/submit",
+        "description": "BF-02 / UC-10–12 / DBR-01. Task 81 yêu cầu ảnh; chưa chọn evidenceIds phải bị chặn. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Hoàn thành kiểm thử.\",\n  \"evidenceIds\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', function () { pm.response.to.have.status(409); });",
+              "if (pm.response.code === 409) pm.test('Mã lỗi completion_evidence_required', function () { pm.expect(pm.response.json().code).to.eql('completion_evidence_required'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "94 — Staff upload ảnh evidence private → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/evidence",
+        "description": "BF-02 / UC-10–12 / DBR-01. Body → binary → chọn ảnh PNG giả lập từ máy. Dùng JPEG thì đổi Content-Type thành image/jpeg. Không dùng ảnh CCCD/PII thật. Tối đa mặc định 5 MiB/ảnh, 10 ảnh/Task. Sau upload bắt buộc chạy 95 để lấy taskVersion mới trước submit. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!pm.request.body || !pm.request.body.file || !pm.request.body.file.src) throw new Error('Chọn ảnh test ở Body > binary trước khi Send.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const b = pm.response.json();",
+              "    const valid = typeof b.id === 'string' && /^[0-9a-f-]{36}$/i.test(b.id) && ['image/png','image/jpeg'].includes(b.contentType) && b.length > 0;",
+              "    pm.test('Metadata evidence hợp lệ, không lộ object key', function () { pm.expect(valid).to.eql(true); pm.expect(b).not.to.have.property('objectKey'); });",
+              "    if (valid) (pm.environment.name ? pm.environment : pm.collectionVariables).set('taskEvidenceId', b.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "95 — Staff lấy version sau upload → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Upload làm tăng taskVersion. Chạy sau 94 hoặc khi cần refresh version trong lúc thực hiện."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái InProgress', function () { pm.expect(body.status).to.eql('InProgress'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "96 — Staff xem metadata evidence → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/evidence",
+        "description": "BF-02 / UC-10–12 / DBR-01. Trả metadata; không chứa URL public hoặc object key."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) pm.test('Evidence metadata private', function () { const b = pm.response.json(); pm.expect(b).to.be.an('array'); b.forEach(function (e) { pm.expect(e).not.to.have.property('objectKey'); }); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "97 — Owner tải ảnh evidence → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/evidence/{{taskEvidenceId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Download có kiểm quyền; không dùng đường dẫn MinIO công khai."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!uuid.test(String(scope.get('taskEvidenceId') || ''))) throw new Error('Thiếu taskEvidenceId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) pm.test('Ảnh attachment và nosniff', function () { pm.expect(pm.response.headers.get('Content-Type')).to.match(/^image\\/(png|jpeg)/); pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "98 — Staff nộp kết quả và evidence → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/submit",
+        "description": "BF-02 / UC-10–12 / DBR-01. Sau 94–95; PendingVerification, chưa Completed. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Hoàn thành kiểm tra vệ sinh (giả lập).\",\n  \"evidenceIds\": [\n    \"{{taskEvidenceId}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');",
+              "if (!uuid.test(String(scope.get('taskEvidenceId') || ''))) throw new Error('Thiếu taskEvidenceId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái PendingVerification', function () { pm.expect(body.status).to.eql('PendingVerification'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "99 — Staff không được xác nhận Completed → 403",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/verify",
+        "description": "BF-02 / UC-10–12 / DBR-01. Chỉ Owner có quyền verify. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "100 — Owner yêu cầu làm lại → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/rework",
+        "description": "BF-02 / UC-10–12 / DBR-01. Reason bắt buộc; giữ evidence và lịch sử lần nộp cũ. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Kiểm tra lại góc cầu thang (giả lập).\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái InProgress', function () { pm.expect(body.status).to.eql('InProgress'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "101 — Staff nộp lại sau rework → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/submit",
+        "description": "BF-02 / UC-10–12 / DBR-01. Chọn lại ảnh phù hợp hoặc upload ảnh mới rồi chạy 95. Không tự xóa evidence cũ. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Đã kiểm tra bổ sung, kết quả giả lập.\",\n  \"evidenceIds\": [\n    \"{{taskEvidenceId}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');",
+              "if (!uuid.test(String(scope.get('taskEvidenceId') || ''))) throw new Error('Thiếu taskEvidenceId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái PendingVerification', function () { pm.expect(body.status).to.eql('PendingVerification'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "102 — Owner xác nhận hoàn thành → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/verify",
+        "description": "BF-02 / UC-10–12 / DBR-01. Ghi verifier/time; Completed sau Owner verification. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Đạt yêu cầu kiểm thử.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái Completed', function () { pm.expect(body.status).to.eql('Completed'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskId', body.id);",
+              "        scope.set('taskVersion', String(body.version));",
+              "    }",
+              "}",
+              "if (pm.response.code === 200) pm.test('Có bằng chứng Owner verification', function () { const b = pm.response.json(); pm.expect(b.verifiedByUserId).to.be.a('string'); pm.expect(b.verifiedAt).to.be.a('string'); pm.expect(b.isOverdue).to.eql(false); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "103 — Owner xem lịch sử Task → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/history?page=1&pageSize=100",
+        "description": "BF-02 / UC-10–12 / DBR-01. History có assignment/progress/blocker/evidence/rework/verification; không có API sửa/xóa history."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "104 — Staff xem thông báo Task → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/notifications?page=1&pageSize=100",
+        "description": "BF-02 / UC-10–12 / DBR-01. Tự lưu taskNotificationId của một thông báo thuộc taskId hiện tại; chỉ recipient hiện hành thấy dữ liệu."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "    const b = pm.response.json(); const found = Array.isArray(b.items) && b.items.find(function (n) { return n.taskId === scope.get('taskId'); });",
+              "    pm.test('Có thông báo của Task hiện tại', function () { pm.expect(Boolean(found)).to.eql(true); });",
+              "    if (found && /^[0-9a-f-]{36}$/i.test(found.id)) scope.set('taskNotificationId', found.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "105 — Staff đánh dấu đã đọc thông báo → 204",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/notifications/{{taskNotificationId}}/read",
+        "description": "BF-02 / UC-10–12 / DBR-01. Tự idempotent, không cần Idempotency-Key. Có thể Send lại."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskNotificationId') || ''))) throw new Error('Thiếu taskNotificationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "106 — Không hủy được Task đã Completed → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/cancel",
+        "description": "BF-02 / UC-10–12 / DBR-01. Không thay trạng thái terminal, không ghi đè taskVersion khi lỗi. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskVersion}},\n  \"note\": \"Thử hủy sau hoàn thành (giả lập).\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskVersion') || ''))) throw new Error('Thiếu taskVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', function () { pm.response.to.have.status(409); });",
+              "if (pm.response.code === 409) pm.test('Mã lỗi invalid_task_transition', function () { pm.expect(pm.response.json().code).to.eql('invalid_task_transition'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "107 — Owner tạo Task riêng để thử hủy → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Lưu taskCancelId/taskCancelVersion riêng; không ghi đè Task chính. Deadline taskDueAt vẫn phải ở tương lai. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"Task kiểm thử nhánh hủy\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskDueAt}}\",\n    \"evidenceRequired\": false\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái Assigned', function () { pm.expect(body.status).to.eql('Assigned'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskCancelId', body.id);",
+              "        scope.set('taskCancelVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "108 — Owner hủy Task với lý do → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskCancelId}}/cancel",
+        "description": "BF-02 / UC-10–12 / DBR-01. Nhánh riêng 107 → 108. Giữ lịch sử thay vì DELETE. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{taskCancelVersion}},\n  \"note\": \"Hủy công việc kiểm thử không còn cần thực hiện.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskCancelId') || ''))) throw new Error('Thiếu taskCancelId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!/^[1-9][0-9]*$/.test(String(scope.get('taskCancelVersion') || ''))) throw new Error('Thiếu taskCancelVersion: lấy lại version từ GET.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const valid = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) && Number.isInteger(body.version) && body.version > 0;",
+              "    pm.test('Task ID/version hợp lệ', function () { pm.expect(valid).to.eql(true); });",
+              "    pm.test('Trạng thái Cancelled', function () { pm.expect(body.status).to.eql('Cancelled'); });",
+              "    if (valid) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('taskCancelId', body.id);",
+              "        scope.set('taskCancelVersion', String(body.version));",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "109 — Staff không được tạo Task → 403",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Không thay đổi quyền để test; dùng Staff token từ 25. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('staffAccessToken') || '').trim()) throw new Error('Thiếu staffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "110 — Không token không được đọc Task → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. No Auth; Task ID từ 81."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "111 — Không giao được khi Location thiếu Staff → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Ca tùy chọn: điền taskUnassignedLocationId là Location active thật, chưa có Staff phụ trách hôm nay. Không dùng ID bịa hoặc Location của workflow đang có assignment. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{taskUnassignedLocationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskUnassignedLocationId') || ''))) throw new Error('Thiếu taskUnassignedLocationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', function () { pm.response.to.have.status(409); });",
+              "if (pm.response.code === 409) pm.test('Mã lỗi no_responsible_staff', function () { pm.expect(pm.response.json().code).to.eql('no_responsible_staff'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "112 — Staff ngoài Location không được tải evidence → 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{otherStaffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}/evidence/{{taskEvidenceId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Ca tùy chọn: điền otherStaffAccessToken từ tài khoản Staff test khác, KHÔNG phụ trách Location của Task. Không dùng token Staff hiện tại hoặc token Owner."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('otherStaffAccessToken') || '').trim()) throw new Error('Thiếu otherStaffAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!uuid.test(String(scope.get('taskEvidenceId') || ''))) throw new Error('Thiếu taskEvidenceId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "113 — Tenant không được đọc Task vận hành → 403",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{tenantAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/{{taskId}}",
+        "description": "BF-02 / UC-10–12 / DBR-01. Ca tùy chọn: đăng nhập Tenant test, điền tenantAccessToken runtime; không lưu token vào file git."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('tenantAccessToken') || '').trim()) throw new Error('Thiếu tenantAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('taskId') || ''))) throw new Error('Thiếu taskId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "114 — Từ chối lệnh thiếu Idempotency-Key → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Không thêm header idempotency; không tạo Task.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', function () { pm.response.to.have.status(400); });",
+              "if (pm.response.code === 400) pm.test('Mã lỗi idempotency_key_required', function () { pm.expect(pm.response.json().code).to.eql('idempotency_key_required'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "115 — Từ chối dùng lại key với payload khác → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{taskCreateKey}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Dùng key từ 81 nhưng thay title. Không tạo thêm Task và không thay taskId/version.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"Nội dung khác để kiểm tra conflict\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!uuid.test(String(scope.get('taskCreateKey') || ''))) throw new Error('Thiếu taskCreateKey: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', function () { pm.response.to.have.status(409); });",
+              "if (pm.response.code === 409) pm.test('Mã lỗi idempotency_conflict', function () { pm.expect(pm.response.json().code).to.eql('idempotency_conflict'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "116 — Từ chối client tự đặt Completed → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Unknown fields bị từ chối; client không chọn status/assignee để vượt workflow. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"{{taskCreateDueAt}}\",\n    \"evidenceRequired\": true\n  },\n  \"status\": \"Completed\",\n  \"assignedStaffUserId\": \"{{staffUserId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');",
+              "if (!uuid.test(String(scope.get('staffUserId') || ''))) throw new Error('Thiếu staffUserId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "117 — Từ chối deadline không có offset → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks",
+        "description": "BF-02 / UC-10–12 / DBR-01. Timestamp cố ý sai contract: thiếu Z hoặc +07:00. Dữ liệu ngày giả lập, server phải từ chối trước nghiệp vụ. Lệnh dùng UUID mới mỗi lần Send; request 82 minh họa retry với cùng key/payload.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"work\": {\n    \"title\": \"{{taskTitle}}\",\n    \"requirements\": \"Kiểm tra vệ sinh khu vực chung, ghi nhận kết quả và ảnh bằng chứng giả lập.\",\n    \"priority\": \"Normal\",\n    \"dueAt\": \"2030-01-01T10:00:00\",\n    \"evidenceRequired\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');",
+              "if (!uuid.test(String(scope.get('locationId') || ''))) throw new Error('Thiếu locationId: chuẩn bị đúng tài nguyên test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "118 — Task không tồn tại → 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/operational-tasks/00000000-0000-0000-0000-000000000001",
+        "description": "BF-02 / UC-10–12 / DBR-01. UUID giả lập không dùng làm Task thực. Không thay taskId đang lưu."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "if (!String(scope.get('ownerAccessToken') || '').trim()) throw new Error('Thiếu ownerAccessToken: đăng nhập đúng tài khoản test trước.');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -3493,6 +5859,76 @@
       "value": "1",
       "type": "string",
       "description": "Tự lưu từ các request 60a/60b/60c để test sửa chính sách tương lai."
+    },
+    {
+      "key": "taskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskVersion",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "taskPreviousVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskTitle",
+      "value": "Kiểm tra khu vực chung (dữ liệu test)",
+      "type": "string"
+    },
+    {
+      "key": "taskDueAt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskCreateDueAt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskCreateKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskEvidenceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskNotificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskCancelId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskCancelVersion",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "taskUnassignedLocationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherStaffAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenantAccessToken",
+      "value": "",
+      "type": "string"
     }
   ]
 }

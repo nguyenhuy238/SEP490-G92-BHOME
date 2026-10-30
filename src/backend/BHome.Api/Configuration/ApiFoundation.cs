@@ -68,6 +68,7 @@ public static class ApiFoundation
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
+            options.OperationFilter<TaskApiOperationFilter>();
             options.SwaggerDoc("v1", new OpenApiInfo { Title = "BHOME API", Version = "v1" });
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {

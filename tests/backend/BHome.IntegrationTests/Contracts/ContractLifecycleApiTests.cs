@@ -52,7 +52,9 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        var location = new Location("Synthetic Contract Location"); var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
+        // The existing single-Chain migration makes ChainId mandatory for every Location.
+        var chainId = await db.Set<Chain>().Select(x => x.Id).SingleAsync();
+        var location = new Location("Synthetic Contract Location") { ChainId = chainId }; var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);

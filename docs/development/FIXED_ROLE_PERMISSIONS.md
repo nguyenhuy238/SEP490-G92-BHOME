@@ -43,6 +43,7 @@ Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi 
 | rooms.view                  | Có    | Có    | Có     | UC-04/07, toàn hệ thống / assigned Location / own Room                                      |
 | rooms.manage                | Có    | Không | Không  | UC-04, chain của Owner                                                                      |
 | assets.update-condition     | Có    | Có    | Không  | UC-05, toàn hệ thống / assigned Location                                                    |
+| operational-tasks.view      | Có    | Có    | Không  | UC-10..12, Staff chỉ đọc công việc tại Location đang phụ trách                            |
 | operational-tasks.manage    | Có    | Không | Không  | UC-10/12, tạo/giao/theo dõi, theo state của use case                                        |
 | operational-tasks.execute   | Không | Có    | Không  | UC-11, task được giao và đúng Location                                                      |
 | operational-tasks.verify    | Có    | Không | Không  | UC-12, Owner xác minh theo workflow                                                         |
