@@ -15,13 +15,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 name: "CK_Task_Period",
                 table: "OperationalTasks");
 
-            migrationBuilder.AddColumn<int>(
-                name: "Status",
-                table: "Rooms",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
-
             migrationBuilder.AddColumn<Guid>(
                 name: "ContractId",
                 table: "OperationalTasks",
@@ -614,10 +607,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
             migrationBuilder.DropCheckConstraint(
                 name: "CK_Task_Period",
                 table: "OperationalTasks");
-
-            migrationBuilder.DropColumn(
-                name: "Status",
-                table: "Rooms");
 
             migrationBuilder.DropColumn(
                 name: "ContractId",
