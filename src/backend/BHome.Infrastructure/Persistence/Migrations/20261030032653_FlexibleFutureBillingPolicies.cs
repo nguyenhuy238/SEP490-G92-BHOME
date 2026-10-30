@@ -61,6 +61,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.Sql("""
                 DO $$ BEGIN
+                    IF to_regnamespace('legacy_capture_20261028') IS NOT NULL THEN
+                        RAISE EXCEPTION 'Legacy upgrade downgrade requires a reviewed data-preserving recovery plan';
+                    END IF;
                     IF EXISTS (SELECT 1 FROM "BillingPolicies" WHERE "FirstUsedAt" IS NOT NULL) THEN
                         RAISE EXCEPTION 'Cannot drop recorded policy usage without an approved preservation plan';
                     END IF;

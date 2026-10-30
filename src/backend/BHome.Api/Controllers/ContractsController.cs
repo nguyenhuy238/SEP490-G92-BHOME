@@ -13,6 +13,11 @@ public sealed class ContractsController(ContractService service) : ControllerBas
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) && key != Guid.Empty
         ? key : throw ContractException.Invalid("idempotency_key_required");
 
+    [HttpGet]
+    public Task<ContractPage> List(CancellationToken t, [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+        [FromQuery] Guid? locationId = null, [FromQuery] string? status = null)
+        => service.ListAsync(page, pageSize, locationId, status, t);
+
     [HttpPost, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public async Task<IActionResult> Create(ContractDraftInput x, CancellationToken t)
     { var result = await service.CreateAsync(x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }

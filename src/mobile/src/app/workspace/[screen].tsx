@@ -7,6 +7,7 @@ import { WorkspaceShell } from '../../components/WorkspaceShell';
 import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
 import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/workspace/navigation';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
+import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import {
   TenantHome,
@@ -23,6 +24,7 @@ import {
 } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
+import { ContractScreen } from '../../features/contracts/ContractScreen';
 import {
   ContractPreparation,
   Inspection,
@@ -94,19 +96,37 @@ export default function WorkspaceRoute() {
       </WorkspaceShell>
     );
   const Screen = screens[screen];
+  if (!preview && screen === 'owner-home')
+    return (
+      <WorkspaceShell screen={screen}>
+        <OwnerOverviewScreen />
+      </WorkspaceShell>
+    );
+  if (
+    !preview &&
+    ['signing', 'contract', 'contract-request', 'prepare-contract', 'move-out'].includes(screen)
+  )
+    return (
+      <WorkspaceShell screen={screen}>
+        <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />
+      </WorkspaceShell>
+    );
   // Never fill an authenticated account with synthetic finance/identity records.
-  // Only the OCR APIs exist today; new data needs a confirmed backend adapter.
+  // Screens without a confirmed backend adapter keep the explicit unavailable state.
   if (!preview && !['profile', 'onboarding', 'rooms'].includes(screen))
     return (
       <WorkspaceShell screen={screen}>
         <Heading
-          title={screen === homeScreen[role] ? 'Chào mừng đến BHOME' : 'Dữ liệu chưa được kết nối'}
+          title={screen === homeScreen[role] ? 'Chào mừng đến BHOME' : 'Chức năng chưa triển khai'}
         />
         <Box>
           <Text>
             Bạn đã đăng nhập với vai trò {role}. Màn hình này chưa có API nghiệp vụ được kết nối.
           </Text>
           <Text>Thông tin tài khoản thật sẽ hiển thị sau khi có hợp đồng API tương ứng.</Text>
+          <Action icon="file-document-outline" onPress={() => go('signing')}>
+            Hợp đồng & Vòng đời
+          </Action>
           {role === 'Staff' && (
             <>
               <Action onPress={() => go('onboarding')}>Tiếp nhận cư dân & CCCD</Action>

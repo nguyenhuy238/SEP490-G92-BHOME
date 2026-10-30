@@ -103,19 +103,41 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
     [InlineData(403)]
     [InlineData(404)]
     [InlineData(409)]
-    public async Task PropertyErrorsPreserveStatusCodeAndPublicCodeWithoutExceptionDetails(int status)
+    public async Task PropertyRejectionsPreserveStatusSafeCodeAndCorrelation(int status)
     {
         var correlation = Guid.NewGuid().ToString();
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/test-probes/property-error/{status}");
         request.Headers.Add("X-Correlation-ID", correlation);
         var response = await client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(status, body.RootElement.GetProperty("status").GetInt32());
-        Assert.Equal("synthetic_property_rejection", body.RootElement.GetProperty("code").GetString());
-        Assert.Equal(correlation, body.RootElement.GetProperty("correlationId").GetString());
-        Assert.False(body.RootElement.TryGetProperty("exception", out _));
-        Assert.DoesNotContain("Property operation rejected.", body.RootElement.GetRawText());
+        Assert.Equal(status, body.GetProperty("status").GetInt32());
+        Assert.Equal("synthetic_property_rejection", body.GetProperty("code").GetString());
+        Assert.Equal(correlation, body.GetProperty("correlationId").GetString());
+        Assert.False(body.TryGetProperty("stackTrace", out _));
+        Assert.False(body.TryGetProperty("detail", out _));
+    }
+
+    [Theory]
+    [InlineData("/test-probes/property-error/400", 400, "application/pdf")]
+    [InlineData("/test-probes/property-error/403", 403, "application/octet-stream")]
+    [InlineData("/test-probes/property-error/404", 404, "image/jpeg")]
+    [InlineData("/test-probes/property-error/409", 409, "application/pdf")]
+    [InlineData("/test-probes/error", 500, "application/pdf")]
+    public async Task BinaryAcceptPreservesProblemStatusInsteadOfThrowingAnotherException(string path, int status, string accept)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.ParseAdd(accept);
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(status, body.GetProperty("status").GetInt32());
+        Assert.Equal(correlation, body.GetProperty("correlationId").GetString());
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.False(body.TryGetProperty("exception", out _));
     }
 }

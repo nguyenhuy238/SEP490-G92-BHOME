@@ -21,6 +21,12 @@ remains a later vertical slice.
 account with the Staff role. A Staff account may have simultaneous assignments to several Locations. PostgreSQL rejects overlapping
 inclusive date ranges for the same Location, including races between parallel requests.
 
+Assignment creation now takes the same transaction-scoped Location advisory lock used by Property
+configuration before checking current Staff eligibility and overlapping dates, then commits the
+assignment. This prevents concurrent GiST exclusion checks from deadlocking (`40P01`); the database
+exclusion constraint remains in force. Concurrency regression uses ten independent date windows,
+requiring exactly one 201 and one 409 per pair. See [Contract stabilization](CONTRACT_STABILIZATION.md).
+
 `GET /api/v1/staff-location-assignments?locationId=<id>` returns the Location's assignment history to
 any Owner. The read API uses a query parameter because GET request bodies are not reliably supported
 by HTTP clients and intermediaries. `GET /api/v1/locations/assigned-to-me` returns only Locations assigned to the current

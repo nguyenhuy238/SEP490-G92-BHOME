@@ -7,6 +7,9 @@ using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.TestHost;
+using Npgsql;
 
 namespace BHome.IntegrationTests;
 
@@ -111,29 +114,48 @@ public sealed class LocationAssignmentApiTests(AuthenticationDatabaseFixture fix
     [Fact]
     public async Task ConcurrentRequestsCreateAtMostOneAssignmentForTheSameLocationAndDates()
     {
+        var failures = new SqlStateCapture();
+        await using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddControllers(options => options.Filters.Add(failures))));
         var owner = await CreateUserAsync(Roles.Owner);
         var firstStaff = await CreateUserAsync(Roles.Staff);
         var secondStaff = await CreateUserAsync(Roles.Staff);
-        using var setupClient = await AuthenticatedClientAsync(owner);
+        using var setupClient = host.CreateClient();
+        var setupSession = await LoginAsync(setupClient, owner);
+        setupClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", setupSession.AccessToken);
         var location = await CreateLocationAsync(setupClient, "Concurrent Location");
         var session = await LoginAsync(setupClient, owner);
-        using var firstClient = fixture.Factory.CreateClient();
-        using var secondClient = fixture.Factory.CreateClient();
+        using var firstClient = host.CreateClient();
+        using var secondClient = host.CreateClient();
         firstClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         secondClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         var start = VietnamToday().AddDays(20);
         var end = start.AddDays(2);
 
-        var requests = new[]
+        for (var attempt = 0; attempt < 10; attempt++)
         {
-            firstClient.PostAsJsonAsync("/api/v1/staff-location-assignments",
-                new { locationId = location.Id, staffUserId = firstStaff.Id, startDate = start, endDate = end }),
-            secondClient.PostAsJsonAsync("/api/v1/staff-location-assignments",
-                new { locationId = location.Id, staffUserId = secondStaff.Id, startDate = start, endDate = end })
-        };
-        var responses = await Task.WhenAll(requests);
-        Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Created));
-        Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Conflict));
+            var from = start.AddDays(attempt * 5); var to = end.AddDays(attempt * 5);
+            var responses = await Task.WhenAll(
+                firstClient.PostAsJsonAsync("/api/v1/staff-location-assignments",
+                    new { locationId = location.Id, staffUserId = firstStaff.Id, startDate = from, endDate = to }),
+                secondClient.PostAsJsonAsync("/api/v1/staff-location-assignments",
+                    new { locationId = location.Id, staffUserId = secondStaff.Id, startDate = from, endDate = to }));
+            var diagnostic = $"Statuses: {string.Join(',', responses.Select(r => (int)r.StatusCode))}; SQLSTATE: {string.Join(',', failures.Codes)}";
+            Assert.True(responses.Count(x => x.StatusCode == HttpStatusCode.Created) == 1, diagnostic);
+            Assert.True(responses.Count(x => x.StatusCode == HttpStatusCode.Conflict) == 1, diagnostic);
+            foreach (var response in responses) response.Dispose();
+        }
+    }
+
+    // Capture only provider classification, never SQL, credentials or exception text.
+    private sealed class SqlStateCapture : IExceptionFilter
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Codes { get; } = new();
+        public void OnException(ExceptionContext context)
+        {
+            for (var current = context.Exception; current is not null; current = current.InnerException)
+                Codes.Enqueue(current is PostgresException postgres ? postgres.SqlState : current.GetType().Name);
+        }
     }
 
     private async Task<ApplicationUser> CreateUserAsync(string role)

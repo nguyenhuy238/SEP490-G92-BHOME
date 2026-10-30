@@ -1,4 +1,5 @@
 using BHome.Application.Jobs;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -99,6 +100,40 @@ public sealed class PostgresFoundationTests : IAsyncLifetime
         await migrator.MigrateAsync();
         await migrator.MigrateAsync();
         await AssertRoomStatuses();
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
+    public async Task ContractSnapshotMatchesRuntimeAndPostgresRelationships()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await db.Database.MigrateAsync();
+        var snapshot = db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model;
+        foreach (var model in new[] { snapshot, db.Model })
+        {
+            var contract = model.FindEntityType(typeof(Contract).FullName!)!;
+            foreach (var name in new[] { nameof(Contract.Residents), nameof(Contract.Signatures) })
+            {
+                var navigation = contract.FindNavigation(name);
+                Assert.NotNull(navigation);
+                Assert.True(navigation.IsCollection);
+                Assert.Equal(nameof(ContractResident.ContractId), Assert.Single(navigation.ForeignKey.Properties).Name);
+                Assert.True(navigation.ForeignKey.IsRequired);
+                Assert.Equal(DeleteBehavior.Restrict, navigation.ForeignKey.DeleteBehavior);
+            }
+            var resident = model.FindEntityType(typeof(ContractResident).FullName!)!;
+            Assert.Equal(new[] { "ContractId", "ResidentId" }, resident.FindPrimaryKey()!.Properties.Select(p => p.Name));
+        }
+        Assert.Equal(2, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM pg_constraint
+            WHERE conrelid = '"ContractResidents"'::regclass AND contype = 'f'
+            """).SingleAsync());
+        Assert.True(await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'Contracts'
+                AND indexname = 'UX_Contract_ActiveRoom' AND indexdef LIKE 'CREATE UNIQUE INDEX%') AS "Value"
+            """).SingleAsync());
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
     }

@@ -1,5 +1,9 @@
 # Mobile development: tự chọn địa chỉ mạng
 
+> Khi readiness trả 503 hoặc iPhone không tải được dữ liệu, xem
+> [chẩn đoán và checklist iPhone](IPHONE_CONNECTIVITY.md), gồm đường nâng cấp có bảo toàn
+> dữ liệu từ migration CaptureWorkflows cũ. Không reset DB hoặc sửa history để né lỗi.
+
 ## Cách dùng chung cho team trên Windows
 
 Từ repository root, mỗi người chạy cùng một lệnh:

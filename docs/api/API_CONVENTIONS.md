@@ -185,6 +185,11 @@ Errors use `application/problem+json`, with `type`, `title`, `status` and `corre
 `ValidationProblemDetails.errors` keyed by field. Never echo rejected passwords/tokens/CCCD values.
 Expected business errors should be mapped explicitly, rather than exposing exception messages.
 
+Property/Chain service rejections preserve their explicit 400/403/404/409 status and safe `code`.
+Exception responses retain `application/problem+json` and `correlationId` even when a private-file
+client sends `Accept: application/pdf`, `application/octet-stream` or an image media type.
+Unsupported error content negotiation must not replace an expected business rejection with 500.
+
 ```json
 {
   "type": "https://httpstatuses.com/503",

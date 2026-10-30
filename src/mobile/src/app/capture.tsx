@@ -154,11 +154,18 @@ export default function Home() {
               </Text>
               <Text>
                 {t.utilityType === 0 ? 'Điện' : 'Nước'} · {t.meterCode} ·{' '}
-                {t.purpose === 0 ? 'Chỉ số ban đầu' : t.billingPeriod}
+                {t.purpose === 0
+                  ? 'Chỉ số ban đầu'
+                  : t.purpose === 2
+                    ? 'Chỉ số chốt trả phòng'
+                    : t.billingPeriod}
               </Text>
               <Text>
                 {t.status === 2 ? 'Đã hoàn thành' : t.status === 3 ? 'Đã hủy' : 'Chờ ghi chỉ số'}
               </Text>
+              {t.purpose === 2 && t.confirmedReadingId && (
+                <Text selectable>Mã chỉ số chốt: {t.confirmedReadingId}</Text>
+              )}
               {session.roles.includes('Staff') && t.status < 2 && (
                 <Button
                   mode="contained-tonal"

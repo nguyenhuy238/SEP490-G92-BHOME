@@ -24,7 +24,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [scrollRevision, setScrollRevision] = useState(0);
   const [requests, setRequests] = useState<WorkspaceContext['requests']>([]);
   const requestId = React.useRef(0);
-  const preview = !session && previewRole !== null;
+  const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
   const go = (screen: WorkspaceScreen, params?: Record<string, string>) =>
     router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } });
@@ -43,7 +43,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           setRequests((before) => [...before, { id, kind, role, summary }]);
         },
         startPreview: (next) => {
-          if (session) return;
+          if (session || !__DEV__) return;
           setPreviewRole(next);
           router.replace({ pathname: '/workspace/[screen]', params: { screen: homeScreen[next] } });
         },

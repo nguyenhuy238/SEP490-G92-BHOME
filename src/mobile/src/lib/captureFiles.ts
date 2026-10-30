@@ -16,8 +16,8 @@ export function ownCapture(uri: string) {
   return target.uri;
 }
 export function clearAbandonedCaptures() {
-  // These are only the app's temporary capture/transformation caches, never the photo library.
-  for (const name of ['bhome-ocr', 'ImageManipulator']) {
+  // Only the app's temporary capture/download caches, never the photo library.
+  for (const name of ['bhome-ocr', 'ImageManipulator', 'bhome-contract-downloads']) {
     const directory = new Directory(Paths.cache, name);
     if (directory.exists) directory.delete();
   }
