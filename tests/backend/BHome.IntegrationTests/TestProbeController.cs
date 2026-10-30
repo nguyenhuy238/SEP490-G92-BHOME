@@ -1,4 +1,5 @@
 using BHome.Application.Ocr;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -38,6 +39,10 @@ public sealed class TestProbeController : ControllerBase
     [HttpGet("error")]
     [AllowAnonymous]
     public IActionResult Error() => throw new InvalidOperationException("PRIVATE_TEST_DETAIL");
+
+    [HttpGet("property-error/{status:int}")]
+    [AllowAnonymous]
+    public IActionResult PropertyError(int status) => throw new PropertyException(status, "synthetic_property_rejection");
 
     [HttpGet("oversized")]
     [AllowAnonymous]

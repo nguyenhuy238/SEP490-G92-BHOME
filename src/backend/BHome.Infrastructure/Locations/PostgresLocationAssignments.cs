@@ -24,6 +24,11 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
     {
         if (createdByUserId == Guid.Empty || locationId == Guid.Empty || staffUserId == Guid.Empty || startDate > endDate)
             return new(CreateAssignmentStatus.InvalidDateRange);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // Use the same Location lock/order as property configuration. Concurrent GiST exclusion
+        // checks can deadlock (40P01); serialize before re-reading eligibility and overlapping dates.
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", cancellationToken);
         if (!await db.Locations.AsNoTracking().AnyAsync(x => x.Id == locationId, cancellationToken))
             return new(CreateAssignmentStatus.LocationNotFound);
 
@@ -43,6 +48,7 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
         try
         {
             await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: "23P01" })
         {

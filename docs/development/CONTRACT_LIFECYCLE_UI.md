@@ -1,5 +1,10 @@
 # D011/D012 — Giao diện kích hoạt và vòng đời hợp đồng
 
+> Cập nhật kiểm chứng tiếp theo: [CONTRACT_STABILIZATION.md](CONTRACT_STABILIZATION.md).
+> 15 IT Property/Chain và lỗi snapshot được ghi bên dưới là kết quả lịch sử của lượt UI.
+> Lượt ổn định đã kiểm chứng lại baseline mới, sửa handler/race và chạy client với API thật;
+> xem bàn giao mới để biết trạng thái hiện tại và các blocker E2E còn lại.
+
 Ngày đối chiếu: 30/10/2026. Phạm vi: BF-03B/BF-04A, FE-03, UC-15/16/19;
 GBR-01/02/04/18, DBR-02/03 và yêu cầu bảo mật, tiếng Việt, VND, ngày Việt Nam.
 
