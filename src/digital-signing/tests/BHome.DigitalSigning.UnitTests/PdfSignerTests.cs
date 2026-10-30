@@ -10,6 +10,23 @@ public sealed class PdfSignerTests
     private readonly ITextPdfSigner signer = new(new PdfAppearanceOptions());
 
     [Fact]
+    public void TwoIndependentSignersPreserveBothSignaturesInIncrementalRevisions()
+    {
+        using var owner = new FakeCa("Synthetic Owner");
+        using var tenant = new FakeCa("Synthetic Tenant");
+        var first = signer.Prepare(Pdfs.Simple(), owner.Chain, DateTimeOffset.UtcNow, null);
+        var firstPdf = signer.Complete(first.PreparedPdf, first.FieldName, first.DocumentDigest, owner.Chain, owner.Sign(first.DataToSignDigest));
+        var second = signer.Prepare(firstPdf, tenant.Chain, DateTimeOffset.UtcNow, null);
+        var result = signer.Complete(second.PreparedPdf, second.FieldName, second.DocumentDigest, tenant.Chain, tenant.Sign(second.DataToSignDigest));
+        using var document = new PdfDocument(new PdfReader(new MemoryStream(result)));
+        var signatures = new SignatureUtil(document);
+        Assert.Equal(2, signatures.GetSignatureNames().Count);
+        Assert.True(signatures.ReadSignatureData(first.FieldName).VerifySignatureIntegrityAndAuthenticity());
+        Assert.True(signatures.ReadSignatureData(second.FieldName).VerifySignatureIntegrityAndAuthenticity());
+        Assert.True(signatures.SignatureCoversWholeDocument(second.FieldName));
+    }
+
+    [Fact]
     public void TwoPhasesProduceAValidSignatureCoveringTheWholeDocument()
     {
         using var ca = new FakeCa();

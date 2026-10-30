@@ -131,6 +131,11 @@ This harness does not authorize any business read, confirmation, or evidence sto
 
 ## Contracts and status codes
 
+D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được
+mô tả tại [Contract lifecycle delivery](../development/CONTRACT_LIFECYCLE_DELIVERY.md).
+Các API mới dùng chuỗi decimal VND trong response; input nhận chuỗi decimal hoặc số nguyên.
+Mọi truy cập file hợp đồng/inspection đi qua endpoint được phân quyền, không có public URL.
+
 Location assignment endpoints follow the fixed Owner/Staff scope described in
 [Staff Location assignments](../development/STAFF_LOCATION_ASSIGNMENTS.md). Owner creates a minimal
 Location and manages inclusive dated assignments; Staff reads only Locations assigned on the current

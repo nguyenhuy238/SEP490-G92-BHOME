@@ -8,6 +8,7 @@ public sealed class Chain : AuditableEntity
 }
 public sealed class Room : AuditableEntity
 {
+    public BHome.Domain.TenantContracts.RoomStatus Status { get; set; }
     public Guid LocationId { get; set; }
     public BHome.Domain.Locations.Location Location { get; set; } = null!;
     public string RoomNumber { get; set; } = "";

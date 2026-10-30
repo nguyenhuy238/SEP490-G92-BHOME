@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.MySign/BHome.DigitalSigning.MySign.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../BHome.Application/BHome.Application.csproj" />
     <ProjectReference Include="../BHome.Domain/BHome.Domain.csproj" />
