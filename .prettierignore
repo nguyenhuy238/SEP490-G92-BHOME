@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/bin
+**/obj
+.tools
+**/package-lock.json
+**/Migrations
+# Preserve the supplied instruction document's numbering and source text.
+AGENTS.md
+# Generated Visual Studio upgrade report.
+**/UpgradeLog.htm

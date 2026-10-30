@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../BHome.DigitalSigning.Domain/BHome.DigitalSigning.Domain.csproj" />
+    <!-- ICurrentUser and the fixed roles come from the BHome backend; nothing there is modified. -->
+    <ProjectReference Include="../../backend/BHome.Application/BHome.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BHome.DigitalSigning.UnitTests" />
+  </ItemGroup>
+</Project>
