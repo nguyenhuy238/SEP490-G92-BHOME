@@ -3,7 +3,6 @@ using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.DigitalSigning.Application;
 using BHome.Application.Ocr;
-using BHome.Application.PropertyManagement;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
