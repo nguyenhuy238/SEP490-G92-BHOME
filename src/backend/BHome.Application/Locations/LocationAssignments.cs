@@ -16,8 +16,6 @@ public sealed record CreateAssignmentResult(CreateAssignmentStatus Status, Staff
 
 public interface ILocationAssignments
 {
-    Task<LocationSummary> CreateLocationAsync(string name, CancellationToken cancellationToken);
-    Task<IReadOnlyList<LocationSummary>> ListLocationsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffUserId, DateOnly effectiveDate,
         CancellationToken cancellationToken);
     Task<CreateAssignmentResult> CreateAssignmentAsync(Guid createdByUserId, Guid locationId, Guid staffUserId,

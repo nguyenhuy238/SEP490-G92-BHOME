@@ -38,6 +38,8 @@ Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi 
 | staff-assignments.manage    | Có    | Không | Không  | UC-08, Owner quản lý toàn bộ Location Assignment                                    |
 | locations.manage            | Có    | Không | Không  | BF-01 / UC-04, chain của Owner                                                      |
 | locations.view-assigned     | Không | Có    | Không  | BF-02 / UC-08, chỉ Location có Assignment đang hiệu lực                             |
+| property.view               | Có    | Có    | Không  | UC-04..06, DTO quản trị Location/Room Type/Room/Asset/giá; Staff chỉ assigned Location |
+| property.manage             | Có    | Không | Không  | UC-04..06, cấu hình và phiên bản giá theo quyết định 29/10/2026; xem PROPERTY_MANAGEMENT.md |
 | rooms.view                  | Có    | Có    | Có     | UC-04/07, toàn hệ thống / assigned Location / own Room                              |
 | rooms.manage                | Có    | Không | Không  | UC-04, chain của Owner                                                              |
 | assets.update-condition     | Có    | Có    | Không  | UC-05, toàn hệ thống / assigned Location                                            |

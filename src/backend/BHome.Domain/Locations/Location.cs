@@ -17,4 +17,5 @@ public sealed class Location : AuditableEntity
     public string Name { get; set; } = "";
     public string Address { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public int Version { get; set; } = 1;
 }

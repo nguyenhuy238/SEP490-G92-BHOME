@@ -19,6 +19,11 @@ boundaries within one application, not independently deployed services.
 These future folders are created when code exists. No empty entity/service/controller classes are
 needed to reserve a module. Shared technical boundaries already exist under Infrastructure.
 
+The PropertyManagement configuration slice is now implemented for Locations, Room Types, Rooms,
+Assets and effective-dated BillingPolicies. See [its API and approved decisions](../api/PROPERTY_MANAGEMENT.md).
+Application owns the business rules; `Modules/PropertyManagement/Persistence` supplies EF queries,
+transaction/Location locking and audit persistence. Legacy OCR configuration creates use the same service.
+
 | Artifact                              | Location pattern                                                 |
 | ------------------------------------- | ---------------------------------------------------------------- |
 | Domain entity/value/rule              | `src/backend/BHome.Domain/<Module>/`                             |

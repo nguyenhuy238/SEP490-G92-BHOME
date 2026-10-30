@@ -138,6 +138,11 @@ Vietnam business date. Assignment mutations send `locationId` in the JSON body; 
 reads use a query parameter rather than a GET body. Every Owner can manage every Location and assign
 any active Staff account. Overlapping assignments return 409 and unknown Location IDs return 404.
 
+The minimal Location create/list slice is now superseded by the approved
+[property configuration APIs](PROPERTY_MANAGEMENT.md): creation requires name/address and automatically uses the sole system Chain,
+listing is paginated, Room creation requires a Location-owned Room Type, and effective-dated
+prices are immutable versions. `assigned-to-me` keeps its existing small list contract.
+
 JSON properties use camelCase. Use explicit request/response DTOs, never EF entities. Require and
 validate bounded string lengths, supported enum values, sizes and page parameters at the API edge;
 application services enforce business invariants and authorization. Do not expose private fields

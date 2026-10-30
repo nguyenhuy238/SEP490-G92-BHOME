@@ -22,7 +22,8 @@ namespace BHome.Infrastructure.Ocr;
 
 internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, IIdentityProtection protection,
     IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock,
-    ILocationAssignments locationAssignments) : ICaptureRepository
+    ILocationAssignments locationAssignments,
+    BHome.Application.PropertyManagement.IPropertyRepository properties) : ICaptureRepository
 {
     private Guid Actor => scope.UserId;
     private void Audit(string action, string type, Guid id) => db.SecurityAudit.Add(new SecurityAuditRecord
@@ -60,23 +61,6 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         if (!(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
         Audit("StaffCreated", "User", u.Id); await Save(t); await tx.CommitAsync(t); return new(u.Id);
     }
-    public async Task<IdResult> CreateChainAsync(ChainInput x, CancellationToken t)
-    {
-        Validate(x); if (string.IsNullOrWhiteSpace(x.Name)) throw new CaptureValidationException("name_required");
-        var c = new Chain { Name = x.Name.Trim() }; db.Add(c); Audit("ChainCreated", "Chain", c.Id); await Save(t); return new(c.Id);
-    }
-    public async Task<IdResult> CreateLocationAsync(LocationInput x, CancellationToken t)
-    {
-        Validate(x); if (string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Address)) throw new CaptureValidationException("location_required");
-        if (!await db.Set<Chain>().AnyAsync(c => c.Id == x.ChainId, t)) throw new OcrAccessException();
-        var l = new Location(x.Name.Trim()) { ChainId = x.ChainId, Address = x.Address.Trim() }; db.Add(l); Audit("LocationCreated", "Location", l.Id); await Save(t); return new(l.Id);
-    }
-    public async Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t)
-    {
-        Validate(x); if (string.IsNullOrWhiteSpace(x.RoomNumber)) throw new CaptureValidationException("room_required");
-        if (!await scope.VisibleLocations.AnyAsync(l => l.Id == x.LocationId, t)) throw new OcrAccessException();
-        var r = new Room { LocationId = x.LocationId, RoomNumber = x.RoomNumber.Trim() }; db.Add(r); Audit("RoomCreated", "Room", r.Id); await Save(t); return new(r.Id);
-    }
     public async Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t)
     {
         if (x.EffectiveFrom == default || x.EffectiveTo is null || x.EffectiveTo < x.EffectiveFrom)
@@ -90,9 +74,16 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     public async Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t)
     {
         Validate(x); if (!Enum.IsDefined(x.ResidentType) || string.IsNullOrWhiteSpace(x.DisplayLabel)) throw new CaptureValidationException("invalid_resident");
-        if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId, t)) throw new OcrAccessException();
-        var r = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
-        db.Add(r); Audit("ResidentCreated", "Resident", r.Id); await Save(t); return new(r.Id);
+        var locationId = await scope.VisibleRooms.Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId)
+            .SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+        return await properties.WithLocationLockAsync(locationId, async () =>
+        {
+            if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId && r.Location.IsActive &&
+                    r.Status != RoomStatus.Unavailable && r.RoomTypeId != null && r.RoomType!.IsActive, t))
+                throw new CaptureConflictException("room_unavailable");
+            var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
+            db.Add(resident); Audit("ResidentCreated", "Resident", resident.Id); return new IdResult(resident.Id);
+        }, t);
     }
     public async Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid locationId, CancellationToken t)
     {

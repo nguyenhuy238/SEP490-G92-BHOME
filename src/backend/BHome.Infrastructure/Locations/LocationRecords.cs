@@ -12,7 +12,8 @@ internal sealed class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Address).HasMaxLength(1000);
         builder.HasIndex(x => x.Name);
-        builder.HasOne(x => x.Chain).WithMany().HasForeignKey(x => x.ChainId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.Version).IsConcurrencyToken();
+        builder.HasOne(x => x.Chain).WithMany().HasForeignKey(x => x.ChainId).IsRequired().OnDelete(DeleteBehavior.Restrict);
     }
 }
 

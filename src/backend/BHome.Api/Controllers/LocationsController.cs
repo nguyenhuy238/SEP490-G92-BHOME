@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,21 +10,29 @@ namespace BHome.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/locations")]
-public sealed class LocationsController(ICurrentUser currentUser, ILocationAssignments locations) : ControllerBase
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+[RequestSizeLimit(32768)]
+public sealed class LocationsController(ICurrentUser currentUser, ILocationAssignments locations, PropertyService properties) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = Permissions.Locations.Manage)]
-    public async Task<ActionResult<LocationSummary>> Create(CreateLocationRequest request,
+    public async Task<ActionResult<LocationDto>> Create(LocationWrite request,
         CancellationToken cancellationToken)
     {
-        var created = await locations.CreateLocationAsync(request.Name!.Trim(), cancellationToken);
-        return CreatedAtAction(nameof(List), new { }, created);
+        var created = await properties.SaveLocationAsync(null, request, cancellationToken);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
     [HttpGet]
-    [Authorize(Policy = Permissions.Locations.Manage)]
-    public async Task<ActionResult<IReadOnlyList<LocationSummary>>> List(CancellationToken cancellationToken) =>
-        Ok(await locations.ListLocationsAsync(cancellationToken));
+    [Authorize(Policy = Permissions.Property.View)]
+    public Task<PagedResult<LocationDto>> List([FromQuery] LocationQuery query, CancellationToken cancellationToken) =>
+        properties.LocationsAsync(query, cancellationToken);
+
+    [HttpGet("{id:guid}"), Authorize(Policy = Permissions.Property.View)]
+    public Task<LocationDto> Get(Guid id, CancellationToken t) => properties.GetLocationAsync(id, t);
+
+    [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
+    public Task<LocationDto> Update(Guid id, LocationWrite input, CancellationToken t) => properties.SaveLocationAsync(id, input, t);
 
     [HttpGet("assigned-to-me")]
     [Authorize(Policy = Permissions.Locations.ViewAssigned)]
@@ -36,8 +45,6 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
         TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow,
             TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
 }
-
-public sealed record CreateLocationRequest([Required, StringLength(200, MinimumLength = 2)] string? Name);
 
 [ApiController]
 [Route("api/v1/staff-location-assignments")]

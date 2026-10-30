@@ -8,6 +8,8 @@ public sealed class RolePermissionTests
     // Acceptance matrix from SRS I.4.4: independent expected grants, including explicit denials.
     public static TheoryData<string, string[]> Matrix => new()
     {
+        { Permissions.Property.View, [Roles.Owner, Roles.Staff] },
+        { Permissions.Property.Manage, [Roles.Owner] },
         { Permissions.Account.ViewOwn, [Roles.Owner, Roles.Staff, Roles.Tenant] },
         { Permissions.Account.UpdateOwn, [Roles.Owner, Roles.Staff, Roles.Tenant] },
         { Permissions.Account.ChangePassword, [Roles.Owner, Roles.Staff, Roles.Tenant] },
