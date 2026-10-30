@@ -147,11 +147,18 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     }
     public async Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t)
     {
-        if (!Enum.IsDefined(x.Purpose) || x.ReadingDate == default || (x.Purpose == ReadingPurpose.Periodic && (x.BillingPeriod is null || x.BillingPeriod.Value.Day != 1 || x.ReadingDate.Year != x.BillingPeriod.Value.Year || x.ReadingDate.Month != x.BillingPeriod.Value.Month)) || (x.Purpose == ReadingPurpose.Initial && x.BillingPeriod != null)) throw new CaptureValidationException("invalid_reading_period");
+        if (!Enum.IsDefined(x.Purpose) || x.ReadingDate == default || (x.Purpose == ReadingPurpose.Periodic && (x.BillingPeriod is null || x.BillingPeriod.Value.Day != 1 || x.ReadingDate.Year != x.BillingPeriod.Value.Year || x.ReadingDate.Month != x.BillingPeriod.Value.Month)) || (x.Purpose != ReadingPurpose.Periodic && x.BillingPeriod != null)) throw new CaptureValidationException("invalid_reading_period");
         var meter = await db.Set<Meter>().Where(m => m.Id == x.MeterId && m.IsActive && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
-            .Select(m => new { m.InstalledOn }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+            .Select(m => new { m.InstalledOn, m.RoomId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         if (x.ReadingDate < meter.InstalledOn) throw new CaptureValidationException("reading_before_installation");
-        var task = new OperationalTask { MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod };
+        if (x.Purpose == ReadingPurpose.Final)
+        {
+            if (x.ContractId is null || !await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == meter.RoomId && c.Status == ContractStatus.Active &&
+                db.Set<ContractMoveOut>().Any(m => m.ContractId == c.Id && m.Status == MoveOutStatus.Approved && m.ProposedDate <= x.ReadingDate), t))
+                throw new CaptureConflictException("approved_contract_move_out_required");
+        }
+        else if (x.ContractId is not null) throw new CaptureValidationException("final_contract_reference_only");
+        var task = new OperationalTask { MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
         db.Add(task); Audit("MeterTaskAssigned", "Task", task.Id); await Save(t); return new(task.Id);
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => await scope.VisibleTasks.AsNoTracking()
@@ -211,11 +218,12 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         if (evidence is null || evidence.TaskId != taskId || evidence.UploadedByUserId != Actor || !evidence.IsUploaded || evidence.IsLinked || evidence.CleanupAfter <= clock.GetUtcNow()) throw new CaptureConflictException("evidence_not_available");
         var previous = await db.Set<MeterReading>().Where(r => r.MeterId == meter.Id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
         if (task.Purpose == ReadingPurpose.Initial && previous != null) throw new CaptureConflictException("baseline_already_confirmed");
-        if (task.Purpose == ReadingPurpose.Periodic && previous is null) throw new CaptureConflictException("confirmed_baseline_required");
+        if (task.Purpose != ReadingPurpose.Initial && previous is null) throw new CaptureConflictException("confirmed_baseline_required");
         if (previous is not null)
         {
             var previousTask = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(a => a.Id == previous.TaskId, t);
-            if (task.ReadingDate <= previousTask.ReadingDate || (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod)) throw new CaptureConflictException("reading_period_out_of_order");
+            var finalOnSameDay = task.Purpose == ReadingPurpose.Final && previousTask.Purpose != ReadingPurpose.Final && task.ReadingDate == previousTask.ReadingDate;
+            if ((!finalOnSameDay && task.ReadingDate <= previousTask.ReadingDate) || (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod)) throw new CaptureConflictException("reading_period_out_of_order");
             if (x.ConfirmedValue < previous.ConfirmedValue) throw new CaptureConflictException("meter_reset_or_rollover_requires_review");
         }
         // Verify the private object still exists before committing its reference.

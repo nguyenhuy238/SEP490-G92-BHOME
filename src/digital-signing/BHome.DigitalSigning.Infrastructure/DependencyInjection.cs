@@ -36,6 +36,7 @@ public static class DependencyInjection
 
         services.AddDbContext<DigitalSigningDbContext>(db => db.UseNpgsql(configuration.GetConnectionString("Database")));
         services.AddScoped<IDigitalSigningStore, EfDigitalSigningStore>();
+        services.AddScoped<ISigningCertificateStore>(sp => sp.GetRequiredService<IDigitalSigningStore>());
         services.AddScoped<ISigningSettingsStore, EfSigningSettingsStore>();
         services.AddScoped<ISignatureImageStore, EfSignatureImageStore>();
 

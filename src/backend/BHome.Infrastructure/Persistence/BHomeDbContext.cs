@@ -24,6 +24,7 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     {
         base.OnModelCreating(builder);
         builder.ConfigureCapture();
+        builder.ConfigureContracts();
         builder.Entity<ApplicationUser>().Property(x => x.IsActive).HasDefaultValue(true);
         builder.ApplyConfigurationsFromAssembly(typeof(BHomeDbContext).Assembly);
         builder.Entity<IdentityRole<Guid>>().HasData(

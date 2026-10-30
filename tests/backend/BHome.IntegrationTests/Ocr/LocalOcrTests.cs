@@ -95,6 +95,34 @@ public sealed class LocalOcrTests
         Assert.Throws<OcrInputException>(() => preprocessor.Prepare(PngHeader(100, 100), OcrDocumentKind.IdentityFront));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisplaySplitSeparatesUnitWithoutCuttingObservedDecimal(bool inverted)
+    {
+        var background = inverted ? Scalar.Black : Scalar.White;
+        var foreground = inverted ? Scalar.White : Scalar.Black;
+        using var image = new Mat(70, 430, MatType.CV_8UC3, background);
+        Cv2.PutText(image, "00123.45", new Point(10, 48), HersheyFonts.HersheySimplex, 1, foreground, 2);
+        Cv2.PutText(image, "kWh", new Point(250, 48), HersheyFonts.HersheySimplex, 1, foreground, 2);
+        Assert.True(MeterDisplaySplitter.TrySplit(image, out var split));
+        Assert.InRange(split, 185, 248);
+        using var number = new Mat(image, new Rect(0, 0, split, image.Height));
+        using var prepared = MeterDisplaySplitter.PrepareSegment(number);
+        Assert.True(prepared.Width < number.Width);
+        Assert.True(prepared.Height < number.Height);
+        Assert.True(prepared.Width > 145); // keep all digits and the printed decimal separator
+    }
+
+    [Fact]
+    public void BlankDisplayDoesNotInventAUnitBoundary()
+    {
+        using var blank = new Mat(70, 300, MatType.CV_8UC3, Scalar.White);
+        Assert.False(MeterDisplaySplitter.TrySplit(blank, out _));
+        using var prepared = MeterDisplaySplitter.PrepareSegment(blank);
+        Assert.Equal(blank.Size(), prepared.Size());
+    }
+
     private static LocalOcrService Service(IOcrEngine engine, int timeout = 1000) => new(
         new OcrOptions { Enabled = true, TimeoutMilliseconds = timeout }, new Lazy<IOcrEngine>(() => engine), NullLogger<LocalOcrService>.Instance);
 

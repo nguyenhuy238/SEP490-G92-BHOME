@@ -114,6 +114,20 @@ public static class DependencyInjection
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
+        services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
+        services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningProvider, BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
+        services.AddScoped<BHome.Application.Contracts.IContractDocumentRenderer, BHome.Infrastructure.Contracts.UnconfiguredContractRenderer>();
+        services.AddScoped<BHome.Application.Contracts.IContractSettlementLedger, BHome.Infrastructure.Contracts.PendingContractSettlementLedger>();
+        services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.UnconfiguredContractHoldingLedger>();
+        services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
+        services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
+        services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
+        services.AddSingleton<BHome.DigitalSigning.Application.IPdfSigner, BHome.Infrastructure.Contracts.UnconfiguredContractPdfSigner>();
+        services.AddScoped<BHome.DigitalSigning.Application.IViettelAccountSource, BHome.Infrastructure.Contracts.ContractMySignAccount>();
+        BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
+        services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
+        services.AddScoped<BHome.DigitalSigning.Application.Services.SigningCertificateService>();
         services.AddOptions<OcrOptions>().Bind(configuration.GetSection("Ocr"))
             .Validate(o => o.IsValid(), "OCR limits or profiles are outside supported bounds.").ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);

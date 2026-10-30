@@ -1,4 +1,6 @@
 using BHome.Application.Common;
+using BHome.Application.Contracts;
+using BHome.DigitalSigning.Application;
 using BHome.Application.Ocr;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +13,14 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
     {
         var status = exception switch
         {
-            BHome.Application.PropertyManagement.PropertyException property => property.Status,
+            ContractException contract => contract.Status,
+            DigitalSigningException signing => signing.Error switch
+            {
+                DigitalSigningError.Invalid => 400, DigitalSigningError.Unauthenticated => 401,
+                DigitalSigningError.Forbidden => 403, DigitalSigningError.NotFound => 404,
+                DigitalSigningError.Conflict => 409, DigitalSigningError.ProviderUnavailable => 503,
+                _ => 500
+            },
             IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
             OcrAccessException => StatusCodes.Status404NotFound,
             CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
@@ -34,7 +43,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         context.Response.ContentType = "application/problem+json";
         var code = exception switch
         {
-            BHome.Application.PropertyManagement.PropertyException property => property.Code,
+            ContractException contract => contract.Code,
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,
