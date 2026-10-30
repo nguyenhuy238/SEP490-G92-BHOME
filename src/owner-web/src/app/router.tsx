@@ -6,9 +6,15 @@ import { LoadingState } from '../components/common/PortalUI';
 const NotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'));
 const LocationsPage = lazy(() => import('../features/locations/pages/LocationsPage'));
 const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
-const CreateRooms = lazy(() => import('../features/property/Rooms').then(m => ({ default: m.CreateRooms })));
-const RoomDetail = lazy(() => import('../features/property/Rooms').then(m => ({ default: m.RoomDetail })));
-const AssetAllocation = lazy(() => import('../features/property/Assets').then(m => ({ default: m.AssetAllocation })));
+const CreateRooms = lazy(() =>
+  import('../features/property/Rooms').then((m) => ({ default: m.CreateRooms })),
+);
+const RoomDetail = lazy(() =>
+  import('../features/property/Rooms').then((m) => ({ default: m.RoomDetail })),
+);
+const AssetAllocation = lazy(() =>
+  import('../features/property/Assets').then((m) => ({ default: m.AssetAllocation })),
+);
 const RoomTypesPage = lazy(() => import('../features/room-types/pages/RoomTypesPage'));
 const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage'));
 const PricingPage = lazy(() => import('../features/pricing/pages/PricingPage'));
