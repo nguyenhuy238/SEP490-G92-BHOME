@@ -22,7 +22,8 @@ namespace BHome.Infrastructure.Ocr;
 
 internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, IIdentityProtection protection,
     IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock,
-    ILocationAssignments locationAssignments) : ICaptureRepository
+    ILocationAssignments locationAssignments,
+    BHome.Application.PropertyManagement.IPropertyRepository properties) : ICaptureRepository
 {
     private Guid Actor => scope.UserId;
     private void Audit(string action, string type, Guid id) => db.SecurityAudit.Add(new SecurityAuditRecord
@@ -60,23 +61,6 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         if (!(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
         Audit("StaffCreated", "User", u.Id); await Save(t); await tx.CommitAsync(t); return new(u.Id);
     }
-    public async Task<IdResult> CreateChainAsync(ChainInput x, CancellationToken t)
-    {
-        Validate(x); if (string.IsNullOrWhiteSpace(x.Name)) throw new CaptureValidationException("name_required");
-        var c = new Chain { Name = x.Name.Trim() }; db.Add(c); Audit("ChainCreated", "Chain", c.Id); await Save(t); return new(c.Id);
-    }
-    public async Task<IdResult> CreateLocationAsync(LocationInput x, CancellationToken t)
-    {
-        Validate(x); if (string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Address)) throw new CaptureValidationException("location_required");
-        if (!await db.Set<Chain>().AnyAsync(c => c.Id == x.ChainId, t)) throw new OcrAccessException();
-        var l = new Location(x.Name.Trim()) { ChainId = x.ChainId, Address = x.Address.Trim() }; db.Add(l); Audit("LocationCreated", "Location", l.Id); await Save(t); return new(l.Id);
-    }
-    public async Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t)
-    {
-        Validate(x); if (string.IsNullOrWhiteSpace(x.RoomNumber)) throw new CaptureValidationException("room_required");
-        if (!await scope.VisibleLocations.AnyAsync(l => l.Id == x.LocationId, t)) throw new OcrAccessException();
-        var r = new Room { LocationId = x.LocationId, RoomNumber = x.RoomNumber.Trim() }; db.Add(r); Audit("RoomCreated", "Room", r.Id); await Save(t); return new(r.Id);
-    }
     public async Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t)
     {
         if (x.EffectiveFrom == default || x.EffectiveTo is null || x.EffectiveTo < x.EffectiveFrom)
@@ -90,9 +74,16 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     public async Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t)
     {
         Validate(x); if (!Enum.IsDefined(x.ResidentType) || string.IsNullOrWhiteSpace(x.DisplayLabel)) throw new CaptureValidationException("invalid_resident");
-        if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId, t)) throw new OcrAccessException();
-        var r = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
-        db.Add(r); Audit("ResidentCreated", "Resident", r.Id); await Save(t); return new(r.Id);
+        var locationId = await scope.VisibleRooms.Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId)
+            .SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+        return await properties.WithLocationLockAsync(locationId, async () =>
+        {
+            if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId && r.Location.IsActive &&
+                    r.Status != RoomStatus.Unavailable && r.RoomTypeId != null && r.RoomType!.IsActive, t))
+                throw new CaptureConflictException("room_unavailable");
+            var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
+            db.Add(resident); Audit("ResidentCreated", "Resident", resident.Id); return new IdResult(resident.Id);
+        }, t);
     }
     public async Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid locationId, CancellationToken t)
     {
@@ -156,11 +147,18 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
     }
     public async Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t)
     {
-        if (!Enum.IsDefined(x.Purpose) || x.ReadingDate == default || (x.Purpose == ReadingPurpose.Periodic && (x.BillingPeriod is null || x.BillingPeriod.Value.Day != 1 || x.ReadingDate.Year != x.BillingPeriod.Value.Year || x.ReadingDate.Month != x.BillingPeriod.Value.Month)) || (x.Purpose == ReadingPurpose.Initial && x.BillingPeriod != null)) throw new CaptureValidationException("invalid_reading_period");
+        if (!Enum.IsDefined(x.Purpose) || x.ReadingDate == default || (x.Purpose == ReadingPurpose.Periodic && (x.BillingPeriod is null || x.BillingPeriod.Value.Day != 1 || x.ReadingDate.Year != x.BillingPeriod.Value.Year || x.ReadingDate.Month != x.BillingPeriod.Value.Month)) || (x.Purpose != ReadingPurpose.Periodic && x.BillingPeriod != null)) throw new CaptureValidationException("invalid_reading_period");
         var meter = await db.Set<Meter>().Where(m => m.Id == x.MeterId && m.IsActive && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
-            .Select(m => new { m.InstalledOn }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+            .Select(m => new { m.InstalledOn, m.RoomId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         if (x.ReadingDate < meter.InstalledOn) throw new CaptureValidationException("reading_before_installation");
-        var task = new OperationalTask { MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod };
+        if (x.Purpose == ReadingPurpose.Final)
+        {
+            if (x.ContractId is null || !await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == meter.RoomId && c.Status == ContractStatus.Active &&
+                db.Set<ContractMoveOut>().Any(m => m.ContractId == c.Id && m.Status == MoveOutStatus.Approved && m.ProposedDate <= x.ReadingDate), t))
+                throw new CaptureConflictException("approved_contract_move_out_required");
+        }
+        else if (x.ContractId is not null) throw new CaptureValidationException("final_contract_reference_only");
+        var task = new OperationalTask { MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
         db.Add(task); Audit("MeterTaskAssigned", "Task", task.Id); await Save(t); return new(task.Id);
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => await scope.VisibleTasks.AsNoTracking()
@@ -220,11 +218,12 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         if (evidence is null || evidence.TaskId != taskId || evidence.UploadedByUserId != Actor || !evidence.IsUploaded || evidence.IsLinked || evidence.CleanupAfter <= clock.GetUtcNow()) throw new CaptureConflictException("evidence_not_available");
         var previous = await db.Set<MeterReading>().Where(r => r.MeterId == meter.Id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
         if (task.Purpose == ReadingPurpose.Initial && previous != null) throw new CaptureConflictException("baseline_already_confirmed");
-        if (task.Purpose == ReadingPurpose.Periodic && previous is null) throw new CaptureConflictException("confirmed_baseline_required");
+        if (task.Purpose != ReadingPurpose.Initial && previous is null) throw new CaptureConflictException("confirmed_baseline_required");
         if (previous is not null)
         {
             var previousTask = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(a => a.Id == previous.TaskId, t);
-            if (task.ReadingDate <= previousTask.ReadingDate || (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod)) throw new CaptureConflictException("reading_period_out_of_order");
+            var finalOnSameDay = task.Purpose == ReadingPurpose.Final && previousTask.Purpose != ReadingPurpose.Final && task.ReadingDate == previousTask.ReadingDate;
+            if ((!finalOnSameDay && task.ReadingDate <= previousTask.ReadingDate) || (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod)) throw new CaptureConflictException("reading_period_out_of_order");
             if (x.ConfirmedValue < previous.ConfirmedValue) throw new CaptureConflictException("meter_reset_or_rollover_requires_review");
         }
         // Verify the private object still exists before committing its reference.

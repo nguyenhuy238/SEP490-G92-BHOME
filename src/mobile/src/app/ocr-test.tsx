@@ -15,6 +15,7 @@ import { displayDate } from '../lib/identity';
 import {
   type DiagnosticResult,
   diagnosticFields,
+  diagnosticEndpoint,
   diagnosticStatus,
   diagnosticWarning,
   ocrProfiles,
@@ -23,6 +24,7 @@ import {
 export default function OcrTest() {
   const { api, session } = useSession();
   const [profile, setProfile] = useState('identity-front');
+  const [decimalPlaces, setDecimalPlaces] = useState('auto');
   const [available, setAvailable] = useState(false);
   const [checking, setChecking] = useState(true);
   const [checkAttempt, setCheckAttempt] = useState(0);
@@ -112,10 +114,35 @@ export default function OcrTest() {
         onSelect={(id) => {
           if (lock.current) return;
           setProfile(id);
+          setDecimalPlaces('auto');
           setResult(null);
           setError('');
         }}
       />
+      {!profile.startsWith('identity-') && (
+        <>
+          <Select
+            label="Số chữ số thập phân thực tế trên công tơ"
+            items={[
+              { id: 'auto', label: 'Chưa xác định' },
+              ...[0, 1, 2, 3, 4].map((value) => ({
+                id: String(value),
+                label: `${value} chữ số thập phân`,
+              })),
+            ]}
+            selected={decimalPlaces}
+            onSelect={(value) => {
+              if (lock.current) return;
+              setDecimalPlaces(value);
+              setResult(null);
+              setError('');
+            }}
+          />
+          <Text>
+            Chọn theo mặt số công tơ. Ví dụ 03251.4 có 1 chữ số thập phân; OCR giữ cả phần lẻ.
+          </Text>
+        </>
+      )}
       <CameraCapture
         key={profile}
         label="Mở camera để thử OCR"
@@ -132,7 +159,7 @@ export default function OcrTest() {
           setResult(null);
           try {
             const response = await api.image<DiagnosticResult>(
-              `/api/v1/ocr/diagnostics/${profile}`,
+              diagnosticEndpoint(profile, decimalPlaces),
               bytes,
               controller.signal,
             );

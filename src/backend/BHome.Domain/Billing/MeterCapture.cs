@@ -5,7 +5,7 @@ namespace BHome.Domain.Billing;
 
 public enum UtilityType { Electricity, Water }
 public enum MeterDisplay { Mechanical, Digital }
-public enum ReadingPurpose { Initial, Periodic }
+public enum ReadingPurpose { Initial, Periodic, Final }
 public enum MeterTaskStatus { Assigned, InProgress, Completed, Cancelled }
 public enum MeterReadingStatus { Confirmed, Corrected }
 
@@ -22,6 +22,7 @@ public sealed class Meter : AuditableEntity
 }
 public sealed class OperationalTask : AuditableEntity
 {
+    public Guid? ContractId { get; set; }
     public Guid MeterId { get; set; }
     public Meter Meter { get; set; } = null!;
     public ReadingPurpose Purpose { get; set; }

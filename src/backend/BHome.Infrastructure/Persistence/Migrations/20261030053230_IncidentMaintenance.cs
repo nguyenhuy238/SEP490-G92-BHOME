@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,40 +11,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "Assets",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    LocationId = table.Column<Guid>(type: "uuid", nullable: false),
-                    RoomId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AssetCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    Category = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    PurchaseInfo = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    Condition = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Assets", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Assets_Locations_LocationId",
-                        column: x => x.LocationId,
-                        principalTable: "Locations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Assets_Rooms_RoomId",
-                        column: x => x.RoomId,
-                        principalTable: "Rooms",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
             migrationBuilder.CreateTable(
                 name: "IncidentReports",
                 columns: table => new
@@ -233,17 +199,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Assets_LocationId_AssetCode",
-                table: "Assets",
-                columns: new[] { "LocationId", "AssetCode" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Assets_RoomId",
-                table: "Assets",
-                column: "RoomId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_IncidentReports_AssetId",
                 table: "IncidentReports",
                 column: "AssetId");
@@ -337,9 +292,6 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "IncidentReports");
-
-            migrationBuilder.DropTable(
-                name: "Assets");
         }
     }
 }

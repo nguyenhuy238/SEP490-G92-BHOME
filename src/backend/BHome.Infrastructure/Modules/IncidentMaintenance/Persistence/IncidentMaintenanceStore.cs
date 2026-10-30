@@ -43,14 +43,8 @@ internal sealed class IncidentMaintenanceStore(BHomeDbContext db, TimeProvider c
     public Task<bool> LocationExistsAsync(Guid locationId, CancellationToken cancellationToken) =>
         db.Locations.AnyAsync(x => x.Id == locationId && x.IsActive, cancellationToken);
 
-    public Task<bool> AssetCodeExistsAsync(Guid locationId, string assetCode, Guid? excludingAssetId,
-        CancellationToken cancellationToken) =>
-        Assets.AnyAsync(x => x.LocationId == locationId && x.AssetCode == assetCode && x.Id != excludingAssetId,
-            cancellationToken);
-
     public void Add(IncidentReport incident) => db.Add(incident);
     public void Add(MaintenanceWorkOrder workOrder) => db.Add(workOrder);
-    public void Add(Asset asset) => db.Add(asset);
 
     public void Audit(Guid actorUserId, string action, string targetType, Guid targetId) =>
         db.SecurityAudit.Add(new SecurityAuditRecord
@@ -115,21 +109,6 @@ internal sealed class IncidentMaintenanceStore(BHomeDbContext db, TimeProvider c
             .Join(Incidents, o => o.IncidentReportId, i => i.Id, (o, i) => new WorkOrderSummary(o.Id, o.IncidentReportId,
                 i.ReportCode, o.LocationId, o.RoomId, o.AssetId, o.AssignedStaffUserId, o.Status, o.CostApprovedAt != null,
                 o.DueAt, o.CreatedAt))
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<AssetSummary>> ListAssetsAsync(MaintenanceViewer viewer, AssetListQuery query,
-        CancellationToken cancellationToken)
-    {
-        var rows = Assets.AsNoTracking();
-        if (!viewer.IsOwner) rows = rows.Where(x => viewer.StaffLocationIds.Contains(x.LocationId));
-        if (query.LocationId is { } locationId) rows = rows.Where(x => x.LocationId == locationId);
-        if (query.RoomId is { } roomId) rows = rows.Where(x => x.RoomId == roomId);
-        if (query.Status is { } status) rows = rows.Where(x => x.Status == status);
-
-        return await rows.OrderBy(x => x.AssetCode).Take(query.Take)
-            .Select(x => new AssetSummary(x.Id, x.LocationId, x.RoomId, x.AssetCode, x.Name, x.Category, x.PurchaseInfo,
-                x.Condition, x.Status))
             .ToListAsync(cancellationToken);
     }
 

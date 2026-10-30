@@ -7,8 +7,12 @@ public enum OcrDocumentKind
 
 public sealed record OcrLine(string Text, float Confidence)
 {
+    // Internal image coordinates, never included in the public proposal.
+    public OcrBounds? Bounds { get; init; }
     public override string ToString() => "OCR line (sensitive text omitted)";
 }
+
+public sealed record OcrBounds(float X, float Y, float Width, float Height);
 
 public sealed record OcrText(IReadOnlyList<OcrLine> Lines, string EngineVersion, IReadOnlyList<string> Warnings);
 

@@ -24,6 +24,7 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     {
         base.OnModelCreating(builder);
         builder.ConfigureCapture();
+        builder.ConfigureContracts();
         builder.Entity<ApplicationUser>().Property(x => x.IsActive).HasDefaultValue(true);
         builder.ApplyConfigurationsFromAssembly(typeof(BHomeDbContext).Assembly);
         builder.Entity<IdentityRole<Guid>>().HasData(
@@ -46,6 +47,9 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
 
     private void StampEntities()
     {
+        if (ChangeTracker.Entries<BHome.Domain.PropertyManagement.PropertyChange>()
+            .Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Property history is append-only.");
         if (ChangeTracker.Entries<SecurityAuditRecord>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Security audit is append-only.");
         var now = DateTimeOffset.UtcNow;

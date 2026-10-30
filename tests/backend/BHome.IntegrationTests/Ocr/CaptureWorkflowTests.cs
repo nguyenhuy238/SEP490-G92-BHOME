@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Minio;
 using Minio.DataModel.Args;
 using OpenCvSharp;
@@ -33,6 +34,42 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private readonly CaptureFixture fixture;
     public CaptureWorkflowTests(CaptureFixture fixture) => this.fixture = fixture;
     private const string Password = "Synthetic-Test-Password!123";
+
+    [Fact]
+    public async Task OcrPersistsOnlyTheProposalUsingDatabaseDisplayPrecision()
+    {
+        var w = await Workspace();
+        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
+                new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
+        using var client = host.CreateClient();
+        await using var loginScope = host.Services.CreateAsyncScope();
+        var loginDb = loginScope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var email = (await loginDb.Users.SingleAsync(user => user.Id == w.StaffId)).Email;
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
+        login.EnsureSuccessStatusCode();
+        var session = (await login.Content.ReadFromJsonAsync<LoginResult>())!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+        using var image = new ByteArrayContent(Image());
+        image.Headers.ContentType = new("image/png");
+        var response = await client.PostAsync($"/api/v1/ocr/meter-tasks/{task}?decimalPlaces=0", image);
+        response.EnsureSuccessStatusCode();
+        var proposal = (await response.Content.ReadFromJsonAsync<OcrProposal>())!;
+        Assert.Equal("000123.45", proposal.ProposedFields["reading"]);
+        Assert.True(proposal.RequiresConfirmation);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var stored = await db.Set<OperationalTask>().SingleAsync(value => value.Id == task);
+        Assert.Equal(123.45m, stored.OcrProposedValue);
+        Assert.False(await db.Set<MeterReading>().AnyAsync(value => value.TaskId == task));
+    }
+
+    private sealed class DigitsEngine : IOcrEngine
+    {
+        public Task<OcrText> RecognizeAsync(ReadOnlyMemory<byte> image, OcrDocumentKind kind, CancellationToken token)
+            => Task.FromResult(new OcrText([new("00012345", .99f)], "synthetic", []));
+    }
     private async Task<(HttpClient Client, Guid UserId)> User(string role)
     {
         var name = Guid.NewGuid().ToString(); var id = Guid.NewGuid();
@@ -57,9 +94,12 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private async Task<(HttpClient Owner, HttpClient Staff, Guid OwnerId, Guid StaffId, Guid Location, Guid Room, Guid Resident, Guid Meter)> Workspace()
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
-        var chain = await Create(owner.Client, "chains", new ChainInput("Synthetic Chain"));
-        var location = await Create(owner.Client, "locations", new LocationInput(chain, "Synthetic Location", "Synthetic Address"));
-        var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01"));
+        var location = await Create(owner.Client, "locations", new LocationInput("Synthetic Location", "Synthetic Address"));
+        var typeResponse = await owner.Client.PostAsJsonAsync("/api/v1/room-types",
+            new BHome.Application.PropertyManagement.RoomTypeWrite(location, "Synthetic Type", null, 2, null, []));
+        typeResponse.EnsureSuccessStatusCode();
+        var type = (await typeResponse.Content.ReadFromJsonAsync<BHome.Application.PropertyManagement.RoomTypeDto>())!;
+        var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01", type.Id, 2));
         await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), Today.AddDays(365)));
         var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant));
         var meter = await Create(owner.Client, "meters", new MeterInput(room, "SYNTHETIC-METER", UtilityType.Water, MeterDisplay.Digital, 2, Today.AddDays(-20)));

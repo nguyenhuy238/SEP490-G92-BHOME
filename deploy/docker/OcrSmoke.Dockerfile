@@ -2,6 +2,11 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /source
 COPY global.json Directory.Build.targets ./
 COPY src/backend/ src/backend/
+COPY src/digital-signing/Directory.Build.props src/digital-signing/
+COPY src/digital-signing/BHome.DigitalSigning.Domain/ src/digital-signing/BHome.DigitalSigning.Domain/
+COPY src/digital-signing/BHome.DigitalSigning.Application/ src/digital-signing/BHome.DigitalSigning.Application/
+COPY src/digital-signing/BHome.DigitalSigning.MySign/ src/digital-signing/BHome.DigitalSigning.MySign/
+COPY src/digital-signing/BHome.DigitalSigning.Infrastructure/Viettel/ src/digital-signing/BHome.DigitalSigning.Infrastructure/Viettel/
 COPY tools/BHome.OcrSmoke/ tools/BHome.OcrSmoke/
 RUN dotnet publish tools/BHome.OcrSmoke/BHome.OcrSmoke.csproj -c Release -r linux-x64 --self-contained false -o /app
 

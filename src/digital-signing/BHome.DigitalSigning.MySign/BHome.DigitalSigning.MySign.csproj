@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../BHome.DigitalSigning.Application/BHome.DigitalSigning.Application.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <!-- Compile the existing provider source without referencing the PDF/iText assembly. -->
+    <Compile Include="../BHome.DigitalSigning.Infrastructure/Viettel/*.cs" Link="Viettel/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

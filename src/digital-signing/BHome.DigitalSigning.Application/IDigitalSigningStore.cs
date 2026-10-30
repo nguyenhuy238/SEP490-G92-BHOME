@@ -2,7 +2,7 @@ using BHome.DigitalSigning.Domain;
 
 namespace BHome.DigitalSigning.Application;
 
-public interface IDigitalSigningStore
+public interface ISigningCertificateStore
 {
     Task<IReadOnlyList<SigningCertificate>> CertificatesOfAsync(Guid ownerUserId, CancellationToken cancellationToken);
     Task<SigningCertificate?> CertificateAsync(Guid id, CancellationToken cancellationToken);
@@ -10,7 +10,10 @@ public interface IDigitalSigningStore
     Task AddCertificateAsync(SigningCertificate certificate, CancellationToken cancellationToken);
     Task RemoveCertificateAsync(Guid id, CancellationToken cancellationToken);
     Task SetLockedAsync(Guid id, bool locked, CancellationToken cancellationToken);
+}
 
+public interface IDigitalSigningStore : ISigningCertificateStore
+{
     Task AddTransactionAsync(SigningTransaction transaction, CancellationToken cancellationToken);
     Task<SigningTransaction?> TransactionAsync(Guid id, CancellationToken cancellationToken);
     Task SetProviderTransactionAsync(Guid id, string providerTransactionId, DateTimeOffset now,

@@ -16,24 +16,6 @@ namespace BHome.Infrastructure.Modules.IncidentMaintenance.Persistence;
 // Evidence and history are JSONB columns (plan D13: no extra tables); the domain only appends to them.
 // RowVersion maps to PostgreSQL xmin for optimistic concurrency (no extra column).
 
-internal sealed class AssetConfiguration : IEntityTypeConfiguration<Asset>
-{
-    public void Configure(EntityTypeBuilder<Asset> builder)
-    {
-        builder.ToTable("Assets");
-        builder.Property(x => x.AssetCode).HasMaxLength(50);
-        builder.Property(x => x.Name).HasMaxLength(150);
-        builder.Property(x => x.Category).HasMaxLength(50);
-        builder.Property(x => x.PurchaseInfo).HasMaxLength(1000);
-        builder.Property(x => x.Condition).HasMaxLength(1000);
-        builder.Property(x => x.RowVersion).IsRowVersion();
-        builder.HasIndex(x => new { x.LocationId, x.AssetCode }).IsUnique();
-        builder.HasIndex(x => x.RoomId);
-        builder.HasOne<Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<Room>().WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
 internal sealed class IncidentReportConfiguration : IEntityTypeConfiguration<IncidentReport>
 {
     public void Configure(EntityTypeBuilder<IncidentReport> builder)

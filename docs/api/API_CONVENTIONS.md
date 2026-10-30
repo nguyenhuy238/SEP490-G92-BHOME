@@ -129,7 +129,20 @@ or persistence. Requires authenticated Owner/Staff and both `Development` enviro
 Binary JPEG/PNG <=5 MiB; returns `{ proposal, elapsedMilliseconds }` with no-store.
 This harness does not authorize any business read, confirmation, or evidence storage.
 
+Meter diagnostics optionally accept `?decimalPlaces=0..4`, the number of fractional digits
+actually displayed by the meter. Invalid values and identity profiles with this parameter
+return 400; disabled diagnostics still return 404 before parameter validation. Without a
+precision hint, an integer-looking proposal warns that the decimal separator is unverified.
+Business meter OCR always uses the server-loaded `Meter.DecimalPlaces`; a caller query cannot
+override it. Values retain their full fractional part and still require human confirmation.
+See [accuracy evaluation and limitations](../development/OCR_ACCURACY_DELIVERY.md).
+
 ## Contracts and status codes
+
+D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được
+mô tả tại [Contract lifecycle delivery](../development/CONTRACT_LIFECYCLE_DELIVERY.md).
+Các API mới dùng chuỗi decimal VND trong response; input nhận chuỗi decimal hoặc số nguyên.
+Mọi truy cập file hợp đồng/inspection đi qua endpoint được phân quyền, không có public URL.
 
 Location assignment endpoints follow the fixed Owner/Staff scope described in
 [Staff Location assignments](../development/STAFF_LOCATION_ASSIGNMENTS.md). Owner creates a minimal
@@ -137,6 +150,11 @@ Location and manages inclusive dated assignments; Staff reads only Locations ass
 Vietnam business date. Assignment mutations send `locationId` in the JSON body; assignment-history
 reads use a query parameter rather than a GET body. Every Owner can manage every Location and assign
 any active Staff account. Overlapping assignments return 409 and unknown Location IDs return 404.
+
+The minimal Location create/list slice is now superseded by the approved
+[property configuration APIs](PROPERTY_MANAGEMENT.md): creation requires name/address and automatically uses the sole system Chain,
+listing is paginated, Room creation requires a Location-owned Room Type, and effective-dated
+prices are immutable versions. `assigned-to-me` keeps its existing small list contract.
 
 JSON properties use camelCase. Use explicit request/response DTOs, never EF entities. Require and
 validate bounded string lengths, supported enum values, sizes and page parameters at the API edge;

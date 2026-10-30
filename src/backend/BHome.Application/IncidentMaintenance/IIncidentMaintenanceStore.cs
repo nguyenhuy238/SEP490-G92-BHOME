@@ -22,11 +22,9 @@ public interface IIncidentMaintenanceStore
     Task<Asset?> FindAssetAsync(Guid id, CancellationToken cancellationToken);
     Task<RoomScope?> FindRoomAsync(Guid roomId, CancellationToken cancellationToken);
     Task<bool> LocationExistsAsync(Guid locationId, CancellationToken cancellationToken);
-    Task<bool> AssetCodeExistsAsync(Guid locationId, string assetCode, Guid? excludingAssetId, CancellationToken cancellationToken);
 
     void Add(IncidentReport incident);
     void Add(MaintenanceWorkOrder workOrder);
-    void Add(Asset asset);
 
     // GBR-13 / plan D15: high-impact decisions go to the existing append-only security audit.
     void Audit(Guid actorUserId, string action, string targetType, Guid targetId);
@@ -40,8 +38,6 @@ public interface IIncidentMaintenanceStore
     Task<IReadOnlyList<IncidentSummary>> ListIncidentsAsync(MaintenanceViewer viewer, IncidentListQuery query,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<WorkOrderSummary>> ListWorkOrdersAsync(MaintenanceViewer viewer, WorkOrderListQuery query,
-        CancellationToken cancellationToken);
-    Task<IReadOnlyList<AssetSummary>> ListAssetsAsync(MaintenanceViewer viewer, AssetListQuery query,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<MaintenanceHistoryItem>> MaintenanceHistoryAsync(MaintenanceHistoryQuery query,
         CancellationToken cancellationToken);

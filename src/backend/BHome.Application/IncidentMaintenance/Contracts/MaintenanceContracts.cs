@@ -25,17 +25,12 @@ public sealed record ProposalInput([Required, StringLength(2000)] string Inspect
 public sealed record NoteInput([Required, StringLength(1000)] string Note);
 public sealed record SubmitResultInput([Required, StringLength(2000)] string ResultSummary);
 public sealed record VerifyInput([Range(0, 999_999_999_999)] decimal ActualCost, [StringLength(1000)] string? CostVarianceReason);
-public sealed record CreateAssetInput(Guid LocationId, Guid? RoomId, [Required, StringLength(50)] string AssetCode,
-    [Required, StringLength(150)] string Name, [Required, StringLength(50)] string Category, [StringLength(1000)] string? PurchaseInfo);
-public sealed record UpdateAssetInput(Guid? RoomId, [Required, StringLength(50)] string AssetCode,
-    [Required, StringLength(150)] string Name, [Required, StringLength(50)] string Category, [StringLength(1000)] string? PurchaseInfo);
 public sealed record AssetConditionInput([Required, StringLength(1000)] string Condition);
 
 // ---- Queries ----
 public sealed record IncidentListQuery(Guid? LocationId = null, IncidentStatus? Status = null,
     IncidentSeverity? Severity = null, bool OpenOnly = false, int Take = 50);
 public sealed record WorkOrderListQuery(bool Mine = false, Guid? LocationId = null, WorkOrderStatus? Status = null, int Take = 50);
-public sealed record AssetListQuery(Guid? LocationId = null, Guid? RoomId = null, AssetStatus? Status = null, int Take = 100);
 public sealed record MaintenanceHistoryQuery(Guid? LocationId = null, Guid? RoomId = null, Guid? AssetId = null, int Take = 100);
 
 // ---- Outputs (least-privilege projections, never EF entities) ----
@@ -70,8 +65,8 @@ public sealed record WorkOrderDetail(Guid Id, Guid IncidentReportId, string Repo
     DateTimeOffset? SubmittedAt, decimal? ActualCost, string? CostVarianceReason, DateTimeOffset? VerifiedAt,
     string? ReworkReason, string? CancelReason, IReadOnlyList<EvidenceItem> Evidence, IReadOnlyList<WorkOrderEntryItem> History);
 
-public sealed record AssetSummary(Guid Id, Guid LocationId, Guid? RoomId, string AssetCode, string Name, string Category,
-    string? PurchaseInfo, string? Condition, AssetStatus Status);
+public sealed record AssetSummary(Guid Id, Guid LocationId, Guid? RoomId, string? CommonArea, string? Code, string Name,
+    string Category, string Condition, AssetStatus Status, int Version);
 
 // Screen 6.4.1 Maintenance History: one row per Work Order.
 public sealed record MaintenanceHistoryItem(Guid WorkOrderId, Guid IncidentReportId, string ReportCode, string IncidentSummary,

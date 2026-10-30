@@ -6,7 +6,7 @@ namespace BHome.DigitalSigning.Application.Services;
 
 // A signer's own Viettel MySign certificates: declared once by subscriber id, then chosen when signing.
 public sealed class SigningCertificateService(
-    ICurrentUser user, IDigitalSigningStore store, ISigningProvider provider, TimeProvider clock)
+    ICurrentUser user, ISigningCertificateStore store, ISigningProvider provider, TimeProvider clock)
 {
     public async Task<IReadOnlyList<CertificateView>> MineAsync(CancellationToken cancellationToken)
     {

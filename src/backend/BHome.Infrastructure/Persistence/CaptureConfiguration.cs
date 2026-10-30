@@ -12,7 +12,11 @@ internal static class CaptureConfiguration
     {
         b.Entity<Chain>().ToTable("Chains"); b.Entity<Room>().ToTable("Rooms");
         b.Entity<Resident>().ToTable("Residents"); b.Entity<MeterEvidence>().ToTable("MeterEvidence");
-        b.Entity<Chain>(e => e.Property(x => x.Name).HasMaxLength(150));
+        b.Entity<Chain>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(150);
+            e.Property(x => x.Version).IsConcurrencyToken();
+        });
         b.Entity<Room>(e => { e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict); e.Property(x => x.RoomNumber).HasMaxLength(50); e.HasIndex(x => new { x.LocationId, x.RoomNumber }).IsUnique(); });
         b.Entity<Resident>(e =>
         {
@@ -33,11 +37,14 @@ internal static class CaptureConfiguration
         b.Entity<OperationalTask>(e =>
         {
             e.HasOne(x => x.Meter).WithMany().HasForeignKey(x => x.MeterId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.OcrProposedValue).HasPrecision(18, 4); e.Property(x => x.OcrImageHash).HasMaxLength(64); e.Property(x => x.OcrEngineVersion).HasMaxLength(150);
             e.HasIndex(x => new { x.MeterId, x.BillingPeriod }).IsUnique().HasFilter("\"Purpose\" = 1 AND \"Status\" <> 3");
             e.HasIndex(x => x.MeterId).IsUnique().HasFilter("\"Purpose\" = 0 AND \"Status\" <> 3");
             e.HasIndex(x => x.Status);
-            e.ToTable("OperationalTasks", t => t.HasCheckConstraint("CK_Task_Period", "(\"Purpose\" = 0 AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)"));
+            e.HasIndex(x => new { x.MeterId, x.ContractId }).IsUnique().HasFilter("\"Purpose\" = 2 AND \"Status\" <> 3");
+            e.ToTable("OperationalTasks", t => t.HasCheckConstraint("CK_Task_Period", "(\"Purpose\" IN (0,2) AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)"));
+            e.ToTable("OperationalTasks", t => t.HasCheckConstraint("CK_Task_FinalContract", "(\"Purpose\" = 2 AND \"ContractId\" IS NOT NULL) OR (\"Purpose\" <> 2 AND \"ContractId\" IS NULL)"));
         });
         b.Entity<MeterEvidence>(e =>
         {

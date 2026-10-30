@@ -101,10 +101,7 @@ internal sealed class ViettelMySignProvider(
         if (!reply.Ok || transactionId.Length == 0)
         {
             // What Viettel support asks for when a sign is refused; never the secret, and the signer's id only by its tail.
-            logger.LogWarning(
-                "Viettel MySign signHash refused: client_id={ClientId} user_id=***{UserTail} credential_id={CredentialId} " +
-                "document_id={DocumentId} status={Status} error={Error}", account.ClientId,
-                ViettelText.Tail(request.ProviderUserId), request.CredentialId, request.DocumentId, reply.Status, reply.Error);
+            logger.LogWarning("Viettel MySign signHash refused: status={Status}", reply.Status);
             throw new SigningProviderException("Viettel MySign signHash failed: " + reply.Error);
         }
         return transactionId;
@@ -206,8 +203,7 @@ internal sealed class ViettelMySignProvider(
         var accessToken = Text(reply.Body, "access_token");
         if (!reply.Ok || accessToken.Length == 0)
         {
-            logger.LogWarning("Viettel MySign login refused: client_id={ClientId} user_id=***{UserTail} status={Status} error={Error}",
-                account.ClientId, ViettelText.Tail(providerUserId), reply.Status, reply.Error);
+            logger.LogWarning("Viettel MySign login refused: status={Status}", reply.Status);
             throw new SigningProviderException("Viettel MySign login failed: " + reply.Error);
         }
         tokens.Put(account, providerUserId, accessToken, Lifetime(Text(reply.Body, "expires_in")));

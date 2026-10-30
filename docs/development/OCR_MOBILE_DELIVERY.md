@@ -1,5 +1,14 @@
 # OCR dùng thử trên mobile — triển khai tiếp
 
+Cập nhật đủ sáu loại: [OCR_SIX_PROFILES_DELIVERY.md](OCR_SIX_PROFILES_DELIVERY.md),
+engine `-layout4`, cải thiện riêng CCCD, bánh số và LCD, kèm kết quả từng profile.
+
+Cải thiện tiếp: [độ chính xác OCR, ảnh thực tế và dấu thập phân](OCR_ACCURACY_DELIVERY.md),
+engine `-layout3`, xử lý ảnh nghiêng/xoay và công cụ đánh giá có nhãn.
+
+Sửa nhận dạng ngày 30/10/2026: xem [CCCD mặt sau và chỉ số công tơ](OCR_RECOGNITION_FIX.md)
+cho nguyên nhân, thay đổi engine/parser, kiểm thử và giới hạn ảnh thực tế.
+
 ## Camera bị mờ khi đưa gần (28/10/2026)
 
 Người dùng báo iPhone 14 Pro không lấy nét khi đưa gần và yêu cầu hỗ trợ cả thiết bị khác.

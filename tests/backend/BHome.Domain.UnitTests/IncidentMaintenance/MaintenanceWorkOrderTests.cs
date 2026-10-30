@@ -149,12 +149,14 @@ public sealed class MaintenanceWorkOrderTests
         Assert.Throws<MaintenanceStateException>(() => order.AddProgress(Staff, "x", [], Now));
     }
 
-    // ---- Asset (UC-05, D10) ----
+    // ---- Asset repair status (UC-05 A4, D10) ----
+
+    private static Asset NewAsset() => new() { LocationId = Location, CommonArea = "Hành lang tầng 2", Name = "Bình nóng lạnh", Category = "Điện", Condition = "Tốt" };
 
     [Fact]
     public void AssetFollowsMaintenanceStatus()
     {
-        var asset = new Asset(Location, null, "BNL-01", "Bình nóng lạnh", "Điện", null);
+        var asset = NewAsset();
         asset.MarkNeedsRepair();
         Assert.Equal(AssetStatus.NeedsRepair, asset.Status);
         asset.MarkUnderRepair();
@@ -162,15 +164,17 @@ public sealed class MaintenanceWorkOrderTests
         Assert.Equal(AssetStatus.UnderRepair, asset.Status);
         asset.CompleteRepair(otherOpenWorkOrders: false);
         Assert.Equal(AssetStatus.Active, asset.Status);
+        Assert.Equal(4, asset.Version);
     }
 
     [Fact]
-    public void AssetRetireIsBlockedByOpenWorkOrdersAndIsFinal()
+    public void RetiredAssetIsNotChangedByMaintenance()
     {
-        var asset = new Asset(Location, null, "BNL-01", "Bình nóng lạnh", "Điện", null);
-        Assert.Throws<MaintenanceStateException>(() => asset.Retire(hasOpenWorkOrders: true));
-        asset.Retire(hasOpenWorkOrders: false);
-        Assert.Equal(AssetStatus.Retired, asset.Status);
+        var asset = NewAsset();
+        asset.Status = AssetStatus.Retired;
+        Assert.Throws<MaintenanceStateException>(() => asset.MarkNeedsRepair());
         Assert.Throws<MaintenanceStateException>(() => asset.UpdateCondition("Hỏng"));
+        asset.CompleteRepair(otherOpenWorkOrders: false);
+        Assert.Equal(AssetStatus.Retired, asset.Status);
     }
 }
