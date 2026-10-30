@@ -15,19 +15,19 @@ Thư mục reports hiện chỉ có bốn report trên; không có Report 5 và 
 
 ## 2. Source hiện có
 
-| Thành phần | Bằng chứng | Kết luận |
-| --- | --- | --- |
-| Permission | Domain/IdentityAccess/Permissions.cs, RolePermissions.cs | Có manage/execute/verify; Owner manage/verify, Staff execute; chưa chứng minh nghiệp vụ Task đã có |
-| Location assignment | Infrastructure/Locations/PostgresLocationAssignments.cs, migration LocationStaffAssignments | Có kiểm tra Staff active/role, ngày hiệu lực và chống overlap tại PostgreSQL |
-| Entity tên OperationalTask | Domain/Billing/MeterCapture.cs | Chỉ là meter task: MeterId bắt buộc, purpose, reading date/period, OCR, CompletedAt |
-| API meter task | Api/Controllers/Ocr/CaptureController.cs | GET/POST /api/v1/capture/meter-tasks; evidence và confirm; không có API Task vận hành tổng quát |
-| Meter completion | Infrastructure/Ocr/CaptureRepository.cs | Staff xác nhận reading sẽ hoàn thành meter task; đúng UC-20, không áp luồng Owner verify của UC-11 vào đây |
-| Visibility meter task | Infrastructure/Ocr/CaptureScope.cs | Theo Location hiện tại, không có assignee riêng từng meter task |
-| Ràng buộc meter task | Infrastructure/Persistence/CaptureConfiguration.cs | FK Meter/Contract, unique reading period/baseline/final, check period; không phù hợp task vệ sinh/kiểm tra tổng quát |
-| Phụ thuộc Contract | Infrastructure/Contracts/ContractRepository.cs | Kiểm tra final reading join OperationalTasks; sửa entity/table hiện tại sẽ ảnh hưởng move-out |
-| Jobs | Infrastructure/Jobs; Application/Jobs | Có durable queue/worker, chưa có recurrence planner và JOB-06/07 nghiệp vụ |
-| Notifications | Application/Integrations/INotificationProvider.cs; Infrastructure/Integrations/UnconfiguredAdapters.cs | Có port; adapter chưa cấu hình; chưa có persistent notification workflow cho Task |
-| Tests | RolePermissionTests, PermissionAccessTests, Ocr/CaptureWorkflowTests | Có quyền nền và meter workflow; chưa có bộ test create/assign/update Task tổng quát |
+| Thành phần                 | Bằng chứng                                                                                             | Kết luận                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Permission                 | Domain/IdentityAccess/Permissions.cs, RolePermissions.cs                                               | Có manage/execute/verify; Owner manage/verify, Staff execute; chưa chứng minh nghiệp vụ Task đã có                   |
+| Location assignment        | Infrastructure/Locations/PostgresLocationAssignments.cs, migration LocationStaffAssignments            | Có kiểm tra Staff active/role, ngày hiệu lực và chống overlap tại PostgreSQL                                         |
+| Entity tên OperationalTask | Domain/Billing/MeterCapture.cs                                                                         | Chỉ là meter task: MeterId bắt buộc, purpose, reading date/period, OCR, CompletedAt                                  |
+| API meter task             | Api/Controllers/Ocr/CaptureController.cs                                                               | GET/POST /api/v1/capture/meter-tasks; evidence và confirm; không có API Task vận hành tổng quát                      |
+| Meter completion           | Infrastructure/Ocr/CaptureRepository.cs                                                                | Staff xác nhận reading sẽ hoàn thành meter task; đúng UC-20, không áp luồng Owner verify của UC-11 vào đây           |
+| Visibility meter task      | Infrastructure/Ocr/CaptureScope.cs                                                                     | Theo Location hiện tại, không có assignee riêng từng meter task                                                      |
+| Ràng buộc meter task       | Infrastructure/Persistence/CaptureConfiguration.cs                                                     | FK Meter/Contract, unique reading period/baseline/final, check period; không phù hợp task vệ sinh/kiểm tra tổng quát |
+| Phụ thuộc Contract         | Infrastructure/Contracts/ContractRepository.cs                                                         | Kiểm tra final reading join OperationalTasks; sửa entity/table hiện tại sẽ ảnh hưởng move-out                        |
+| Jobs                       | Infrastructure/Jobs; Application/Jobs                                                                  | Có durable queue/worker, chưa có recurrence planner và JOB-06/07 nghiệp vụ                                           |
+| Notifications              | Application/Integrations/INotificationProvider.cs; Infrastructure/Integrations/UnconfiguredAdapters.cs | Có port; adapter chưa cấu hình; chưa có persistent notification workflow cho Task                                    |
+| Tests                      | RolePermissionTests, PermissionAccessTests, Ocr/CaptureWorkflowTests                                   | Có quyền nền và meter workflow; chưa có bộ test create/assign/update Task tổng quát                                  |
 
 Thiếu cho UC-10–12: entity đúng nghiệp vụ, DTO/controller/service/repository, title/requirements/priority/deadline/evidence requirement, routing và history, progress/blocker/result, Pending Verification, Owner verify/rework/cancel, private evidence, concurrency/idempotency, notification intent và test riêng.
 
@@ -64,14 +64,14 @@ Nếu muốn khóa task vào người nhận cũ và Owner phải reassign thủ
 
 Base path đề xuất: `/api/v1/operational-tasks`. Đây là route mới cần được chốt, chưa tồn tại.
 
-| Method / route | Quyền | Ý nghĩa |
-| --- | --- | --- |
-| POST / | Owner/manage | Tạo ad-hoc task và route tới Staff phụ trách Location trong cùng transaction; 201 + Location header |
-| GET / | Owner hoặc Staff có quyền phù hợp | Phân trang, lọc Location/status/priority/due date; Staff chỉ thấy công việc thuộc trách nhiệm hiện tại |
-| GET /{id} | Như trên + scope server | Chi tiết task và assignment hiện tại |
-| PUT /{id} | Owner/manage | Cập nhật các trường cho phép, có version và change reason; không nhận status/actor từ client |
-| POST /{id}/assign | Owner/manage | Đồng bộ trách nhiệm với assignment hiện hành; không nhận staffUserId tùy ý; cùng assignment thì không tạo history trùng |
-| GET /{id}/history | Scope tương ứng | Lịch sử phân trang, append-only; actor/time/change reason |
+| Method / route    | Quyền                             | Ý nghĩa                                                                                                                 |
+| ----------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| POST /            | Owner/manage                      | Tạo ad-hoc task và route tới Staff phụ trách Location trong cùng transaction; 201 + Location header                     |
+| GET /             | Owner hoặc Staff có quyền phù hợp | Phân trang, lọc Location/status/priority/due date; Staff chỉ thấy công việc thuộc trách nhiệm hiện tại                  |
+| GET /{id}         | Như trên + scope server           | Chi tiết task và assignment hiện tại                                                                                    |
+| PUT /{id}         | Owner/manage                      | Cập nhật các trường cho phép, có version và change reason; không nhận status/actor từ client                            |
+| POST /{id}/assign | Owner/manage                      | Đồng bộ trách nhiệm với assignment hiện hành; không nhận staffUserId tùy ý; cùng assignment thì không tạo history trùng |
+| GET /{id}/history | Scope tương ứng                   | Lịch sử phân trang, append-only; actor/time/change reason                                                               |
 
 `POST /` dự thảo:
 

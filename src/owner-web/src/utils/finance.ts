@@ -3,7 +3,9 @@ export function financeSummary(db: DemoDatabase, locationId = 'all', month = '20
   const scoped = (row: { locationId: string; date: string }) =>
     (locationId === 'all' || row.locationId === locationId) && row.date.startsWith(month);
   const invoices = db.records.invoices.filter((row) => scoped(row) && row.status !== 'Nháp');
-  const expenses = db.records.expenses.filter(row => scoped(row) && row.category !== 'Đầu tư ban đầu').reduce((sum, row) => sum + row.amount, 0);
+  const expenses = db.records.expenses
+    .filter((row) => scoped(row) && row.category !== 'Đầu tư ban đầu')
+    .reduce((sum, row) => sum + row.amount, 0);
   const revenue = invoices.reduce((sum, row) => sum + row.paid, 0);
   const due = invoices.reduce(
     (sum, row) => sum + row.amount + Number(row.attributes.approvedAdjustment || 0),

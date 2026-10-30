@@ -70,19 +70,19 @@ Luồng chính:
 7. **107–108:** Task riêng cho nhánh hủy, không ghi đè ID/version của luồng chính.
 8. **109–118:** ca lỗi/quyền. **111–113 là tùy chọn**, cần Location/token bổ sung như bảng dưới.
 
-| Biến mới | Cách dùng |
-| --- | --- |
-| `taskId`, `taskVersion` | 81 tự lưu; GET/action thành công cập nhật version. Khi stale, chạy lại 84; sau upload chạy 95 |
-| `taskPreviousVersion` | 85 lưu version cũ cho ca 86 |
-| `taskTitle` | Nội dung Task test; có thể sửa trước khi chạy 81 |
-| `taskDueAt` | Deadline có Z/offset; 81 tự đặt sau hiện tại 24 giờ nếu trống/hết hạn, chỉ là dữ liệu test |
-| `taskCreateDueAt`, `taskCreateKey` | 81 lưu payload/key tạo ban đầu, 82 dùng nguyên trạng để replay |
-| `taskEvidenceId` | 94 tự lưu khi upload thành công |
-| `taskNotificationId` | 104 tự lưu một thông báo thuộc Task hiện tại |
-| `taskCancelId`, `taskCancelVersion` | Nhánh 107–108 dùng riêng |
-| `taskUnassignedLocationId` | Ca 111: tự điền ID Location test active thật, chưa có Staff hiện hành |
-| `otherStaffAccessToken` | Ca 112: token Staff test khác không phụ trách Location của Task |
-| `tenantAccessToken` | Ca 113: token Tenant test, nhập runtime, không lưu vào file git |
+| Biến mới                            | Cách dùng                                                                                     |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `taskId`, `taskVersion`             | 81 tự lưu; GET/action thành công cập nhật version. Khi stale, chạy lại 84; sau upload chạy 95 |
+| `taskPreviousVersion`               | 85 lưu version cũ cho ca 86                                                                   |
+| `taskTitle`                         | Nội dung Task test; có thể sửa trước khi chạy 81                                              |
+| `taskDueAt`                         | Deadline có Z/offset; 81 tự đặt sau hiện tại 24 giờ nếu trống/hết hạn, chỉ là dữ liệu test    |
+| `taskCreateDueAt`, `taskCreateKey`  | 81 lưu payload/key tạo ban đầu, 82 dùng nguyên trạng để replay                                |
+| `taskEvidenceId`                    | 94 tự lưu khi upload thành công                                                               |
+| `taskNotificationId`                | 104 tự lưu một thông báo thuộc Task hiện tại                                                  |
+| `taskCancelId`, `taskCancelVersion` | Nhánh 107–108 dùng riêng                                                                      |
+| `taskUnassignedLocationId`          | Ca 111: tự điền ID Location test active thật, chưa có Staff hiện hành                         |
+| `otherStaffAccessToken`             | Ca 112: token Staff test khác không phụ trách Location của Task                               |
+| `tenantAccessToken`                 | Ca 113: token Tenant test, nhập runtime, không lưu vào file git                               |
 
 Các biến có trong cả Environment và Collection Variables; token bổ sung để trống và đánh dấu secret
 trong Environment. Script có kiểm tra biến bắt buộc; response lỗi không ghi đè Task/evidence/version

@@ -351,6 +351,9 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             .MigrateAsync("20261030023603_SingleSystemChain"));
         Assert.Equal("P0001", rollback.SqlState);
         Assert.NotNull((await db.Set<BillingPolicy>().AsNoTracking().SingleAsync(x => x.Id == used.Id)).FirstUsedAt);
+        // EF commits each migration separately: newer migrations can be rolled back before
+        // the billing-policy guard stops its own Down. Restore them for this shared fixture.
+        await db.GetService<IMigrator>().MigrateAsync();
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 

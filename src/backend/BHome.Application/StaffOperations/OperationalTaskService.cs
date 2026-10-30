@@ -74,8 +74,14 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
             var location = await repository.LocationAsync(input.LocationId, t) ?? throw OperationalTaskException.Missing();
             if (!location.IsActive) throw OperationalTaskException.Conflict("location_inactive");
             var responsible = await repository.ResponsibilityAsync(location.Id, Today, t) ?? throw OperationalTaskException.Conflict("no_responsible_staff");
-            var task = new OperationalTask { Kind = OperationalTaskKind.AdHoc, LocationId = location.Id,
-                AssignedStaffUserId = responsible.StaffUserId, AssignmentId = responsible.AssignmentId, AssignedAt = Now };
+            var task = new OperationalTask
+            {
+                Kind = OperationalTaskKind.AdHoc,
+                LocationId = location.Id,
+                AssignedStaffUserId = responsible.StaffUserId,
+                AssignmentId = responsible.AssignmentId,
+                AssignedAt = Now
+            };
             SetWork(task, input.Work); repository.Add(task);
             await RecordAsync(task, "created", "", new { input.Work, responsible.AssignmentId }, [responsible.StaffUserId], t);
             await repository.FlushAsync(t);
@@ -189,9 +195,18 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
     }
     private Task RecordAsync(OperationalTask task, string action, string note, object changes, IReadOnlyList<Guid> recipients, CancellationToken t, bool? wasOverdue = null)
     {
-        var history = new OperationalTaskHistory { TaskId = task.Id, ActorId = Actor, Action = action, Note = note,
-            ChangesJson = JsonSerializer.Serialize(changes), ResponsibleStaffUserId = task.AssignedStaffUserId,
-            OccurredAt = Now, WasOverdue = wasOverdue ?? task.IsOverdue(Now), TaskVersion = action == "created" ? task.Version : task.Version + 1 };
+        var history = new OperationalTaskHistory
+        {
+            TaskId = task.Id,
+            ActorId = Actor,
+            Action = action,
+            Note = note,
+            ChangesJson = JsonSerializer.Serialize(changes),
+            ResponsibleStaffUserId = task.AssignedStaffUserId,
+            OccurredAt = Now,
+            WasOverdue = wasOverdue ?? task.IsOverdue(Now),
+            TaskVersion = action == "created" ? task.Version : task.Version + 1
+        };
         repository.Add(history);
         if (action is "created" or "updated" or "assign" or "responsibility_changed" or "submit" or "verify" or "rework" or "cancel" or "blockers" or "coordinate")
             foreach (var recipient in recipients.Distinct().Where(x => x != Actor)) repository.Add(new OperationalTaskNotification
@@ -213,8 +228,14 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
                 return JsonSerializer.Deserialize<T>(existing.ResponseJson)!;
             }
             var result = await work();
-            repository.Add(new OperationalTaskCommand { ActorId = Actor, Key = key, TaskId = taskId(result),
-                Fingerprint = fingerprint, ResponseJson = JsonSerializer.Serialize(result) });
+            repository.Add(new OperationalTaskCommand
+            {
+                ActorId = Actor,
+                Key = key,
+                TaskId = taskId(result),
+                Fingerprint = fingerprint,
+                ResponseJson = JsonSerializer.Serialize(result)
+            });
             return result;
         }, t);
     }
@@ -253,8 +274,15 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
                     if ((await repository.EvidenceAsync(id, t)).Count >= limits.MaximumFilesPerTask) throw OperationalTaskException.Conflict("task_evidence_limit");
                     repository.Track(task);
                     await SynchronizeResponsibilityAsync(task, responsible, t);
-                    var evidence = new OperationalTaskEvidence { TaskId = id, UploadedByUserId = Actor, ContentType = type, Length = length,
-                        Sha256 = hash, ObjectKey = "task-evidence/" + id.ToString("N") + "/" + Guid.NewGuid().ToString("N") };
+                    var evidence = new OperationalTaskEvidence
+                    {
+                        TaskId = id,
+                        UploadedByUserId = Actor,
+                        ContentType = type,
+                        Length = length,
+                        Sha256 = hash,
+                        ObjectKey = "task-evidence/" + id.ToString("N") + "/" + Guid.NewGuid().ToString("N")
+                    };
                     await files.PutAsync(id, evidence.ObjectKey, content, type, t);
                     repository.Add(evidence);
                     await RecordAsync(task, "evidence_uploaded", "", new { EvidenceId = evidence.Id }, [], t);

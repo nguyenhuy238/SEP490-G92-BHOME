@@ -35,27 +35,27 @@ Trong lượt triển khai source ban đầu chỉ kiểm tra trên database dù
 
 Base: `/api/v1/operational-tasks`. Bearer session hợp lệ; response no-store. Không có Guest/Tenant access.
 
-| Method / suffix | Quyền | Kết quả |
-| --- | --- | --- |
-| POST / | Owner/manage | 201, TaskView, Location header; tạo và tự assign trong transaction |
-| GET / | Owner/Staff view + current scope | TaskPage<TaskView>, list AdHoc tasks |
-| GET /{id} | Owner/Staff view + current scope | TaskView |
-| PUT /{id} | Owner/manage | Cập nhật thông tin khi Assigned/InProgress, có reason/version |
-| POST /{id}/assign | Owner/manage | Đồng bộ snapshot với phân công Location hiện tại, không chọn Staff tùy ý |
-| POST /{id}/start | Staff/execute + current scope | Assigned → InProgress |
-| POST /{id}/progress | Staff/execute + current scope | Thêm progress history khi InProgress |
-| POST /{id}/blockers | Staff/execute + current scope | Thêm blocker history, giữ InProgress, thông báo Owner |
-| POST /{id}/coordinate | Owner/manage | Thêm hướng dẫn xử lý khi Task đang mở, thông báo Staff |
-| POST /{id}/submit | Staff/execute + current scope | InProgress → PendingVerification; cần result và evidence theo cấu hình Task |
-| POST /{id}/verify | Owner/verify | PendingVerification → Completed; ghi verifier/time |
-| POST /{id}/rework | Owner/verify | PendingVerification → InProgress; reason bắt buộc |
-| POST /{id}/cancel | Owner/manage | Task đang mở → Cancelled; reason bắt buộc; giữ history/evidence |
-| GET /{id}/history | View + current scope | Phân trang lịch sử append-only |
-| GET /{id}/evidence | View + current scope | Metadata ảnh, không trả object key |
-| PUT /{id}/evidence | Staff/execute + current scope | Raw image/png hoặc image/jpeg; chỉ khi InProgress |
-| GET /{id}/evidence/{evidenceId} | View + current scope | Download attachment, MIME từ nội dung đã xác thực, nosniff |
-| GET /notifications | Own recipient + view/current scope | Phân trang persistent notifications của module Task |
-| POST /notifications/{id}/read | Own recipient + view/current scope | 204; đánh dấu đọc idempotent |
+| Method / suffix                 | Quyền                              | Kết quả                                                                     |
+| ------------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| POST /                          | Owner/manage                       | 201, TaskView, Location header; tạo và tự assign trong transaction          |
+| GET /                           | Owner/Staff view + current scope   | TaskPage<TaskView>, list AdHoc tasks                                        |
+| GET /{id}                       | Owner/Staff view + current scope   | TaskView                                                                    |
+| PUT /{id}                       | Owner/manage                       | Cập nhật thông tin khi Assigned/InProgress, có reason/version               |
+| POST /{id}/assign               | Owner/manage                       | Đồng bộ snapshot với phân công Location hiện tại, không chọn Staff tùy ý    |
+| POST /{id}/start                | Staff/execute + current scope      | Assigned → InProgress                                                       |
+| POST /{id}/progress             | Staff/execute + current scope      | Thêm progress history khi InProgress                                        |
+| POST /{id}/blockers             | Staff/execute + current scope      | Thêm blocker history, giữ InProgress, thông báo Owner                       |
+| POST /{id}/coordinate           | Owner/manage                       | Thêm hướng dẫn xử lý khi Task đang mở, thông báo Staff                      |
+| POST /{id}/submit               | Staff/execute + current scope      | InProgress → PendingVerification; cần result và evidence theo cấu hình Task |
+| POST /{id}/verify               | Owner/verify                       | PendingVerification → Completed; ghi verifier/time                          |
+| POST /{id}/rework               | Owner/verify                       | PendingVerification → InProgress; reason bắt buộc                           |
+| POST /{id}/cancel               | Owner/manage                       | Task đang mở → Cancelled; reason bắt buộc; giữ history/evidence             |
+| GET /{id}/history               | View + current scope               | Phân trang lịch sử append-only                                              |
+| GET /{id}/evidence              | View + current scope               | Metadata ảnh, không trả object key                                          |
+| PUT /{id}/evidence              | Staff/execute + current scope      | Raw image/png hoặc image/jpeg; chỉ khi InProgress                           |
+| GET /{id}/evidence/{evidenceId} | View + current scope               | Download attachment, MIME từ nội dung đã xác thực, nosniff                  |
+| GET /notifications              | Own recipient + view/current scope | Phân trang persistent notifications của module Task                         |
+| POST /notifications/{id}/read   | Own recipient + view/current scope | 204; đánh dấu đọc idempotent                                                |
 
 Read detail/history của meter Task chỉ trả thông tin chung; meter details/reading vẫn qua capture API. List AdHoc không trộn meter workflow. Generic write vào meter Task trả `409 meter_workflow_required`.
 
@@ -105,15 +105,15 @@ List filters: page mặc định 1, pageSize mặc định 20 (tối đa 100), l
 
 ProblemDetails kèm correlationId và code cho lỗi Task:
 
-| HTTP | Ví dụ code |
-| --- | --- |
-| 400 | invalid_task_input, invalid_task_work_or_deadline, task_note_required, invalid_task_evidence, invalid_task_image, invalid_pagination, idempotency_key_required |
-| 401 | authentication_required hoặc lỗi session nền |
-| 403 | task_permission_denied hoặc lỗi policy nền |
-| 404 | task_resource_not_found, không tiết lộ Task/ảnh ngoài scope |
-| 409 | no_responsible_staff, location_inactive, stale_version, idempotency_conflict, invalid_task_transition, task_not_editable, completion_evidence_required, task_evidence_limit, meter_workflow_required |
-| 413 | task_evidence_too_large hoặc body vượt trần HTTP |
-| 415 | MIME khai báo không hỗ trợ |
+| HTTP | Ví dụ code                                                                                                                                                                                           |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | invalid_task_input, invalid_task_work_or_deadline, task_note_required, invalid_task_evidence, invalid_task_image, invalid_pagination, idempotency_key_required                                       |
+| 401  | authentication_required hoặc lỗi session nền                                                                                                                                                         |
+| 403  | task_permission_denied hoặc lỗi policy nền                                                                                                                                                           |
+| 404  | task_resource_not_found, không tiết lộ Task/ảnh ngoài scope                                                                                                                                          |
+| 409  | no_responsible_staff, location_inactive, stale_version, idempotency_conflict, invalid_task_transition, task_not_editable, completion_evidence_required, task_evidence_limit, meter_workflow_required |
+| 413  | task_evidence_too_large hoặc body vượt trần HTTP                                                                                                                                                     |
+| 415  | MIME khai báo không hỗ trợ                                                                                                                                                                           |
 
 Lỗi validation/model binding của framework dùng ValidationProblemDetails, không đảm bảo có code nghiệp vụ. Lỗi DB/provider bất ngờ vẫn được sanitize; không đổi thành thành công.
 

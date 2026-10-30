@@ -8,17 +8,17 @@ Người dùng phê duyệt D1-C và D2-B; giao người triển khai chọn D3/
 
 ## Acceptance và thiết kế trước triển khai
 
-| Yêu cầu | Thành phần | Bằng chứng test |
-| --- | --- | --- |
-| Owner create/assign/update theo Location active, Staff active/role/ngày hiệu lực | Task DTO/controller → OperationalTaskService → IOperationalTaskRepository → PostgreSQL | ServiceTests; duplicate create/update và scope API tests |
-| Chỉ Staff phụ trách hiện hành thực thi; Staff cũ mất quyền, Staff mới tiếp tục | Live responsibility lookup mỗi read/write, đồng bộ snapshot/history dưới Location lock | ReplacementStaffContinues; ScopeIsRecheckedWithOldTokens |
-| Staff start/progress/blocker/submit; không tự Completed | Domain ApplyAction, service Execute permission, result/evidence validation | Domain transition tests; completion service/API tests |
-| Owner verify/rework/cancel, có actor/time/reason và history | Verify/manage permissions; TaskHistory + SecurityAudit | Rework/verification API, competing Owner decisions |
-| Quá hạn không xóa execution state/history | isOverdue từ DueAt và trạng thái; WasOverdue trước mutation | DeadlineExtension; OverduePendingReview |
-| Evidence phải private, đúng Task, nội dung ảnh hợp lệ; upload lỗi không dangling | ITaskEvidenceFiles → MinIO, metadata, independent staging intent + cleanup | Private download/IDOR; duplicate upload; failure cleanup và linked retention |
-| Retry/parallel không duplicate; không ghi đè stale request | Actor/key fingerprint/response snapshot, unique key; version; transaction/advisory locks | Parallel create/update/upload, verify-vs-cancel, payload conflict |
-| Thông báo không phụ thuộc external delivery | Persistent TaskNotifications cùng transaction, own-recipient API/read state | Workflow notification/read assertions |
-| Bảo toàn meter/final reading/move-out | Backfill LocationId, giữ ID/FK/status cũ; Kind guard | Migration upgrade/down/guard test; CaptureWorkflowTests; ContractLifecycleApiTests |
+| Yêu cầu                                                                          | Thành phần                                                                               | Bằng chứng test                                                                    |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Owner create/assign/update theo Location active, Staff active/role/ngày hiệu lực | Task DTO/controller → OperationalTaskService → IOperationalTaskRepository → PostgreSQL   | ServiceTests; duplicate create/update và scope API tests                           |
+| Chỉ Staff phụ trách hiện hành thực thi; Staff cũ mất quyền, Staff mới tiếp tục   | Live responsibility lookup mỗi read/write, đồng bộ snapshot/history dưới Location lock   | ReplacementStaffContinues; ScopeIsRecheckedWithOldTokens                           |
+| Staff start/progress/blocker/submit; không tự Completed                          | Domain ApplyAction, service Execute permission, result/evidence validation               | Domain transition tests; completion service/API tests                              |
+| Owner verify/rework/cancel, có actor/time/reason và history                      | Verify/manage permissions; TaskHistory + SecurityAudit                                   | Rework/verification API, competing Owner decisions                                 |
+| Quá hạn không xóa execution state/history                                        | isOverdue từ DueAt và trạng thái; WasOverdue trước mutation                              | DeadlineExtension; OverduePendingReview                                            |
+| Evidence phải private, đúng Task, nội dung ảnh hợp lệ; upload lỗi không dangling | ITaskEvidenceFiles → MinIO, metadata, independent staging intent + cleanup               | Private download/IDOR; duplicate upload; failure cleanup và linked retention       |
+| Retry/parallel không duplicate; không ghi đè stale request                       | Actor/key fingerprint/response snapshot, unique key; version; transaction/advisory locks | Parallel create/update/upload, verify-vs-cancel, payload conflict                  |
+| Thông báo không phụ thuộc external delivery                                      | Persistent TaskNotifications cùng transaction, own-recipient API/read state              | Workflow notification/read assertions                                              |
+| Bảo toàn meter/final reading/move-out                                            | Backfill LocationId, giữ ID/FK/status cũ; Kind guard                                     | Migration upgrade/down/guard test; CaptureWorkflowTests; ContractLifecycleApiTests |
 
 Lock order: command actor/key → Location advisory lock. Location lock dùng cùng convention với PropertyManagement và create StaffLocationAssignment. Scope được kiểm lại sau lock. Không có request chọn Staff tùy ý hoặc cập nhật arbitrary status.
 
@@ -36,15 +36,15 @@ Lock order: command actor/key → Location advisory lock. Location lock dùng c�
 
 Mọi tài khoản/ảnh/dữ liệu test đều synthetic. Database và MinIO dưới đây do Testcontainers tạo và hủy; không dùng database phát triển/production.
 
-| Lệnh/check | Kết quả |
-| --- | --- |
-| `dotnet restore src/backend/BHome.sln --verbosity minimal -m:1 -nr:false` | PASS sau khi chạy có quyền network; không đổi package version |
-| `dotnet build src/backend/BHome.sln --no-restore --verbosity minimal -m:1 -nr:false` | PASS, 0 warnings/errors tại lần build; các lượt test tiếp theo cũng build source mới |
-| `dotnet test src/backend/BHome.sln --no-restore --filter 'Category!=Docker' --verbosity minimal -m:1 -nr:false` | PASS: Application 170/170, Domain 62/62, Integration non-Docker 114/114 |
-| `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~CaptureWorkflowTests\|FullyQualifiedName~ContractLifecycleApiTests\|FullyQualifiedName~LocationAssignmentApiTests\|FullyQualifiedName~StaffOperations' --verbosity minimal -m:1 -nr:false` | PASS 34/34; bao gồm một OpenAPI test cũng thuộc tập non-Docker, không cộng trùng thành tổng unique tests |
-| Migration metadata/snapshot | Nằm trong MigrationConsistencyTests của tập non-Docker |
-| Migration thật | PASS: inspect schema tạm, upgrade dữ liệu meter/evidence/reading cũ, downgrade khi chỉ meter, upgrade lại, từ chối downgrade mất AdHoc |
-| `git diff --check` | PASS; chỉ có thông báo Git chuẩn hóa CRLF thành LF của snapshot EF |
+| Lệnh/check                                                                                                                                                                                                                                                                             | Kết quả                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotnet restore src/backend/BHome.sln --verbosity minimal -m:1 -nr:false`                                                                                                                                                                                                              | PASS sau khi chạy có quyền network; không đổi package version                                                                          |
+| `dotnet build src/backend/BHome.sln --no-restore --verbosity minimal -m:1 -nr:false`                                                                                                                                                                                                   | PASS, 0 warnings/errors tại lần build; các lượt test tiếp theo cũng build source mới                                                   |
+| `dotnet test src/backend/BHome.sln --no-restore --filter 'Category!=Docker' --verbosity minimal -m:1 -nr:false`                                                                                                                                                                        | PASS: Application 170/170, Domain 62/62, Integration non-Docker 114/114                                                                |
+| `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~CaptureWorkflowTests\|FullyQualifiedName~ContractLifecycleApiTests\|FullyQualifiedName~LocationAssignmentApiTests\|FullyQualifiedName~StaffOperations' --verbosity minimal -m:1 -nr:false` | PASS 34/34; bao gồm một OpenAPI test cũng thuộc tập non-Docker, không cộng trùng thành tổng unique tests                               |
+| Migration metadata/snapshot                                                                                                                                                                                                                                                            | Nằm trong MigrationConsistencyTests của tập non-Docker                                                                                 |
+| Migration thật                                                                                                                                                                                                                                                                         | PASS: inspect schema tạm, upgrade dữ liệu meter/evidence/reading cũ, downgrade khi chỉ meter, upgrade lại, từ chối downgrade mất AdHoc |
+| `git diff --check`                                                                                                                                                                                                                                                                     | PASS; chỉ có thông báo Git chuẩn hóa CRLF thành LF của snapshot EF                                                                     |
 
 TRX lưu dưới thư mục ignored `TestResults/task-verification/`. Lệnh thực tế có thêm `--logger`/`--results-directory` để lưu evidence.
 

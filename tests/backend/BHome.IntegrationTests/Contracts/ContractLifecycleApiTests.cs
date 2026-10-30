@@ -374,9 +374,17 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
             var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
             foreach (var (certId, actorId) in new[] { (ownerCert, w.Owner.Id), (tenantCert, w.Tenant.Id) }) db.Add(new BHome.DigitalSigning.Domain.SigningCertificate
             {
-                Id = certId, OwnerUserId = actorId, Provider = "viettel-mysign", ProviderUserId = "SYNTHETIC-SUBSCRIBER-" + certId,
-                CredentialId = "SYNTHETIC-CREDENTIAL", SerialNumber = certId.ToString(), Subject = "CN=Synthetic", Issuer = "CN=Synthetic CA",
-                ValidFrom = DateTimeOffset.UtcNow.AddDays(-1), ValidTo = DateTimeOffset.UtcNow.AddDays(10), CreatedAt = DateTimeOffset.UtcNow
+                Id = certId,
+                OwnerUserId = actorId,
+                Provider = "viettel-mysign",
+                ProviderUserId = "SYNTHETIC-SUBSCRIBER-" + certId,
+                CredentialId = "SYNTHETIC-CREDENTIAL",
+                SerialNumber = certId.ToString(),
+                Subject = "CN=Synthetic",
+                Issuer = "CN=Synthetic CA",
+                ValidFrom = DateTimeOffset.UtcNow.AddDays(-1),
+                ValidTo = DateTimeOffset.UtcNow.AddDays(10),
+                CreatedAt = DateTimeOffset.UtcNow
             });
             await db.SaveChangesAsync();
         }
@@ -405,14 +413,16 @@ public sealed class ContractFixture : IAsyncLifetime
     {
         await infrastructure.InitializeAsync();
         var testSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
-        Factory = infrastructure.Factory.WithWebHostBuilder(b => {
+        Factory = infrastructure.Factory.WithWebHostBuilder(b =>
+        {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey }));
             b.ConfigureTestServices(s =>
         {
             ProductionSigningProviderType = s.Last(d => d.ServiceType == typeof(IContractSigningProvider)).ImplementationType!;
             s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, TestOnlySigningProvider>();
             s.RemoveAll<IContractSettlementLedger>(); s.AddSingleton<IContractSettlementLedger>(Ledger);
-        }); });
+        });
+        });
     }
     public async Task DisposeAsync() { if (Factory is not null) await Factory.DisposeAsync(); await infrastructure.DisposeAsync(); }
 }

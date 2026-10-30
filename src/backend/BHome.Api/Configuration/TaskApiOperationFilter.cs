@@ -14,7 +14,9 @@ internal sealed class TaskApiOperationFilter : IOperationFilter
         {
             operation.Parameters.Add(new OpenApiParameter
             {
-                Name = "Idempotency-Key", In = ParameterLocation.Header, Required = true,
+                Name = "Idempotency-Key",
+                In = ParameterLocation.Header,
+                Required = true,
                 Description = "Non-empty UUID. Retries by the same actor with identical input return the original result; reuse with different input returns 409.",
                 Schema = new OpenApiSchema { Type = "string", Format = "uuid" }
             });
