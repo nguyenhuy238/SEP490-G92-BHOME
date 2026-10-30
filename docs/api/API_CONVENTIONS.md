@@ -129,6 +129,14 @@ or persistence. Requires authenticated Owner/Staff and both `Development` enviro
 Binary JPEG/PNG <=5 MiB; returns `{ proposal, elapsedMilliseconds }` with no-store.
 This harness does not authorize any business read, confirmation, or evidence storage.
 
+Meter diagnostics optionally accept `?decimalPlaces=0..4`, the number of fractional digits
+actually displayed by the meter. Invalid values and identity profiles with this parameter
+return 400; disabled diagnostics still return 404 before parameter validation. Without a
+precision hint, an integer-looking proposal warns that the decimal separator is unverified.
+Business meter OCR always uses the server-loaded `Meter.DecimalPlaces`; a caller query cannot
+override it. Values retain their full fractional part and still require human confirmation.
+See [accuracy evaluation and limitations](../development/OCR_ACCURACY_DELIVERY.md).
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được

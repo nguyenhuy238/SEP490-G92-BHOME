@@ -3,7 +3,7 @@ using BHome.Domain.IdentityAccess;
 
 namespace BHome.Application.Ocr;
 
-public sealed record OcrWorkflowResource(ResourceScope Scope, bool CanCapture, OcrDocumentKind Kind);
+public sealed record OcrWorkflowResource(ResourceScope Scope, bool CanCapture, OcrDocumentKind Kind, int? DecimalPlaces = null);
 
 // Implement against real Resident/Task/Meter/Location records when those modules exist.
 // A caller-provided Location/Owner ID must never be used to manufacture this scope.
@@ -35,6 +35,7 @@ public sealed class OcrWorkflowService(IOcrWorkflowResources resources, Resource
         if (resource!.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack || !Enum.IsDefined(resource.Kind))
             throw new OcrWorkflowStateException();
         var proposal = await ocr.ExtractAsync(input, resource.Kind, token);
+        proposal = MeterReadingPrecision.Apply(proposal, resource.DecimalPlaces);
         await resources.RecordMeterProposalAsync(taskId, proposal, token);
         return proposal;
     }

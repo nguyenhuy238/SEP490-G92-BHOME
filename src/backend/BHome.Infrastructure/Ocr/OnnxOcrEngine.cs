@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
 using System.Text;
 using BHome.Application.Ocr;
 using Microsoft.ML.OnnxRuntime;
@@ -10,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-layout4";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -59,24 +60,110 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
         using var prepared = preprocessor.Prepare(image, kind);
         using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
         using var registration = token.Register(() => run.Terminate = true);
-        var lines = new List<OcrLine>();
-        var warnings = prepared.Warnings.ToList();
+        var clock = Stopwatch.StartNew();
         try
         {
-            var regions = Detect(prepared.Image, run, token);
-            if (regions.Count > options.MaxTextRegions) warnings.Add("text_region_limit");
-            foreach (var region in regions.Take(options.MaxTextRegions))
+            using var upright = new Mat();
+            using var reversed = new Mat();
+            var source = prepared.Image;
+            var regions = Detect(source, run, token);
+            var axisCorrected = OcrImageGeometry.IsVertical(regions);
+            if (axisCorrected)
             {
-                token.ThrowIfCancellationRequested();
-                using var crop = Crop(prepared.Image, region);
-                var line = ReadLine(crop, run);
-                if (line.Text.Length > 0) lines.Add(line);
+                Cv2.Rotate(source, upright, RotateFlags.Rotate90Counterclockwise);
+                source = upright;
+                regions = Detect(source, run, token);
+            }
+            var text = ReadPage(source, regions, kind, run, token);
+            var proposal = OcrFieldParser.Parse(text, kind);
+            // Try the opposite direction only when the first result is missing data, leaving
+            // budget for the request deadline. Detect again in the upright image: DBNet's
+            // shrunken regions are not invariant under a 180-degree flip.
+            if (!text.Warnings.Contains("conflicting_reading") &&
+                (proposal.IsFallback || proposal.MissingFields.Count > 0) && regions.Count > 0 &&
+                clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 2)
+            {
+                Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
+                var flipped = Detect(reversed, run, token);
+                var alternative = ReadPage(reversed, flipped, kind, run, token);
+                var alternativeProposal = OcrFieldParser.Parse(alternative, kind);
+                var conflicting = proposal.ProposedFields.Any(field => alternativeProposal.ProposedFields.TryGetValue(field.Key, out var value) && value != field.Value);
+                if (!conflicting && alternativeProposal.ProposedFields.Count > proposal.ProposedFields.Count)
+                    text = alternative with { Warnings = [.. alternative.Warnings, "orientation_corrected"] };
+                else if (conflicting && !alternativeProposal.IsFallback)
+                    text = text with { Warnings = [.. text.Warnings, "orientation_uncertain"] };
             }
             token.ThrowIfCancellationRequested();
-            if (lines.Count == 0) warnings.Add("no_text");
-            return new OcrText(lines, Version, warnings);
+            return text with
+            {
+                Warnings = [.. prepared.Warnings, .. text.Warnings,
+                .. axisCorrected ? new[] { "orientation_corrected" } : Array.Empty<string>()]
+            };
         }
         catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
+    }
+
+    private OcrText ReadPage(Mat source, List<RotatedRect> regions, OcrDocumentKind kind, RunOptions run, CancellationToken token)
+    {
+        var lines = new List<OcrLine>();
+        var warnings = new List<string>();
+        var lineRegions = new List<RotatedRect>();
+        var pageAngle = OcrImageGeometry.PageAngle(regions);
+        var meterRetries = 0;
+        if (regions.Count > options.MaxTextRegions) warnings.Add("text_region_limit");
+        foreach (var region in regions.Take(options.MaxTextRegions))
+        {
+            token.ThrowIfCancellationRequested();
+            using var crop = Crop(source, region);
+            var line = ReadLine(crop, run, wideLine: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack);
+            // Read the number and its unit separately when a display's whitespace gives a
+            // clear boundary. Identity-tuned CTC can otherwise swallow m³ into the digits.
+            if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack) &&
+                line.Text.Count(char.IsDigit) >= 4 && meterRetries < 4 &&
+                MeterDisplaySplitter.TrySplit(crop, out var split))
+            {
+                meterRetries++;
+                using var numberCrop = new Mat(crop, new Rect(0, 0, split, crop.Height));
+                using var unitCrop = new Mat(crop, new Rect(split, 0, crop.Width - split, crop.Height));
+                using var preparedNumber = MeterDisplaySplitter.PrepareSegment(numberCrop);
+                using var preparedUnit = MeterDisplaySplitter.PrepareSegment(unitCrop);
+                var number = ReadLine(preparedNumber, run);
+                var unit = ReadLine(preparedUnit, run);
+                var combined = new OcrText([new($"{number.Text} {unit.Text}", Math.Min(number.Confidence, unit.Confidence))], Version, []);
+                if (MeterOcrLayout.IsCorrectUnit(unit.Text, kind) &&
+                    OcrFieldParser.Parse(combined, kind).ProposedFields.ContainsKey("reading"))
+                    line = combined.Lines[0];
+            }
+            if (line.Text.Length > 0)
+            {
+                lines.Add(line with { Bounds = OcrImageGeometry.LayoutBounds(region, pageAngle) });
+                lineRegions.Add(region);
+            }
+        }
+        if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
+        {
+            var refinements = 0;
+            for (var index = 0; index < lines.Count && refinements < 4; index++)
+            {
+                var line = lines[index];
+                if (line.Text.Count(char.IsDigit) < 3 || !OcrNumericRefinement.HasUnit(line, lines, kind)) continue;
+                if (kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.MechanicalWater &&
+                    OcrNumericRefinement.HasReading(line, kind)) continue;
+                token.ThrowIfCancellationRequested();
+                refinements++;
+                using var crop = Crop(source, lineRegions[index]);
+                using var binary = OcrNumericRefinement.Binarize(crop);
+                var candidate = ReadLine(binary, run);
+                var result = OcrNumericRefinement.Select(line, candidate, kind);
+                if (result.Conflicting) warnings.Add("conflicting_reading");
+                else if (result.Changed) warnings.Add("reading_preprocessed");
+                lines[index] = result.Line;
+            }
+        }
+        token.ThrowIfCancellationRequested();
+        if (lines.Count == 0) warnings.Add("no_text");
+        return new OcrText(lines.OrderBy(line => Math.Round((line.Bounds!.Y + line.Bounds.Height / 2) / 12))
+            .ThenBy(line => line.Bounds!.X).ToArray(), Version, warnings);
     }
 
     private List<RotatedRect> Detect(Mat image, RunOptions run, CancellationToken token)
@@ -111,9 +198,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
                     if (mask.At<byte>(y, x) != 0) { sum += map[0, 0, y, x]; count++; }
             if (count == 0 || sum / count < .5) continue;
             var box = Cv2.MinAreaRect(contour.Select(p => new Point2f((float)p.X * image.Width / mw, (float)p.Y * image.Height / mh)));
-            // Conservative rectangle expansion instead of polygon unclip; retain diacritics.
-            var padding = Math.Min(box.Size.Width, box.Size.Height) * .5f;
-            boxes.Add(new RotatedRect(box.Center, new Size2f(box.Size.Width + padding, box.Size.Height + padding), box.Angle));
+            boxes.Add(OcrImageGeometry.Expand(box));
         }
         return boxes.OrderBy(b => Math.Round(b.Center.Y / 12)).ThenBy(b => b.Center.X).ToList();
     }
@@ -121,11 +206,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
     private static Mat Crop(Mat source, RotatedRect region)
     {
         // Order corners TL/TR/BR/BL, correct local text-line perspective/rotation.
-        var points = region.Points();
-        var sorted = points.OrderBy(p => p.Y).ToArray();
-        var top = sorted.Take(2).OrderBy(p => p.X).ToArray();
-        var bottom = sorted.Skip(2).OrderBy(p => p.X).ToArray();
-        Point2f[] src = [top[0], top[1], bottom[1], bottom[0]];
+        var src = OcrImageGeometry.Corners(region);
         var width = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[1]), src[2].DistanceTo(src[3])));
         var height = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[3]), src[1].DistanceTo(src[2])));
         Point2f[] dst = [new(0, 0), new(width - 1, 0), new(width - 1, height - 1), new(0, height - 1)];
@@ -136,11 +217,24 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
         return result;
     }
 
-    private OcrLine ReadLine(Mat crop, RunOptions run)
+    private OcrLine ReadLine(Mat crop, RunOptions run, bool wideLine = false, int tileDepth = 0)
     {
         const int height = 48;
-        const int width = 320;
-        var actualWidth = Math.Clamp((int)Math.Ceiling(height * crop.Width / (double)crop.Height), 1, width);
+        // The pinned recognizer supports its trained 320/640 buckets. Compressing every long
+        // bilingual label or MRZ line into 320 destroys characters even in a sharp photograph.
+        var naturalWidth = (int)Math.Ceiling(height * crop.Width / (double)crop.Height);
+        // Bilingual identity labels + long values can still exceed the model's 640 bucket.
+        // Split only at observed whitespace, never inside digits or by a guessed name/date.
+        if (wideLine && naturalWidth > 640 && tileDepth < 2 && OcrLineSegmentation.TryWordBoundary(crop, out var split))
+        {
+            using var left = new Mat(crop, new Rect(0, 0, split, crop.Height));
+            using var right = new Mat(crop, new Rect(split, 0, crop.Width - split, crop.Height));
+            var first = ReadLine(left, run, true, tileDepth + 1);
+            var second = ReadLine(right, run, true, tileDepth + 1);
+            return new($"{first.Text} {second.Text}".Trim(), Math.Min(first.Confidence, second.Confidence));
+        }
+        var width = wideLine && naturalWidth > 320 ? 640 : 320;
+        var actualWidth = Math.Clamp(naturalWidth, 1, width);
         using var resized = new Mat();
         Cv2.Resize(crop, resized, new Size(actualWidth, height));
         using var padded = new Mat(height, width, MatType.CV_8UC3, Scalar.All(127));

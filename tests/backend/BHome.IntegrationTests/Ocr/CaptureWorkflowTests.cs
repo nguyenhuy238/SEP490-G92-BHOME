@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Minio;
 using Minio.DataModel.Args;
 using OpenCvSharp;
@@ -33,6 +34,42 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private readonly CaptureFixture fixture;
     public CaptureWorkflowTests(CaptureFixture fixture) => this.fixture = fixture;
     private const string Password = "Synthetic-Test-Password!123";
+
+    [Fact]
+    public async Task OcrPersistsOnlyTheProposalUsingDatabaseDisplayPrecision()
+    {
+        var w = await Workspace();
+        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
+                new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
+        using var client = host.CreateClient();
+        await using var loginScope = host.Services.CreateAsyncScope();
+        var loginDb = loginScope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var email = (await loginDb.Users.SingleAsync(user => user.Id == w.StaffId)).Email;
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
+        login.EnsureSuccessStatusCode();
+        var session = (await login.Content.ReadFromJsonAsync<LoginResult>())!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+        using var image = new ByteArrayContent(Image());
+        image.Headers.ContentType = new("image/png");
+        var response = await client.PostAsync($"/api/v1/ocr/meter-tasks/{task}?decimalPlaces=0", image);
+        response.EnsureSuccessStatusCode();
+        var proposal = (await response.Content.ReadFromJsonAsync<OcrProposal>())!;
+        Assert.Equal("000123.45", proposal.ProposedFields["reading"]);
+        Assert.True(proposal.RequiresConfirmation);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var stored = await db.Set<OperationalTask>().SingleAsync(value => value.Id == task);
+        Assert.Equal(123.45m, stored.OcrProposedValue);
+        Assert.False(await db.Set<MeterReading>().AnyAsync(value => value.TaskId == task));
+    }
+
+    private sealed class DigitsEngine : IOcrEngine
+    {
+        public Task<OcrText> RecognizeAsync(ReadOnlyMemory<byte> image, OcrDocumentKind kind, CancellationToken token)
+            => Task.FromResult(new OcrText([new("00012345", .99f)], "synthetic", []));
+    }
     private async Task<(HttpClient Client, Guid UserId)> User(string role)
     {
         var name = Guid.NewGuid().ToString(); var id = Guid.NewGuid();

@@ -7,6 +7,27 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class OcrWorkflowTests
 {
+    [Fact]
+    public async Task MeterUsesServerPrecisionBeforeRecordingTheProposal()
+    {
+        var user = Substitute.For<ICurrentUser>(); user.UserId.Returns(Guid.NewGuid()); user.IsInRole(Roles.Staff).Returns(true);
+        var assignments = Substitute.For<IStaffLocationAccess>();
+        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        var resources = Substitute.For<IOcrWorkflowResources>();
+        var id = Guid.NewGuid();
+        resources.FindMeterTaskAsync(id, Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(
+            new ResourceScope(Guid.NewGuid(), null), true, OcrDocumentKind.DigitalElectricity, 1));
+        var ocr = Substitute.For<IOcrService>();
+        ocr.ExtractAsync(Arg.Any<Stream>(), OcrDocumentKind.DigitalElectricity, Arg.Any<CancellationToken>()).Returns(
+            new OcrProposal(new Dictionary<string, string> { ["reading"] = "032514" }, "synthetic"));
+        var service = new OcrWorkflowService(resources, new ResourceAccess(user, assignments), ocr);
+        using var input = new MemoryStream();
+        var proposal = await service.MeterAsync(id, input, default);
+        Assert.Equal("03251.4", proposal.ProposedFields["reading"]);
+        await resources.Received(1).RecordMeterProposalAsync(id,
+            Arg.Is<OcrProposal>(value => value.ProposedFields["reading"] == "03251.4" && value.RequiresConfirmation), Arg.Any<CancellationToken>());
+    }
+
     [Theory]
     [InlineData(Roles.Owner, true, true)]
     [InlineData(Roles.Owner, false, true)]

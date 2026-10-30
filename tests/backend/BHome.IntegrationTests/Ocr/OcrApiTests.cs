@@ -24,6 +24,45 @@ public sealed class OcrApiTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
 
+    [Theory]
+    [InlineData("diagnostics/electricity-digital?decimalPlaces=1", HttpStatusCode.OK)]
+    [InlineData("diagnostics/electricity-digital?decimalPlaces=5", HttpStatusCode.BadRequest)]
+    [InlineData("diagnostics/electricity-digital?decimalPlaces=-1", HttpStatusCode.BadRequest)]
+    [InlineData("diagnostics/identity-back?decimalPlaces=1", HttpStatusCode.BadRequest)]
+    public async Task DiagnosticPrecisionIsExplicitValidatedAndMeterOnly(string route, HttpStatusCode expected)
+    {
+        using var root = new ApiFactory();
+        var engine = new TestEngine();
+        using var factory = Configure(root, new TestResources(), new TestAssignments(), "Development", true, engine);
+        using var client = factory.CreateClient();
+        using var request = Request(route, Roles.Staff, Image());
+        var response = await client.SendAsync(request);
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+        if (expected == HttpStatusCode.OK)
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var proposal = json.RootElement.GetProperty("proposal");
+            Assert.Equal("00000000000.0", proposal.GetProperty("proposedFields").GetProperty("reading").GetString());
+            Assert.True(proposal.GetProperty("requiresConfirmation").GetBoolean());
+        }
+        else Assert.Null(engine.LastKind);
+    }
+
+    [Fact]
+    public async Task BusinessOcrIgnoresCallerPrecisionAndUsesTheServerMeter()
+    {
+        using var root = new ApiFactory();
+        var resources = new TestResources { DecimalPlaces = 2 };
+        using var factory = Configure(root, resources, new TestAssignments { Assigned = true });
+        using var client = factory.CreateClient();
+        using var request = Request($"meter-tasks/{resources.TaskId}?decimalPlaces=0", Roles.Staff, Image());
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("0000000000.00", json.RootElement.GetProperty("proposedFields").GetProperty("reading").GetString());
+    }
+
     [Fact]
     public async Task DiagnosticsPreservesUnavailableFallbackInsteadOfPretendingRecognitionWorked()
     {
@@ -77,6 +116,8 @@ public sealed class OcrApiTests
         using var client = factory.CreateClient();
         using var request = Request("diagnostics/identity-front", Roles.Owner, []);
         Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(request)).StatusCode);
+        using var invalidPrecision = Request("diagnostics/electricity-digital?decimalPlaces=invalid", Roles.Owner, []);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(invalidPrecision)).StatusCode);
         using var check = new HttpRequestMessage(HttpMethod.Get, "/api/v1/ocr/diagnostics");
         check.Headers.Add("X-Test-Role", Roles.Owner);
         Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(check)).StatusCode);
@@ -226,11 +267,12 @@ public sealed class OcrApiTests
     {
         public Guid ResidentId { get; } = Guid.NewGuid(); public Guid TaskId { get; } = Guid.NewGuid();
         public bool Open { get; set; } = true;
+        public int? DecimalPlaces { get; set; }
         private readonly Guid locationId = Guid.NewGuid();
         public Task<OcrWorkflowResource?> FindIdentityAsync(Guid id, CancellationToken token)
             => Task.FromResult(id == ResidentId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.IdentityFront) : null);
         public Task<OcrWorkflowResource?> FindMeterTaskAsync(Guid id, CancellationToken token)
-            => Task.FromResult(id == TaskId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.DigitalWater) : null);
+            => Task.FromResult(id == TaskId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.DigitalWater, DecimalPlaces) : null);
     }
 
     private sealed class TestAssignments : IStaffLocationAccess
