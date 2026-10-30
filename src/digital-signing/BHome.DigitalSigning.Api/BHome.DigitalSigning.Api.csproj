@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <!-- Controllers only: BHome.Api stays the host and composition root. -->
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="../BHome.DigitalSigning.Application/BHome.DigitalSigning.Application.csproj" />
-  </ItemGroup>
-</Project>
