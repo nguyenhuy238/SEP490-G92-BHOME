@@ -1,6 +1,7 @@
 export const portalRoutes = [
   '/notifications',
   '/locations',
+  '/locations/loc-1/overview',
   '/rooms',
   '/room-types',
   '/assets',

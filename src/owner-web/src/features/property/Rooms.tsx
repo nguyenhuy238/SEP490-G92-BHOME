@@ -634,6 +634,7 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
                 type="number"
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
+                helperText="Nhập 1 hoặc mã đầy đủ như 401"
               />
               <TextField
                 label="Số phòng mỗi tầng"

@@ -55,19 +55,23 @@ export function PageHeader({
       <Box sx={{ maxWidth: 740 }}>
         <Typography
           variant="overline"
-          sx={{ fontSize: 10, color: 'primary.main', letterSpacing: 1 }}
+          sx={{ fontSize: 11, color: 'primary.main', fontWeight: 850, letterSpacing: 1.15 }}
         >
           {group || 'BHOME OWNER PORTAL'}
         </Typography>
         <Typography
           component="h1"
           variant="h1"
-          sx={{ fontSize: { xs: 20, md: 23 }, lineHeight: 1.4 }}
+          sx={{ fontSize: { xs: 22, md: 26 }, lineHeight: 1.3, mt: 0.35 }}
         >
           {title}
         </Typography>
         {subtitle && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: 12 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 0.75, fontSize: 13, lineHeight: 1.6 }}
+          >
             {subtitle}
           </Typography>
         )}

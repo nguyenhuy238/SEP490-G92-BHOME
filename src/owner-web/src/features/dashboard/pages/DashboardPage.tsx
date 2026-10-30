@@ -32,6 +32,7 @@ import { compactMoney, dateLabel, exportCsv, money } from '../../../utils/format
 import { financeSummary } from '../../../utils/finance';
 import { RecordEditor } from '../../../components/dialogs/RecordEditor';
 import { featureDefinitions } from '../../../app/featureDefinitions';
+import { roomStatus } from '../../property/model';
 export default function DashboardPage() {
   const query = usePortalData(),
     portal = usePortal(),
@@ -42,6 +43,10 @@ export default function DashboardPage() {
   if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
   const db = query.data,
     finance = financeSummary(db, portal.locationId, month);
+  const chainRooms = db.records.rooms;
+  const chainOccupied = chainRooms.filter((room) => roomStatus(room) === 'OCCUPIED').length;
+  const chainAvailable = chainRooms.filter((room) => roomStatus(room) === 'AVAILABLE').length;
+  const chainOccupancy = chainRooms.length ? (chainOccupied / chainRooms.length) * 100 : 0;
   const locations = db.records.locations.filter(
     (row) => portal.locationId === 'all' || row.id === portal.locationId,
   );
@@ -83,9 +88,9 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Tổng quan hoạt động"
-        group="CHUỖI BHOME • DỮ LIỆU MÔ PHỎNG"
-        subtitle="Theo dõi nhịp vận hành, dòng tiền và các đầu việc cần xử lý trong chuỗi trọ"
+        title="Tổng quan chuỗi BHOME"
+        group="CHAIN DASHBOARD • DỮ LIỆU MÔ PHỎNG"
+        subtitle="Theo dõi công suất toàn chuỗi, mở workspace từng cơ sở và xử lý các cảnh báo vận hành quan trọng."
         actions={
           <>
             <TextField
@@ -125,6 +130,78 @@ export default function DashboardPage() {
           </>
         }
       />
+      <KPIGrid
+        items={[
+          {
+            label: 'Tổng số cơ sở',
+            value: db.records.locations.length,
+            hint: 'Cơ sở trong chuỗi BHOME',
+          },
+          { label: 'Tổng số phòng', value: chainRooms.length, hint: 'Tất cả trạng thái khai thác' },
+          { label: 'Phòng đang thuê', value: chainOccupied, hint: 'Trạng thái OCCUPIED' },
+          { label: 'Phòng trống', value: chainAvailable, hint: 'Trạng thái AVAILABLE' },
+          {
+            label: 'Tỷ lệ lấp đầy',
+            value: `${chainOccupancy.toFixed(1)}%`,
+            hint: `${chainOccupied}/${chainRooms.length} phòng`,
+          },
+        ]}
+      />
+      <ChartCard
+        title="Danh sách cơ sở"
+        subtitle="Chọn một cơ sở để mở Location Workspace và giữ nguyên ngữ cảnh qua các tab."
+      >
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2,1fr)', xl: 'repeat(3,1fr)' },
+            gap: 1.5,
+          }}
+        >
+          {db.records.locations.map((item) => {
+            const rooms = chainRooms.filter((room) => room.locationId === item.id);
+            const occupied = rooms.filter((room) => roomStatus(room) === 'OCCUPIED').length;
+            const percentage = rooms.length ? (occupied / rooms.length) * 100 : 0;
+            return (
+              <Box
+                key={item.id}
+                component={Link}
+                to={`/locations/${item.id}/overview`}
+                sx={{
+                  display: 'block',
+                  p: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  color: 'inherit',
+                  textDecoration: 'none',
+                  '&:hover': { borderColor: 'primary.light', boxShadow: 1 },
+                }}
+              >
+                <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1, mb: 1 }}>
+                  <Box>
+                    <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.attributes.address}
+                    </Typography>
+                  </Box>
+                  <ArrowRight size={17} />
+                </Stack>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.75 }}>
+                  <Typography variant="caption">
+                    {occupied}/{rooms.length} phòng đang thuê
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                    {percentage.toFixed(1)}%
+                  </Typography>
+                </Stack>
+                <LinearProgress variant="determinate" value={percentage} color="success" />
+              </Box>
+            );
+          })}
+        </Box>
+      </ChartCard>
+      <Box sx={{ height: 24 }} />
       {finance.invoices.length === 0 ? (
         <EmptyState message="Chưa có dữ liệu tài chính trong kỳ đã chọn." />
       ) : (
