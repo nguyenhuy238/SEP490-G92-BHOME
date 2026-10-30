@@ -6,6 +6,9 @@ import { LoadingState } from '../components/common/PortalUI';
 const NotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'));
 const LocationsPage = lazy(() => import('../features/locations/pages/LocationsPage'));
 const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
+const CreateRooms = lazy(() => import('../features/property/Rooms').then(m => ({ default: m.CreateRooms })));
+const RoomDetail = lazy(() => import('../features/property/Rooms').then(m => ({ default: m.RoomDetail })));
+const AssetAllocation = lazy(() => import('../features/property/Assets').then(m => ({ default: m.AssetAllocation })));
 const RoomTypesPage = lazy(() => import('../features/room-types/pages/RoomTypesPage'));
 const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage'));
 const PricingPage = lazy(() => import('../features/pricing/pages/PricingPage'));
@@ -40,6 +43,9 @@ export function AppRouter() {
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/locations" element={<LocationsPage />} />
             <Route path="/rooms" element={<RoomsPage />} />
+            <Route path="/rooms/new" element={<CreateRooms />} />
+            <Route path="/rooms/:id" element={<RoomDetail />} />
+            <Route path="/asset-allocation" element={<AssetAllocation />} />
             <Route path="/room-types" element={<RoomTypesPage />} />
             <Route path="/assets" element={<AssetsPage />} />
             <Route path="/pricing" element={<PricingPage />} />

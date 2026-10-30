@@ -66,6 +66,7 @@ const iconMap: Record<string, typeof Building2> = {
   rooms: DoorOpen,
   'room-types': Shapes,
   assets: Package,
+  'asset-allocation': Package,
   pricing: Coins,
   staff: Users,
   schedules: CalendarDays,
@@ -87,7 +88,7 @@ const iconMap: Record<string, typeof Building2> = {
 };
 const navGroups = [
   ['Tổng quan', ['dashboard', 'notifications']],
-  ['Quản lý cơ sở', ['locations', 'rooms', 'room-types', 'assets', 'pricing']],
+  ['Quản lý cơ sở', ['locations', 'rooms', 'room-types', 'assets', 'asset-allocation', 'pricing']],
   ['Nhân sự & Vận hành', ['staff', 'schedules', 'tasks']],
   ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'handovers', 'temporary-residence']],
   ['Tài chính & Hóa đơn', ['meters', 'invoices', 'payments', 'debts']],
@@ -102,6 +103,7 @@ const navLabels: Record<string, string> = {
   rooms: 'Phòng',
   'room-types': 'Loại phòng',
   assets: 'Tài sản',
+  'asset-allocation': 'Cấp phát tài sản',
   pricing: 'Giá thuê & Biểu phí',
   staff: 'Nhân viên',
   schedules: 'Lịch làm việc',
