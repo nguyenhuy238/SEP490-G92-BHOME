@@ -1,4 +1,1 @@
-import { ResourcePage } from '../../../components/common/ResourcePage';
-export default function RoomTypesPage() {
-  return <ResourcePage kind="room-types" variant="cards" />;
-}
+export { RoomTypes as default } from '../../property/ConfigurationPages';

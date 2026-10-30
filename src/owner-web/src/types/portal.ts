@@ -1,3 +1,4 @@
+import type { PropertyCommand, PropertyData } from '../features/property/model';
 /** Demo view models only. Replace at repository boundary when .NET OpenAPI is finalized. */
 export const resourceKinds = [
   'locations',
@@ -67,6 +68,7 @@ export interface AuditEntry {
   recordId: string;
 }
 export interface DemoDatabase {
+  property?: PropertyData;
   version: 1;
   records: Record<ResourceKind, PortalRecord[]>;
   scenarios: Scenario[];
@@ -91,6 +93,7 @@ export interface FeatureDefinition {
   images: string[];
 }
 export interface PortalRepository {
+  executeProperty(command: PropertyCommand): Promise<void>;
   read(signal?: AbortSignal): Promise<DemoDatabase>;
   save(kind: ResourceKind, record: PortalRecord): Promise<PortalRecord>;
   remove(kind: ResourceKind, id: string): Promise<void>;

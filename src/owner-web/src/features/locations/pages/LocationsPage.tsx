@@ -1,4 +1,1 @@
-import { ResourcePage } from '../../../components/common/ResourcePage';
-export default function LocationsPage() {
-  return <ResourcePage kind="locations" variant="cards" />;
-}
+export { Locations as default } from '../../property/ConfigurationPages';
