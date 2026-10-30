@@ -7,6 +7,7 @@ using BHome.Application.IdentityAccess;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 
 namespace BHome.Application.Contracts;

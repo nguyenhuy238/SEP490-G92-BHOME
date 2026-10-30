@@ -37,7 +37,7 @@ public sealed class ContractServiceTests
         public readonly List<ContractOperation> Operations = [];
         public readonly List<DepositVerification> Deposits = [];
         public readonly Resident Resident = new() { VerificationStatus = IdentityVerificationStatus.Verified };
-        public readonly Room Room = new() { Location = new Location("Synthetic") };
+        public readonly Room Room = new() { Location = new Location("Synthetic"), Status = RoomStatus.Available };
         public Guid Owner => Contracts[0].OwnerSignerId;
         public Guid Tenant { get; } = Guid.NewGuid();
         public ContractService Service { get; }
@@ -84,6 +84,20 @@ public sealed class ContractServiceTests
             Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(bytes));
             Deposits.Add(new DepositVerification { ContractId = c.Id, Amount = c.RequiredDeposit }); return c;
         }
+    }
+
+    [Theory]
+    [InlineData(RoomStatus.OnHold)]
+    [InlineData(RoomStatus.Occupied)]
+    [InlineData(RoomStatus.Unavailable)]
+    public async Task DraftRequiresAvailableRoomWithoutChangingItsStatus(RoomStatus status)
+    {
+        var r = new Rig(); r.Room.Status = status;
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.CreateAsync(r.Draft, Guid.NewGuid(), default));
+        Assert.Equal(409, error.Status);
+        Assert.Equal(status, r.Room.Status);
+        Assert.Empty(r.Contracts);
+        Assert.Empty(r.Operations);
     }
 
     [Fact] public async Task T01_ActivationCommitsContractAndRoomAndReplaysWithoutDuplicateAudit()

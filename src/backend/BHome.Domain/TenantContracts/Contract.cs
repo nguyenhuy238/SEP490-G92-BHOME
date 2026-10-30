@@ -7,7 +7,6 @@ public enum ContractKind { Main, Renewal }
 public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled }
 public enum SignatureStatus { Prepared, Dispatching, Pending, Signed, Failed, ManualReview }
 public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, Settled, Completed }
-public enum RoomStatus { Available, Occupied }
 
 // Signed versions are never edited. A renewal is a new version of the same tenancy.
 public sealed class Contract : AuditableEntity
