@@ -4,7 +4,8 @@ using BHome.Domain.IdentityAccess;
 namespace BHome.Application.Ocr;
 
 // HTTP-independent entry point. Repository queries also scope every lookup and re-read under locks.
-public sealed class CaptureService(ICaptureRepository repository, ICurrentUser user)
+public sealed class CaptureService(ICaptureRepository repository, ICurrentUser user,
+    BHome.Application.PropertyManagement.PropertyService properties)
 {
     private Task<T> Allow<T>(string[] roles, Func<Task<T>> work)
     {
@@ -17,9 +18,11 @@ public sealed class CaptureService(ICaptureRepository repository, ICurrentUser u
     public Task<IReadOnlyList<NamedResource>> RoomsAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.RoomsAsync(id, t));
     public Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t) => Allow([Roles.Owner], () => repository.StaffAsync(t));
     public Task<IdResult> CreateStaffAsync(StaffInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateStaffAsync(x, t));
-    public Task<IdResult> CreateChainAsync(ChainInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateChainAsync(x, t));
-    public Task<IdResult> CreateLocationAsync(LocationInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateLocationAsync(x, t));
-    public Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateRoomAsync(x, t));
+    public Task<IdResult> CreateLocationAsync(LocationInput x, CancellationToken t) => Allow([Roles.Owner], async () =>
+        new IdResult((await properties.SaveLocationAsync(null, new(x.Name, x.Address), t)).Id));
+    public Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t) => Allow([Roles.Owner], async () =>
+        new IdResult((await properties.SaveRoomAsync(null,
+            new(x.LocationId, x.RoomTypeId ?? Guid.Empty, x.RoomNumber, null, x.Capacity), t)).Id));
     public Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.AssignStaffAsync(x, t));
     public Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t) => Allow(Operators, () => repository.CreateResidentAsync(x, t));
     public Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.ResidentsAsync(id, t));

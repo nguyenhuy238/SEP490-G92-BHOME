@@ -34,6 +34,10 @@ visible to the Owner.
 
 ## Current boundary
 
+The later [property API slice](../api/PROPERTY_MANAGEMENT.md) supersedes the minimal Location
+create/list boundary described above. Full details, Room Types, Rooms, Assets and prices now have
+their own application service; the assignment API and its inclusive dated/global Owner rules remain.
+
 Staff provisioning is not exposed by this slice. Assignment eligibility comes from current trusted
 Identity state: the account must exist, be active and have the Staff role. Legacy per-Owner columns
 are retained under `Legacy*` names by migration for rollback/history, but application authorization

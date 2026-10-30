@@ -1,0 +1,40 @@
+SRS_No,Screen,UseCase,MobileRole,Before,After,RouteOrScope,BackendStatus
+1,Sign In,UC-01,All,Existing,Existing,/,Existing HTTPS session API
+2,Profile,UC-02,All,Incomplete,Incomplete,/workspace/profile,Read-only session; profile edit API pending
+3,Owner Dashboard,UC-33..36,Owner,Incomplete,Incomplete,/workspace/owner-home,Stitch UI; data adapter pending
+4,Location / Room Management,UC-04..06,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web primary admin,Mobile only authorized room overview
+5,Occupancy / Room History,UC-05,Staff,Missing,Incomplete,/workspace/rooms,Scoped room/resident API connected; occupancy history pending
+6,Asset Management,UC-07,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web primary admin,Asset baseline shown in inspection preview
+7,Staff Management,UC-08,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web primary admin,Existing mobile setup retained as utility
+8,Staff Shift Management,UC-09,Staff,Missing,Incomplete,/workspace/shifts,Own schedule UI; API pending; no shift changes
+9,Operational Task Management,UC-10..12,Owner/Staff,Incomplete,Incomplete,/workspace/work-orders and task-detail,Staff execution UI; Owner assignment remains Web
+10,Tenant / Occupant Management,UC-13,Staff,Incomplete,Incomplete,/workspace/onboarding,Resident create and identity confirm connected; contact/household relationship API pending
+11,Contract Management,UC-14..16/19,Staff/Tenant,Missing,Incomplete,/workspace/prepare-contract and contract-request,Complete draft forms and preview states; API pending
+12,Contract Signing Status,UC-14..16,Owner/Staff/Tenant,Missing,Incomplete,/workspace/signing,External provider status UI; integration pending
+13,Room Handover,UC-17,Staff/Tenant,Incomplete,Incomplete,/workspace/move-in and checklist,Condition/checklist/keys/readings/evidence UI; API pending
+14,Temporary Residence Tasks,UC-18,Tenant,Missing,Incomplete,/workspace/residence,Tenant results UI; API pending; no government submission
+15,Meter Reading,UC-20,Staff,Existing,Existing,/meter and /workspace/meter-reading,Existing OCR/confirm/evidence APIs retained
+16,Billing Policy,UC-06,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web primary configuration,No mobile pricing policy editor
+17,Invoice Management,UC-21,Tenant,Incomplete,Incomplete,/workspace/invoice and billing-history,Own invoice UI; API pending
+18,Invoice Adjustment,UC-24,Tenant/Owner,Missing,Incomplete,/workspace/adjustment and approvals,Dispute form and Owner review preview; API pending
+19,Payment Reconciliation,UC-22,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web primary reconciliation,Mobile displays bank-only statuses; no Staff reconciliation
+20,Debt Management,UC-23,Staff/Tenant,Missing,Incomplete,/workspace/debt-follow-up and billing-history,Operational debt/contact UI only; API pending
+21,Incident / Maintenance Management,UC-26..30,Staff/Tenant/Owner,Incomplete,Incomplete,/workspace/incidents and report-incident and operations,Report/progress UI; API pending
+22,Incident Detail,UC-26..29,Staff/Tenant,Incomplete,Incomplete,/workspace/incidents and task-detail,Timeline/evidence UI; API pending
+23,Repair Task / Proposal,UC-29,Staff,Incomplete,Incomplete,/workspace/work-orders and task-detail,Progress/blocker/evidence/cost/time proposal UI; API pending
+24,Maintenance Verification,UC-30,Owner,Incomplete,Incomplete,/workspace/approvals and operations,Owner decision preview; no API confirmation
+25,Investment & Expense Management,UC-33..34,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web primary financial admin,Mobile monitoring only
+26,Business Reports,UC-35,Owner,Incomplete,Incomplete,/workspace/owner-home,Summary monitoring UI; data adapter pending
+27,Financial What-if,UC-36,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web analytical tool,No real-data mutation
+28,Public Content Management,UC-38,Owner,Not Mobile Scope,Not Mobile Scope,Owner Web publishing,No mobile CMS added
+29,Staff Home,UC-09..13,Staff,Incomplete,Incomplete,/workspace/staff-home,Stitch dashboard with workflow entry points; live data pending
+30,My Tasks,UC-11,Staff,Incomplete,Incomplete,/workspace/work-orders and task-detail,General tasks/search/filter/detail/progress/result UI; API pending
+31,Tenant Home,UC-31,Tenant,Incomplete,Incomplete,/workspace/tenant-home,Stitch UI with missing-flow entry points; API pending
+32,My Contract,UC-15..19,Tenant,Incomplete,Incomplete,/workspace/contract and contract-request,Read/renewal/termination UI; API pending
+33,My Billing & Payment,UC-21/25,Tenant,Incomplete,Incomplete,/workspace/billing-history,Invoices/payments/allocations preview; API pending
+34,Submit Incident,UC-26..27,Staff/Tenant,Incomplete,Incomplete,/workspace/incidents and report-incident,Severity/description/evidence forms; API pending
+35,Notifications,UC-32,All,Incomplete,Incomplete,/workspace/notifications,Role-scoped preview; delivery/read-state API pending
+36,Public Home / Location / Room,UC-37,Guest,Not Mobile Scope,Not Mobile Scope,Read-only public website,No Guest app/account or enquiry flow
+Extra,CCCD Capture,UC-13,Staff,Incomplete,Existing,/identity and onboarding wizard,Two sides; alignment; capture/retake/confirm; transient deletion
+Extra,CCCD OCR Verification,UC-13,Staff,Incomplete,Existing,/identity and onboarding wizard,Internal OCR proposal; correction; explicit confirmation; existing server API
+Extra,Move-out Inspection,UC-19,Staff,Missing,Incomplete,/workspace/move-out,Asset/condition/keys/final-reading/evidence form; Owner review API pending

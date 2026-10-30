@@ -17,6 +17,26 @@ public sealed class LocationAssignmentApiTests(AuthenticationDatabaseFixture fix
     private const string Password = "Synthetic-Location!493";
 
     [Fact]
+    public async Task OwnerListsLocationsAcrossIdsWithPaginationAndGetsSpecificLocationByRoute()
+    {
+        var owner = await CreateUserAsync(Roles.Owner);
+        using var client = await AuthenticatedClientAsync(owner);
+        var prefix = "List-" + Guid.NewGuid().ToString("N");
+        var first = await CreateLocationAsync(client, prefix + " Alpha");
+        var second = await CreateLocationAsync(client, prefix + " Beta");
+        var pageOne = (await client.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<BHome.Application.PropertyManagement.LocationDto>>(
+            $"/api/v1/locations?search={prefix}&page=1&pageSize=1&locationId={first.Id}"))!;
+        var pageTwo = (await client.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<BHome.Application.PropertyManagement.LocationDto>>(
+            $"/api/v1/locations?search={prefix}&page=2&pageSize=1"))!;
+        Assert.Equal(2, pageOne.TotalCount);
+        Assert.Equal(2, pageTwo.TotalCount);
+        Assert.Equal(new[] { first.Id, second.Id }.Order(), pageOne.Items.Concat(pageTwo.Items).Select(x => x.Id).Order());
+        var detail = (await client.GetFromJsonAsync<BHome.Application.PropertyManagement.LocationDto>(
+            $"/api/v1/locations/{second.Id}"))!;
+        Assert.Equal(second.Id, detail.Id);
+    }
+
+    [Fact]
     public async Task StaffSeesEveryCurrentlyAssignedLocationAndNotFutureAssignments()
     {
         var owner = await CreateUserAsync(Roles.Owner);
@@ -149,7 +169,7 @@ public sealed class LocationAssignmentApiTests(AuthenticationDatabaseFixture fix
 
     private static async Task<LocationSummary> CreateLocationAsync(HttpClient client, string name)
     {
-        var response = await client.PostAsJsonAsync("/api/v1/locations", new { name });
+        var response = await client.PostAsJsonAsync("/api/v1/locations", new { name, address = "Synthetic Address" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<LocationSummary>())!;
     }

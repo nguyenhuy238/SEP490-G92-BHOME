@@ -94,9 +94,12 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private async Task<(HttpClient Owner, HttpClient Staff, Guid OwnerId, Guid StaffId, Guid Location, Guid Room, Guid Resident, Guid Meter)> Workspace()
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
-        var chain = await Create(owner.Client, "chains", new ChainInput("Synthetic Chain"));
-        var location = await Create(owner.Client, "locations", new LocationInput(chain, "Synthetic Location", "Synthetic Address"));
-        var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01"));
+        var location = await Create(owner.Client, "locations", new LocationInput("Synthetic Location", "Synthetic Address"));
+        var typeResponse = await owner.Client.PostAsJsonAsync("/api/v1/room-types",
+            new BHome.Application.PropertyManagement.RoomTypeWrite(location, "Synthetic Type", null, 2, null, []));
+        typeResponse.EnsureSuccessStatusCode();
+        var type = (await typeResponse.Content.ReadFromJsonAsync<BHome.Application.PropertyManagement.RoomTypeDto>())!;
+        var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01", type.Id, 2));
         await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), Today.AddDays(365)));
         var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant));
         var meter = await Create(owner.Client, "meters", new MeterInput(room, "SYNTHETIC-METER", UtilityType.Water, MeterDisplay.Digital, 2, Today.AddDays(-20)));

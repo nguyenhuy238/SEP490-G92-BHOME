@@ -3,6 +3,11 @@ namespace BHome.Domain.IdentityAccess;
 // Fixed business actions, not JWT claims or a configurable permissions table.
 public static class Permissions
 {
+    public static class Property
+    {
+        public const string View = "property.view";
+        public const string Manage = "property.manage";
+    }
     public static class Account
     {
         public const string ViewOwn = "account.view-own";

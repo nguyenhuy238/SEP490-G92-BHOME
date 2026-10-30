@@ -12,7 +12,11 @@ internal static class CaptureConfiguration
     {
         b.Entity<Chain>().ToTable("Chains"); b.Entity<Room>().ToTable("Rooms");
         b.Entity<Resident>().ToTable("Residents"); b.Entity<MeterEvidence>().ToTable("MeterEvidence");
-        b.Entity<Chain>(e => e.Property(x => x.Name).HasMaxLength(150));
+        b.Entity<Chain>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(150);
+            e.Property(x => x.Version).IsConcurrencyToken();
+        });
         b.Entity<Room>(e => { e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict); e.Property(x => x.RoomNumber).HasMaxLength(50); e.HasIndex(x => new { x.LocationId, x.RoomNumber }).IsUnique(); });
         b.Entity<Resident>(e =>
         {

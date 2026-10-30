@@ -10,19 +10,6 @@ namespace BHome.Infrastructure.Locations;
 
 internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocationAssignments, IStaffLocationAccess
 {
-    public async Task<LocationSummary> CreateLocationAsync(string name, CancellationToken cancellationToken)
-    {
-        var location = new Location(name);
-        db.Locations.Add(location);
-        await db.SaveChangesAsync(cancellationToken);
-        return new LocationSummary(location.Id, location.Name);
-    }
-
-    public async Task<IReadOnlyList<LocationSummary>> ListLocationsAsync(CancellationToken cancellationToken) =>
-        await db.Locations.AsNoTracking()
-            .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Select(x => new LocationSummary(x.Id, x.Name)).ToArrayAsync(cancellationToken);
-
     public async Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffUserId,
         DateOnly effectiveDate, CancellationToken cancellationToken) =>
         await db.StaffLocationAssignments.AsNoTracking()

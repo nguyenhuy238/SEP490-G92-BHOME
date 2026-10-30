@@ -108,6 +108,9 @@ public static class DependencyInjection
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();
+        services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
+        services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
