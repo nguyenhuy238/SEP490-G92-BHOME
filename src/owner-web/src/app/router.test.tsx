@@ -111,4 +111,27 @@ it('keeps property functions inside the selected Location Workspace', async () =
     'href',
     '/locations/loc-1/investment',
   );
+  expect(screen.getByRole('heading', { name: 'Không gian phòng theo tầng' })).toBeInTheDocument();
+  expect(document.querySelector('a[href="/rooms/room-0"]')).toBeInTheDocument();
+  expect(document.querySelector('a[href="/rooms/room-25"]')).not.toBeInTheDocument();
+}, 15000);
+
+it('isolates the room space by Location route context', async () => {
+  render(
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        <PortalProvider>
+          <MemoryRouter initialEntries={['/locations/loc-2/overview']}>
+            <AppRouter />
+          </MemoryRouter>
+        </PortalProvider>
+      </AuthProvider>
+    </ThemeProvider>,
+  );
+
+  expect(
+    await screen.findByRole('heading', { name: 'BHOME Riverside 2 - Phan Xích Long' }),
+  ).toBeInTheDocument();
+  expect(document.querySelector('a[href="/rooms/room-25"]')).toBeInTheDocument();
+  expect(document.querySelector('a[href="/rooms/room-0"]')).not.toBeInTheDocument();
 }, 15000);

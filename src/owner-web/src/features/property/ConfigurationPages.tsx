@@ -1,6 +1,15 @@
 import { useState } from 'react';
-import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material';
-import { Building2, Copy, Plus } from 'lucide-react';
+import {
+  Box,
+  Button,
+  Chip,
+  LinearProgress,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { ArrowRight, Building2, Copy, Plus, UserRound } from 'lucide-react';
 import { Link } from 'react-router';
 import { usePortal } from '../../app/PortalProvider';
 import { PageHeader } from '../../components/common/PortalUI';
@@ -33,8 +42,9 @@ function LocationContent({ db }: { db: DemoDatabase }) {
   return (
     <>
       <PageHeader
-        title="Quản lý cơ sở"
-        subtitle="Cấu hình không gian, theo dõi khai thác và nhân viên phụ trách tại từng cơ sở."
+        group="QUẢN LÝ CƠ SỞ"
+        title="Danh sách cơ sở"
+        subtitle="Chọn cơ sở để vào không gian quản lý. Phòng, loại phòng, tài sản, giá và tài chính được giới hạn theo cơ sở."
         actions={
           <Button
             variant="contained"
@@ -61,40 +71,86 @@ function LocationContent({ db }: { db: DemoDatabase }) {
             {page.map((l) => {
               const rooms = db.records.rooms.filter((r) => r.locationId === l.id),
                 count = (s: string) => rooms.filter((r) => roomStatus(r) === s).length;
+              const occupied = count('OCCUPIED');
+              const occupancy = rooms.length ? Math.round((occupied / rooms.length) * 100) : 0;
+              const manager =
+                db.records.staff.find((s) => s.id === l.staffId)?.name ||
+                db.records.staff.find((s) => s.locationId === l.id)?.name ||
+                'Chưa phân công';
               return (
-                <Panel key={l.id} title={l.name} actions={<Building2 size={24} color="#2563eb" />}>
-                  <Chip size="small" label={l.status} />
-                  <Typography color="text.secondary" sx={{ mt: 2, mb: 2 }}>
+                <Paper key={l.id} sx={{ p: 2.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Stack
+                    direction="row"
+                    sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                  >
+                    <Box
+                      sx={{
+                        width: 38,
+                        height: 38,
+                        display: 'grid',
+                        placeItems: 'center',
+                        bgcolor: '#eef4ff',
+                        color: 'primary.main',
+                        borderRadius: 1.25,
+                      }}
+                    >
+                      <Building2 size={20} />
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={l.status.includes('Đang') ? 'Hoạt động' : l.status}
+                      sx={{ bgcolor: '#ebf2ff', color: 'primary.main', fontWeight: 750 }}
+                    />
+                  </Stack>
+                  <Typography component="h2" sx={{ mt: 2, fontSize: 15, fontWeight: 850 }}>
+                    {l.name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.5, mb: 2 }}
+                  >
                     {l.attributes.address}
                   </Typography>
-                  <Stack direction="row" sx={{ gap: 3 }}>
-                    <Box>
-                      <Typography variant="h5">{rooms.length}</Typography>
-                      <Typography variant="caption">Phòng • {l.attributes.floors} tầng</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="h5" color="success.main">
-                        {count('OCCUPIED')}
-                      </Typography>
-                      <Typography variant="caption">Đang thuê</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="h5" color="primary.main">
-                        {count('AVAILABLE')}
-                      </Typography>
-                      <Typography variant="caption">Trống khai thác</Typography>
-                    </Box>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1, mb: 0.75 }}>
+                    <Typography variant="caption">
+                      {occupied}/{rooms.length} phòng đang thuê
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 850 }}>
+                      {occupancy}%
+                    </Typography>
                   </Stack>
-                  <Typography variant="body2" sx={{ mt: 2 }}>
-                    Phụ trách:{' '}
-                    {db.records.staff.find((s) => s.id === l.staffId)?.name ||
-                      db.records.staff.find((s) => s.locationId === l.id)?.name ||
-                      'Chưa phân công'}
-                  </Typography>
-                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mt: 3 }}>
-                    <Button component={Link} to={`/locations/${l.id}/overview`} variant="contained">
-                      Mở workspace
+                  <LinearProgress
+                    variant="determinate"
+                    value={occupancy}
+                    color="success"
+                    sx={{ height: 7, borderRadius: 10, bgcolor: '#e9edf4' }}
+                  />
+                  <Stack
+                    direction="row"
+                    sx={{ mt: 2.5, alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                  >
+                    <Stack
+                      direction="row"
+                      sx={{ alignItems: 'center', gap: 0.65, color: 'text.secondary', minWidth: 0 }}
+                    >
+                      <UserRound size={14} />
+                      <Typography variant="caption" noWrap>
+                        {manager}
+                      </Typography>
+                    </Stack>
+                    <Button
+                      component={Link}
+                      to={`/locations/${l.id}/overview`}
+                      endIcon={<ArrowRight size={13} />}
+                    >
+                      Xem cơ sở
                     </Button>
+                  </Stack>
+                  <Stack
+                    direction="row"
+                    sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider', gap: 0.5 }}
+                  >
                     <Button onClick={() => setEditing({ record: structuredClone(l) })}>
                       Chỉnh sửa
                     </Button>
@@ -114,7 +170,7 @@ function LocationContent({ db }: { db: DemoDatabase }) {
                       Sao chép cấu hình
                     </Button>
                   </Stack>
-                </Panel>
+                </Paper>
               );
             })}
           </Box>

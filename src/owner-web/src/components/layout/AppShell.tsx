@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Breadcrumbs,
-  Button,
   Divider,
   Drawer,
   IconButton,
@@ -138,33 +137,38 @@ export function AppShell() {
   const current = location.pathname.split('/')[1] || 'dashboard';
   const workspaceParts = location.pathname.split('/');
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
+  const selectedLocation = data?.records.locations.find((row) => row.id === workspaceParts[2]);
   const nav = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
       <Stack
         direction="row"
         sx={{
-          height: 64,
-          px: 2,
+          height: 76,
+          px: 2.25,
           alignItems: 'center',
           gap: 1.2,
           borderBottom: '1px solid',
           borderColor: 'divider',
         }}
       >
-        <Avatar variant="rounded" sx={{ bgcolor: '#2563eb', width: 32, height: 32, fontSize: 19 }}>
+        <Avatar variant="rounded" sx={{ bgcolor: '#255dde', width: 37, height: 37, fontSize: 21 }}>
           B
         </Avatar>
         <Box>
-          <Typography sx={{ fontWeight: 650, fontSize: 15 }}>BHOME</Typography>
+          <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHOME</Typography>
           <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Owner Portal</Typography>
         </Box>
       </Stack>
-      <Box component="nav" aria-label="Điều hướng chính" sx={{ overflowY: 'auto', flex: 1, py: 1 }}>
+      <Box
+        component="nav"
+        aria-label="Điều hướng chính"
+        sx={{ overflowY: 'auto', flex: 1, py: 1.5 }}
+      >
         {navGroups.map(([group, items]) => (
           <Box key={group} sx={{ mb: 1 }}>
             <Typography
               sx={{
-                px: 2,
+                px: 2.25,
                 pt: 1.5,
                 pb: 0.5,
                 fontSize: 10,
@@ -188,14 +192,18 @@ export function AppShell() {
                       portal.setSearch('');
                     }}
                     sx={{
-                      mx: 1,
-                      borderRadius: 0.5,
-                      py: 0.65,
-                      '&.active': { bgcolor: '#eaedff', color: 'primary.main' },
+                      mx: 1.25,
+                      my: 0.25,
+                      borderRadius: 1.25,
+                      minHeight: 41,
+                      py: 0.75,
+                      color: '#53657f',
+                      '&:hover': { bgcolor: '#f4f7fc' },
+                      '&.active': { bgcolor: '#ebf2ff', color: 'primary.main', fontWeight: 800 },
                     }}
                   >
                     <ListItemIcon sx={{ minWidth: 28, color: 'inherit' }}>
-                      <Icon size={16} />
+                      <Icon size={17} />
                     </ListItemIcon>
                     <ListItemText
                       primary={navLabels[key]}
@@ -221,7 +229,7 @@ export function AppShell() {
         sx={{
           display: { xs: 'none', lg: 'block' },
           position: 'fixed',
-          width: 240,
+          width: 258,
           top: 0,
           bottom: 0,
           borderRight: '1px solid',
@@ -234,22 +242,22 @@ export function AppShell() {
       <Drawer
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
-        sx={{ '& .MuiDrawer-paper': { width: 250 } }}
+        sx={{ '& .MuiDrawer-paper': { width: 258 } }}
       >
         {nav}
       </Drawer>
-      <Box sx={{ ml: { lg: '240px' } }}>
+      <Box sx={{ ml: { lg: '258px' } }}>
         <Paper
           component="header"
           square
           elevation={0}
           sx={{
-            height: { xs: 'auto', sm: 64 },
-            minHeight: 64,
+            height: { xs: 'auto', sm: 75 },
+            minHeight: 75,
             py: { xs: 1, sm: 0 },
             display: 'flex',
             alignItems: 'center',
-            px: { xs: 1.5, md: 3 },
+            px: { xs: 1.5, md: 3.75 },
             gap: { xs: 1, sm: 2 },
             flexWrap: { xs: 'wrap', md: 'nowrap' },
             borderBottom: '1px solid',
@@ -266,28 +274,50 @@ export function AppShell() {
           >
             <Menu size={20} />
           </IconButton>
-          <Breadcrumbs sx={{ display: { xs: 'none', md: 'block' }, fontSize: 11, flexShrink: 0 }}>
+          <Breadcrumbs sx={{ display: { xs: 'none', md: 'flex' }, fontSize: 11, flexShrink: 0 }}>
             <House size={13} />
-            <Typography sx={{ fontSize: 11 }}>BHOME Portal</Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 750, color: 'text.primary' }}>
+              {selectedLocation ? `Cơ sở / ${selectedLocation.name}` : 'BHOME Portal'}
+            </Typography>
           </Breadcrumbs>
-          <TextField
-            size="small"
-            placeholder="Tìm kiếm phòng, khách, hợp đồng..."
-            value={portal.search}
-            onChange={(e) => portal.setSearch(e.target.value)}
-            sx={{ maxWidth: 340, flex: 1, minWidth: 130 }}
-            slotProps={{
-              htmlInput: { 'aria-label': 'Tìm kiếm toàn trang' },
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={15} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
+          {!inLocationWorkspace && (
+            <TextField
+              size="small"
+              placeholder="Tìm kiếm phòng, khách, hợp đồng..."
+              value={portal.search}
+              onChange={(e) => portal.setSearch(e.target.value)}
+              sx={{ maxWidth: 340, flex: 1, minWidth: 130 }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Tìm kiếm toàn trang' },
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={15} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          )}
           <Box sx={{ flex: 1, display: { xs: 'none', md: 'block' } }} />
+          {isMockMode && (
+            <Box
+              sx={{
+                display: { xs: 'none', md: 'block' },
+                px: 1.25,
+                py: 0.65,
+                borderRadius: 10,
+                bgcolor: '#fffae8',
+                border: '1px solid #f0e4ae',
+                color: '#99732e',
+                fontSize: 10,
+                fontWeight: 800,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              DEMO · KHÔNG GỬI API
+            </Box>
+          )}
           <TextField
             select
             size="small"
@@ -321,6 +351,13 @@ export function AppShell() {
               <Bell size={19} />
             </Badge>
           </IconButton>
+          {isMockMode && (
+            <Tooltip title="Khôi phục dữ liệu demo">
+              <IconButton aria-label="Khôi phục demo" onClick={() => setResetOpen(true)}>
+                <RotateCcw size={17} />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Đăng xuất">
             <IconButton
               aria-label="Đăng xuất"
@@ -347,34 +384,7 @@ export function AppShell() {
             NH
           </Avatar>
         </Paper>
-        <Stack
-          direction="row"
-          sx={{
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            px: { xs: 2, md: 4 },
-            py: 0.6,
-            bgcolor: '#eaedff',
-            gap: 1,
-          }}
-        >
-          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
-            {isMockMode
-              ? 'MÔ PHỎNG • Dữ liệu minh họa lưu trên trình duyệt • Kỳ 10/2024 • Không giao dịch thực tế'
-              : 'Chế độ API • Hợp đồng nghiệp vụ cần được cấu hình'}
-          </Typography>
-          {isMockMode && (
-            <Button
-              size="small"
-              startIcon={<RotateCcw size={12} />}
-              sx={{ fontSize: 10, whiteSpace: 'nowrap' }}
-              onClick={() => setResetOpen(true)}
-            >
-              Khôi phục demo
-            </Button>
-          )}
-        </Stack>
-        <Box sx={{ px: { xs: 2, md: 4 }, py: 3 }}>
+        <Box sx={{ px: { xs: 2, md: 4 }, py: 3.5, maxWidth: 1480, mx: 'auto' }}>
           <Breadcrumbs sx={{ fontSize: 10, mb: 1 }}>
             <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>Hệ thống</Typography>
             <Typography sx={{ fontSize: 10, color: 'primary.main' }}>

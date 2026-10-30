@@ -32,6 +32,13 @@ Thay đổi lần này:
 - Route cũ vẫn được giữ để bảo toàn deep link.
 - Bulk generator chấp nhận cả hậu tố `1` và số đầy đủ `401`; ví dụ tầng 4, prefix `P.`, start `401`,
   quantity `5` tạo `P.401`..`P.405`.
+- Đồng bộ design token với prototype v2: nền `#f6f8fc`, navy `#15243e`, primary `#255dde`, card
+  bo 14–15 px, sidebar 258 px, topbar 75 px và trạng thái phòng theo bốn dải màu riêng.
+- Tab Tổng quan của Location Workspace hiển thị toàn bộ Room Card thuộc đúng `locationId`, nhóm theo
+  tầng. Mỗi card tái sử dụng dữ liệu Room Type, giá, occupancy, Incident/Maintenance/Debt/Contract
+  warning và mở hồ sơ Room hiện có; không tạo bản sao dữ liệu.
+- Danh sách Location dùng card occupancy/progress giống prototype, đồng thời vẫn giữ các thao tác
+  Chỉnh sửa và Sao chép cấu hình hiện hữu.
 
 ## API và mock boundary
 
