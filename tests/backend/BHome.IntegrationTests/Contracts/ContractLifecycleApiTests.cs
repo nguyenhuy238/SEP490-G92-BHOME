@@ -52,7 +52,8 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        var location = new Location("Synthetic Contract Location"); var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
+        var location = new Location("Synthetic Contract Location") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
+        var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
@@ -79,6 +80,60 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         await Success<ContractId>(await Post(w.Owner, Path(id, "deposit-verifications"), new DepositInput("SYNTHETIC-" + Guid.NewGuid(), amount, "Verified synthetic bank statement")));
     private async Task<Guid> Active(Workspace w)
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
+
+    [Fact]
+    public async Task ListScopesBeforeCountingAndPagingAndReturnsOnlySafeSummaries()
+    {
+        var a = await Setup(); var b = await Setup(); var own = await Draft(a); var another = await Draft(b);
+        foreach (var actor in new[] { a.Staff, a.Tenant })
+        {
+            var page = await Success<ContractPage>(await actor.Client.GetAsync("/api/v1/contracts?page=1&pageSize=1"));
+            Assert.Equal(1, page.TotalCount); Assert.Equal(own, Assert.Single(page.Items).Id);
+            var outside = await Success<ContractPage>(await actor.Client.GetAsync($"/api/v1/contracts?locationId={b.Location}"));
+            Assert.Equal(0, outside.TotalCount); Assert.Empty(outside.Items);
+            var second = await Success<ContractPage>(await actor.Client.GetAsync("/api/v1/contracts?page=2&pageSize=1"));
+            Assert.Equal(1, second.TotalCount); Assert.Empty(second.Items);
+        }
+        var owner = await Success<ContractPage>(await a.Owner.Client.GetAsync($"/api/v1/contracts?locationId={b.Location}&status=Draft"));
+        Assert.Equal(another, Assert.Single(owner.Items).Id);
+        var empty = await Success<ContractPage>(await a.Owner.Client.GetAsync($"/api/v1/contracts?locationId={a.Location}&status=Active"));
+        Assert.Empty(empty.Items);
+        var response = await a.Staff.Client.GetAsync("/api/v1/contracts");
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("tenantUserId", json); Assert.DoesNotContain("residentIds", json);
+        Assert.DoesNotContain("terms", json); Assert.DoesNotContain("objectKey", json);
+        Assert.Contains("\"monthlyRent\":\"3000000\"", json);
+        Assert.Equal(a.Location, (await Success<ContractView>(await a.Owner.Client.GetAsync(Path(own)))).LocationId);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Factory.CreateClient().GetAsync("/api/v1/contracts")).StatusCode);
+        foreach (var query in new[] { "page=0", "page=-1", "pageSize=0", "pageSize=101", "page=2147483647&pageSize=100", "status=Invented", "status=99", "locationId=00000000-0000-0000-0000-000000000000" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await a.Owner.Client.GetAsync("/api/v1/contracts?" + query)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ListRechecksEffectiveAssignmentsWithSameToken()
+    {
+        var w = await Setup(); var own = await Draft(w); var other = await Setup(); await Draft(other);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            await db.StaffLocationAssignments.Where(a => a.StaffUserId == w.Staff.Id).ExecuteDeleteAsync();
+            await db.StaffLocationAssignments.Where(a => a.StaffUserId == other.Staff.Id).ExecuteDeleteAsync();
+            db.Add(new StaffLocationAssignment(w.Location, w.Staff.Id, w.Owner.Id, Today.AddDays(-10), Today.AddDays(-1)));
+            db.Add(new StaffLocationAssignment(other.Location, w.Staff.Id, w.Owner.Id, Today.AddDays(1), Today.AddDays(5)));
+            await db.SaveChangesAsync();
+        }
+        var hidden = await Success<ContractPage>(await w.Staff.Client.GetAsync("/api/v1/contracts"));
+        Assert.Empty(hidden.Items); Assert.Equal(0, hidden.TotalCount);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            db.Add(new StaffLocationAssignment(w.Location, w.Staff.Id, w.Owner.Id, Today, Today));
+            await db.SaveChangesAsync();
+        }
+        // The same token immediately sees the newly effective server-side assignment.
+        var visible = await Success<ContractPage>(await w.Staff.Client.GetAsync("/api/v1/contracts"));
+        Assert.Equal(own, Assert.Single(visible.Items).Id);
+    }
 
     [Fact]
     public async Task T01_T07_RealPersistenceTwoPartySignaturesActivationAndParallelReplay()
@@ -174,7 +229,15 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
             using var binary = new ByteArrayContent(Image()); binary.Headers.ContentType = new("image/png");
             var evidence = (await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task}/evidence", binary))).Id;
             var reading = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", new MeterConfirmation(true, purpose == ReadingPurpose.Initial ? 100 : 120, evidence)));
-            if (purpose == ReadingPurpose.Final) return reading.Id;
+            if (purpose == ReadingPurpose.Final)
+            {
+                var tasks = (await w.Staff.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!;
+                var summary = Assert.Single(tasks, x => x.Id == task);
+                Assert.Equal(contractId, summary.ContractId); Assert.Equal(reading.Id, summary.ConfirmedReadingId);
+                var outsider = await User(Roles.Staff);
+                Assert.DoesNotContain((await outsider.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!, x => x.Id == task);
+                return reading.Id;
+            }
         }
         throw new InvalidOperationException();
     }

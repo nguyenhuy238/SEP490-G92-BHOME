@@ -38,6 +38,8 @@ export interface MeterTask {
   billingPeriod: string | null;
   status: number;
   previousValue: string | null;
+  contractId?: string | null;
+  confirmedReadingId?: string | null;
 }
 export class MobileApiError extends Error {
   constructor(
@@ -108,16 +110,21 @@ export class MobileApi {
   ) {
     this.base = apiBaseUrl(base);
   }
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async request<T>(
+    path: string,
+    init: RequestInit = {},
+    responseType: 'json' | 'blob' | 'bytes' = 'json',
+  ): Promise<T> {
     if (
       !path.startsWith('/api/v1/') ||
       path.includes('..') ||
       path.includes('://') ||
-      path.includes('?')
+      path.includes('#')
     )
       throw new Error('Invalid API path.');
     const headers = new Headers(init.headers);
-    headers.set('Accept', 'application/json');
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const original = this.token();
     if (original) headers.set('Authorization', 'Bearer ' + original);
     const send = async () => {
@@ -146,7 +153,11 @@ export class MobileApi {
       const problem = (await response.json().catch(() => ({}))) as { code?: string };
       throw new MobileApiError(response.status, problem.code);
     }
-    return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
+    if (response.status === 204) return undefined as T;
+    if (responseType === 'bytes') return new Uint8Array(await response.arrayBuffer()) as T;
+    return responseType === 'blob'
+      ? (response.blob() as Promise<T>)
+      : (response.json() as Promise<T>);
   }
   json<T>(path: string, value: unknown, signal?: AbortSignal) {
     return this.request<T>(path, {

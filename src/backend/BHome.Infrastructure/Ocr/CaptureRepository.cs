@@ -165,7 +165,8 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         .OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Take(100)
         .Select(x => new MeterTaskSummary(x.Id, x.MeterId, x.Meter.Room.Location.Name, x.Meter.Room.RoomNumber, x.Meter.Code,
             x.Meter.UtilityType, x.Meter.Display, x.Meter.DecimalPlaces, x.Purpose, x.ReadingDate, x.BillingPeriod, x.Status,
-            db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId).OrderByDescending(r => r.ConfirmedAt).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault())).ToListAsync(t);
+            db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId).OrderByDescending(r => r.ConfirmedAt).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
+            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault())).ToListAsync(t);
 
     public async Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken t)
     {

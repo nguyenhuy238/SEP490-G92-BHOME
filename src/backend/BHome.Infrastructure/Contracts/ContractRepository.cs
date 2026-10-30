@@ -11,6 +11,21 @@ namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractRepository(BHomeDbContext db) : IContractRepository
 {
+    public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
+    {
+        var query = db.Set<Contract>().AsNoTracking().Where(c => scope.Owner ||
+            (scope.Tenant && c.TenantUserId == scope.ActorId) ||
+            (scope.Staff && db.StaffLocationAssignments.Any(a => a.StaffUserId == scope.ActorId &&
+                a.LocationId == c.Room.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
+        if (locationId is { } location) query = query.Where(c => c.Room.LocationId == location);
+        if (status is { } state) query = query.Where(c => c.Status == state);
+        var total = await query.CountAsync(t);
+        var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(c => new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent)).ToArrayAsync(t);
+        return new(items, page, pageSize, total);
+    }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {

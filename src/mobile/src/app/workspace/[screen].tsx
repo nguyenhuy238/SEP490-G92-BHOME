@@ -23,6 +23,7 @@ import {
 } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
+import { ContractScreen } from '../../features/contracts/ContractScreen';
 import {
   ContractPreparation,
   Inspection,
@@ -94,8 +95,17 @@ export default function WorkspaceRoute() {
       </WorkspaceShell>
     );
   const Screen = screens[screen];
+  if (
+    !preview &&
+    ['signing', 'contract', 'contract-request', 'prepare-contract', 'move-out'].includes(screen)
+  )
+    return (
+      <WorkspaceShell screen={screen}>
+        <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />
+      </WorkspaceShell>
+    );
   // Never fill an authenticated account with synthetic finance/identity records.
-  // Only the OCR APIs exist today; new data needs a confirmed backend adapter.
+  // Screens without a confirmed backend adapter keep the explicit unavailable state.
   if (!preview && !['profile', 'onboarding', 'rooms'].includes(screen))
     return (
       <WorkspaceShell screen={screen}>
@@ -107,6 +117,9 @@ export default function WorkspaceRoute() {
             Bạn đã đăng nhập với vai trò {role}. Màn hình này chưa có API nghiệp vụ được kết nối.
           </Text>
           <Text>Thông tin tài khoản thật sẽ hiển thị sau khi có hợp đồng API tương ứng.</Text>
+          <Action icon="file-document-outline" onPress={() => go('signing')}>
+            Hợp đồng & Vòng đời
+          </Action>
           {role === 'Staff' && (
             <>
               <Action onPress={() => go('onboarding')}>Tiếp nhận cư dân & CCCD</Action>

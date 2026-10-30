@@ -9,7 +9,10 @@ export const formatVnd = (value: number) =>
   }).format(value);
 export const formatInstant = (isoInstant: string) =>
   new Intl.DateTimeFormat(locale, {
-    dateStyle: 'short',
-    timeStyle: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
     timeZone: businessTimeZone,
   }).format(new Date(isoInstant));
