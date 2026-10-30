@@ -1,0 +1,3498 @@
+{
+  "info": {
+    "_postman_id": "95bb127b-ef91-4786-9ab4-9c9f18c41614",
+    "name": "BHOME — API đơn giản: Auth, Location, Room Type, Room, Asset và giá/phí",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "FE-02 / UC-01/02; BF-01 / UC-04..06 / GBR-01..03/08 / DBR-01/13. Có sẵn biến baseUrl, ownerAccessToken, staffAccessToken, staffUserId, locationId và chainVersion. Import thêm BHome.Local.postman_environment.json rồi chọn BHOME Local; nếu không chọn Environment thì dùng Collection Variables có sẵn. Request 24 tự lưu Owner token; 25 tự lưu Staff token + userId; 26 tự lưu Location ID khi response thành công và đúng role/dữ liệu. Các URL/Body/Authorization tham chiếu biến tự động. Send từng request; không Run toàn bộ khi chưa điền dữ liệu còn thiếu. 01–23: JWT/refresh/logout; 24–35: login Owner/Staff, xem/đổi tên Chain duy nhất (25a/25b), tạo Location và assignment; 36–50: Location/Room Type/Room/Asset; 51–63: giá/phí; 64–76: phân quyền/lỗi; 77–80: ngừng sử dụng. Áp dụng migration mới nhất, gồm 20261030023603_SingleSystemChain trên database test trước khi gọi API mới. baseUrl mặc định https://localhost:7240; sửa một lần trong Environment hoặc Collection Variables nếu API chạy địa chỉ khác. ROOM_TYPE_ID/ROOM_ID/ASSET_ID/POLICY_ID và version của các tài nguyên vẫn điền tay; Location ID và Staff ID dùng biến có sẵn. PUT phải lấy version mới nhất từ GET. D0 >= hôm nay theo Asia/Ho_Chi_Minh; D1 > hôm nay và > D0; D2 >= D1. Thay placeholder ngày trong Body và query bằng YYYY-MM-DD. Giá/phí là số giả lập kiểm thử, không phải quy định giá vận hành. Enum dùng số; không có DELETE. Dùng Location mới mỗi lượt test để tránh trùng số phòng/tên type/mã asset. Test script kiểm tra response và lưu token/ID và chainVersion khi thành công; không tự gửi request khác. Phần 01–23 kiểm thử JWT/refresh/logout vẫn giữ token riêng để tránh làm sai bài test reuse/thu hồi. Token hết hạn thì login lại đúng role; không dùng token đã logout. 08–15 test reuse R0 sẽ thu hồi session đó; giữ riêng token cũ. Nếu 429, chờ Retry-After. Chỉ dùng account/dữ liệu test. Chi tiết: docs/api/PROPERTY_MANAGEMENT.md. Collection chưa được chạy live trên server của người dùng. Hệ thống có một Chain duy nhất; Location tự thuộc Chain chung, không gửi chainId. Không có API tạo/xóa Chain. 25a/25b tự lưu chainVersion; chỉ Owner xem/đổi tên. Quyết định linh hoạt: 60a–60e test PUT sửa policy tương lai chưa sử dụng, có audit và kiểm tra version. Chỉ sửa name/rate/kỳ; không đổi scope/mã. Giá đã hiệu lực hoặc firstUsedAt có giá trị tiếp tục khóa. Repository chưa có luồng Invoice, mốc sử dụng dành cho tích hợp billing sau này. Áp dụng migration FlexibleFutureBillingPolicies trước khi test PUT."
+  },
+  "item": [
+    {
+      "name": "01 — Đăng nhập email đúng → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Điền email và mật khẩu test thật vào Body. Gửi request, copy accessToken từ response. expiresAt phải khoảng 30 phút sau thời điểm cấp. Nguồn: PostgresAuthenticationTests.LoginVerifiesStoredPasswordAndRolesThenAuthenticatesSession.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Xem phiên với token → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/me",
+        "description": "Authorization → Bearer Token: thay DAN_ACCESS_TOKEN_VAO_DAY bằng accessToken của request 01. Kiểm tra userId/sessionId/roles đúng account."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Không có token → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/me",
+        "description": "Giữ Authorization = No Auth. Server phải từ chối. Nguồn: ApiFoundationTests.ProtectedControllerRejectsAnonymousWithProblemDetails."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Email sai định dạng → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Giữ email sai định dạng. Kỳ vọng validation ProblemDetails 400. Nguồn: LoginApiTests.InvalidInputReturnsValidationProblemBeforeCredentialLookup.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"khong-phai-email\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Mật khẩu sai → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Điền email test đang tồn tại, giữ password khác mật khẩu thật. Chỉ thử một lần. Nguồn: PostgresAuthenticationTests.UnsupportedOrFailedSignInReturnsSameGenericDenial(wrong-password).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"MAT_KHAU_SAI_DE_TEST\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 — Đăng xuất → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/logout",
+        "description": "Dán cùng accessToken của request 01 vào Authorization → Bearer Token. Body giữ {}. Nguồn: AuthenticationSecurityTests.LogoutCurrentAndAllDevicesApplyCorrectScope.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 — Token cũ sau logout → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/me",
+        "description": "Dán chính token vừa dùng logout ở request 06. Không login lại trước bước này. Server phải từ chối dù token chưa hết hạn. Nguồn: AuthenticationSecurityTests.LoginRefreshLogoutPersistsOnlyHashAndImmediatelyRejectsAccessToken."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 — Login để thử refresh → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Lưu riêng accessToken A0 và refreshToken R0 của response. Không dùng token của request 01 đã logout.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 — Refresh hợp lệ → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Dán R0 từ request 08. Response có accessToken mới A1 và refreshToken mới R1. Giữ riêng R0 để dùng ở request 11; không ghi đè. sessionExpiresAt phải bằng request 08, không kéo dài quá 7 ngày.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_R0_TU_REQUEST_08\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 — Access token mới A1 → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/me",
+        "description": "Authorization: dán accessToken A1 từ response request 09. Đây là token mới sau refresh."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 — Dùng lại R0 cũ → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Dán đúng R0 đã dùng ở request 09. Reuse thu hồi toàn bộ session này. Không dùng R1 ở bước này.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_LAI_REFRESH_TOKEN_R0_TU_REQUEST_08\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 — A1 bị thu hồi sau reuse → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/me",
+        "description": "Authorization: dán chính A1 từ request 09. Phải bị từ chối dù access token chưa hết hạn."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 — R1 cũng bị thu hồi → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Dán R1 mới của request 09. Session đã bị thu hồi do reuse R0 nên R1 cũng không dùng được.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_R1_TU_REQUEST_09\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 — Refresh token không tồn tại → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Giữ token tổng hợp không hợp lệ; không dùng token thật ở request này.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"SYNTHETIC_REFRESH_TOKEN_KHONG_TON_TAI\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 — Không có refresh token → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Body giữ {}. No Auth. Thiếu refresh credential phải bị từ chối.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 — Login mới để thử logout → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Login mới. Copy accessToken A2 và refreshToken R2. Session ở request 08 đã bị thu hồi.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 — Logout session A2 → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/logout",
+        "description": "Authorization: dán A2 từ request 16. Body giữ {}.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 — R2 không refresh được sau logout → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Dán R2 từ request 16. Logout phải thu hồi cả khả năng refresh.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_R2_TU_REQUEST_16\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 — Login session A → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Lưu accessToken A và refreshToken RA. Không dùng token từ những request trước.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 — Login thêm session B → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Dùng cùng email/password với request 19. Lưu accessToken B và refreshToken RB riêng, không ghi đè RA.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 — Logout-all bằng B → 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/auth/logout-all",
+        "description": "Authorization: dán accessToken B từ request 20. Thu hồi mọi session của account TEST, bao gồm các tab/thiết bị khác.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 204', function () { pm.response.to.have.status(204); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 — RA bị thu hồi sau logout-all → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Dán refreshToken RA của session A từ request 19.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_RA_TU_REQUEST_19\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 — RB bị thu hồi sau logout-all → 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "description": "Dán refreshToken RB của session B từ request 20.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"DAN_REFRESH_TOKEN_RB_TU_REQUEST_20\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 — Login Owner để test Location → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Điền email/mật khẩu tài khoản Owner test rồi Send. Khi HTTP 200 và roles có Owner, tự lưu ownerAccessToken vào Environment đang chọn; nếu không chọn Environment thì lưu vào Collection Variables. Request quản trị dùng {{ownerAccessToken}}. Không dùng token của phần 01–23 đã logout; token hết hạn thì gửi lại 24.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"owner.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const validRole = Array.isArray(body.roles) && body.roles.includes('Owner');",
+              "    const validToken = typeof body.accessToken === 'string' && body.accessToken.trim().length > 0;",
+              "    pm.test('Response has valid Owner credentials', function () {",
+              "        pm.expect(validRole && validToken).to.eql(true);",
+              "    });",
+              "    if (validRole && validToken) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('ownerAccessToken', body.accessToken);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 — Login Staff để lấy userId và token → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Điền email/mật khẩu tài khoản Staff test rồi Send. Khi HTTP 200, roles có Staff và userId hợp lệ, tự lưu staffAccessToken và staffUserId. Các request Staff dùng {{staffAccessToken}}; Body phân công dùng {{staffUserId}}. Cùng một Environment với request 24.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"staff.dev@example.invalid\",\n  \"password\": \"DIEN_MAT_KHAU_TEST_CUA_BAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const validRole = Array.isArray(body.roles) && body.roles.includes('Staff');",
+              "    const validToken = typeof body.accessToken === 'string' && body.accessToken.trim().length > 0;",
+              "    const validUserId = typeof body.userId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.userId);",
+              "    pm.test('Response has valid Staff credentials', function () {",
+              "        pm.expect(validRole && validToken && validUserId).to.eql(true);",
+              "    });",
+              "    if (validRole && validToken && validUserId) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('staffAccessToken', body.accessToken);",
+              "        scope.set('staffUserId', body.userId);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25a — Owner xem cấu hình Chain duy nhất → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/chain",
+        "description": "Hệ thống luôn có đúng một Chain; không cần tạo trước Location. Owner xem tên/version hiện tại. Response 200 tự lưu chainVersion; có thể bỏ qua bước đổi tên nếu không cần."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const b = pm.response.json(); if (Number.isInteger(b.version) && b.version > 0) { const scope = pm.environment.name ? pm.environment : pm.collectionVariables; scope.set('chainVersion', String(b.version)); } }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25b — Owner đổi tên Chain duy nhất → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/chain",
+        "description": "Tùy chọn. Chạy 25a lấy version trước; nhập tên muốn dùng rồi Send. Chỉ đổi tên Chain hiện hữu, không tạo Chain mới. 200 cập nhật chainVersion tự động; nếu 409, gửi lại 25a rồi xem tên hiện tại trước khi thử lại.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"BHOME Chuỗi Test\",\n  \"version\": {{chainVersion}},\n  \"reason\": \"Owner cập nhật tên chuỗi\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const b = pm.response.json(); if (Number.isInteger(b.version) && b.version > 0) { const scope = pm.environment.name ? pm.environment : pm.collectionVariables; scope.set('chainVersion', String(b.version)); } }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 — Owner tạo Location → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations",
+        "description": "UC-04. Chỉ gửi name/address/isActive; server tự gắn Location vào Chain duy nhất, không gửi hoặc chọn chainId. Dùng {{ownerAccessToken}}. Khi 201, tự lưu id vào {{locationId}}. Version và các ID khác vẫn lấy từ response khi cần.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"BHOME Cơ sở Test\",\n  \"address\": \"Địa chỉ giả lập để kiểm thử\",\n  \"isActive\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "    const body = pm.response.json();",
+              "    const validId = typeof body.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.id);",
+              "    pm.test('Created Location has a valid id', function () { pm.expect(validId).to.eql(true); });",
+              "    if (validId) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('locationId', body.id);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27 — Owner xem danh sách Location → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations?page=1&pageSize=20",
+        "description": "Owner xem toàn bộ danh sách Location theo từng trang, không cần locationId. Response {items,page,pageSize,totalCount}. Đổi page để xem trang tiếp theo; có thể lọc search/isActive. Xem một Location cụ thể dùng GET /locations/{id} ở request 36. Staff chỉ thấy các Location hiện được phân công."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pagination DTO', function () { var b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.page).to.eql(1); pm.expect(b.pageSize).to.eql(20); pm.expect(b.totalCount).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 — Owner gán Staff vào Location → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments",
+        "description": "Điền {{locationId}} và {{staffUserId}} trong Body. Khoảng ngày phải chứa ngày hiện tại tại Việt Nam.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"staffUserId\": \"{{staffUserId}}\",\n  \"startDate\": \"2026-10-29\",\n  \"endDate\": \"2026-12-31\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29 — Owner xem lịch sử Assignment → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments?locationId={{locationId}}",
+        "description": "Thay {{locationId}} trong query. GET không dùng Body vì nhiều HTTP client/proxy không hỗ trợ GET Body ổn định. Response phải có Assignment từ request 28."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 — Staff xem Location được phân công → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations/assigned-to-me",
+        "description": "Dán Staff accessToken từ request 25. Nếu khoảng ngày request 28 đang hiệu lực, response phải có Location test."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "31 — Staff không được tạo Location → 403",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations",
+        "description": "Dùng Staff token từ 25. Payload hợp lệ để kiểm tra quyền; Staff không được tạo Location, kỳ vọng 403.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"BHOME Cơ sở Test\",\n  \"address\": \"Địa chỉ giả lập để kiểm thử\",\n  \"isActive\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 403', function () { pm.response.to.have.status(403); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "32 — Assignment chồng ngày → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments",
+        "description": "Dùng cùng {{locationId}} và {{staffUserId}} của request 28 trong Body. Hai khoảng ngày chồng nhau nên phải trả 409.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"staffUserId\": \"{{staffUserId}}\",\n  \"startDate\": \"2026-11-01\",\n  \"endDate\": \"2026-11-30\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "33 — EndDate trước StartDate → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments",
+        "description": "Điền {{locationId}} và {{staffUserId}} trong Body. Khoảng ngày ngược phải bị validation từ chối.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"staffUserId\": \"{{staffUserId}}\",\n  \"startDate\": \"2026-12-31\",\n  \"endDate\": \"2026-12-01\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "34 — Owner truy cập Location không tồn tại → 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments?locationId=11111111-1111-1111-1111-111111111111",
+        "description": "GUID tổng hợp không tồn tại. API phải trả 404."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 404', function () { pm.response.to.have.status(404); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "35 — Xem Location được phân công không token → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/locations/assigned-to-me",
+        "description": "Giữ No Auth. Endpoint Staff phải yêu cầu đăng nhập."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "36 — Owner xem chi tiết Location → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations/{{locationId}}",
+        "description": "Điền {{locationId}} từ 26. Copy version hiện tại; mọi PUT phải gửi version mới nhất."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "37 — Owner cập nhật Location → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations/{{locationId}}",
+        "description": "Điền CHAIN_ID/{{locationId}}. version=1 chỉ đúng ngay sau khi tạo; lấy version từ GET 36 nếu đã sửa. Giữ isActive=true để tiếp tục tạo dữ liệu.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"BHOME Cơ sở Test cập nhật\",\n  \"address\": \"Địa chỉ giả lập để kiểm thử\",\n  \"isActive\": true,\n  \"version\": 1,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "38 — Owner tạo Room Type → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/room-types",
+        "description": "Điền {{locationId}} đang hoạt động. Lưu id làm ROOM_TYPE_ID và version. Tên không trùng trong cùng Location sau trim/chuyển hoa.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"name\": \"Studio Test\",\n  \"description\": \"Loại phòng kiểm thử\",\n  \"defaultCapacity\": 2,\n  \"areaM2\": 20.5,\n  \"amenities\": [\n    \"Ban công\"\n  ],\n  \"isActive\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "39 — Owner xem danh sách Room Type → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/room-types?locationId={{locationId}}&page=1&pageSize=20",
+        "description": "Điền {{locationId}}. Response phân trang; hỗ trợ roomTypeId/isActive/search."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pagination DTO', function () { var b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.page).to.eql(1); pm.expect(b.pageSize).to.eql(20); pm.expect(b.totalCount).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "40 — Owner xem chi tiết Room Type → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/room-types/DIEN_ROOM_TYPE_ID_VAO_DAY",
+        "description": "Điền ROOM_TYPE_ID từ 38; lấy version hiện tại cho PUT."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "41 — Owner cập nhật Room Type → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/room-types/DIEN_ROOM_TYPE_ID_VAO_DAY",
+        "description": "Điền {{locationId}}/ROOM_TYPE_ID; version lấy từ GET 40. Không đổi Location; defaultCapacity mới không tự đổi capacity của phòng đã có.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"name\": \"Studio Test\",\n  \"description\": \"Đã cập nhật mô tả kiểm thử\",\n  \"defaultCapacity\": 2,\n  \"areaM2\": 20.5,\n  \"amenities\": [\n    \"Ban công\"\n  ],\n  \"isActive\": true,\n  \"version\": 1,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "42 — Owner tạo Room → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms",
+        "description": "Điền {{locationId}} và ROOM_TYPE_ID cùng Location, đang hoạt động. Lưu id làm ROOM_ID và version. Available=0, Unavailable=3; không nhập tay OnHold=1/Occupied=2.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_ID_VAO_DAY\",\n  \"roomNumber\": \"TEST-01\",\n  \"floor\": \"1\",\n  \"capacity\": 2,\n  \"status\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "43 — Owner xem danh sách Room → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms?locationId={{locationId}}&roomTypeId=DIEN_ROOM_TYPE_ID_VAO_DAY&roomStatus=0&page=1&pageSize=20",
+        "description": "Điền {{locationId}}/ROOM_TYPE_ID. Lọc phòng Available (roomStatus=0); response phân trang."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pagination DTO', function () { var b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.page).to.eql(1); pm.expect(b.pageSize).to.eql(20); pm.expect(b.totalCount).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "44 — Owner xem chi tiết Room → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Điền ROOM_ID từ 42. Copy version hiện tại cho PUT."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "45 — Owner cập nhật Room → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Điền {{locationId}}/ROOM_TYPE_ID/ROOM_ID và version từ GET 44. Giữ status=0 để tiếp tục test; không đổi sức chứa/loại phòng khi có nghĩa vụ liên quan.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_ID_VAO_DAY\",\n  \"roomNumber\": \"TEST-01\",\n  \"floor\": \"Tầng 1\",\n  \"capacity\": 2,\n  \"status\": 0,\n  \"version\": 1,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "46 — Owner tạo Asset trong Room → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets",
+        "description": "Điền {{locationId}} và ROOM_ID cùng Location. Lưu id làm ASSET_ID và version. Asset là từng món, không có quantity.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomId\": \"DIEN_ROOM_ID_VAO_DAY\",\n  \"commonArea\": null,\n  \"code\": \"AC-TEST-01\",\n  \"name\": \"Máy lạnh test\",\n  \"category\": \"Điện lạnh\",\n  \"condition\": \"Hoạt động bình thường\",\n  \"status\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "47 — Owner tạo Asset tại khu chung → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets",
+        "description": "Điền {{locationId}}. Chọn đúng một trong roomId hoặc commonArea. Giữ riêng ASSET_ID máy lạnh từ 46 cho các bước sau, không thay bằng id máy giặt.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomId\": null,\n  \"commonArea\": \"Sảnh tầng trệt\",\n  \"code\": \"WASH-TEST-01\",\n  \"name\": \"Máy giặt khu chung\",\n  \"category\": \"Gia dụng\",\n  \"condition\": \"Hoạt động bình thường\",\n  \"status\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "48 — Owner xem danh sách Asset → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets?locationId={{locationId}}&page=1&pageSize=20",
+        "description": "Điền {{locationId}}. Có thể thêm roomId/assetStatus/search. Response phân trang."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pagination DTO', function () { var b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.page).to.eql(1); pm.expect(b.pageSize).to.eql(20); pm.expect(b.totalCount).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "49 — Owner xem chi tiết Asset → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets/DIEN_ASSET_ID_VAO_DAY",
+        "description": "Điền ASSET_ID máy lạnh từ 46. Lấy version hiện tại cho PUT."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "50 — Owner cập nhật tình trạng Asset → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets/DIEN_ASSET_ID_VAO_DAY",
+        "description": "Dùng ASSET_ID từ 46 và version từ 49. Active=0, NeedsRepair=1, UnderRepair=2, Retired=3. Không chuyển vị trí qua PUT hoặc ghi đè tình trạng Asset UnderRepair.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomId\": \"DIEN_ROOM_ID_VAO_DAY\",\n  \"commonArea\": null,\n  \"code\": \"AC-TEST-01\",\n  \"name\": \"Máy lạnh test\",\n  \"category\": \"Điện lạnh\",\n  \"condition\": \"Cần kiểm tra tiếng ồn\",\n  \"status\": 1,\n  \"version\": 1,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "51 — Tra giá khi chưa cấu hình → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY/prices?effectiveOn=DIEN_NGAY_D0_YYYY-MM-DD",
+        "description": "Chạy trước 52–57 trên Location mới. Chọn D0 >= hôm nay tại Việt Nam; thay placeholder ở query bằng YYYY-MM-DD. Phải báo thiếu RENT/ELECTRICITY/WATER, không tự coi là giá 0."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Missing required charges', function () { var b = pm.response.json(); pm.expect(b.charges).to.be.an('array').that.is.empty; pm.expect(b.missingRequiredCharges).to.have.members(['RENT','ELECTRICITY','WATER']); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "52 — Tạo giá thuê cấp Location → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}} và D0 >= hôm nay. Lưu id làm LOCATION_RENT_POLICY_ID và version cho 61. VND/phòng/tháng; không cập nhật hợp đồng/hóa đơn.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 0,\n  \"chargeCode\": \"RENT\",\n  \"name\": \"Tiền thuê\",\n  \"method\": 0,\n  \"rate\": 2500000,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "53 — Tạo giá thuê cấp Room Type → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}}/ROOM_TYPE_ID và cùng D0. Lưu id làm ROOM_TYPE_RENT_POLICY_ID. Giá này ưu tiên giá Location cho phòng cùng loại.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_ID_VAO_DAY\",\n  \"roomId\": null,\n  \"category\": 0,\n  \"chargeCode\": \"RENT\",\n  \"name\": \"Tiền thuê\",\n  \"method\": 0,\n  \"rate\": 2600000,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "54 — Tạo giá thuê riêng cho Room → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}}/ROOM_ID và cùng D0. Lưu id làm ROOM_RENT_POLICY_ID. Giá Room ưu tiên cả Room Type và Location.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": \"DIEN_ROOM_ID_VAO_DAY\",\n  \"category\": 0,\n  \"chargeCode\": \"RENT\",\n  \"name\": \"Tiền thuê\",\n  \"method\": 0,\n  \"rate\": 2700000,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "55 — Tạo đơn giá điện → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}} và cùng D0. Electricity=1, Metered=1, đơn vị VND/kWh, tối đa 4 chữ số thập phân. Số liệu giả lập kiểm thử, không phải quy định giá vận hành.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 1,\n  \"chargeCode\": \"ELECTRICITY\",\n  \"name\": \"Điện\",\n  \"method\": 1,\n  \"rate\": 3500.125,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "56 — Tạo đơn giá nước → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}} và cùng D0. Water=2, Metered=1, đơn vị VND/m³. Số liệu giả lập kiểm thử.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 2,\n  \"chargeCode\": \"WATER\",\n  \"name\": \"Nước\",\n  \"method\": 1,\n  \"rate\": 18000,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "57 — Tạo phí Internet bằng 0 → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}} và cùng D0. ServiceFee=3, FixedPerRoomPerMonth=0. Mức 0 có chủ đích; thêm phí khác bằng chargeCode riêng.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 3,\n  \"chargeCode\": \"INTERNET\",\n  \"name\": \"Internet\",\n  \"method\": 0,\n  \"rate\": 0,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "58 — Owner xem danh sách giá và phí → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies?locationId={{locationId}}&effectiveOn=DIEN_NGAY_D0_YYYY-MM-DD&page=1&pageSize=20",
+        "description": "Điền {{locationId}}/D0. Trả mọi policy trong phạm vi lọc, chưa áp dụng ưu tiên; hỗ trợ roomTypeId/roomId/chargeCategory/search."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pagination DTO', function () { var b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.page).to.eql(1); pm.expect(b.pageSize).to.eql(20); pm.expect(b.totalCount).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "59 — Owner xem chi tiết policy → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/DIEN_LOCATION_RENT_POLICY_ID_VAO_DAY",
+        "description": "Dùng LOCATION_RENT_POLICY_ID từ 52; copy version mới nhất trước bước 61."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60 — Tra giá áp dụng cho Room → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY/prices?effectiveOn=DIEN_NGAY_D0_YYYY-MM-DD",
+        "description": "Sau 52–57, dùng ROOM_ID và cùng D0. Kỳ vọng RENT=2700000 từ Room, ELECTRICITY=3500.125, WATER=18000, INTERNET=0; không còn thiếu giá bắt buộc."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Charge specificity and zero rate', function () { var b = pm.response.json(); pm.expect(b.missingRequiredCharges).to.be.an('array').that.is.empty; var rates = {}; b.charges.forEach(function (x) { rates[x.chargeCode] = x.rate; }); pm.expect(rates.RENT).to.eql(2700000); pm.expect(rates.ELECTRICITY).to.eql(3500.125); pm.expect(rates.WATER).to.eql(18000); pm.expect(rates.INTERNET).to.eql(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60a — Tạo phí tương lai chưa sử dụng → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Chạy khi Location còn hoạt động, trước các bước ngừng sử dụng. D1 phải sau hôm nay tại Việt Nam; D2 >= D1. Đây là phí giả lập để test PUT, không phải quy định phí vận hành. Tự lưu futurePolicyId và futurePolicyVersion; chỉ tạo một lần trên mỗi Location mới.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 3,\n  \"chargeCode\": \"FUTURE_TEST\",\n  \"name\": \"Phí thử nghiệm tương lai\",\n  \"method\": 0,\n  \"rate\": 100000,\n  \"effectiveFrom\": \"DIEN_NGAY_D1_YYYY-MM-DD\",\n  \"effectiveTo\": \"DIEN_NGAY_D2_YYYY-MM-DD\",\n  \"reason\": \"Cấu hình thử nghiệm chưa sử dụng\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) { const b = pm.response.json(); if (typeof b.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(b.id) && Number.isInteger(b.version) && b.version > 0) { const scope = pm.environment.name ? pm.environment : pm.collectionVariables; scope.set('futurePolicyId', b.id); scope.set('futurePolicyVersion', String(b.version)); } }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60b — Xem phiên bản phí tương lai → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/{{futurePolicyId}}",
+        "description": "Lấy tên, rate, kỳ hiệu lực, version và firstUsedAt. Chỉ sửa khi effectiveFrom > hôm nay và firstUsedAt=null."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const b = pm.response.json(); if (typeof b.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(b.id) && Number.isInteger(b.version) && b.version > 0) { const scope = pm.environment.name ? pm.environment : pm.collectionVariables; scope.set('futurePolicyId', b.id); scope.set('futurePolicyVersion', String(b.version)); } }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60c — Sửa phí tương lai chưa sử dụng → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/{{futurePolicyId}}",
+        "description": "Điền cùng D1/D2 như 60a, hoặc ngày mới vẫn trong tương lai. Giữ scope/category/chargeCode. Sửa rate/name/ngày, ID giữ nguyên, version tăng, audit giữ dữ liệu trước/sau. Giá đã hiệu lực hoặc firstUsedAt khác null trả 409; xung đột kỳ trả 409. Tự cập nhật futurePolicyVersion khi thành công.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"policy\": {\n    \"locationId\": \"{{locationId}}\",\n    \"roomTypeId\": null,\n    \"roomId\": null,\n    \"category\": 3,\n    \"chargeCode\": \"FUTURE_TEST\",\n    \"name\": \"Phí tương lai đã chỉnh\",\n    \"method\": 0,\n    \"rate\": 120000,\n    \"effectiveFrom\": \"DIEN_NGAY_D1_YYYY-MM-DD\",\n    \"effectiveTo\": \"DIEN_NGAY_D2_YYYY-MM-DD\",\n    \"reason\": \"Owner sửa mức phí trước khi có hiệu lực\"\n  },\n  \"expectedVersion\": {{futurePolicyVersion}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const b = pm.response.json(); if (typeof b.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(b.id) && Number.isInteger(b.version) && b.version > 0) { const scope = pm.environment.name ? pm.environment : pm.collectionVariables; scope.set('futurePolicyId', b.id); scope.set('futurePolicyVersion', String(b.version)); } }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60d — Kiểm tra phí tương lai sau chỉnh → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/{{futurePolicyId}}",
+        "description": "Kiểm tra rate=120000 và firstUsedAt=null. ID không đổi, version ít nhất 2 nếu vừa chạy 60c."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Future policy edited in place', function () { const b = pm.response.json(); pm.expect(b.rate).to.eql(120000); pm.expect(b.version).to.be.at.least(2); pm.expect(b.firstUsedAt).to.eql(null); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60e — Sửa phí bằng version cũ → 409",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/{{futurePolicyId}}",
+        "description": "Chỉ chạy sau 60c thành công, khi version hiện tại >=2; giữ expectedVersion=1 cũ. D1/D2 phải hợp lệ. Request lỗi không cập nhật biến version.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"policy\": {\n    \"locationId\": \"{{locationId}}\",\n    \"roomTypeId\": null,\n    \"roomId\": null,\n    \"category\": 3,\n    \"chargeCode\": \"FUTURE_TEST\",\n    \"name\": \"Phí tương lai đã chỉnh\",\n    \"method\": 0,\n    \"rate\": 120000,\n    \"effectiveFrom\": \"DIEN_NGAY_D1_YYYY-MM-DD\",\n    \"effectiveTo\": \"DIEN_NGAY_D2_YYYY-MM-DD\",\n    \"reason\": \"Owner sửa mức phí trước khi có hiệu lực\"\n  },\n  \"expectedVersion\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "61 — Thay phiên bản giá thuê Location → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/DIEN_LOCATION_RENT_POLICY_ID_VAO_DAY/replacement",
+        "description": "Dùng LOCATION_RENT_POLICY_ID từ 52, {{locationId}}, expectedVersion từ 59. Chọn D1 > hôm nay và > D0. Lưu id mới làm NEW_LOCATION_RENT_POLICY_ID và version. Bản cũ kết thúc D1-1, giữ amount cũ. Giá riêng Room/Room Type vẫn ưu tiên nên 60 không đổi theo giá Location.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expectedVersion\": 1,\n  \"policy\": {\n    \"locationId\": \"{{locationId}}\",\n    \"roomTypeId\": null,\n    \"roomId\": null,\n    \"category\": 0,\n    \"chargeCode\": \"RENT\",\n    \"name\": \"Tiền thuê\",\n    \"method\": 0,\n    \"rate\": 2800000,\n    \"effectiveFrom\": \"DIEN_NGAY_D1_YYYY-MM-DD\",\n    \"effectiveTo\": null,\n    \"reason\": \"Thay phiên bản giá kiểm thử\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 201', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "62 — Xem phiên bản giá cũ được giữ → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/DIEN_LOCATION_RENT_POLICY_ID_VAO_DAY",
+        "description": "Sau 61: bản cũ vẫn rate=2500000, effectiveTo=D1-1 và version tăng. Không thay LOCATION_RENT_POLICY_ID bằng id mới."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Historical rate preserved', function () { var b = pm.response.json(); pm.expect(b.rate).to.eql(2500000); pm.expect(b.effectiveTo).to.be.a('string'); pm.expect(b.version).to.be.at.least(2); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "63 — Kết thúc hiệu lực policy mới → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies/DIEN_NEW_LOCATION_RENT_POLICY_ID_VAO_DAY/end",
+        "description": "Dùng id mới từ 61 và version mới nhất. D2 >= D1 và >= hôm nay. Chỉ kết thúc hiệu lực, không xóa lịch sử hoặc kéo dài lại bản đã có ngày kết thúc.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"effectiveTo\": \"DIEN_NGAY_D2_YYYY-MM-DD\",\n  \"version\": 1,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "64 — Staff xem Room trong Location được phân công → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Dùng Staff token từ 25; ROOM_ID thuộc Location đã gán ở 28 và ngày hiện tại nằm trong assignment."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "65 — Staff không được tạo Asset → 403",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets",
+        "description": "Điền {{locationId}}/ROOM_ID hợp lệ; dùng Staff token. Staff chỉ đọc trong slice quản trị này.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomId\": \"DIEN_ROOM_ID_VAO_DAY\",\n  \"commonArea\": null,\n  \"code\": \"FORBIDDEN\",\n  \"name\": \"Máy lạnh test\",\n  \"category\": \"Điện lạnh\",\n  \"condition\": \"Hoạt động bình thường\",\n  \"status\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 403', function () { pm.response.to.have.status(403); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "66 — Staff không đọc được Location ngoài phân công → 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations/DIEN_LOCATION_KHONG_DUOC_PHAN_CONG_ID",
+        "description": "Dùng ID Location có thật nhưng Staff chưa được phân công. Owner có thể tạo Location thứ hai qua 26; không gán Staff vào Location đó."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 404', function () { pm.response.to.have.status(404); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "67 — Không token không được xem Room → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Điền ROOM_ID; giữ No Auth."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "68 — Tenant không được xem danh sách quản trị → 403",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "DAN_TENANT_ACCESS_TOKEN_VAO_DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms?page=1&pageSize=20",
+        "description": "Login bằng tài khoản Tenant test tại /auth/login, dán token vào Authorization. Không dùng Owner/Staff token. Đây không phải API Tenant xem phòng của mình."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 403', function () { pm.response.to.have.status(403); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "69 — Từ chối tự đặt phòng Occupied → 409",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Lấy version mới nhất từ GET 44 và điền trước khi gửi. Phòng phải đang Available sau 45. Kỳ vọng code room_status_controlled.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_ID_VAO_DAY\",\n  \"roomNumber\": \"TEST-01\",\n  \"floor\": \"1\",\n  \"capacity\": 2,\n  \"status\": 2,\n  \"version\": 2,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "70 — Từ chối giá chồng kỳ → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Dùng {{locationId}} và đúng D0 của 52. Policy Location RENT vẫn tồn tại tại D0, kể cả sau 61. Kỳ vọng 409, không tạo bản trùng.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 0,\n  \"chargeCode\": \"RENT\",\n  \"name\": \"Tiền thuê\",\n  \"method\": 0,\n  \"rate\": 2900000,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "71 — Từ chối giá âm → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/billing-policies",
+        "description": "Điền {{locationId}}/D0 hợp lệ; chỉ rate cố ý âm. Không tạo dữ liệu khi thất bại.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": null,\n  \"roomId\": null,\n  \"category\": 0,\n  \"chargeCode\": \"RENT\",\n  \"name\": \"Tiền thuê\",\n  \"method\": 0,\n  \"rate\": -1,\n  \"effectiveFrom\": \"DIEN_NGAY_D0_YYYY-MM-DD\",\n  \"effectiveTo\": null,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "72 — Từ chối Room dùng loại phòng khác Location → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms",
+        "description": "Owner tạo Room Type ở Location khác, điền ID đó vào Body. {{locationId}} vẫn là Location test ban đầu. Kỳ vọng room_type_scope_invalid.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_CUA_LOCATION_KHAC\",\n  \"roomNumber\": \"WRONG-SCOPE\",\n  \"floor\": \"1\",\n  \"capacity\": 2,\n  \"status\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "73 — Từ chối cập nhật bằng version cũ → 409",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Chạy sau 45 đã thành công (version >=2), trước khi đóng phòng. Giữ version=1 cũ; mọi trường còn lại hợp lệ. Kỳ vọng stale_version.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_ID_VAO_DAY\",\n  \"roomNumber\": \"TEST-01\",\n  \"floor\": \"1\",\n  \"capacity\": 2,\n  \"status\": 0,\n  \"version\": 1,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "74 — Từ chối pageSize vượt giới hạn → 400",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms?page=1&pageSize=101",
+        "description": "Giới hạn pageSize=100. Dùng Owner token; không cần ID."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 400', function () { pm.response.to.have.status(400); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "75 — Từ chối trùng mã Asset → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets",
+        "description": "Chạy sau 46; dùng cùng {{locationId}}/ROOM_ID. Mã sau trim/chuyển hoa trùng AC-TEST-01, kỳ vọng 409.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomId\": \"DIEN_ROOM_ID_VAO_DAY\",\n  \"commonArea\": null,\n  \"code\": \" ac-test-01 \",\n  \"name\": \"Máy lạnh test\",\n  \"category\": \"Điện lạnh\",\n  \"condition\": \"Hoạt động bình thường\",\n  \"status\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "76 — Chặn ngừng Location khi Room còn hoạt động → 409",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations/{{locationId}}",
+        "description": "Room TEST-01 phải còn Available. Điền version Location mới nhất từ 36 (thường 2 sau 37); dùng CHAIN_ID/{{locationId}} đúng.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"BHOME Cơ sở Test cập nhật\",\n  \"address\": \"Địa chỉ giả lập để kiểm thử\",\n  \"isActive\": false,\n  \"version\": 2,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 409', function () { pm.response.to.have.status(409); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "77 — Owner cho Room ngừng sử dụng → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/rooms/DIEN_ROOM_ID_VAO_DAY",
+        "description": "Chạy sau các bước giá/phân quyền. Lấy version mới nhất từ 44 (thường 2 sau 45). Chỉ thành công khi không có Resident/nghĩa vụ liên quan; Unavailable=3.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomTypeId\": \"DIEN_ROOM_TYPE_ID_VAO_DAY\",\n  \"roomNumber\": \"TEST-01\",\n  \"floor\": \"Tầng 1\",\n  \"capacity\": 2,\n  \"status\": 3,\n  \"version\": 2,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "78 — Owner ngừng Room Type → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/room-types/DIEN_ROOM_TYPE_ID_VAO_DAY",
+        "description": "Sau 77, mọi phòng thuộc type phải Unavailable và không có Resident. Điền version mới nhất từ 40 (thường 2 sau 41).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"name\": \"Studio Test\",\n  \"description\": \"Đã cập nhật mô tả kiểm thử\",\n  \"defaultCapacity\": 2,\n  \"areaM2\": 20.5,\n  \"amenities\": [\n    \"Ban công\"\n  ],\n  \"isActive\": false,\n  \"version\": 2,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "79 — Owner ngừng Location → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/locations/{{locationId}}",
+        "description": "Sau 77–78, không còn phòng vận hành hoặc Resident. Điền version Location mới nhất từ 36. Giữ tên/địa chỉ; không xóa lịch sử.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"BHOME Cơ sở Test cập nhật\",\n  \"address\": \"Địa chỉ giả lập để kiểm thử\",\n  \"isActive\": false,\n  \"version\": 2,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "80 — Owner ngừng Asset → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/assets/DIEN_ASSET_ID_VAO_DAY",
+        "description": "Dùng ASSET_ID máy lạnh từ 46, version mới nhất từ 49 (thường 2 sau 50). Retired=3. Giữ nguyên vị trí phòng/code; Asset không được ở trạng thái UnderRepair.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomId\": \"DIEN_ROOM_ID_VAO_DAY\",\n  \"commonArea\": null,\n  \"code\": \"AC-TEST-01\",\n  \"name\": \"Máy lạnh test\",\n  \"category\": \"Điện lạnh\",\n  \"condition\": \"Cần kiểm tra tiếng ồn\",\n  \"status\": 3,\n  \"version\": 2,\n  \"reason\": \"Cấu hình giá kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:7240",
+      "type": "string",
+      "description": "Địa chỉ API, không có dấu / cuối."
+    },
+    {
+      "key": "ownerAccessToken",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu sau request 24 đăng nhập đúng Owner."
+    },
+    {
+      "key": "staffAccessToken",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu sau request 25 đăng nhập đúng Staff."
+    },
+    {
+      "key": "staffUserId",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu userId Staff sau request 25."
+    },
+    {
+      "key": "locationId",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu id Location sau request 26; có thể nhập ID Location đã có."
+    },
+    {
+      "key": "chainVersion",
+      "value": "1",
+      "type": "string",
+      "description": "Tự lấy từ GET/PUT /chain, dùng cho đổi tên có kiểm tra version."
+    },
+    {
+      "key": "futurePolicyId",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu từ các request 60a/60b/60c để test sửa chính sách tương lai."
+    },
+    {
+      "key": "futurePolicyVersion",
+      "value": "1",
+      "type": "string",
+      "description": "Tự lưu từ các request 60a/60b/60c để test sửa chính sách tương lai."
+    }
+  ]
+}

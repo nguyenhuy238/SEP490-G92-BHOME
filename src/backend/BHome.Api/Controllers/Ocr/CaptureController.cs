@@ -14,7 +14,6 @@ public sealed class CaptureController(CaptureService service) : ControllerBase
     [HttpGet("locations/{id:guid}/rooms")] public Task<IReadOnlyList<NamedResource>> Rooms(Guid id, CancellationToken t) => service.RoomsAsync(id, t);
     [HttpGet("staff")] public Task<IReadOnlyList<NamedResource>> Staff(CancellationToken t) => service.StaffAsync(t);
     [HttpPost("staff"), Authorize(Roles = Roles.Owner), RequestSizeLimit(16384)] public Task<IdResult> Staff(StaffInput x, CancellationToken t) => service.CreateStaffAsync(x, t);
-    [HttpPost("chains"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Chain(ChainInput x, CancellationToken t) => service.CreateChainAsync(x, t);
     [HttpPost("locations"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Location(LocationInput x, CancellationToken t) => service.CreateLocationAsync(x, t);
     [HttpPost("rooms"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Room(RoomInput x, CancellationToken t) => service.CreateRoomAsync(x, t);
     [HttpPost("assignments"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Assignment(AssignmentInput x, CancellationToken t) => service.AssignStaffAsync(x, t);

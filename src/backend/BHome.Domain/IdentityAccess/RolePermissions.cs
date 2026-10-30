@@ -9,6 +9,8 @@ public static class RolePermissions
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> All { get; } =
         new Dictionary<string, IReadOnlyList<string>>
         {
+            [Permissions.Property.View] = Allow(Roles.Owner, Roles.Staff),
+            [Permissions.Property.Manage] = Allow(Roles.Owner),
             [Permissions.Account.ViewOwn] = Allow(Roles.Owner, Roles.Staff, Roles.Tenant),
             [Permissions.Account.UpdateOwn] = Allow(Roles.Owner, Roles.Staff, Roles.Tenant),
             [Permissions.Account.ChangePassword] = Allow(Roles.Owner, Roles.Staff, Roles.Tenant),

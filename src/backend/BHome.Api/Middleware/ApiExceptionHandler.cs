@@ -11,6 +11,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
     {
         var status = exception switch
         {
+            BHome.Application.PropertyManagement.PropertyException property => property.Status,
             IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
             OcrAccessException => StatusCodes.Status404NotFound,
             CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
@@ -33,6 +34,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         context.Response.ContentType = "application/problem+json";
         var code = exception switch
         {
+            BHome.Application.PropertyManagement.PropertyException property => property.Code,
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,

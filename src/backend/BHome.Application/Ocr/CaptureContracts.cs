@@ -5,9 +5,9 @@ using BHome.Domain.TenantContracts;
 
 namespace BHome.Application.Ocr;
 
-public sealed record ChainInput([Required, StringLength(150, MinimumLength = 1)] string Name);
-public sealed record LocationInput(Guid ChainId, [Required, StringLength(150)] string Name, [Required, StringLength(1000)] string Address);
-public sealed record RoomInput(Guid LocationId, [Required, StringLength(50)] string RoomNumber);
+public sealed record LocationInput([Required, StringLength(150)] string Name, [Required, StringLength(1000)] string Address);
+public sealed record RoomInput(Guid LocationId, [Required, StringLength(50)] string RoomNumber,
+    Guid? RoomTypeId = null, [Range(1, 32767)] int Capacity = 1);
 public sealed record AssignmentInput(Guid LocationId, Guid StaffUserId, DateOnly EffectiveFrom, DateOnly? EffectiveTo);
 public sealed record StaffInput([Required, StringLength(100)] string UserName, [Required, EmailAddress, StringLength(256)] string Email, [Required, StringLength(1024, MinimumLength = 12)] string Password)
 {
@@ -55,9 +55,6 @@ public interface ICaptureRepository
     Task<IReadOnlyList<NamedResource>> RoomsAsync(Guid locationId, CancellationToken token);
     Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken token);
     Task<IdResult> CreateStaffAsync(StaffInput input, CancellationToken token);
-    Task<IdResult> CreateChainAsync(ChainInput input, CancellationToken token);
-    Task<IdResult> CreateLocationAsync(LocationInput input, CancellationToken token);
-    Task<IdResult> CreateRoomAsync(RoomInput input, CancellationToken token);
     Task<IdResult> AssignStaffAsync(AssignmentInput input, CancellationToken token);
     Task<IdResult> CreateResidentAsync(ResidentInput input, CancellationToken token);
     Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid locationId, CancellationToken token);
