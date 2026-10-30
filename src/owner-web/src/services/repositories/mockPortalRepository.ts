@@ -1,4 +1,5 @@
 import { workflowTransitions } from '../workflowTransitions';
+import { prepareProperty, applyPropertyCommand } from '../../features/property/mockProperty';
 import { createSeed } from '../mock/seed';
 import { featureDefinitions } from '../../app/featureDefinitions';
 import type {
@@ -36,7 +37,7 @@ export function createMockRepository(
   function load(): DemoDatabase {
     if (cached) return structuredClone(cached);
     const raw = storage.getItem(STORAGE_KEY);
-    if (!raw) return createSeed();
+    if (!raw) return prepareProperty(createSeed());
     try {
       const data = JSON.parse(raw) as DemoDatabase;
       if (
@@ -48,7 +49,7 @@ export function createMockRepository(
         throw new Error();
       for (const kind of Object.keys(createSeed().records) as ResourceKind[])
         if (!Array.isArray(data.records[kind])) throw new Error();
-      return data;
+      return prepareProperty(data);
     } catch {
       throw new Error(
         'Dữ liệu demo không hợp lệ. Dùng Khôi phục dữ liệu demo trong thanh công cụ.',
@@ -166,6 +167,12 @@ export function createMockRepository(
     }
   }
   return {
+    async executeProperty(command) {
+      await delay();
+      const db = load();
+      applyPropertyCommand(db, command);
+      commit(db, 'rooms', 'property', `Mô phỏng: ${command.kind}${'reason' in command ? ` — ${command.reason}` : ''}`);
+    },
     async read(signal) {
       await delay(signal);
       const db = load();
