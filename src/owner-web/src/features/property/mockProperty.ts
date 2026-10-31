@@ -302,8 +302,11 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
           locationId: l.id,
           category: type.id,
           amount: type.amount,
-          status: 'Trống khai thác',
+          // A template only describes the room. Operational readiness is a
+          // separate backend-confirmed setup/allocation workflow.
+          status: 'UNAVAILABLE',
           attributes: {
+            setupStatus: 'IN_SETUP',
             floor: String(floor),
             area: type.attributes.area,
             maxOccupants: type.attributes.maxOccupants,
