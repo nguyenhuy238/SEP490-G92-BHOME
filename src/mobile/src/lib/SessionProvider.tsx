@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { resolveApiEndpoint } from './apiEndpoint';
@@ -13,14 +14,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [manager] = useState(
     () =>
       new MobileSessions(
-        {
-          read: () => SecureStore.getItemAsync(KEY),
-          write: (value) =>
-            SecureStore.setItemAsync(KEY, value, {
-              keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-            }),
-          remove: () => SecureStore.deleteItemAsync(KEY),
-        },
+        Platform.OS === 'web'
+          ? {
+              read: () =>
+                Promise.resolve(typeof window !== 'undefined' ? localStorage.getItem(KEY) : null),
+              write: (value) => {
+                if (typeof window !== 'undefined') localStorage.setItem(KEY, value);
+                return Promise.resolve();
+              },
+              remove: () => {
+                if (typeof window !== 'undefined') localStorage.removeItem(KEY);
+                return Promise.resolve();
+              },
+            }
+          : {
+              read: () => SecureStore.getItemAsync(KEY),
+              write: (value) =>
+                SecureStore.setItemAsync(KEY, value, {
+                  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+                }),
+              remove: () => SecureStore.deleteItemAsync(KEY),
+            },
         resolveApiEndpoint({
           development: __DEV__,
           hostUri: Constants.expoConfig?.hostUri,

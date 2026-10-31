@@ -1,11 +1,14 @@
+import { Platform } from 'react-native';
 import { Directory, File, Paths } from 'expo-file-system';
 
 export function captureDirectory() {
+  if (Platform.OS === 'web') return null as any;
   const directory = new Directory(Paths.cache, 'bhome-ocr');
   directory.create({ idempotent: true, intermediates: true });
   return directory;
 }
 export function ownCapture(uri: string) {
+  if (Platform.OS === 'web') return uri;
   const file = new File(uri);
   if (!uri.startsWith(Paths.cache.uri)) throw new Error('Capture is outside application cache.');
   const target = new File(
@@ -16,6 +19,7 @@ export function ownCapture(uri: string) {
   return target.uri;
 }
 export function clearAbandonedCaptures() {
+  if (Platform.OS === 'web') return;
   // Only the app's temporary capture/download caches, never the photo library.
   for (const name of ['bhome-ocr', 'ImageManipulator', 'bhome-contract-downloads']) {
     const directory = new Directory(Paths.cache, name);
