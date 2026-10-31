@@ -132,7 +132,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
-        services.AddSingleton<BHome.DigitalSigning.Application.IPdfSigner, BHome.Infrastructure.Contracts.UnconfiguredContractPdfSigner>();
+        BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractPdfSigning(services);
         services.AddScoped<BHome.DigitalSigning.Application.IViettelAccountSource, BHome.Infrastructure.Contracts.ContractMySignAccount>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();

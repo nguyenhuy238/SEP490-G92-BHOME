@@ -86,6 +86,7 @@ export interface Certificate {
   providerUserIdHint: string;
   serialNumber: string;
   subject: string;
+  validFrom: string;
   validTo: string;
   locked: boolean;
   usable: boolean;
@@ -160,6 +161,11 @@ export function contractClient(request: ContractRequest) {
         method: 'POST',
         body: JSON.stringify({ providerUserId, serialNumber: serialNumber || null }),
       }),
+    lockCertificate: (id: string, locked: boolean) =>
+      request<void>(`${certificates}/${guid(id)}/lock`, {
+        method: 'POST',
+        body: JSON.stringify({ locked }),
+      }),
     locations: (signal?: AbortSignal) =>
       request<NamedOption[]>('/api/v1/capture/locations', { signal }),
     rooms: (locationId: string, signal?: AbortSignal) =>
@@ -214,6 +220,17 @@ export function contractClient(request: ContractRequest) {
   };
 }
 export type ContractClient = ReturnType<typeof contractClient>;
+export function certificateStatus(certificate: Certificate, now = Date.now()) {
+  if (certificate.locked) return 'Đã khóa';
+  const from = Date.parse(certificate.validFrom),
+    to = Date.parse(certificate.validTo);
+  if (Number.isFinite(to) && to <= now) return 'Đã hết hạn';
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from > now || !certificate.usable)
+    return 'Chưa dùng được';
+  return 'Có thể dùng';
+}
+export const canUseCertificate = (certificate: Certificate) =>
+  certificateStatus(certificate) === 'Có thể dùng';
 export const labels: Record<string, string> = {
   Main: 'Hợp đồng thuê',
   Renewal: 'Gia hạn',
@@ -240,6 +257,12 @@ export const labels: Record<string, string> = {
   location_not_active: 'Location chưa hoạt động.',
   room_not_available: 'Phòng chưa sẵn sàng.',
   signed_terms_changed: 'Nội dung hợp đồng không khớp bản đã đưa đi ký.',
+  contract_template_not_configured:
+    'Chưa có mẫu PDF hợp đồng được phê duyệt. Liên hệ Owner để hoàn tất cấu hình trước khi ký.',
+  signing_certificate_not_valid:
+    'Chứng thư đã bị khóa hoặc không còn hiệu lực. Tải lại chứng thư trước khi ký.',
+  signing_certificate_no_longer_available:
+    'Nhà cung cấp không còn trả về chứng thư đã chọn. Hãy kiểm tra và khai báo lại chứng thư của bạn.',
   contract_not_in_effective_period: 'Chưa đến hoặc đã qua kỳ hiệu lực.',
   verified_signature_evidence_required: 'Cần đủ bằng chứng ký đã xác minh của Owner và Tenant.',
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',

@@ -28,6 +28,7 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
+import { SigningCertificates } from './SigningCertificates';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -56,9 +57,6 @@ export function ContractDetailPanel({
   const [notice, setNotice] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
-  const [declare, setDeclare] = useState(false),
-    [subscriber, setSubscriber] = useState(''),
-    [serial, setSerial] = useState('');
   const lock = useRef(false);
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
@@ -168,41 +166,7 @@ export function ContractDetailPanel({
           >
             Tải tài liệu ký
           </Button>
-          {signer && (
-            <Button disabled={busy} onClick={() => setDeclare((v) => !v)}>
-              Khai báo chứng thư MySign của bạn
-            </Button>
-          )}
-          {declare && signer && (
-            <Stack spacing={1}>
-              <TextField
-                label="Mã thuê bao MySign của bạn"
-                value={subscriber}
-                disabled={busy}
-                onChange={(e) => setSubscriber(e.target.value)}
-              />
-              <TextField
-                label="Số serial (tùy chọn)"
-                value={serial}
-                disabled={busy}
-                onChange={(e) => setSerial(e.target.value)}
-              />
-              <Button
-                disabled={
-                  busy || !subscriber.trim() || subscriber.length > 100 || serial.length > 100
-                }
-                onClick={() =>
-                  void run(async () => {
-                    await api.declareCertificate(subscriber.trim(), serial.trim());
-                    setNotice('Đã truy vấn và lưu chứng thư từ nhà cung cấp.');
-                    setDeclare(false);
-                  })
-                }
-              >
-                Tra cứu và lưu chứng thư
-              </Button>
-            </Stack>
-          )}
+          {signer && <SigningCertificates api={api} />}
         </Stack>
       </ChartCard>
       {r && (
