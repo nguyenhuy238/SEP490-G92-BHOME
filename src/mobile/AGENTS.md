@@ -1,3 +1,99 @@
+# BHOME Mobile - AI Agent Rules
+
+## 1. Scope
+This application is built with React Native.
+
+Supported roles:
+- Owner
+- Staff
+- Tenant
+
+Follow the root AGENTS.md rules.
+
+## 2. Architecture
+Respect the existing project structure.
+
+Typical responsibilities:
+- navigation/: Navigation configuration and guards.
+- screens/: Screen-level UI and interactions.
+- components/: Reusable UI components.
+- services/: Backend API communication.
+- hooks/: Reusable React logic, if present.
+- types/: TypeScript contracts, if present.
+
+Do not move or rename existing folders unnecessarily.
+
+## 3. Coding Rules
+- Use TypeScript conventions if the project uses TypeScript.
+- Prefer functional components and React Hooks.
+- Keep components focused and reusable.
+- Separate UI rendering from API communication.
+- Avoid duplicated business logic.
+- Follow existing naming, formatting and import conventions.
+- Do not introduce a new state-management library unless required.
+- Avoid unnecessary re-renders and expensive computations.
+
+## 4. Navigation
+- Follow the existing navigation library and patterns.
+- Restrict navigation according to authenticated roles.
+- Prevent unauthorized access to protected screens.
+- Handle expired sessions and logout correctly.
+- Preserve existing navigation flows.
+
+## 5. API Integration
+- Centralize API calls in the existing service layer.
+- Use configured environment-specific API URLs.
+- Follow backend request and response contracts.
+- Handle loading, error, empty and success states.
+- Handle 401, 403 and validation errors.
+- Prevent unintended duplicate requests.
+
+## 6. UI/UX
+- Follow the existing design system.
+- Support different mobile screen sizes.
+- Respect safe areas and keyboard behavior.
+- Provide clear form validation messages.
+- Show loading indicators for asynchronous operations.
+- Provide useful empty and error states.
+- Ensure buttons and touch targets are accessible.
+- Do not hardcode repeated styles without reason.
+
+## 7. Security
+- Never store tokens in unencrypted AsyncStorage.
+- Use the project's approved secure storage mechanism.
+- Never log tokens, passwords or sensitive tenant data.
+- Request device permissions only when needed.
+- Do not expose sensitive data in navigation parameters.
+- UI role checks do not replace backend authorization.
+
+## 8. BHOME-Specific Rules
+- Staff actions must respect assigned Location scope.
+- Staff must not view restricted tenant personal data.
+- Meter readings require confirmation before submission.
+- OCR output must be treated as a proposal, not final data.
+- Handle camera permission denial and upload failures.
+- Do not mark operations completed without backend confirmation.
+- Tenant residence registration must follow the approved VNeID workflow.
+
+## 9. Testing
+- Follow existing testing tools and patterns.
+- Test role-based navigation.
+- Test form validation and API errors.
+- Test loading, empty and failure states.
+- Test duplicate submissions.
+- Test permission denial for camera or media access.
+- Test applicable Android and iOS behavior.
+- Run existing lint, typecheck and test scripts when available.
+
+## 10. Agent Restrictions
+- Do not rewrite entire screens for small changes.
+- Do not alter shared navigation without checking its consumers.
+- Do not replace existing libraries without approval.
+- Do not introduce mock data into production workflows.
+- Do not change backend contracts without explicit requirements.
+
+---
+
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
 ## Expo has changed — do not trust your training data
