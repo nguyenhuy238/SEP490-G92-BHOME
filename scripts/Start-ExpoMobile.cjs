@@ -58,7 +58,35 @@ async function checkExpoOnline({ sdkVersion, offline, fetchImpl, whoami }) {
   return username;
 }
 
-async function main(args = process.argv.slice(2)) {
+function developmentArguments(args) {
+  const result = [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    path.join(repository, 'scripts/Start-OcrMobileApp.ps1'),
+  ];
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === '--lan') continue;
+    if (argument === '--clear' || argument === '-c') result.push('-Clear');
+    else if (argument === '--port' || argument === '-p' || argument.startsWith('--port=')) {
+      const value = argument.startsWith('--port=') ? argument.slice(7) : args[++index];
+      if (!/^\d+$/.test(value ?? '') || Number(value) < 1024 || Number(value) > 65535)
+        throw new Error('Cổng Expo phải là số từ 1024 đến 65535.');
+      result.push('-Port', value);
+    } else
+      throw new Error(
+        'Khởi động BHOME dùng --clear, --lan hoặc --port <cổng>. Dùng --metro-only cho tùy chọn Expo khác và tự chạy API HTTPS.',
+      );
+  }
+  return result;
+}
+
+async function main(
+  args = process.argv.slice(2),
+  { platform = process.platform, runCommand = run } = {},
+) {
   const tools = path.join(repository, '.tools');
   const candidates = fs.existsSync(tools)
     ? fs.readdirSync(tools).flatMap((name) => {
@@ -70,10 +98,18 @@ async function main(args = process.argv.slice(2)) {
   const runtime = selectRuntime(process.versions.node, process.execPath, candidates);
   if (runtime !== process.execPath) {
     console.log('BHOME: sử dụng Node 22 trong .tools cho Expo.');
-    return run(runtime, [__filename, ...args]);
+    return runCommand(runtime, [__filename, ...args]);
   }
   if (!fs.existsSync(cli))
     throw new Error('Chưa có Expo CLI local. Chạy npm ci tại thư mục gốc repository.');
+  // npm start must keep the API alive alongside Metro. The supervisor calls back
+  // with --metro-only after verifying HTTPS readiness, without recursively starting it.
+  if (
+    platform === 'win32' &&
+    !args.some((argument) => ['--metro-only', '--check', '--help', '-h'].includes(argument))
+  )
+    return runCommand('powershell.exe', developmentArguments(args));
+  args = args.filter((argument) => argument !== '--metro-only');
   if (!args.includes('--help') && !args.includes('-h')) {
     // Match Expo's environment and HTTP transport, including HTTP_PROXY support.
     process.env.NODE_ENV ??= 'development';
@@ -97,7 +133,7 @@ async function main(args = process.argv.slice(2)) {
     );
   }
   if (args.includes('--check')) return 0;
-  return run(runtime, [cli, 'start', ...args]);
+  return runCommand(runtime, [cli, 'start', ...args]);
 }
 
 function run(executable, args) {
@@ -115,7 +151,7 @@ function run(executable, args) {
   });
 }
 
-module.exports = { supportedNode, selectRuntime, checkExpoOnline };
+module.exports = { supportedNode, selectRuntime, checkExpoOnline, main };
 if (require.main === module) {
   main()
     .then((code) => {

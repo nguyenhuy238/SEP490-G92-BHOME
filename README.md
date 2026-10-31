@@ -186,7 +186,10 @@ Lệnh `npm.cmd run mobile:dev` tự chọn IP, chuẩn bị HTTPS, dùng lại 
 Quét QR trên điện thoại cùng mạng; đổi Wi-Fi thì quét QR mới, không sửa IP trong cấu hình.
 Các thành viên dùng cùng lệnh trên máy riêng. Điện thoại cần tin cậy CA của từng máy một lần.
 Xem [hướng dẫn kết nối tự động](docs/development/MOBILE_NETWORK_DEVELOPMENT.md).
-`npm.cmd run mobile` và `npx expo start` chỉ mở Metro; dùng khi chủ động chuẩn bị API/HTTPS riêng.
+Trên Windows, `npm.cmd run mobile` từ root hoặc `npm.cmd start` trong `src/mobile` cũng chạy
+luồng API + HTTPS + Metro này; hỗ trợ `-- --clear` và `-- --port 8082`.
+`npm.cmd run mobile -- --metro-only` và `npx expo start` chỉ mở Metro;
+dùng khi chủ động chuẩn bị API/HTTPS riêng.
 
 Chỉ cần chạy frontend đang làm việc. Với hai ứng dụng web, nếu thay API URL, cập nhật
 `VITE_API_BASE_URL` rồi khởi động lại Vite. Production build cần cấu hình rõ biến này bằng địa chỉ

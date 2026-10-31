@@ -66,7 +66,7 @@ try {
         Write-Output "API: https://${lanIp}:7240; Expo: exp://${lanIp}:$Port"
         Write-Output 'Scan the QR/open the Expo URL. Network changes are detected automatically; scan the new QR after switching networks.'
         $expoLauncher = Join-Path $repo 'scripts/Start-ExpoMobile.cjs'
-        $expoArguments = @(('"' + $expoLauncher + '"'), '--lan', '--port', [string]$Port)
+        $expoArguments = @(('"' + $expoLauncher + '"'), '--metro-only', '--lan', '--port', [string]$Port)
         if ($Clear) { $expoArguments += '--clear' }
         # Reuse this interactive terminal so the developer can read the Expo QR and use its controls.
         $metro = Start-Process (Get-Command node.exe).Source -NoNewWindow -PassThru -WorkingDirectory (Join-Path $repo 'src/mobile') -ArgumentList $expoArguments

@@ -1,10 +1,55 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
-const { supportedNode, selectRuntime, checkExpoOnline } = createRequire(import.meta.url)(
+const { supportedNode, selectRuntime, checkExpoOnline, main } = createRequire(import.meta.url)(
   '../../../scripts/Start-ExpoMobile.cjs',
 );
 
 describe('Expo startup runtime and online checks', () => {
+  it.each([[], ['--clear'], ['--lan', '--port', '8082'], ['-c', '--port=8083']])(
+    'starts the API/HTTPS supervisor for a normal Windows npm start (%j)',
+    async (...args: string[]) => {
+      const runCommand = vi.fn().mockResolvedValue(0);
+      await expect(main(args, { platform: 'win32', runCommand })).resolves.toBe(0);
+      expect(runCommand).toHaveBeenCalledExactlyOnceWith(
+        'powershell.exe',
+        expect.arrayContaining([
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          expect.stringContaining('Start-OcrMobileApp.ps1'),
+        ]),
+      );
+      const forwarded = runCommand.mock.calls[0]![1];
+      if (args.includes('--clear') || args.includes('-c')) expect(forwarded).toContain('-Clear');
+      if (args.includes('8082')) expect(forwarded.slice(-2)).toEqual(['-Port', '8082']);
+      if (args.includes('--port=8083')) expect(forwarded.slice(-2)).toEqual(['-Port', '8083']);
+    },
+  );
+  it.each([['--port'], ['--port', '0'], ['--port=65536'], ['--port', '8081;whoami'], ['--tunnel']])(
+    'rejects unsupported supervisor arguments without launching a process (%j)',
+    async (...args: string[]) => {
+      const runCommand = vi.fn();
+      await expect(main(args, { platform: 'win32', runCommand })).rejects.toThrow();
+      expect(runCommand).not.toHaveBeenCalled();
+    },
+  );
+  it('preserves the supervisor exit status instead of reporting a failed API startup as success', async () => {
+    const runCommand = vi.fn().mockResolvedValue(1);
+    await expect(main([], { platform: 'win32', runCommand })).resolves.toBe(1);
+    expect(runCommand).toHaveBeenCalledOnce();
+  });
+  it('does not recurse into the supervisor or send the internal flag to Expo', async () => {
+    const runCommand = vi.fn().mockResolvedValue(0);
+    await expect(main(['--metro-only', '--help'], { platform: 'win32', runCommand })).resolves.toBe(
+      0,
+    );
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith(process.execPath, [
+      expect.stringMatching(/expo[/\\]bin[/\\]cli$/),
+      'start',
+      '--help',
+    ]);
+  });
   it('uses supported Node 22 and falls back from global Node 24 to local Node 22', () => {
     expect(supportedNode('22.13.0')).toBe(true);
     expect(supportedNode('22.23.4')).toBe(true);

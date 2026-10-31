@@ -83,6 +83,7 @@ $global:prepared += $LanIp
         }
         $global:started++
         if ($ArgumentList[0] -notlike '*Start-ExpoMobile.cjs*') { throw 'Metro must use the checked Expo launcher.' }
+        if ($ArgumentList -notcontains '--metro-only') { throw 'Supervisor must not recursively launch another supervisor.' }
         if ($env:EXPO_PUBLIC_DEV_SERVER_ID -ne 'SYNTHETIC-CA') { throw 'Missing developer server binding.' }
         if ($env:EXPO_PACKAGER_PROXY_URL -ne @('http://192.168.1.8:8081', 'http://10.33.59.31:8081')[$global:started - 1]) { throw 'Incorrect Expo advertised IP.' }
         $process = [pscustomobject]@{ Id = 900 + $global:started; HasExited = $false; ExitCode = 0; Generation = $global:started }

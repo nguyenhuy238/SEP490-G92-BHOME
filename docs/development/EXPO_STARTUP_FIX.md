@@ -1,5 +1,9 @@
 # Sửa lỗi Expo Go/Metro ngày 30/10/2026
 
+> Cập nhật 31/10/2026: trên Windows, `npm start` mặc định chạy supervisor API + HTTPS + Metro.
+> Muốn chỉ mở Metro dùng `npm start -- --metro-only`. `--check` vẫn chỉ kiểm tra Expo.
+> Xem [chẩn đoán lỗi đăng nhập và kết quả sửa](MOBILE_LOGIN_CONNECTION_FIX.md).
+
 ## Nguyên nhân đã kiểm chứng
 
 CLI đang đăng nhập đúng tài khoản Expo Go, nhưng Metro cũ ở cổng 8081 trả manifest iOS
