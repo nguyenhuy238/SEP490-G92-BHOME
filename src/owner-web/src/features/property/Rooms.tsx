@@ -4,19 +4,20 @@ import {
   Box,
   Button,
   Chip,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
+  Paper,
   Stack,
-  Step,
-  StepLabel,
-  Stepper,
   Tab,
   Tabs,
   TextField,
   Typography,
 } from '@mui/material';
 import { ArrowRight, Grid2X2, List, Plus, Users, X } from 'lucide-react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { usePortal } from '../../app/PortalProvider';
 import { ConfirmDialog, KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import type { DemoDatabase, PortalRecord } from '../../types/portal';
@@ -509,14 +510,12 @@ export function CreateRooms() {
 function RoomWizard({ db }: { db: DemoDatabase }) {
   const [params] = useSearchParams(),
     portal = usePortal(),
-    navigate = useNavigate(),
     save = usePropertyMutation();
   const [location, setLocation] = useState(
       params.get('location') ||
         (portal.locationId !== 'all' ? portal.locationId : db.records.locations[0]?.id || ''),
     ),
     [type, setType] = useState(''),
-    [step, setStep] = useState(0),
     [floors, setFloors] = useState('1'),
     [start, setStart] = useState('1'),
     [quantity, setQuantity] = useState('1'),
@@ -554,42 +553,65 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
     validation = (e as Error).message;
   }
   const selectedType = db.records['room-types'].find((t) => t.id === type);
+  const closeTo = location ? `/locations/${location}/rooms` : '/locations';
   if (done)
     return (
-      <Panel title="Đã tạo phòng trong dữ liệu demo">
-        <Alert severity="success">
-          Đã tạo {codes.length} phòng, chưa phát sinh tài sản hoặc chi phí mua sắm.
-        </Alert>
-        <Stack direction="row" sx={{ gap: 2, mt: 3 }}>
-          <Button
-            variant="contained"
-            component={Link}
-            to={`/asset-allocation?location=${location}`}
-          >
-            Tiếp tục cấp phát tài sản
+      <Box
+        sx={{ position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'rgba(15,23,42,.45)', p: 2, display: 'grid', placeItems: 'center' }}
+      >
+        <Paper role="dialog" aria-modal="true" aria-labelledby="bulk-room-success-title" sx={{ width: 'min(720px, 100%)' }}>
+        <DialogTitle component="h1" id="bulk-room-success-title">Đã tạo phòng chờ cấu hình</DialogTitle>
+        <DialogContent>
+          <Alert severity="success">
+            Đã tạo {codes.length} phòng ở trạng thái IN_SETUP / UNAVAILABLE. Chưa phát sinh tài sản
+            thực tế hoặc chi phí mua sắm.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button component={Link} to={`/locations/${location}/assets`}>
+            Nhập kho & phân bổ
           </Button>
-          <Button component={Link} to={`/rooms?location=${location}`}>
+          <Button component={Link} to={closeTo} variant="contained">
             Xem danh sách phòng
           </Button>
-        </Stack>
-      </Panel>
+        </DialogActions>
+        </Paper>
+      </Box>
     );
   return (
-    <>
-      <PageHeader
-        title="Tạo phòng"
-        subtitle="Tạo một phòng hoặc nhiều phòng trên các tầng; xem trước trước khi lưu."
-      />
-      <Panel title="Thiết lập phòng mới">
-        <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>
-          {['Cơ sở & Loại phòng', 'Số phòng & Tầng', 'Kiểm tra cấu hình'].map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-        {step === 0 && (
-          <Stack sx={{ gap: 3 }}>
+    <Box
+      sx={{ position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'rgba(15,23,42,.45)', p: { xs: 1, sm: 3 }, display: 'grid', placeItems: 'center' }}
+    >
+      <Paper
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-room-dialog-title"
+        sx={{ width: 'min(1120px, 100%)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
+      >
+      <DialogTitle
+        component="h1"
+        id="bulk-room-dialog-title"
+        sx={{ fontSize: 24, fontWeight: 850, pb: 1 }}
+      >
+        Tạo phòng vật lý hàng loạt
+      </DialogTitle>
+      <DialogContent sx={{ pt: '12px !important' }}>
+        <Typography color="text.secondary" sx={{ mb: 3 }}>
+          Chọn cấu hình mẫu và quy tắc đánh số. Mã phòng được kiểm tra trùng trong cơ sở trước khi
+          lưu.
+        </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) minmax(0,1fr)' },
+            gap: 3,
+          }}
+        >
+          <Paper variant="outlined" sx={{ p: 2.5 }}>
+            <Typography component="h2" sx={{ fontSize: 17, fontWeight: 800, mb: 2 }}>
+              Thông tin cơ bản
+            </Typography>
+            <Stack sx={{ gap: 2 }}>
             <Select
               label="Cơ sở"
               value={location}
@@ -611,13 +633,19 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
             <Button component={Link} to="/room-types">
               Quản lý mẫu loại phòng
             </Button>
-          </Stack>
-        )}
-        {step === 1 && (
-          <>
-            <Box
-              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
-            >
+            {selectedType && (
+              <Alert severity="info">
+                {selectedType.attributes.area} m² · tối đa {selectedType.attributes.maxOccupants}{' '}
+                người · {currency(selectedType.amount)}/tháng
+              </Alert>
+            )}
+            </Stack>
+          </Paper>
+          <Paper variant="outlined" sx={{ p: 2.5 }}>
+            <Typography component="h2" sx={{ fontSize: 17, fontWeight: 800, mb: 2 }}>
+              Tiền tố & đánh số
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               <TextField
                 label="Các tầng (cách nhau dấu phẩy)"
                 value={floors}
@@ -643,15 +671,21 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
                 onChange={(e) => setQuantity(e.target.value)}
               />
             </Box>
-            <Typography sx={{ fontWeight: 650, mt: 3, mb: 1 }}>
+          </Paper>
+        </Box>
+        <Paper variant="outlined" sx={{ mt: 3, p: 2.5, bgcolor: '#f8fafc' }}>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+            <Typography sx={{ fontSize: 17, fontWeight: 800 }}>
               Xem trước {codes.length} mã phòng
             </Typography>
+            <Chip label="Trạng thái mới: IN_SETUP / UNAVAILABLE" color="warning" />
+          </Stack>
             <Stack
               direction="row"
-              sx={{ gap: 1, flexWrap: 'wrap', maxHeight: 220, overflowY: 'auto' }}
+              sx={{ gap: 1, flexWrap: 'wrap', maxHeight: 210, overflowY: 'auto' }}
             >
               {codes.map((c, i) => (
-                <Chip key={i} label={c.code} />
+                <Chip key={i} label={c.code} sx={{ fontWeight: 750, bgcolor: 'white' }} />
               ))}
             </Stack>
             {validation && (
@@ -659,47 +693,23 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
                 {validation}
               </Alert>
             )}
-          </>
-        )}
-        {step === 2 && (
-          <Stack sx={{ gap: 2 }}>
-            <Typography>
-              {db.records.locations.find((l) => l.id === location)?.name} • {selectedType?.name}
-            </Typography>
-            <Typography>
-              {codes.length} phòng • {selectedType?.attributes.area} m² • tối đa{' '}
-              {selectedType?.attributes.maxOccupants} người/phòng
-            </Typography>
-            <Typography>Giá cấu hình: {currency(selectedType?.amount || 0)}/tháng</Typography>
-            <Typography>Tiện ích: {selectedType?.attributes.amenities || '—'}</Typography>
-            {(db.property!.requirements[type] || []).map((r) => (
-              <Typography key={r.catalogId}>
-                {db.property!.catalog.find((c) => c.id === r.catalogId)?.name} × {r.quantity}/phòng
-              </Typography>
-            ))}
-            <Alert severity="info">
-              Các phòng mới ở trạng thái Trống khai thác. Yêu cầu trang bị được kế thừa từ mẫu; tài
-              sản mua thực tế được cấp phát ở bước tiếp theo.
-            </Alert>
-          </Stack>
-        )}
+        </Paper>
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
             {error}
           </Alert>
         )}
-        <Stack direction="row" sx={{ gap: 1, mt: 4 }}>
-          <Button disabled={busy} onClick={() => (step ? setStep(step - 1) : navigate('/rooms'))}>
-            Quay lại
-          </Button>
-          <Button
-            variant="contained"
-            disabled={busy || !selectedType || (step > 0 && !!validation)}
-            onClick={() => (step < 2 ? setStep(step + 1) : setConfirm(true))}
-          >
-            {step < 2 ? 'Tiếp tục' : `Tạo ${codes.length} phòng`}
-          </Button>
-        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button component={Link} to={closeTo} disabled={busy}>Hủy</Button>
+        <Button
+          variant="contained"
+          disabled={busy || !selectedType || !!validation || codes.length === 0}
+          onClick={() => setConfirm(true)}
+        >
+          Tạo {codes.length} phòng
+        </Button>
+      </DialogActions>
         <ConfirmDialog
           title="Xác nhận tạo phòng?"
           open={confirm}
@@ -718,8 +728,8 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
         >
           Tạo {codes.length} phòng với mã và cấu hình đã xem trước.
         </ConfirmDialog>
-      </Panel>
-    </>
+      </Paper>
+    </Box>
   );
 }
 

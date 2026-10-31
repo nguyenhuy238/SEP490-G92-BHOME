@@ -3,13 +3,15 @@ import {
   Box,
   Button,
   Chip,
+  IconButton,
   LinearProgress,
+  MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowRight, Building2, Copy, Plus, UserRound } from 'lucide-react';
+import { ArrowRight, Building2, Copy, Plus, Trash2, UserRound } from 'lucide-react';
 import { Link } from 'react-router';
 import { usePortal } from '../../app/PortalProvider';
 import { PageHeader } from '../../components/common/PortalUI';
@@ -186,6 +188,7 @@ function LocationContent({ db }: { db: DemoDatabase }) {
             floors: editing.record.attributes.floors || '1',
             status: editing.record.status,
             staff: editing.record.staffId,
+            copySource: editing.source || '',
           }}
           fields={[
             { key: 'name', label: 'Tên cơ sở', required: true },
@@ -207,9 +210,26 @@ function LocationContent({ db }: { db: DemoDatabase }) {
                   .map((s) => ({ id: s.id, name: s.name })),
               ],
             },
+            ...(!db.records.locations.some((location) => location.id === editing.record.id)
+              ? [
+                  {
+                    key: 'copySource',
+                    label: 'Sao chép cấu hình từ cơ sở',
+                    options: [
+                      { id: '', name: 'Không sao chép — tạo cấu hình mới' },
+                      ...db.records.locations.map((location) => ({
+                        id: location.id,
+                        name: location.name,
+                      })),
+                    ],
+                    helper:
+                      'Chỉ sao chép loại phòng, định mức tài sản và chính sách giá/phí; không sao chép dữ liệu vận hành.',
+                  } satisfies FormField,
+                ]
+              : []),
           ]}
           description={
-            editing.source
+            editing.source || !db.records.locations.some((location) => location.id === editing.record.id)
               ? 'Chỉ sao chép mẫu loại phòng, yêu cầu trang bị và chính sách giá cấp cơ sở/loại phòng. Không sao chép phòng, cư dân, hợp đồng, giao dịch hoặc kho tài sản.'
               : undefined
           }
@@ -225,7 +245,7 @@ function LocationContent({ db }: { db: DemoDatabase }) {
                 staffId: v.staff,
                 attributes: { ...editing.record.attributes, address: v.address, floors: v.floors },
               },
-              copyFrom: editing.source,
+              copyFrom: v.copySource || editing.source,
             })
           }
         />
@@ -377,22 +397,88 @@ function TypeContent({ db }: { db: DemoDatabase }) {
             })
           }
         >
-          <Typography sx={{ fontWeight: 650 }}>Checklist trang bị tiêu chuẩn</Typography>
-          {db.property!.catalog.map((c) => (
-            <TextField
-              key={c.id}
-              label={`${c.name} — số lượng (0 = không yêu cầu)`}
-              type="number"
-              value={requirements.find((r) => r.catalogId === c.id)?.quantity || 0}
-              onChange={(e) =>
-                setRequirements([
-                  ...requirements.filter((r) => r.catalogId !== c.id),
-                  ...(Number(e.target.value)
-                    ? [{ catalogId: c.id, quantity: Number(e.target.value) }]
-                    : []),
-                ])
-              }
-            />
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography sx={{ fontWeight: 750 }}>Định mức tài sản tiêu chuẩn</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Cấu hình mẫu này không tạo tài sản thực tế trong kho.
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<Plus size={15} />}
+              disabled={requirements.length >= db.property!.catalog.length}
+              onClick={() => {
+                const next = db.property!.catalog.find(
+                  (catalog) => !requirements.some((item) => item.catalogId === catalog.id),
+                );
+                if (next) setRequirements([...requirements, { catalogId: next.id, quantity: 1 }]);
+              }}
+            >
+              Thêm tài sản
+            </Button>
+          </Stack>
+          {requirements.length === 0 && (
+            <Typography sx={{ p: 2, borderRadius: 1.5, bgcolor: '#f8fafc', color: 'text.secondary' }}>
+              Chưa có định mức tài sản.
+            </Typography>
+          )}
+          {requirements.map((requirement, index) => (
+            <Stack
+              key={`${requirement.catalogId}-${index}`}
+              direction="row"
+              sx={{ gap: 1, alignItems: 'center' }}
+            >
+              <TextField
+                select
+                label="Loại tài sản"
+                value={requirement.catalogId}
+                onChange={(event) =>
+                  setRequirements(
+                    requirements.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, catalogId: event.target.value } : item,
+                    ),
+                  )
+                }
+                sx={{ flex: 1 }}
+              >
+                {db.property!.catalog.map((catalog) => (
+                  <MenuItem
+                    key={catalog.id}
+                    value={catalog.id}
+                    disabled={requirements.some(
+                      (item, itemIndex) => itemIndex !== index && item.catalogId === catalog.id,
+                    )}
+                  >
+                    {catalog.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                label="Số lượng"
+                type="number"
+                value={requirement.quantity}
+                onChange={(event) =>
+                  setRequirements(
+                    requirements.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, quantity: Math.max(1, Number(event.target.value)) }
+                        : item,
+                    ),
+                  )
+                }
+                slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                sx={{ width: 130 }}
+              />
+              <IconButton
+                aria-label="Xóa định mức tài sản"
+                onClick={() =>
+                  setRequirements(requirements.filter((_, itemIndex) => itemIndex !== index))
+                }
+              >
+                <Trash2 size={18} />
+              </IconButton>
+            </Stack>
           ))}
         </EditDrawer>
       )}

@@ -61,6 +61,7 @@ export function AppRouter() {
             <Route path="/locations/:locationId" element={<LocationWorkspace />}>
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<LocationOverview />} />
+              <Route path="rooms/new" element={<CreateRooms />} />
               <Route path="rooms" element={<RoomsPage />} />
               <Route path="room-types" element={<RoomTypesPage />} />
               <Route path="assets" element={<AssetsPage />} />
