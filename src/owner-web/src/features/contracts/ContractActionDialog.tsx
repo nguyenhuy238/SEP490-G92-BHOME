@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import {
   actionPayload,
+  canUseCertificate,
   contractError,
   type ContractAction,
   type ContractClient,
@@ -50,6 +51,15 @@ export function ContractActionDialog({
   });
   async function submit() {
     if (lock.current) return;
+    if (
+      action.operation === 'signing' &&
+      (certs.isFetching ||
+        !!certs.error ||
+        !certs.data?.some((c) => c.id === values.certificateId && canUseCertificate(c)))
+    ) {
+      setError('Chọn chứng thư còn hiệu lực, không khóa và tải lại trước khi ký.');
+      return;
+    }
     let body;
     try {
       body = actionPayload(action, values, contract);
@@ -96,13 +106,11 @@ export function ContractActionDialog({
                 disabled={busy || certs.isFetching}
                 onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
               >
-                {(certs.data ?? [])
-                  .filter((c) => c.usable && !c.locked)
-                  .map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.provider} · {c.serialNumber} · {c.providerUserIdHint}
-                    </MenuItem>
-                  ))}
+                {(certs.data ?? []).filter(canUseCertificate).map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.provider} · {c.serialNumber} · {c.providerUserIdHint}
+                  </MenuItem>
+                ))}
               </TextField>
             ) : (
               <TextField
@@ -132,7 +140,8 @@ export function ContractActionDialog({
           )}
           {action.operation === 'signing' &&
             !certs.isFetching &&
-            !certs.data?.some((c) => c.usable && !c.locked) && (
+            !certs.error &&
+            !certs.data?.some(canUseCertificate) && (
               <Alert severity="info">
                 Chưa có chứng thư dùng được. Đóng hộp thoại và khai báo chứng thư MySign của bạn.
               </Alert>
@@ -142,6 +151,17 @@ export function ContractActionDialog({
               {contractError(certs.error)}
               <Button onClick={() => void certs.refetch()}>Tải lại chứng thư</Button>
             </Alert>
+          )}
+          {action.operation === 'signing' && !certs.error && (
+            <Button
+              disabled={busy || certs.isFetching}
+              onClick={() => {
+                setValues({});
+                void certs.refetch();
+              }}
+            >
+              Tải lại chứng thư
+            </Button>
           )}
           {!!error && <Alert severity="error">{error}</Alert>}
         </Stack>
@@ -155,7 +175,9 @@ export function ContractActionDialog({
           disabled={
             busy ||
             (action.operation === 'signing' &&
-              (!values.certificateId || certs.isFetching || !!certs.error))
+              (certs.isFetching ||
+                !!certs.error ||
+                !certs.data?.some((c) => c.id === values.certificateId && canUseCertificate(c))))
           }
           onClick={() => void submit()}
         >

@@ -85,18 +85,10 @@ internal sealed class ContractMySignAccount(IConfiguration config) : IViettelAcc
     }
 }
 
-// No iText package is included in the backend. Register a reviewed/licensed implementation explicitly.
-internal sealed class UnconfiguredContractPdfSigner : IPdfSigner
-{
-    public PreparedSignature Prepare(byte[] pdf, IReadOnlyList<X509Certificate2> chain, DateTimeOffset at, VisibleSignature? visible)
-        => throw new IntegrationUnavailableException("approved PDF signing implementation/license");
-    public byte[] Complete(byte[] pdf, string fieldName, byte[] digest, IReadOnlyList<X509Certificate2> chain, byte[] signature)
-        => throw new IntegrationUnavailableException("approved PDF signing implementation/license");
-}
 internal sealed class UnconfiguredContractRenderer : IContractDocumentRenderer
 {
     public Task<byte[]> RenderAsync(ContractDocument document, CancellationToken t)
-        => throw new IntegrationUnavailableException("approved authoritative contract PDF template");
+        => throw new ContractException(503, "contract_template_not_configured");
 }
 internal sealed class PendingContractSettlementLedger : IContractSettlementLedger
 {

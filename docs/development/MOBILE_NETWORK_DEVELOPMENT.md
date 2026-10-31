@@ -12,6 +12,12 @@ Từ repository root, mỗi người chạy cùng một lệnh:
 npm.cmd run mobile:dev
 ```
 
+Trên Windows, `npm.cmd run mobile` từ root hoặc `npm.cmd start` trong `src/mobile` dùng cùng
+supervisor. Tham số `-- --clear` và `-- --port 8082` được chuyển thành tham số PowerShell tương ứng.
+Chỉ dùng `-- --metro-only` khi đã tự chuẩn bị/chạy API; cờ này bỏ qua supervisor, vẫn giữ kiểm tra
+Expo online/tài khoản. `--check` chỉ kiểm tra Expo, không xác nhận API BHOME sẵn sàng.
+Xem [lỗi đăng nhập do API/TLS/migration](MOBILE_LOGIN_CONNECTION_FIX.md).
+
 Quét QR hoặc mở URL Expo do terminal in ra trên điện thoại cùng LAN/Wi-Fi. Không nhập IP,
 không sửa `.env.local`, không dùng IP của máy thành viên khác. Giữ terminal này chạy.
 Đăng nhập BHOME bằng email; tài khoản và database thuộc backend đang phục vụ QR đó.

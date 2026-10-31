@@ -427,6 +427,51 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     }
 
     [Fact]
+    public async Task ProductionAdapterAndPdfSignerCompleteTwoPartyContractThroughApiWithSyntheticRemoteCa()
+    {
+        var w = await Setup(); var id = await Draft(w);
+        using var remote = new SyntheticRemoteSigningProvider();
+        await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.RemoveAll<IContractSigningProvider>();
+            s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
+            s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
+            s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
+            s.RemoveAll<IContractDocumentRenderer>();
+            s.AddSingleton<IContractDocumentRenderer, SyntheticContractRenderer>();
+        }));
+        foreach (var (signer, subscriber) in new[] { (w.Owner, "SYNTHETIC-OWNER"), (w.Tenant, "SYNTHETIC-TENANT") })
+        {
+            var actor = new Actor(host.CreateClient(), signer.Id);
+            actor.Client.DefaultRequestHeaders.Authorization = signer.Client.DefaultRequestHeaders.Authorization;
+            var certificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(actor,
+                "/api/v1/digital-signing/certificates", new { providerUserId = subscriber, serialNumber = (string?)null }));
+            var key = Guid.NewGuid();
+            var input = new SigningInput(certificate.Id);
+            var requested = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
+            Assert.Equal("Pending", requested.Status);
+            var replay = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
+            Assert.Equal(requested.Id, replay.Id);
+            var signed = await Success<ContractView>(await Post(actor, Path(id, "signing/sync")));
+            Assert.Equal("Signed", Assert.Single(signed.Signatures, x => x.SignerUserId == signer.Id).Status);
+        }
+        Assert.Equal(2, remote.RequestCount);
+        await Deposit(w, id);
+        await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
+        var response = await w.Tenant.Client.GetAsync(Path(id, "document"));
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType!.MediaType);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        using var document = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(bytes)));
+        var signatures = new iText.Signatures.SignatureUtil(document);
+        var fields = signatures.GetSignatureNames();
+        Assert.Equal(2, fields.Count);
+        Assert.All(fields, name => Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity()));
+        Assert.True(signatures.SignatureCoversWholeDocument(fields[^1]));
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(Path(id, "document"))).StatusCode);
+    }
+
+    [Fact]
     public async Task CertificateDirectoryIsPrivateAndActualAdapterRejectsAnotherSignersCertificate()
     {
         var w = await Setup(); var id = await Draft(w); var ownerCert = Guid.NewGuid(); var tenantCert = Guid.NewGuid();
@@ -453,14 +498,28 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         var mine = await w.Owner.Client.GetFromJsonAsync<BHome.DigitalSigning.Application.Contracts.CertificateView[]>(certificates);
         Assert.Equal(ownerCert, Assert.Single(mine!).Id);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(certificates)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Factory.CreateClient().GetAsync(certificates)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, certificates + $"/{ownerCert}/lock", new { locked = true })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(w.Owner, certificates + $"/{tenantCert}/lock", new { locked = true })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Post(w.Tenant, certificates + $"/{tenantCert}/lock", new { locked = true })).StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Post(w.Owner, certificates, new { providerUserId = "SYNTHETIC-UNCONFIGURED", serialNumber = (string?)null })).StatusCode);
         await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType)));
         var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
         Assert.Equal(HttpStatusCode.NotFound, (await Post(actor, Path(id, "signing"), new SigningInput(tenantCert))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(w.Owner, certificates + $"/{ownerCert}/lock", new { locked = true })).StatusCode);
+        var locked = Assert.Single((await w.Owner.Client.GetFromJsonAsync<BHome.DigitalSigning.Application.Contracts.CertificateView[]>(certificates))!);
+        Assert.True(locked.Locked); Assert.False(locked.Usable);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(actor, Path(id, "signing"), new SigningInput(ownerCert))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(w.Tenant, certificates + $"/{ownerCert}/lock", new { locked = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(w.Owner, certificates + $"/{ownerCert}/lock", new { locked = false })).StatusCode);
+        Assert.True(Assert.Single((await w.Owner.Client.GetFromJsonAsync<BHome.DigitalSigning.Application.Contracts.CertificateView[]>(certificates))!).Usable);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Post(actor, Path(id, "signing"), new SigningInput(ownerCert))).StatusCode);
         Assert.Equal("PendingSigning", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+        await using var verification = fixture.Factory.Services.CreateAsyncScope();
+        var persisted = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        Assert.False(await persisted.Set<ContractSignature>().AnyAsync(s => s.ContractId == id));
+        Assert.Equal(1, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && a.UserId == w.Owner.Id && a.Event == "ContractCertificateLocked"));
+        Assert.Equal(1, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && a.UserId == w.Owner.Id && a.Event == "ContractCertificateUnlocked"));
     }
 }
 

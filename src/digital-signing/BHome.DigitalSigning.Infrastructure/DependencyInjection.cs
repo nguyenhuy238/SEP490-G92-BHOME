@@ -13,6 +13,14 @@ namespace BHome.DigitalSigning.Infrastructure;
 
 public static class DependencyInjection
 {
+    // Only the PDF implementation: keep BHOME's existing DbContext, access rules and provider registration.
+    public static IServiceCollection AddContractPdfSigning(this IServiceCollection services)
+    {
+        services.TryAddSingleton<PdfAppearanceOptions>();
+        services.AddSingleton<IPdfSigner, ITextPdfSigner>();
+        return services;
+    }
+
     // Expects ICurrentUser to be registered by the host (BHome.Api does) and ConnectionStrings:Database to be set.
     public static IServiceCollection AddDigitalSigning(this IServiceCollection services, IConfiguration configuration)
     {

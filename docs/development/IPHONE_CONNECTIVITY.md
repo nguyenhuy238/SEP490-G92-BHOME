@@ -1,5 +1,9 @@
 # iPhone: kết nối HTTPS, đồng bộ phiên và dữ liệu
 
+> Lỗi Expo Go báo thiếu tài khoản CLI hoặc manifest HTTP 500 sau khi Metro chuyển offline:
+> xem [EXPO_STARTUP_FIX.md](EXPO_STARTUP_FIX.md). Dùng `npm start -- --clear` trong `src/mobile`
+> để chọn Node 22 và kiểm tra kết nối/tài khoản trước khi mở Metro.
+
 Ngày thực hiện: 30/10/2026. Nhánh `member/QHuy`. Không commit, push hoặc merge.
 
 ## Truy vết và phạm vi

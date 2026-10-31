@@ -1,5 +1,10 @@
 # D011/D012 — Gap Analysis và kế hoạch hoàn thiện DoD
 
+> Cập nhật sau phân tích: [DIGITAL_SIGNING_COMPLETION.md](DIGITAL_SIGNING_COMPLETION.md).
+> Người yêu cầu đã phê duyệt iText và bộ ký PDF đã được nối vào backend chính.
+> Q-S1/S3 và phần trust profile của Q-S2 vẫn mở; G03 không còn bị chặn bởi registration PDF,
+> nhưng chưa có mẫu PDF được duyệt hoặc bằng chứng ký MySign thật.
+
 Ngày đối chiếu: 30/10/2026. Phạm vi: BF-03B/BF-04A, UC-15/16/19, FE-03.
 Trạng thái: **phân tích và đề xuất, chưa phê duyệt thiết kế bổ sung**.
 
