@@ -1,3 +1,62 @@
+# BHOME - Shared AI Agent Rules
+
+## 1. Project Overview
+BHOME is a rental and boarding-house management system.
+
+Main roles:
+- Owner: Manages properties, contracts, invoices, and finances.
+- Staff: Performs authorized operational tasks.
+- Tenant: Manages personal tenancy activities.
+
+Backend: .NET REST API.
+Database: PostgreSQL.
+
+## 2. General Rules
+- Read existing code and relevant requirements before making changes.
+- Follow the project's existing architecture and naming conventions.
+- Do not invent business rules, API endpoints, or response fields.
+- Do not modify unrelated features.
+- Do not introduce new dependencies without justification.
+- Prefer reusable and maintainable solutions.
+- Keep implementations simple and avoid unnecessary abstractions.
+
+## 3. Business Rules
+- Enforce role-based and location-based authorization.
+- Staff must not access sensitive tenant information.
+- Tenant data must only be visible to authorized users.
+- Do not store national ID document images unless explicitly required by approved specifications.
+- Contract activation must follow backend-confirmed payment rules.
+- Meter OCR results require user confirmation.
+- Invoice finalization is an Owner-authorized operation.
+- Invoice adjustments require the specified approval workflow.
+- Temporary residence registration is performed externally via VNeID.
+- Owner handles the required residence approval.
+- Frontend must not independently determine payment success.
+
+## 4. API Rules
+- The .NET backend is the source of truth.
+- Follow existing API contracts and DTOs.
+- Handle authentication, authorization and validation errors.
+- Never hardcode secrets or authentication tokens.
+- Do not bypass backend permission checks.
+
+## 5. Change Management
+Before coding:
+1. Understand the request.
+2. Inspect related files and dependencies.
+3. Identify affected components and services.
+4. Make the smallest reasonable change.
+
+After coding:
+1. Run available relevant checks.
+2. Verify affected workflows.
+3. Report modified files.
+4. Report test results and unresolved issues.
+
+Never claim a test passed unless it was executed.
+
+---
+
 BHOME — Repository-Wide AI Engineering Instructions
 Applies to the entire SEP490-G92-BHOME repository. Intended for Codex and other coding agents.
 Source basis: project reports and working-rule documents supplied on 2026-10-28. This file is a requirements and quality guardrail, not evidence that the repository currently implements every listed feature.
