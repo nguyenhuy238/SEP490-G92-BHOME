@@ -200,6 +200,8 @@ it('shows provider unavailability and never marks signing successful from a fail
       provider: 'MySign',
       serialNumber: 'SYNTHETIC',
       providerUserIdHint: '***001',
+      validFrom: '2020-01-01T00:00:00Z',
+      validTo: '2099-01-01T00:00:00Z',
       locked: false,
       usable: true,
     },

@@ -3,14 +3,17 @@ import { Button, Checkbox, Text } from 'react-native-paper';
 import {
   actionPayload,
   businessToday,
+  canUseCertificate,
+  certificateStatus,
   contractError,
-  type Certificate,
   type ContractAction,
   type ContractClient,
   type ContractView,
   type FinalMeterTask,
   type mutationKeys,
 } from '../../../../../packages/client-core/src/contracts';
+import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
+import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 
@@ -32,24 +35,19 @@ export function ContractActionForm({
   onSuccess: (id?: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [certs, setCerts] = useState<Certificate[]>([]),
-    [error, setError] = useState(''),
+  const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
-  const [certRevision, setCertRevision] = useState(0);
+  const directory = useSigningCertificates(api, action.operation === 'signing');
+  const selectedCertificate = directory.certificates.find((c) => c.id === values.certificateId);
+  const signingBlocked =
+    action.operation === 'signing' &&
+    (directory.loading ||
+      !!directory.error ||
+      !selectedCertificate ||
+      !canUseCertificate(selectedCertificate));
   const [readings, setReadings] = useState<FinalMeterTask[]>([]);
   const lock = useRef(false);
-  useEffect(() => {
-    if (action.operation !== 'signing') return;
-    const controller = new AbortController();
-    void api
-      .certificates(controller.signal)
-      .then(setCerts)
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(contractError(e));
-      });
-    return () => controller.abort();
-  }, [api, action.operation, certRevision]);
   useEffect(() => {
     if (action.operation !== 'move-out/inspection') return;
     const c = new AbortController();
@@ -74,7 +72,12 @@ export function ContractActionForm({
     return () => c.abort();
   }, [api, action.operation, contract.id]);
   async function submit() {
-    if (lock.current || !checked) return;
+    if (lock.current || !checked || signingBlocked) return;
+    if (
+      action.operation === 'signing' &&
+      (!selectedCertificate || !canUseCertificate(selectedCertificate))
+    )
+      return;
     let body;
     try {
       body = actionPayload(action, values, contract, evidenceIds);
@@ -112,13 +115,11 @@ export function ContractActionForm({
             key={f.name}
             label={f.label}
             value={values[f.name] ?? ''}
-            disabled={busy}
-            options={certs
-              .filter((c) => c.usable && !c.locked)
-              .map((c) => ({
-                id: c.id,
-                label: `${c.provider} · ${c.serialNumber} · ${c.providerUserIdHint}`,
-              }))}
+            disabled={busy || directory.loading}
+            options={directory.certificates.filter(canUseCertificate).map((c) => ({
+              id: c.id,
+              label: `${c.provider} · ${c.serialNumber} · ${c.providerUserIdHint}`,
+            }))}
             onChange={(v) => {
               setValues((before) => ({ ...before, [f.name]: v }));
               setChecked(false);
@@ -165,15 +166,26 @@ export function ContractActionForm({
       )}
       {action.operation === 'signing' && (
         <>
+          {directory.loading && <Text>Đang tải chứng thư…</Text>}
+          {!!directory.error && <Text style={ui.red}>{directory.error}</Text>}
+          {!directory.loading &&
+            !directory.error &&
+            !directory.certificates.some(canUseCertificate) && (
+              <Text>
+                Chưa có chứng thư dùng được. Khai báo hoặc mở khóa chứng thư của bạn ở phần chữ ký.
+              </Text>
+            )}
           <Text variant="bodySmall">
             Chỉ dùng chứng thư của bạn, còn hiệu lực và không khóa. Nếu chưa có, khai báo MySign ở
             phần chữ ký.
           </Text>
           <Button
-            disabled={busy}
+            disabled={busy || directory.loading}
             onPress={() => {
               setError('');
-              setCertRevision((v) => v + 1);
+              setValues({});
+              setChecked(false);
+              directory.reload();
             }}
           >
             Tải lại chứng thư
@@ -196,7 +208,7 @@ export function ContractActionForm({
         onPress={() => setChecked((v) => !v)}
       />
       {!!error && <Text style={ui.red}>{error}</Text>}
-      <Action disabled={busy || !checked} onPress={() => void submit()}>
+      <Action disabled={busy || !checked || signingBlocked} onPress={() => void submit()}>
         {busy ? 'Đang xử lý…' : 'Xác nhận'}
       </Action>
       <Action secondary disabled={busy} onPress={onCancel}>
@@ -211,13 +223,79 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
     [serial, setSerial] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [saved, setSaved] = useState(false);
+    [notice, setNotice] = useState('');
   const lock = useRef(false);
+  const directory = useSigningCertificates(api, open);
+  async function run(work: () => Promise<unknown>, message: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await work();
+      setSubscriber('');
+      setSerial('');
+      setNotice(message);
+      directory.reload();
+    } catch (e) {
+      setError(contractError(e));
+      directory.reload();
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
   return (
     <>
-      <Button onPress={() => setOpen((v) => !v)}>Khai báo chứng thư MySign của bạn</Button>
+      <Button
+        disabled={busy}
+        onPress={() => {
+          setOpen((v) => !v);
+          directory.reload();
+        }}
+      >
+        {open ? 'Đóng quản lý chứng thư' : 'Khai báo chứng thư MySign của bạn'}
+      </Button>
       {open && (
         <>
+          <Text variant="titleSmall">Chứng thư MySign của bạn</Text>
+          <Text>
+            Khai báo chứng thư không đồng nghĩa đã ký hợp đồng. Xác nhận ký trên ứng dụng MySign khi
+            có yêu cầu.
+          </Text>
+          {directory.loading && <Text>Đang tải chứng thư…</Text>}
+          {!!directory.error && <Text style={ui.red}>{directory.error}</Text>}
+          {!directory.loading && !directory.error && !directory.certificates.length && (
+            <Text>Bạn chưa khai báo chứng thư MySign.</Text>
+          )}
+          {directory.certificates.map((c) => (
+            <Box key={c.id}>
+              <Text>
+                {c.provider} · {c.serialNumber}
+              </Text>
+              <Text>
+                Thuê bao: {c.providerUserIdHint} · {certificateStatus(c)}
+              </Text>
+              <Text>Hết hạn: {formatInstant(c.validTo)}</Text>
+              <Button
+                disabled={busy || directory.loading}
+                onPress={() =>
+                  void run(
+                    () => api.lockCertificate(c.id, !c.locked),
+                    c.locked
+                      ? 'Đã mở khóa chứng thư. Máy chủ vẫn kiểm tra hiệu lực khi ký.'
+                      : 'Đã khóa chứng thư cho các yêu cầu ký mới.',
+                  )
+                }
+              >
+                {c.locked ? 'Mở khóa chứng thư' : 'Khóa chứng thư'}
+              </Button>
+            </Box>
+          ))}
+          <Button disabled={busy || directory.loading} onPress={directory.reload}>
+            Tải lại chứng thư
+          </Button>
           <Input
             label="Mã thuê bao MySign của bạn"
             value={subscriber}
@@ -226,25 +304,15 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
           />
           <Input label="Số serial (tùy chọn)" value={serial} onChange={setSerial} disabled={busy} />
           {!!error && <Text style={ui.red}>{error}</Text>}
-          {saved && <Text>Đã truy vấn và lưu chứng thư từ nhà cung cấp.</Text>}
+          {!!notice && <Text>{notice}</Text>}
           <Action
             disabled={busy || !subscriber.trim() || subscriber.length > 100 || serial.length > 100}
-            onPress={async () => {
-              if (lock.current) return;
-              lock.current = true;
-              setBusy(true);
-              setError('');
-              setSaved(false);
-              try {
-                await api.declareCertificate(subscriber.trim(), serial.trim());
-                setSaved(true);
-              } catch (e) {
-                setError(contractError(e));
-              } finally {
-                lock.current = false;
-                setBusy(false);
-              }
-            }}
+            onPress={() =>
+              void run(
+                () => api.declareCertificate(subscriber.trim(), serial.trim()),
+                'Đã truy vấn và lưu chứng thư từ nhà cung cấp.',
+              )
+            }
           >
             Tra cứu và lưu chứng thư
           </Action>

@@ -65,7 +65,8 @@ try {
         $env:EXPO_PACKAGER_PROXY_URL = "http://${lanIp}:$Port"
         Write-Output "API: https://${lanIp}:7240; Expo: exp://${lanIp}:$Port"
         Write-Output 'Scan the QR/open the Expo URL. Network changes are detected automatically; scan the new QR after switching networks.'
-        $expoArguments = @(('"' + $expoCli + '"'), 'start', '--lan', '--port', [string]$Port)
+        $expoLauncher = Join-Path $repo 'scripts/Start-ExpoMobile.cjs'
+        $expoArguments = @(('"' + $expoLauncher + '"'), '--metro-only', '--lan', '--port', [string]$Port)
         if ($Clear) { $expoArguments += '--clear' }
         # Reuse this interactive terminal so the developer can read the Expo QR and use its controls.
         $metro = Start-Process (Get-Command node.exe).Source -NoNewWindow -PassThru -WorkingDirectory (Join-Path $repo 'src/mobile') -ArgumentList $expoArguments

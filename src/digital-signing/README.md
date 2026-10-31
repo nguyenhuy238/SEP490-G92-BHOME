@@ -3,9 +3,12 @@
 Đây là bản **clone độc lập** chức năng ký số từ xa (Remote Signing) của dự án `kho-so-tai-chinh`
 (Java/Spring), chỉ lấy phần **Viettel MySign**, viết lại bằng .NET 8 theo kiến trúc phân lớp của BHome.
 
-Module này **chưa được gắn vào BHome**: `BHome.sln`, `Program.cs`, `BHomeDbContext` và migration
-đều không bị sửa. Module chỉ tham chiếu (đọc) `BHome.Domain` và `BHome.Application` để dùng
-`ICurrentUser` và các role Owner/Staff/Tenant.
+Backend chính đã tích hợp một phần: thư mục chứng thư riêng Owner/Tenant, adapter MySign,
+lifecycle hợp đồng và bộ ký PDF iText. Web Owner và mobile Owner/Tenant đã có giao diện ký,
+tra cứu, khóa/mở khóa chứng thư. **Chưa hoàn tất ký hợp đồng thật**: renderer vẫn chặn khi
+chưa có mẫu PDF được duyệt; quy trình xác minh chủ chứng thư và profile tin cậy còn mở.
+Xem [bàn giao cập nhật](../../docs/development/DIGITAL_SIGNING_COMPLETION.md).
+Sandbox và API ký PDF tùy ý bên dưới là luồng độc lập, không phải bằng chứng nghiệm thu hợp đồng.
 
 ## Luồng ký
 
@@ -66,6 +69,11 @@ trust store, và luồng duyệt hồ sơ cấp trên.
 
 ## API
 
+Bảng này mô tả API của module độc lập/sandbox. Backend BHOME chính chỉ công khai
+GET/POST certificates và POST certificates/{id}/lock cho Owner/Tenant, cùng các API
+ký/sync/recover/document của Contract. Staff không được ký hợp đồng hoặc quản lý chứng thư
+qua các controller của backend chính. Không đăng ký toàn bộ controller sandbox vào production.
+
 | Method         | Đường dẫn                                            | Quyền              | Việc                                                                                    |
 | -------------- | ---------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
 | GET            | `/api/v1/digital-signing/certificates`               | Owner/Staff/Tenant | Chứng thư của tôi                                                                       |
@@ -92,8 +100,8 @@ từng trường; client secret được mã hóa AES-256-GCM, và API chỉ tr�
 
 ## Sandbox: trang thử ký cho cả nhóm
 
-Trong lúc app mobile và web chưa có màn hình ký số, project `BHome.DigitalSigning.Sandbox` dựng một
-trang web tạm để thử toàn bộ luồng ký. Sandbox **không bao giờ được deploy**.
+Project `BHome.DigitalSigning.Sandbox` dựng trang web tạm để thử luồng ký PDF độc lập.
+Sandbox **không bao giờ được deploy**. Giao diện hợp đồng chính nằm trong Owner Portal và mobile.
 
 ```powershell
 # Từ thư mục gốc repo. Cần .NET 8 SDK (winget install Microsoft.DotNet.SDK.8)
@@ -155,7 +163,10 @@ dotnet build src/digital-signing/BHome.DigitalSigning.sln
 dotnet test src/digital-signing/tests/BHome.DigitalSigning.UnitTests
 ```
 
-## Khi gắn vào BHome (chưa làm)
+## Kế hoạch tích hợp ban đầu (lịch sử)
+
+Các bước bên dưới là kế hoạch cũ cho toàn bộ module độc lập. Không dùng nguyên trạng
+để thay thế tích hợp Contract đã có; trạng thái hiện tại được ghi trong bàn giao cập nhật ở đầu file.
 
 1. Thêm các project vào `BHome.sln`; `BHome.Api` tham chiếu `.Api` và `.Infrastructure`.
 2. Trong `Program.cs`: gọi `services.AddDigitalSigning(configuration)` và `services.AddDigitalSigningApi()`
