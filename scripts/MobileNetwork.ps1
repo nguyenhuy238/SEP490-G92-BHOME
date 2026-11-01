@@ -35,3 +35,33 @@ function Get-MobileDevelopmentServerId([string]$CertificatePath) {
     $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($CertificatePath)
     try { return $certificate.Thumbprint } finally { $certificate.Dispose() }
 }
+
+function Get-MobileDevelopmentHost([string]$ComputerName = [Net.Dns]::GetHostName()) {
+    $name = $ComputerName.ToLowerInvariant()
+    if ($name -notmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$') { return $null }
+    return "$name.local"
+}
+
+# Parse only backend configuration already supported by the local API launcher.
+# This returns data; never evaluate .env contents or print the returned values.
+function Get-MobileBackendSettings([string]$ConfigurationText) {
+    $settings = @{}
+    foreach ($line in ($ConfigurationText -split '\r?\n')) {
+        if ($line -match '^((?:ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|ObjectStorage|Jobs|Cors|Ocr|IdentityProtection|Capture|Kestrel|MobileDevelopment|Api)__[^=]+|AllowedHosts)=(.*)$') {
+            $settings[$Matches[1].Replace('__', ':')] = $Matches[2]
+        }
+    }
+    return $settings
+}
+
+# Keep native LAN clients on the mobile CA, including clients that send no SNI.
+# localhost can use an already-trusted ASP.NET development certificate on this PC.
+function Get-MobileHttpsSniSettings([string]$MobilePfxPath, [string]$Password, [string]$LocalhostPfxPath) {
+    if (-not $LocalhostPfxPath) { $LocalhostPfxPath = $MobilePfxPath }
+    return @{
+        'Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Path' = $MobilePfxPath
+        'Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Password' = $Password
+        'Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Path' = $LocalhostPfxPath
+        'Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Password' = $Password
+    }
+}

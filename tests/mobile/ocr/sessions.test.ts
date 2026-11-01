@@ -72,10 +72,11 @@ it('coalesces restore and refresh, and persists only API binding + refresh crede
   await storage.write(JSON.stringify({ base: 'https://api.test', refreshToken: 'refresh-old' }));
   const transport = vi
     .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response('Healthy'))
     .mockResolvedValueOnce(new Response(JSON.stringify(session('new')), { status: 200 }));
   const manager = new MobileSessions(storage, 'https://api.test', transport);
   await Promise.all([manager.restore(), manager.restore(), manager.restore()]);
-  expect(transport).toHaveBeenCalledTimes(1);
+  expect(transport).toHaveBeenCalledTimes(2);
   expect(manager.snapshot.session?.accessToken).toBe('access-new');
   const saved = await storage.read();
   expect(saved).toContain('refresh-new');
@@ -96,11 +97,13 @@ it('does not restore a credential to another server or retry an ambiguous refres
     session: null,
   });
   await storage.write(JSON.stringify({ base: 'https://new.test', refreshToken: 'old' }));
-  transport.mockRejectedValue(new Error('network unavailable'));
+  transport
+    .mockResolvedValueOnce(new Response('Healthy'))
+    .mockRejectedValue(new Error('network unavailable'));
   const failed = new MobileSessions(storage, 'https://new.test', transport);
   await failed.restore();
   await failed.refresh();
-  expect(transport).toHaveBeenCalledTimes(1);
+  expect(transport).toHaveBeenCalledTimes(2);
   expect(await storage.read()).toBeNull();
   expect(failed.snapshot.session).toBeNull();
 });
@@ -108,7 +111,8 @@ it('an in-flight refresh cannot revive a locally cleared session', async () => {
   const storage = store();
   const transport = vi
     .fn<typeof fetch>()
-    .mockResolvedValueOnce(new Response(JSON.stringify(session('login')), { status: 200 }));
+    .mockResolvedValueOnce(new Response(JSON.stringify(session('login')), { status: 200 }))
+    .mockResolvedValueOnce(new Response('Healthy'));
   const manager = new MobileSessions(storage, 'https://api.test', transport);
   await manager.login('https://api.test', 'staff.dev@example.invalid', 'synthetic-password');
   let respond!: (response: Response) => void;
@@ -119,6 +123,7 @@ it('an in-flight refresh cannot revive a locally cleared session', async () => {
       }),
   );
   const refresh = manager.refresh();
+  await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(3));
   await manager.clear();
   respond(new Response(JSON.stringify(session('late')), { status: 200 }));
   await refresh;
@@ -143,12 +148,67 @@ it('restores sessions only for the same development origin and server identity',
   const storage = store();
   const transport = vi
     .fn<typeof fetch>()
-    .mockImplementation(async () => new Response(JSON.stringify(session('dev')), { status: 200 }));
+    .mockImplementation(async (url) =>
+      String(url).endsWith('/health/ready')
+        ? new Response('Healthy')
+        : new Response(JSON.stringify(session('dev')), { status: 200 }),
+    );
   const first = new MobileSessions(storage, 'https://api.test', transport, 'synthetic-ca-a');
   await first.login('https://api.test', 'owner.dev@example.invalid', 'synthetic-password');
   expect(JSON.parse((await storage.read())!).serverId).toBe('synthetic-ca-a');
   const restored = new MobileSessions(storage, 'https://api.test', transport, 'synthetic-ca-a');
   await restored.restore();
   expect(restored.snapshot.session?.accessToken).toBe('access-dev');
-  expect(transport).toHaveBeenCalledTimes(2);
+  expect(transport).toHaveBeenCalledTimes(3);
+});
+
+it.each([0, 503])(
+  'keeps a saved session when the anonymous readiness probe fails (%s), and restores after reconnection',
+  async (status) => {
+    const storage = store();
+    await storage.write(JSON.stringify({ base: 'https://api.test', refreshToken: 'refresh-old' }));
+    const transport = vi.fn<typeof fetch>();
+    if (status) transport.mockResolvedValueOnce(new Response('', { status }));
+    else transport.mockRejectedValueOnce(new TypeError('offline'));
+    transport
+      .mockResolvedValueOnce(new Response('Healthy'))
+      .mockResolvedValueOnce(new Response(JSON.stringify(session('reconnected'))));
+    const manager = new MobileSessions(storage, 'https://api.test', transport);
+    await manager.restore();
+    expect(await storage.read()).toContain('refresh-old');
+    expect(manager.snapshot.ready).toBe(true);
+    expect(manager.snapshot.session).toBeNull();
+    expect(manager.snapshot.restoreError).toBeTruthy();
+    expect(transport.mock.calls[0]![0]).toBe('https://api.test/health/ready');
+    expect(transport.mock.calls[0]![1]?.body).toBeUndefined();
+    await Promise.all([manager.reconnect(), manager.reconnect()]);
+    expect(transport).toHaveBeenCalledTimes(3);
+    expect(manager.snapshot.session?.accessToken).toBe('access-reconnected');
+    expect(manager.snapshot.restoreError).toBeUndefined();
+    expect(await storage.read()).toContain('refresh-reconnected');
+    await manager.reconnect();
+    expect(transport).toHaveBeenCalledTimes(3);
+  },
+);
+
+it('logout during a connectivity probe prevents refresh and automatic reconnection', async () => {
+  const storage = store();
+  await storage.write(JSON.stringify({ base: 'https://api.test', refreshToken: 'refresh-old' }));
+  let respond!: (value: Response) => void;
+  const transport = vi.fn<typeof fetch>().mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        respond = resolve;
+      }),
+  );
+  const manager = new MobileSessions(storage, 'https://api.test', transport);
+  const restore = manager.restore();
+  await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+  await manager.clear();
+  respond(new Response('Healthy'));
+  await restore;
+  await manager.reconnect();
+  expect(transport).toHaveBeenCalledTimes(1);
+  expect(await storage.read()).toBeNull();
+  expect(manager.snapshot.session).toBeNull();
 });

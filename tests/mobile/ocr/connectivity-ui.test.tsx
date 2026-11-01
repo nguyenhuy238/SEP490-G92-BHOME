@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('react-native', () => ({
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
+vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   ActivityIndicator: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
@@ -36,6 +37,15 @@ vi.mock('../../../src/mobile/src/components/WorkspaceKit', () => ({
     <span>
       {label}: {value}
     </span>
+  ),
+  QuickActions: ({ items }: { items: { label: string; onPress: () => void }[] }) => (
+    <div>
+      {items.map((item) => (
+        <button key={item.label} onClick={item.onPress}>
+          {item.label}
+        </button>
+      ))}
+    </div>
   ),
   ui: {},
 }));

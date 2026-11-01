@@ -183,9 +183,16 @@ npm.cmd run dev --workspace @bhome/public-web
 
 Mobile dùng Expo Router, đã kết nối đăng nhập email và luồng OCR với backend.
 Lệnh `npm.cmd run mobile:dev` tự chọn IP, chuẩn bị HTTPS, dùng lại hoặc mở API rồi chạy Expo.
-Quét QR trên điện thoại cùng mạng; đổi Wi-Fi thì quét QR mới, không sửa IP trong cấu hình.
+Quét QR trên điện thoại cùng mạng. Launcher mặc định tự chọn IP LAN cho cả Metro và API,
+không cần nhập IP hoặc dựa vào `.local`. Sau khi Metro chạy, launcher kiểm tra `/status` và
+manifest iOS; kết quả từ máy tính không thay thế kiểm tra kết nối trên điện thoại.
+Máy mới tự tải OCR models còn thiếu qua script kiểm checksum.
+Để dùng qua 4G/5G hoặc Wi-Fi khác mạng máy chủ, cấu hình `EXPO_PUBLIC_API_BASE_URL`
+bằng địa chỉ API HTTPS công khai; xem hướng dẫn bên dưới.
 Các thành viên dùng cùng lệnh trên máy riêng. Điện thoại cần tin cậy CA của từng máy một lần.
 Xem [hướng dẫn kết nối tự động](docs/development/MOBILE_NETWORK_DEVELOPMENT.md).
+Xem [thiết lập Mobile cho các máy trong team](docs/development/MOBILE_TEAM_DEVELOPMENT.md).
+Nếu quét QR bị kẹt trước màn đăng nhập, xem [kiểm tra đường tới Metro](docs/development/MOBILE_QR_LOADING_FIX.md).
 Trên Windows, `npm.cmd run mobile` từ root hoặc `npm.cmd start` trong `src/mobile` cũng chạy
 luồng API + HTTPS + Metro này; hỗ trợ `-- --clear` và `-- --port 8082`.
 `npm.cmd run mobile -- --metro-only` và `npx expo start` chỉ mở Metro;

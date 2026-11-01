@@ -14,7 +14,7 @@ export function WorkspaceShell({
   screen: WorkspaceScreen;
   children: React.ReactNode;
 }) {
-  const { role, preview, go, unavailable, leavePreview, scrollRevision } = useWorkspace();
+  const { role, preview, go, leavePreview, scrollRevision } = useWorkspace();
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -35,7 +35,9 @@ export function WorkspaceShell({
           ].includes(screen)
         ? 'staff-home'
         : screen === 'task-detail'
-          ? 'work-orders'
+          ? role === 'Owner'
+            ? 'operations'
+            : 'work-orders'
           : ['adjustment', 'billing-history'].includes(screen)
             ? 'invoice'
             : screen;
@@ -43,9 +45,19 @@ export function WorkspaceShell({
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.header}>
         <TouchableRipple
-          onPress={() => unavailable('Chọn cơ sở')}
+          onPress={() =>
+            go(
+              preview
+                ? homeScreen[role]
+                : role === 'Owner'
+                  ? 'operations'
+                  : role === 'Staff'
+                    ? 'rooms'
+                    : 'contract',
+            )
+          }
           accessibilityRole="button"
-          accessibilityLabel="Chọn cơ sở"
+          accessibilityLabel={role === 'Tenant' ? 'Xem hợp đồng của bạn' : 'Xem cơ sở được phép'}
           style={ui.grow}
         >
           <View style={ui.row}>

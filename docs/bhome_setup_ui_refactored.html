@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="BHOME Owner Portal – Cấu hình cơ sở và phòng (BF-01)">
+<title>BHOME | Location & Setup Workspace</title>
+<style>
+:root{--bg:#f6f8fc;--paper:#fff;--navy:#15243e;--muted:#75839b;--border:#e6ebf2;--blue:#255dde;--blue-light:#ebf2ff;--green:#159a60;--amber:#cb8b16;--red:#db4d49;--grey:#8290a5;--shadow:0 12px 36px rgba(31,57,91,.045)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--navy);font-size:14px}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #9bb9ff;outline-offset:2px}
+#app{display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{width:258px;flex:0 0 258px;background:#fff;border-right:1px solid var(--border);height:100vh;position:sticky;top:0;display:flex;flex-direction:column;transition:.2s}
+.sidebar.small{width:76px;flex-basis:76px}
+.brand{display:flex;align-items:center;gap:11px;padding:24px 19px 21px;border-bottom:1px solid var(--border)}
+.brandmark{width:37px;height:37px;border-radius:11px;background:var(--blue);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:850;font-size:22px}
+.brandname{font-weight:850;font-size:18px;letter-spacing:.15px}
+.brandtag{font-size:10px;color:var(--muted);margin-top:2px}
+.nav-scroll{overflow-y:auto;padding:14px 11px 26px;flex:1;scrollbar-width:thin}
+.navgroup{margin-bottom:18px}
+.group-label{font-weight:800;color:#a0a9bb;font-size:10px;letter-spacing:1.15px;margin:0 13px 9px;text-transform:uppercase}
+.navitem{border:0;background:transparent;color:#53657f;text-align:left;width:100%;display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;margin:2px 0;min-height:41px;font-size:13px;transition:background .15s}
+.navitem:hover{background:#f4f7fc}
+.navitem.active{background:var(--blue-light);color:var(--blue);font-weight:800}
+.navitem svg{width:17px;height:17px;flex-shrink:0}
+.navdivider{height:1px;background:var(--border);margin:12px 7px 18px}
+.sidebar-footer{border-top:1px solid var(--border);padding:13px 12px;display:flex;gap:10px;align-items:center}
+.avatar{background:#e1eaff;color:#1e55bc;display:flex;width:34px;height:34px;align-items:center;justify-content:center;font-weight:800;border-radius:11px}
+.avatarlabel{font-weight:750;font-size:12px}
+.avatarsub{font-size:10px;color:var(--muted);margin-top:3px}
+.sidebar.small .hide-small,.sidebar.small .group-label,.sidebar.small .avatarlabel,.sidebar.small .avatarsub{display:none}
+.sidebar.small .brand{padding:22px 18px}
+.sidebar.small .navitem{justify-content:center;padding:13px}
+.sidebar.small .navitem svg{width:21px;height:21px}
+.sidebar.small .sidebar-footer{justify-content:center}
+
+/* Shell & Topbar */
+.shell{flex:1;min-width:0}
+.topbar{height:75px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 30px;background:#fff;position:sticky;top:0;z-index:15}
+.crumb{display:flex;align-items:center;gap:8px;font-size:12px;color:#8490a4;white-space:nowrap;overflow:hidden}
+.crumb b{color:#364965;font-weight:800;overflow:hidden;text-overflow:ellipsis}
+.top-right{display:flex;gap:12px;align-items:center}
+.demo-tag{font-size:10px;background:#fffae8;border:1px solid #f0e4ae;color:#99732e;padding:6px 9px;border-radius:15px;font-weight:750;white-space:nowrap}
+.top-select{border:1px solid var(--border);border-radius:10px;padding:10px 33px 10px 12px;background:white;color:#253954;font-size:12px;max-width:215px;outline:none;cursor:pointer}
+.roundbtn{height:36px;width:36px;background:#fff;border:1px solid var(--border);border-radius:11px;display:flex;align-items:center;justify-content:center;color:#617087;transition:border-color .2s}
+.roundbtn:hover{border-color:#b5ccfa;color:var(--blue)}
+.roundbtn svg{width:17px;height:17px}
+
+/* Main Content */
+.main{max-width:1480px;margin:auto;padding:30px 34px 50px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.eyebrow{color:var(--blue);font-size:11px;font-weight:850;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:9px}
+h1{margin:0 0 8px;font-size:26px;letter-spacing:-.65px;font-weight:850}
+h2{font-size:17px;margin:0;font-weight:820;letter-spacing:-.15px}
+h3{font-size:14px;margin:0;font-weight:790}
+p{margin:0}
+.subtitle{color:var(--muted);font-size:13px;line-height:1.6}
+
+/* Buttons */
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.btn{padding:10px 16px;border-radius:10px;border:1px solid var(--border);background:#fff;color:#3a506f;font-size:13px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;min-height:40px;transition:all .15s}
+.btn:hover{background:#f4f7fc}
+.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.primary:hover{background:#194cbb;transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,93,222,.15)}
+.btn svg{height:16px;width:16px}
+.btn.danger-text{color:#d94c4a}
+.btn.danger-text:hover{background:#fff1f1;border-color:#ffcdcd}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+.stat{background:var(--paper);border:1px solid var(--border);border-radius:14px;padding:19px 21px;box-shadow:var(--shadow)}
+.stat-top{display:flex;justify-content:space-between;align-items:center}
+.stat-label{font-size:12px;color:#718097;font-weight:700}
+.stat-icon{width:36px;height:36px;border-radius:10px;background:#edf3ff;color:#2e68d4;display:flex;align-items:center;justify-content:center}
+.stat-icon svg{width:18px;height:18px}
+.stat-value{font-size:28px;font-weight:850;margin-top:14px;letter-spacing:-.8px}
+.stat-hint{font-size:11px;color:#929cad;margin-top:5px}
+
+/* Cards & Layout */
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+.card-header{padding:19px 22px 15px;display:flex;align-items:center;justify-content:space-between;gap:15px}
+.card-body{padding:0 22px 22px}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.tiny{font-size:11px}
+.row{display:flex;gap:12px;align-items:center}
+.between{justify-content:space-between}
+.two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.location-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+
+/* Location Card */
+.location-card{padding:22px;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s}
+.location-card:hover{border-color:#a7c5f6;transform:translateY(-3px);box-shadow:0 12px 28px rgba(37,93,222,.08)}
+.location-icon{height:40px;width:40px;border-radius:11px;background:#eef4ff;display:flex;align-items:center;justify-content:center;color:#2b60c8}
+.location-icon svg{height:20px;width:20px}
+.location-title{font-size:16px;font-weight:850;margin-top:18px}
+.location-address{font-size:12px;color:var(--muted);margin:6px 0 18px}
+.progress-track{height:8px;background:#e9edf4;border-radius:10px;overflow:hidden}
+.progress-fill{height:100%;background:var(--green);border-radius:10px}
+.loc-footer{display:flex;justify-content:space-between;align-items:center;padding-top:16px;margin-top:18px;border-top:1px solid #eff2f6;color:#53657c;font-size:12px}
+
+/* Utils */
+.section{margin-top:28px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hintbox{border:1px solid #d6e5ff;background:#f1f7ff;padding:15px 18px;border-radius:12px;color:#49668e;font-size:13px;line-height:1.6}
+.subnav{display:flex;align-items:center;gap:5px;border-bottom:1px solid var(--border);margin-bottom:26px;overflow-x:auto;white-space:nowrap}
+.subnav button{border:0;background:transparent;padding:13px 18px;color:#718198;font-size:13px;font-weight:750;border-bottom:2px solid transparent;white-space:nowrap;transition:color .2s}
+.subnav button:hover{color:var(--blue)}
+.subnav button.selected{color:var(--blue);border-bottom-color:var(--blue)}
+.pill{font-size:11px;font-weight:750;padding:5px 9px;border-radius:8px;background:#f0f4fa;color:#647892;display:inline-flex;align-items:center;gap:4px}
+.pill.red{background:#ffebeb;color:#d94c4a}
+.pill.green{background:#e8f8ee;color:#208959}
+.pill.amber{background:#fff2d7;color:#b27b13}
+.pill.blue{background:#e8f0ff;color:#275ecc}
+.badge{background:#f1f4f9;color:#74849a;border-radius:20px;font-size:11px;padding:4px 9px;font-weight:700}
+.workspace-tabs{margin-top:-8px;position:relative}
+
+/* Room Grid */
+.floor-group{margin-bottom:22px}
+.floor-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.floor-head strong{font-size:14px}
+.floor-preview{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.roomtile{border:1px solid var(--border);padding:14px;border-radius:12px;text-align:left;background:white;cursor:pointer;min-width:0;box-shadow:0 1px 2px rgba(30,45,70,.02);transition:transform .16s,box-shadow .16s}
+.roomtile:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(30,45,70,.07)}
+.roomtile.occupied{background:#f4fdf8;border-color:#c5ebd6}
+.roomtile.available{background:#f1f6ff;border-color:#cddffc}
+.roomtile.hold{background:#fffaec;border-color:#f5e2b5}
+.roomtile.unavailable{background:#f8f9fb;border-color:#dbe0e8}
+.roomcode{font-size:15px;font-weight:850;margin:0}
+.price-tile{font-size:14px;font-weight:800;margin:12px 0 8px}
+.price-tile span{font-size:11px;font-weight:600;color:#64748b}
+.status{font-size:11px;font-weight:800;display:inline-flex;align-items:center;gap:5px;margin-bottom:8px}
+.status.occupied{color:#158450}
+.status.available{color:#2c67ca}
+.status.hold{color:#a37013}
+.status.unavailable{color:#68768c}
+.roomtile .roommeta{font-size:11px;color:#69809a;margin-top:6px;display:flex;align-items:center;gap:5px}
+.roomtile .roommeta svg{width:13px;height:13px}
+
+/* Type Cards */
+.typegrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.type-card{padding:22px}
+.type-price{font-weight:850;margin:14px 0;color:#1b4eae;font-size:15px}
+.asset-line{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #eff2f6;padding:10px 0;color:#6c7a91;font-size:12px}
+.type-card h3{margin:14px 0 5px;font-size:16px}
+.card-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.card-actions .btn{padding:8px 12px;font-size:12px;min-height:36px}
+
+/* Tables */
+.tablewrap{overflow:auto}
+.datatable{border-collapse:collapse;width:100%;min-width:700px}
+.datatable th{text-align:left;color:#79879c;background:#f8fafd;font-size:12px;font-weight:800;padding:15px 20px;border-bottom:1px solid var(--border)}
+.datatable td{padding:15px 20px;border-bottom:1px solid #edf1f6;font-size:13px;vertical-align:middle}
+.empty{padding:40px;text-align:center;color:#8090a8;font-size:13px}
+
+/* Modals & Forms (REFOCUSED FOR BF-01) */
+.overlay{position:fixed;inset:0;background:rgba(19,31,49,.4);z-index:50;display:flex;justify-content:center;align-items:center;padding:20px}
+.modal{background:#fff;border-radius:20px;padding:34px;width:min(600px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2)}
+.modal.wide-modal{width:min(850px,100%)}
+.xbtn{border:0;background:#f5f7fb;border-radius:10px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#53657c;transition:background .2s}
+.xbtn:hover{background:#e1e7f0;color:var(--navy)}
+
+.formfield{display:block;margin-top:18px}
+.formfield label{font-size:13px;font-weight:750;display:block;margin-bottom:8px;color:#2f3d53}
+.formfield input, .formfield select, .formfield textarea{width:100%;border:1px solid var(--border);border-radius:10px;padding:12px 15px;font-size:13px;background:#fff;color:var(--navy);transition:border-color .2s}
+.formfield input:focus, .formfield select:focus, .formfield textarea:focus{border-color:#9bb9ff}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:30px;padding-top:20px;border-top:1px solid var(--border)}
+
+/* Special Form Sections */
+.form-section-title{font-size:14px;font-weight:800;color:var(--navy);margin:24px 0 12px;padding-bottom:8px;border-bottom:1px solid #e1e7f0;display:flex;align-items:center;justify-content:space-between}
+.checkbox-group{display:flex;flex-direction:column;gap:10px;margin-top:12px;background:#f8fafd;padding:14px 16px;border-radius:10px;border:1px solid #eff2f6}
+.checkbox-label{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;cursor:pointer;color:#3a506f}
+.checkbox-label input[type="checkbox"]{width:18px;height:18px;accent-color:var(--blue);cursor:pointer}
+
+/* Dynamic Asset Rows (Room Type) */
+.asset-req-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.asset-row{display:flex;align-items:center;gap:10px;background:#f4f7fc;padding:10px 14px;border-radius:10px;border:1px solid #e9edf4}
+.asset-row select{flex:1;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px}
+.asset-row input[type="number"]{width:80px;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;text-align:center}
+.asset-row .xbtn{width:34px;height:34px;background:#fff;border:1px solid var(--border)}
+.btn-add-dashed{width:100%;background:transparent;border:2px dashed #c0d1f3;color:#255dde;font-weight:750;border-radius:10px;padding:10px;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;transition:background .2s}
+.btn-add-dashed:hover{background:#f1f5ff}
+
+/* Bulk Preview */
+.preview-box{background:#f8fafd;border:1px solid #d6e5ff;border-radius:12px;padding:18px;margin-top:20px}
+.preview-codes{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.preview-code-tag{background:#fff;border:1px solid #b5ccfa;color:#1b4eae;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:750;box-shadow:0 1px 2px rgba(0,0,0,.02)}
+.preview-code-tag.error{border-color:#fecaca;background:#fff2f2;color:#b91c1c}
+
+.notice{position:fixed;bottom:24px;right:24px;background:#15243e;color:white;padding:15px 22px;border-radius:12px;font-size:13px;z-index:100;box-shadow:0 10px 40px rgba(0,0,0,.15);font-weight:600}
+
+/* Tools */
+.toolrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.tools{display:flex;gap:10px;flex-wrap:wrap}
+.search{border:1px solid var(--border);background:#fff;padding:12px 16px;border-radius:10px;min-width:260px;font-size:13px}
+.filter{border:1px solid var(--border);background:#fff;padding:12px 16px;border-radius:10px;font-size:13px;color:#41536d}
+
+@media(max-width:1230px){
+    .location-grid,.typegrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .floor-preview{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .two-col{grid-template-columns:1fr}
+}
+@media(max-width:800px){
+    .sidebar{width:76px;flex-basis:76px}
+    .sidebar .hide-small,.sidebar .group-label{display:none}
+    .main{padding:22px 16px}
+    .floor-preview{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .form-grid{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+    .location-grid,.typegrid{grid-template-columns:1fr}
+    .floor-preview{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .modal{padding:24px;border-radius:16px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+const svgPaths = {
+ dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+ building:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h1M15 6h1M8 10h1M15 10h1M8 14h1M15 14h1"/>',
+ door:'<path d="M5 21V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v17M3 21h18M15 12h.01"/>',
+ layers:'<path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"/>',
+ money:'<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 12h.01M18 12h.01"/>',
+ people:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+ alert:'<path d="m10.3 3.4-8 14a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0ZM12 9v4M12 17h.01"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>', chevron:'<path d="m9 18 6-6-6-6"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', home:'<path d="m3 10 9-7 9 7v11H3V10ZM9 21v-7h6v7"/>',
+ edit:'<path d="M12 20h9M16 4l4 4-12 12H4v-4L16 4Z"/>', trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
+ back:'<path d="m15 18-6-6 6-6"/>'
+};
+const I = k => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${svgPaths[k]||svgPaths.dashboard}</svg>`;
+const H = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const VND = n => Number(n||0).toLocaleString('vi-VN')+' đ';
+const uid = (p='id') => p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
+const dTomorrow = () => {const d=new Date();d.setDate(d.getDate()+1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+const STATUS = {AVAILABLE:['Trống','available'],ON_HOLD:['Giữ chỗ','hold'],OCCUPIED:['Đang thuê','occupied'],UNAVAILABLE:['Tạm ngừng','unavailable']};
+
+// MOCK DATA (BF-01 Focus)
+let db = {
+ locations: [
+  {id:'l1', name:'BHOME Central 1', address:'Bạch Đằng, Hà Nội', staff:'Trần Minh Đức', floors:[2,3,4,5], active:true},
+  {id:'l2', name:'BHOME Central 2', address:'Hòa Lạc, Hà Nội', staff:'Nguyễn Hà Linh', floors:[1,2,3], active:true}
+ ],
+ assetCatalog: [
+  {id:'cat-AC', code:'AC', name:'Điều hòa 9000 BTU', active:true},
+  {id:'cat-BED', code:'BED', name:'Giường 1m6', active:true},
+  {id:'cat-REF', code:'REF', name:'Tủ lạnh 90L', active:true},
+  {id:'cat-DESK', code:'DESK', name:'Bàn học', active:true}
+ ],
+ roomTypes: [
+  {id:'l1-studio', locationId:'l1', name:'Studio tiêu chuẩn', area:25, capacity:3, price:7200000, active:true, requirements:[{catalogId:'cat-AC',qty:1},{catalogId:'cat-BED',qty:1}]},
+  {id:'l1-single', locationId:'l1', name:'Phòng đơn', area:18, capacity:2, price:4500000, active:true, requirements:[{catalogId:'cat-BED',qty:1},{catalogId:'cat-DESK',qty:1}]}
+ ],
+ rooms: [
+  {id:'l1-r2-1', locationId:'l1', code:'P.201', floor:2, typeId:'l1-studio', capacity:3, area:25, manualUnavailable:false, status:'OCCUPIED', occupants:2},
+  {id:'l1-r2-2', locationId:'l1', code:'P.202', floor:2, typeId:'l1-studio', capacity:3, area:25, manualUnavailable:false, status:'AVAILABLE', occupants:0},
+  {id:'l1-r2-3', locationId:'l1', code:'P.203', floor:2, typeId:'l1-single', capacity:2, area:18, manualUnavailable:true, status:'UNAVAILABLE', occupants:0}
+ ],
+ policies: [
+  {id:'pol-1', locationId:'l1', scope:'LOCATION', scopeId:'l1', category:'ELECTRICITY', name:'Điện', amount:3500, from:'2026-09-01', to:'', archived:false}
+ ]
+};
+
+let UI = { view: 'overview', locationId: null, modal: null, modalId: null, search: '', filterFloor: 'ALL' };
+const loc = () => db.locations.find(x => x.id === UI.locationId);
+const roomsOf = () => db.rooms.filter(x => x.locationId === UI.locationId);
+const typesOf = () => db.roomTypes.filter(x => x.locationId === UI.locationId);
+const typeById = id => db.roomTypes.find(x => x.id === id);
+
+function go(view, locationId) {
+ UI.view = view; 
+ if(locationId) UI.locationId = locationId;
+ else if(view === 'overview' || view === 'properties') UI.locationId = null;
+ UI.modal = null; UI.search = ''; UI.filterFloor = 'ALL';
+ render();
+}
+
+function toast(msg) {
+ const t = document.createElement('div'); t.className = 'notice'; t.textContent = msg;
+ document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
+}
+
+// === COMPONENTS ===
+const button = (action, label, {klass='', id='', icon='', extra=''}={}) => 
+ `<button type="button" class="btn ${klass}" data-action="${action}" ${id?`data-id="${id}"`:''} ${extra}>${icon?I(icon):''}${label}</button>`;
+
+const navItem = (view, label, icon) => 
+ `<button class="navitem ${(UI.view===view||(view==='properties'&&UI.locationId))?'active':''}" data-action="nav" data-view="${view}">${I(icon)}<span class="hide-small">${label}</span></button>`;
+
+function sidebar() {
+ return `<aside class="sidebar"><div class="brand"><div class="brandmark">B</div><div class="hide-small"><div class="brandname">BHOME</div><div class="brandtag">Owner Portal</div></div></div><div class="nav-scroll">
+ <div class="navgroup"><p class="group-label">TOÀN CHUỖI</p>${navItem('overview','Tổng quan','dashboard')}${navItem('properties','Danh sách cơ sở','building')}</div>
+ </div><div class="sidebar-footer"><div class="avatar">O</div><div class="hide-small"><div class="avatarlabel">Tài khoản Owner</div><div class="avatarsub">Thiết lập & Cấu hình</div></div></div></aside>`;
+}
+
+function topbar() {
+ const l = loc();
+ return `<header class="topbar"><div class="crumb">${I('home')} <span>/</span><b>${UI.view==='overview'?'Tổng quan chuỗi':UI.view==='properties'?'Danh sách cơ sở':l?`Cơ sở / ${H(l.name)}`:'Cấu hình'}</b></div>
+ <div class="top-right"><span class="demo-tag">MÔ PHỎNG BF-01</span></div></header>`;
+}
+
+function tabs() {
+ const items = [['location','Tổng quan'],['rooms','Phòng & Sơ đồ tầng'],['roomTypes','Loại phòng'],['pricing','Giá & Biểu phí']];
+ return `<div class="subnav workspace-tabs">${items.map(([v,name])=>`<button class="${UI.view===v?'selected':''}" data-action="nav" data-view="${v}">${name}</button>`).join('')}</div>`;
+}
+
+// === VIEWS ===
+function dashboard() {
+ return `<div class="page-head"><div><h1>Tổng quan toàn chuỗi</h1><p class="subtitle">Quản lý tổng thể cấu hình và các cơ sở trong hệ thống BHOME.</p></div>${button('add-location','Tạo cơ sở mới',{klass:'primary',icon:'plus'})}</div>
+ <div class="location-grid">${db.locations.map(locationCard).join('')}</div>`;
+}
+
+function locationCard(l) {
+ const rs = db.rooms.filter(x=>x.locationId===l.id);
+ const occupied = rs.filter(x=>x.status==='OCCUPIED').length;
+ const pct = rs.length ? Math.round(occupied/rs.length*100) : 0;
+ return `<div class="card location-card" data-action="open-location" data-id="${l.id}">
+ <div class="row between"><span class="location-icon">${I('building')}</span><span class="pill blue">${l.active?'Hoạt động':'Ngừng'}</span></div>
+ <div class="location-title">${H(l.name)}</div><div class="location-address">${H(l.address)}</div>
+ <div class="row between small"><span>${occupied}/${rs.length} phòng đang thuê</span><strong>${pct}%</strong></div>
+ <div class="progress-track" style="margin-top:8px"><div class="progress-fill" style="width:${pct}%"></div></div>
+ <div class="loc-footer"><span>${I('people')} ${H(l.staff)}</span><span>Quản lý cơ sở ${I('chevron')}</span></div></div>`;
+}
+
+function workspaceWrapper(content) {
+ const l = loc();
+ return `<div class="page-head"><div><div class="eyebrow">KHÔNG GIAN CƠ SỞ</div><h1>${H(l.name)}</h1><p class="subtitle">${H(l.address)} · Phụ trách: ${H(l.staff)}</p></div>${button('nav','Danh sách cơ sở',{icon:'back',extra:'data-view="properties"'})}</div>${tabs()}${content}`;
+}
+
+function locOverview() {
+ return workspaceWrapper(`<div class="two-col"><section class="card"><div class="card-header"><h2>Lối tắt cấu hình (BF-01)</h2></div><div class="card-body" style="display:flex;gap:10px;flex-wrap:wrap">
+ ${button('add-type','Tạo loại phòng',{klass:'primary',icon:'plus'})} ${button('bulk-room','Tạo phòng hàng loạt',{klass:'primary',icon:'plus'})} ${button('nav','Cấu hình giá/phí',{extra:'data-view="pricing"',icon:'money'})}
+ </div></section></div><div class="hintbox" style="margin-top:20px">Luồng BF-01: Owner tạo Location -> Định nghĩa Room Types (Loại phòng & định mức) -> Tạo Rooms hàng loạt -> Cấu hình Billing Policies.</div>`);
+}
+
+function roomPage() {
+ const rr = roomsOf().filter(r => (UI.filterFloor==='ALL' || r.floor===Number(UI.filterFloor)) && (!UI.search || r.code.toLowerCase().includes(UI.search.toLowerCase())));
+ const floors = [...new Set(rr.map(x=>x.floor))].sort((a,b)=>b-a);
+ 
+ const floorOptions = [...loc().floors].sort((a,b)=>b-a).map(n=>`<option value="${n}" ${String(n)===UI.filterFloor?'selected':''}>Tầng ${n}</option>`).join('');
+ 
+ let grid = floors.map(f => `<section class="floor-group"><div class="floor-head"><strong>Tầng ${f}</strong><span class="badge">${rr.filter(r=>r.floor===f).length} phòng</span></div>
+ <div class="floor-preview">${rr.filter(r=>r.floor===f).sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true})).map(roomTile).join('')}</div></section>`).join('') || '<div class="empty">Không tìm thấy phòng.</div>';
+
+ return workspaceWrapper(`<div class="page-head"><div><h2>Sơ đồ phòng</h2><p class="subtitle">Quản lý danh sách phòng vật lý thuộc cơ sở này.</p></div>${button('bulk-room','Tạo phòng hàng loạt',{klass:'primary',icon:'plus'})}</div>
+ <div class="toolrow"><div class="tools"><input id="searchRooms" class="search" placeholder="Tìm mã phòng..." value="${H(UI.search)}"/>
+ <select class="filter" id="floorFilter"><option value="ALL">Tất cả tầng</option>${floorOptions}</select></div></div>${grid}`);
+}
+
+function roomTile(r) {
+ const t = typeById(r.typeId);
+ return `<div class="roomtile ${STATUS[r.status][1]}"><div class="row between"><strong class="roomcode">${H(r.code)}</strong></div>
+ <div class="tiny muted" style="margin:6px 0">${H(t?.name)} · Tầng ${r.floor}</div>
+ <div class="price-tile">${VND(t?.price)}<span>/tháng</span></div>
+ <div class="status ${STATUS[r.status][1]}">● ${STATUS[r.status][0]}</div>
+ <div class="roommeta">${I('people')}${r.occupants}/${r.capacity} người</div></div>`;
+}
+
+function roomTypesPage() {
+ return workspaceWrapper(`<div class="page-head"><div><h2>Loại phòng (Cấu hình mẫu)</h2><p class="subtitle">Định nghĩa cấu hình diện tích, sức chứa, giá chuẩn và định mức tài sản cho các phòng.</p></div>
+ ${button('add-type','Tạo loại phòng',{klass:'primary',icon:'plus'})}</div>
+ <div class="typegrid">${typesOf().map(typeCard).join('')||'<div class="empty">Chưa có loại phòng.</div>'}</div>`);
+}
+
+function typeCard(t) {
+ let count = roomsOf().filter(r=>r.typeId===t.id).length;
+ return `<div class="card type-card"><div class="row between"><span class="location-icon">${I('layers')}</span><span class="pill ${t.active?'green':''}">${t.active?'Đang sử dụng':'Ngừng dùng'}</span></div>
+ <h3>${H(t.name)}</h3><p class="subtitle">${t.area} m² · Tối đa ${t.capacity} người</p><p class="type-price">${VND(t.price)} <span style="font-size:12px;color:#64748b;font-weight:600">/ tháng</span></p>
+ <div class="form-section-title" style="margin-top:20px; font-size:12px">ĐỊNH MỨC TÀI SẢN MẶC ĐỊNH</div>
+ ${t.requirements.length ? t.requirements.map(a=>`<div class="asset-line"><span>${H(db.assetCatalog.find(c=>c.id===a.catalogId)?.name)}</span><b>×${a.qty}</b></div>`).join('') : '<div class="muted small">Không yêu cầu tài sản.</div>'}
+ <div class="asset-line" style="margin-top:10px"><span>Phòng đang áp dụng</span><b>${count}</b></div>
+ <div class="card-actions">${button('edit-type','Chỉnh sửa',{id:t.id,icon:'edit'})}</div></div>`;
+}
+
+function pricingPage() {
+ const ps = db.policies.filter(p=>p.locationId===UI.locationId);
+ return workspaceWrapper(`<div class="page-head"><div><h2>Chính sách & Biểu phí</h2><p class="subtitle">Thiết lập các loại phí (điện, nước, dịch vụ) áp dụng cho cơ sở, loại phòng hoặc phòng cụ thể.</p></div>
+ ${button('add-policy','Tạo chính sách',{klass:'primary',icon:'plus'})}</div>
+ <div class="card tablewrap"><table class="datatable"><thead><tr><th>Loại phí</th><th>Phạm vi áp dụng</th><th>Đơn giá</th><th>Hiệu lực từ</th><th>Thao tác</th></tr></thead>
+ <tbody>${ps.map(p=>`<tr><td><b>${H(p.name||p.category)}</b></td><td>${p.scope==='LOCATION'?'Toàn cơ sở':p.scope==='ROOM_TYPE'?`Loại phòng: ${typeById(p.scopeId)?.name}`:`Phòng: ${db.rooms.find(r=>r.id===p.scopeId)?.code}`}</td>
+ <td><b>${VND(p.amount)}</b></td><td>${p.from}</td><td>${button('edit-policy','Sửa',{id:p.id})}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Chưa có chính sách.</td></tr>'}</tbody></table></div>`);
+}
+
+function render() {
+ const p = UI.view==='overview'?dashboard(): UI.view==='properties'?dashboard(): UI.view==='location'?locOverview(): UI.view==='rooms'?roomPage(): UI.view==='roomTypes'?roomTypesPage(): UI.view==='pricing'?pricingPage(): '';
+ document.getElementById('app').innerHTML = sidebar() + `<div class="shell">${topbar()}<main class="main">${p}</main></div>` + modalMarkup();
+}
+
+// === MODALS (REFOCUSED UI) ===
+const field = (lbl, name, val='', opts='') => `<div class="formfield"><label>${lbl}</label><input name="${name}" value="${H(val)}" ${opts}/></div>`;
+const select = (lbl, name, opts, sel='') => `<div class="formfield"><label>${lbl}</label><select name="${name}">${opts.map(x=>`<option value="${x[0]}" ${String(sel)===String(x[0])?'selected':''}>${H(x[1])}</option>`).join('')}</select></div>`;
+const saveBtn = lbl => `<div class="form-actions"><button type="button" class="btn" data-action="close-modal">Hủy</button><button type="submit" class="btn primary">${lbl}</button></div>`;
+
+function modalMarkup() {
+ if(!UI.modal) return '';
+ let x = '', id = UI.modalId;
+
+ if(UI.modal === 'location') {
+  const v = db.locations.find(o=>o.id===id);
+  x = `<div class="row between"><h2>${v?'Chỉnh sửa cơ sở':'Tạo không gian Cơ sở mới'}</h2><button class="xbtn" data-action="close-modal">×</button></div>
+  <p class="subtitle" style="margin-bottom:20px">Thiết lập cấu trúc cơ bản để quản lý phòng và các nghiệp vụ liên quan.</p>
+  <form id="locForm"><div class="form-grid">${field('Tên cơ sở *','name',v?.name,'required')}${field('Địa chỉ *','address',v?.address,'required')}
+  ${field('Người phụ trách','staff',v?.staff)}${field('Số tầng (1-30) *','floors',v?.floors.length||4,'type="number" min="1" required')}</div>
+  ${!v ? `<div class="form-section-title">SAO CHÉP DỮ LIỆU CẤU HÌNH (TÙY CHỌN)</div>
+  <div class="formfield"><label>Cơ sở nguồn</label><select name="copySource"><option value="">-- Không sao chép, tạo mới hoàn toàn --</option>
+  ${db.locations.map(l=>`<option value="${l.id}">${H(l.name)}</option>`).join('')}</select></div>
+  <div class="checkbox-group">
+   <label class="checkbox-label"><input type="checkbox" name="copyTypes" checked> Sao chép toàn bộ Loại phòng & Định mức tài sản</label>
+   <label class="checkbox-label"><input type="checkbox" name="copyPolicies" checked> Sao chép Chính sách Biểu phí (Điện, Nước, Dịch vụ)</label>
+  </div>` : ''}
+  ${saveBtn(v?'Lưu thay đổi':'Khởi tạo cơ sở')}</form>`;
+ }
+ else if(UI.modal === 'type') {
+  const t = typeById(id);
+  const catOpts = db.assetCatalog.filter(x=>x.active).map(x=>`<option value="${x.id}">${x.code} - ${H(x.name)}</option>`).join('');
+  let reqs = (t?.requirements||[]).map(r => `
+   <div class="asset-row">
+    <select name="req_cat[]">${db.assetCatalog.map(x=>`<option value="${x.id}" ${x.id===r.catalogId?'selected':''}>${x.code} - ${H(x.name)}</option>`).join('')}</select>
+    <input type="number" name="req_qty[]" value="${r.qty}" min="1" max="100" placeholder="Số lượng">
+    <button type="button" class="xbtn danger-text" onclick="this.parentElement.remove()">×</button>
+   </div>`).join('');
+  
+  x = `<div class="row between"><h2>${t?'Chỉnh sửa Loại phòng':'Định nghĩa Loại phòng'}</h2><button class="xbtn" data-action="close-modal">×</button></div>
+  <p class="subtitle" style="margin-bottom:20px">Thiết lập cấu hình mẫu cho diện tích, giá và các tài sản tiêu chuẩn cần có trong phòng.</p>
+  <form id="typeForm"><div class="form-grid">${field('Tên loại phòng *','name',t?.name,'required')}${field('Giá thuê chuẩn (VND) *','price',t?.price||5000000,'type="number" required')}
+  ${field('Diện tích (m²) *','area',t?.area||20,'type="number" required')}${field('Sức chứa tối đa *','capacity',t?.capacity||2,'type="number" required')}</div>
+  <div class="form-section-title">ĐỊNH MỨC TÀI SẢN CHO LOẠI PHÒNG NÀY</div>
+  <div class="asset-req-list" id="dynamicAssets">${reqs}</div>
+  <button type="button" class="btn-add-dashed" id="btnAddAsset">+ Thêm tiêu chuẩn tài sản</button>
+  <template id="tplAssetRow"><div class="asset-row"><select name="req_cat[]">${catOpts}</select><input type="number" name="req_qty[]" value="1" min="1" max="100"><button type="button" class="xbtn danger-text" onclick="this.parentElement.remove()">×</button></div></template>
+  ${saveBtn('Lưu cấu hình')}</form>`;
+ }
+ else if(UI.modal === 'bulkRoom') {
+  const ts = typesOf();
+  const l = loc();
+  x = `<div class="row between"><h2>Tạo phòng vật lý hàng loạt</h2><button class="xbtn" data-action="close-modal">×</button></div>
+  <p class="subtitle" style="margin-bottom:20px">Sinh nhanh danh sách mã phòng dựa trên cấu hình loại phòng đã tạo.</p>
+  <form id="bulkForm"><div class="form-grid">
+   <div>
+    <div class="form-section-title" style="margin-top:0">THÔNG TIN CƠ BẢN</div>
+    ${select('Loại phòng áp dụng *','typeId',ts.map(x=>[x.id,`${x.name} (${VND(x.price)})`]))}
+    ${select('Tầng *','floor',l.floors.map(n=>[n,`Tầng ${n}`]))}
+   </div>
+   <div>
+    <div class="form-section-title" style="margin-top:0">CẤU TRÚC MÃ PHÒNG</div>
+    <div class="form-grid" style="gap:10px">${field('Tiền tố *','prefix','P.2','required')}${field('Số bắt đầu *','start',1,'type="number" min="1" required')}</div>
+    ${field('Số lượng phòng cần tạo *','count',5,'type="number" min="1" max="50" required')}
+   </div>
+  </div>
+  <div class="preview-box">
+   <div class="row between"><b>Xem trước kết quả sinh mã</b><span class="tiny muted" id="bulkCountTxt">5 phòng</span></div>
+   <div class="preview-codes" id="bulkPreview"></div>
+  </div>
+  ${saveBtn('Tạo danh sách phòng')}</form>`;
+ }
+ else if(UI.modal === 'policy') {
+  const p = db.policies.find(x=>x.id===id);
+  x = `<div class="row between"><h2>${p?'Chỉnh sửa Chính sách / Biểu phí':'Cấu hình Chính sách / Biểu phí'}</h2><button class="xbtn" data-action="close-modal">×</button></div>
+  <p class="subtitle" style="margin-bottom:20px">Thiết lập các khoản phí định kỳ (Điện, Nước, Dịch vụ mạng...).</p>
+  <form id="policyForm">
+  <div class="form-section-title" style="margin-top:0">THÔNG TIN KHOẢN PHÍ</div>
+  <div class="form-grid">${select('Loại phí *','category',[['ELECTRICITY','Điện'],['WATER','Nước'],['SERVICE','Phí dịch vụ chung']],p?.category)}
+  ${field('Tên hiển thị (nếu là dịch vụ)','name',p?.name||'')}${field('Đơn giá (VND) *','amount',p?.amount||0,'type="number" required')}</div>
+  
+  <div class="form-section-title">PHẠM VI & HIỆU LỰC</div>
+  <div class="form-grid">${select('Áp dụng cho *','scope',[['LOCATION','Toàn bộ cơ sở'],['ROOM_TYPE','Theo loại phòng'],['ROOM','Phòng cụ thể']],p?.scope||'LOCATION')}
+  <div id="targetPolicyWrap"></div>
+  ${field('Ngày bắt đầu áp dụng *','from',p?.from||dTomorrow(),'type="date" required')}${field('Ngày kết thúc (Bỏ trống nếu vô thời hạn)','to',p?.to||'','type="date"')}</div>
+  ${saveBtn('Lưu chính sách')}</form>`;
+ }
+
+ return `<div class="overlay" data-action="close-modal"><div class="modal ${UI.modal==='bulkRoom'||UI.modal==='location'?'wide-modal':''}" onclick="event.stopPropagation()">${x}</div></div>`;
+}
+
+// === FORM HANDLING & LOGIC ===
+document.addEventListener('submit', e => {
+ e.preventDefault(); const f = e.target; const d = new FormData(f);
+ const v = n => String(d.get(n)||'').trim(); const num = n => Number(d.get(n));
+
+ if(f.id === 'locForm') {
+  if(!v('name') || !v('address') || num('floors') < 1) return toast('Vui lòng nhập đủ thông tin hợp lệ.');
+  if(UI.modalId) {
+   let l = loc(); l.name = v('name'); l.address = v('address'); l.staff = v('staff'); l.floors = Array.from({length:num('floors')},(_,i)=>i+1);
+   toast('Đã cập nhật cơ sở.');
+  } else {
+   const nid = uid('l'); 
+   db.locations.push({id:nid, name:v('name'), address:v('address'), staff:v('staff'), floors:Array.from({length:num('floors')},(_,i)=>i+1), active:true});
+   const src = v('copySource');
+   if(src) {
+    if(d.get('copyTypes')) db.roomTypes.filter(t=>t.locationId===src).forEach(t=>db.roomTypes.push({...t, id:uid('type'), locationId:nid, requirements:t.requirements.map(a=>({...a}))}));
+    if(d.get('copyPolicies')) db.policies.filter(p=>p.locationId===src && p.scope==='LOCATION').forEach(p=>db.policies.push({...p, id:uid('pol'), locationId:nid, scopeId:nid}));
+   }
+   UI.locationId = nid; go('location'); toast('Đã tạo cơ sở mới thành công.');
+  }
+  UI.modal = null; render();
+ }
+ else if(f.id === 'typeForm') {
+  if(!v('name') || num('price') < 0 || num('area') < 1) return toast('Cấu hình loại phòng không hợp lệ.');
+  const cats = d.getAll('req_cat[]'); const qtys = d.getAll('req_qty[]');
+  let reqs = [];
+  for(let i=0; i<cats.length; i++) {
+   if(reqs.some(x=>x.catalogId===cats[i])) return toast('Lỗi: Một tài sản bị thêm trùng lặp định mức.');
+   reqs.push({catalogId: cats[i], qty: Number(qtys[i])});
+  }
+  if(UI.modalId) { Object.assign(typeById(UI.modalId), {name:v('name'), price:num('price'), area:num('area'), capacity:num('capacity'), requirements:reqs}); }
+  else { db.roomTypes.push({id:uid('type'), locationId:UI.locationId, name:v('name'), price:num('price'), area:num('area'), capacity:num('capacity'), requirements:reqs, active:true}); }
+  UI.modal = null; render(); toast('Đã lưu loại phòng.');
+ }
+ else if(f.id === 'bulkForm') {
+  const n=num('count'), start=num('start'), pfx=v('prefix'), floor=num('floor'), t=typeById(v('typeId'));
+  if(!t || n<1 || n>50 || !pfx) return toast('Vui lòng kiểm tra lại thông số sinh mã.');
+  const codes = Array.from({length:n}, (_,i) => pfx + String(start+i).padStart(2,'0'));
+  if(codes.some(c => roomsOf().some(r=>r.code.toLowerCase()===c.toLowerCase()))) return toast('Cảnh báo: Có mã phòng bị trùng lặp với dữ liệu hiện tại.');
+  codes.forEach(code => {
+   db.rooms.push({id:uid('room'), locationId:UI.locationId, code, floor, typeId:t.id, capacity:t.capacity, area:t.area, manualUnavailable:true, status:'AVAILABLE', occupants:0});
+  });
+  UI.modal = null; go('rooms'); toast(`Đã tạo thành công ${n} phòng.`);
+ }
+ else if(f.id === 'policyForm') {
+  if(num('amount')<0 || !v('from')) return toast('Thông tin chính sách không hợp lệ.');
+  let p = UI.modalId ? db.policies.find(x=>x.id===UI.modalId) : {id:uid('pol'), locationId:UI.locationId};
+  Object.assign(p, {category:v('category'), name:v('name'), amount:num('amount'), scope:v('scope'), scopeId:v('scopeId')||UI.locationId, from:v('from'), to:v('to')});
+  if(!UI.modalId) db.policies.push(p);
+  UI.modal = null; render(); toast('Đã lưu chính sách/biểu phí.');
+ }
+});
+
+// INTERACTIVE LOGIC
+document.addEventListener('click', e => {
+ let el = e.target.closest('[data-action]');
+ if(el) {
+  const a = el.dataset.action, id = el.dataset.id;
+  if(a==='close-modal') { UI.modal = null; render(); }
+  else if(a==='nav') go(el.dataset.view);
+  else if(a==='open-location') go('location', id);
+  else if(a==='add-location') { UI.modal = 'location'; render(); }
+  else if(a==='add-type') { UI.modal = 'type'; render(); }
+  else if(a==='edit-type') { UI.modal = 'type'; UI.modalId = id; render(); }
+  else if(a==='bulk-room') { UI.modal = 'bulkRoom'; render(); setTimeout(renderBulkPreview, 50); }
+  else if(a==='add-policy') { UI.modal = 'policy'; render(); setTimeout(renderPolicyTarget, 50); }
+  else if(a==='edit-policy') { UI.modal = 'policy'; UI.modalId = id; render(); setTimeout(renderPolicyTarget, 50); }
+ }
+ 
+ if(e.target.id === 'btnAddAsset') {
+  const tpl = document.getElementById('tplAssetRow').innerHTML;
+  document.getElementById('dynamicAssets').insertAdjacentHTML('beforeend', tpl);
+ }
+});
+
+document.addEventListener('input', e => {
+ if(e.target.closest('#bulkForm')) renderBulkPreview();
+ if(e.target.id === 'searchRooms') { UI.search = e.target.value; render(); setTimeout(()=>document.getElementById('searchRooms').focus(),0); }
+});
+document.addEventListener('change', e => {
+ if(e.target.id === 'floorFilter') { UI.filterFloor = e.target.value; render(); }
+ if(UI.modal === 'policy' && e.target.name === 'scope') renderPolicyTarget();
+});
+
+// UTILS FOR MODALS
+function renderBulkPreview() {
+ const f = document.getElementById('bulkForm'); if(!f) return;
+ const d = new FormData(f), n = Number(d.get('count'))||0, start = Number(d.get('start'))||1, pfx = (d.get('prefix')||'').trim();
+ const codes = (n>0 && n<=50 && pfx) ? Array.from({length:n}, (_,i) => pfx + String(start+i).padStart(2,'0')) : [];
+ const dup = codes.filter(c => roomsOf().some(r=>r.code.toLowerCase()===c.toLowerCase()));
+ 
+ document.getElementById('bulkCountTxt').textContent = codes.length ? `${codes.length} mã phòng` : '';
+ document.getElementById('bulkPreview').innerHTML = codes.length ? codes.map(c => 
+  `<span class="preview-code-tag ${dup.includes(c)?'error':''}">${H(c)}</span>`
+ ).join('') : '<span class="muted small">Vui lòng điền tiền tố và số lượng hợp lệ để xem trước.</span>';
+ if(dup.length) document.getElementById('bulkPreview').insertAdjacentHTML('beforeend', `<div style="width:100%;margin-top:5px" class="tiny red">Cảnh báo: Có ${dup.length} mã bị trùng với dữ liệu hiện tại!</div>`);
+}
+
+function renderPolicyTarget() {
+ const f = document.getElementById('policyForm'); if(!f) return;
+ const scope = f.querySelector('[name="scope"]').value, p = db.policies.find(x=>x.id===UI.modalId);
+ let opts = [];
+ if(scope === 'ROOM_TYPE') opts = typesOf().map(t=>[t.id, t.name]);
+ else if(scope === 'ROOM') opts = roomsOf().map(r=>[r.id, r.code]);
+ else opts = [[UI.locationId, loc().name]];
+ 
+ document.getElementById('targetPolicyWrap').innerHTML = select('Đới tượng cụ thể *', 'scopeId', opts, p?.scope===scope ? p.scopeId : (opts[0]?.[0]||''));
+}
+
+render();
+</script>
+</body>
+</html>

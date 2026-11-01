@@ -173,12 +173,21 @@ export function errorMessage(error: unknown): string {
     reading_date_or_precision: 'Kiểm tra ngày ghi và số chữ số thập phân của đồng hồ.',
     staff_not_currently_assigned: 'Staff chưa được phân công Location có hiệu lực.',
     invalid_citizen_number: 'Số CCCD cần đúng 12 chữ số.',
+    stale_version: 'Công việc đã thay đổi. Hãy tải lại và kiểm tra trước khi gửi tiếp.',
+    no_responsible_staff:
+      'Cơ sở chưa có nhân viên phụ trách có hiệu lực. Owner cần cập nhật phân công.',
+    completion_evidence_required: 'Cần chọn ảnh kết quả trước khi gửi Owner kiểm tra.',
+    invalid_task_work_or_deadline:
+      'Kiểm tra tên, yêu cầu và thời hạn công việc; thời hạn mới phải ở tương lai.',
+    task_note_required: 'Nhập nội dung, kết quả hoặc lý do cho thao tác công việc.',
+    invalid_task_transition: 'Trạng thái công việc không cho phép thao tác này. Hãy tải lại.',
+    task_resource_not_found: 'Công việc không khả dụng hoặc không thuộc phạm vi hiện tại của bạn.',
   };
   return (
     ((error.code && messages[error.code]) ||
       (
         {
-          0: 'Không kết nối được API. Kiểm tra máy chủ đang chạy, iPhone cùng mạng và chứng chỉ HTTPS. Nếu vừa đổi Wi-Fi, hãy quét mã QR Expo mới trong terminal.',
+          0: 'Kết nối tới máy chủ đang gián đoạn. Hãy kiểm tra mạng rồi thử lại. API nội bộ cần cùng mạng với máy chủ và chứng chỉ HTTPS được tin cậy; dùng API HTTPS công khai để kết nối qua mạng khác hoặc 4G/5G.',
           400: 'Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường rồi thử lại.',
           401: 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.',
           403: 'Tài khoản không được phép thực hiện thao tác này.',
@@ -221,7 +230,7 @@ export class MobileApi {
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const original = this.token();
     if (original) headers.set('Authorization', 'Bearer ' + original);
-    const send = () =>
+    const sendOnce = () =>
       mobileResponse(this.base, path, { ...init, headers }, this.transport, async (response) => {
         if (response.status === 204) return undefined as T;
         if (responseType === 'bytes') return new Uint8Array(await response.arrayBuffer()) as T;
@@ -229,6 +238,38 @@ export class MobileApi {
           ? (response.blob() as Promise<T>)
           : (response.json() as Promise<T>);
       });
+    const send = async () => {
+      try {
+        return await sendOnce();
+      } catch (error) {
+        // Only retry reads on a brief transport interruption, against the same trusted origin.
+        // A lost mutation/refresh response may already have committed on the server.
+        if (
+          !['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase()) ||
+          !(error instanceof MobileApiError) ||
+          error.code !== 'network_unavailable' ||
+          init.signal?.aborted
+        )
+          throw error;
+        await new Promise<void>((resolve, reject) => {
+          const finish = () => {
+            init.signal?.removeEventListener('abort', cancel);
+            resolve();
+          };
+          const timer = setTimeout(finish, 750);
+          const cancel = () => {
+            clearTimeout(timer);
+            init.signal?.removeEventListener('abort', cancel);
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          };
+          init.signal?.addEventListener('abort', cancel);
+          if (init.signal?.aborted) cancel();
+        });
+        return sendOnce();
+      }
+    };
     try {
       try {
         return await send();

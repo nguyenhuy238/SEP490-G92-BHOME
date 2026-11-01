@@ -2,6 +2,7 @@ import {
   MobileApi,
   MobileApiError,
   apiBaseUrl,
+  checkApiConnection,
   errorMessage,
   mobileResponse,
   type Session,
@@ -26,6 +27,7 @@ export class MobileSessions {
   private credential: string | undefined;
   private refreshTask: Promise<string | undefined> | null = null;
   private restoreTask: Promise<void> | null = null;
+  private waitingForConnection = false;
   private writes: Promise<void> = Promise.resolve();
   private listeners = new Set<(view: SessionView) => void>();
   constructor(
@@ -67,6 +69,7 @@ export class MobileSessions {
   async clear() {
     const epoch = ++this.epoch;
     this.credential = undefined;
+    this.waitingForConnection = false;
     this.emit({ session: null, api: null, restoreError: undefined });
     await this.persist(epoch, null);
   }
@@ -144,7 +147,7 @@ export class MobileSessions {
         }
       } catch (error) {
         if (this.epoch === epoch || !this.value.session) {
-          await this.clear().catch(() => {});
+          if (!this.waitingForConnection) await this.clear().catch(() => {});
           this.emit({ restoreError: errorMessage(error) });
         }
       } finally {
@@ -160,6 +163,19 @@ export class MobileSessions {
     const epoch = this.epoch;
     const base = this.value.baseUrl;
     this.refreshTask = (async () => {
+      // A failed anonymous probe cannot consume a rotating refresh token. Keep it for
+      // reconnection; once refresh has been sent, ambiguous failures still clear it.
+      try {
+        await checkApiConnection(base, this.transport);
+      } catch (error) {
+        if (epoch === this.epoch) {
+          this.waitingForConnection = true;
+          this.emit({ restoreError: errorMessage(error) });
+        }
+        throw error;
+      }
+      if (epoch !== this.epoch) return undefined;
+      this.waitingForConnection = false;
       try {
         const next = await this.auth(base, 'refresh', { refreshToken: previous });
         if (epoch !== this.epoch) return undefined;
@@ -169,16 +185,23 @@ export class MobileSessions {
         );
         if (epoch !== this.epoch) return undefined;
         this.credential = next.refreshToken;
-        this.emit({ session: next, api: this.value.api || this.api(base) });
+        this.emit({
+          session: next,
+          api: this.value.api || this.api(base),
+          restoreError: undefined,
+        });
         return next.accessToken;
       } catch (error) {
         if (epoch === this.epoch) await this.clear();
         throw error;
-      } finally {
-        this.refreshTask = null;
       }
-    })();
+    })().finally(() => {
+      this.refreshTask = null;
+    });
     return this.refreshTask;
+  }
+  async reconnect() {
+    if (this.waitingForConnection) await this.refresh().catch(() => {});
   }
   async login(input: string, email: string, password: string) {
     const base = apiBaseUrl(input);

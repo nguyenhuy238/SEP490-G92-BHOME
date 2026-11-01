@@ -47,6 +47,8 @@ it('creates a Room Type and five inherited rooms without creating Actual Assets'
   const afterRooms = await repository.read();
   const created = afterRooms.records.rooms.filter((room) => room.category === type.id);
   expect(created).toHaveLength(5);
+  expect(created.every((room) => room.status === 'UNAVAILABLE')).toBe(true);
+  expect(created.every((room) => room.attributes.setupStatus === 'IN_SETUP')).toBe(true);
   expect(JSON.parse(created[0].attributes.requirements)).toEqual([{ catalogId, quantity: 1 }]);
   expect(afterRooms.records.assets).toHaveLength(before.records.assets.length);
   await expect(
@@ -57,6 +59,44 @@ it('creates a Room Type and five inherited rooms without creating Actual Assets'
       codes,
     }),
   ).rejects.toThrow('Mã phòng bị trùng');
+});
+
+it('copies setup templates without copying operational Location data', async () => {
+  const repository = createMockRepository();
+  const before = await repository.read();
+  const sourceId = 'loc-1';
+  const destination = makeRecord('locations', {
+    id: 'loc-copy-test',
+    code: 'LOC-COPY',
+    name: 'Cơ sở nhận cấu hình mẫu',
+    status: 'Đang vận hành',
+    attributes: { address: 'Địa chỉ tổng hợp dùng cho kiểm thử', floors: '5' },
+  });
+
+  await repository.executeProperty({
+    kind: 'location',
+    record: destination,
+    copyFrom: sourceId,
+  });
+
+  const after = await repository.read();
+  const sourceTypes = before.records['room-types'].filter((row) => row.locationId === sourceId);
+  const copiedTypes = after.records['room-types'].filter(
+    (row) => row.locationId === destination.id,
+  );
+  const copyablePrices = before.records.pricing.filter(
+    (row) => row.locationId === sourceId && row.attributes.scope !== 'room',
+  );
+
+  expect(copiedTypes).toHaveLength(sourceTypes.length);
+  expect(after.records.pricing.filter((row) => row.locationId === destination.id)).toHaveLength(
+    copyablePrices.length,
+  );
+  expect(after.records.rooms.some((row) => row.locationId === destination.id)).toBe(false);
+  expect(after.records.assets.some((row) => row.locationId === destination.id)).toBe(false);
+  expect(after.records.contracts.some((row) => row.locationId === destination.id)).toBe(false);
+  expect(after.records.tenants.some((row) => row.locationId === destination.id)).toBe(false);
+  expect(after.records.expenses.some((row) => row.locationId === destination.id)).toBe(false);
 });
 
 it('updates inventory on purchase and does not count assignment as a second investment', async () => {

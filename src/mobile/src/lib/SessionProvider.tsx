@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
+import { AppState, Platform } from 'react-native';
 import { resolveApiEndpoint } from './apiEndpoint';
 import { clearAbandonedCaptures } from './captureFiles';
+import { createCredentialStore } from './credentialStore';
 import { MobileSessions, type SessionView } from './sessions';
 
-const KEY = 'bhome.mobile.session.v1';
 const Context = createContext<
   (SessionView & { login: MobileSessions['login']; logout: MobileSessions['logout'] }) | null
 >(null);
@@ -14,31 +13,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [manager] = useState(
     () =>
       new MobileSessions(
-        Platform.OS === 'web'
-          ? {
-              read: () =>
-                Promise.resolve(typeof window !== 'undefined' ? localStorage.getItem(KEY) : null),
-              write: (value) => {
-                if (typeof window !== 'undefined') localStorage.setItem(KEY, value);
-                return Promise.resolve();
-              },
-              remove: () => {
-                if (typeof window !== 'undefined') localStorage.removeItem(KEY);
-                return Promise.resolve();
-              },
-            }
-          : {
-              read: () => SecureStore.getItemAsync(KEY),
-              write: (value) =>
-                SecureStore.setItemAsync(KEY, value, {
-                  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-                }),
-              remove: () => SecureStore.deleteItemAsync(KEY),
-            },
+        createCredentialStore(),
         resolveApiEndpoint({
           development: __DEV__,
           hostUri: Constants.expoConfig?.hostUri,
           configuredUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
+          developmentUrl: process.env.EXPO_PUBLIC_DEV_API_BASE_URL,
+          browserHostname: Platform.OS === 'web' ? globalThis.location?.hostname : undefined,
         }),
         undefined,
         __DEV__ ? process.env.EXPO_PUBLIC_DEV_SERVER_ID : undefined,
@@ -49,7 +30,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     clearAbandonedCaptures();
     const unsubscribe = manager.subscribe(setView);
     void manager.restore();
-    return unsubscribe;
+    const reconnect = () => {
+      if (AppState.currentState === 'active') void manager.reconnect();
+    };
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void manager.reconnect();
+    });
+    const timer = setInterval(reconnect, 5000);
+    return () => {
+      unsubscribe();
+      listener.remove();
+      clearInterval(timer);
+    };
   }, [manager]);
   return (
     <Context.Provider
