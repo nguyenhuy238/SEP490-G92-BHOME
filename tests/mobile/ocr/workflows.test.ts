@@ -13,7 +13,6 @@ describe('new mobile workflow permissions', () => {
     'shifts',
     'rooms',
     'debt-follow-up',
-    'task-detail',
     'report-incident',
   ] as const)('restricts %s to Staff', (screen) => {
     expect(canOpenScreen('Staff', screen)).toBe(true);
@@ -28,6 +27,11 @@ describe('new mobile workflow permissions', () => {
       expect(canOpenScreen('Owner', screen)).toBe(false);
     },
   );
+  it('allows Owner to inspect operational tasks, while Tenant remains excluded', () => {
+    expect(canOpenScreen('Owner', 'task-detail')).toBe(true);
+    expect(canOpenScreen('Staff', 'task-detail')).toBe(true);
+    expect(canOpenScreen('Tenant', 'task-detail')).toBe(false);
+  });
 });
 describe('workflow validation before submission', () => {
   const contract = {

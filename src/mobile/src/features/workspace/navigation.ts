@@ -13,7 +13,7 @@ export const screenRoles = {
   shifts: ['Staff'],
   rooms: ['Staff'],
   'debt-follow-up': ['Staff'],
-  'task-detail': ['Staff'],
+  'task-detail': ['Owner', 'Staff'],
   'owner-home': ['Owner'],
   approvals: ['Owner'],
   operations: ['Owner'],
@@ -65,7 +65,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
       { screen: 'profile', title: 'Tài khoản', icon: 'account-cog-outline' },
     ],
     Staff: [
-      { screen: 'staff-home', title: 'Ca trực', icon: 'clipboard-check-outline' },
+      { screen: 'staff-home', title: 'Tổng quan', icon: 'clipboard-check-outline' },
       { screen: 'work-orders', title: 'Công việc', icon: 'calendar-month-outline' },
       { screen: 'meter-reading', title: 'Điện nước', icon: 'meter-electric-outline' },
       { screen: 'profile', title: 'Tài khoản', icon: 'badge-account-outline' },

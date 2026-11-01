@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Constants from 'expo-constants';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { resolveApiEndpoint } from './apiEndpoint';
 import { clearAbandonedCaptures } from './captureFiles';
 import { createCredentialStore } from './credentialStore';
@@ -19,6 +19,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           hostUri: Constants.expoConfig?.hostUri,
           configuredUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
           developmentUrl: process.env.EXPO_PUBLIC_DEV_API_BASE_URL,
+          browserHostname: Platform.OS === 'web' ? globalThis.location?.hostname : undefined,
         }),
         undefined,
         __DEV__ ? process.env.EXPO_PUBLIC_DEV_SERVER_ID : undefined,

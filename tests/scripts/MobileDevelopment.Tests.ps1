@@ -15,6 +15,12 @@ function New-Network([string]$Address, [int]$Index, [int]$Metric = 10, [string]$
         IPv4Address = @([pscustomobject]@{ IPAddress = $Address; SkipAsSource = $false })
     }
 }
+$tlsSettings = Get-MobileHttpsSniSettings 'synthetic-mobile.pfx' 'synthetic-password' 'synthetic-localhost.pfx'
+Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Path'] 'synthetic-mobile.pfx' 'LAN and no-SNI clients retain mobile certificate'
+Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Path'] 'synthetic-localhost.pfx' 'localhost uses the trusted development certificate'
+Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Password'] 'synthetic-password' 'certificate password is carried as configuration data'
+$fallbackTlsSettings = Get-MobileHttpsSniSettings 'synthetic-mobile.pfx' 'synthetic-password' $null
+Assert-Equal $fallbackTlsSettings['Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Path'] 'synthetic-mobile.pfx' 'missing trusted certificate clears any stale localhost mapping'
 $routes = @(
     [pscustomobject]@{ InterfaceIndex = 1; RouteMetric = 20 },
     [pscustomobject]@{ InterfaceIndex = 2; RouteMetric = 1 }
