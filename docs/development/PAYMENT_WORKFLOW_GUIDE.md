@@ -143,8 +143,9 @@ Không dùng seed để làm mới dữ liệu sau quyết định tài chính t
   tuyên bố đã gửi in-app/push/email; không sửa worker/JOB-19. Lỗi delivery không rollback payment.
 - **Business Decision Pending:** partial/excess, Tenant Credit, refund, allocation priority và
   điều chỉnh được duyệt. Hiện thiếu/thừa/sai reference/trùng cọc/đã Paid giữ PendingReview với
-  lý do, không trừ dư nợ hoặc sửa Final. BH-41 cần nối approved adjustments vào balance trước
-  khi dùng cho các hóa đơn đã điều chỉnh; BH-25 chưa triển khai adjustments.
+  lý do, không trừ dư nợ hoặc sửa Final. BH-41 hiện đã nối approved adjustments vào effective
+  payable/debt/QR; xem [hướng dẫn điều chỉnh](INVOICE_ADJUSTMENT_WORKFLOW_GUIDE.md). Khoản
+  thừa do điều chỉnh giảm sau Paid được giữ riêng PendingReview, chưa tự refund/credit.
 - **Awaiting Tester:** formal ST/AT, thiết bị iOS/Android thực, app ngân hàng và chuyển khoản
   thực, hiệu năng tải và recovery chưa được kiểm chứng trong tác vụ này.
 
