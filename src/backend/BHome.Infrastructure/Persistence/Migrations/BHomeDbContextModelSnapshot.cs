@@ -1207,6 +1207,129 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("ContractFileUploads", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandover", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ElectricityReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset?>("StaffConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("StaffConfirmedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("TenantConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantConfirmedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("TenantConfirmedVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WaterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId")
+                        .IsUnique();
+
+                    b.HasIndex("ElectricityReadingId");
+
+                    b.HasIndex("StaffConfirmedBy");
+
+                    b.HasIndex("TenantConfirmedBy");
+
+                    b.HasIndex("WaterReadingId");
+
+                    b.ToTable("ContractHandovers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContractHandover_State", "\"Version\" > 0 AND \"Status\" BETWEEN 0 AND 2 AND (\"TenantConfirmedVersion\" IS NULL OR \"TenantConfirmedVersion\" = \"Version\") AND (\"Status\" <> 2 OR (\"TenantConfirmedVersion\" IS NOT NULL AND \"TenantConfirmedVersion\" = \"Version\" AND \"TenantConfirmedAt\" IS NOT NULL AND \"StaffConfirmedAt\" IS NOT NULL AND \"TenantConfirmedBy\" IS NOT NULL AND \"StaffConfirmedBy\" IS NOT NULL))");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandoverHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ElectricityReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WaterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("ElectricityReadingId");
+
+                    b.HasIndex("WaterReadingId");
+
+                    b.HasIndex("ContractId", "OccurredAt");
+
+                    b.ToTable("ContractHandoverHistory", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractInspectionEvidence", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2379,6 +2502,64 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandover", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("ElectricityReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StaffConfirmedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantConfirmedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("WaterReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandoverHistory", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("ElectricityReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("WaterReadingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

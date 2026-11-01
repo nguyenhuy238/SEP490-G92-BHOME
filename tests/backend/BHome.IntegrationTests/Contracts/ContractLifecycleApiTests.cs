@@ -184,6 +184,63 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     }
 
     [Fact]
+    public async Task MoveInHandoverRequiresScopedStaffRealReadingsEvidenceAndSameVersionConfirmations()
+    {
+        var w = await Setup(); var outside = await Setup(); var id = await Active(w);
+        var readingIds = new List<Guid>();
+        foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
+        {
+            Guid meterId;
+            await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+                var meter = new Meter { RoomId = w.Room, Code = "SYNTHETIC-HANDOVER-" + type, UtilityType = type, InstalledOn = Today.AddDays(-1) }; db.Add(meter); await db.SaveChangesAsync(); meterId = meter.Id;
+            }
+            var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meterId, ReadingPurpose.Initial, Today, null, null)));
+            using var image = new ByteArrayContent(Image()); image.Headers.ContentType = new("image/png");
+            var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", image));
+            var reading = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true, 100, evidence.Id)));
+            readingIds.Add(reading.Id);
+        }
+        using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
+        var picture = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), photo));
+        var input = new HandoverInput(0, Today, "SYNTHETIC room condition", "SYNTHETIC keys checklist", "", [], readingIds[0], readingIds[1], [picture.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { EvidenceIds = [] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { ElectricityReadingId = readingIds[1] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { Date = Today.AddDays(1) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Owner, Path(id, "handover"), input)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(outside.Staff, Path(id, "handover"), input)).StatusCode);
+        var first = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), input)); Assert.Equal(1, first.Version);
+        await using (var direct = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var store = direct.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            await Assert.ThrowsAsync<PostgresException>(() => store.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractHandovers\" SET \"Status\"=2, \"TenantConfirmedAt\"={now}, \"StaffConfirmedAt\"={now}, \"TenantConfirmedBy\"={w.Tenant.Id}, \"StaffConfirmedBy\"={w.Staff.Id} WHERE \"ContractId\"={id}"));
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(outside.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/disputes"), new HandoverDecision(1, "SYNTHETIC discrepancy")));
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        using var correctedPhoto = new ByteArrayContent(Image()); correctedPhoto.Headers.ContentType = new("image/png");
+        var replacement = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), correctedPhoto));
+        var second = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), input with { Version = 1, RoomCondition = "SYNTHETIC corrected", EvidenceIds = [replacement.Id] })); Assert.Equal(2, second.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(2, "")));
+        var confirmed = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(2, ""))); Assert.Equal("Confirmed", confirmed.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "handover"), input with { Version = 2 })).StatusCode);
+        Assert.Equal(5, (await Success<HandoverHistoryView[]>(await w.Owner.Client.GetAsync(Path(id, "handover/history")))).Length);
+        Assert.Equal(Image(), await w.Tenant.Client.GetByteArrayAsync(Path(id, $"handover/evidence/{picture.Id}")));
+        Assert.Equal(Image(), await w.Tenant.Client.GetByteArrayAsync(Path(id, $"handover/meter-evidence/{readingIds[0]}")));
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"handover/meter-evidence/{readingIds[0]}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"handover/evidence/{picture.Id}"))).StatusCode);
+        var json = await w.Tenant.Client.GetStringAsync(Path(id, "handover")); Assert.DoesNotContain("objectKey", json, StringComparison.OrdinalIgnoreCase);
+        await using var verify = fixture.Factory.Services.CreateAsyncScope(); var stored = verify.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractHandovers\" SET \"Version\"=3 WHERE \"ContractId\"={id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"ContractHandoverHistory\" WHERE \"ContractId\"={id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"MeterReadings\" WHERE \"Id\"={readingIds[0]}"));
+    }
+
+    [Fact]
     public async Task ListRechecksEffectiveAssignmentsWithSameToken()
     {
         var w = await Setup(); var own = await Draft(w); var other = await Setup(); await Draft(other);

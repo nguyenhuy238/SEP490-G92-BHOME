@@ -15,7 +15,8 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService(IContractRepository repository, ICurrentUser user, ResourceAccess access,
     IContractSigningProvider signing, IObjectStorage storage, IContractFileStore files, IContractImageValidator images,
     IContractSettlementLedger ledger, IContractHoldingLedger holdings, TimeProvider clock,
-    IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null)
+    IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null,
+    IContractHandoverRepository? handoverRepository = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);

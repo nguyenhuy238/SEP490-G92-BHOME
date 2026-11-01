@@ -62,6 +62,28 @@ public sealed class ContractsController(ContractService service) : ControllerBas
     [HttpPost("{id:guid}/renewals"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public async Task<IActionResult> Renewal(Guid id, RenewalInput x, CancellationToken t)
     { var result = await service.RenewAsync(id, x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
+    [HttpGet("{id:guid}/handover")]
+    public Task<HandoverView> Handover(Guid id, CancellationToken t) => service.GetHandoverAsync(id, t);
+    [HttpGet("{id:guid}/handover/history")]
+    public Task<IReadOnlyList<HandoverHistoryView>> HandoverHistory(Guid id, CancellationToken t) => service.HandoverHistoryAsync(id, t);
+    [HttpGet("{id:guid}/handover/choices"), Authorize(Roles = Roles.Staff)]
+    public Task<HandoverChoices> HandoverChoices(Guid id, CancellationToken t) => service.HandoverChoicesAsync(id, t);
+    [HttpPost("{id:guid}/handover"), Authorize(Roles = Roles.Staff)]
+    public Task<HandoverView> SaveHandover(Guid id, HandoverInput x, CancellationToken t) => service.SaveHandoverAsync(id, x, Key(), t);
+    [HttpPost("{id:guid}/handover/tenant-confirmation"), Authorize(Roles = Roles.Tenant)]
+    public Task<HandoverView> TenantHandover(Guid id, HandoverDecision x, CancellationToken t) => service.DecideHandoverAsync(id, x, Key(), false, false, t);
+    [HttpPost("{id:guid}/handover/disputes"), Authorize(Roles = Roles.Tenant)]
+    public Task<HandoverView> DisputeHandover(Guid id, HandoverDecision x, CancellationToken t) => service.DecideHandoverAsync(id, x, Key(), true, false, t);
+    [HttpPost("{id:guid}/handover/staff-confirmation"), Authorize(Roles = Roles.Staff)]
+    public Task<HandoverView> StaffHandover(Guid id, HandoverDecision x, CancellationToken t) => service.DecideHandoverAsync(id, x, Key(), false, true, t);
+    [HttpPost("{id:guid}/handover/evidence"), Authorize(Roles = Roles.Staff), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
+    public Task<ContractId> UploadHandover(Guid id, CancellationToken t) => service.UploadHandoverEvidenceAsync(id, Request.Body, t);
+    [HttpGet("{id:guid}/handover/evidence/{fileId:guid}")]
+    public async Task<IActionResult> HandoverFile(Guid id, Guid fileId, CancellationToken t)
+    { var buffer = new MemoryStream(); await service.CopyHandoverEvidenceAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, "application/octet-stream", "bang-chung-ban-giao"); }
+    [HttpGet("{id:guid}/handover/meter-evidence/{readingId:guid}")]
+    public async Task<IActionResult> HandoverMeterFile(Guid id, Guid readingId, CancellationToken t)
+    { var buffer = new MemoryStream(); await service.CopyHandoverMeterEvidenceAsync(id, readingId, buffer, t); buffer.Position = 0; return File(buffer, "application/octet-stream", "chi-so-ban-giao"); }
     [HttpPost("{id:guid}/renewal-cancellation"), Authorize(Roles = Roles.Owner)]
     public Task<ContractView> CancelRenewal(Guid id, CancellationToken t) => service.CancelRenewalAsync(id, Key(), t);
     [HttpPost("{id:guid}/termination-requests"), Authorize(Roles = Roles.Tenant)]
