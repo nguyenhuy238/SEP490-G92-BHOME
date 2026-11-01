@@ -183,6 +183,19 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var replies = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data)));
         Assert.All(replies, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         var reading = await replies[0].Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Equal(25.5m, reading!.Consumption);
+        var saved = await w.Owner.GetFromJsonAsync<ConfirmedReading>($"/api/v1/capture/readings/{reading.Id}");
+        Assert.Equal(reading, saved);
+        var completed = await w.Staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{periodic}");
+        Assert.Equal(100m, completed!.PreviousValue);
+        Assert.Equal(reading.Id, completed.ConfirmedReadingId);
+        var allTasks = await w.Owner.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks");
+        Assert.Null(Assert.Single(allTasks!, x => x.Id == initial).PreviousValue);
+        Assert.Equal(100m, Assert.Single(allTasks!, x => x.Id == periodic).PreviousValue);
+        var outsider = await User(Roles.Staff);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.Client.GetAsync($"/api/v1/capture/meter-tasks/{periodic}")).StatusCode);
+        var tenant = await User(Roles.Tenant);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data with { ConfirmedValue = 126 })).StatusCode);
         var file = await w.Staff.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence"); Assert.Equal(Image(), await file.Content.ReadAsByteArrayAsync());
         // Every Owner has chain-wide access, including private evidence through the authorized API.

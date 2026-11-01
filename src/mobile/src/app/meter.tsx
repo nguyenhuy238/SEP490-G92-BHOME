@@ -6,8 +6,13 @@ import { CameraCapture } from '../components/CameraCapture';
 import { Field, Page, styles } from '../components/Controls';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type MeterTask, type Proposal } from '../lib/api';
+import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
+import { meterService } from '../services/meterService';
 export default function MeterScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
+  return <MeterTaskScreen key={taskId} taskId={taskId} />;
+}
+function MeterTaskScreen({ taskId }: { taskId: string }) {
   const { api, session } = useSession();
   const [task, setTask] = useState<MeterTask | null>(null);
   const [reading, setReading] = useState('');
@@ -16,8 +21,7 @@ export default function MeterScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [savedReadingId, setSavedReadingId] = useState('');
+  const [saved, setSaved] = useState<ConfirmedReading | null>(null);
   const lock = useRef(false);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -31,24 +35,51 @@ export default function MeterScreen() {
     return () => sub.remove();
   }, []);
   useEffect(() => {
-    if (api)
-      void api
-        .request<MeterTask[]>('/api/v1/capture/meter-tasks')
-        .then((list) => {
-          const current = list.find((t) => t.id === taskId);
-          if (current) setTask(current);
-          else setError('Tác vụ không còn trong phạm vi của bạn.');
-        })
-        .catch((e) => setError(errorMessage(e)));
-    return () => abort.current?.abort();
+    const controller = new AbortController();
+    if (api && taskId)
+      void (async () => {
+        try {
+          const current = await meterService(api).task(taskId, controller.signal);
+          if (controller.signal.aborted) return;
+          setTask(current);
+          if (current.confirmedReadingId) {
+            const result = await meterService(api).reading(
+              current.confirmedReadingId,
+              controller.signal,
+            );
+            if (!controller.signal.aborted) setSaved(result);
+          }
+        } catch (e) {
+          if (!controller.signal.aborted) setError(errorMessage(e));
+        }
+      })();
+    return () => {
+      controller.abort();
+      abort.current?.abort();
+    };
   }, [api, taskId]);
   if (!api || !session) return <Redirect href="/" />;
+  if (!session.roles.includes('Staff'))
+    return (
+      <Page>
+        <Text>Chỉ Staff được giao cơ sở mới có thể ghi chỉ số.</Text>
+      </Page>
+    );
   if (saved)
     return (
       <Page>
         <Text variant="headlineSmall">Đã lưu chỉ số và ảnh minh chứng</Text>
         <Text>Tác vụ đã hoàn thành. Chỉ số đã xác nhận sẵn sàng cho bước lập hóa đơn.</Text>
-        {!!savedReadingId && <Text selectable>Mã chỉ số đã xác nhận: {savedReadingId}</Text>}
+        <Text>
+          {task?.location} · Phòng {task?.room} · {task?.meterCode}
+        </Text>
+        <Text>Chỉ số trước: {saved.previousValue ?? 'Chưa có baseline xác nhận'}</Text>
+        <Text>Chỉ số xác nhận: {saved.confirmedValue}</Text>
+        <Text>
+          Tiêu thụ: {saved.consumption ?? 'Chỉ số ban đầu'}{' '}
+          {saved.consumption !== null ? (task?.utilityType === 0 ? 'kWh' : 'm³') : ''}
+        </Text>
+        <Text selectable>Mã chỉ số đã xác nhận: {saved.id}</Text>
         {task?.purpose === 2 && (
           <Text>Dùng mã chỉ số này để lập biên bản trả phòng cho đúng hợp đồng.</Text>
         )}
@@ -143,7 +174,9 @@ export default function MeterScreen() {
       {!!error && <Text style={styles.error}>{error}</Text>}
       <Button
         mode="contained"
-        disabled={busy || !checked || !evidence}
+        disabled={
+          busy || !task || (task.status !== 0 && task.status !== 1) || !checked || !evidence
+        }
         loading={busy}
         onPress={async () => {
           if (lock.current) return;
@@ -160,13 +193,13 @@ export default function MeterScreen() {
           const controller = new AbortController();
           abort.current = controller;
           try {
-            const result = await api.json<{ id: string }>(
-              `/api/v1/capture/meter-tasks/${taskId}/confirm`,
-              { humanConfirmed: true, confirmedValue: normalized, evidenceId: evidence },
+            const result = await meterService(api).confirm(
+              taskId,
+              normalized,
+              evidence,
               controller.signal,
             );
-            setSavedReadingId(result.id);
-            setSaved(true);
+            setSaved(result);
           } catch (e) {
             setError(errorMessage(e));
           } finally {

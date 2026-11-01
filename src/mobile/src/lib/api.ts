@@ -26,23 +26,7 @@ export interface Resident {
   displayLabel: string;
   verificationStatus: number;
 }
-export interface MeterTask {
-  id: string;
-  meterId: string;
-  location: string;
-  room: string;
-  meterCode: string;
-  utilityType: number;
-  display: number;
-  decimalPlaces: number;
-  purpose: number;
-  readingDate: string;
-  billingPeriod: string | null;
-  status: number;
-  previousValue: string | null;
-  contractId?: string | null;
-  confirmedReadingId?: string | null;
-}
+export type { MeterTask } from '../../../../packages/client-core/src/meter';
 export class MobileApiError extends Error {
   constructor(
     public status: number,

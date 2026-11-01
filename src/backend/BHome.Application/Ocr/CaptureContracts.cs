@@ -64,6 +64,8 @@ public interface ICaptureRepository
     Task<IReadOnlyList<NamedResource>> MetersAsync(Guid locationId, CancellationToken token);
     Task<IdResult> CreateTaskAsync(MeterTaskInput input, CancellationToken token);
     Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken token);
+    Task<MeterTaskSummary> TaskAsync(Guid taskId, CancellationToken token);
+    Task<ConfirmedReading> ReadingAsync(Guid readingId, CancellationToken token);
     Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken token);
     Task<ConfirmedReading> ConfirmMeterAsync(Guid taskId, MeterConfirmation input, CancellationToken token);
     Task CopyEvidenceAsync(Guid readingId, Stream output, CancellationToken token);

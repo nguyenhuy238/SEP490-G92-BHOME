@@ -198,6 +198,13 @@ export function MeterTasksScreen() {
               Chụp ảnh / Nhập & xác nhận
             </Action>
           )}
+          {role === 'Staff' && task.status === 2 && (
+            <Action
+              onPress={() => router.push({ pathname: '/meter', params: { taskId: task.id } })}
+            >
+              Xem kết quả đã xác nhận
+            </Action>
+          )}
         </Box>
       ))}
       {query.data && !items.length && (
