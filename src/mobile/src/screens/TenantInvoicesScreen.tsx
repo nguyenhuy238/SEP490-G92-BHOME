@@ -16,6 +16,7 @@ import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { TenantPaymentPanel } from './TenantPaymentPanel';
+import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
 import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
 export function TenantInvoicesScreen() {
@@ -56,9 +57,16 @@ function TenantInvoiceList() {
           Về danh sách hóa đơn
         </Action>
         <QueryState {...detail} />
+        <Action secondary onPress={() => detail.reload()}>
+          Tải lại hóa đơn
+        </Action>
         {detail.data && (
           <>
             <InvoiceDetail invoice={detail.data} />
+            <TenantAdjustmentPanel
+              key={detail.data.id + ':' + detail.data.version}
+              invoice={detail.data}
+            />
             {detail.data.status === 'Final' && (
               <TenantPaymentPanel key={detail.data.id} invoiceId={detail.data.id} />
             )}
@@ -153,6 +161,9 @@ export function InvoiceDetail({ invoice }: { invoice: Invoice }) {
             </Text>
           )}
           <Text style={ui.money}>{formatContractMoney(line.amount)}</Text>
+          {line.calculatedAmount != null && (
+            <Text>Trước correction đã duyệt: {formatContractMoney(line.calculatedAmount)}</Text>
+          )}
         </Box>
       ))}
       <Box>
