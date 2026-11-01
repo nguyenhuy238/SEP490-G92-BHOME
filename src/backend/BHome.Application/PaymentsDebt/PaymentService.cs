@@ -52,6 +52,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             !PaymentRules.ValidReference(x.BankReference) || !Regex.IsMatch(x.ProviderIdentity, "^[A-Z0-9][A-Z0-9:-]{0,79}$") ||
             x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw new PaymentException(400, "invalid_verified_bank_transfer");
+        x = x with { Amount = decimal.Truncate(x.Amount) };
         var normalized = PaymentRules.NormalizeReference(x.BankReference);
         var identity = new { x.ProviderIdentity, Reference = normalized, Amount = x.Amount.ToString("0", CultureInfo.InvariantCulture),
             x.Currency, x.OccurredAt, Description = x.TransferDescription.ToUpperInvariant(), x.StatementReference, x.VerificationReason, x.ProposedInvoiceId, x.IsDevelopmentDemo };
@@ -89,6 +90,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (await Replay(key, "allocate", new { transferId, x }, t) is not null)
                 return await Outcome(transferId, t);
             var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+                throw new PaymentException(409, "development_payment_unavailable");
             var allocated = await repository.AllocationAsync(transferId, t);
             if (allocated is not null)
             {

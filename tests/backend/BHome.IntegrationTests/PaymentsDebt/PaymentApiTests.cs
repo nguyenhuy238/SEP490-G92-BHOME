@@ -30,16 +30,23 @@ public sealed partial class PaymentLedgerTests
     public async Task OwnerApiReconcilesPersistedInvoiceAndRejectsUnmatchedTransferWithHistory()
     {
         var w=await Setup(); using var owner=await Client(w.Owner); using var tenant=await Client(w.Tenants[0]); using var staff=await Client(w.Staff);
-        const string root="/api/v1/payment-transactions"; var input=Input(w);
+        const string root="/api/v1/payment-transactions"; var input=Input(w) with { ProposedInvoiceId = null, Amount = 100000.00m };
         Assert.Equal(HttpStatusCode.BadRequest,(await owner.PostAsJsonAsync(root,input)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await Post(tenant,root,input)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await staff.GetAsync(root)).StatusCode);
         var key=Guid.NewGuid(); var registration=await Post(owner,root,input,key); registration.EnsureSuccessStatusCode();
         var transfer=(await registration.Content.ReadFromJsonAsync<TransferView>())!;
         Assert.Equal("PendingReview",transfer.Status);
+        var unpaidBody=await owner.GetStringAsync($"/api/v1/debts?roomId={w.Room}");
+        using(var json=System.Text.Json.JsonDocument.Parse(unpaidBody))
+            Assert.Equal("100000",json.RootElement.GetProperty("items")[0].GetProperty("outstandingAmount").GetString());
         Assert.Equal(transfer.Id,(await (await Post(owner,root,input,key)).Content.ReadFromJsonAsync<TransferView>())!.Id);
         var allocation=await Post(owner,$"{root}/{transfer.Id}/allocate",new PaymentMatchInput(w.Invoice,w.Tenants[0],true)); allocation.EnsureSuccessStatusCode();
         Assert.Equal("Allocated",(await allocation.Content.ReadFromJsonAsync<PaymentReviewResult>())!.Status);
+        var scoped=(await owner.GetFromJsonAsync<PagedResult<TransferView>>($"{root}?locationId={w.Location}&roomId={w.Room}"))!;
+        Assert.Contains(scoped.Items,p=>p.Id==transfer.Id && p.AllocatedInvoiceId==w.Invoice);
+        var unrelated=(await owner.GetFromJsonAsync<PagedResult<TransferView>>($"{root}?roomId={Guid.NewGuid()}"))!;
+        Assert.Empty(unrelated.Items);
         var view=(await owner.GetFromJsonAsync<InvoicePaymentView>($"/api/v1/invoices/{w.Invoice}/payment"))!;
         Assert.Equal("Paid",view.PaymentStatus);
         var unknown=await Post(owner,root,Input(w,memo:"WRONG-REFERENCE") with{ProposedInvoiceId=null}); unknown.EnsureSuccessStatusCode();

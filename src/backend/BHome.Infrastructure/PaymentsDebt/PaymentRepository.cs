@@ -65,7 +65,9 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
     public async Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     {
         var source = db.Set<PaymentTransfer>().AsNoTracking().Where(x =>
-            (query.LocationId == null && query.RoomId == null && query.BillingPeriod == null) || db.Set<Invoice>().Any(i => i.Id == x.ProposedInvoiceId &&
+            (query.LocationId == null && query.RoomId == null && query.BillingPeriod == null) || db.Set<Invoice>().Any(i => i.Id ==
+                (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault() ??
+                 db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
                 (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) && (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod)));
         var views = source.OrderByDescending(x => x.VerifiedAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new TransferView(x.Id, x.ProviderIdentity, x.BankReference, x.Amount, x.Currency, x.OccurredAt, x.TransferDescription,
@@ -97,7 +99,7 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
         var count=await filtered.CountAsync(t);
         var rows=await filtered.OrderBy(i=>i.DueDate).ThenBy(i=>i.Id).Skip((query.Page-1)*query.PageSize).Take(query.PageSize).ToArrayAsync(t);
         var items=rows.Select(i=>new DebtInvoiceView(i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,
-            scope.Staff&&!scope.Owner&&!scope.Tenant?null:i.Total,scope.Staff&&!scope.Owner&&!scope.Tenant?null:i.Paid,i.Total-i.Paid,
+            scope.Staff&&!scope.Owner&&!scope.Tenant?null:decimal.Truncate(i.Total),scope.Staff&&!scope.Owner&&!scope.Tenant?null:decimal.Truncate(i.Paid),decimal.Truncate(i.Total-i.Paid),
             i.Total<=i.Paid?"Paid":"Unpaid",PaymentRules.OverdueDays(i.DueDate,scope.Today,i.Total-i.Paid))).ToArray();
         return new(items,query.Page,query.PageSize,count);
     }

@@ -142,3 +142,32 @@ it('retries an unavailable payment overview and renders the real empty state', a
   fireEvent.click(retry);
   await screen.findByText('Không có hóa đơn phù hợp bộ lọc.');
 });
+it('refreshes invoice balance and history after successful allocation', async () => {
+  const invoice = {
+    invoiceId: id,
+    locationName: 'Cơ sở tổng hợp',
+    roomNumber: 'PAY-TEST',
+    billingPeriod: '2026-10-01',
+    dueDate: '2026-11-30',
+    outstandingAmount: '100000',
+    paymentStatus: 'Unpaid',
+    overdueDays: 0,
+  };
+  mocks.api.invoices
+    .mockResolvedValueOnce({ items: [invoice], totalCount: 1 })
+    .mockResolvedValue({
+      items: [{ ...invoice, outstandingAmount: '0', paymentStatus: 'Paid' }],
+      totalCount: 1,
+    });
+  mocks.api.transfers.mockResolvedValue({ items: [transfer], totalCount: 1 });
+  mocks.api.allocate.mockResolvedValue({ status: 'Allocated', reason: 'verified_full_payment' });
+  mount(<PaymentManagementPage />);
+  await screen.findByText(/Chưa thanh toán · Còn phải trả 100.000/);
+  fireEvent.click(
+    await screen.findByLabelText('Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng'),
+  );
+  fireEvent.click(screen.getByText('Xác nhận phân bổ tiền'));
+  fireEvent.click(within(screen.getByRole('dialog')).getByText('Xác nhận đối soát'));
+  await screen.findByText(/Đã thanh toán · Còn phải trả 0/);
+  expect(mocks.api.history).toHaveBeenCalledTimes(2);
+});

@@ -158,7 +158,7 @@ export function RecordTransferForm({
   if (saved)
     return (
       <>
-        <Alert severity="success">Đã lưu giao dịch. Chưa phân bổ vào hóa đơn.</Alert>
+        <Alert severity="success">Đã lưu giao dịch đã đối chiếu sao kê.</Alert>
         <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
         <Button onClick={onClose}>Đóng biểu mẫu</Button>
       </>
@@ -352,16 +352,17 @@ export function ReconcileTransfer({
       setConfirm(false);
       setChecked(false);
       key.current = crypto.randomUUID();
-      for (const queryKey of [
-        ['invoice-payment'],
-        ['transfer-instructions'],
-        ['payment-transfers'],
-        ['payment-transfer'],
-        ['payment-reviews'],
-        ['payment-invoices'],
-        ['payment-history'],
-      ])
-        await cache.invalidateQueries({ queryKey });
+      await Promise.all(
+        [
+          ['invoice-payment'],
+          ['transfer-instructions'],
+          ['payment-transfers'],
+          ['payment-transfer'],
+          ['payment-reviews'],
+          ['payment-invoices'],
+          ['payment-history'],
+        ].map((queryKey) => cache.invalidateQueries({ queryKey })),
+      );
     } catch (e) {
       setError(paymentError(e));
     } finally {

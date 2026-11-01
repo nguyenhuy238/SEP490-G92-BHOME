@@ -69,6 +69,20 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
             memo ?? PaymentRules.InvoiceReference(w.Invoice),"SYNTHETIC-STATEMENT","Owner checked synthetic bank statement",w.Invoice,true);
 
     [Fact]
+    public async Task DevelopmentTransferCannotBeAllocatedOutsideDevelopmentMode()
+    {
+        var w=await Setup();
+        await using var scope=fixture.Factory.Services.CreateAsyncScope();
+        var repository=scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
+        var development=new PaymentService(repository,new User(w.Owner,Roles.Owner),TimeProvider.System,new PaymentRuntimeMode(true));
+        var production=new PaymentService(repository,new User(w.Owner,Roles.Owner),TimeProvider.System,new PaymentRuntimeMode(false));
+        var transfer=await development.RegisterAsync(Input(w) with { IsDevelopmentDemo=true },Guid.NewGuid(),default);
+        var error=await Assert.ThrowsAsync<PaymentException>(()=>production.AllocateAsync(transfer.Id,new(w.Invoice,w.Tenants[0],true),Guid.NewGuid(),default));
+        Assert.Equal(409,error.Status);
+        Assert.Equal("development_payment_unavailable",error.Code);
+        Assert.Equal("Unpaid",(await production.InvoicePaymentAsync(w.Invoice,default)).PaymentStatus);
+    }
+    [Fact]
     public async Task FullPaymentIsAtomicIdempotentSharedAndDoesNotMutateFinalInvoice()
     {
         var w=await Setup(); var input=Input(w); var key=Guid.NewGuid();
