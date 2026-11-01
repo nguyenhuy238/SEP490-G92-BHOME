@@ -1,6 +1,7 @@
 import React from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
+import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentPanel';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { RequestHistory } from '../../components/WorkflowControls';
@@ -128,6 +129,9 @@ export default function WorkspaceRoute() {
       switch (screen) {
         case 'invoice':
           content = <TenantInvoicesScreen />;
+          break;
+        case 'billing-history':
+          content = <TenantPaymentHistoryScreen />;
           break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;

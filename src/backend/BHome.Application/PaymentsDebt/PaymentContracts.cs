@@ -26,6 +26,7 @@ public sealed class PaymentQuery
     public bool OverdueOnly { get; set; }
     public bool OutstandingOnly { get; set; }
     public string? PaymentStatus { get; set; }
+    public Guid[]? InvoiceIds { get; set; }
 }
 public sealed record PaymentHistoryView(Guid Id,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,

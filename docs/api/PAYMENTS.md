@@ -51,3 +51,8 @@ Các list lọc locationId/roomId/billingPeriod, page/pageSize trước paginati
 dueDate < Today ở Asia/Ho_Chi_Minh và outstanding > 0. Không phát sinh phí phạt hoặc tự nhắc nợ.
 Staff chỉ thấy Location hiện được phân công: Room/kỳ/hạn/outstanding/overdue; total/paid null,
 không có bank/payer/history. Không dùng assignment trong JWT để bỏ qua kiểm tra hiện tại.
+
+`/payment-invoices` hỗ trợ repeated `invoiceIds=...` tối đa 100 ID để đọc trạng thái theo
+trang Invoice trên Mobile trong một query, vẫn áp entitlement trước filter/count/pagination.
+Mobile dùng expo-clipboard bản SDK 58 để sao chép thông tin theo thao tác người dùng,
+không có nút Tenant tự xác minh hay sửa balance. QR bị ẩn ngay khi trạng thái server Paid.

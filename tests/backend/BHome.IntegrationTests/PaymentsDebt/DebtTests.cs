@@ -38,6 +38,7 @@ public sealed partial class PaymentLedgerTests
         var history=(await tenant.GetFromJsonAsync<PagedResult<PaymentHistoryEntry>>($"/api/v1/payment-history?roomId={w.Room}"))!;
         Assert.Equal(1,history.TotalCount);Assert.Null(history.Items[0].BankReference);Assert.Null(history.Items[0].VerifiedByUserId);
         var other=await Setup();using var outsider=await Client(other.Tenants[0]);
+        Assert.Empty((await outsider.GetFromJsonAsync<PagedResult<DebtInvoiceView>>($"/api/v1/payment-invoices?invoiceIds={w.Invoice}&pageSize=100"))!.Items);
         Assert.Empty((await outsider.GetFromJsonAsync<PagedResult<PaymentHistoryEntry>>($"/api/v1/payment-history?roomId={w.Room}"))!.Items);
         Assert.Equal(HttpStatusCode.BadRequest,(await owner.GetAsync("/api/v1/debts?pageSize=101")).StatusCode);
     }

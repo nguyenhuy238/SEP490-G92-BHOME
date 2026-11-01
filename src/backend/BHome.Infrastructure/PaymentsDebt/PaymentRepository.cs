@@ -90,7 +90,7 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
     public async Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope,PaymentQuery query,CancellationToken t)
     {
         var source=VisibleInvoices(scope).Where(i=>(query.LocationId==null||i.LocationId==query.LocationId)&&(query.RoomId==null||i.RoomId==query.RoomId)&&
-            (query.BillingPeriod==null||i.BillingPeriod==query.BillingPeriod)).Select(i=>new {i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,i.Total,
+            (query.BillingPeriod==null||i.BillingPeriod==query.BillingPeriod)&&(query.InvoiceIds==null||query.InvoiceIds.Contains(i.Id))).Select(i=>new {i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,i.Total,
                 Paid=db.Set<PaymentAllocation>().Where(a=>a.InvoiceId==i.Id).Sum(a=>(decimal?)a.Amount)??0m});
         var filtered=source.Where(i=>(!query.OutstandingOnly || i.Total>i.Paid)&&(!query.OverdueOnly || i.Total>i.Paid && i.DueDate<scope.Today)&&
             (query.PaymentStatus==null||query.PaymentStatus=="Paid"&&i.Total<=i.Paid||query.PaymentStatus=="Unpaid"&&i.Total>i.Paid));

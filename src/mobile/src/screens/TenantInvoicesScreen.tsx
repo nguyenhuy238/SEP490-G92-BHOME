@@ -14,6 +14,9 @@ import { Action, Box, Heading, Pill, ui } from '../components/WorkspaceKit';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { TenantPaymentPanel } from './TenantPaymentPanel';
+import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
 export function TenantInvoicesScreen() {
   const { session } = useSession();
@@ -21,6 +24,7 @@ export function TenantInvoicesScreen() {
   return <TenantInvoiceList key={session?.userId} />;
 }
 function TenantInvoiceList() {
+  const { go } = useWorkspace();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
   const [page, setPage] = useState(1),
@@ -30,6 +34,13 @@ function TenantInvoiceList() {
   );
   const detail = useWorkspaceQuery<Invoice>(
     allowed && selected ? `/api/v1/invoices/${encodeURIComponent(selected)}` : null,
+  );
+  const finalIds =
+    list.data?.items
+      .filter((i) => i.status === 'Final')
+      .map((i) => 'invoiceIds=' + encodeURIComponent(i.id)) ?? [];
+  const states = useWorkspaceQuery<Page<DebtInvoice>>(
+    finalIds.length ? '/api/v1/payment-invoices?pageSize=100&' + finalIds.join('&') : null,
   );
   if (!allowed)
     return (
@@ -45,13 +56,22 @@ function TenantInvoiceList() {
           Về danh sách hóa đơn
         </Action>
         <QueryState {...detail} />
-        {detail.data && <InvoiceDetail invoice={detail.data} />}
+        {detail.data && (
+          <>
+            <InvoiceDetail invoice={detail.data} />
+            {detail.data.status === 'Final' && (
+              <TenantPaymentPanel key={detail.data.id} invoiceId={detail.data.id} />
+            )}
+          </>
+        )}
       </>
     );
   return (
     <>
       <Heading title="Hóa đơn của tôi" detail="Hóa đơn chung của phòng trong những kỳ bạn đã ở" />
+      <Action onPress={() => go('billing-history')}>Lịch sử thanh toán</Action>
       <QueryState {...list} />
+      {!!states.error && <QueryState {...states} />}
       {list.data?.items.length === 0 && (
         <Box>
           <Text>Bạn chưa có hóa đơn.</Text>
@@ -67,6 +87,13 @@ function TenantInvoiceList() {
             {invoice.status === 'Final' ? 'Đã phát hành' : 'Nháp để kiểm tra'}
           </Pill>
           <Text style={ui.money}>{formatContractMoney(invoice.total)}</Text>
+          {states.data?.items
+            .filter((item) => item.invoiceId === invoice.id)
+            .map((item) => (
+              <Pill key={item.invoiceId} tone={item.paymentStatus === 'Paid' ? 'green' : 'blue'}>
+                {paymentText(item.paymentStatus)}
+              </Pill>
+            ))}
           {invoice.missingInputs.length > 0 && <Text>Chưa đủ dữ liệu tính tiền chính thức.</Text>}
           <Action onPress={() => setSelected(invoice.id)}>Xem hóa đơn</Action>
         </Box>

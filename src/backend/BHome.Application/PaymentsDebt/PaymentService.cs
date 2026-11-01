@@ -135,7 +135,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     private static void Query(PaymentQuery q)
     {
         if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
-            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || q.PaymentStatus is not (null or "Paid" or "Unpaid")) throw new PaymentException(400, "invalid_payment_query");
+            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || q.PaymentStatus is not (null or "Paid" or "Unpaid") ||
+            q.InvoiceIds is {Length:>100} || q.InvoiceIds?.Contains(Guid.Empty)==true) throw new PaymentException(400, "invalid_payment_query");
     }
     public Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     { Owner(); Query(query); return repository.TransfersAsync(query, t); }
