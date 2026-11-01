@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
 import {
   Alert,
   Button,
@@ -248,6 +249,9 @@ export function LiveInvoicesPage() {
               <Typography variant="h6">
                 Chi tiết hóa đơn · Phòng {invoice.roomNumber} · {invoice.billingPeriod.slice(0, 7)}
               </Typography>
+              <Button component={Link} to={`/invoice-adjustments?invoiceId=${invoice.id}`}>
+                Yêu cầu điều chỉnh của hóa đơn
+              </Button>
               <Typography>
                 {invoice.status === 'Final'
                   ? 'Đã phát hành — chi phí được giữ nguyên'

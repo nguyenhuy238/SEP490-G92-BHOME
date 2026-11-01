@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { theme } from '../../theme/theme';
 import type { Invoice } from '../../../../../packages/client-core/src/invoices';
@@ -66,7 +67,7 @@ function mount(element: React.ReactNode) {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        {element}
+        <MemoryRouter>{element}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
