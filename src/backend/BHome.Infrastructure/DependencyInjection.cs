@@ -161,6 +161,10 @@ public static class DependencyInjection
         services.AddScoped<ICaptureRepository, CaptureRepository>();
         services.AddScoped<CaptureService>();
         services.AddScoped<BHome.Application.Billing.IInvoiceRepository, BHome.Infrastructure.Billing.InvoiceRepository>();
+        services.AddScoped<BHome.Application.Billing.IAdjustmentRepository, BHome.Infrastructure.Billing.AdjustmentRepository>();
+        services.AddScoped<BHome.Application.Billing.IAdjustmentEvidenceFiles, BHome.Infrastructure.Billing.AdjustmentEvidenceFiles>();
+        services.AddScoped<BHome.Application.Billing.AdjustmentService>();
+        services.AddHostedService<BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup>();
         services.AddScoped<BHome.Application.Billing.InvoiceService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
