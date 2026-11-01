@@ -1029,6 +1029,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("HoldingContractId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsDevelopmentDemo")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
@@ -1108,6 +1111,80 @@ namespace BHome.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Contract_Signers", "\"OwnerSignerId\" <> \"TenantUserId\"");
 
                             t.HasCheckConstraint("CK_Contract_Terms", "\"EndDate\" > \"StartDate\" AND \"MonthlyRent\" > 0 AND \"RequiredDeposit\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractDocumentFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DevelopmentOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TemplateId")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int?>("TemplateVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("ContractId", "SnapshotHash", "TemplateId", "TemplateVersion")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 0");
+
+                    b.ToTable("ContractDocumentFiles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContractDocumentFile_Length", "\"Length\" > 0 AND \"Length\" <= 10485760");
                         });
                 });
 
@@ -1543,6 +1620,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("TenantUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1554,6 +1634,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("ConfirmedByUserId");
 
                     b.HasIndex("RoomId");
+
+                    b.HasIndex("TenantUserId");
 
                     b.HasIndex("OwnerUserId", "HmacKeyVersion", "IdentityHmac")
                         .IsUnique()
@@ -2286,6 +2368,21 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Navigation("Room");
                 });
 
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractDocumentFile", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractInspectionEvidence", b =>
                 {
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
@@ -2380,6 +2477,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Room");
                 });

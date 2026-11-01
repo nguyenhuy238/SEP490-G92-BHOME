@@ -31,12 +31,13 @@ public sealed record SettlementInput([Required, StringLength(2000, MinimumLength
 public sealed record CompletionInput(DateOnly ActualEndDate);
 public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLength = 1)] string ProviderReference);
 public sealed record SignatureView(Guid Id, Guid SignerUserId, string Status, DateTimeOffset? SignedAt);
+public sealed record ContractOccupantView(Guid Id, string Label, bool Representative);
 public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, string Terms, Guid? PreviousContractId,
     IReadOnlyList<Guid> ResidentIds, IReadOnlyList<SignatureView> Signatures, DateTimeOffset? ActivatedAt,
     Guid OwnerSignerId, Guid TenantUserId, Guid RepresentativeResidentId, Guid? HoldingContractId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AppliedHoldingDeposit,
-    Guid LocationId = default);
+    Guid LocationId = default, bool IsDevelopmentDemo = false, string RoomNumber = "", string LocationName = "", IReadOnlyList<ContractOccupantView>? Occupants = null);
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
 public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, string Reason,
@@ -69,6 +70,7 @@ public interface IContractSigningProvider
 }
 public interface IContractDocumentRenderer
 {
+    Task<ContractTemplateView> ConfigurationAsync(CancellationToken t);
     // Check snapshot integrity and template eligibility even when reusing the first signer's PDF.
     Task ValidateAsync(ContractDocument document, CancellationToken t);
     Task<byte[]> RenderAsync(ContractDocument document, CancellationToken t);

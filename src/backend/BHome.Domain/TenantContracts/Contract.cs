@@ -5,7 +5,7 @@ namespace BHome.Domain.TenantContracts;
 
 public enum ContractKind { Main, Renewal }
 public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled }
-public enum SignatureStatus { Prepared, Dispatching, Pending, Signed, Failed, ManualReview }
+public enum SignatureStatus { Prepared, Dispatching, Pending, Signed, Failed, ManualReview, Simulated }
 public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, Settled, Completed }
 
 // Signed versions are never edited. A renewal is a new version of the same tenancy.
@@ -28,6 +28,7 @@ public sealed class Contract : AuditableEntity
     public decimal RequiredDeposit { get; set; }
     public string Terms { get; set; } = "";
     public string SnapshotHash { get; set; } = "";
+    public bool IsDevelopmentDemo { get; set; }
     public List<ContractResident> Residents { get; set; } = [];
     public List<ContractSignature> Signatures { get; set; } = [];
     public Guid? ActivatedByUserId { get; set; }

@@ -18,6 +18,27 @@ public sealed class ContractsController(ContractService service) : ControllerBas
         [FromQuery] Guid? locationId = null, [FromQuery] string? status = null)
         => service.ListAsync(page, pageSize, locationId, status, t);
 
+    [HttpGet("configuration")]
+    public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
+    [HttpGet("preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<ContractPreparation> Preparation([FromQuery] Guid? locationId, CancellationToken t) => service.PreparationAsync(locationId, t);
+    [HttpGet("preparation/accounts"), Authorize(Roles = Roles.Owner)]
+    public Task<IReadOnlyList<ContractChoice>> TenantAccounts(CancellationToken t) => service.TenantAccountsAsync(t);
+    [HttpPost("preparation/residents/{residentId:guid}/account"), Authorize(Roles = Roles.Owner)]
+    public async Task<IActionResult> LinkTenant(Guid residentId, TenantAccountLink input, CancellationToken t)
+    { await service.LinkTenantAccountAsync(residentId, input, t); return NoContent(); }
+    [HttpGet("{id:guid}/history")]
+    public Task<IReadOnlyList<ContractHistoryView>> History(Guid id, CancellationToken t) => service.HistoryAsync(id, t);
+    [HttpGet("{id:guid}/deposit-verifications"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<IReadOnlyList<DepositVerificationView>> Deposits(Guid id, CancellationToken t) => service.DepositsAsync(id, t);
+    [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<IReadOnlyList<ContractDocumentView>> Previews(Guid id, CancellationToken t) => service.PreviewDocumentsAsync(id, t);
+    [HttpPost("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<ContractDocumentView> GeneratePreview(Guid id, CancellationToken t) => service.GeneratePreviewAsync(id, Key(), t);
+    [HttpGet("{id:guid}/previews/{fileId:guid}"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public async Task<IActionResult> PreviewFile(Guid id, Guid fileId, CancellationToken t)
+    { var buffer = new MemoryStream(); await service.CopyPreviewAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "ban-xem-truoc.pdf"); }
+
     [HttpPost, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public async Task<IActionResult> Create(ContractDraftInput x, CancellationToken t)
     { var result = await service.CreateAsync(x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }

@@ -12,9 +12,10 @@ using BHome.Domain.TenantContracts;
 
 namespace BHome.Application.Contracts;
 
-public sealed class ContractService(IContractRepository repository, ICurrentUser user, ResourceAccess access,
+public sealed partial class ContractService(IContractRepository repository, ICurrentUser user, ResourceAccess access,
     IContractSigningProvider signing, IObjectStorage storage, IContractFileStore files, IContractImageValidator images,
-    IContractSettlementLedger ledger, IContractHoldingLedger holdings, TimeProvider clock)
+    IContractSettlementLedger ledger, IContractHoldingLedger holdings, TimeProvider clock,
+    IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -73,10 +74,15 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
         c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
         c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(s => new SignatureView(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt)).ToArray(), c.ActivatedAt,
-        c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId);
+        c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "");
     private static MoveOutView View(ContractMoveOut m) => new(m.Id, m.Status.ToString(), m.ProposedDate, m.Reason, m.InspectionScheduledAt, m.PendingReason,
         m.InspectionNotes, m.InspectedAt, m.ElectricityReadingId, m.WaterReadingId, []);
-    public async Task<ContractView> GetAsync(Guid id, CancellationToken t) => View(await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t));
+    public async Task<ContractView> GetAsync(Guid id, CancellationToken t)
+    {
+        var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        var people = await repository.ResidentsAsync(c.RoomId, c.Residents.Select(r => r.ResidentId).ToArray(), t);
+        return View(c) with { Occupants = people.Select(r => new ContractOccupantView(r.Id, r.DisplayLabel, r.Id == c.RepresentativeResidentId)).ToArray() };
+    }
 
     public Task<ContractPage> ListAsync(int page, int pageSize, Guid? locationId, string? status, CancellationToken t)
     {
@@ -111,6 +117,8 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
             var residents = await repository.ResidentsAsync(x.RoomId, x.ResidentIds, t);
             if (residents.Count != x.ResidentIds.Length || residents.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified))
                 throw ContractException.Invalid("verified_residents_required");
+            if (residents.Single(r => r.Id == x.RepresentativeResidentId).TenantUserId is { } linkedTenant && linkedTenant != x.TenantUserId)
+                throw ContractException.Invalid("tenant_account_mismatch");
             if (await repository.ConflictsAsync(x.RoomId, Guid.Empty, x.StartDate, x.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
             var c = new Contract
             {
@@ -122,6 +130,7 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
                 EndDate = x.EndDate,
                 MonthlyRent = x.MonthlyRent,
                 RequiredDeposit = x.RequiredDeposit,
+                IsDevelopmentDemo = DemoEnabled,
                 Terms = x.Terms.Trim()
             };
             if (x.HoldingContractId is { } holdingId)
@@ -160,6 +169,7 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
                 TenantUserId = c.TenantUserId,
                 RepresentativeResidentId = c.RepresentativeResidentId,
                 Kind = ContractKind.Renewal,
+                IsDevelopmentDemo = c.IsDevelopmentDemo,
                 PreviousContractId = c.Id,
                 StartDate = c.EndDate.AddDays(1),
                 EndDate = x.EndDate,
@@ -211,13 +221,14 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
     private async Task<ActivationReadiness> Readiness(Contract c, CancellationToken t)
     {
         List<string> blockers = [];
+        if (c.IsDevelopmentDemo && !DemoEnabled) blockers.Add("development_demo_disabled");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("contract_not_pending_activation");
         if (!c.Room.Location.IsActive) blockers.Add("location_not_active");
         if (c.PreviousContractId is null && c.Room.Status != RoomStatus.Available) blockers.Add("room_not_available");
         if (!Intact(c)) blockers.Add("signed_terms_changed");
         if (c.StartDate > Today || c.EndDate < Today) blockers.Add("contract_not_in_effective_period");
         foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId })
-            if (!c.Signatures.Any(s => s.SignerUserId == signer && s.Status == SignatureStatus.Signed && s.SignedAt is not null &&
+            if (!c.Signatures.Any(s => s.SignerUserId == signer && CompleteSignature(s, c) && s.SignedAt is not null &&
                 s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)))
                 blockers.Add("verified_signature_evidence_required");
         var residents = await repository.ResidentsAsync(c.RoomId, c.Residents.Select(r => r.ResidentId).ToArray(), t);
@@ -237,7 +248,7 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
         if (await Replay(key, "activate", id, t) is not null) return View(c);
         if (!(await Readiness(c, t)).Ready) throw ContractException.Conflict("contract_not_ready_for_activation");
         // Verify stored evidence still exists and matches the exact bytes accepted from the PDF verifier.
-        foreach (var s in c.Signatures.Where(s => s.Status == SignatureStatus.Signed))
+        foreach (var s in c.Signatures.Where(s => CompleteSignature(s, c)))
         {
             using var bytes = new MemoryStream(); await storage.CopyToAsync(s.SignedObjectKey!, bytes, t);
             if (FileHash(bytes.ToArray()) != s.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
@@ -258,9 +269,10 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
     // Persist prepared work before making the ambiguous external mutation. Never automatically resend Dispatching.
     public async Task<SignatureView> RequestSigningAsync(Guid id, SigningInput x, Guid key, CancellationToken t)
     {
-        if (x.CertificateId == Guid.Empty) throw ContractException.Invalid("certificate_required");
+        if (x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
         await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
         {
+            RequireSigningMode(c);
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign", new { id, x }, t) is not null) return true;
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
@@ -269,13 +281,14 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
         }, t);
         var signatureId = await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
         {
+            RequireSigningMode(c);
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign", new { id, x }, t) is { } prior) return prior;
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
             if (c.Signatures.Any(s => s.SignerUserId == Actor && s.Status != SignatureStatus.Failed)) throw ContractException.Conflict("signer_already_requested");
-            if (c.Signatures.Any(s => s.Status is not (SignatureStatus.Signed or SignatureStatus.Failed))) throw ContractException.Conflict("previous_signature_pending");
+            if (c.Signatures.Any(s => s.Status is not (SignatureStatus.Signed or SignatureStatus.Simulated or SignatureStatus.Failed))) throw ContractException.Conflict("previous_signature_pending");
             byte[]? previous = null;
-            var last = c.Signatures.Where(s => s.Status == SignatureStatus.Signed).OrderBy(s => s.SignedAt).LastOrDefault();
+            var last = c.Signatures.Where(s => CompleteSignature(s, c)).OrderBy(s => s.SignedAt).LastOrDefault();
             if (last is not null)
             {
                 using var stream = new MemoryStream(); await storage.CopyToAsync(last.SignedObjectKey!, stream, t); previous = stream.ToArray();
@@ -336,6 +349,7 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
 
     public Task<ContractView> SyncSigningAsync(Guid id, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
     {
+        RequireSigningMode(c);
         if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
         if (c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Superseded) return View(c);
         var s = c.Signatures.Where(s => s.SignerUserId == Actor).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
@@ -344,13 +358,14 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
         using var prepared = new MemoryStream(); await storage.CopyToAsync(s.PreparedObjectKey, prepared, t);
         if (FileHash(prepared.ToArray()) != s.PreparedHash) throw ContractException.Conflict("prepared_document_integrity_failed");
         var answer = await signing.PollAsync(s, prepared.ToArray(), t);
-        if (answer.State == "Signed" && answer.SignedPdf is { Length: > 0 } pdf)
+        if (answer.State is "Signed" or "Simulated" && answer.SignedPdf is { Length: > 0 } pdf)
         {
+            if ((answer.State == "Simulated") != c.IsDevelopmentDemo) throw ContractException.Conflict("signing_mode_mismatch");
             s.SignedObjectKey = $"contracts/{id:N}/signatures/{s.Id:N}/signed.pdf";
             await files.PutAsync(c.RoomId, s.SignedObjectKey, pdf, "application/pdf", t);
-            s.SignedHash = FileHash(pdf); s.Status = SignatureStatus.Signed; s.SignedAt = clock.GetUtcNow();
-            if (new[] { c.OwnerSignerId, c.TenantUserId }.All(signer => c.Signatures.Any(a => a.SignerUserId == signer && a.Status == SignatureStatus.Signed))) c.Status = ContractStatus.PendingActivation;
-            Audit("ContractSignatureVerified", id);
+            s.SignedHash = FileHash(pdf); s.Status = c.IsDevelopmentDemo ? SignatureStatus.Simulated : SignatureStatus.Signed; s.SignedAt = clock.GetUtcNow();
+            if (new[] { c.OwnerSignerId, c.TenantUserId }.All(signer => c.Signatures.Any(a => a.SignerUserId == signer && CompleteSignature(a, c)))) c.Status = ContractStatus.PendingActivation;
+            Audit(c.IsDevelopmentDemo ? "ContractSignatureSimulated" : "ContractSignatureVerified", id);
         }
         else if (answer.State == "Failed") { s.Status = SignatureStatus.Failed; Audit("ContractSigningFailed", id); }
         return View(c);
@@ -360,6 +375,7 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
         Validate(x);
         return Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
         {
+            RequireSigningMode(c);
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign-recover", new { id, x }, t) is not null) return View(c);
             var s = c.Signatures.SingleOrDefault(s => s.SignerUserId == Actor && s.Status != SignatureStatus.Failed) ?? throw ContractException.Missing();
@@ -372,7 +388,7 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
     public async Task CopyDocumentAsync(Guid id, Stream output, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Tenant], t);
-        var s = c.Signatures.Where(s => s.Status == SignatureStatus.Signed).OrderBy(s => s.SignedAt).LastOrDefault() ?? throw ContractException.Conflict("signed_document_not_available");
+        var s = c.Signatures.Where(s => s.Status is SignatureStatus.Signed or SignatureStatus.Simulated).OrderBy(s => s.SignedAt).LastOrDefault() ?? throw ContractException.Conflict("signed_document_not_available");
         await storage.CopyToAsync(s.SignedObjectKey!, output, t);
     }
 

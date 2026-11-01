@@ -82,6 +82,80 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
 
     [Fact]
+    public async Task DevelopmentWorkflowUsesPrivateRealPdfAndDistinctSimulationEvidenceBeforeActivation()
+    {
+        var w = await Setup(); var outside = await Setup();
+        await using (var setup = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var setupDb = setup.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC TYPE", DefaultCapacity = 2 };
+            setupDb.Add(type); (await setupDb.Set<Room>().FindAsync(w.Room))!.RoomTypeId = type.Id; await setupDb.SaveChangesAsync();
+        }
+        await using var host = fixture.Factory.WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ContractWorkflow:SimulatedSigningEnabled"] = "true",
+                ["ContractPdf:TemplateId"] = "main-contract-development-v1"
+            }));
+            b.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IContractSigningProvider>();
+                s.AddScoped(typeof(IContractSigningProvider), typeof(ViettelMySignContractAdapter).Assembly
+                    .GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!);
+            });
+        });
+        Actor InHost(Actor a) { var client = host.CreateClient(); client.DefaultRequestHeaders.Authorization = a.Client.DefaultRequestHeaders.Authorization; return new(client, a.Id); }
+        var owner = InHost(w.Owner); var tenant = InHost(w.Tenant); var staff = InHost(w.Staff);
+        var configuration = await Success<ContractWorkflowConfiguration>(await owner.Client.GetAsync("/api/v1/contracts/configuration"));
+        Assert.True(configuration.Template.Available); Assert.True(configuration.Template.DevelopmentOnly); Assert.Equal("Simulated", configuration.SigningMode);
+        var prepared = await Success<ContractPreparation>(await staff.Client.GetAsync($"/api/v1/contracts/preparation?locationId={w.Location}"));
+        Assert.Contains(prepared.Rooms, r => r.Id == w.Room); Assert.DoesNotContain(prepared.Rooms, r => r.Id == outside.Room);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.Client.GetAsync("/api/v1/contracts/preparation")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync("/api/v1/contracts/preparation/accounts")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(owner, $"/api/v1/contracts/preparation/residents/{w.Resident}/account", new TenantAccountLink(w.Tenant.Id))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"/api/v1/contracts/preparation/residents/{w.Resident}/account", new TenantAccountLink(outside.Tenant.Id))).StatusCode);
+        var id = (await Success<ContractId>(await Post(staff, "/api/v1/contracts", Input(w)))).Id;
+        var wrong = Input(w) with { TenantUserId = outside.Tenant.Id };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(staff, "/api/v1/contracts", wrong)).StatusCode);
+        var preview = await Success<ContractDocumentView>(await Post(owner, Path(id, "previews")));
+        var replay = await Success<ContractDocumentView>(await Post(owner, Path(id, "previews")));
+        Assert.Equal(preview.Id, replay.Id); Assert.True(preview.DevelopmentOnly);
+        var pdf = await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}"));
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(pdf));
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, "previews"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, Path(id, "activate"))).StatusCode);
+        foreach (var actor in new[] { owner, tenant })
+        {
+            await Success<SignatureView>(await Post(actor, Path(id, "signing"), new SigningInput(Guid.Empty)));
+            var signed = await Success<ContractView>(await Post(actor, Path(id, "signing/sync")));
+            Assert.True(signed.IsDevelopmentDemo); Assert.Contains(signed.Signatures, s => s.SignerUserId == actor.Id && s.Status == "Simulated");
+            Assert.DoesNotContain(signed.Signatures, s => s.Status == "Signed");
+        }
+        Assert.False((await Success<ActivationReadiness>(await owner.Client.GetAsync(Path(id, "activation-readiness")))).Ready);
+        await Deposit(w, id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, Path(id, "activate"))).StatusCode);
+        var active = await Success<ContractView>(await Post(owner, Path(id, "activate")));
+        Assert.Equal("Active", active.Status);
+        Assert.Single(await Success<DepositVerificationView[]>(await owner.Client.GetAsync(Path(id, "deposit-verifications"))));
+        Assert.Contains(await Success<ContractHistoryView[]>(await tenant.Client.GetAsync(Path(id, "history"))), a => a.Action == "ContractSignatureSimulated");
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().FindAsync(w.Room))!.Status);
+        Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == id).ToArrayAsync());
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"IsDevelopmentDemo\" = false WHERE \"Id\" = {id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractDocumentFiles\" SET \"FileHash\" = 'tampered' WHERE \"ContractId\" = {id}"));
+        var objectStorage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
+        await ContractFileCleanup.CleanupAsync(db, objectStorage, DateTimeOffset.UtcNow.AddDays(2), default);
+        Assert.Equal(pdf, await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}")));
+        var documentFile = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == preview.Id);
+        using var tampered = new MemoryStream("SYNTHETIC TAMPERING"u8.ToArray());
+        await objectStorage.PutAsync(documentFile.ObjectKey, tampered, tampered.Length, "application/pdf", default);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
+    }
+
+    [Fact]
     public async Task ListScopesBeforeCountingAndPagingAndReturnsOnlySafeSummaries()
     {
         var a = await Setup(); var b = await Setup(); var own = await Draft(a); var another = await Draft(b);
@@ -599,7 +673,7 @@ public sealed class ContractFixture : IAsyncLifetime
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey }));
             b.ConfigureTestServices(s =>
         {
-            ProductionSigningProviderType = s.Last(d => d.ServiceType == typeof(IContractSigningProvider)).ImplementationType!;
+            ProductionSigningProviderType = typeof(ViettelMySignContractAdapter);
             s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, TestOnlySigningProvider>();
             s.RemoveAll<IContractSettlementLedger>(); s.AddSingleton<IContractSettlementLedger>(Ledger);
         });

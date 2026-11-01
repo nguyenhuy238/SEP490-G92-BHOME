@@ -22,6 +22,17 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
     private static readonly Lazy<byte[]> FontBytes = new(LoadFont);
     private static readonly CultureInfo Vietnamese = CultureInfo.GetCultureInfo("vi-VN");
 
+    public Task<ContractTemplateView> ConfigurationAsync(CancellationToken t)
+    {
+        t.ThrowIfCancellationRequested();
+        var template = DevelopmentTemplate.Value;
+        string? blocker = null;
+        try { _ = ResolveTemplate(); }
+        catch (ContractException error) { blocker = error.Code; }
+        return Task.FromResult(new ContractTemplateView(template.Id, template.Version, template.Title, template.Notice,
+            blocker is null, true, blocker, template.Fields.Select(f => f.Label).ToArray()));
+    }
+
     public Task ValidateAsync(ContractDocument document, CancellationToken t)
     {
         t.ThrowIfCancellationRequested();

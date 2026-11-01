@@ -18,11 +18,12 @@ public sealed class ContractPdfRendererTests
 {
     internal const string TemplateId = "main-contract-development-v1";
 
-    internal static ServiceProvider Backend(string? environment = "Testing", string? templateId = TemplateId)
+    internal static ServiceProvider Backend(string? environment = "Testing", string? templateId = TemplateId, bool simulation = false)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ContractPdf:TemplateId"] = templateId
+            ["ContractPdf:TemplateId"] = templateId,
+            ["ContractWorkflow:SimulatedSigningEnabled"] = simulation.ToString()
         }).Build();
         var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration);
         if (environment is not null) services.AddSingleton<IHostEnvironment>(new TestEnvironment(environment));

@@ -21,6 +21,7 @@ internal static class CaptureConfiguration
         b.Entity<Room>(e => { e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict); e.Property(x => x.RoomNumber).HasMaxLength(50); e.HasIndex(x => new { x.LocationId, x.RoomNumber }).IsUnique(); });
         b.Entity<Resident>(e =>
         {
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.TenantUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Room).WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
