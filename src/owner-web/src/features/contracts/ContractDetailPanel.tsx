@@ -30,6 +30,7 @@ import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
 import { SigningCertificates } from './SigningCertificates';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
+import { ContractHandoverPanel } from './ContractHandoverPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -189,7 +190,9 @@ export function ContractDetailPanel({
         </Stack>
       </ChartCard>
       <ContractWorkflowPanel api={api} contract={c} />
-
+      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+        <ContractHandoverPanel api={api} id={c.id} />
+      )}
       {r && (
         <ChartCard
           title="Điều kiện kích hoạt"

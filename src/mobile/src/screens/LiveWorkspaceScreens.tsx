@@ -82,7 +82,7 @@ export function StaffHomeScreen() {
                 detail="Công việc được phép truy cập"
               />
             )}
-            {(query.loading || query.error) && <QueryState {...query} />}
+            {(query.loading || !!query.error) && <QueryState {...query} />}
           </View>
         ))}
       </View>
@@ -116,6 +116,12 @@ export function StaffHomeScreen() {
           icon="clipboard-text-outline"
           detail="Theo hồ sơ hợp đồng thực tế"
           onPress={() => go('move-out')}
+        />
+        <InfoRow
+          title="Bàn giao nhận phòng"
+          icon="key-outline"
+          detail="Biên bản nhận phòng và xác nhận của Tenant"
+          onPress={() => go('move-in')}
         />
         <InfoRow
           title="Thông báo công việc"

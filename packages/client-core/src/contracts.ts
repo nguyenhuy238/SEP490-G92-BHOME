@@ -109,6 +109,53 @@ export interface Readiness {
   remainingDeposit: string;
   blockers: string[];
 }
+export interface HandoverAsset {
+  id: string;
+  name: string;
+  inventoryCondition: string;
+  observedCondition: string;
+}
+export interface HandoverReading {
+  id: string;
+  meterCode: string;
+  utilityType: number;
+  date: string;
+  value: string;
+  evidenceId: string;
+  evidenceHash: string;
+}
+export interface HandoverSnapshot {
+  date: string;
+  roomNumber: string;
+  roomCondition: string;
+  keysAndAccess: string;
+  notes: string;
+  assets: HandoverAsset[];
+  electricity: HandoverReading;
+  water: HandoverReading;
+  evidenceIds: string[];
+}
+export interface HandoverView {
+  version: number;
+  status: string;
+  snapshot: HandoverSnapshot;
+  tenantConfirmedVersion: number | null;
+  tenantConfirmedAt: string | null;
+  staffConfirmedAt: string | null;
+}
+export interface HandoverHistory {
+  version: number;
+  action: string;
+  actorId: string;
+  occurredAt: string;
+  note: string;
+  snapshot: HandoverSnapshot;
+}
+export interface HandoverChoices {
+  assets: HandoverAsset[];
+  readings: HandoverReading[];
+  evidence: PreviewDocument[];
+}
 export interface MoveOut {
   id: string;
   status: string;
@@ -199,6 +246,30 @@ export function contractClient(request: ContractRequest) {
     },
     configuration: (signal?: AbortSignal) =>
       request<ContractConfiguration>(root + '/configuration', { signal }),
+    handover: (id: string, signal?: AbortSignal) =>
+      request<HandoverView>(root + '/' + id + '/handover', { signal }),
+    handoverHistory: (id: string, signal?: AbortSignal) =>
+      request<HandoverHistory[]>(root + '/' + id + '/handover/history', { signal }),
+    handoverChoices: (id: string, signal?: AbortSignal) =>
+      request<HandoverChoices>(root + '/' + id + '/handover/choices', { signal }),
+    handoverEvidence: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Blob>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'blob'),
+    handoverEvidenceBytes: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'bytes'),
+    handoverMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Blob>(root + '/' + id + '/handover/meter-evidence/' + readingId, { signal }, 'blob'),
+    handoverMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        root + '/' + id + '/handover/meter-evidence/' + readingId,
+        { signal },
+        'bytes',
+      ),
+    uploadHandover: (id: string, bytes: BodyInit, contentType: string) =>
+      request<{ id: string }>(root + '/' + id + '/handover/evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType },
+        body: bytes,
+      }),
     preparation: (locationId = '', signal?: AbortSignal) =>
       request<Preparation>(
         root + '/preparation' + (locationId ? '?locationId=' + locationId : ''),
@@ -327,6 +398,10 @@ export const labels: Record<string, string> = {
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
   Simulated: 'SIMULATED SIGNING — không có giá trị pháp lý',
+  Confirmed: 'Đã xác nhận bàn giao',
+  Disputed: 'Cần sửa nội dung bàn giao',
+  Recorded: 'Ghi nhận phiên bản bàn giao',
+  TenantConfirmed: 'Tenant xác nhận nhận phòng',
   ContractDraftCreated: 'Lập bản nháp hợp đồng',
   ContractPreviewGenerated: 'Tạo tài liệu xem trước',
   ContractSigningInitiated: 'Bắt đầu quy trình ký',
@@ -349,6 +424,23 @@ export const labels: Record<string, string> = {
   ContractSettlementReviewed: 'Owner ghi nhận xem xét quyết toán',
   ContractTerminationCompleted: 'Hoàn tất chấm dứt hợp đồng',
   ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
+  ContractHandoverRecorded: 'Ghi nhận phiên bản bàn giao',
+  ContractHandoverDisputed: 'Tenant yêu cầu sửa bàn giao',
+  ContractHandoverTenantConfirmed: 'Tenant xác nhận bàn giao',
+  ContractHandoverCompleted: 'Staff hoàn tất bàn giao',
+  ContractHandoverEvidenceAdded: 'Tải ảnh nhận phòng',
+  handover_version_changed:
+    'Biên bản đã thay đổi. Tải lại và kiểm tra phiên bản mới trước khi xác nhận.',
+  handover_correction_required: 'Staff cần lưu nội dung đã sửa trước khi Tenant xác nhận lại.',
+  tenant_handover_confirmation_required:
+    'Cần Tenant xác nhận đúng phiên bản hiện tại trước khi Staff hoàn tất.',
+  confirmed_handover_readings_required:
+    'Cần đủ chỉ số điện và nước đã xác nhận, kèm ảnh, đúng phòng và ngày bàn giao.',
+  handover_already_confirmed: 'Biên bản đã hoàn tất; nội dung và bằng chứng được giữ nguyên.',
+  invalid_handover_input:
+    'Kiểm tra ngày bàn giao, hiện trạng, chìa khóa, tài sản và từ 1 đến 5 ảnh.',
+  handover_evidence_integrity_failed:
+    'Bằng chứng bàn giao không còn khớp bản đã lưu. Cần kiểm tra tại máy chủ.',
   resident_account_already_linked:
     'Hồ sơ đã liên kết tài khoản khác hoặc có lịch sử hợp đồng khác. Không thể liên kết lại.',
   development_demo_disabled:

@@ -112,7 +112,15 @@ export default function WorkspaceRoute() {
   if (!preview) {
     let content: React.ReactNode;
     if (
-      ['signing', 'contract', 'contract-request', 'prepare-contract', 'move-out'].includes(screen)
+      [
+        'signing',
+        'contract',
+        'contract-request',
+        'prepare-contract',
+        'move-out',
+        'move-in',
+        'checklist',
+      ].includes(screen)
     )
       content = <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />;
     else

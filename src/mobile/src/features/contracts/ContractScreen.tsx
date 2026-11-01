@@ -26,6 +26,7 @@ import { ContractDraftForm } from './ContractDraftForm';
 import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
+import { ContractHandoverPanel } from './ContractHandoverPanel';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -279,7 +280,9 @@ function LiveContractDetail({
         {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
       </Box>
       <ContractWorkflowPanel api={api} contract={c} role={role} />
-
+      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+        <ContractHandoverPanel api={api} contract={c} role={role} />
+      )}
       {r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />
@@ -332,6 +335,8 @@ function LiveContractDetail({
           />
           <CameraCapture
             label="Chụp và tải ảnh hiện trạng"
+            reviewActionLabel="Tải ảnh trả phòng"
+            reviewNotice="Ảnh được lưu riêng tư làm bằng chứng trả phòng; ảnh tạm trên thiết bị được xóa sau khi tải hoặc rời màn hình. Không chụp giấy tờ cá nhân."
             disabled={uploading || !uploadChecked || availableEvidence.length >= 5}
             reviewBeforeSubmit
             onCapture={async (bytes) => {

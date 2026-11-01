@@ -21,6 +21,8 @@ export function CameraCapture({
   onCapture,
   retainPreview = false,
   reviewBeforeSubmit = false,
+  reviewActionLabel = 'Dùng ảnh này để OCR',
+  reviewNotice = 'Kiểm tra ảnh rõ chữ, không lóa. Ảnh chỉ nằm trong bộ nhớ đệm tạm thời và được xóa sau xử lý hoặc khi rời ứng dụng.',
   documentSide,
 }: {
   label: string;
@@ -28,6 +30,8 @@ export function CameraCapture({
   onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
   retainPreview?: boolean;
   reviewBeforeSubmit?: boolean;
+  reviewActionLabel?: string;
+  reviewNotice?: string;
   documentSide?: 'front' | 'back';
 }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -315,17 +319,14 @@ export function CameraCapture({
       )}
       {reviewBeforeSubmit && !!preview && (
         <View style={{ gap: 8 }}>
-          <Text>
-            Kiểm tra ảnh rõ chữ, không lóa. Ảnh chỉ nằm trong bộ nhớ đệm tạm thời và được xóa sau xử
-            lý hoặc khi rời ứng dụng.
-          </Text>
+          <Text>{reviewNotice}</Text>
           <Button
             mode="contained"
             disabled={disabled || working}
             loading={working}
             onPress={() => void submitPending()}
           >
-            Dùng ảnh này để OCR
+            {reviewActionLabel}
           </Button>
           <Button
             disabled={working}
