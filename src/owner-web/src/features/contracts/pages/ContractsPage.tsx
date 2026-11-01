@@ -34,6 +34,7 @@ import { isMockMode } from '../../../services/config';
 import { useContractsApi } from '../useContractsApi';
 import { ContractDraftDialog } from '../ContractDraftDialog';
 import { ContractDetailPanel } from '../ContractDetailPanel';
+import { ContractConfigurationPanel } from '../ContractWorkflowPanel';
 
 export default function ContractsPage() {
   return isMockMode ? (
@@ -79,6 +80,7 @@ function LiveContractsPage() {
         }
       />
       <Stack spacing={2}>
+        <ContractConfigurationPanel api={api} />
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <TextField
             select

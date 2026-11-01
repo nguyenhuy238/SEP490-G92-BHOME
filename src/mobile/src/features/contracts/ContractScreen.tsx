@@ -25,6 +25,7 @@ import { ContractActionForm, SigningCertificates } from './ContractActionForm';
 import { ContractDraftForm } from './ContractDraftForm';
 import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
+import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -71,7 +72,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   }
   const id = selected || deepId;
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
-  if (create && role === 'Staff')
+  if (create && ['Owner', 'Staff'].includes(role))
     return (
       <ContractDraftForm
         api={client}
@@ -128,7 +129,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         <Button disabled={listing.loading} onPress={() => setRevision((v) => v + 1)}>
           Tải lại
         </Button>
-        {role === 'Staff' && (
+        {['Owner', 'Staff'].includes(role) && (
           <Button onPress={() => setCreate(true)}>Tạo nháp hợp đồng thuê</Button>
         )}
       </Row>
@@ -210,6 +211,7 @@ function LiveContractDetail({
   return (
     <>
       <Heading title={text(c.kind)} detail={c.id} />
+
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
       <Button
         disabled={uploading}
@@ -224,14 +226,20 @@ function LiveContractDetail({
       <Box>
         <Heading title="Kỳ thuê & Người ở" />
         <Text>
+          Phòng {c.roomNumber || c.roomId}
+          {c.locationName ? ` · ${c.locationName}` : ''}
+        </Text>
+        <Text>
           {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
         </Text>
         <Text>Tiền thuê: {formatContractMoney(c.monthlyRent)} / tháng</Text>
         <Text>Cọc yêu cầu: {formatContractMoney(c.requiredDeposit)}</Text>
         <Text>Cọc giữ chỗ áp dụng: {formatContractMoney(c.appliedHoldingDeposit)}</Text>
         <Text>
-          {c.residentIds.length} người ở · Đại diện: {c.representativeResidentId}
+          {c.residentIds.length} người ở · Đại diện:{' '}
+          {c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId}
         </Text>
+        {!!c.occupants?.length && <Text>{c.occupants.map((o) => o.label).join(', ')}</Text>}
         {c.previousContractId && (
           <Button onPress={() => onNext(c.previousContractId!)}>Xem hợp đồng trước</Button>
         )}
@@ -267,6 +275,8 @@ function LiveContractDetail({
         )}
         {signer && <SigningCertificates api={api} />}
       </Box>
+      <ContractWorkflowPanel api={api} contract={c} role={role} />
+
       {r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />

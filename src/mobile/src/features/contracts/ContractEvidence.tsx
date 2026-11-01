@@ -14,12 +14,14 @@ export function ContractEvidence({
   api,
   contractId,
   evidenceId,
+  previewId,
   pdf = false,
   number,
 }: {
   api: ContractClient;
   contractId: string;
   evidenceId?: string;
+  previewId?: string;
   pdf?: boolean;
   number?: number;
 }) {
@@ -38,9 +40,11 @@ export function ContractEvidence({
     abort.current = controller;
     try {
       if (Platform.OS === 'web') {
-        const blob = pdf
-          ? await api.document(contractId, controller.signal)
-          : await api.evidence(contractId, evidenceId!, controller.signal);
+        const blob = previewId
+          ? await api.preview(contractId, previewId, controller.signal)
+          : pdf
+            ? await api.document(contractId, controller.signal)
+            : await api.evidence(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
@@ -53,9 +57,11 @@ export function ContractEvidence({
           setError('Thiết bị chưa hỗ trợ mở hoặc lưu tài liệu.');
           return;
         }
-        const bytes = pdf
-          ? await api.documentBytes(contractId, controller.signal)
-          : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
+        const bytes = previewId
+          ? await api.previewBytes(contractId, previewId, controller.signal)
+          : pdf
+            ? await api.documentBytes(contractId, controller.signal)
+            : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const directory = new Directory(Paths.cache, 'bhome-contract-downloads');
         directory.create({ idempotent: true, intermediates: true });
@@ -82,7 +88,11 @@ export function ContractEvidence({
   return (
     <>
       <Button disabled={busy} loading={busy} onPress={() => void download()}>
-        {pdf ? 'Mở hoặc lưu tài liệu ký' : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`}
+        {previewId
+          ? 'Mở hoặc lưu PDF xem trước'
+          : pdf
+            ? 'Mở hoặc lưu tài liệu ký'
+            : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`}
       </Button>
       {!!error && <Text style={ui.red}>{error}</Text>}
     </>

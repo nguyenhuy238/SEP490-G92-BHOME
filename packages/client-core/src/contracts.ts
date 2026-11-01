@@ -52,7 +52,55 @@ export interface ContractView {
   representativeResidentId: string;
   holdingContractId: string | null;
   appliedHoldingDeposit: string;
+  roomNumber?: string;
+  locationName?: string;
+  occupants?: { id: string; label: string; representative: boolean }[] | null;
   locationId: string;
+}
+export interface ContractTemplate {
+  id: string;
+  version: number;
+  title: string;
+  notice: string;
+  available: boolean;
+  developmentOnly: boolean;
+  blocker: string | null;
+  fields: string[];
+}
+export interface ContractConfiguration {
+  template: ContractTemplate;
+  signingMode: string;
+  holdingBlocker: string;
+  settlementBlocker: string;
+}
+export interface Preparation {
+  locations: NamedOption[];
+  rooms: (NamedOption & { locationId: string; status: string })[];
+  residents: (NamedOption & { roomId: string; tenantUserId: string | null; verified: boolean })[];
+  ownerSigners: NamedOption[];
+}
+export interface PreviewDocument {
+  id: string;
+  contractId: string;
+  kind: string;
+  snapshotHash: string;
+  templateId: string | null;
+  templateVersion: number | null;
+  developmentOnly: boolean;
+  recordedAt: string;
+}
+export interface ContractAudit {
+  action: string;
+  actorId: string | null;
+  occurredAt: string;
+}
+export interface DepositVerification {
+  id: string;
+  bankTransactionReference: string;
+  amount: string;
+  verificationReason: string;
+  verifiedByUserId: string;
+  verifiedAt: string;
 }
 export interface Readiness {
   ready: boolean;
@@ -148,6 +196,38 @@ export function contractClient(request: ContractRequest) {
         throw new ApiError(502, { code: 'invalid_response' });
       return result;
     },
+    configuration: (signal?: AbortSignal) =>
+      request<ContractConfiguration>(root + '/configuration', { signal }),
+    preparation: (locationId = '', signal?: AbortSignal) =>
+      request<Preparation>(
+        root + '/preparation' + (locationId ? '?locationId=' + locationId : ''),
+        { signal },
+      ),
+    tenantAccounts: (signal?: AbortSignal) =>
+      request<NamedOption[]>(root + '/preparation/accounts', { signal }),
+    linkTenant: (residentId: string, tenantUserId: string) =>
+      request<void>(root + '/preparation/residents/' + residentId + '/account', {
+        method: 'POST',
+        body: JSON.stringify({ tenantUserId }),
+      }),
+    previews: (id: string, signal?: AbortSignal) =>
+      request<PreviewDocument[]>(root + '/' + id + '/previews', { signal }),
+    preview: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        root + '/' + id + '/previews/' + fileId,
+        { signal, headers: { Accept: 'application/pdf' } },
+        'blob',
+      ),
+    previewBytes: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        root + '/' + id + '/previews/' + fileId,
+        { signal, headers: { Accept: 'application/pdf' } },
+        'bytes',
+      ),
+    audit: (id: string, signal?: AbortSignal) =>
+      request<ContractAudit[]>(root + '/' + id + '/history', { signal }),
+    deposits: (id: string, signal?: AbortSignal) =>
+      request<DepositVerification[]>(root + '/' + id + '/deposit-verifications', { signal }),
     get: (id: string, signal?: AbortSignal) => request<ContractView>(`${root}/${id}`, { signal }),
     readiness: (id: string, signal?: AbortSignal) =>
       request<Readiness>(`${root}/${id}/activation-readiness`, { signal }),
@@ -245,6 +325,35 @@ export const labels: Record<string, string> = {
   Dispatching: 'Đang gửi yêu cầu ký',
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
+  ContractDraftCreated: 'Lập bản nháp hợp đồng',
+  ContractPreviewGenerated: 'Tạo tài liệu xem trước',
+  ContractSigningInitiated: 'Bắt đầu quy trình ký',
+  ContractSigningPrepared: 'Chuẩn bị tài liệu ký',
+  ContractSigningDispatching: 'Gửi yêu cầu ký',
+  ContractSigningRequested: 'Đã gửi yêu cầu ký',
+  ContractSignatureSimulated: 'Mô phỏng thao tác ký (Development)',
+  ContractSignatureVerified: 'Xác minh chữ ký điện tử',
+  ContractDepositVerified: 'Owner xác minh cọc',
+  ContractActivated: 'Owner kích hoạt hợp đồng',
+  ContractRenewalPrepared: 'Lập bản gia hạn chờ ký',
+  ContractRenewalCancelled: 'Hủy bản gia hạn đang chờ',
+  ContractSigningNeedsReview: 'Cần kiểm tra yêu cầu ký tại nhà cung cấp',
+  ContractSigningFailed: 'Nhà cung cấp báo ký thất bại',
+  ContractSigningReferenceRecovered: 'Khôi phục tham chiếu yêu cầu ký',
+  ContractMoveOutRequested: 'Gửi yêu cầu trả phòng',
+  ContractMoveOutApproved: 'Owner duyệt yêu cầu trả phòng',
+  ContractInspectionScheduled: 'Đặt lịch kiểm tra trả phòng',
+  ContractMoveOutInspected: 'Lưu biên bản kiểm tra trả phòng',
+  ContractSettlementReviewed: 'Owner ghi nhận xem xét quyết toán',
+  ContractTerminationCompleted: 'Hoàn tất chấm dứt hợp đồng',
+  ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
+  resident_account_already_linked:
+    'Hồ sơ đã liên kết tài khoản khác hoặc có lịch sử hợp đồng khác. Không thể liên kết lại.',
+  tenant_account_link_required:
+    'Owner cần liên kết tài khoản Tenant với hồ sơ đại diện đã xác minh.',
+  tenant_account_mismatch: 'Tài khoản Tenant không khớp người đại diện.',
+  holding_policy_and_verified_allocation_required:
+    'Giữ phòng / chuyển cọc: chờ chính sách OQ-03 và sổ phân bổ cọc đã xác minh.',
   Failed: 'Ký thất bại',
   ManualReview: 'Cần kiểm tra tại nhà cung cấp',
   Requested: 'Chờ Owner duyệt',

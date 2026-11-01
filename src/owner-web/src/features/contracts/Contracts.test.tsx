@@ -77,7 +77,14 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
     else if (path.endsWith('/move-out')) {
       if (!m) throw { status: 404 };
       result = m;
-    } else result = c;
+    } else if (
+      ['/previews', '/deposit-verifications', '/history', '/handover/history'].some((s) =>
+        path.endsWith(s),
+      )
+    )
+      result = [];
+    else if (path.endsWith('/handover')) throw { status: 404 };
+    else result = c;
     return result as T;
   });
   return {
