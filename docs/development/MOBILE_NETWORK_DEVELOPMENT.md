@@ -14,6 +14,8 @@ npm.cmd run mobile:dev
 
 Trên Windows, `npm.cmd run mobile` từ root hoặc `npm.cmd start` trong `src/mobile` dùng cùng
 supervisor. Tham số `-- --clear` và `-- --port 8082` được chuyển thành tham số PowerShell tương ứng.
+IP LAN tự chọn là mặc định. `-- --lan-api` giữ tương thích; chỉ dùng `-- --hostname-api`
+khi đã kiểm tra `.local` hoạt động trên điện thoại. Hai cờ này không dùng cùng nhau.
 Chỉ dùng `-- --metro-only` khi đã tự chuẩn bị/chạy API; cờ này bỏ qua supervisor, vẫn giữ kiểm tra
 Expo online/tài khoản. `--check` chỉ kiểm tra Expo, không xác nhận API BHOME sẵn sàng.
 Xem [lỗi đăng nhập do API/TLS/migration](MOBILE_LOGIN_CONNECTION_FIX.md).
@@ -32,15 +34,52 @@ Không tự dừng API/Metro của checkout khác khi cổng bị chiếm.
 Khi đổi Wi-Fi trong lúc chạy, script phát hiện theo chu kỳ khoảng 3 giây (cộng thời gian truy vấn
 mạng), cấp lại chứng chỉ server bằng CA cũ, cập nhật cấu hình API và restart Metro do nó tạo.
 **Quét QR mới** để Expo Go tải manifest trên mạng mới; không sửa cấu hình IP.
+**Sửa hồi quy 01/11/2026:** mặc định dùng IP LAN tự chọn cho API lẫn Metro. Không tự chọn
+`.local` từ kết quả probe Windows vì kết quả đó không chứng minh iPhone hỗ trợ mDNS.
+Chỉ khi bật `--hostname-api`, launcher kiểm tra hostname bằng CA/IP LAN hiện tại trước khi
+chọn; nếu không đạt thì dùng IP LAN. Tên máy không hợp lệ cho DNS cũng dùng IP LAN.
+URL hiện tại được truyền qua `EXPO_PUBLIC_DEV_API_BASE_URL`; SAN/AllowedHosts cho phép đúng
+DNS/IP. Ở chế độ IP LAN, quét QR/reload sau đổi mạng để nhận URL mới. Máy chủ kiểm tra được
+hostname không chứng minh điện thoại cũng phân giải được; dùng `--lan-api` khi cần.
+Launcher kiểm tra thêm Metro `/status` và manifest iOS; ghi rõ đây là phép thử từ máy tính.
+Xem [hướng dẫn nhiều máy trong team](MOBILE_TEAM_DEVELOPMENT.md) và
+[chẩn đoán QR bị kẹt](MOBILE_QR_LOADING_FIX.md).
 Mất Wi-Fi tạm thời giữ nguyên tiến trình và chờ mạng trở lại.
 Khi dừng launcher, nó chỉ dọn API/Metro do nó tạo, giữ API đang debug từ trước.
 Không chạy thêm một Metro độc lập trên cùng cổng. Tùy chọn `-- -Port 8082` dùng cho phiên riêng.
+
+## Đổi giữa Wi-Fi và 4G/5G
+
+API local không thể truy cập từ Internet chỉ bằng việc đổi IP trong ứng dụng. Để điện thoại
+dùng qua mạng khác, cung cấp API đã triển khai qua HTTPS với chứng chỉ được thiết bị tin cậy,
+cấu hình trong `src/mobile/.env.local` rồi khởi động lại Metro:
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=https://api.example.invalid
+```
+
+Thay hostname ví dụ bằng API BHOME thật của môi trường. URL HTTPS cấu hình bằng DNS/public IP
+được ưu tiên cả khi Metro chạy LAN. Địa chỉ local cũ trong `.env.local` (private IPv4/IPv6,
+loopback hoặc `.local`) không ghi đè URL của launcher hiện tại; chế độ Metro riêng tiếp tục
+suy ra LAN từ manifest. Không suy ra API từ
+tunnel Expo; tunnel Metro không làm API backend truy cập được từ Internet.
+
+Yêu cầu GET/HEAD gặp mất kết nối được thử lại một lần sau 750 ms, cùng API origin; không retry
+lỗi HTTP hoặc timeout. POST/PUT/PATCH/DELETE, upload, login và refresh không được tự gửi lại
+khi kết quả chưa rõ. Trước mỗi refresh, client kiểm tra `/health/ready` không kèm credential.
+Probe lỗi giữ refresh token trong SecureStore; khi app active, thử phục hồi mỗi 5 giây hoặc
+khi trở lại foreground. Chỉ khi probe thành công mới gửi refresh. Nếu refresh đã gửi mà mất
+phản hồi thì vẫn xóa credential/yêu cầu đăng nhập lại theo chính sách chống reuse của backend.
+Không gửi credential sang origin khác, không hạ xuống HTTP hoặc bỏ xác minh chứng chỉ.
+
+Chi tiết truy vết và kiểm chứng: [sửa lỗi thích ứng mạng Mobile](MOBILE_NETWORK_RECOVERY.md).
 
 ## Chuẩn bị một lần cho mỗi máy/điện thoại
 
 - Máy phát triển đã cài Node 22.13–22.x, .NET 8 SDK, chạy `npm ci`; database/migrations,
   object storage và OCR models được chuẩn bị theo `LOCAL_DEVELOPMENT.md`/`OCR_MOBILE_DELIVERY.md`.
-  Launcher tạo `.env` ngẫu nhiên nếu chưa có, nhưng không tự migrate/reset database hay cài công cụ.
+  Launcher tạo `.env` ngẫu nhiên nếu chưa có và tải models còn thiếu qua `Get-OcrModels.ps1`
+  có kiểm checksum. Không tự migrate/reset database hoặc cài công cụ toàn máy.
 - Lần đầu điện thoại kết nối **một máy phát triển mới**, cài và tin cậy CA public của máy đó
   từ URL `/development/mobile-ca.cer` do terminal in ra; xem hướng dẫn iPhone trong
   `OCR_MOBILE_DELIVERY.md`. Đây là bước tin cậy TLS của hệ điều hành, không thể tự chấp thuận

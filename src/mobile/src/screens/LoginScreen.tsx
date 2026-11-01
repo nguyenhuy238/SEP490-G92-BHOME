@@ -13,7 +13,8 @@ export function LoginScreen() {
   const { startPreview, unavailable } = useWorkspace();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [base, setBase] = useState(baseUrl);
+  const [baseOverride, setBase] = useState<string | null>(null);
+  const base = baseOverride ?? baseUrl;
   const [settings, setSettings] = useState(false);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -103,7 +104,9 @@ export function LoginScreen() {
             />
             <Row spread>
               <Text variant="labelSmall" style={[ui.muted, ui.grow]}>
-                Phiên đăng nhập được lưu bảo mật trên thiết bị
+                {Platform.OS === 'web'
+                  ? 'Tải lại hoặc đóng trang sẽ kết thúc phiên đăng nhập'
+                  : 'Phiên đăng nhập được lưu bảo mật trên thiết bị'}
               </Text>
               <Button compact textColor={c.blue} onPress={() => unavailable('Khôi phục mật khẩu')}>
                 Quên mật khẩu?

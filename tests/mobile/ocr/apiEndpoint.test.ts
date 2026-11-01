@@ -2,6 +2,80 @@ import { expect, it, vi } from 'vitest';
 import { resolveApiEndpoint } from '../../../src/mobile/src/lib/apiEndpoint';
 import { MobileSessions } from '../../../src/mobile/src/lib/sessions';
 
+it.each([
+  'https://teammate-pc.local:7240',
+  'https://TEAMMATE-PC.LOCAL.:7240',
+  'https://localhost:7240',
+  'https://api.localhost:7240',
+  'https://127.0.0.1:7240',
+  'https://127.0.0.2:7240',
+  'https://169.254.1.2:7240',
+  'https://[::1]:7240',
+  'https://[fd12:3456::1]:7240',
+  'https://[fc00::1]:7240',
+  'https://[fe80::1]:7240',
+])('does not reuse another workstation local configuration %s', (configuredUrl) => {
+  expect(
+    resolveApiEndpoint({
+      development: true,
+      hostUri: '192.168.1.8:8081',
+      configuredUrl,
+      developmentUrl: 'https://current-pc.local:7240',
+    }),
+  ).toBe('https://current-pc.local:7240');
+  expect(
+    resolveApiEndpoint({ development: true, hostUri: '192.168.1.8:8081', configuredUrl }),
+  ).toBe('https://192.168.1.8:7240');
+  expect(resolveApiEndpoint({ development: false, configuredUrl })).toBe(
+    new URL(configuredUrl).origin,
+  );
+});
+
+it('uses each developer launcher URL even if their Metro port or computer name is the same', () => {
+  expect(
+    resolveApiEndpoint({
+      development: true,
+      hostUri: '192.168.1.8:8081',
+      developmentUrl: 'https://192.168.1.8:7240',
+      configuredUrl: 'https://other-pc.local:7240',
+    }),
+  ).toBe('https://192.168.1.8:7240');
+  expect(
+    resolveApiEndpoint({
+      development: true,
+      hostUri: '10.0.0.8:8081',
+      developmentUrl: 'https://10.0.0.8:7240',
+      configuredUrl: 'https://other-pc.local:7240',
+    }),
+  ).toBe('https://10.0.0.8:7240');
+});
+
+it('does not send a saved refresh token between computers with identical local hostnames', async () => {
+  let saved: string | null = JSON.stringify({
+    base: 'https://same-name.local:7240',
+    refreshToken: 'synthetic-a',
+    serverId: 'ca-a',
+  });
+  const transport = vi.fn<typeof fetch>();
+  const manager = new MobileSessions(
+    {
+      read: async () => saved,
+      write: async (value) => {
+        saved = value;
+      },
+      remove: async () => {
+        saved = null;
+      },
+    },
+    'https://same-name.local:7240',
+    transport,
+    'ca-b',
+  );
+  await manager.restore();
+  expect(transport).not.toHaveBeenCalled();
+  expect(saved).toBeNull();
+});
+
 it.each(['192.168.1.20', '10.33.59.31', '172.16.0.2', '172.31.255.2'])(
   'uses the current developer Metro host %s instead of a stale configured IP',
   (address) => {
@@ -19,9 +93,44 @@ it('does not use a development host in a release build', () => {
     resolveApiEndpoint({
       development: false,
       hostUri: '10.0.0.2:8081',
+      developmentUrl: 'https://synthetic-pc.local:7240',
       configuredUrl: 'https://api.example.invalid',
     }),
   ).toBe('https://api.example.invalid');
+});
+it('uses the stable development hostname across LAN address changes', () => {
+  for (const hostUri of ['192.168.1.2:8081', '10.33.59.31:8081']) {
+    expect(
+      resolveApiEndpoint({
+        development: true,
+        hostUri,
+        configuredUrl: 'https://192.168.0.106:7240',
+        developmentUrl: 'https://synthetic-pc.local:7240',
+      }),
+    ).toBe('https://synthetic-pc.local:7240');
+  }
+});
+it('honors an explicit public HTTPS API even when Expo is served from a private LAN', () => {
+  expect(
+    resolveApiEndpoint({
+      development: true,
+      hostUri: '192.168.1.2:8081',
+      developmentUrl: 'https://synthetic-pc.local:7240',
+      configuredUrl: 'https://api.example.invalid',
+    }),
+  ).toBe('https://api.example.invalid');
+});
+it('does not infer an API or disable TLS from an Expo tunnel', () => {
+  expect(
+    resolveApiEndpoint({
+      development: true,
+      hostUri: 'synthetic.exp.direct:8081',
+      configuredUrl: 'https://api.example.invalid',
+    }),
+  ).toBe('https://api.example.invalid');
+  expect(() =>
+    resolveApiEndpoint({ development: true, developmentUrl: 'http://synthetic-pc.local:7240' }),
+  ).toThrow();
 });
 it.each([
   undefined,

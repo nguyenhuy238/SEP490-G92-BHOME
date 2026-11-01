@@ -69,7 +69,9 @@ function developmentArguments(args) {
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
     if (argument === '--lan') continue;
-    if (argument === '--clear' || argument === '-c') result.push('-Clear');
+    if (argument === '--lan-api') result.push('-LanApi');
+    else if (argument === '--hostname-api') result.push('-HostnameApi');
+    else if (argument === '--clear' || argument === '-c') result.push('-Clear');
     else if (argument === '--port' || argument === '-p' || argument.startsWith('--port=')) {
       const value = argument.startsWith('--port=') ? argument.slice(7) : args[++index];
       if (!/^\d+$/.test(value ?? '') || Number(value) < 1024 || Number(value) > 65535)
@@ -77,7 +79,7 @@ function developmentArguments(args) {
       result.push('-Port', value);
     } else
       throw new Error(
-        'Khởi động BHOME dùng --clear, --lan hoặc --port <cổng>. Dùng --metro-only cho tùy chọn Expo khác và tự chạy API HTTPS.',
+        'Khởi động BHOME dùng --clear, --lan, --lan-api, --hostname-api hoặc --port <cổng>. Dùng --metro-only cho tùy chọn Expo khác và tự chạy API HTTPS.',
       );
   }
   return result;

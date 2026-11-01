@@ -5,7 +5,14 @@ const { supportedNode, selectRuntime, checkExpoOnline, main } = createRequire(im
 );
 
 describe('Expo startup runtime and online checks', () => {
-  it.each([[], ['--clear'], ['--lan', '--port', '8082'], ['-c', '--port=8083']])(
+  it.each([
+    [],
+    ['--clear'],
+    ['--lan', '--port', '8082'],
+    ['-c', '--port=8083'],
+    ['--lan-api'],
+    ['--hostname-api'],
+  ])(
     'starts the API/HTTPS supervisor for a normal Windows npm start (%j)',
     async (...args: string[]) => {
       const runCommand = vi.fn().mockResolvedValue(0);
@@ -22,6 +29,8 @@ describe('Expo startup runtime and online checks', () => {
       );
       const forwarded = runCommand.mock.calls[0]![1];
       if (args.includes('--clear') || args.includes('-c')) expect(forwarded).toContain('-Clear');
+      if (args.includes('--lan-api')) expect(forwarded).toContain('-LanApi');
+      if (args.includes('--hostname-api')) expect(forwarded).toContain('-HostnameApi');
       if (args.includes('8082')) expect(forwarded.slice(-2)).toEqual(['-Port', '8082']);
       if (args.includes('--port=8083')) expect(forwarded.slice(-2)).toEqual(['-Port', '8083']);
     },

@@ -1,4 +1,4 @@
-param([switch]$Clear, [ValidateRange(1024, 65535)][int]$Port = 8081)
+param([switch]$Clear, [ValidateRange(1024, 65535)][int]$Port = 8081, [switch]$LanApi, [switch]$HostnameApi)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 . (Join-Path $PSScriptRoot 'MobileNetwork.ps1')
@@ -8,6 +8,7 @@ if ($LASTEXITCODE -ne 0 -or [version]$nodeVersion -lt [version]'22.13.0' -or [ve
     throw 'BHOME requires Node >=22.13 and <23. Install Node 22 or use the local .tools Node 22 distribution.'
 }
 if ($Port -in @(5240,7240)) { throw 'Metro must use a different port from the API.' }
+if ($LanApi -and $HostnameApi) { throw 'Choose either LAN API or hostname API.' }
 if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
     throw "Metro port $Port is already in use. Stop the previous Expo terminal with Ctrl+C, or select -Port explicitly."
 }
@@ -41,16 +42,35 @@ function Wait-MobileApi([string]$Address) {
         if ($script:ownedApi -and $script:ownedApi.HasExited) { break }
         Start-Sleep -Seconds 2
     } while ((Get-Date) -lt $deadline)
-    throw 'API HTTPS readiness failed. Check the local database/storage, API logs, and Development configuration. No TLS checks were bypassed.'
+    throw 'API HTTPS readiness failed. Check .tools/mobile-dev-api.stderr.log, local database/storage and Development settings. If migrations are pending, stop the API and use scripts/Update-LocalDatabase.ps1. No TLS checks were bypassed.'
+}
+
+function Wait-MobileMetro([string]$Address) {
+    $deadline = (Get-Date).AddSeconds(90)
+    do {
+        & node (Join-Path $repo 'scripts/Test-ExpoMobile.cjs') $Address $Port
+        if ($LASTEXITCODE -eq 0) { return }
+        if ($script:metro.HasExited) { break }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+    throw "Metro status/iOS manifest failed at http://${Address}:$Port. Check the Expo terminal; API readiness alone does not mean the app can load."
 }
 
 $ownedApi = $null
 $metro = $null
 $previousProxy = $env:EXPO_PACKAGER_PROXY_URL
 $previousServerId = $env:EXPO_PUBLIC_DEV_SERVER_ID
+$previousDevelopmentUrl = $env:EXPO_PUBLIC_DEV_API_BASE_URL
 try {
     Assert-LocalApiProcess
     $lanIp = Get-MobileLanIp
+    $missingModels = @('detection.onnx', 'recognition.onnx', 'charset.txt') | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $repo ".tools/ocr-models/$_"))
+    }
+    if ($missingModels) {
+        Write-Output 'Preparing missing OCR models for this workstation (verified download, first run only).'
+        & (Join-Path $PSScriptRoot 'Get-OcrModels.ps1')
+    }
     & (Join-Path $PSScriptRoot 'Prepare-OcrMobile.ps1') -LanIp $lanIp -SkipDatabase
     if (-not (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue)) {
         $apiLauncher = Join-Path $PSScriptRoot 'Start-OcrMobile.ps1'
@@ -62,16 +82,46 @@ try {
     while ($true) {
         # Public CA fingerprint distinguishes developer machines even if DHCP reuses the same IP.
         $env:EXPO_PUBLIC_DEV_SERVER_ID = Get-MobileDevelopmentServerId (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
+        $apiHost = $lanIp
+        # A Windows hostname self-probe cannot establish iPhone mDNS support.
+        # Keep LAN IPv4 as the default; hostname mode requires an explicit choice.
+        if ($HostnameApi) {
+            $developmentHost = Get-MobileDevelopmentHost
+            if ($developmentHost) {
+                & node (Join-Path $repo 'scripts/Test-MobileApi.cjs') $developmentHost (Join-Path $repo '.tools/mobile-tls/root-ca.cer') $lanIp
+                if ($LASTEXITCODE -eq 0) { $apiHost = $developmentHost }
+                else { Write-Warning 'Local hostname is not reachable at this LAN IP with valid HTTPS. Using the current LAN IP automatically.' }
+            }
+        }
+        $env:EXPO_PUBLIC_DEV_API_BASE_URL = "https://${apiHost}:7240"
         $env:EXPO_PACKAGER_PROXY_URL = "http://${lanIp}:$Port"
         Write-Output "API: https://${lanIp}:7240; Expo: exp://${lanIp}:$Port"
-        Write-Output 'Scan the QR/open the Expo URL. Network changes are detected automatically; scan the new QR after switching networks.'
+        Write-Output "API checked from this computer: $env:EXPO_PUBLIC_DEV_API_BASE_URL"
+        Write-Output 'Scan the QR/open the Expo URL. Use the new QR when reloading Expo on a new network.'
         $expoLauncher = Join-Path $repo 'scripts/Start-ExpoMobile.cjs'
         $expoArguments = @(('"' + $expoLauncher + '"'), '--metro-only', '--lan', '--port', [string]$Port)
         if ($Clear) { $expoArguments += '--clear' }
         # Reuse this interactive terminal so the developer can read the Expo QR and use its controls.
         $metro = Start-Process (Get-Command node.exe).Source -NoNewWindow -PassThru -WorkingDirectory (Join-Path $repo 'src/mobile') -ArgumentList $expoArguments
+        Wait-MobileMetro $lanIp
+        Write-Output "Metro status/iOS manifest OK from this computer. On iPhone Safari, test http://${lanIp}:$Port/status (expected: packager-status:running)."
+        Write-Output 'Desktop probes do not confirm phone connectivity. If Safari fails, check Expo Go Local Network permission and router/device isolation.'
+        $deviceSeen = $false
+        $deviceDeadline = (Get-Date).AddSeconds(30)
         $networkChanged = $false
         while (-not $metro.WaitForExit(3000)) {
+            if (-not $deviceSeen) {
+                $peer = Get-NetTCPConnection -State Established -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object {
+                    ($_.RemoteAddress -replace '^::ffff:', '') -notin @('127.0.0.1', '::1', $lanIp)
+                } | Select-Object -First 1
+                if ($peer) {
+                    $deviceSeen = $true
+                    Write-Output 'Metro received a TCP connection from another device. Wait for iOS Bundled to confirm JavaScript transfer.'
+                } elseif ((Get-Date) -ge $deviceDeadline) {
+                    Write-Warning "No device TCP connection observed yet. Test http://${lanIp}:$Port/status in iPhone Safari; loading the API is a separate step."
+                    $deviceDeadline = (Get-Date).AddSeconds(60)
+                }
+            }
             try { $currentIp = Get-MobileLanIp }
             catch { continue } # A brief Wi-Fi disconnect is not a reason to stop API/Metro.
             if ($currentIp -eq $lanIp) { continue }
@@ -91,4 +141,5 @@ try {
     Stop-OwnedProcess $ownedApi
     $env:EXPO_PACKAGER_PROXY_URL = $previousProxy
     $env:EXPO_PUBLIC_DEV_SERVER_ID = $previousServerId
+    $env:EXPO_PUBLIC_DEV_API_BASE_URL = $previousDevelopmentUrl
 }
