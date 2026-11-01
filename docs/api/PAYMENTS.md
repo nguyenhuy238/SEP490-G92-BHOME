@@ -37,3 +37,9 @@ không phải xác minh callback ngân hàng hay receipt Tenant. Không có endp
 Event `payment.confirmed.v1` lưu trong PaymentConfirmedEvents cùng allocation, key allocationId,
 payload contract `{allocationId, invoiceId, occurredAt}`; recipient lấy từ InvoiceRecipients và Owner.
 Notification module chưa consume/deliver; PendingIntegration, không sửa worker dùng chung.
+
+`GET /invoices/{id}/payment` dành cho Owner/Tenant có entitlement, Staff 403, ngoài snapshot 404.
+Tenant thấy cùng Paid/Unpaid và các payment amount/date, với payer “Bạn”/“Khách thuê khác trong hóa đơn”/
+“Chưa xác định người trả”; không trả bank reference, statement reference hay payer account/name của người khác.
+Owner có thêm payer user ID; `GET /invoices/{id}/payment/eligible-payers` chỉ Owner, nhãn Resident tối thiểu.
+PaidBy được Owner chọn khi xác minh bằng chứng, không lấy người đang xem hoặc VerifiedBy.

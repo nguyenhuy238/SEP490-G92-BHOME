@@ -20,9 +20,10 @@ public sealed class PaymentTransactionsController(PaymentService service) : Cont
     [HttpGet("{id:guid}/reconciliation-history")] public Task<PagedResult<ReconciliationView>> History(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default) => service.ReviewsAsync(id,page,pageSize,t);
 }
 
-[ApiController, Route("api/v1/invoices/{id:guid}/payment"), Authorize(Roles = Roles.Owner)]
+[ApiController, Route("api/v1/invoices/{id:guid}/payment"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class InvoicePaymentController(PaymentService service) : ControllerBase
 {
     [HttpGet] public Task<InvoicePaymentView> Get(Guid id, CancellationToken t) => service.InvoicePaymentAsync(id,t);
+    [HttpGet("eligible-payers"),Authorize(Roles=Roles.Owner)] public Task<IReadOnlyList<PayerChoice>> Payers(Guid id,CancellationToken t)=>service.PayersAsync(id,t);
 }

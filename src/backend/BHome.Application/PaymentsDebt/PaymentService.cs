@@ -176,11 +176,15 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         var history = await repository.HistoryAsync(id, t);
         var paid = history.Sum(entry => entry.Allocation.Amount);
         var outstanding = invoice.Total - paid;
+        var payers = scope.Owner ? await repository.PayersAsync(id,t) : [];
         return new(id, invoice.Status != InvoiceStatus.Final ? "NotIssued" : outstanding <= 0 ? "Paid" : "Unpaid",
             invoice.Total, paid, outstanding, invoice.DueDate, invoice.Status == InvoiceStatus.Final ? PaymentRules.OverdueDays(invoice.DueDate, Today, outstanding) : 0,
             PaymentRules.InvoiceReference(invoice.Id), await repository.PendingReviewAsync(id, t),
             history.Select(entry => new PaymentHistoryView(entry.Allocation.Id, entry.Allocation.Amount, entry.Transfer.OccurredAt,
-                entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ? "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
+                entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
+                    scope.Owner ? payers.FirstOrDefault(p=>p.UserId==entry.Allocation.PaidByUserId)?.DisplayLabel??"Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                 scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray());
     }
+    public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id,CancellationToken t)
+    { Owner();_=await Invoice(id,t);return await repository.PayersAsync(id,t); }
 }

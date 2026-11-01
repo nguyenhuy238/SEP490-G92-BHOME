@@ -58,6 +58,10 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
     public Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t) => db.Set<PaymentCommand>().AsNoTracking().SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key && c.Operation == operation, t);
     public Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId,CancellationToken t)=>db.Set<ReceivingBankAccount>().AsNoTracking().Where(a=>a.LocationId==locationId).OrderByDescending(a=>a.Version).FirstOrDefaultAsync(t);
     public Task<bool> ActiveLocationAsync(Guid locationId,CancellationToken t)=>db.Locations.AnyAsync(l=>l.Id==locationId && l.IsActive,t);
+    public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid invoiceId,CancellationToken t)=>await db.Set<InvoiceRecipient>().AsNoTracking().Where(r=>r.InvoiceId==invoiceId)
+        .OrderBy(r=>r.TenantUserId).Select(r=>new PayerChoice(r.TenantUserId,
+            db.Set<BHome.Domain.TenantContracts.Resident>().Where(person=>person.TenantUserId==r.TenantUserId &&
+                db.Set<Invoice>().Any(i=>i.Id==invoiceId && i.RoomId==person.RoomId)).OrderBy(person=>person.Id).Select(person=>person.DisplayLabel).FirstOrDefault()??"Khách thuê đã liên kết")).ToArrayAsync(t);
     public async Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     {
         var source = db.Set<PaymentTransfer>().AsNoTracking().Where(x =>

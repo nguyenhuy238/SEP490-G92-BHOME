@@ -54,4 +54,32 @@ public sealed partial class PaymentLedgerTests
         Assert.Contains(listing.Items,p=>p.Id==transfer.Id && p.Status=="Allocated");
         Assert.Equal(HttpStatusCode.BadRequest,(await owner.GetAsync(root+"?page=0")).StatusCode);
     }
+    [Fact]
+    public async Task SharedTenantStatusAndHistoricalAccessStayScopedWithoutLeakingStatementOrAnotherPayerIdentity()
+    {
+        var w=await Setup();using var owner=await Client(w.Owner);using var a=await Client(w.Tenants[0]);using var b=await Client(w.Tenants[1]);using var c=await Client(w.Tenants[2]);
+        var path=$"/api/v1/invoices/{w.Invoice}/payment";
+        var transfer=await As(w.Owner,Roles.Owner,s=>s.RegisterAsync(Input(w),Guid.NewGuid(),default));
+        await As(w.Owner,Roles.Owner,s=>s.AllocateAsync(transfer.Id,new(w.Invoice,w.Tenants[0],true),Guid.NewGuid(),default));
+        foreach(var client in new[]{a,b,c})
+        {
+            var payment=(await client.GetFromJsonAsync<InvoicePaymentView>(path))!;
+            Assert.Equal("Paid",payment.PaymentStatus);Assert.Equal(0,payment.OutstandingAmount);Assert.Single(payment.History);
+            var body=await client.GetStringAsync(path);
+            Assert.DoesNotContain("bankReference",body);Assert.DoesNotContain("statementReference",body);Assert.DoesNotContain(w.Owner.ToString(),body);
+            Assert.DoesNotContain(w.Tenants[0].ToString(),body);
+        }
+        Assert.Equal("Bạn",(await a.GetFromJsonAsync<InvoicePaymentView>(path))!.History[0].PaidBy);
+        Assert.Equal("Khách thuê khác trong hóa đơn",(await b.GetFromJsonAsync<InvoicePaymentView>(path))!.History[0].PaidBy);
+        Assert.Equal(3,(await owner.GetFromJsonAsync<PayerChoice[]>(path+"/eligible-payers"))!.Length);
+        Assert.Equal(HttpStatusCode.Forbidden,(await b.GetAsync(path+"/eligible-payers")).StatusCode);
+        await using(var scope=fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"Status\" = 4 WHERE \"RoomId\" = {w.Room}");
+        }
+        Assert.Equal(HttpStatusCode.OK,(await c.GetAsync(path)).StatusCode);
+        var outside=await Setup();using var outsider=await Client(outside.Tenants[0]);
+        Assert.Equal(HttpStatusCode.NotFound,(await outsider.GetAsync(path)).StatusCode);
+    }
 }
