@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 import { resolveApiEndpoint } from './apiEndpoint';
 import { clearAbandonedCaptures } from './captureFiles';
+import { createCredentialStore } from './credentialStore';
 import { MobileSessions, type SessionView } from './sessions';
 
-const KEY = 'bhome.mobile.session.v1';
 const Context = createContext<
   (SessionView & { login: MobileSessions['login']; logout: MobileSessions['logout'] }) | null
 >(null);
@@ -14,14 +13,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [manager] = useState(
     () =>
       new MobileSessions(
-        {
-          read: () => SecureStore.getItemAsync(KEY),
-          write: (value) =>
-            SecureStore.setItemAsync(KEY, value, {
-              keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-            }),
-          remove: () => SecureStore.deleteItemAsync(KEY),
-        },
+        createCredentialStore(),
         resolveApiEndpoint({
           development: __DEV__,
           hostUri: Constants.expoConfig?.hostUri,

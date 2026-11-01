@@ -81,3 +81,66 @@ dừng và chạy tiến trình mới. Không yêu cầu người dùng gửi pa
 
 Chưa thao tác trực tiếp trên iPhone để xác nhận ứng dụng mở được. Probe máy tính không thay thế
 native E2E, quyền mạng cục bộ hoặc cấu hình tin cậy CA của API HTTPS trên thiết bị.
+
+## Sửa dependency bundle web ngày 01/11/2026
+
+Phạm vi: NFR môi trường phát triển, không thay đổi BF/UC/GBR/DBR/JOB nghiệp vụ.
+Yêu cầu: sửa `Unable to resolve "react-native-web/dist/index"` khi Metro nhận yêu cầu web.
+Đối chiếu `src/mobile/package.json`, dependency thực tế và
+[hướng dẫn Expo web](https://docs.expo.dev/workflow/web/): workspace thiếu `react-native-web`
+và chưa khai báo trực tiếp `react-dom`, `@expo/metro-runtime`.
+
+Đã chạy `expo install react-dom react-native-web @expo/metro-runtime --npm` bằng Node 22.23.4
+trong `src/mobile`. Expo chọn phiên bản tương thích SDK 58; `react-dom` khớp React 19.3.0
+của mobile. Cập nhật manifest và lockfile để `npm ci` cài đủ dependency trên máy khác.
+
+Tiêu chí chấp nhận: Expo export web giải quyết được import bị thiếu, export iOS vẫn thành công,
+typecheck/lint và test mobile hiện có không lỗi. Kiểm chứng đã thực hiện bằng Node 22.23.4:
+
+- `expo export --platform web --output-dir ../../.tools/expo-web-dependency-fix`: PASS.
+- `expo export --platform ios --output-dir ../../.tools/expo-web-fix-ios`: PASS.
+- `npm.cmd run typecheck --workspace ./src/mobile`: PASS.
+- `npm.cmd run lint --workspace ./src/mobile`: PASS.
+- `npm.cmd run test --workspace ./src/mobile`: PASS, 199 test / 15 file.
+
+Chạy lại từ root bằng `npm.cmd run mobile -- --clear`. Thông báo
+`No device TCP connection observed yet` là cảnh báo kết nối thiết bị riêng;
+export/test trên máy tính không xác nhận kết nối hoặc thao tác thực tế trên iPhone.
+
+## Sửa lỗi SessionProvider trên web ngày 01/11/2026
+
+Traceability: khởi động web sau khi bundle thành công → NFR tương thích nền tảng,
+UC-01 / GBR-01, GBR-13 về phiên đăng nhập và bảo vệ thông tin → `captureFiles.ts`,
+`credentialStore.ts`, `SessionProvider.tsx`, `LoginScreen.tsx` → kiểm tra cleanup theo nền tảng,
+đăng nhập/đăng xuất, đăng nhập bị từ chối và tải lại trang.
+
+Nguyên nhân: `clearAbandonedCaptures()` chạy trên mọi nền tảng, gọi `Paths.cache` rồi
+`new Directory(...)`. Implementation web không có `validatePath`, khiến effect khởi tạo
+SessionProvider ném lỗi và giao diện dừng hoạt động. Đối chiếu source dependency đã cài và
+[Expo FileSystem SDK 58](https://docs.expo.dev/versions/v58.0.0/sdk/filesystem/): API này dành cho
+native. [SecureStore SDK 58](https://docs.expo.dev/versions/v58.0.0/sdk/securestore/) cũng không
+hỗ trợ web; chỉ sửa cleanup sẽ còn lỗi lưu phiên khi đăng nhập.
+
+- Web bỏ qua cleanup thư mục cache native; iOS/Android vẫn xóa các thư mục tạm như trước.
+- Credential store trên web chỉ giữ token trong bộ nhớ của SessionProvider. Tải lại/đóng trang
+  hoặc unmount provider kết thúc phiên ở client; không ghi token vào localStorage/sessionStorage.
+- iOS/Android tiếp tục dùng SecureStore với cùng key và `WHEN_UNLOCKED_THIS_DEVICE_ONLY`.
+- Màn đăng nhập mô tả đúng thời hạn lưu phiên trên web. Không đổi endpoint, phân quyền backend,
+  schema, dependency hay quy trình xử lý ảnh native.
+
+Kiểm chứng bằng Node 22.23.4:
+
+- `npm.cmd run test --workspace ./src/mobile`: PASS, 207 test / 17 file, gồm regression mới
+  tại `captureFiles.test.ts`, `credentialStore.test.ts` và `sessionProvider.test.tsx`.
+- `npm.cmd run typecheck --workspace ./src/mobile`, `npm.cmd run lint --workspace ./src/mobile`
+  và ESLint riêng ba file test: PASS.
+- `expo export --platform web --platform ios --output-dir ../../.tools/expo-session-web-fix`: PASS.
+- Edge headless + Playwright, API giả lập với dữ liệu tổng hợp: tái hiện lỗi `validatePath` trên
+  export cũ; bản sửa hiện màn đăng nhập, từ chối sai thông tin, đăng nhập Tenant thành công,
+  tải lại quay về đăng nhập; không lưu token vào web storage; không có page error.
+  Script và ảnh kiểm chứng cục bộ tại `.tools/expo-session-browser.cjs`,
+  `.tools/expo-session-web-fix.png` (không commit).
+
+Chưa kiểm tra trực tiếp trên iPhone/Android hoặc đăng nhập backend thật từ trình duyệt.
+Kiểm tra trình duyệt dùng response giả lập không chứng minh cấu hình CORS/TLS của backend thật.
+Cảnh báo Animated dùng JS fallback trên web không phải nguyên nhân crash này.

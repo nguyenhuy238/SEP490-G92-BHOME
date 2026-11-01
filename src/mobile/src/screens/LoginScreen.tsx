@@ -104,7 +104,9 @@ export function LoginScreen() {
             />
             <Row spread>
               <Text variant="labelSmall" style={[ui.muted, ui.grow]}>
-                Phiên đăng nhập được lưu bảo mật trên thiết bị
+                {Platform.OS === 'web'
+                  ? 'Tải lại hoặc đóng trang sẽ kết thúc phiên đăng nhập'
+                  : 'Phiên đăng nhập được lưu bảo mật trên thiết bị'}
               </Text>
               <Button compact textColor={c.blue} onPress={() => unavailable('Khôi phục mật khẩu')}>
                 Quên mật khẩu?

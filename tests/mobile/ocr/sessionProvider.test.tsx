@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   saved: null as string | null,
+  platform: 'ios',
   state: 'active',
   listener: undefined as ((state: string) => void) | undefined,
   removeListener: vi.fn(),
@@ -21,6 +22,11 @@ vi.mock('expo-secure-store', () => ({
   },
 }));
 vi.mock('react-native', () => ({
+  Platform: {
+    get OS() {
+      return mocks.platform;
+    },
+  },
   AppState: {
     get currentState() {
       return mocks.state;
@@ -42,6 +48,28 @@ function Consumer() {
     </span>
   );
 }
+function WebConsumer() {
+  const { session, ready, login, logout } = useSession();
+  const [error, setError] = React.useState('');
+  return (
+    <>
+      <span>{ready ? (session?.userId ?? 'signed-out') : 'loading'}</span>
+      <button
+        onClick={() =>
+          void login(
+            'https://synthetic-pc.local:7240',
+            'synthetic@example.test',
+            'synthetic-password',
+          ).catch(() => setError('login-failed'))
+        }
+      >
+        Login
+      </button>
+      <button onClick={() => void logout()}>Logout</button>
+      <span>{error}</span>
+    </>
+  );
+}
 const session = {
   userId: 'synthetic-user',
   roles: ['Owner'],
@@ -60,6 +88,7 @@ beforeEach(() => {
     serverId: 'synthetic-ca',
   });
   mocks.state = 'active';
+  mocks.platform = 'ios';
   mocks.removeListener.mockClear();
 });
 afterEach(() => {
@@ -126,4 +155,76 @@ it('does not poll in the background, reconnects on foreground, and removes timer
   view.unmount();
   expect(mocks.removeListener).toHaveBeenCalledTimes(1);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('supports web login/logout without native storage and starts signed out after remount', async () => {
+  mocks.platform = 'web';
+  const savedOnDevice = mocks.saved;
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(JSON.stringify(session)))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetcher);
+  const view = render(
+    <SessionProvider>
+      <WebConsumer />
+    </SessionProvider>,
+  );
+  await act(async () => {});
+  expect(screen.getByText('signed-out')).toBeTruthy();
+  expect(fetcher).not.toHaveBeenCalled();
+  await act(async () => {
+    screen.getByText('Login').click();
+  });
+  expect(screen.getByText('synthetic-user')).toBeTruthy();
+  expect(mocks.saved).toBe(savedOnDevice);
+  view.unmount();
+  const remounted = render(
+    <SessionProvider>
+      <WebConsumer />
+    </SessionProvider>,
+  );
+  await act(async () => {});
+  expect(screen.getByText('signed-out')).toBeTruthy();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  remounted.unmount();
+
+  fetcher
+    .mockReset()
+    .mockResolvedValueOnce(new Response(JSON.stringify(session)))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  render(
+    <SessionProvider>
+      <WebConsumer />
+    </SessionProvider>,
+  );
+  await act(async () => {
+    screen.getByText('Login').click();
+  });
+  await act(async () => {
+    screen.getByText('Logout').click();
+  });
+  expect(screen.getByText('signed-out')).toBeTruthy();
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    'https://synthetic-pc.local:7240/api/v1/auth/login',
+    'https://synthetic-pc.local:7240/api/v1/auth/logout',
+  ]);
+  expect(mocks.saved).toBe(savedOnDevice);
+});
+
+it('keeps an invalid web login signed out without changing native credentials', async () => {
+  mocks.platform = 'web';
+  const savedOnDevice = mocks.saved;
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })));
+  render(
+    <SessionProvider>
+      <WebConsumer />
+    </SessionProvider>,
+  );
+  await act(async () => {
+    screen.getByText('Login').click();
+  });
+  expect(screen.getByText('signed-out')).toBeTruthy();
+  expect(screen.getByText('login-failed')).toBeTruthy();
+  expect(mocks.saved).toBe(savedOnDevice);
 });
