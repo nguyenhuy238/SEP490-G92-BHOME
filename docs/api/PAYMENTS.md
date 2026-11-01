@@ -15,15 +15,15 @@ Theo BF-06/UC-22/23/25 và [quyết định BH-25](../development/BH25_TRACEABIL
 Invoice Final không bị sửa; trạng thái thanh toán được suy từ allocation ledger.
 Amounts là decimal strings VND nguyên. Lỗi theo ProblemDetails có code/correlationId.
 
-| Method | `/api/v1` route | Quyền / body |
-| --- | --- | --- |
-| POST | `/payment-transactions` | Owner; bank/provider identity, bankReference, amount/currency/occurredAt, transferDescription, statementReference, verificationReason, proposedInvoiceId nullable, humanVerified=true |
-| GET | `/payment-transactions` | Owner; page/pageSize, locationId/roomId/billingPeriod |
-| GET | `/payment-transactions/{id}` | Owner; metadata sao kê và kết quả đối soát |
-| POST | `/payment-transactions/{id}/allocate` | Owner; invoiceId, paidByUserId nullable, humanVerified=true |
-| POST | `/payment-transactions/{id}/reject` | Owner; reason; không xóa giao dịch, không undo tiền đã allocate |
-| GET | `/payment-transactions/{id}/reconciliation-history` | Owner; page/pageSize; append-only theo sequence |
-| GET | `/invoices/{id}/payment` | Read model số tiền, balance/status và payer theo quyền |
+| Method | `/api/v1` route                                     | Quyền / body                                                                                                                                                                          |
+| ------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/payment-transactions`                             | Owner; bank/provider identity, bankReference, amount/currency/occurredAt, transferDescription, statementReference, verificationReason, proposedInvoiceId nullable, humanVerified=true |
+| GET    | `/payment-transactions`                             | Owner; page/pageSize, locationId/roomId/billingPeriod                                                                                                                                 |
+| GET    | `/payment-transactions/{id}`                        | Owner; metadata sao kê và kết quả đối soát                                                                                                                                            |
+| POST   | `/payment-transactions/{id}/allocate`               | Owner; invoiceId, paidByUserId nullable, humanVerified=true                                                                                                                           |
+| POST   | `/payment-transactions/{id}/reject`                 | Owner; reason; không xóa giao dịch, không undo tiền đã allocate                                                                                                                       |
+| GET    | `/payment-transactions/{id}/reconciliation-history` | Owner; page/pageSize; append-only theo sequence                                                                                                                                       |
+| GET    | `/invoices/{id}/payment`                            | Read model số tiền, balance/status và payer theo quyền                                                                                                                                |
 
 Mọi POST cần header GUID `Idempotency-Key`: cùng key/payload replay, đổi payload 409.
 Bank reference chuẩn hóa trim/uppercase; unique provider + reference chống nhập trùng giao dịch.
@@ -31,12 +31,18 @@ Claim normalized reference xuyên cọc/Invoice chống credit hai nghĩa vụ n
 Giao dịch đúng full outstanding + đúng transfer reference mới được phân bổ. Thiếu/thừa, sai memo,
 đã Paid hoặc reference đã được credit giữ PendingReview, không tạo PaymentAllocation.
 Một bank transfer chỉ có một allocation. Paid không cấm xem lịch sử.
+List giao dịch theo Location/Room/kỳ dùng hóa đơn đã allocate, rồi target của quyết định
+đối soát mới nhất, rồi proposedInvoiceId; giao dịch ban đầu unmatched không biến mất sau match.
+Amounts đọc từ debt query được chuẩn hóa scale 0; không trả chuỗi `.0` làm UI mất số tiền.
+Giao dịch đánh dấu isDevelopmentDemo không được allocate ngoài Development/Testing.
 
 Provider production hiện Unconfigured. `OwnerBankStatement` chỉ là Owner xác minh bằng sao kê,
 không phải xác minh callback ngân hàng hay receipt Tenant. Không có endpoint fake bank success.
 Event `payment.confirmed.v1` lưu trong PaymentConfirmedEvents cùng allocation, key allocationId,
 payload contract `{allocationId, invoiceId, occurredAt}`; recipient lấy từ InvoiceRecipients và Owner.
 Notification module chưa consume/deliver; PendingIntegration, không sửa worker dùng chung.
+Consumer cần delivery/inbox ledger riêng với unique allocationId+recipient+channel; không cập nhật
+event gốc bất biến. Chỉ acknowledge sau durable receipt; lỗi delivery không thay đổi allocation.
 
 `GET /invoices/{id}/payment` dành cho Owner/Tenant có entitlement, Staff 403, ngoài snapshot 404.
 Tenant thấy cùng Paid/Unpaid và các payment amount/date, với payer “Bạn”/“Khách thuê khác trong hóa đơn”/
