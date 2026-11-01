@@ -31,6 +31,7 @@ import { PageHeader } from '../../../components/common/PortalUI';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useInvoiceApi } from '../useInvoiceApi';
+import { OwnerInvoicePaymentPanel } from '../../payments/OwnerInvoicePaymentPanel';
 
 export default function InvoicesPage() {
   return isMockMode ? <ResourcePage kind="invoices" variant="table" /> : <LiveInvoicesPage />;
@@ -302,6 +303,9 @@ export function LiveInvoicesPage() {
                 </TableBody>
               </Table>
               <Typography variant="h6">Tổng: {formatContractMoney(invoice.total)}</Typography>
+              {invoice.status === 'Final' && (
+                <OwnerInvoicePaymentPanel key={invoice.id} invoiceId={invoice.id} />
+              )}
               {invoice.status === 'Draft' && (
                 <Stack direction="row" spacing={2}>
                   <Button

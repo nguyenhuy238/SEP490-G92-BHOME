@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 vi.mock('./useInvoiceApi', () => ({ useInvoiceApi: () => mocks.api }));
+vi.mock('../payments/OwnerInvoicePaymentPanel', () => ({ OwnerInvoicePaymentPanel: () => null }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
 }));
