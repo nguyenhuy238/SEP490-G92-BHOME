@@ -28,7 +28,7 @@ internal static class ContractConfiguration
             e.HasIndex(c => c.HoldingContractId).IsUnique().HasFilter("\"HoldingContractId\" IS NOT NULL");
             e.HasIndex(c => c.HoldingAllocationReference).IsUnique().HasFilter("\"HoldingAllocationReference\" IS NOT NULL");
             e.Property(c => c.Terms).HasMaxLength(12000); e.Property(c => c.SnapshotHash).HasMaxLength(64);
-            e.HasIndex(c => c.RoomId).IsUnique().HasFilter("\"Status\" = 3").HasDatabaseName("UX_Contract_ActiveRoom");
+            e.HasIndex(c => c.RoomId).HasFilter("\"Status\" = 3").HasDatabaseName("IX_Contract_ActiveRoom");
             e.HasIndex(c => c.PreviousContractId).IsUnique().HasFilter("\"PreviousContractId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)");
             e.HasMany(c => c.Residents).WithOne().HasForeignKey(r => r.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(c => c.Signatures).WithOne().HasForeignKey(s => s.ContractId).OnDelete(DeleteBehavior.Restrict);

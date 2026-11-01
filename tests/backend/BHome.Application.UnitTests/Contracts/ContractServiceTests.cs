@@ -96,9 +96,8 @@ public sealed class ContractServiceTests
 
     [Theory]
     [InlineData(RoomStatus.OnHold)]
-    [InlineData(RoomStatus.Occupied)]
     [InlineData(RoomStatus.Unavailable)]
-    public async Task DraftRequiresAvailableRoomWithoutChangingItsStatus(RoomStatus status)
+    public async Task DraftRejectsHeldOrUnavailableRoomWithoutChangingItsStatus(RoomStatus status)
     {
         var r = new Rig(); r.Room.Status = status;
         var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.CreateAsync(r.Draft, Guid.NewGuid(), default));
@@ -106,6 +105,14 @@ public sealed class ContractServiceTests
         Assert.Equal(status, r.Room.Status);
         Assert.Empty(r.Contracts);
         Assert.Empty(r.Operations);
+    }
+
+    [Fact]
+    public async Task SharedRoomDraftIsAllowedWhenOccupantsAndCapacityDoNotConflict()
+    {
+        var r = new Rig(); r.Room.Status = RoomStatus.Occupied;
+        await r.Service.CreateAsync(r.Draft, Guid.NewGuid(), default);
+        Assert.Single(r.Contracts); Assert.Equal(RoomStatus.Occupied, r.Room.Status);
     }
 
     [Fact]
@@ -127,7 +134,7 @@ public sealed class ContractServiceTests
         var r = new Rig(); var c = await r.Ready();
         if (invalid == "signature") c.Signatures.RemoveAt(0);
         if (invalid == "deposit") r.Deposits.Clear();
-        if (invalid == "room") r.Repo.ConflictsAsync(default, default, default, default, default).ReturnsForAnyArgs(true);
+        if (invalid == "room") r.Repo.ConflictsAsync(default, default, default, default, default!, default).ReturnsForAnyArgs(true);
         if (invalid == "terms") c.Terms = "tampered";
         if (invalid == "identity") r.Resident.VerificationStatus = IdentityVerificationStatus.Pending;
         Assert.Equal(409, (await Assert.ThrowsAsync<ContractException>(() => r.Service.ActivateAsync(c.Id, Guid.NewGuid(), default))).Status);

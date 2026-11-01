@@ -1,4 +1,4 @@
-# BH-21 — phạm vi và quyết định còn thiếu
+# BH-21 — phạm vi và quyết định triển khai
 
 Ngày 01/11/2026, nhánh `member/QHuy`. Nguồn: AGENTS.md, SRS v1.3 trong
 `docs/reports/BHome_Report-3_Software Requirement Specification (2).docx` (đọc nội dung XML),
@@ -14,7 +14,24 @@ của AGENTS.md và yêu cầu task: chỉ commit local trên `member/QHuy`, kh�
 | Owner cấu hình utility rates có hiệu lực        | UC-06, GBR-08; API Property hiện có | BillingPolicy, Owner pricing                   | API thật, ngày hiệu lực, version conflict, loading/error/empty; không tính tiền trên client               |
 | Draft/Final, Tenant Invoice                     | UC-21, DBR-06/07, GBR-08/09; JOB-10 | Chưa tạo persistence khi chưa chốt             | Chờ quyết định bên dưới; không tạo trạng thái Paid hoặc endpoint giả                                      |
 
-## Quyết định cần chủ dự án phê duyệt
+## Quyết định người dùng đã phê duyệt trong phiên 01/11/2026
+
+- Nhóm khách chung phòng: mỗi khách ký hợp đồng riêng; phòng có một đại diện. Gia đình:
+  một hợp đồng và một người đại diện. Các hợp đồng cùng phòng vẫn phải tuân sức chứa và
+  không cho một occupant có hợp đồng Active trùng kỳ; kiểm tra trong service/Room lock và DB trigger.
+- Một hóa đơn chung Room + tháng. Mọi Tenant trong kỳ cùng chịu trách nhiệm, được xem,
+  giữ quyền xem kỳ đã ở khi rời phòng. Đây là thay đổi được duyệt so với SRS DBR-06 Contract + kỳ.
+  Snapshot `InvoiceRecipients` giữ quyền; không dựa vào danh sách người đang ở để đọc hóa đơn cũ.
+- Owner có chức năng cấu hình nguồn tiền thuê, ngày chọn rate, xử lý tháng thiếu, làm tròn,
+  ngày Draft/Final/Due. Không dùng giá trị mặc định khi Location chưa có cấu hình.
+- Lựa chọn cấu hình được biểu diễn rõ: rate tại đầu/cuối kỳ; tiền thuê từ Room policy hoặc
+  Contract đại diện Owner chọn; phí cố định cả tháng hoặc theo số ngày có người ở/tháng;
+  làm tròn từng dòng về VND (AwayFromZero/ToEven); ngày 29–31 co về ngày cuối tháng ngắn.
+  Đây là cơ chế cấu hình để Owner chọn; không tự coi một công thức là policy đã được chọn.
+  Không hỗ trợ bậc thang, phí theo người, tự chia tiền giữa Tenant hoặc nhiều mức giá trong tháng.
+  Phòng có thay meter/baseline không liền kỳ giữ Draft thiếu input để review, không tự ước lượng.
+
+## Nội dung câu hỏi trước khi chốt
 
 1. **D-01 — định danh nghĩa vụ**: SRS DBR-06 quy định Contract + kỳ; code giữ một Active
    Contract/Room (`UX_Contract_ActiveRoom`). Task đề cập nhiều Contract cùng Room và hóa đơn chung.
@@ -25,5 +42,5 @@ của AGENTS.md và yêu cầu task: chỉ commit local trên `member/QHuy`, kh�
 3. **D-03 — lịch billing**: ngày Draft/Final/Due do Owner cấu hình theo UC-21; chưa có model lịch
    được duyệt. Không tự đặt hạn thanh toán hoặc suy ra từ UI minh họa.
 
-Các câu hỏi đã được gửi cho người dùng trong phiên triển khai. Trong khi chờ, tiếp tục phần
-cấu hình và confirmed readings độc lập. Không coi tài liệu audit/kế hoạch là phê duyệt mới.
+Các câu hỏi này đã được trả lời bằng các quyết định bên trên. Audit/kế hoạch cũ được giữ nguyên
+như bằng chứng lịch sử; tài liệu này ghi quyết định mới và phạm vi thay đổi.

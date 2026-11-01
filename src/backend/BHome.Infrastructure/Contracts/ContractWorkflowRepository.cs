@@ -16,7 +16,7 @@ internal sealed class ContractWorkflowRepository(BHomeDbContext db) : IContractW
         var choices = await locations.OrderBy(l => l.Name).Take(100).Select(l => new ContractChoice(l.Id, l.Name)).ToArrayAsync(t);
         if (locationId is not null && !await locations.AnyAsync(l => l.Id == locationId, t)) throw ContractException.Missing();
         var rooms = await db.Set<Room>().AsNoTracking().Where(r => locationId != null && r.LocationId == locationId &&
-            r.Status == RoomStatus.Available && r.RoomTypeId != null && r.RoomType!.IsActive && locations.Any(l => l.Id == r.LocationId))
+            (r.Status == RoomStatus.Available || r.Status == RoomStatus.Occupied) && r.RoomTypeId != null && r.RoomType!.IsActive && locations.Any(l => l.Id == r.LocationId))
             .OrderBy(r => r.RoomNumber).Take(100).Select(r => new ContractRoomChoice(r.Id, r.RoomNumber, r.LocationId, r.Status.ToString())).ToArrayAsync(t);
         var ids = rooms.Select(r => r.Id).ToArray();
         var residents = await db.Set<Resident>().AsNoTracking().Where(r => ids.Contains(r.RoomId))

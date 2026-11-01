@@ -56,8 +56,17 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
          join r in db.Roles on ur.RoleId equals r.Id
          where u.Id == id && u.IsActive && r.Name == role
          select u.Id).AnyAsync(t);
-    public Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t) =>
-        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from, t);
+    public async Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t)
+    {
+        var capacity = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.Capacity).SingleAsync(t);
+        var others = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == roomId && c.Id != exceptId &&
+            c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from).ToArrayAsync(t);
+        if (others.Any(c => c.Residents.Any(r => residentIds.Contains(r.ResidentId)))) return true;
+        var dates = others.Select(c => c.StartDate < from ? from : c.StartDate).Append(from).Distinct();
+        return dates.Any(date => residentIds.Length + others.Where(c => c.StartDate <= date && c.EndDate >= date).SelectMany(c => c.Residents).Select(r => r.ResidentId).Distinct().Count() > capacity);
+    }
+    public Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t) =>
+        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active, t);
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
     public async Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t) =>

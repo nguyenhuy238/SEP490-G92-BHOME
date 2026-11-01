@@ -108,7 +108,8 @@ public interface IContractRepository
     Task<Room?> RoomAsync(Guid id, CancellationToken t);
     Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t);
     Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t);
-    Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t);
+    Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
+    Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t);
     Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t);

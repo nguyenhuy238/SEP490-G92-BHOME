@@ -112,7 +112,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             await ScopeRoom(x.RoomId, t);
             if (await Replay(key, "draft", x, t) is { } prior) return new ContractId(prior);
-            if ((await repository.RoomAsync(x.RoomId, t))!.Status != RoomStatus.Available) throw ContractException.Conflict("room_not_available");
+            if ((await repository.RoomAsync(x.RoomId, t))!.Status is not (RoomStatus.Available or RoomStatus.Occupied)) throw ContractException.Conflict("room_not_available");
             if (!await repository.ActiveUserInRoleAsync(x.OwnerSignerId, Roles.Owner, t) ||
                 !await repository.ActiveUserInRoleAsync(x.TenantUserId, Roles.Tenant, t)) throw ContractException.Invalid("invalid_contract_signers");
             var residents = await repository.ResidentsAsync(x.RoomId, x.ResidentIds, t);
@@ -120,7 +120,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 throw ContractException.Invalid("verified_residents_required");
             if (residents.Single(r => r.Id == x.RepresentativeResidentId).TenantUserId is { } linkedTenant && linkedTenant != x.TenantUserId)
                 throw ContractException.Invalid("tenant_account_mismatch");
-            if (await repository.ConflictsAsync(x.RoomId, Guid.Empty, x.StartDate, x.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
+            if (await repository.ConflictsAsync(x.RoomId, Guid.Empty, x.StartDate, x.EndDate, x.ResidentIds, t)) throw ContractException.Conflict("room_contract_conflict");
             var c = new Contract
             {
                 RoomId = x.RoomId,
@@ -225,7 +225,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.IsDevelopmentDemo && !DemoEnabled) blockers.Add("development_demo_disabled");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("contract_not_pending_activation");
         if (!c.Room.Location.IsActive) blockers.Add("location_not_active");
-        if (c.PreviousContractId is null && c.Room.Status != RoomStatus.Available) blockers.Add("room_not_available");
+        if (c.PreviousContractId is null && c.Room.Status is not (RoomStatus.Available or RoomStatus.Occupied)) blockers.Add("room_not_available");
         if (!Intact(c)) blockers.Add("signed_terms_changed");
         if (c.StartDate > Today || c.EndDate < Today) blockers.Add("contract_not_in_effective_period");
         foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId })
@@ -240,7 +240,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         while (root.PreviousContractId is { } previous) root = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
         var deposit = root.AppliedHoldingDeposit + await repository.DepositTotalAsync(root.Id, t);
         if (deposit < c.RequiredDeposit) blockers.Add("security_deposit_insufficient");
-        if (await repository.ConflictsAsync(c.RoomId, c.PreviousContractId ?? c.Id, c.StartDate, c.EndDate, t)) blockers.Add("room_contract_conflict");
+        if (await repository.ConflictsAsync(c.RoomId, c.PreviousContractId ?? c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t)) blockers.Add("room_contract_conflict");
         return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
     }
     public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t) => await Readiness(await Load(id, [Roles.Owner, Roles.Tenant], t), t);
@@ -502,7 +502,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var final = await ledger.ReadAsync(id, m.ElectricityReadingId!.Value, m.WaterReadingId!.Value, t);
         if (final is not { AllObligationsResolved: true, DepositResolved: true, TransfersVerified: true } || string.IsNullOrWhiteSpace(final.DecisionReference) || final.DecisionReference != m.SettlementLedgerReference)
             throw ContractException.Conflict("settlement_unresolved");
-        c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate; c.Room.Status = RoomStatus.Available; m.Status = MoveOutStatus.Completed;
+        c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate;
+        c.Room.Status = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t) ? RoomStatus.Occupied : RoomStatus.Available;
+        m.Status = MoveOutStatus.Completed;
         foreach (var r in c.Residents) r.ResidenceTo = x.ActualEndDate;
         Audit("ContractTerminationCompleted", id); Remember(key, "complete", new { id, x }, id); return View(c);
     }, t);
