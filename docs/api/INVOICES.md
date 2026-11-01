@@ -1,5 +1,13 @@
 # BH-21 — Billing API
 
+POST `/api/v1/invoices/{id}/finalize`: Owner, `{ "expectedVersion": n }`.
+Chỉ phát hành từ Draft đã đến ngày Final, đủ readings/rates và khớp input được revalidate
+trong cùng Location/Room lock. Input thay đổi yêu cầu refresh rồi review lại; không âm thầm
+phát hành số tiền mới. Replay/concurrent finalization trả cùng Final; một audit effect.
+DB triggers cấm sửa/xóa/truncate hóa đơn Final, lines và recipient, kiểm tổng khớp lines.
+Hạn thanh toán lấy từ snapshot schedule, không tự áp số ngày sau ngày phát hành.
+Các endpoint này là thao tác Owner; chưa triển khai scheduler JOB-10 hay push/email billing.
+
 Nguồn nghiệp vụ: [quyết định và traceability](../development/BH21_TRACEABILITY.md).
 Thay DBR-06 bằng unique Room + tháng theo quyết định người dùng 01/11/2026.
 Owner quản trị toàn chuỗi; Tenant chỉ đọc hóa đơn có snapshot recipient của mình;

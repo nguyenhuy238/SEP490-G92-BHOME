@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using OpenCvSharp;
 
 namespace BHome.IntegrationTests.Billing;
 
@@ -75,6 +76,59 @@ public sealed class InvoiceApiTests(CaptureFixture fixture) : IClassFixture<Capt
     {
         await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
         return await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
+    }
+
+    private async Task ConfirmUtilities(Workspace w)
+    {
+        foreach (var utility in new[] { UtilityType.Electricity, UtilityType.Water })
+        {
+            var meter = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meters", new MeterInput(w.Room,
+                "SYNTHETIC-" + utility, utility, MeterDisplay.Digital, 2, w.Period.AddMonths(-1))));
+            foreach (var purpose in new[] { ReadingPurpose.Initial, ReadingPurpose.Periodic })
+            {
+                var date = purpose == ReadingPurpose.Initial ? w.Period.AddDays(-1) : w.Period.AddMonths(1).AddDays(-1);
+                var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter.Id, purpose, date, purpose == ReadingPurpose.Periodic ? w.Period : null)));
+                using var image = new Mat(120, 300, MatType.CV_8UC3, Scalar.White);
+                Cv2.PutText(image, "SYNTHETIC 125.5", new(10, 70), HersheyFonts.HersheySimplex, .6, Scalar.Black, 1);
+                using var content = new ByteArrayContent(image.ImEncode(".png")); content.Headers.ContentType = new("image/png");
+                var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", content));
+                await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true,
+                    purpose == ReadingPurpose.Initial ? 100 : utility == UtilityType.Electricity ? 125.5m : 102m, evidence.Id)));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task FinalizationRequiresReviewedConfirmedDataIsConcurrentSafeImmutableAndHistoricallyScoped()
+    {
+        var w = await Setup(); var draft = await Draft(w);
+        var path = $"/api/v1/invoices/{draft.Id}";
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        await ConfirmUtilities(w);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        var ready = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version)));
+        Assert.Empty(ready.MissingInputs); Assert.Equal(3119250m, ready.Total);
+        Assert.Equal(25.5m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        var finals = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(ready.Version))));
+        foreach (var response in finals)
+        {
+            var result = await Success<InvoiceView>(response); Assert.Equal("Final", result.Status); Assert.Equal(ready.Total, result.Total);
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(ready.Version + 1))).StatusCode);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == draft.Id && a.Event == "InvoiceFinalized"));
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Invoices\" SET \"Total\" = 1 WHERE \"Id\" = {draft.Id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"InvoiceLines\" SET \"Amount\" = 1 WHERE \"InvoiceId\" = {draft.Id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceRecipients\" WHERE \"InvoiceId\" = {draft.Id}"));
+        // Terminating tenancy does not revoke access to the bill for the period actually occupied.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"Status\" = 4, \"ActualEndDate\" = {Today} WHERE \"RoomId\" = {w.Room}");
+        Assert.Equal(HttpStatusCode.OK, (await w.OtherTenant.Client.GetAsync(path)).StatusCode);
+        var newcomer = await User(Roles.Tenant);
+        Assert.Equal(HttpStatusCode.NotFound, (await newcomer.Client.GetAsync(path)).StatusCode);
+        var body = await w.Tenant.Client.GetStringAsync(path);
+        Assert.DoesNotContain("Paid", body); Assert.DoesNotContain("objectKey", body);
     }
 
     [Fact]

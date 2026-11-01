@@ -42,7 +42,7 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23P01" or "23514" })
         { throw ContractException.Conflict("contract_concurrent_or_duplicate_operation"); }
-        catch (PostgresException e) when (e.SqlState is "40001" or "40P01")
+        catch (PostgresException e) when (e.SqlState is "40001" or "40P01" or "23514" or "23505" or "23P01")
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
     }
     public Task<Contract?> FindAsync(Guid id, CancellationToken t) => db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)

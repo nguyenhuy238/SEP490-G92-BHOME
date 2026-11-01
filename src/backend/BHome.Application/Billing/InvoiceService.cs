@@ -104,7 +104,36 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             if (invoice.Status != InvoiceStatus.Draft || invoice.Version != version) throw new InvoiceException(409, "invoice_changed_or_final");
             repository.RemoveLines(invoice);
             await CalculateAsync(invoice, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t);
+            foreach (var line in invoice.Lines) repository.Add(line);
             invoice.Version++; repository.Audit(Actor, "InvoiceDraftRefreshed", id, clock.GetUtcNow()); return View(invoice);
+        }, t);
+    }
+
+    public async Task<InvoiceView> FinalizeAsync(Guid id, int version, CancellationToken t)
+    {
+        RequireOwner();
+        if (version < 1) throw new InvoiceException(400, "invalid_invoice_version");
+        var initial = await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found");
+        return await repository.WithRoomLockAsync(initial.RoomId, async () =>
+        {
+            var invoice = await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found");
+            // The Room/period business key and lock make repeated/concurrent finalization a single effect.
+            if (invoice.Status == InvoiceStatus.Final) return View(invoice);
+            if (invoice.Version != version) throw new InvoiceException(409, "invoice_changed_or_final");
+            if (Today < invoice.ScheduledFinalDate) throw new InvoiceException(409, "finalization_date_not_reached");
+            var room = await repository.RoomAsync(invoice.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
+            if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
+            var check = new Invoice { RoomId = invoice.RoomId, LocationId = invoice.LocationId,
+                BillingPeriod = invoice.BillingPeriod, RepresentativeContractId = invoice.RepresentativeContractId };
+            await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t);
+            if (check.MissingInputs.Length > 0) throw new InvoiceException(409, "confirmed_billing_inputs_required");
+            static IEnumerable<InvoiceLineView> Charges(Invoice i) => View(i).Lines.Select(line => line with { Id = Guid.Empty });
+            if (invoice.MissingInputs.Length > 0 || !Charges(invoice).SequenceEqual(Charges(check)) ||
+                !invoice.Recipients.Select(r => r.TenantUserId).Order().SequenceEqual(check.Recipients.Select(r => r.TenantUserId).Order()))
+                throw new InvoiceException(409, "draft_refresh_and_review_required");
+            invoice.Status = InvoiceStatus.Final; invoice.Version++;
+            invoice.FinalizedAt = clock.GetUtcNow(); invoice.FinalizedByUserId = Actor;
+            repository.Audit(Actor, "InvoiceFinalized", id, clock.GetUtcNow()); return View(invoice);
         }, t);
     }
 

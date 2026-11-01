@@ -16,6 +16,7 @@ public sealed class InvoicesController(InvoiceService service) : ControllerBase
     [HttpGet("{id:guid}")] public Task<InvoiceView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
     [HttpPost("drafts"), Authorize(Roles = Roles.Owner)] public Task<InvoiceView> Draft(DraftInvoiceInput x, CancellationToken t) => service.GenerateAsync(x, t);
     [HttpPost("{id:guid}/refresh"), Authorize(Roles = Roles.Owner)] public Task<InvoiceView> Refresh(Guid id, InvoiceFinalizeInput x, CancellationToken t) => service.RefreshAsync(id, x.ExpectedVersion, t);
+    [HttpPost("{id:guid}/finalize"), Authorize(Roles = Roles.Owner)] public Task<InvoiceView> FinalizeInvoice(Guid id, InvoiceFinalizeInput x, CancellationToken t) => service.FinalizeAsync(id, x.ExpectedVersion, t);
 }
 
 [ApiController, Route("api/v1/billing-schedules"), Authorize(Roles = Roles.Owner)]
