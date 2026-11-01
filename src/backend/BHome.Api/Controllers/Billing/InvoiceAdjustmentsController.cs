@@ -14,6 +14,9 @@ public sealed class InvoiceAdjustmentsController(AdjustmentService service) : Co
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) && key != Guid.Empty ? key : throw new AdjustmentException(400, "idempotency_key_required");
     [HttpGet] public Task<PagedResult<AdjustmentView>> List([FromQuery] AdjustmentQuery q, CancellationToken t) => service.ListAsync(q, t);
     [HttpGet("{id:guid}")] public Task<AdjustmentView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
+    [HttpGet("/api/v1/invoices/{invoiceId:guid}/adjustments")]
+    public Task<PagedResult<AdjustmentEffectView>> Effects(Guid invoiceId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default)
+        => service.EffectsAsync(invoiceId, page, pageSize, t);
     [HttpPost("{id:guid}/approve"), Authorize(Policy = Permissions.InvoiceAdjustments.Approve)]
     public Task<AdjustmentView> Approve(Guid id, AdjustmentDecisionInput x, CancellationToken t) => service.DecideAsync(id, true, x, Key(), t);
     [HttpPost("{id:guid}/reject"), Authorize(Policy = Permissions.InvoiceAdjustments.Approve)]

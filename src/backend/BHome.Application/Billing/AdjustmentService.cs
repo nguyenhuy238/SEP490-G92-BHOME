@@ -62,22 +62,35 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
             if (invoice.Version != x.ExpectedInvoiceVersion) throw new AdjustmentException(409, "adjustment_invoice_changed");
             var line = x.InvoiceLineId is { } lineId ? invoice.Lines.SingleOrDefault(l => l.Id == lineId)
                 ?? throw new AdjustmentException(400, "adjustment_charge_not_found") : null;
+            var financial = await repository.FinancialsAsync(invoiceId, t);
             var evidence = await repository.EvidenceAsync(x.EvidenceIds, t);
             if (evidence.Length != x.EvidenceIds.Length || evidence.Any(e => e.InvoiceId != invoiceId || e.UploaderId != Actor || e.RequestId != null || !e.Uploaded || e.CleanupAfter <= Now))
                 throw new AdjustmentException(400, "adjustment_evidence_invalid");
             var request = new InvoiceAdjustmentRequest { InvoiceId = invoiceId, RequesterId = Actor, InvoiceLineId = x.InvoiceLineId,
-                ChargeCode = line?.ChargeCode, CurrentAmount = line?.Amount ?? invoice.Total, ProposedAmount = x.ProposedAmount is { } amount ? decimal.Truncate(amount) : null,
+                ChargeCode = line?.ChargeCode, CurrentAmount = line is null ? financial.EffectivePayableAmount : line.Amount + (invoice.Status == InvoiceStatus.Final ? await repository.ChargeAdjustmentsAsync(invoiceId, line.ChargeCode, t) : 0), ProposedAmount = x.ProposedAmount is { } amount ? decimal.Truncate(amount) : null,
                 Reason = x.Reason, InvoiceSnapshot = JsonSerializer.Serialize(new { invoice.Total, invoice.Version, invoice.Status, invoice.Lines }),
-                InvoiceStatus = invoice.Status, InvoiceVersion = invoice.Version, SubmittedAt = Now, Evidence = evidence.ToList() };
+                InvoiceStatus = invoice.Status, InvoiceVersion = invoice.Version, FinancialVersion = financial.FinancialVersion, SubmittedAt = Now, Evidence = evidence.ToList() };
             foreach (var file in evidence) file.RequestId = request.Id;
             repository.Add(request); Remember(key, "submit", command, request.Id);
             repository.Add(new InvoiceAdjustmentEvent { RequestId = request.Id, InvoiceId = invoiceId, RequesterId = Actor, Name = "invoice.adjustment.requested.v1", OccurredAt = Now });
             repository.Audit(Actor, "InvoiceAdjustmentRequested", request.Id, Now);
-            return View(request, invoice);
+            return View(request, invoice, financial);
         }, t);
     }
     public async Task<AdjustmentView> GetAsync(Guid id, CancellationToken t)
-    { var request = await Request(id, t); return View(request, await Invoice(request.InvoiceId, t)); }
+    {
+        var request = await Request(id, t); var invoice = await Invoice(request.InvoiceId, t); var financial = await repository.FinancialsAsync(request.InvoiceId, t);
+        var amount = request.ChargeCode is null ? financial.EffectivePayableAmount : invoice.Lines.SingleOrDefault(l => l.ChargeCode == request.ChargeCode)?.Amount;
+        if (amount is not null && request.ChargeCode is not null && invoice.Status == InvoiceStatus.Final)
+            amount += await repository.ChargeAdjustmentsAsync(invoice.Id, request.ChargeCode, t);
+        return View(request, invoice, financial) with { CurrentChargeAmount = amount };
+    }
+    public async Task<PagedResult<AdjustmentEffectView>> EffectsAsync(Guid invoiceId, int page, int pageSize, CancellationToken t)
+    {
+        _ = await Invoice(invoiceId, t);
+        if (page < 1 || pageSize is < 1 or > 100 || page > int.MaxValue / pageSize) throw new AdjustmentException(400, "invalid_adjustment_query");
+        return await repository.EffectsAsync(invoiceId, page, pageSize, t);
+    }
     public async Task<PagedResult<AdjustmentView>> ListAsync(AdjustmentQuery q, CancellationToken t)
     {
         var scope = Scope;
@@ -88,12 +101,12 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
         foreach (var request in result.Items) views.Add(View(request, request.Invoice));
         return new(views, q.Page, q.PageSize, result.TotalCount);
     }
-    private static AdjustmentView View(InvoiceAdjustmentRequest r, Invoice i) => new(r.Id, r.InvoiceId, i.LocationName, i.RoomNumber, i.BillingPeriod,
+    private static AdjustmentView View(InvoiceAdjustmentRequest r, Invoice i, InvoiceFinancialView? financial = null) => new(r.Id, r.InvoiceId, i.LocationName, i.RoomNumber, i.BillingPeriod,
         r.RequesterId, r.InvoiceLineId, r.ChargeCode, r.CurrentAmount, r.ProposedAmount, r.Reason, r.InvoiceSnapshot,
         r.InvoiceStatus.ToString(), r.InvoiceVersion, r.FinancialVersion, r.Decision?.Outcome ?? "Pending", r.Decision is null ? 1 : 2, r.SubmittedAt,
         r.Evidence.Select(e => new AdjustmentEvidenceView(e.Id, e.ContentType, e.Length)).ToArray(), InvoiceService.View(i),
         r.Decision is { } d ? new(d.Outcome, d.InvoiceStatus.ToString(), d.ChargeCode, d.BeforeAmount, d.CorrectedAmount, d.Delta,
-            d.EffectiveBefore, d.EffectiveAfter, d.PaidAtDecision, d.Reason, d.OwnerId, d.DecidedAt) : null);
+            d.EffectiveBefore, d.EffectiveAfter, d.PaidAtDecision, d.Reason, d.OwnerId, d.DecidedAt) : null, financial?.FinancialVersion ?? 0, financial);
     public async Task<AdjustmentEvidenceView> UploadAsync(Guid invoiceId, Stream input, CancellationToken t)
     {
         Tenant(); _ = await Invoice(invoiceId, t);

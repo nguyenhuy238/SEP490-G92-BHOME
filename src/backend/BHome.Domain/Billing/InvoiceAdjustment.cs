@@ -72,6 +72,12 @@ public static class AdjustmentRules
 {
     public const decimal MoneyLimit = 1_000_000_000_000_000_000m;
     public static bool Money(decimal value) => value >= 0 && value < MoneyLimit && decimal.Truncate(value) == value;
+    public static (decimal Payable, decimal Outstanding, decimal Excess) Balance(decimal issued, decimal adjustments, decimal paid)
+    {
+        var payable = issued + adjustments;
+        if (!Money(issued) || !Money(payable) || paid < 0 || decimal.Truncate(paid) != paid) throw new ArgumentOutOfRangeException(nameof(issued));
+        return (decimal.Truncate(payable), decimal.Truncate(Math.Max(0, payable - paid)), decimal.Truncate(Math.Max(0, paid - payable)));
+    }
     public static string SourceFingerprint(InvoiceLine line)
     {
         static string D(decimal value) => value.ToString("G29", System.Globalization.CultureInfo.InvariantCulture);

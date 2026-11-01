@@ -318,8 +318,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("PaidAtDecision")
-                        .HasPrecision(18)
-                        .HasColumnType("numeric(18,0)");
+                        .HasPrecision(28)
+                        .HasColumnType("numeric(28,0)");
 
                     b.Property<string>("Reason")
                         .IsRequired()

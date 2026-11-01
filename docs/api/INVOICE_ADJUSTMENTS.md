@@ -36,3 +36,19 @@ xử lý yêu cầu mới để duyệt correction phù hợp. Finalize vẫn re
 Invoice đổi stage/revision sau khi Owner đọc thì 409; Reject không thay invoice hoặc số dư.
 Event `invoice.adjustment.decided.v1` có contract giống requested, consumer đọc decision theo
 requestId; không chứa reason/ảnh trong event hoặc log.
+
+Final: approve lưu decision/effect riêng, không UPDATE Invoice/lines. Owner nhập correctedAmount
+cho charge hoặc tổng hóa đơn (chargeCode null). Delta tính trên giá trị hiện hành, không cộng
+proposal trực tiếp. Detail có currentChargeAmount và financials/currentFinancialVersion để Owner
+xem lại trước khi xác nhận. FinancialVersion thay đổi sau khi đọc trả 409, cần tải lại và review.
+
+`GET /invoices/{invoiceId}/adjustments?page=1&pageSize=20`: Owner/Tenant trong snapshot, trả
+summary Approved (stage/charge/before/corrected/delta/time), không có requester/reason/evidence.
+Correction Draft đã nằm trong issued total; chỉ delta Approved/Final cộng vào payable để tránh
+đếm hai lần. Payment/debt/QR dùng cùng projection: effective = issued + approved Final deltas;
+outstanding = max(effective - verified allocations,0); potentialExcess = max(allocations - effective,0).
+Payment DTO bổ sung originalIssuedAmount/approvedAdjustmentTotal/potentialExcessAmount/
+financialVersion/reviewStatus. PayableAmount hiện là effective payable; history vẫn giữ allocation gốc.
+Excess trả reviewStatus PendingReview, không mất khoản thừa, không auto-refund/credit. Paid tăng
+tạo outstanding mới, cho phép giao dịch mới đúng phần outstanding; khoản trả gốc vẫn giữ nguyên.
+Staff debt DTO không nhận issued/adjustment/excess; quyền operational hiện có giữ nguyên.

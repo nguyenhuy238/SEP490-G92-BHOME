@@ -25,6 +25,7 @@ internal sealed class AdjustmentDecisionConfiguration : IEntityTypeConfiguration
         e.ToTable("InvoiceAdjustmentDecisions", t => t.HasCheckConstraint("CK_AdjustmentDecision_Values", "\"Outcome\" IN ('Approved','Rejected') AND \"InvoiceStatus\" IN (0,1) AND length(btrim(\"Reason\")) > 0 AND \"EffectiveBefore\" >= 0 AND \"EffectiveAfter\" >= 0 AND \"BeforeAmount\" >= 0 AND (\"CorrectedAmount\" IS NULL OR \"CorrectedAmount\" >= 0) AND \"EffectiveAfter\" = \"EffectiveBefore\" + \"Delta\" AND ((\"Outcome\" = 'Approved' AND \"CorrectedAmount\" IS NOT NULL AND \"Delta\" = \"CorrectedAmount\" - \"BeforeAmount\") OR (\"Outcome\" = 'Rejected' AND \"CorrectedAmount\" IS NULL AND \"Delta\" = 0))"));
         e.Property(x => x.Sequence).UseIdentityByDefaultColumn(); e.HasIndex(x => x.Sequence).IsUnique();
         foreach (var name in new[] { "BeforeAmount", "CorrectedAmount", "Delta", "EffectiveBefore", "EffectiveAfter", "PaidAtDecision" }) e.Property(name).HasPrecision(18, 0);
+        e.Property(x => x.PaidAtDecision).HasPrecision(28, 0);
         e.Property(x => x.Outcome).HasMaxLength(20); e.Property(x => x.Reason).HasMaxLength(2000); e.Property(x => x.ChargeCode).HasMaxLength(50); e.Property(x => x.SourceFingerprint).HasMaxLength(64);
         e.HasOne<InvoiceAdjustmentRequest>().WithOne(r => r.Decision).HasForeignKey<InvoiceAdjustmentDecision>(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
         e.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);

@@ -35,7 +35,11 @@ public sealed record InvoicePaymentView(Guid InvoiceId, string PaymentStatus,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal PayableAmount,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal PaidAmount,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OutstandingAmount,
-    DateOnly DueDate, int OverdueDays, string TransferReference, bool PendingReview, IReadOnlyList<PaymentHistoryView> History);
+    DateOnly DueDate, int OverdueDays, string TransferReference, bool PendingReview, IReadOnlyList<PaymentHistoryView> History,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OriginalIssuedAmount = 0,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ApprovedAdjustmentTotal = 0,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal PotentialExcessAmount = 0,
+    int FinancialVersion = 0, string ReviewStatus = "None");
 public sealed record TransferView(Guid Id, string ProviderIdentity, string BankReference,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,
     string Currency, DateTimeOffset OccurredAt, string TransferDescription, string StatementReference,
@@ -49,7 +53,10 @@ public sealed record DebtInvoiceView(Guid InvoiceId,Guid LocationId,Guid RoomId,
     [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? PayableAmount,
     [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? PaidAmount,
     [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal OutstandingAmount,
-    string PaymentStatus,int OverdueDays);
+    string PaymentStatus,int OverdueDays,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? OriginalIssuedAmount = null,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? ApprovedAdjustmentTotal = null,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? PotentialExcessAmount = null);
 public sealed record PaymentHistoryEntry(Guid Id,Guid InvoiceId,Guid LocationId,Guid RoomId,string LocationName,string RoomNumber,DateOnly BillingPeriod,
     [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal Amount,
     DateTimeOffset PaidAt,string PaidBy,string VerificationSource,string? BankReference,Guid? VerifiedByUserId);
@@ -68,6 +75,7 @@ public interface IPaymentRepository
     Task<PaymentReconciliation?> LatestReviewAsync(Guid transferId, CancellationToken t);
     Task<IReadOnlyList<PaymentLedgerEntry>> HistoryAsync(Guid invoiceId, CancellationToken t);
     Task<decimal> AllocatedAsync(Guid invoiceId, CancellationToken t);
+    Task<BHome.Application.Billing.InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t);
     Task<bool> ReferenceClaimedAsync(string reference, CancellationToken t);
     Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t);
     Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t);

@@ -42,6 +42,15 @@ internal sealed class AdjustmentRepository(BHomeDbContext db) : IAdjustmentRepos
     public Task<InvoiceAdjustmentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t) => db.Set<InvoiceAdjustmentCommand>().AsNoTracking()
         .SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key && c.Operation == operation, t);
     public Task<InvoiceAdjustmentEvidence[]> EvidenceAsync(Guid[] ids, CancellationToken t) => db.Set<InvoiceAdjustmentEvidence>().Where(e => ids.Contains(e.Id)).ToArrayAsync(t);
+    public Task<InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t) => db.FinancialsAsync(invoiceId, t);
+    public async Task<decimal> ChargeAdjustmentsAsync(Guid invoiceId, string chargeCode, CancellationToken t) =>
+        await db.Set<InvoiceAdjustmentDecision>().Where(d => d.InvoiceId == invoiceId && d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved" && d.ChargeCode == chargeCode).SumAsync(d => (decimal?)d.Delta, t) ?? 0;
+    public async Task<PagedResult<AdjustmentEffectView>> EffectsAsync(Guid invoiceId, int page, int pageSize, CancellationToken t)
+    {
+        var source = db.Set<InvoiceAdjustmentDecision>().AsNoTracking().Where(d => d.InvoiceId == invoiceId && d.Outcome == "Approved");
+        return new(await source.OrderByDescending(d => d.Sequence).Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(d => new AdjustmentEffectView(d.Id, d.InvoiceStatus.ToString(), d.ChargeCode, d.Delta, d.BeforeAmount, d.CorrectedAmount, d.DecidedAt)).ToArrayAsync(t), page, pageSize, await source.CountAsync(t));
+    }
     public void Add(object entity) => db.Add(entity);
     public void Audit(Guid actor, string action, Guid target, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actor, Event = action, TargetId = target, TargetType = "InvoiceAdjustment", Succeeded = true, OccurredAt = at });

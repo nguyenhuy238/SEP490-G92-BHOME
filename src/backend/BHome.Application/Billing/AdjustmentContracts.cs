@@ -14,7 +14,20 @@ public sealed record AdjustmentView(Guid Id, Guid InvoiceId, string LocationName
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? ProposedAmount,
     string Reason, string InvoiceSnapshot, string InvoiceStatus, int InvoiceVersion, int FinancialVersion,
     string Status, int Version, DateTimeOffset SubmittedAt, IReadOnlyList<AdjustmentEvidenceView> Evidence,
-    InvoiceView? CurrentInvoice = null, AdjustmentDecisionView? Decision = null, int CurrentFinancialVersion = 0);
+    InvoiceView? CurrentInvoice = null, AdjustmentDecisionView? Decision = null, int CurrentFinancialVersion = 0, InvoiceFinancialView? Financials = null,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? CurrentChargeAmount = null);
+public sealed record InvoiceFinancialView(
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OriginalIssuedAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ApprovedAdjustmentTotal,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal EffectivePayableAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal AllocatedPayments,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OutstandingAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal PotentialExcessAmount,
+    int FinancialVersion, string ReviewStatus);
+public sealed record AdjustmentEffectView(Guid Id, string InvoiceStatus, string? ChargeCode,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Delta,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal BeforeAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? CorrectedAmount, DateTimeOffset DecidedAt);
 public sealed record AdjustmentDecisionInput(int ExpectedVersion, int ExpectedInvoiceVersion, int ExpectedFinancialVersion,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? CorrectedAmount,
     string? ChargeCode, string Reason, bool HumanConfirmed);
@@ -45,6 +58,9 @@ public interface IAdjustmentRepository
     Task<PagedResult<InvoiceAdjustmentRequest>> ListAsync(AdjustmentQuery query, InvoiceScope scope, CancellationToken t);
     Task<InvoiceAdjustmentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t);
     Task<InvoiceAdjustmentEvidence[]> EvidenceAsync(Guid[] ids, CancellationToken t);
+    Task<InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t);
+    Task<decimal> ChargeAdjustmentsAsync(Guid invoiceId, string chargeCode, CancellationToken t);
+    Task<PagedResult<AdjustmentEffectView>> EffectsAsync(Guid invoiceId, int page, int pageSize, CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset at);
 }
