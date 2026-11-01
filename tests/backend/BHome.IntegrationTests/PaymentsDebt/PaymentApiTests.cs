@@ -1,0 +1,57 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using BHome.Application.IdentityAccess;
+using BHome.Application.PaymentsDebt;
+using BHome.Application.PropertyManagement;
+using BHome.Domain.IdentityAccess;
+using BHome.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BHome.IntegrationTests.PaymentsDebt;
+
+public sealed partial class PaymentLedgerTests
+{
+    private async Task<HttpClient> Client(Guid actor)
+    {
+        await using var scope=fixture.Factory.Services.CreateAsyncScope(); var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var email=await db.Users.Where(u=>u.Id==actor).Select(u=>u.Email).SingleAsync();
+        var client=fixture.Factory.CreateClient(); var login=await client.PostAsJsonAsync("/api/v1/auth/login",new{email,password="Synthetic-Payment-Test!123"});
+        login.EnsureSuccessStatusCode(); var session=(await login.Content.ReadFromJsonAsync<LoginResult>())!;
+        client.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer",session.AccessToken); return client;
+    }
+    private static async Task<HttpResponseMessage> Post(HttpClient client,string route,object body,Guid? key=null)
+    {
+        using var request=new HttpRequestMessage(HttpMethod.Post,route){Content=JsonContent.Create(body)};
+        request.Headers.Add("Idempotency-Key",(key??Guid.NewGuid()).ToString()); return await client.SendAsync(request);
+    }
+    [Fact]
+    public async Task OwnerApiReconcilesPersistedInvoiceAndRejectsUnmatchedTransferWithHistory()
+    {
+        var w=await Setup(); using var owner=await Client(w.Owner); using var tenant=await Client(w.Tenants[0]); using var staff=await Client(w.Staff);
+        const string root="/api/v1/payment-transactions"; var input=Input(w);
+        Assert.Equal(HttpStatusCode.BadRequest,(await owner.PostAsJsonAsync(root,input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await Post(tenant,root,input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await staff.GetAsync(root)).StatusCode);
+        var key=Guid.NewGuid(); var registration=await Post(owner,root,input,key); registration.EnsureSuccessStatusCode();
+        var transfer=(await registration.Content.ReadFromJsonAsync<TransferView>())!;
+        Assert.Equal("PendingReview",transfer.Status);
+        Assert.Equal(transfer.Id,(await (await Post(owner,root,input,key)).Content.ReadFromJsonAsync<TransferView>())!.Id);
+        var allocation=await Post(owner,$"{root}/{transfer.Id}/allocate",new PaymentMatchInput(w.Invoice,w.Tenants[0],true)); allocation.EnsureSuccessStatusCode();
+        Assert.Equal("Allocated",(await allocation.Content.ReadFromJsonAsync<PaymentReviewResult>())!.Status);
+        var view=(await owner.GetFromJsonAsync<InvoicePaymentView>($"/api/v1/invoices/{w.Invoice}/payment"))!;
+        Assert.Equal("Paid",view.PaymentStatus);
+        var unknown=await Post(owner,root,Input(w,memo:"WRONG-REFERENCE") with{ProposedInvoiceId=null}); unknown.EnsureSuccessStatusCode();
+        var unmatched=(await unknown.Content.ReadFromJsonAsync<TransferView>())!;
+        Assert.Equal("invoice_already_settled",(await (await Post(owner,$"{root}/{unmatched.Id}/allocate",new PaymentMatchInput(w.Invoice,null,true))).Content.ReadFromJsonAsync<PaymentReviewResult>())!.Reason);
+        var rejected=await Post(owner,$"{root}/{unmatched.Id}/reject",new PaymentRejectInput("Không đủ bằng chứng để phân bổ; giao dịch được giữ lại.")); rejected.EnsureSuccessStatusCode();
+        Assert.Equal("Rejected",(await owner.GetFromJsonAsync<TransferView>($"{root}/{unmatched.Id}"))!.Status);
+        var history=(await owner.GetFromJsonAsync<PagedResult<ReconciliationView>>($"{root}/{unmatched.Id}/reconciliation-history"))!;
+        Assert.Equal(3,history.TotalCount); Assert.Equal("Rejected",history.Items[0].Decision);
+        Assert.Equal(HttpStatusCode.Conflict,(await Post(owner,$"{root}/{transfer.Id}/reject",new PaymentRejectInput("Cannot undo an allocation"))).StatusCode);
+        var listing=(await owner.GetFromJsonAsync<PagedResult<TransferView>>(root))!;
+        Assert.Contains(listing.Items,p=>p.Id==transfer.Id && p.Status=="Allocated");
+        Assert.Equal(HttpStatusCode.BadRequest,(await owner.GetAsync(root+"?page=0")).StatusCode);
+    }
+}

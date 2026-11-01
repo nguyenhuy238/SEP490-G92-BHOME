@@ -7,6 +7,7 @@ using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PaymentsDebt;
+using BHome.Application.PropertyManagement;
 
 namespace BHome.Application.PaymentsDebt;
 
@@ -130,6 +131,38 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     {
         Owner(); var transfer = await repository.TransferAsync(id, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
         return View(transfer, await repository.AllocationAsync(id, t), await repository.LatestReviewAsync(id, t));
+    }
+    private static void Query(PaymentQuery q)
+    {
+        if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
+            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 }) throw new PaymentException(400, "invalid_payment_query");
+    }
+    public Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
+    { Owner(); Query(query); return repository.TransfersAsync(query, t); }
+    public async Task<PagedResult<ReconciliationView>> ReviewsAsync(Guid transferId, int page, int pageSize, CancellationToken t)
+    {
+        Owner(); Query(new() { Page = page, PageSize = pageSize });
+        _ = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+        return await repository.ReviewsAsync(transferId, page, pageSize, t);
+    }
+    public Task<PaymentReviewResult> RejectAsync(Guid transferId, PaymentRejectInput x, Guid key, CancellationToken t)
+    {
+        Owner(); Validate(x); var reason = x.Reason.Trim();
+        return repository.TransactionAsync<PaymentReviewResult>(transferId, null, async () =>
+        {
+            if (await Replay(key, "reject", new { transferId, reason }, t) is not null) return await Outcome(transferId, t);
+            _ = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+            if (await repository.AllocationAsync(transferId, t) is not null) throw new PaymentException(409, "allocated_payment_cannot_be_rejected");
+            var latest = await repository.LatestReviewAsync(transferId, t);
+            if (latest?.Decision == "Rejected" && latest.Reason != reason) throw new PaymentException(409, "bank_transfer_rejected");
+            if (latest?.Decision != "Rejected")
+            {
+                repository.Add(new PaymentReconciliation { TransferId = transferId, InvoiceId = latest?.InvoiceId, Decision = "Rejected", Reason = reason, ActorId = Actor, OccurredAt = Now });
+                repository.Audit(Actor, "BankTransferAllocationRejected", transferId, Now);
+            }
+            Remember(key, "reject", new { transferId, reason }, transferId);
+            return new("Rejected", reason, transferId, latest?.InvoiceId);
+        }, t);
     }
     private static TransferView View(PaymentTransfer transfer, PaymentAllocation? allocation, PaymentReconciliation? review) =>
         new(transfer.Id, transfer.ProviderIdentity, transfer.BankReference, transfer.Amount, transfer.Currency, transfer.OccurredAt,

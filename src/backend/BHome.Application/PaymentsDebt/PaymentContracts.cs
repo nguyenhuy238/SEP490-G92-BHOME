@@ -41,6 +41,7 @@ public sealed record TransferView(Guid Id, string ProviderIdentity, string BankR
     string Status, string Reason, Guid? AllocatedInvoiceId, bool IsDevelopmentDemo);
 public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTransfer Transfer);
 public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId);
+public sealed record ReconciliationView(long Sequence, Guid? InvoiceId, string Decision, string Reason, Guid ActorId, DateTimeOffset OccurredAt);
 public sealed class PaymentException(int status, string code) : Exception("Payment operation rejected.")
 {
     public int Status { get; } = status;
@@ -60,7 +61,8 @@ public interface IPaymentRepository
     Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t);
     Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t);
     Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t);
-    Task<PagedResult<PaymentTransfer>> TransfersAsync(PaymentQuery query, CancellationToken t);
+    Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t);
+    Task<PagedResult<ReconciliationView>> ReviewsAsync(Guid transferId, int page, int pageSize, CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset at);
 }

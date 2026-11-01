@@ -16,7 +16,7 @@ using Npgsql;
 namespace BHome.IntegrationTests.PaymentsDebt;
 
 [Trait("Category", "Docker")]
-public sealed class PaymentLedgerTests(CaptureFixture fixture) : IClassFixture<CaptureFixture>
+public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassFixture<CaptureFixture>
 {
     private sealed class User(Guid id, string role) : ICurrentUser
     { public Guid? UserId => id; public bool IsInRole(string name) => name == role; }
