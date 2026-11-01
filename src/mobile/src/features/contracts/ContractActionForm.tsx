@@ -38,10 +38,14 @@ export function ContractActionForm({
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
-  const directory = useSigningCertificates(api, action.operation === 'signing');
+  const directory = useSigningCertificates(
+    api,
+    action.operation === 'signing' && !contract.isDevelopmentDemo,
+  );
   const selectedCertificate = directory.certificates.find((c) => c.id === values.certificateId);
   const signingBlocked =
     action.operation === 'signing' &&
+    !contract.isDevelopmentDemo &&
     (directory.loading ||
       !!directory.error ||
       !selectedCertificate ||
@@ -75,6 +79,7 @@ export function ContractActionForm({
     if (lock.current || !checked || signingBlocked) return;
     if (
       action.operation === 'signing' &&
+      !contract.isDevelopmentDemo &&
       (!selectedCertificate || !canUseCertificate(selectedCertificate))
     )
       return;
@@ -164,7 +169,7 @@ export function ContractActionForm({
           />
         ),
       )}
-      {action.operation === 'signing' && (
+      {action.operation === 'signing' && !contract.isDevelopmentDemo && (
         <>
           {directory.loading && <Text>Đang tải chứng thư…</Text>}
           {!!directory.error && <Text style={ui.red}>{directory.error}</Text>}

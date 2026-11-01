@@ -21,6 +21,7 @@ internal sealed class ViettelMySignContractAdapter(BHomeDbContext db, ICurrentUs
         if (certificate is null || certificate.OwnerUserId != user.UserId || certificate.Provider != SigningProviders.ViettelMySign)
             throw ContractException.Missing();
         if (certificate.Locked || !certificate.IsValidAt(clock.GetUtcNow())) throw ContractException.Conflict("signing_certificate_not_valid");
+        await renderer.ValidateAsync(document, t);
         try
         {
             var credentials = await remote.ListCredentialsAsync(certificate.ProviderUserId, certificate.SerialNumber, t);
@@ -85,11 +86,6 @@ internal sealed class ContractMySignAccount(IConfiguration config) : IViettelAcc
     }
 }
 
-internal sealed class UnconfiguredContractRenderer : IContractDocumentRenderer
-{
-    public Task<byte[]> RenderAsync(ContractDocument document, CancellationToken t)
-        => throw new ContractException(503, "contract_template_not_configured");
-}
 internal sealed class PendingContractSettlementLedger : IContractSettlementLedger
 {
     public Task<SettlementLedgerState?> ReadAsync(Guid contractId, Guid electricityReadingId, Guid waterReadingId, CancellationToken t)

@@ -48,7 +48,6 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
         try
         {
             await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: "23P01" })
         {

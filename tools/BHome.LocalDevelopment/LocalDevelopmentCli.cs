@@ -6,7 +6,7 @@ namespace BHome.LocalDevelopment;
 
 internal static class LocalDevelopmentCli
 {
-    public static async Task<int> Main()
+    public static async Task<int> Main(string[] args)
     {
         // Read only from the invoking process, never command-line args or checked-in files.
         var password = Environment.GetEnvironmentVariable("BHOME_DEV_TEST_PASSWORD");
@@ -22,6 +22,12 @@ internal static class LocalDevelopmentCli
             var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
             services.AddInfrastructure(config);
             await using var provider = services.BuildServiceProvider();
+            if (args.SequenceEqual(new[] { "seed-contract-demo" }))
+            {
+                await ContractDemoSeed.RunAsync(provider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password);
+                return 0;
+            }
+            if (args.Length != 0) throw new LocalTestAccountException("Lệnh không hợp lệ.");
             var created = await LocalTestAccounts.CreateAsync(provider,
                 Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password);
             Console.WriteLine(created
@@ -32,6 +38,11 @@ internal static class LocalDevelopmentCli
         catch (LocalTestAccountException error)
         {
             Console.Error.WriteLine(error.Message);
+            return 1;
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException error) when (error.InnerException is Npgsql.PostgresException database)
+        {
+            Console.Error.WriteLine($"Seed bị database từ chối: SQLSTATE={database.SqlState}; constraint={database.ConstraintName}; table={database.TableName}. Không in dữ liệu hoặc credential.");
             return 1;
         }
         catch (Exception error)

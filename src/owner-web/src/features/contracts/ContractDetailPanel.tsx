@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContractDetail } from '../../../../../packages/client-core/src/useContractDetail';
 import {
   contractActions,
@@ -29,6 +29,8 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
 import { SigningCertificates } from './SigningCertificates';
+import { ContractWorkflowPanel } from './ContractWorkflowPanel';
+import { ContractHandoverPanel } from './ContractHandoverPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -52,6 +54,7 @@ export function ContractDetailPanel({
   onChanged: (id?: string) => void;
 }) {
   const detail = useContractDetail(api, id, 'Owner');
+  const cache = useQueryClient();
   const [action, setAction] = useState<ContractAction | null>(null);
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const [notice, setNotice] = useState(''),
@@ -87,6 +90,11 @@ export function ContractDetailPanel({
   const signer = c.ownerSignerId === actorId;
   return (
     <Stack spacing={2}>
+      {c.isDevelopmentDemo && (
+        <Alert severity="warning">
+          HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.
+        </Alert>
+      )}
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <StatusChip label={text(c.status)} />
         <Chip size="small" label={text(c.kind)} />
@@ -99,6 +107,10 @@ export function ContractDetailPanel({
       <ChartCard title="Thông tin hợp đồng" subtitle={c.id}>
         <Stack spacing={1}>
           <Typography>
+            Phòng {c.roomNumber || c.roomId}
+            {c.locationName ? ` · ${c.locationName}` : ''}
+          </Typography>
+          <Typography>
             Kỳ thuê: {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
           </Typography>
           <Typography>
@@ -109,8 +121,12 @@ export function ContractDetailPanel({
             {formatContractMoney(c.appliedHoldingDeposit)}
           </Typography>
           <Typography>
-            {c.residentIds.length} người ở · Đại diện: {c.representativeResidentId}
+            {c.residentIds.length} người ở · Đại diện:{' '}
+            {c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId}
           </Typography>
+          {!!c.occupants?.length && (
+            <Typography>{c.occupants.map((o) => o.label).join(', ')}</Typography>
+          )}
           {c.previousContractId && (
             <Button onClick={() => onChanged(c.previousContractId!)}>Xem hợp đồng trước</Button>
           )}
@@ -131,7 +147,11 @@ export function ContractDetailPanel({
       </ChartCard>
       <ChartCard
         title="Chữ ký và tài liệu"
-        subtitle="Owner và Tenant ký bằng chứng thư của chính mình"
+        subtitle={
+          c.isDevelopmentDemo
+            ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
+            : 'Owner và Tenant ký bằng chứng thư của chính mình'
+        }
       >
         <Stack spacing={1}>
           {[
@@ -159,16 +179,20 @@ export function ContractDetailPanel({
             </Paper>
           ))}
           <Button
-            disabled={busy || !c.signatures.some((s) => s.status === 'Signed')}
+            disabled={busy || !c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status))}
             onClick={() =>
               void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
             }
           >
             Tải tài liệu ký
           </Button>
-          {signer && <SigningCertificates api={api} />}
+          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
         </Stack>
       </ChartCard>
+      <ContractWorkflowPanel api={api} contract={c} />
+      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+        <ContractHandoverPanel api={api} id={c.id} />
+      )}
       {r && (
         <ChartCard
           title="Điều kiện kích hoạt"
@@ -289,6 +313,7 @@ export function ContractDetailPanel({
             detail.reload();
           }}
           onSuccess={(next) => {
+            void cache.invalidateQueries({ queryKey: ['contract-workflow', id] });
             setAction(null);
             setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được tải lại.');
             detail.reload();

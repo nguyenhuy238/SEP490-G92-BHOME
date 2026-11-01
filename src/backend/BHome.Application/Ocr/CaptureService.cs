@@ -32,6 +32,8 @@ public sealed class CaptureService(ICaptureRepository repository, ICurrentUser u
     public Task<IReadOnlyList<NamedResource>> MetersAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.MetersAsync(id, t));
     public Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateTaskAsync(x, t));
     public Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => Allow(Operators, () => repository.TasksAsync(t));
+    public Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.TaskAsync(id, t));
+    public Task<ConfirmedReading> ReadingAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.ReadingAsync(id, t));
     public Task<IdResult> UploadEvidenceAsync(Guid id, Stream stream, CancellationToken t) => Allow([Roles.Staff], () => repository.UploadEvidenceAsync(id, stream, t));
     public Task<ConfirmedReading> ConfirmMeterAsync(Guid id, MeterConfirmation x, CancellationToken t)
         => Allow([Roles.Staff], () => { if (!x.HumanConfirmed) throw new CaptureValidationException("human_confirmation_required"); return repository.ConfirmMeterAsync(id, x, t); });

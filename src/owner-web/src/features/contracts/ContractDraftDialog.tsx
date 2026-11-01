@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Button,
@@ -11,6 +10,9 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
   TextField,
   Typography,
 } from '@mui/material';
@@ -18,8 +20,10 @@ import {
   contractError,
   draftPayload,
   mutationKeys,
+  text,
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
+import { useContractPreparation } from '../../../../../packages/client-core/src/useContractPreparation';
 
 export function ContractDraftDialog({
   api,
@@ -32,50 +36,28 @@ export function ContractDraftDialog({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({
-    ownerSignerId: ownerId,
-    requiredDeposit: '',
-  });
-  const [location, setLocation] = useState('');
-  const [residents, setResidents] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
-  const lock = useRef(false);
-  const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
-  const locations = useQuery({
-    queryKey: ['contract-locations', ownerId],
-    queryFn: ({ signal }) => api.locations(signal),
-  });
-  const rooms = useQuery({
-    queryKey: ['contract-rooms', ownerId, location],
-    queryFn: ({ signal }) => api.rooms(location, signal),
-    enabled: !!location,
-  });
-  const people = useQuery({
-    queryKey: ['contract-residents', ownerId, location],
-    queryFn: ({ signal }) => api.residents(location, signal),
-    enabled: !!location,
-  });
-  const eligible = (people.data ?? []).filter(
-    (r) => r.roomId === values.roomId && r.verificationStatus === 1,
-  );
-  const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
-  async function submit() {
+  const [values, setValues] = useState<Record<string, string>>({ ownerSignerId: ownerId });
+  const [location, setLocation] = useState(''),
+    [residents, setResidents] = useState<string[]>([]);
+  const [step, setStep] = useState(0),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [account, setAccount] = useState('');
+  const lock = useRef(false),
+    [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
+  const query = useContractPreparation(api, location, true);
+  const p = query.data?.preparation,
+    template = query.data?.configuration.template;
+  const eligible = (p?.residents ?? []).filter((r) => r.roomId === values.roomId && r.verified);
+  const representative = eligible.find((r) => r.id === values.representativeResidentId);
+  const set = (key: string, value: string) => setValues((v) => ({ ...v, [key]: value }));
+  async function run(work: () => Promise<void>) {
     if (lock.current) return;
-    setError('');
-    let body;
-    try {
-      body = draftPayload(values, residents);
-    } catch (e) {
-      setError((e as Error).message);
-      return;
-    }
     lock.current = true;
     setBusy(true);
+    setError('');
     try {
-      const result = await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
-      keys.confirmed('draft', body);
-      onCreated(result.id);
+      await work();
     } catch (e) {
       setError(contractError(e));
     } finally {
@@ -83,163 +65,241 @@ export function ContractDraftDialog({
       setBusy(false);
     }
   }
-  const queryError = locations.error || rooms.error || people.error;
+  function next() {
+    setError('');
+    if (
+      step === 1 &&
+      (!representative?.tenantUserId ||
+        !residents.includes(representative.id) ||
+        !values.ownerSignerId)
+    ) {
+      setError('Chọn phòng, người ở và đại diện đã liên kết tài khoản Tenant.');
+      return;
+    }
+    setStep((v) => v + 1);
+  }
+  const chooseRepresentative = (id: string) => {
+    set('representativeResidentId', id);
+    setAccount('');
+  };
   return (
     <Dialog open fullWidth maxWidth="md" onClose={() => !busy && onClose()}>
       <DialogTitle>Tạo nháp hợp đồng thuê</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <Alert severity="info">
-            Bản nháp chưa giữ chỗ hoặc kích hoạt phòng. Người ở cần được Staff xác minh trước.
-          </Alert>
-          {queryError && (
+          <Stepper activeStep={step}>
+            {['Cấu hình', 'Phòng & Người ở', 'Điều khoản'].map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+          {query.loading && <Typography role="status">Đang tải lựa chọn…</Typography>}
+          {!!query.error && (
             <Alert severity="error">
-              {contractError(queryError)}
-              <Button
-                onClick={() => {
-                  void locations.refetch();
-                  if (location) {
-                    void rooms.refetch();
-                    void people.refetch();
-                  }
+              {query.error}
+              <Button onClick={query.reload}>Tải lại</Button>
+            </Alert>
+          )}
+          {step === 0 && template && (
+            <>
+              <TextField select label="Mẫu được cấu hình tại máy chủ" value={template.id}>
+                <MenuItem value={template.id}>
+                  {template.title} · v{template.version}
+                </MenuItem>
+              </TextField>
+              <Alert severity={template.developmentOnly ? 'warning' : 'info'}>
+                {template.notice}
+              </Alert>
+              <Typography>Trường ánh xạ: {template.fields.join(', ')}</Typography>
+              <Typography>
+                Ký:{' '}
+                {query.data?.configuration.signingMode === 'Simulated'
+                  ? 'SIMULATED SIGNING — không có giá trị pháp lý'
+                  : 'Nhà cung cấp điện tử'}
+              </Typography>
+              {!template.available && (
+                <Alert severity="warning">{text(template.blocker ?? '')}</Alert>
+              )}
+              <Alert severity="info">
+                Bản nháp chưa giữ chỗ hoặc kích hoạt phòng.{' '}
+                {text(query.data?.configuration.holdingBlocker ?? '')}
+              </Alert>
+            </>
+          )}
+          {step === 1 && (
+            <>
+              <TextField
+                select
+                label="Cơ sở"
+                value={location}
+                disabled={busy || query.loading}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  set('roomId', '');
+                  chooseRepresentative('');
+                  setResidents([]);
                 }}
               >
-                Tải lại lựa chọn
-              </Button>
-            </Alert>
-          )}
-          <TextField
-            select
-            label="Cơ sở"
-            value={location}
-            disabled={busy || locations.isFetching}
-            onChange={(e) => {
-              setLocation(e.target.value);
-              set('roomId', '');
-              set('representativeResidentId', '');
-              setResidents([]);
-            }}
-          >
-            {(locations.data ?? []).map((o) => (
-              <MenuItem key={o.id} value={o.id}>
-                {o.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label="Phòng"
-            value={values.roomId ?? ''}
-            disabled={busy || !location || rooms.isFetching}
-            onChange={(e) => {
-              set('roomId', e.target.value);
-              set('representativeResidentId', '');
-              setResidents([]);
-            }}
-          >
-            {(rooms.data ?? []).map((o) => (
-              <MenuItem key={o.id} value={o.id}>
-                {o.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <Typography variant="subtitle2">Người ở đã xác minh</Typography>
-          {eligible.map((r) => (
-            <FormControlLabel
-              key={r.id}
-              label={r.displayLabel}
-              control={
-                <Checkbox
-                  checked={residents.includes(r.id)}
-                  disabled={busy}
-                  onChange={(_, checked) => {
-                    setResidents((ids) =>
-                      checked ? [...ids, r.id] : ids.filter((i) => i !== r.id),
-                    );
-                    if (!checked && values.representativeResidentId === r.id)
-                      set('representativeResidentId', '');
-                  }}
+                {(p?.locations ?? []).map((o) => (
+                  <MenuItem key={o.id} value={o.id}>
+                    {o.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Phòng sẵn sàng"
+                value={values.roomId ?? ''}
+                disabled={busy || query.loading || !location}
+                onChange={(e) => {
+                  set('roomId', e.target.value);
+                  chooseRepresentative('');
+                  setResidents([]);
+                }}
+              >
+                {(p?.rooms ?? []).map((o) => (
+                  <MenuItem key={o.id} value={o.id}>
+                    {o.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Typography>Người ở đã xác minh</Typography>
+              {eligible.map((r) => (
+                <FormControlLabel
+                  key={r.id}
+                  label={r.label}
+                  control={
+                    <Checkbox
+                      checked={residents.includes(r.id)}
+                      disabled={busy}
+                      onChange={(_, checked) => {
+                        setResidents((ids) =>
+                          checked ? [...ids, r.id] : ids.filter((id) => id !== r.id),
+                        );
+                        if (!checked && representative?.id === r.id) chooseRepresentative('');
+                      }}
+                    />
+                  }
                 />
-              }
-            />
-          ))}
-          {!!values.roomId && !eligible.length && (
-            <Alert severity="warning">
-              Phòng chưa có người ở đã xác minh. Hoàn tất tiếp nhận trên mobile trước khi lập hợp
-              đồng.
-            </Alert>
-          )}
-          <TextField
-            select
-            label="Người đại diện"
-            value={values.representativeResidentId ?? ''}
-            disabled={busy}
-            onChange={(e) => set('representativeResidentId', e.target.value)}
-          >
-            {eligible
-              .filter((r) => residents.includes(r.id))
-              .map((r) => (
-                <MenuItem key={r.id} value={r.id}>
-                  {r.displayLabel}
-                </MenuItem>
               ))}
-          </TextField>
-          <TextField
-            label="UUID tài khoản Tenant ký hợp đồng"
-            value={values.tenantUserId ?? ''}
-            disabled={busy}
-            onChange={(e) => set('tenantUserId', e.target.value.trim())}
-            helperText="Tài khoản Tenant có sẵn; mã tài khoản khác mã hồ sơ người ở. Máy chủ kiểm tra vai trò và trạng thái."
-          />
-          <TextField
-            label="UUID tài khoản Owner ký hợp đồng"
-            value={values.ownerSignerId ?? ''}
-            disabled={busy}
-            onChange={(e) => set('ownerSignerId', e.target.value.trim())}
-          />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            {['startDate', 'endDate'].map((name, i) => (
+              {!!values.roomId && !eligible.length && (
+                <Alert severity="warning">
+                  Chưa có người ở đã xác minh tại phòng này. Hoàn tất tiếp nhận trên Mobile.
+                </Alert>
+              )}
               <TextField
-                key={name}
-                fullWidth
-                label={i ? 'Ngày hết hạn' : 'Ngày bắt đầu'}
-                type="date"
-                slotProps={{ inputLabel: { shrink: true } }}
-                value={values[name] ?? ''}
+                select
+                label="Người đại diện"
+                value={values.representativeResidentId ?? ''}
+                onChange={(e) => chooseRepresentative(e.target.value)}
                 disabled={busy}
-                onChange={(e) => set(name, e.target.value)}
-              />
-            ))}
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            {['monthlyRent', 'requiredDeposit'].map((name, i) => (
+              >
+                {eligible
+                  .filter((r) => residents.includes(r.id))
+                  .map((r) => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.label}
+                    </MenuItem>
+                  ))}
+              </TextField>
+              {representative && !representative.tenantUserId && (
+                <>
+                  <Alert severity="warning">
+                    Hồ sơ chưa liên kết tài khoản Tenant. Owner xác nhận liên kết trước khi tạo hợp
+                    đồng.
+                  </Alert>
+                  <TextField
+                    select
+                    label="Tài khoản Tenant của người đại diện"
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
+                    disabled={busy}
+                  >
+                    {(query.data?.accounts ?? []).map((a) => (
+                      <MenuItem key={a.id} value={a.id}>
+                        {a.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    disabled={busy || !account}
+                    onClick={() =>
+                      void run(async () => {
+                        await api.linkTenant(representative.id, account);
+                        query.reload();
+                      })
+                    }
+                  >
+                    Xác nhận liên kết tài khoản
+                  </Button>
+                </>
+              )}
+              {representative?.tenantUserId && (
+                <Alert severity="success">
+                  Người đại diện đã liên kết tài khoản Tenant ký hợp đồng.
+                </Alert>
+              )}
               <TextField
-                key={name}
-                fullWidth
-                label={i ? 'Cọc yêu cầu (VND)' : 'Tiền thuê tháng (VND)'}
-                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 18 } }}
-                value={values[name] ?? ''}
+                select
+                label="Owner ký hợp đồng"
+                value={values.ownerSignerId ?? ''}
+                onChange={(e) => set('ownerSignerId', e.target.value)}
                 disabled={busy}
-                onChange={(e) => set(name, e.target.value)}
+              >
+                {(p?.ownerSigners ?? []).map((o) => (
+                  <MenuItem key={o.id} value={o.id}>
+                    {o.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
+          )}
+          {step === 2 && (
+            <>
+              <Alert severity="info">
+                Hợp đồng thuê chính · {p?.rooms.find((r) => r.id === values.roomId)?.label} ·{' '}
+                {representative?.label} · {residents.length} người ở. Giá thuê và cọc do hai bên
+                thống nhất; máy chủ kiểm tra lại toàn bộ điều kiện.
+              </Alert>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                {['startDate', 'endDate'].map((key, i) => (
+                  <TextField
+                    fullWidth
+                    key={key}
+                    label={i ? 'Ngày hết hạn' : 'Ngày bắt đầu'}
+                    type="date"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    value={values[key] ?? ''}
+                    disabled={busy}
+                    onChange={(e) => set(key, e.target.value)}
+                  />
+                ))}
+              </Stack>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                {['monthlyRent', 'requiredDeposit'].map((key, i) => (
+                  <TextField
+                    fullWidth
+                    key={key}
+                    label={i ? 'Cọc yêu cầu (VND)' : 'Tiền thuê tháng (VND)'}
+                    slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 18 } }}
+                    value={values[key] ?? ''}
+                    disabled={busy}
+                    onChange={(e) => set(key, e.target.value)}
+                  />
+                ))}
+              </Stack>
+              <TextField
+                multiline
+                minRows={4}
+                label="Điều khoản đã thống nhất"
+                value={values.terms ?? ''}
+                disabled={busy}
+                slotProps={{ htmlInput: { maxLength: 12000 } }}
+                onChange={(e) => set('terms', e.target.value)}
               />
-            ))}
-          </Stack>
-          <TextField
-            label="Điều khoản đã thống nhất"
-            multiline
-            minRows={4}
-            slotProps={{ htmlInput: { maxLength: 12000 } }}
-            value={values.terms ?? ''}
-            disabled={busy}
-            onChange={(e) => set('terms', e.target.value)}
-          />
-          <TextField
-            label="UUID hợp đồng giữ chỗ (nếu có)"
-            value={values.holdingContractId ?? ''}
-            disabled={busy}
-            onChange={(e) => set('holdingContractId', e.target.value.trim())}
-            helperText="Chỉ áp dụng khi hợp đồng giữ chỗ và phân bổ cọc đã được backend hỗ trợ; không tự chuyển cọc."
-          />
+            </>
+          )}
           {!!error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
@@ -247,13 +307,43 @@ export function ContractDraftDialog({
         <Button disabled={busy} onClick={onClose}>
           Đóng
         </Button>
-        <Button
-          variant="contained"
-          disabled={busy || !!queryError || !eligible.length}
-          onClick={() => void submit()}
-        >
-          {busy ? 'Đang lưu…' : 'Lưu bản nháp'}
-        </Button>
+        {step > 0 && (
+          <Button disabled={busy} onClick={() => setStep((v) => v - 1)}>
+            Quay lại
+          </Button>
+        )}
+        {step < 2 ? (
+          <Button
+            variant="contained"
+            disabled={busy || query.loading || !!query.error || !template?.available}
+            onClick={next}
+          >
+            Tiếp theo
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            disabled={busy || query.loading || !!query.error}
+            onClick={() =>
+              void run(async () => {
+                const body = draftPayload(
+                  { ...values, tenantUserId: representative?.tenantUserId ?? '' },
+                  residents,
+                );
+                const result = await api.mutate<{ id: string }>(
+                  null,
+                  '',
+                  body,
+                  keys.get('draft', body),
+                );
+                keys.confirmed('draft', body);
+                onCreated(result.id);
+              })
+            }
+          >
+            {busy ? 'Đang lưu…' : 'Lưu bản nháp'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

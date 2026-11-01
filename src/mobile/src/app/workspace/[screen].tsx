@@ -1,5 +1,7 @@
 import React from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
+import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentPanel';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { RequestHistory } from '../../components/WorkflowControls';
@@ -112,11 +114,25 @@ export default function WorkspaceRoute() {
   if (!preview) {
     let content: React.ReactNode;
     if (
-      ['signing', 'contract', 'contract-request', 'prepare-contract', 'move-out'].includes(screen)
+      [
+        'signing',
+        'contract',
+        'contract-request',
+        'prepare-contract',
+        'move-out',
+        'move-in',
+        'checklist',
+      ].includes(screen)
     )
       content = <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />;
     else
       switch (screen) {
+        case 'invoice':
+          content = <TenantInvoicesScreen />;
+          break;
+        case 'billing-history':
+          content = <TenantPaymentHistoryScreen />;
+          break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;
           break;

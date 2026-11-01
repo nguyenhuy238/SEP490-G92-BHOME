@@ -23,6 +23,8 @@ public sealed class CaptureController(CaptureService service) : ControllerBase
     [HttpGet("locations/{id:guid}/meters")] public Task<IReadOnlyList<NamedResource>> Meters(Guid id, CancellationToken t) => service.MetersAsync(id, t);
     [HttpPost("meters"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Meter(MeterInput x, CancellationToken t) => service.CreateMeterAsync(x, t);
     [HttpGet("meter-tasks")] public Task<IReadOnlyList<MeterTaskSummary>> Tasks(CancellationToken t) => service.TasksAsync(t);
+    [HttpGet("meter-tasks/{id:guid}")] public Task<MeterTaskSummary> TaskDetail(Guid id, CancellationToken t) => service.TaskAsync(id, t);
+    [HttpGet("readings/{id:guid}")] public Task<ConfirmedReading> Reading(Guid id, CancellationToken t) => service.ReadingAsync(id, t);
     [HttpPost("meter-tasks"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Task(MeterTaskInput x, CancellationToken t) => service.CreateTaskAsync(x, t);
     [HttpPut("meter-tasks/{id:guid}/evidence"), Authorize(Roles = Roles.Staff), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
     public Task<IdResult> Evidence(Guid id, CancellationToken t) => service.UploadEvidenceAsync(id, Request.Body, t);
