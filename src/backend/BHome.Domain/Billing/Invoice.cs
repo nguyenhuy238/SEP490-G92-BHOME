@@ -64,6 +64,8 @@ public sealed class InvoiceLine
     public int OccupiedDays { get; set; }
     public int PeriodDays { get; set; }
     public decimal Amount { get; set; }
+    public decimal? CalculatedAmount { get; set; }
+    public Guid? CorrectionRequestId { get; set; }
     public Guid? MeterReadingId { get; set; }
     public decimal? PreviousReading { get; set; }
     public decimal? ConfirmedReading { get; set; }

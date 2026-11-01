@@ -29,12 +29,13 @@ internal sealed class AdjustmentRepository(BHomeDbContext db) : IAdjustmentRepos
         .SingleOrDefaultAsync(i => i.Id == id && (scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.Actor)), t);
     private IQueryable<InvoiceAdjustmentRequest> Visible(InvoiceScope scope) => db.Set<InvoiceAdjustmentRequest>().Where(r =>
         scope.Owner || scope.Tenant && r.RequesterId == scope.Actor && r.Invoice.Recipients.Any(v => v.TenantUserId == scope.Actor));
-    private static IQueryable<InvoiceAdjustmentRequest> Detail(IQueryable<InvoiceAdjustmentRequest> query) => query.Include(r => r.Evidence).Include(r => r.Invoice).AsSplitQuery();
+    private static IQueryable<InvoiceAdjustmentRequest> Detail(IQueryable<InvoiceAdjustmentRequest> query) => query.Include(r => r.Evidence).Include(r => r.Invoice).Include(r => r.Decision).AsSplitQuery();
     public Task<InvoiceAdjustmentRequest?> RequestAsync(Guid id, InvoiceScope scope, CancellationToken t) => Detail(Visible(scope)).SingleOrDefaultAsync(r => r.Id == id, t);
     public async Task<PagedResult<InvoiceAdjustmentRequest>> ListAsync(AdjustmentQuery q, InvoiceScope scope, CancellationToken t)
     {
         var source = Visible(scope).AsNoTracking().Where(r => (q.InvoiceId == null || r.InvoiceId == q.InvoiceId) &&
-            (q.LocationId == null || r.Invoice.LocationId == q.LocationId) && (q.RoomId == null || r.Invoice.RoomId == q.RoomId) && (q.Status == null || q.Status == "Pending"));
+            (q.LocationId == null || r.Invoice.LocationId == q.LocationId) && (q.RoomId == null || r.Invoice.RoomId == q.RoomId) &&
+            (q.Status == null || q.Status == "Pending" && r.Decision == null || r.Decision != null && r.Decision.Outcome == q.Status));
         var count = await source.CountAsync(t);
         return new(await Detail(source.OrderByDescending(r => r.SubmittedAt).ThenBy(r => r.Id).Skip((q.Page - 1) * q.PageSize).Take(q.PageSize)).ToArrayAsync(t), q.Page, q.PageSize, count);
     }

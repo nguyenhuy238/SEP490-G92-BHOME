@@ -85,6 +85,8 @@ internal sealed class InvoiceRepository(BHomeDbContext db) : IInvoiceRepository
         foreach (var policy in await db.Set<BillingPolicy>().Where(p => ids.Contains(p.Id)).ToArrayAsync(t)) policy.RecordUsage(at);
     }
     public void Add(object entity) => db.Add(entity);
+    public async Task<IReadOnlyList<InvoiceAdjustmentDecision>> DraftCorrectionsAsync(Guid invoiceId, CancellationToken t) =>
+        await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().Where(d => d.InvoiceId == invoiceId && d.Outcome == "Approved" && d.InvoiceStatus == InvoiceStatus.Draft).ToArrayAsync(t);
     public void Audit(Guid actor, string action, Guid invoiceId, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actor, Event = action, TargetType = "Billing", TargetId = invoiceId, Succeeded = true, OccurredAt = at });
     public void RemoveLines(Invoice invoice) { db.RemoveRange(invoice.Lines); invoice.Lines.Clear(); }

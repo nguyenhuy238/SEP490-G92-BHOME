@@ -13,7 +13,19 @@ public sealed record AdjustmentView(Guid Id, Guid InvoiceId, string LocationName
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal CurrentAmount,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? ProposedAmount,
     string Reason, string InvoiceSnapshot, string InvoiceStatus, int InvoiceVersion, int FinancialVersion,
-    string Status, int Version, DateTimeOffset SubmittedAt, IReadOnlyList<AdjustmentEvidenceView> Evidence);
+    string Status, int Version, DateTimeOffset SubmittedAt, IReadOnlyList<AdjustmentEvidenceView> Evidence,
+    InvoiceView? CurrentInvoice = null, AdjustmentDecisionView? Decision = null, int CurrentFinancialVersion = 0);
+public sealed record AdjustmentDecisionInput(int ExpectedVersion, int ExpectedInvoiceVersion, int ExpectedFinancialVersion,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? CorrectedAmount,
+    string? ChargeCode, string Reason, bool HumanConfirmed);
+public sealed record AdjustmentDecisionView(string Outcome, string InvoiceStatus, string? ChargeCode,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal BeforeAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? CorrectedAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Delta,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal EffectiveBefore,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal EffectiveAfter,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal PaidAtDecision,
+    string Reason, Guid OwnerId, DateTimeOffset DecidedAt);
 public sealed class AdjustmentQuery
 {
     public int Page { get; set; } = 1;

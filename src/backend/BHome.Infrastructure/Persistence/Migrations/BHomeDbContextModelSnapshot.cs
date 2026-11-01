@@ -267,6 +267,100 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("InvoiceAdjustmentCommands", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BeforeAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<string>("ChargeCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<decimal?>("CorrectedAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Delta")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("EffectiveAfter")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("EffectiveBefore")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("InvoiceStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("PaidAtDecision")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Sequence"));
+
+                    b.Property<string>("SourceFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("Sequence")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId", "InvoiceStatus", "Outcome");
+
+                    b.ToTable("InvoiceAdjustmentDecisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AdjustmentDecision_Values", "\"Outcome\" IN ('Approved','Rejected') AND \"InvoiceStatus\" IN (0,1) AND length(btrim(\"Reason\")) > 0 AND \"EffectiveBefore\" >= 0 AND \"EffectiveAfter\" >= 0 AND \"BeforeAmount\" >= 0 AND (\"CorrectedAmount\" IS NULL OR \"CorrectedAmount\" >= 0) AND \"EffectiveAfter\" = \"EffectiveBefore\" + \"Delta\" AND ((\"Outcome\" = 'Approved' AND \"CorrectedAmount\" IS NOT NULL AND \"Delta\" = \"CorrectedAmount\" - \"BeforeAmount\") OR (\"Outcome\" = 'Rejected' AND \"CorrectedAmount\" IS NULL AND \"Delta\" = 0))");
+                        });
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentEvent", b =>
                 {
                     b.Property<Guid>("RequestId")
@@ -421,6 +515,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("numeric(18,0)");
 
+                    b.Property<decimal?>("CalculatedAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
                     b.Property<int>("Category")
                         .HasColumnType("integer");
 
@@ -432,6 +530,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("ConfirmedReading")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid?>("CorrectionRequestId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid");
@@ -472,6 +573,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasColumnType("date");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CorrectionRequestId");
 
                     b.HasIndex("MeterReadingId");
 
@@ -2985,6 +3088,27 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentDecision", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithOne("Decision")
+                        .HasForeignKey("BHome.Domain.Billing.InvoiceAdjustmentDecision", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentEvent", b =>
                 {
                     b.HasOne("BHome.Domain.Billing.Invoice", null)
@@ -3045,6 +3169,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
                 {
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("CorrectionRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BHome.Domain.Billing.Invoice", null)
                         .WithMany("Lines")
                         .HasForeignKey("InvoiceId")
@@ -3767,6 +3896,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
                 {
+                    b.Navigation("Decision");
+
                     b.Navigation("Evidence");
                 });
 

@@ -21,7 +21,9 @@ public sealed record InvoiceLineView(Guid Id, string Category, string ChargeCode
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,
     Guid? MeterReadingId,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousReading,
-    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? ConfirmedReading);
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? ConfirmedReading,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? CalculatedAmount = null,
+    Guid? CorrectionRequestId = null);
 public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string RoomNumber, string LocationName,
     DateOnly BillingPeriod, string Status, int Version,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Total,
@@ -47,6 +49,7 @@ public interface IInvoiceRepository
     Task<IReadOnlyList<BillingOccupancy>> OccupanciesAsync(Guid roomId, DateOnly from, DateOnly to, CancellationToken t);
     Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t);
     Task RecordPolicyUsageAsync(Guid[] ids, DateTimeOffset at, CancellationToken t);
+    Task<IReadOnlyList<InvoiceAdjustmentDecision>> DraftCorrectionsAsync(Guid invoiceId, CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid invoiceId, DateTimeOffset at);
     void RemoveLines(Invoice invoice);

@@ -125,7 +125,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
             var check = new Invoice { RoomId = invoice.RoomId, LocationId = invoice.LocationId,
                 BillingPeriod = invoice.BillingPeriod, RepresentativeContractId = invoice.RepresentativeContractId };
-            await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t);
+            await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t, invoice.Id);
             if (check.MissingInputs.Length > 0) throw new InvoiceException(409, "confirmed_billing_inputs_required");
             static IEnumerable<InvoiceLineView> Charges(Invoice i) => View(i).Lines.Select(line => line with { Id = Guid.Empty });
             if (invoice.MissingInputs.Length > 0 || !Charges(invoice).SequenceEqual(Charges(check)) ||
@@ -138,7 +138,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         }, t);
     }
 
-    private async Task CalculateAsync(Invoice invoice, BillingSchedule schedule, CancellationToken t)
+    private async Task CalculateAsync(Invoice invoice, BillingSchedule schedule, CancellationToken t, Guid? correctionsFor = null)
     {
         var start = invoice.BillingPeriod; var end = start.AddMonths(1).AddDays(-1);
         var occupants = await repository.OccupanciesAsync(invoice.RoomId, start, end, t);
@@ -181,15 +181,22 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 MeterReadingId = reading?.Reading.Id, PreviousReading = reading?.Reading.PreviousValue, ConfirmedReading = reading?.Reading.ConfirmedValue });
             if (policy.Id != Guid.Empty) used.Add(policy.Id);
         }
+        foreach (var correction in (await repository.DraftCorrectionsAsync(correctionsFor ?? invoice.Id, t)).GroupBy(d => d.ChargeCode).Select(g => g.OrderByDescending(d => d.Sequence).First()))
+        {
+            var line = invoice.Lines.SingleOrDefault(l => l.ChargeCode == correction.ChargeCode);
+            if (line is null || AdjustmentRules.SourceFingerprint(line) != correction.SourceFingerprint)
+            { missing.Add("draft_correction_source_changed"); continue; }
+            line.CalculatedAmount = line.Amount; line.Amount = correction.CorrectedAmount!.Value; line.CorrectionRequestId = correction.RequestId;
+        }
         invoice.MissingInputs = missing.Distinct().ToArray();
         invoice.Total = invoice.Lines.Sum(l => l.Amount);
         if (invoice.Total >= 1_000_000_000_000_000_000m) throw new InvoiceException(400, "invoice_amount_out_of_range");
         await repository.RecordPolicyUsageAsync(used.Distinct().ToArray(), clock.GetUtcNow(), t);
     }
 
-    private static InvoiceView View(Invoice i) => new(i.Id, i.RoomId, i.LocationId, i.RoomNumber, i.LocationName,
+    internal static InvoiceView View(Invoice i) => new(i.Id, i.RoomId, i.LocationId, i.RoomNumber, i.LocationName,
         i.BillingPeriod, i.Status.ToString(), i.Version, i.Total, i.MissingInputs, i.ScheduledFinalDate, i.DueDate, i.FinalizedAt,
         i.RepresentativeTenantUserId, i.Lines.OrderBy(l => l.ChargeCode).Select(l => new InvoiceLineView(l.Id, l.Category.ToString(),
             l.ChargeCode, l.Name, l.PolicyId, l.PolicyVersion, l.RateDate, l.Rate, l.Quantity, l.OccupiedDays, l.PeriodDays,
-            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading)).ToArray());
+            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading, l.CalculatedAmount, l.CorrectionRequestId)).ToArray());
 }

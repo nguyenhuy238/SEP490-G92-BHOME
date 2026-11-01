@@ -14,6 +14,10 @@ public sealed class InvoiceAdjustmentsController(AdjustmentService service) : Co
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) && key != Guid.Empty ? key : throw new AdjustmentException(400, "idempotency_key_required");
     [HttpGet] public Task<PagedResult<AdjustmentView>> List([FromQuery] AdjustmentQuery q, CancellationToken t) => service.ListAsync(q, t);
     [HttpGet("{id:guid}")] public Task<AdjustmentView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
+    [HttpPost("{id:guid}/approve"), Authorize(Policy = Permissions.InvoiceAdjustments.Approve)]
+    public Task<AdjustmentView> Approve(Guid id, AdjustmentDecisionInput x, CancellationToken t) => service.DecideAsync(id, true, x, Key(), t);
+    [HttpPost("{id:guid}/reject"), Authorize(Policy = Permissions.InvoiceAdjustments.Approve)]
+    public Task<AdjustmentView> Reject(Guid id, AdjustmentDecisionInput x, CancellationToken t) => service.DecideAsync(id, false, x, Key(), t);
     [HttpPost("/api/v1/invoices/{invoiceId:guid}/adjustment-requests"), Authorize(Policy = Permissions.InvoiceAdjustments.Request)]
     public Task<AdjustmentView> Submit(Guid invoiceId, AdjustmentSubmit x, CancellationToken t) => service.SubmitAsync(invoiceId, x, Key(), t);
     [HttpPut("/api/v1/invoices/{invoiceId:guid}/adjustment-evidence"), Authorize(Policy = Permissions.InvoiceAdjustments.Request), RequestSizeLimit(5242880)]

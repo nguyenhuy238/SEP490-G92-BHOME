@@ -90,8 +90,10 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
     }
     private static AdjustmentView View(InvoiceAdjustmentRequest r, Invoice i) => new(r.Id, r.InvoiceId, i.LocationName, i.RoomNumber, i.BillingPeriod,
         r.RequesterId, r.InvoiceLineId, r.ChargeCode, r.CurrentAmount, r.ProposedAmount, r.Reason, r.InvoiceSnapshot,
-        r.InvoiceStatus.ToString(), r.InvoiceVersion, r.FinancialVersion, "Pending", 1, r.SubmittedAt,
-        r.Evidence.Select(e => new AdjustmentEvidenceView(e.Id, e.ContentType, e.Length)).ToArray());
+        r.InvoiceStatus.ToString(), r.InvoiceVersion, r.FinancialVersion, r.Decision?.Outcome ?? "Pending", r.Decision is null ? 1 : 2, r.SubmittedAt,
+        r.Evidence.Select(e => new AdjustmentEvidenceView(e.Id, e.ContentType, e.Length)).ToArray(), InvoiceService.View(i),
+        r.Decision is { } d ? new(d.Outcome, d.InvoiceStatus.ToString(), d.ChargeCode, d.BeforeAmount, d.CorrectedAmount, d.Delta,
+            d.EffectiveBefore, d.EffectiveAfter, d.PaidAtDecision, d.Reason, d.OwnerId, d.DecidedAt) : null);
     public async Task<AdjustmentEvidenceView> UploadAsync(Guid invoiceId, Stream input, CancellationToken t)
     {
         Tenant(); _ = await Invoice(invoiceId, t);
