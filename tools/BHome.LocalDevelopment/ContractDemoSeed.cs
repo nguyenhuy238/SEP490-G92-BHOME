@@ -91,6 +91,7 @@ public static class ContractDemoSeed
         await tx.CommitAsync(t);
         await InvoiceDemoSeed.PrepareAsync(db, t);
         await PaymentDemoSeed.PrepareAsync(db, t);
+        await AdjustmentDemoSeed.PrepareAsync(db, t);
         using var storage = new MinioClient().WithEndpoint(endpoint).WithCredentials(config["ObjectStorage:AccessKey"], config["ObjectStorage:SecretKey"]).Build();
         if (!await storage.BucketExistsAsync(new BucketExistsArgs().WithBucket("contract-demo"), t))
             await storage.MakeBucketAsync(new MakeBucketArgs().WithBucket("contract-demo"), t);
