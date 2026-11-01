@@ -211,7 +211,9 @@ function LiveContractDetail({
   return (
     <>
       <Heading title={text(c.kind)} detail={c.id} />
-
+      {c.isDevelopmentDemo && (
+        <Text style={ui.red}>HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.</Text>
+      )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
       <Button
         disabled={uploading}
@@ -270,10 +272,11 @@ function LiveContractDetail({
             {!c.signatures.some((x) => x.signerUserId === s.id) && <Text>Chưa có yêu cầu ký</Text>}
           </View>
         ))}
-        {['Owner', 'Tenant'].includes(role) && c.signatures.some((s) => s.status === 'Signed') && (
-          <ContractEvidence api={api} contractId={id} pdf />
-        )}
-        {signer && <SigningCertificates api={api} />}
+        {['Owner', 'Tenant'].includes(role) &&
+          c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
+            <ContractEvidence api={api} contractId={id} pdf />
+          )}
+        {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
       </Box>
       <ContractWorkflowPanel api={api} contract={c} role={role} />
 

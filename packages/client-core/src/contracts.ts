@@ -52,6 +52,7 @@ export interface ContractView {
   representativeResidentId: string;
   holdingContractId: string | null;
   appliedHoldingDeposit: string;
+  isDevelopmentDemo?: boolean;
   roomNumber?: string;
   locationName?: string;
   occupants?: { id: string; label: string; representative: boolean }[] | null;
@@ -325,6 +326,7 @@ export const labels: Record<string, string> = {
   Dispatching: 'Đang gửi yêu cầu ký',
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
+  Simulated: 'SIMULATED SIGNING — không có giá trị pháp lý',
   ContractDraftCreated: 'Lập bản nháp hợp đồng',
   ContractPreviewGenerated: 'Tạo tài liệu xem trước',
   ContractSigningInitiated: 'Bắt đầu quy trình ký',
@@ -349,6 +351,9 @@ export const labels: Record<string, string> = {
   ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
   resident_account_already_linked:
     'Hồ sơ đã liên kết tài khoản khác hoặc có lịch sử hợp đồng khác. Không thể liên kết lại.',
+  development_demo_disabled:
+    'Hợp đồng demo chỉ có thể xử lý trong Development/Testing đã bật mô phỏng.',
+  signing_mode_mismatch: 'Chế độ ký của hợp đồng không khớp cấu hình máy chủ.',
   tenant_account_link_required:
     'Owner cần liên kết tài khoản Tenant với hồ sơ đại diện đã xác minh.',
   tenant_account_mismatch: 'Tài khoản Tenant không khớp người đại diện.',
@@ -536,7 +541,7 @@ export function contractActions(
   const active = c.status === 'Active',
     waiting = ['Draft', 'PendingSigning', 'PendingActivation'].includes(c.status);
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
-  const open = c.signatures.some((s) => !['Signed', 'Failed'].includes(s.status));
+  const open = c.signatures.some((s) => !['Signed', 'Simulated', 'Failed'].includes(s.status));
   const result: ContractAction[] = [];
   if (
     signer &&
@@ -547,9 +552,13 @@ export function contractActions(
     result.push(
       action(
         'signing',
-        'Yêu cầu ký MySign',
-        [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
-        'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
+        c.isDevelopmentDemo ? 'Mô phỏng ký (Development)' : 'Yêu cầu ký MySign',
+        c.isDevelopmentDemo
+          ? []
+          : [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
+        c.isDevelopmentDemo
+          ? 'SIMULATED SIGNING: chỉ thử nghiệm, không phải chữ ký điện tử có giá trị pháp lý.'
+          : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
       ),
     );
   if (signer && mine.some((s) => s.status === 'Pending'))
@@ -692,6 +701,8 @@ export function actionPayload(
   c: ContractView,
   evidenceIds: string[] = [],
 ): Record<string, unknown> | undefined {
+  if (a.operation === 'signing' && c.isDevelopmentDemo)
+    return { certificateId: '00000000-0000-0000-0000-000000000000' };
   if (!a.fields.length) return undefined;
   const body: Record<string, unknown> = {};
   for (const f of a.fields) {

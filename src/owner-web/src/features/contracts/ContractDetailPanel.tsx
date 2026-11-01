@@ -89,6 +89,11 @@ export function ContractDetailPanel({
   const signer = c.ownerSignerId === actorId;
   return (
     <Stack spacing={2}>
+      {c.isDevelopmentDemo && (
+        <Alert severity="warning">
+          HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.
+        </Alert>
+      )}
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <StatusChip label={text(c.status)} />
         <Chip size="small" label={text(c.kind)} />
@@ -141,7 +146,11 @@ export function ContractDetailPanel({
       </ChartCard>
       <ChartCard
         title="Chữ ký và tài liệu"
-        subtitle="Owner và Tenant ký bằng chứng thư của chính mình"
+        subtitle={
+          c.isDevelopmentDemo
+            ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
+            : 'Owner và Tenant ký bằng chứng thư của chính mình'
+        }
       >
         <Stack spacing={1}>
           {[
@@ -169,14 +178,14 @@ export function ContractDetailPanel({
             </Paper>
           ))}
           <Button
-            disabled={busy || !c.signatures.some((s) => s.status === 'Signed')}
+            disabled={busy || !c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status))}
             onClick={() =>
               void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
             }
           >
             Tải tài liệu ký
           </Button>
-          {signer && <SigningCertificates api={api} />}
+          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
         </Stack>
       </ChartCard>
       <ContractWorkflowPanel api={api} contract={c} />

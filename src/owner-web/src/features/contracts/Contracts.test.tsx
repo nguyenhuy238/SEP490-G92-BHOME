@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import {
   contractActions,
   contractClient,
+  actionPayload,
   mutationKeys,
   type ContractRequest,
   type ContractView,
@@ -42,6 +43,31 @@ const draft: ContractView = {
   holdingContractId: null,
   appliedHoldingDeposit: '0',
 };
+
+it('uses a separate simulated action without a certificate and permits the second signer after a simulation', () => {
+  const demo = {
+    ...draft,
+    status: 'PendingSigning',
+    isDevelopmentDemo: true,
+    signatures: [
+      { id: owner, signerUserId: owner, status: 'Simulated', signedAt: '2026-10-30T02:00:00Z' },
+    ],
+  };
+  const signing = contractActions(demo, null, 'Tenant', tenant).find(
+    (a) => a.operation === 'signing',
+  )!;
+  expect(signing.label).toContain('Mô phỏng');
+  expect(signing.fields).toEqual([]);
+  expect(actionPayload(signing, {}, demo)).toEqual({
+    certificateId: '00000000-0000-0000-0000-000000000000',
+  });
+  expect(
+    contractActions(demo, null, 'Staff', tenant).some((a) => a.operation.startsWith('signing')),
+  ).toBe(false);
+  expect(contractActions(demo, null, 'Owner', owner).some((a) => a.operation === 'signing')).toBe(
+    false,
+  );
+});
 function mount(element: React.ReactNode) {
   const query = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

@@ -47,12 +47,13 @@ export function ContractActionDialog({
     staleTime: 0,
     queryKey: ['contract-certificates', actorId],
     queryFn: ({ signal }) => api.certificates(signal),
-    enabled: action.operation === 'signing',
+    enabled: action.operation === 'signing' && !contract.isDevelopmentDemo,
   });
   async function submit() {
     if (lock.current) return;
     if (
       action.operation === 'signing' &&
+      !contract.isDevelopmentDemo &&
       (certs.isFetching ||
         !!certs.error ||
         !certs.data?.some((c) => c.id === values.certificateId && canUseCertificate(c)))
@@ -139,6 +140,7 @@ export function ContractActionDialog({
             ),
           )}
           {action.operation === 'signing' &&
+            !contract.isDevelopmentDemo &&
             !certs.isFetching &&
             !certs.error &&
             !certs.data?.some(canUseCertificate) && (
@@ -152,7 +154,7 @@ export function ContractActionDialog({
               <Button onClick={() => void certs.refetch()}>Tải lại chứng thư</Button>
             </Alert>
           )}
-          {action.operation === 'signing' && !certs.error && (
+          {action.operation === 'signing' && !contract.isDevelopmentDemo && !certs.error && (
             <Button
               disabled={busy || certs.isFetching}
               onClick={() => {
@@ -175,6 +177,7 @@ export function ContractActionDialog({
           disabled={
             busy ||
             (action.operation === 'signing' &&
+              !contract.isDevelopmentDemo &&
               (certs.isFetching ||
                 !!certs.error ||
                 !certs.data?.some((c) => c.id === values.certificateId && canUseCertificate(c))))
