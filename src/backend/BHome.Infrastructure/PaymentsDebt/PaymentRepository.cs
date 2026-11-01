@@ -56,6 +56,8 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
         !db.Set<PaymentReconciliation>().Any(newer => newer.TransferId == r.TransferId && newer.Sequence > r.Sequence) &&
         !db.Set<PaymentAllocation>().Any(a => a.TransferId == r.TransferId), t);
     public Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t) => db.Set<PaymentCommand>().AsNoTracking().SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key && c.Operation == operation, t);
+    public Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId,CancellationToken t)=>db.Set<ReceivingBankAccount>().AsNoTracking().Where(a=>a.LocationId==locationId).OrderByDescending(a=>a.Version).FirstOrDefaultAsync(t);
+    public Task<bool> ActiveLocationAsync(Guid locationId,CancellationToken t)=>db.Locations.AnyAsync(l=>l.Id==locationId && l.IsActive,t);
     public async Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     {
         var source = db.Set<PaymentTransfer>().AsNoTracking().Where(x =>

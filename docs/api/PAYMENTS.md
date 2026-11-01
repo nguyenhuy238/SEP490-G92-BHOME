@@ -1,5 +1,16 @@
 # BH-25 Payment API
 
+GET/PUT `/api/v1/receiving-bank-accounts/{locationId}` / `/api/v1/receiving-bank-accounts`:
+Owner tạo phiên bản cấu hình với expectedVersion, humanVerified, bankIdentifier BIN 6 số,
+accountNumber 6–19 số, accountHolder ASCII hoa, enabled, isDevelopmentDemo.
+Mỗi version bất biến; bản mới nhất disabled ngừng cấp instructions. Demo chỉ cho Development/Testing.
+GET `/api/v1/invoices/{id}/transfer-instructions`: Owner hoặc Tenant có InvoiceRecipients.
+Số dư = server ledger. Draft/Settled/missing configuration không trả QR hoặc tài khoản giả.
+QR dựng local với QRCoder 1.8.1 (MIT, PNG không cần System.Drawing), không gọi dịch vụ ngoài.
+VietQR chuyển tài khoản dùng EMV TLV/CRC, đối chiếu [tài liệu và vector công khai của VietQR Kit](https://www.vietqr.io/generate).
+Giới hạn QR: số tiền nguyên tối đa 13 chữ số, memo ASCII 25 ký tự; ngoài giới hạn trả
+InstructionsOnly với hướng dẫn chính xác, không cắt số tiền hoặc reference. QR không chứng minh trả tiền.
+
 Theo BF-06/UC-22/23/25 và [quyết định BH-25](../development/BH25_TRACEABILITY.md).
 Invoice Final không bị sửa; trạng thái thanh toán được suy từ allocation ledger.
 Amounts là decimal strings VND nguyên. Lỗi theo ProblemDetails có code/correlationId.

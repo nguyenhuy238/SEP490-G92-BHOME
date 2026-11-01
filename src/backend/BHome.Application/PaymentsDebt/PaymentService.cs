@@ -11,7 +11,7 @@ using BHome.Application.PropertyManagement;
 
 namespace BHome.Application.PaymentsDebt;
 
-public sealed class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock)
+public sealed class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private DateTimeOffset Now => PaymentRules.Timestamp(clock.GetUtcNow());
@@ -50,11 +50,11 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             VerificationReason = input.VerificationReason.Trim(), OccurredAt = PaymentRules.Timestamp(input.OccurredAt) };
         if (!x.HumanVerified || !PaymentRules.ValidMoney(x.Amount) || x.Currency != "VND" || x.OccurredAt == default || x.OccurredAt > Now ||
             !PaymentRules.ValidReference(x.BankReference) || !Regex.IsMatch(x.ProviderIdentity, "^[A-Z0-9][A-Z0-9:-]{0,79}$") ||
-            x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty)
+            x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw new PaymentException(400, "invalid_verified_bank_transfer");
         var normalized = PaymentRules.NormalizeReference(x.BankReference);
         var identity = new { x.ProviderIdentity, Reference = normalized, Amount = x.Amount.ToString("0", CultureInfo.InvariantCulture),
-            x.Currency, x.OccurredAt, Description = x.TransferDescription.ToUpperInvariant(), x.StatementReference, x.VerificationReason, x.ProposedInvoiceId };
+            x.Currency, x.OccurredAt, Description = x.TransferDescription.ToUpperInvariant(), x.StatementReference, x.VerificationReason, x.ProposedInvoiceId, x.IsDevelopmentDemo };
         // Serializes bank identities across commands without a fictitious financial effect.
         return await repository.TransactionAsync<TransferView>(null, x.ProposedInvoiceId, async () =>
         {
@@ -71,7 +71,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             var transfer = new PaymentTransfer { ProviderIdentity = x.ProviderIdentity, BankReference = x.BankReference,
                 NormalizedReference = normalized, Amount = x.Amount, Currency = x.Currency, OccurredAt = x.OccurredAt,
                 TransferDescription = x.TransferDescription, StatementReference = x.StatementReference, VerificationReason = x.VerificationReason,
-                VerifiedByUserId = Actor, VerifiedAt = Now, ProposedInvoiceId = x.ProposedInvoiceId };
+                VerifiedByUserId = Actor, VerifiedAt = Now, ProposedInvoiceId = x.ProposedInvoiceId, IsDevelopmentDemo = x.IsDevelopmentDemo };
             repository.Add(transfer);
             var review = new PaymentReconciliation { TransferId = transfer.Id, InvoiceId = x.ProposedInvoiceId, Decision = "PendingReview",
                 Reason = x.ProposedInvoiceId is null ? "unmatched_bank_transfer" : "owner_allocation_confirmation_required", ActorId = Actor, OccurredAt = Now };

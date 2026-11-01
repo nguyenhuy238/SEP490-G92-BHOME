@@ -12,7 +12,7 @@ public sealed record PaymentTransferInput([Required, StringLength(80)] string Pr
     [Required] string Currency, DateTimeOffset OccurredAt,
     [StringLength(100)] string TransferDescription, [Required, StringLength(500)] string StatementReference,
     [Required, StringLength(2000)] string VerificationReason, Guid? ProposedInvoiceId,
-    [property: JsonRequired] bool HumanVerified);
+    [property: JsonRequired] bool HumanVerified, bool IsDevelopmentDemo = false);
 public sealed record PaymentMatchInput(Guid InvoiceId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified);
 public sealed record PaymentRejectInput([Required, StringLength(2000)] string Reason);
 public sealed record PaymentScope(Guid ActorId, bool Owner, bool Tenant, bool Staff, DateOnly Today);
@@ -63,6 +63,8 @@ public interface IPaymentRepository
     Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t);
     Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t);
     Task<PagedResult<ReconciliationView>> ReviewsAsync(Guid transferId, int page, int pageSize, CancellationToken t);
+    Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId,CancellationToken t);
+    Task<bool> ActiveLocationAsync(Guid locationId,CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset at);
 }

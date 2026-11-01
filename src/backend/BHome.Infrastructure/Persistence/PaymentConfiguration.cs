@@ -74,3 +74,14 @@ internal sealed class PaymentConfirmedEventConfiguration : IEntityTypeConfigurat
         e.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+internal sealed class ReceivingBankAccountConfiguration : IEntityTypeConfiguration<ReceivingBankAccount>
+{
+    public void Configure(EntityTypeBuilder<ReceivingBankAccount> e)
+    {
+        e.ToTable("ReceivingBankAccounts",t=>t.HasCheckConstraint("CK_ReceivingBankAccount_Format","\"BankIdentifier\" ~ '^[0-9]{6}$' AND \"AccountNumber\" ~ '^[0-9]{6,19}$' AND \"AccountHolder\" ~ '^[A-Z0-9 ]{5,50}$' AND \"Version\" > 0"));
+        e.Property(x=>x.BankIdentifier).HasMaxLength(6);e.Property(x=>x.AccountNumber).HasMaxLength(19);e.Property(x=>x.AccountHolder).HasMaxLength(50);
+        e.HasIndex(x=>new{x.LocationId,x.Version}).IsUnique();
+        e.HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x=>x.LocationId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
