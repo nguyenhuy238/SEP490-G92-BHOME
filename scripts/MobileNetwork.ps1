@@ -53,3 +53,15 @@ function Get-MobileBackendSettings([string]$ConfigurationText) {
     }
     return $settings
 }
+
+# Keep native LAN clients on the mobile CA, including clients that send no SNI.
+# localhost can use an already-trusted ASP.NET development certificate on this PC.
+function Get-MobileHttpsSniSettings([string]$MobilePfxPath, [string]$Password, [string]$LocalhostPfxPath) {
+    if (-not $LocalhostPfxPath) { $LocalhostPfxPath = $MobilePfxPath }
+    return @{
+        'Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Path' = $MobilePfxPath
+        'Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Password' = $Password
+        'Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Path' = $LocalhostPfxPath
+        'Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Password' = $Password
+    }
+}

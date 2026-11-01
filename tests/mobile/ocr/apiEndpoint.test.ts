@@ -2,6 +2,47 @@ import { expect, it, vi } from 'vitest';
 import { resolveApiEndpoint } from '../../../src/mobile/src/lib/apiEndpoint';
 import { MobileSessions } from '../../../src/mobile/src/lib/sessions';
 
+it.each(['localhost', '127.0.0.1', '[::1]'])(
+  'uses trusted local HTTPS for a browser on %s without changing native LAN routing',
+  (browserHostname) => {
+    const input = {
+      development: true,
+      hostUri: '192.168.1.8:8081',
+      developmentUrl: 'https://192.168.1.8:7240',
+    };
+    expect(resolveApiEndpoint({ ...input, browserHostname })).toBe('https://localhost:7240');
+    expect(resolveApiEndpoint(input)).toBe('https://192.168.1.8:7240');
+  },
+);
+it('honors public API, release configuration and explicit development ports in the browser', () => {
+  const browser = { browserHostname: 'localhost', developmentUrl: 'https://192.168.1.8:7443' };
+  expect(resolveApiEndpoint({ ...browser, development: true })).toBe('https://localhost:7443');
+  expect(
+    resolveApiEndpoint({
+      ...browser,
+      development: true,
+      configuredUrl: 'https://api.example.invalid',
+    }),
+  ).toBe('https://api.example.invalid');
+  expect(
+    resolveApiEndpoint({
+      ...browser,
+      development: true,
+      developmentUrl: 'https://api.example.invalid',
+    }),
+  ).toBe('https://api.example.invalid');
+  expect(
+    resolveApiEndpoint({
+      ...browser,
+      development: false,
+      configuredUrl: 'https://release.example.invalid',
+    }),
+  ).toBe('https://release.example.invalid');
+  expect(
+    resolveApiEndpoint({ ...browser, development: true, browserHostname: 'other.example.invalid' }),
+  ).toBe('https://192.168.1.8:7443');
+});
+
 it.each([
   'https://teammate-pc.local:7240',
   'https://TEAMMATE-PC.LOCAL.:7240',

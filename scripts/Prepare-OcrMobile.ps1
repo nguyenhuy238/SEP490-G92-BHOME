@@ -85,6 +85,23 @@ $mobileSettings['Kestrel:Endpoints:MobileHttps:Url'] = 'https://0.0.0.0:7240'
 $mobileSettings['Kestrel:Endpoints:MobileHttps:Certificate:Path'] = $pfxPath
 $mobileSettings['Kestrel:Endpoints:MobileHttps:Certificate:Password'] = $existingPassword
 $mobileSettings['Kestrel:Endpoints:MobileHttp:Url'] = 'http://0.0.0.0:5240'
+# Never install or trust a root automatically. Reuse only an existing, trusted
+# ASP.NET localhost certificate; exporting it stays inside the ignored TLS directory.
+$localhostPfx = $null
+$trustedLocalhost = Get-ChildItem Cert:\CurrentUser\My | Where-Object {
+    $_.Subject -eq 'CN=localhost' -and $_.HasPrivateKey -and
+    $_.Extensions.Oid.Value -contains '1.3.6.1.4.1.311.84.1.1' -and
+    $_.NotAfter -gt (Get-Date).AddDays(7) -and $_.Verify()
+} | Sort-Object NotAfter -Descending | Select-Object -First 1
+if ($trustedLocalhost) {
+    $localhostPfx = Join-Path (Split-Path -Parent $pfxPath) 'localhost.pfx'
+    Export-PfxCertificate -Cert $trustedLocalhost -FilePath $localhostPfx -Password (ConvertTo-SecureString $existingPassword -AsPlainText -Force) | Out-Null
+    Write-Output 'Browser HTTPS: using the already-trusted localhost development certificate; LAN certificate unchanged.'
+} else {
+    Write-Warning 'No trusted localhost development certificate found. Browser HTTPS requires explicit certificate trust; see docs/development/MOBILE_LIVE_WORKSPACE.md.'
+}
+$sniSettings = Get-MobileHttpsSniSettings $pfxPath $existingPassword $localhostPfx
+foreach ($key in $sniSettings.Keys) { $mobileSettings[$key] = $sniSettings[$key] }
 $apiProject = [xml][IO.File]::ReadAllText((Join-Path $repo 'src/backend/BHome.Api/BHome.Api.csproj'))
 $secretsId = [string]$apiProject.Project.PropertyGroup.UserSecretsId
 if (-not $secretsId) { throw 'API project has no UserSecretsId for Visual Studio mobile configuration.' }

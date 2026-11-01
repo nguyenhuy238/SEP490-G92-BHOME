@@ -171,6 +171,7 @@ export function LoginScreen() {
             <Box>
               <TextInput
                 label="Địa chỉ API HTTPS"
+                accessibilityLabel="Địa chỉ API HTTPS"
                 value={base}
                 onChangeText={(value) => {
                   setBase(value);

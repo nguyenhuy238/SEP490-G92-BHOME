@@ -212,6 +212,20 @@ it('supports web login/logout without native storage and starts signed out after
   expect(mocks.saved).toBe(savedOnDevice);
 });
 
+it('selects loopback HTTPS for localhost web without using the native LAN endpoint', async () => {
+  mocks.platform = 'web';
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal('fetch', fetcher);
+  render(
+    <SessionProvider>
+      <Consumer />
+    </SessionProvider>,
+  );
+  await act(async () => {});
+  expect(screen.getByText(/https:\/\/localhost:7240/)).toBeTruthy();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it('keeps an invalid web login signed out without changing native credentials', async () => {
   mocks.platform = 'web';
   const savedOnDevice = mocks.saved;

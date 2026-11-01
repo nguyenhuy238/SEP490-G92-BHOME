@@ -30,6 +30,7 @@ export function ChoiceField({
       <Button
         mode="outlined"
         icon="chevron-down"
+        accessibilityLabel={label}
         disabled={disabled}
         onPress={() => setOpen(true)}
         contentStyle={{
@@ -90,6 +91,7 @@ export function Input({
     <TextInput
       mode="outlined"
       label={label}
+      accessibilityLabel={label}
       value={value}
       onChangeText={onChange}
       keyboardType={numeric ? 'decimal-pad' : 'default'}

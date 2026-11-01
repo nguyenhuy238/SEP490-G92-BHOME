@@ -1,5 +1,9 @@
 # BHOME Mobile — bổ sung luồng theo SRS
 
+> Cập nhật 01/11/2026: tài liệu dưới đây ghi nhận đợt triển khai trước. Trạng thái nối
+> API hiện tại xem `MOBILE_LIVE_WORKSPACE.md` và `MOBILE_SCREEN_COVERAGE.csv`;
+> công việc vận hành, trang chủ và thông báo công việc đã có adapter thật.
+
 ## Nguồn đối chiếu
 
 - `docs/reports/BHome_Report-3_Software Requirement Specification (2).docx`, v1.3:
