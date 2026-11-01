@@ -24,6 +24,12 @@ Assets and effective-dated BillingPolicies. See [its API and approved decisions]
 Application owns the business rules; `Modules/PropertyManagement/Persistence` supplies EF queries,
 transaction/Location locking and audit persistence. Legacy OCR configuration creates use the same service.
 
+The IncidentMaintenance slice implements UC-26–30 according to approved D1–D8 A:
+separate Incident/Work Order models, proposal approval, private evidence, scoped notifications,
+maintenance history and Maintenance OperatingExpenses. Its EF repository/configurations live in
+`Modules/IncidentMaintenance/Persistence`; delivery and file adapters remain Infrastructure concerns.
+See [the API and current limits](../api/INCIDENT_MAINTENANCE.md). Generic Tasks and meter statuses are unchanged.
+
 | Artifact                              | Location pattern                                                 |
 | ------------------------------------- | ---------------------------------------------------------------- |
 | Domain entity/value/rule              | `src/backend/BHome.Domain/<Module>/`                             |

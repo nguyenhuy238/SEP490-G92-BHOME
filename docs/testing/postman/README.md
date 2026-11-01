@@ -1,5 +1,31 @@
 # Kiểm thử API với Postman
 
+## Incident và Maintenance Backend
+
+Import thêm `BHome.Incidents.postman_collection.json` (63 request). Có thể dùng Environment hiện có;
+collection mới khai báo các biến riêng `incidentLocationId`, `incidentRoomId`, `incidentAssetId`,
+`incidentId`, `incidentVersion`, `workOrderId`, `workOrderVersion`, `incidentEvidenceId` và `emergencyActionId`.
+Điền `baseUrl`, token Owner/Staff/Tenant giả lập và `staffUserId`; token trong file được để trống.
+Location/Room/Asset phải tồn tại, Staff được phân công ngày hiện hành. Tenant Emergency cần Active Contract
+và kỳ cư trú hợp lệ tại Room. Áp migration Incident trước khi gọi; không chạy trên dữ liệu production.
+
+- Folder 01: Normal → review → assign → proposal → approve → start → result/evidence → verify/expense.
+- Folder 02: nhánh rework, chạy khi Work Order đang PendingVerification, trước bước verify của folder 01.
+- Folder 03: Tenant Emergency → Staff acknowledge/action/receipt → Owner quyết định chi phí; không reminder 15/30 phút.
+- Folder 04: Owner direct completion, không Work Order.
+- Folder 05/06: scoped reads, notification/read state và các ca từ chối quyền/input.
+
+Không Run All vì các folder sử dụng nhánh trạng thái khác nhau. Các upload binary cần chọn ảnh PNG giả lập
+tại Body; request submit multipart có thể thêm `images` tùy chọn. Giới hạn 5 ảnh mỗi nhóm, 5.000.000 bytes/ảnh.
+GET ngay trước mỗi mutation lấy version mới; response command chỉ trả ID. Script chỉ cập nhật biến trên
+response thành công, không tự gửi request khác hoặc lưu token vào source.
+
+Mặc định mỗi mutation tạo UUID key mới. Muốn thử replay, đặt `incidentIdempotencyKey` thành UUID cố định,
+gửi lại đúng request/input; xóa biến đó trước command tiếp theo. Cùng key khác payload → 409.
+Chi tiết contract/quyền và giới hạn: [Incident API](../../api/INCIDENT_MAINTENANCE.md).
+
+## Collection nền và Task hiện có
+
 Import hai file:
 
 - `BHome.Simple.postman_collection.json`

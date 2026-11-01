@@ -108,6 +108,13 @@ public static class DependencyInjection
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository,
+            BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles,
+            BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
+        services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddOptions<BHome.Application.StaffOperations.TaskEvidenceLimits>().Bind(configuration.GetSection("OperationalTasks:Evidence"))
             .Validate(o => o.MaximumFilesPerTask is >= 1 and <= 50 && o.MaximumFileBytes is >= 1024 and <= 20 * 1024 * 1024,
                 "Task evidence limits must be 1-50 files and 1 KiB-20 MiB per file.").ValidateOnStart();

@@ -57,6 +57,10 @@ Chỉ sửa code và cập nhật test/tài liệu qua review mới thay đổi 
 | invoice-adjustments.request | Không | Không | Có     | UC-24, own Invoice                                                                          |
 | invoice-adjustments.approve | Có    | Không | Không  | UC-24 / GBR-03, Owner quyết định theo workflow                                              |
 | incidents.report            | Không | Có    | Có     | UC-26, Staff trong scope / Tenant của Room                                                  |
+| incidents.view              | Có    | Có    | Có     | UC-26–30, Owner / assigned Location / chỉ report của Tenant                                 |
+| incidents.manage            | Có    | Không | Không  | UC-28/30, review/assign/direct handling và quyết định đóng report                           |
+| incidents.respond           | Không | Có    | Không  | UC-27, Staff acknowledge Emergency trong Location hiện hành                                 |
+| work-orders.view            | Có    | Có    | Không  | UC-29/30, scope và DTO theo role; Staff khác assignee không thấy cost/vendor                |
 | work-orders.approve-plan    | Có    | Không | Không  | BF-07 / GBR-12, Owner duyệt kế hoạch/chi phí                                                |
 | work-orders.execute         | Không | Có    | Không  | BF-07, Work Order được giao và đúng state                                                   |
 | work-orders.verify          | Có    | Không | Không  | BF-07 / GBR-12, Owner xác minh kết quả                                                      |

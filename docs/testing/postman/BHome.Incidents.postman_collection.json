@@ -1,0 +1,2943 @@
+{
+  "info": {
+    "name": "BHOME Incident Maintenance",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "BF-07 / UC-26–30, approved D1–D8 A. Use synthetic accounts and a review database. Do not Run All: folders exercise alternative state transitions. See docs/api/INCIDENT_MAINTENANCE.md. No automatic extra requests or provider delivery."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:7240",
+      "type": "string"
+    },
+    {
+      "key": "ownerAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staffAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenantAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentLocationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentRoomId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentAssetId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staffUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workOrderVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentEvidenceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "emergencyActionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentNotificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentForeignId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentIdempotencyKey",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const stable = pm.variables.get('incidentIdempotencyKey');",
+          "pm.variables.set('incidentRequestKey', stable || pm.variables.replaceIn('{{$guid}}'));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Normal report to verified Work Order",
+      "item": [
+        {
+          "name": "Submit Normal report (staff)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents",
+            "description": "Requires an active assigned Staff or Tenant with an active tenancy. Images are optional; add form-data images files if needed, at most 5 × 5,000,000 bytes.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "locationId",
+                  "value": "{{incidentLocationId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "roomId",
+                  "value": "{{incidentRoomId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "assetId",
+                  "value": "{{incidentAssetId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "severity",
+                  "value": "Normal",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Sự cố giả lập để kiểm thử backend",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([201]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner classify report",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/review",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"type\": \"Technical\",\n  \"category\": \"Water\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner assign Work Order",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/work-orders",
+            "description": "Set a real future target date for your synthetic scenario; no default business deadline is inferred.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"staffId\": \"{{staffUserId}}\",\n  \"expectedOutcome\": \"Khắc phục sự cố kiểm thử\",\n  \"targetCompletionAt\": \"2030-01-01T10:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([201]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Inspection PNG (select a file)",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/png"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/evidence?kind=Inspection&workOrderId={{workOrderId}}",
+            "description": "Choose a synthetic PNG in Body → binary. Metadata IDs are opaque; no public object URL is used.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.resourceId || '')) target.set('incidentEvidenceId', data.resourceId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff inspect and propose",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/proposal",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"inspectionResult\": \"Kết quả kiểm tra giả lập\",\n  \"solution\": \"Phương án giả lập\",\n  \"estimatedMinutes\": 60,\n  \"estimatedCost\": 100000,\n  \"evidenceIds\": [\n    \"{{incidentEvidenceId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner approve plan",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/plan-decision",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"approve\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff start approved work",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/start",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff append progress",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/progress",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"note\": \"Tiến độ xử lý giả lập\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Completion PNG (select a file)",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/png"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/evidence?kind=Completion&workOrderId={{workOrderId}}",
+            "description": "Choose a synthetic PNG in Body → binary. Metadata IDs are opaque; no public object URL is used.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.resourceId || '')) target.set('incidentEvidenceId', data.resourceId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff submit result and after photo",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/submit",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"note\": \"Kết quả hoàn tất giả lập\",\n  \"evidenceIds\": [\n    \"{{incidentEvidenceId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner verify and record actual maintenance cost",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/verify",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"actualCost\": 100000,\n  \"result\": \"Đã kiểm tra kết quả giả lập\",\n  \"costVarianceReason\": null,\n  \"assetCondition\": \"Đã sửa\",\n  \"assetStatus\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner view linked expenses",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/expenses",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner view append-only history",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/history?pageSize=100",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Alternative: rework before verification (use PendingVerification Work Order)",
+      "item": [
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner request rework",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/rework",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"note\": \"Yêu cầu làm lại giả lập\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Completion PNG (select a file)",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/png"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/evidence?kind=Completion&workOrderId={{workOrderId}}",
+            "description": "Choose a synthetic PNG in Body → binary. Metadata IDs are opaque; no public object URL is used.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.resourceId || '')) target.set('incidentEvidenceId', data.resourceId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Work Order and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('workOrderVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff resubmit with new after photo",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/submit",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"note\": \"Đã xử lý lại\",\n  \"evidenceIds\": [\n    \"{{incidentEvidenceId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Emergency with acknowledged action and separate cost",
+      "item": [
+        {
+          "name": "Submit Emergency report (tenant)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenantAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents",
+            "description": "Requires an active assigned Staff or Tenant with an active tenancy. Images are optional; add form-data images files if needed, at most 5 × 5,000,000 bytes.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "locationId",
+                  "value": "{{incidentLocationId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "roomId",
+                  "value": "{{incidentRoomId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "assetId",
+                  "value": "{{incidentAssetId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "severity",
+                  "value": "Emergency",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Sự cố giả lập để kiểm thử backend",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([201]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff acknowledge Tenant emergency",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/acknowledge",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload EmergencyAction PNG (select a file)",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/png"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/evidence?kind=EmergencyAction",
+            "description": "Choose a synthetic PNG in Body → binary. Metadata IDs are opaque; no public object URL is used.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.resourceId || '')) target.set('incidentEvidenceId', data.resourceId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff record containment and receipt",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/emergency-actions",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"note\": \"Hành động khống chế giả lập\",\n  \"evidenceIds\": [\n    \"{{incidentEvidenceId}}\"\n  ],\n  \"requestedCost\": 50000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.resourceId || '')) target.set('emergencyActionId', data.resourceId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner confirm emergency cost once",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/emergency-actions/{{emergencyActionId}}/cost-decision",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"approve\": true,\n  \"reason\": \"Đã kiểm tra bằng chứng giả lập\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner classify report",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/review",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"type\": \"Technical\",\n  \"category\": \"Water\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner resolve without repair when containment suffices",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/resolve",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"reason\": \"Không cần công việc bổ sung trong kịch bản kiểm thử\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner view separate emergency expense",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/expenses",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Owner direct handling (no Work Order)",
+      "item": [
+        {
+          "name": "Submit Normal report (staff)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents",
+            "description": "Requires an active assigned Staff or Tenant with an active tenancy. Images are optional; add form-data images files if needed, at most 5 × 5,000,000 bytes.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "locationId",
+                  "value": "{{incidentLocationId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "roomId",
+                  "value": "{{incidentRoomId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "assetId",
+                  "value": "{{incidentAssetId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "severity",
+                  "value": "Normal",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Sự cố giả lập để kiểm thử backend",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([201]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner classify report",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/review",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"type\": \"Technical\",\n  \"category\": \"Water\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Direct PNG (select a file)",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/png"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/evidence?kind=Direct",
+            "description": "Choose a synthetic PNG in Body → binary. Metadata IDs are opaque; no public object URL is used.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.resourceId || '')) target.set('incidentEvidenceId', data.resourceId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner confirm direct completion",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/direct-completion",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"actualCost\": 0,\n  \"result\": \"Owner đã xử lý trực tiếp trong kịch bản giả lập\",\n  \"evidenceIds\": [\n    \"{{incidentEvidenceId}}\"\n  ],\n  \"assetCondition\": \"Đã khắc phục\",\n  \"assetStatus\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.incidentId || '')) target.set('incidentId', data.incidentId);",
+                  "  if (data && /^[0-9a-f-]{36}$/i.test(data.workOrderId || '')) target.set('workOrderId', data.workOrderId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident and save current version",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Number.isInteger(data.version) && data.version > 0) target.set('incidentVersion', String(data.version));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Scoped lists and notifications",
+      "item": [
+        {
+          "name": "Tenant allowed reporting rooms",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenantAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/reporting-rooms?locationId={{incidentLocationId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant allowed Room and common-area Assets",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenantAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/reporting-assets?locationId={{incidentLocationId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner Work Orders linked to current Incident",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders?incidentId={{incidentId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner list incidents",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents?locationId={{incidentLocationId}}&page=1&pageSize=20",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff list work in assigned Location",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders?locationId={{incidentLocationId}}&page=1&pageSize=20",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner maintenance history",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders/maintenance-history?locationId={{incidentLocationId}}",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner own incident notifications",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/notifications?pageSize=100",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([200]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "  if (data && Array.isArray(data.items)) { const item = data.items.find(x => x.incidentId === pm.variables.get('incidentId')); if (item) target.set('incidentNotificationId', item.id); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner mark notification read",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/notifications/{{incidentNotificationId}}/read",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([204]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Negative checks (prepare matching state)",
+      "item": [
+        {
+          "name": "Staff cannot verify",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/verify",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"actualCost\": 100000,\n  \"result\": \"Không có quyền\",\n  \"assetCondition\": \"Fixed\",\n  \"assetStatus\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([403]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant cannot view internal expenses",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenantAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/expenses",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([403]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant cannot browse Work Orders",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenantAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/work-orders",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([403]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing actual cost is not zero",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/verify",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"result\": \"Thiếu actualCost\",\n  \"assetCondition\": \"Fixed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([400]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing approval choice rejected",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/plan-decision",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"reason\": \"Thiếu approve\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([400]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff cannot browse foreign Incident",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{staffAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentForeignId}}",
+            "description": "Fill incidentForeignId with an incident outside this Staff current Location scope."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([404]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown overposted field rejected",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{incidentRequestKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/review",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{incidentVersion}},\n  \"type\": \"Technical\",\n  \"category\": \"Water\",\n  \"ownerId\": \"00000000-0000-0000-0000-000000000001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([400]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid pagination rejected",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents?pageSize=101",
+            "description": "IDs and version come from successful prior requests. A failed response never replaces saved state."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected HTTP result', () => pm.expect([400]).to.include(pm.response.code));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  let data; try { data = pm.response.json(); } catch {}",
+                  "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
