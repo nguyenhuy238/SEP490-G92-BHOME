@@ -51,7 +51,10 @@ Ngày date-only giữ nguyên ISO trên wire; giờ lịch nhập ở Việt Nam
   `usable`, không khóa và đang trong `[validFrom, validTo)`. Server vẫn kiểm tra lại trước ký.
 - Backend chính đã đăng ký iText qua `AddContractPdfSigning()`, chỉ dùng bộ ký PDF,
   không đăng ký DbContext/controller/settings của sandbox. Chữ ký thứ hai là incremental revision.
-- Chưa có renderer với mẫu hợp đồng được duyệt: trả 503 với code `contract_template_not_configured`.
+- Đã có concrete renderer dùng snapshot sealed và mẫu Development/Testing có phiên bản; chưa có mẫu production được duyệt.
+  Mặc định chưa chọn template vẫn trả 503 với code `contract_template_not_configured`.
+  Chọn mẫu thử ngoài Development/Testing trả 503 `contract_template_not_approved`, kể cả khi tiếp tục ký PDF của bên thứ nhất.
+  Cấu hình, dữ liệu PDF và kết quả kiểm chứng: [BH-16 PDF renderer](../development/BH16_CONTRACT_PDF_RENDERER.md).
   Client giải thích lỗi bằng tiếng Việt; không suy diễn thành Signed hoặc Active.
   `signing_certificate_not_valid` và `signing_certificate_no_longer_available` có thông báo riêng.
 - Quyết định và giới hạn: [DIGITAL_SIGNING_COMPLETION.md](../development/DIGITAL_SIGNING_COMPLETION.md).

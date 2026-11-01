@@ -1,12 +1,8 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using BHome.Application.Contracts;
 using BHome.DigitalSigning.Application;
 using BHome.DigitalSigning.Domain;
-using iText.Kernel.Pdf;
-using iText.Layout;
-using iText.Layout.Element;
 
 namespace BHome.IntegrationTests.Contracts;
 
@@ -58,22 +54,5 @@ internal sealed class SyntheticRemoteSigningProvider : ISigningProvider, IDispos
     public void Dispose()
     {
         foreach (var (key, certificate) in signers.Values) { certificate.Dispose(); key.Dispose(); }
-    }
-}
-
-// This renderer is injected only in the test host. It cannot become a production contract template.
-internal sealed class SyntheticContractRenderer : IContractDocumentRenderer
-{
-    public Task<byte[]> RenderAsync(ContractDocument snapshot, CancellationToken t)
-    {
-        using var output = new MemoryStream();
-        using (var pdf = new PdfDocument(new PdfWriter(output)))
-        using (var document = new Document(pdf))
-        {
-            document.Add(new Paragraph("SYNTHETIC TEST TEMPLATE - NOT A LEGAL CONTRACT"));
-            document.Add(new Paragraph(snapshot.SnapshotHash));
-            document.Add(new Paragraph(snapshot.Terms));
-        }
-        return Task.FromResult(output.ToArray());
     }
 }

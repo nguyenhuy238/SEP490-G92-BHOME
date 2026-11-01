@@ -68,8 +68,8 @@ public sealed class ContractService(IContractRepository repository, ICurrentUser
     private static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId,
         c.RepresentativeResidentId, c.Residents.Select(x => x.ResidentId).Order().ToArray(), c.StartDate, c.EndDate,
         c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash);
-    private static void Seal(Contract c) => c.SnapshotHash = Hash(Document(c) with { SnapshotHash = "" });
-    private static bool Intact(Contract c) => c.SnapshotHash == Hash(Document(c) with { SnapshotHash = "" });
+    private static void Seal(Contract c) => c.SnapshotHash = ContractDocumentSnapshot.Hash(Document(c));
+    private static bool Intact(Contract c) => c.SnapshotHash == ContractDocumentSnapshot.Hash(Document(c));
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
         c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
         c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(s => new SignatureView(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt)).ToArray(), c.ActivatedAt,

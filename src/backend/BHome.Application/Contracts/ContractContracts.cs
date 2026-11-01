@@ -69,6 +69,8 @@ public interface IContractSigningProvider
 }
 public interface IContractDocumentRenderer
 {
+    // Check snapshot integrity and template eligibility even when reusing the first signer's PDF.
+    Task ValidateAsync(ContractDocument document, CancellationToken t);
     Task<byte[]> RenderAsync(ContractDocument document, CancellationToken t);
 }
 public interface IContractFileStore
