@@ -6,6 +6,7 @@ import {
 } from '../../../../packages/client-core/src/contracts';
 import {
   missingBillingInput,
+  formatBillingDecimal,
   type Invoice,
   type Page,
 } from '../../../../packages/client-core/src/invoices';
@@ -106,15 +107,18 @@ export function InvoiceDetail({ invoice }: { invoice: Invoice }) {
           {line.meterReadingId && (
             <>
               <Text>
-                Chỉ số trước: {line.previousReading} · Chỉ số xác nhận: {line.confirmedReading}
+                Chỉ số trước: {formatBillingDecimal(line.previousReading ?? '')} · Chỉ số xác nhận:{' '}
+                {formatBillingDecimal(line.confirmedReading ?? '')}
               </Text>
               <Text>
-                Tiêu thụ: {line.quantity} {line.category === 'Electricity' ? 'kWh' : 'm³'}
+                Tiêu thụ: {formatBillingDecimal(line.quantity)}{' '}
+                {line.category === 'Electricity' ? 'kWh' : 'm³'}
               </Text>
             </>
           )}
           <Text>
-            Đơn giá: {line.rate} đ · Ngày áp dụng: {displayContractDate(line.rateDate)}
+            Đơn giá: {formatBillingDecimal(line.rate)} đ · Ngày áp dụng:{' '}
+            {displayContractDate(line.rateDate)}
           </Text>
           {!line.meterReadingId && (
             <Text>

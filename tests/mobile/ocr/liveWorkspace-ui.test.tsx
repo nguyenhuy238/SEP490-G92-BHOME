@@ -267,7 +267,7 @@ it('Tenant reads persisted invoice consumption and amount without a fake payment
   await screen.findByText('Phòng P101 · 2026-10');
   fireEvent.click(screen.getByText('Xem hóa đơn'));
   await screen.findByText('Điện tổng hợp');
-  expect(screen.getByText('Tiêu thụ: 25.5 kWh')).toBeTruthy();
+  expect(screen.getByText('Tiêu thụ: 25,5 kWh')).toBeTruthy();
   expect(screen.getByText(/Chỉ số trước: 100/)).toBeTruthy();
   expect(screen.queryByText(/Đã thanh toán|Paid|Thanh toán thành công/)).toBeNull();
   expect(fetcher.mock.calls[1]![0]).toContain('/api/v1/invoices/bill');

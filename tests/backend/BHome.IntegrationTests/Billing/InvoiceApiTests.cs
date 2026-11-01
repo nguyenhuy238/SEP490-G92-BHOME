@@ -135,6 +135,8 @@ public sealed class InvoiceApiTests(CaptureFixture fixture) : IClassFixture<Capt
     public async Task SharedRoomDraftIsPersistedIdempotentScopedAndExplicitlyMissingReadings()
     {
         var w = await Setup(); var invoice = await Draft(w);
+        var policyJson = await w.Owner.Client.GetStringAsync($"/api/v1/billing-policies?locationId={w.Location}");
+        Assert.Contains("\"rate\":\"", policyJson);
         Assert.Equal("Draft", invoice.Status); Assert.Equal(3000000m, invoice.Total);
         Assert.Contains("confirmed_reading_Electricity", invoice.MissingInputs); Assert.Contains("confirmed_reading_Water", invoice.MissingInputs);
         var replies = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))));

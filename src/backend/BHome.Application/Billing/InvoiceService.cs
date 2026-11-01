@@ -132,7 +132,8 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 !invoice.Recipients.Select(r => r.TenantUserId).Order().SequenceEqual(check.Recipients.Select(r => r.TenantUserId).Order()))
                 throw new InvoiceException(409, "draft_refresh_and_review_required");
             invoice.Status = InvoiceStatus.Final; invoice.Version++;
-            invoice.FinalizedAt = clock.GetUtcNow(); invoice.FinalizedByUserId = Actor;
+            var now = clock.GetUtcNow();
+            invoice.FinalizedAt = now.AddTicks(-(now.Ticks % 10)); invoice.FinalizedByUserId = Actor;
             repository.Audit(Actor, "InvoiceFinalized", id, clock.GetUtcNow()); return View(invoice);
         }, t);
     }

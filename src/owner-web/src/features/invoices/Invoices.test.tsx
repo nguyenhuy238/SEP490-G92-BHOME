@@ -90,7 +90,7 @@ it('shows persisted charges and finalizes only after explicit review confirmatio
   mount(<LiveInvoicesPage />);
   fireEvent.click(await screen.findByText('Xem chi tiết'));
   await screen.findByText('Điện tổng hợp');
-  expect(screen.getByText('100 → 125.5')).toBeInTheDocument();
+  expect(screen.getByText('100 → 125,5')).toBeInTheDocument();
   fireEvent.click(screen.getByText('Phát hành hóa đơn'));
   expect(mocks.api.finalize).not.toHaveBeenCalled();
   const dialog = screen.getByRole('dialog');

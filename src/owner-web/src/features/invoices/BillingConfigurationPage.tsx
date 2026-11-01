@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
+  formatBillingDecimal,
   type BillingSchedule,
   type Policy,
   type PolicyInput,
@@ -122,7 +123,8 @@ function LocationBilling({ location }: { location: string }) {
               sx={{ gap: 2, flexWrap: 'wrap', alignItems: 'center' }}
             >
               <Typography>
-                {p.name} · {p.rate} đ · {p.effectiveFrom} → {p.effectiveTo ?? 'Không hạn'} ·{' '}
+                {p.name} · {formatBillingDecimal(p.rate)} đ · {p.effectiveFrom} →{' '}
+                {p.effectiveTo ?? 'Không hạn'} ·{' '}
                 {p.roomId ? 'Phòng' : p.roomTypeId ? 'Loại phòng' : 'Cơ sở'}
               </Typography>
               <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>

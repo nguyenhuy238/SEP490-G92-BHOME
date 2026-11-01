@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
+  formatBillingDecimal,
   missingBillingInput,
 } from '../../../../../../packages/client-core/src/invoices';
 import { formatContractMoney } from '../../../../../../packages/client-core/src/contracts';
@@ -283,18 +284,18 @@ export function LiveInvoicesPage() {
                       </TableCell>
                       <TableCell>
                         {line.meterReadingId
-                          ? `${line.previousReading} → ${line.confirmedReading}`
+                          ? `${formatBillingDecimal(line.previousReading ?? '')} → ${formatBillingDecimal(line.confirmedReading ?? '')}`
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        {line.quantity}{' '}
+                        {formatBillingDecimal(line.quantity)}{' '}
                         {line.category === 'Electricity'
                           ? 'kWh'
                           : line.category === 'Water'
                             ? 'm³'
                             : ''}
                       </TableCell>
-                      <TableCell>{line.rate} đ</TableCell>
+                      <TableCell>{formatBillingDecimal(line.rate)} đ</TableCell>
                       <TableCell>{formatContractMoney(line.amount)}</TableCell>
                     </TableRow>
                   ))}

@@ -245,6 +245,9 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         // Verify the private object still exists before committing its reference.
         await storage.CopyToAsync(evidence.ObjectKey, Stream.Null, t);
         var proposed = task.OcrImageHash == evidence.ImageHash ? task.OcrProposedValue : null;
+        // PostgreSQL timestamptz stores microseconds. Match it before returning the first response.
+        var confirmedAt = clock.GetUtcNow();
+        confirmedAt = confirmedAt.AddTicks(-(confirmedAt.Ticks % 10));
         var row = new MeterReading
         {
             TaskId = taskId,
@@ -256,7 +259,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
             Consumption = previous is null ? null : x.ConfirmedValue - previous.ConfirmedValue,
             Status = proposed.HasValue && proposed != x.ConfirmedValue ? MeterReadingStatus.Corrected : MeterReadingStatus.Confirmed,
             ConfirmedByUserId = Actor,
-            ConfirmedAt = clock.GetUtcNow()
+            ConfirmedAt = confirmedAt
         };
         db.Add(row); task.Status = MeterTaskStatus.Completed; task.CompletedAt = row.ConfirmedAt; evidence.IsLinked = true;
         Audit("MeterReadingConfirmed", "MeterReading", row.Id); await Save(t); await tx.CommitAsync(t); return Reading(row);

@@ -1,5 +1,14 @@
 import { ApiError } from './api';
 
+// Keep decimal strings exact, including amounts beyond Number.MAX_SAFE_INTEGER.
+export function formatBillingDecimal(value: string | number): string {
+  const text = String(value);
+  if (!/^\d+(?:\.\d{1,4})?$/.test(text)) return '—';
+  const [whole, digits = ''] = text.split('.');
+  const fraction = digits.replace(/0+$/, '');
+  return new Intl.NumberFormat('vi-VN').format(BigInt(whole!)) + (fraction ? ',' + fraction : '');
+}
+
 export interface InvoiceLine {
   id: string;
   category: string;

@@ -44,7 +44,9 @@ PolicyId/version/rate/date và readingId/previous/current/quantity đều đư�
 `RecordUsage` và insert invoice trong cùng transaction/Location advisory lock + Room row lock.
 
 POST Draft lặp cùng Room/kỳ/đại diện trả cùng bản ghi; đổi đại diện trên cùng identity trả 409. Refresh dùng version chống ghi đè. Không tự retry mutation sau lỗi mạng mơ hồ.
-Amounts/quantities trong Invoice response là decimal strings. 400 validation, 401 auth,
+Amounts/quantities trong Invoice response và `rate` của BillingPolicy response là decimal strings.
+Client giữ nguyên độ chính xác, chỉ format dấu phân cách Việt Nam và bỏ zero dư khi hiển thị.
+400 validation, 401 auth,
 403 role, 404 scoped lookup, 409 missing configuration/stale/duplicate/state. Lỗi theo
 ProblemDetails, không chứa input tài chính nhạy cảm, credential hoặc danh sách Tenant khác.
 
