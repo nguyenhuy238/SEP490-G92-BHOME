@@ -25,7 +25,9 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.BadRequest,(await Post(a,route,input with{ProposedAmount=0.5m})).StatusCode);
         var result=await Post(a,route,input,key);result.EnsureSuccessStatusCode();var request=(await result.Content.ReadFromJsonAsync<AdjustmentView>())!;
         Assert.Equal("Pending",request.Status);Assert.Equal(100000,request.CurrentAmount);
+        using(var snapshot=System.Text.Json.JsonDocument.Parse(request.InvoiceSnapshot))Assert.Equal("100000",snapshot.RootElement.GetProperty("Total").GetString());
         Assert.Equal(request.Id,(await (await Post(a,route,input,key)).Content.ReadFromJsonAsync<AdjustmentView>())!.Id);
+        Assert.Equal(HttpStatusCode.OK,(await Post(a,route,input with{ProposedAmount=90000.00m},key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,(await Post(a,route,input with{ProposedAmount=80000},key)).StatusCode);
         Assert.Equal(HttpStatusCode.OK,(await owner.GetAsync($"/api/v1/invoice-adjustments/{request.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,(await b.GetAsync($"/api/v1/invoice-adjustments/{request.Id}")).StatusCode);
@@ -36,6 +38,8 @@ public sealed partial class PaymentLedgerTests
         await using var scope=fixture.Factory.Services.CreateAsyncScope();var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
         Assert.Equal(1,await db.Set<InvoiceAdjustmentRequest>().CountAsync(r=>r.InvoiceId==w.Invoice));
         Assert.Equal(1,await db.Set<InvoiceAdjustmentEvent>().CountAsync(r=>r.InvoiceId==w.Invoice));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"Status\"=4 WHERE \"RoomId\"={w.Room}");
+        Assert.Equal(HttpStatusCode.OK,(await a.GetAsync($"/api/v1/invoice-adjustments/{request.Id}")).StatusCode);
         await Assert.ThrowsAsync<PostgresException>(()=>db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceAdjustmentRequests\" WHERE \"Id\"={request.Id}"));
     }
     [Fact]
@@ -54,5 +58,26 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(png,await owner.GetByteArrayAsync(file));Assert.Equal(png,await a.GetByteArrayAsync(file));
         Assert.Equal(HttpStatusCode.NotFound,(await b.GetAsync(file)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await Post(a,$"/api/v1/invoices/{w.Invoice}/adjustment-requests",input)).StatusCode);
+    }
+    private sealed class FailingAdjustmentStorage : BHome.Application.Storage.IObjectStorage
+    {
+        public int Deletes { get; private set; }
+        public Task PutAsync(string key,Stream content,long length,string contentType,CancellationToken t)=>throw new IOException("Synthetic upload failure");
+        public Task CopyToAsync(string key,Stream destination,CancellationToken t)=>throw new NotSupportedException();
+        public Task DeleteAsync(string key,CancellationToken t){Deletes++;return Task.CompletedTask;}
+    }
+    [Fact]
+    public async Task FailedEvidenceUploadLeavesOnlyRecoverableIntentAndCannotBeSubmitted()
+    {
+        var w=await Setup();using var tenant=await Client(w.Tenants[0]);
+        await using var scope=fixture.Factory.Services.CreateAsyncScope();var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var storage=new FailingAdjustmentStorage();
+        var files=new BHome.Infrastructure.Billing.AdjustmentEvidenceFiles(scope.ServiceProvider.GetRequiredService<DbContextOptions<BHomeDbContext>>(),storage,TimeProvider.System);
+        await Assert.ThrowsAsync<IOException>(()=>files.UploadAsync(w.Invoice,w.Tenants[0],[137,80,78,71],"image/png",default));
+        var orphan=await db.Set<InvoiceAdjustmentEvidence>().AsNoTracking().SingleAsync(e=>e.InvoiceId==w.Invoice);Assert.False(orphan.Uploaded);
+        var input=new AdjustmentSubmit(null,90000,"Synthetic failed upload",[orphan.Id],1);
+        Assert.Equal(HttpStatusCode.BadRequest,(await Post(tenant,$"/api/v1/invoices/{w.Invoice}/adjustment-requests",input)).StatusCode);
+        await BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup.CleanupAsync(db,storage,DateTimeOffset.UtcNow.AddDays(2),default);
+        Assert.Equal(1,storage.Deletes);Assert.False(await db.Set<InvoiceAdjustmentEvidence>().AnyAsync(e=>e.Id==orphan.Id));
     }
 }

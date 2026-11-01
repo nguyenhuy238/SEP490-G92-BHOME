@@ -300,12 +300,9 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
   );
 }
 function snapshotTotal(value: Adjustment) {
-  try {
-    const data = JSON.parse(value.invoiceSnapshot) as { Total: string | number };
-    return formatContractMoney(String(data.Total));
-  } catch {
-    return 'Không đọc được snapshot';
-  }
+  // Read exact legacy JSON numeric tokens without passing money through binary Number.
+  const match = /"Total"\s*:\s*(?:"(\d+)"|(\d+)(?:\.0+)?)/.exec(value.invoiceSnapshot);
+  return match ? formatContractMoney(match[1] ?? match[2]!) : 'Không đọc được snapshot';
 }
 function DecisionForm({ value, saved }: { value: Adjustment; saved: () => Promise<void> }) {
   const api = useAdjustmentApi();

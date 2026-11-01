@@ -52,3 +52,8 @@ financialVersion/reviewStatus. PayableAmount hiện là effective payable; histo
 Excess trả reviewStatus PendingReview, không mất khoản thừa, không auto-refund/credit. Paid tăng
 tạo outstanding mới, cho phép giao dịch mới đúng phần outstanding; khoản trả gốc vẫn giữ nguyên.
 Staff debt DTO không nhận issued/adjustment/excess; quyền operational hiện có giữ nguyên.
+Ngay cả tài khoản có cả Staff và Tenant, dữ liệu tài chính đầy đủ chỉ trả cho invoice có
+entitlement Tenant; invoice xem nhờ assignment Staff vẫn dùng DTO giới hạn.
+Snapshot mới lưu số tiền dạng chuỗi decimal, không đưa qua JavaScript Number. Canonicalize
+proposedAmount trước fingerprint để retry số VND cùng giá trị không xung đột vì decimal scale.
+Mobile Web chọn ảnh PNG/JPEG, xem trước rồi upload; native tái sử dụng camera/review hiện có.

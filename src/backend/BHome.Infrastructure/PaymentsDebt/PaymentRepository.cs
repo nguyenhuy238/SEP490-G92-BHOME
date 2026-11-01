@@ -99,10 +99,13 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
             (query.PaymentStatus==null||query.PaymentStatus=="Paid"&&i.Original+i.Adjustments<=i.Paid||query.PaymentStatus=="Unpaid"&&i.Original+i.Adjustments>i.Paid));
         var count=await filtered.CountAsync(t);
         var rows=await filtered.OrderBy(i=>i.DueDate).ThenBy(i=>i.Id).Skip((query.Page-1)*query.PageSize).Take(query.PageSize).ToArrayAsync(t);
-        var limited=scope.Staff&&!scope.Owner&&!scope.Tenant;
+        var entitled=scope.Staff&&scope.Tenant&&!scope.Owner
+            ? await db.Set<InvoiceRecipient>().Where(r=>rows.Select(i=>i.Id).Contains(r.InvoiceId)&&r.TenantUserId==scope.ActorId).Select(r=>r.InvoiceId).ToArrayAsync(t)
+            : [];
         var items=rows.Select(i=>
         {
             var v=i.View();
+            var limited=scope.Staff&&!scope.Owner&&(!scope.Tenant||!entitled.Contains(i.Id));
             return new DebtInvoiceView(i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,
                 limited?null:v.EffectivePayableAmount,limited?null:v.AllocatedPayments,v.OutstandingAmount,
                 v.OutstandingAmount<=0?"Paid":"Unpaid",PaymentRules.OverdueDays(i.DueDate,scope.Today,v.OutstandingAmount),

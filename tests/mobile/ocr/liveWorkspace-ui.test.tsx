@@ -25,6 +25,7 @@ vi.mock('expo-router', () => ({
 vi.mock('expo-crypto', () => ({ randomUUID: () => crypto.randomUUID() }));
 vi.mock('expo-clipboard', () => ({ setStringAsync: (...args: unknown[]) => mocks.copy(...args) }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   View: ({ children }: Children) => <div>{children}</div>,
   Image: () => <img alt="Ảnh kết quả" />,
   AppState: {
@@ -516,28 +517,26 @@ it('Tenant sees the Owner rejection and no approval control', async () => {
 });
 it('Tenant retains visible excess after a downward paid adjustment without a refund success', async () => {
   mocks.role = 'Tenant';
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async (url) =>
-      json(
-        String(url).endsWith('/payment')
-          ? {
-              paymentStatus: 'Paid',
-              outstandingAmount: '0',
-              paidAmount: '100000',
-              payableAmount: '90000',
-              originalIssuedAmount: '100000',
-              approvedAdjustmentTotal: '-10000',
-              potentialExcessAmount: '10000',
-              reviewStatus: 'PendingReview',
-              history: [],
-              dueDate: '2026-11-30',
-              overdueDays: 0,
-              pendingReview: true,
-            }
-          : { availability: 'Settled' },
-      ),
-    );
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    json(
+      String(url).endsWith('/payment')
+        ? {
+            paymentStatus: 'Paid',
+            outstandingAmount: '0',
+            paidAmount: '100000',
+            payableAmount: '90000',
+            originalIssuedAmount: '100000',
+            approvedAdjustmentTotal: '-10000',
+            potentialExcessAmount: '10000',
+            reviewStatus: 'PendingReview',
+            history: [],
+            dueDate: '2026-11-30',
+            overdueDays: 0,
+            pendingReview: true,
+          }
+        : { availability: 'Settled' },
+    ),
+  );
   setApi(fetcher);
   render(<TenantPaymentPanel invoiceId="bill" />);
   await screen.findByText(/Tiền thừa chờ xem xét: 10.000/);

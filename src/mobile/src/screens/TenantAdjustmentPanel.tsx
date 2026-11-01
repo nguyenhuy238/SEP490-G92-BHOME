@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
 import { Checkbox, Text, TextInput } from 'react-native-paper';
 import { randomUUID } from 'expo-crypto';
 import {
@@ -235,6 +235,26 @@ function RequestForm({
       setBusy(false);
     }
   }
+  async function uploadEvidence(bytes: Uint8Array<ArrayBuffer>, mime = 'image/jpeg') {
+    if (uploadLock.current) return;
+    uploadLock.current = true;
+    setUploading(true);
+    setError('');
+    try {
+      if (bytes.byteLength > 5 * 1024 * 1024) {
+        setError('Ảnh vượt quá 5 MB.');
+        return;
+      }
+      const result = await client.upload(invoice.id, bytes, mime);
+      setEvidence((ids) => [...ids, result.id]);
+      changed();
+    } catch (e) {
+      setError(adjustmentError(e));
+    } finally {
+      uploadLock.current = false;
+      setUploading(false);
+    }
+  }
   return (
     <>
       <ChoiceField
@@ -255,6 +275,7 @@ function RequestForm({
       />
       <TextInput
         label="Giá trị đề xuất (VND, tùy chọn)"
+        accessibilityLabel="Giá trị đề xuất (VND, tùy chọn)"
         value={amount}
         keyboardType="number-pad"
         disabled={busy}
@@ -265,6 +286,7 @@ function RequestForm({
       />
       <TextInput
         label="Lý do yêu cầu điều chỉnh"
+        accessibilityLabel="Lý do yêu cầu điều chỉnh"
         value={reason}
         multiline
         maxLength={2000}
@@ -283,33 +305,21 @@ function RequestForm({
         disabled={busy || uploading}
         onPress={() => setChecked(!checked)}
       />
-      <CameraCapture
-        label="Chụp ảnh bằng chứng điều chỉnh"
-        disabled={!checked || busy || uploading || evidence.length >= 5}
-        reviewBeforeSubmit
-        reviewActionLabel="Tải bằng chứng điều chỉnh"
-        reviewNotice="Ảnh được lưu private cùng yêu cầu điều chỉnh. Kiểm tra nội dung trước khi tải."
-        onCapture={async (bytes) => {
-          if (uploadLock.current) return;
-          uploadLock.current = true;
-          setUploading(true);
-          setError('');
-          try {
-            if (bytes.byteLength > 5 * 1024 * 1024) {
-              setError('Ảnh vượt quá 5 MB.');
-              return;
-            }
-            const result = await client.upload(invoice.id, bytes, 'image/jpeg');
-            setEvidence((ids) => [...ids, result.id]);
-            changed();
-          } catch (e) {
-            setError(adjustmentError(e));
-          } finally {
-            uploadLock.current = false;
-            setUploading(false);
-          }
-        }}
-      />
+      {Platform.OS === 'web' ? (
+        <WebEvidencePicker
+          disabled={!checked || busy || uploading || evidence.length >= 5}
+          upload={uploadEvidence}
+        />
+      ) : (
+        <CameraCapture
+          label="Chụp ảnh bằng chứng điều chỉnh"
+          disabled={!checked || busy || uploading || evidence.length >= 5}
+          reviewBeforeSubmit
+          reviewActionLabel="Tải bằng chứng điều chỉnh"
+          reviewNotice="Ảnh được lưu private cùng yêu cầu điều chỉnh. Kiểm tra nội dung trước khi tải."
+          onCapture={uploadEvidence}
+        />
+      )}
       <Text>Đã tải {evidence.length}/5 ảnh.</Text>
       {evidence.map((id, index) => (
         <Action
@@ -333,6 +343,93 @@ function RequestForm({
         Gửi yêu cầu cho Owner
       </Action>
       <Text>Đề xuất chưa thay đổi số tiền. Owner cần xem xét và quyết định.</Text>
+    </>
+  );
+}
+function WebEvidencePicker({
+  disabled,
+  upload,
+}: {
+  disabled: boolean;
+  upload: (bytes: Uint8Array<ArrayBuffer>, mime: string) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null),
+    [url, setUrl] = useState(''),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement | null>(null),
+    lock = useRef(false);
+  useEffect(
+    () => () => {
+      if (url) URL.revokeObjectURL(url);
+    },
+    [url],
+  );
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg"
+        capture="environment"
+        aria-label="Chọn ảnh bằng chứng điều chỉnh"
+        disabled={disabled || busy}
+        onChange={(event) => {
+          const selected = event.currentTarget.files?.[0];
+          setError('');
+          setFile(null);
+          setUrl('');
+          if (!selected) return;
+          if (
+            selected.size > 5 * 1024 * 1024 ||
+            !['image/png', 'image/jpeg'].includes(selected.type)
+          ) {
+            setError('Chọn PNG/JPEG tối đa 5 MB.');
+            event.currentTarget.value = '';
+            return;
+          }
+          setFile(selected);
+          setUrl(URL.createObjectURL(selected));
+        }}
+      />
+      {url && (
+        <Image
+          source={{ uri: url }}
+          accessibilityLabel="Xem trước ảnh điều chỉnh"
+          style={{ width: '100%', height: 240 }}
+          resizeMode="contain"
+        />
+      )}
+      {!!error && <Text style={ui.red}>{error}</Text>}
+      {file && (
+        <Action
+          disabled={disabled || busy}
+          onPress={() => {
+            if (lock.current) return;
+            lock.current = true;
+            setBusy(true);
+            setError('');
+            void (async () => {
+              let bytes: Uint8Array<ArrayBuffer> | null = null;
+              try {
+                bytes = new Uint8Array(await file.arrayBuffer());
+                await upload(bytes, file.type);
+              } catch {
+                setError('Không đọc được ảnh. Chọn lại ảnh để thử.');
+              } finally {
+                bytes?.fill(0);
+                setFile(null);
+                setUrl('');
+                if (input.current) input.current.value = '';
+                lock.current = false;
+                setBusy(false);
+              }
+            })();
+          }}
+        >
+          Tải bằng chứng điều chỉnh
+        </Action>
+      )}
     </>
   );
 }

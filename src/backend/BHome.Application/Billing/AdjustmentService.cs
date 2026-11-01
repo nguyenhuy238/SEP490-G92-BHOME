@@ -53,6 +53,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
         if (x.Reason.Length is < 1 or > 2000 || x.EvidenceIds.Length > 5 || x.EvidenceIds.Contains(Guid.Empty) ||
             x.InvoiceLineId == Guid.Empty || x.ExpectedInvoiceVersion < 1 || x.ProposedAmount is { } proposed && !AdjustmentRules.Money(proposed))
             throw new AdjustmentException(400, "invalid_adjustment_request");
+        if (x.ProposedAmount is { } proposedValue) x = x with { ProposedAmount = decimal.Truncate(proposedValue) };
         _ = await Invoice(invoiceId, t);
         return await repository.TransactionAsync(invoiceId, async () =>
         {
@@ -68,7 +69,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
                 throw new AdjustmentException(400, "adjustment_evidence_invalid");
             var request = new InvoiceAdjustmentRequest { InvoiceId = invoiceId, RequesterId = Actor, InvoiceLineId = x.InvoiceLineId,
                 ChargeCode = line?.ChargeCode, CurrentAmount = line is null ? financial.EffectivePayableAmount : line.Amount + (invoice.Status == InvoiceStatus.Final ? await repository.ChargeAdjustmentsAsync(invoiceId, line.ChargeCode, t) : 0), ProposedAmount = x.ProposedAmount is { } amount ? decimal.Truncate(amount) : null,
-                Reason = x.Reason, InvoiceSnapshot = JsonSerializer.Serialize(new { invoice.Total, invoice.Version, invoice.Status, invoice.Lines }),
+                Reason = x.Reason, InvoiceSnapshot = JsonSerializer.Serialize(new { Total = invoice.Total.ToString("0", System.Globalization.CultureInfo.InvariantCulture), invoice.Version, invoice.Status, Lines = InvoiceService.View(invoice).Lines }),
                 InvoiceStatus = invoice.Status, InvoiceVersion = invoice.Version, FinancialVersion = financial.FinancialVersion, SubmittedAt = Now, Evidence = evidence.ToList() };
             foreach (var file in evidence) file.RequestId = request.Id;
             repository.Add(request); Remember(key, "submit", command, request.Id);
@@ -83,7 +84,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
         var amount = request.ChargeCode is null ? financial.EffectivePayableAmount : invoice.Lines.SingleOrDefault(l => l.ChargeCode == request.ChargeCode)?.Amount;
         if (amount is not null && request.ChargeCode is not null && invoice.Status == InvoiceStatus.Final)
             amount += await repository.ChargeAdjustmentsAsync(invoice.Id, request.ChargeCode, t);
-        return View(request, invoice, financial) with { CurrentChargeAmount = amount };
+        return View(request, invoice, financial) with { CurrentChargeAmount = amount is { } current ? decimal.Truncate(current) : null };
     }
     public async Task<PagedResult<AdjustmentEffectView>> EffectsAsync(Guid invoiceId, int page, int pageSize, CancellationToken t)
     {

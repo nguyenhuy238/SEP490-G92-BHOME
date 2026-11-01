@@ -81,6 +81,11 @@ it('shows original and effective amounts with traceable excess rather than a ref
   expect(screen.getByText(/Tiền hóa đơn gốc: 100.000/)).toBeInTheDocument();
   expect(screen.queryByText('Phê duyệt điều chỉnh')).toBeNull();
 });
+it('preserves exact legacy snapshot money above JavaScript safe integer range', async () => {
+  mocks.api.get.mockResolvedValue({ ...value, invoiceSnapshot: '{"Total":9007199254740993}' });
+  mount(<OwnerAdjustmentDetail id="request" />);
+  await screen.findByText(/Hóa đơn gốc khi gửi: 9.007.199.254.740.993/);
+});
 it('requires human review and dialog, sends backend revisions and blocks duplicate approval', async () => {
   let done!: (x: unknown) => void;
   mocks.api.decide.mockImplementation(
