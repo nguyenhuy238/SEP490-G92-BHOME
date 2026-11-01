@@ -192,6 +192,7 @@ import {
   TenantHomeScreen,
 } from '../../../src/mobile/src/screens/LiveWorkspaceScreens';
 import { AccountSecurityScreen } from '../../../src/mobile/src/screens/AccountSecurityScreen';
+import { TenantInvoicesScreen } from '../../../src/mobile/src/screens/TenantInvoicesScreen';
 
 const id = '00000000-0000-0000-0000-000000000001';
 const fileId = '00000000-0000-0000-0000-000000000002';
@@ -228,6 +229,76 @@ beforeEach(() => {
   mocks.replace.mockClear();
 });
 afterEach(cleanup);
+
+it('Tenant reads persisted invoice consumption and amount without a fake payment state', async () => {
+  mocks.role = 'Tenant';
+  mocks.actor = 'tenant';
+  const invoice = {
+    id: 'bill',
+    roomNumber: 'P101',
+    locationName: 'Synthetic',
+    billingPeriod: '2026-10-01',
+    status: 'Final',
+    total: '3119250',
+    missingInputs: [],
+    dueDate: '2026-11-10',
+    lines: [
+      {
+        id: 'line',
+        name: 'Điện tổng hợp',
+        category: 'Electricity',
+        rateDate: '2026-10-01',
+        rate: '3500',
+        quantity: '25.5',
+        amount: '89250',
+        meterReadingId: 'reading',
+        previousReading: '100',
+        confirmedReading: '125.5',
+      },
+    ],
+  };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      json(String(url).includes('/invoices/bill') ? invoice : page([invoice])),
+    );
+  setApi(fetcher);
+  render(<TenantInvoicesScreen />);
+  await screen.findByText('Phòng P101 · 2026-10');
+  fireEvent.click(screen.getByText('Xem hóa đơn'));
+  await screen.findByText('Điện tổng hợp');
+  expect(screen.getByText('Tiêu thụ: 25.5 kWh')).toBeTruthy();
+  expect(screen.getByText(/Chỉ số trước: 100/)).toBeTruthy();
+  expect(screen.queryByText(/Đã thanh toán|Paid|Thanh toán thành công/)).toBeNull();
+  expect(fetcher.mock.calls[1]![0]).toContain('/api/v1/invoices/bill');
+});
+it('Tenant invoice detail failure removes prior data and offers reload', async () => {
+  mocks.role = 'Tenant';
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      json(
+        page([
+          {
+            id: 'bill',
+            roomNumber: 'P101',
+            locationName: 'Synthetic',
+            billingPeriod: '2026-10-01',
+            status: 'Draft',
+            total: '3000000',
+            missingInputs: [],
+          },
+        ]),
+      ),
+    )
+    .mockResolvedValue(json({}, 404));
+  setApi(fetcher);
+  render(<TenantInvoicesScreen />);
+  fireEvent.click(await screen.findByText('Xem hóa đơn'));
+  await screen.findByText(/HTTP 404/);
+  expect(screen.queryByText('Tổng tiền hóa đơn')).toBeNull();
+  expect(screen.getByText('Về danh sách hóa đơn')).toBeTruthy();
+});
 function setApi(fetcher: typeof fetch) {
   mocks.api = new MobileApi(
     'https://api.example.invalid',

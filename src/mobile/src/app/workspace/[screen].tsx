@@ -1,5 +1,6 @@
 import React from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { RequestHistory } from '../../components/WorkflowControls';
@@ -125,6 +126,9 @@ export default function WorkspaceRoute() {
       content = <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />;
     else
       switch (screen) {
+        case 'invoice':
+          content = <TenantInvoicesScreen />;
+          break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;
           break;
