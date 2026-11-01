@@ -135,7 +135,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     private static void Query(PaymentQuery q)
     {
         if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
-            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 }) throw new PaymentException(400, "invalid_payment_query");
+            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || q.PaymentStatus is not (null or "Paid" or "Unpaid")) throw new PaymentException(400, "invalid_payment_query");
     }
     public Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     { Owner(); Query(query); return repository.TransfersAsync(query, t); }
@@ -187,4 +187,16 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     }
     public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id,CancellationToken t)
     { Owner();_=await Invoice(id,t);return await repository.PayersAsync(id,t); }
+    public Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentQuery query,CancellationToken t)
+    {
+        var scope=Scope;Query(query);
+        if(!scope.Owner&&!scope.Tenant&&!scope.Staff)throw new PaymentException(403,"payment_view_forbidden");
+        return repository.DebtAsync(scope,query,t);
+    }
+    public Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentQuery query,CancellationToken t)
+    {
+        var scope=Scope;Query(query);
+        if(!scope.Owner&&!scope.Tenant)throw new PaymentException(403,"payment_history_forbidden");
+        return repository.PaymentHistoryAsync(scope,query,t);
+    }
 }

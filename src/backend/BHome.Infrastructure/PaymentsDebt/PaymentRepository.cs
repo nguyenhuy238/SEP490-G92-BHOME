@@ -83,6 +83,37 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
             .Select(r => new ReconciliationView(r.Sequence, r.InvoiceId, r.Decision, r.Reason, r.ActorId, r.OccurredAt)).ToArrayAsync(t),page,pageSize,await query.CountAsync(t));
     }
     public void Add(object entity) => db.Add(entity);
+    private IQueryable<Invoice> VisibleInvoices(PaymentScope scope)=>db.Set<Invoice>().AsNoTracking().Where(i=>i.Status==InvoiceStatus.Final &&
+        (scope.Owner || scope.Tenant && i.Recipients.Any(r=>r.TenantUserId==scope.ActorId) ||
+            scope.Staff && db.Locations.Any(l=>l.Id==i.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a=>a.LocationId==i.LocationId &&
+                a.StaffUserId==scope.ActorId && a.StartDate<=scope.Today && a.EndDate>=scope.Today)));
+    public async Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope,PaymentQuery query,CancellationToken t)
+    {
+        var source=VisibleInvoices(scope).Where(i=>(query.LocationId==null||i.LocationId==query.LocationId)&&(query.RoomId==null||i.RoomId==query.RoomId)&&
+            (query.BillingPeriod==null||i.BillingPeriod==query.BillingPeriod)).Select(i=>new {i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,i.Total,
+                Paid=db.Set<PaymentAllocation>().Where(a=>a.InvoiceId==i.Id).Sum(a=>(decimal?)a.Amount)??0m});
+        var filtered=source.Where(i=>(!query.OutstandingOnly || i.Total>i.Paid)&&(!query.OverdueOnly || i.Total>i.Paid && i.DueDate<scope.Today)&&
+            (query.PaymentStatus==null||query.PaymentStatus=="Paid"&&i.Total<=i.Paid||query.PaymentStatus=="Unpaid"&&i.Total>i.Paid));
+        var count=await filtered.CountAsync(t);
+        var rows=await filtered.OrderBy(i=>i.DueDate).ThenBy(i=>i.Id).Skip((query.Page-1)*query.PageSize).Take(query.PageSize).ToArrayAsync(t);
+        var items=rows.Select(i=>new DebtInvoiceView(i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,
+            scope.Staff&&!scope.Owner&&!scope.Tenant?null:i.Total,scope.Staff&&!scope.Owner&&!scope.Tenant?null:i.Paid,i.Total-i.Paid,
+            i.Total<=i.Paid?"Paid":"Unpaid",PaymentRules.OverdueDays(i.DueDate,scope.Today,i.Total-i.Paid))).ToArray();
+        return new(items,query.Page,query.PageSize,count);
+    }
+    public async Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentScope scope,PaymentQuery query,CancellationToken t)
+    {
+        var rows=from allocation in db.Set<PaymentAllocation>().AsNoTracking()
+                 join invoice in VisibleInvoices(scope) on allocation.InvoiceId equals invoice.Id
+                 join transfer in db.Set<PaymentTransfer>() on allocation.TransferId equals transfer.Id
+                 where (query.LocationId==null||invoice.LocationId==query.LocationId)&&(query.RoomId==null||invoice.RoomId==query.RoomId)&&
+                     (query.BillingPeriod==null||invoice.BillingPeriod==query.BillingPeriod)
+                 orderby allocation.AllocatedAt descending,allocation.Id
+                 select new PaymentHistoryEntry(allocation.Id,invoice.Id,invoice.LocationId,invoice.RoomId,invoice.LocationName,invoice.RoomNumber,invoice.BillingPeriod,
+                    allocation.Amount,transfer.OccurredAt,allocation.PaidByUserId==scope.ActorId?"Bạn":allocation.PaidByUserId!=null?"Khách thuê khác trong hóa đơn":"Chưa xác định người trả",
+                    transfer.VerificationSource,scope.Owner?transfer.BankReference:null,scope.Owner?(Guid?)allocation.VerifiedByUserId:null);
+        return new(await rows.Skip((query.Page-1)*query.PageSize).Take(query.PageSize).ToArrayAsync(t),query.Page,query.PageSize,await rows.CountAsync(t));
+    }
     public void Audit(Guid actor, string action, Guid target, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actor, Event = action, TargetId = target, TargetType = "Payment", Succeeded = true, OccurredAt = at });
 }

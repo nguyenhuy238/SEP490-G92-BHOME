@@ -43,3 +43,11 @@ Tenant thấy cùng Paid/Unpaid và các payment amount/date, với payer “B�
 “Chưa xác định người trả”; không trả bank reference, statement reference hay payer account/name của người khác.
 Owner có thêm payer user ID; `GET /invoices/{id}/payment/eligible-payers` chỉ Owner, nhãn Resident tối thiểu.
 PaidBy được Owner chọn khi xác minh bằng chứng, không lấy người đang xem hoặc VerifiedBy.
+
+GET `/debts`: Owner/Tenant/Staff; chỉ outstanding Final invoices, một record/phòng/kỳ.
+GET `/payment-invoices`: Owner/Tenant; cả Paid/Unpaid, dùng paymentStatus filter.
+GET `/payment-history`: Owner/Tenant; allocations đã xác minh; Tenant không nhận bankReference/verifiedByUserId.
+Các list lọc locationId/roomId/billingPeriod, page/pageSize trước pagination; overdueOnly áp
+dueDate < Today ở Asia/Ho_Chi_Minh và outstanding > 0. Không phát sinh phí phạt hoặc tự nhắc nợ.
+Staff chỉ thấy Location hiện được phân công: Room/kỳ/hạn/outstanding/overdue; total/paid null,
+không có bank/payer/history. Không dùng assignment trong JWT để bỏ qua kiểm tra hiện tại.

@@ -25,6 +25,7 @@ public sealed class PaymentQuery
     public DateOnly? BillingPeriod { get; set; }
     public bool OverdueOnly { get; set; }
     public bool OutstandingOnly { get; set; }
+    public string? PaymentStatus { get; set; }
 }
 public sealed record PaymentHistoryView(Guid Id,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,
@@ -43,6 +44,14 @@ public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTra
 public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId);
 public sealed record ReconciliationView(long Sequence, Guid? InvoiceId, string Decision, string Reason, Guid ActorId, DateTimeOffset OccurredAt);
 public sealed record PayerChoice(Guid UserId,string DisplayLabel);
+public sealed record DebtInvoiceView(Guid InvoiceId,Guid LocationId,Guid RoomId,string LocationName,string RoomNumber,DateOnly BillingPeriod,DateOnly DueDate,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? PayableAmount,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal? PaidAmount,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal OutstandingAmount,
+    string PaymentStatus,int OverdueDays);
+public sealed record PaymentHistoryEntry(Guid Id,Guid InvoiceId,Guid LocationId,Guid RoomId,string LocationName,string RoomNumber,DateOnly BillingPeriod,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)] decimal Amount,
+    DateTimeOffset PaidAt,string PaidBy,string VerificationSource,string? BankReference,Guid? VerifiedByUserId);
 public sealed class PaymentException(int status, string code) : Exception("Payment operation rejected.")
 {
     public int Status { get; } = status;
@@ -67,6 +76,8 @@ public interface IPaymentRepository
     Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId,CancellationToken t);
     Task<bool> ActiveLocationAsync(Guid locationId,CancellationToken t);
     Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid invoiceId,CancellationToken t);
+    Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope,PaymentQuery query,CancellationToken t);
+    Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentScope scope,PaymentQuery query,CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset at);
 }
