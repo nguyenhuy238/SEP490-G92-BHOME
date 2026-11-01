@@ -13,7 +13,8 @@ export function LoginScreen() {
   const { startPreview, unavailable } = useWorkspace();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [base, setBase] = useState(baseUrl);
+  const [baseOverride, setBase] = useState<string | null>(null);
+  const base = baseOverride ?? baseUrl;
   const [settings, setSettings] = useState(false);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);

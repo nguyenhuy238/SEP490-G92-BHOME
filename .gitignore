@@ -2,6 +2,7 @@
 **/bin/
 **/obj/
 **/node_modules/
+**/.expo/
 **/dist/
 **/build/
 **/coverage/
