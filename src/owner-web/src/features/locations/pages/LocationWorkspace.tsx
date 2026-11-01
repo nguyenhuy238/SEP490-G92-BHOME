@@ -105,9 +105,9 @@ function WorkspaceMetric({
   hint: string;
 }) {
   return (
-    <Paper sx={{ p: 2.25, border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+    <Paper sx={{ p: 2.75, border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary', fontWeight: 700 }}>
+        <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 750 }}>
           {label}
         </Typography>
         <Box
@@ -124,7 +124,7 @@ function WorkspaceMetric({
           {icon}
         </Box>
       </Stack>
-      <Typography sx={{ mt: 1.5, fontSize: 28, fontWeight: 850, letterSpacing: '-0.04em' }}>
+      <Typography sx={{ mt: 1.5, fontSize: 31, fontWeight: 850, letterSpacing: '-0.04em' }}>
         {value}
       </Typography>
       <Typography variant="caption" color="text.secondary">
@@ -206,7 +206,7 @@ function SetupShortcuts({ locationId }: { locationId: string }) {
     {
       label: 'Tạo phòng hàng loạt',
       icon: <Plus size={15} />,
-      to: `/rooms/new?location=${locationId}`,
+      to: `/locations/${locationId}/rooms/new`,
       primary: true,
     },
     {
@@ -255,7 +255,7 @@ function RoomCard({ db, room }: { db: DemoDatabase; room: PortalRecord }) {
       sx={{
         display: 'block',
         minWidth: 0,
-        p: 1.5,
+        p: 2,
         color: 'inherit',
         textDecoration: 'none',
         bgcolor: config.background,
@@ -266,7 +266,7 @@ function RoomCard({ db, room }: { db: DemoDatabase; room: PortalRecord }) {
         '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 8px 18px rgba(31,57,91,.08)' },
       }}
     >
-      <Typography sx={{ fontSize: 14, fontWeight: 850 }}>{room.code}</Typography>
+      <Typography sx={{ fontSize: 16, fontWeight: 850 }}>{room.code}</Typography>
       <Typography
         variant="caption"
         color="text.secondary"
@@ -280,7 +280,7 @@ function RoomCard({ db, room }: { db: DemoDatabase; room: PortalRecord }) {
       >
         {type?.name || 'Chưa gán loại phòng'} · Tầng {room.attributes.floor || '—'}
       </Typography>
-      <Typography sx={{ mt: 1.25, fontSize: 13, fontWeight: 850 }}>
+      <Typography sx={{ mt: 1.25, fontSize: 15, fontWeight: 850 }}>
         {currency(room.amount)}
         <Typography component="span" variant="caption">
           /tháng
