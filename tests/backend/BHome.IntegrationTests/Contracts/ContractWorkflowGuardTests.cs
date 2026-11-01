@@ -1,6 +1,7 @@
 using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.TenantContracts;
+using BHome.LocalDevelopment;
 using iText.Kernel.Pdf;
 using iText.Signatures;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,12 @@ public sealed class ContractWorkflowGuardTests
         signature.ProviderReference = await adapter.RequestAsync(signature, default);
         Assert.Equal("Simulated", (await adapter.PollAsync(signature, result.PreparedPdf, default)).State);
     }
+    [Theory]
+    [InlineData("Production", "127.0.0.1", "bhome_contract_demo")]
+    [InlineData("Development", "127.0.0.1", "bhome")]
+    [InlineData("Development", "example.invalid", "bhome_contract_demo")]
+    public void DemoSeedRefusesPersonalRemoteOrProductionDatabase(string environment, string host, string database) =>
+        Assert.Throws<LocalTestAccountException>(() => ContractDemoSeed.ValidateTarget(environment, $"Host={host};Database={database};Username=unconfigured"));
     private sealed class Actor : ICurrentUser
     { public static readonly Guid Id = Guid.NewGuid(); public Guid? UserId => Id; public bool IsInRole(string role) => role == "Owner"; }
 }
