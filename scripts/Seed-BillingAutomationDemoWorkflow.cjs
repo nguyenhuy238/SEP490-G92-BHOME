@@ -2,7 +2,7 @@
 const fs = require('node:fs'),
   path = require('node:path'),
   assert = require('node:assert/strict'),
-  crypto = require('node:crypto');
+  nodeCrypto = require('node:crypto');
 const output = path.join(__dirname, '../.tools/contract-demo');
 const settings = JSON.parse(
   fs.readFileSync(path.join(output, 'runtime.json'), 'utf8').replace(/^\uFEFF/, ''),
@@ -11,7 +11,7 @@ const base = process.env.BHOME_AUTOMATION_DEMO_API || 'http://localhost:5540';
 const id = (n) => `fa090000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const user = (n) => `de000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const key = (name) => {
-  const h = crypto
+  const h = nodeCrypto
     .createHash('sha256')
     .update('bhome-automation/' + name)
     .digest('hex');
