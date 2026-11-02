@@ -170,7 +170,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.BillingAutomationService>();
         services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine,BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
         services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
-        services.AddSingleton(p=>new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
+        services.AddSingleton(p=>new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing",configuration.GetValue<bool>("Jobs:Enabled")));
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter","Meter",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft","Draft",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-final","Final",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));

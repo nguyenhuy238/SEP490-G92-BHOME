@@ -64,3 +64,9 @@ GET `attempts?locationId=&period=` trả tối đa 100 attempts mới nhất c�
 không trả queue payload/provider credentials. Hai API dùng cùng Owner permission như settings.
 Web liên kết cấu hình lịch tài chính hiện có `/pricing`, hiển thị version history, execution
 counts, exception codes, delivery retry status và chọn hợp đồng đại diện theo phòng/kỳ.
+
+GET `queue?locationId=&period=` trả tối đa 30 lượt queue billing mới nhất đã liên kết với
+plan thuộc cơ sở/kỳ: `{id,name,state,attempts,availableAt,lockedUntil,lastErrorCode}`.
+Không trả PayloadJson hoặc khóa provider. Preview thêm `workerEnabled` phản ánh Jobs:Enabled
+của máy chủ đang phục vụ. UI phân biệt worker tắt với Developer Run Now, hiển thị lần thử lại
+thực tế của queue; execution PendingInputs vẫn hiển thị từng missing input bằng tiếng Việt.

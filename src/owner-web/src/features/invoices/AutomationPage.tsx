@@ -14,7 +14,10 @@ import {
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
-import { invoiceError } from '../../../../../packages/client-core/src/invoices';
+import {
+  invoiceError,
+  missingBillingInput,
+} from '../../../../../packages/client-core/src/invoices';
 import {
   automationCalendar,
   automationIssues,
@@ -31,6 +34,26 @@ const phaseLabel: Record<string, string> = {
   Meter: 'Giao việc ghi số',
   Draft: 'Lập hóa đơn nháp',
   Final: 'Phát hành hóa đơn',
+};
+const issueLabel: Record<string, string> = {
+  active_meter_configuration_required: 'Thiếu đồng hồ hoạt động đúng ngày ghi số',
+  staff_assignment_required: 'Cần phân công Staff đang phụ trách cơ sở',
+  representative_selection_required: 'Cần chọn hợp đồng đại diện hóa đơn phòng/kỳ',
+  draft_missing_inputs: 'Bản nháp còn thiếu dữ liệu bắt buộc',
+  confirmed_billing_inputs_required: 'Chưa đủ giá hoặc chỉ số hợp lệ để phát hành',
+  draft_invoice_required: 'Chưa có hóa đơn nháp',
+  meter_replacement_review_required: 'Cần Owner kiểm tra việc thay đồng hồ trong kỳ',
+  cancelled_period_requires_review: 'Tác vụ kỳ này đã hủy, cần Owner kiểm tra',
+  automation_authorization_changed: 'Quyền hoặc lịch đã thay đổi, cần kiểm tra lại',
+};
+type QueueRow = {
+  id: string;
+  name: string;
+  state: string;
+  attempts: number;
+  availableAt: string;
+  lockedUntil: string | null;
+  lastErrorCode: string | null;
 };
 const date = (s?: string | null) =>
   s ? new Date(s).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : 'Chưa chạy';
@@ -111,7 +134,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
     queryKey: key,
     refetchInterval: 30000,
     queryFn: async ({ signal }) => {
-      const [history, preview, executions, attempts, calendar] = await Promise.all([
+      const [history, preview, executions, attempts, calendar, queue] = await Promise.all([
         api.request<AutomationPlan[]>(`/api/v1/billing-automation/${location}/history`, { signal }),
         api.request<AutomationPreview>(`/api/v1/billing-automation/preview?${query}`, { signal }),
         api.request<AutomationExecution[]>(`/api/v1/billing-automation/executions?${query}`, {
@@ -121,8 +144,9 @@ function AutomationLocation({ location, period }: { location: string; period: st
           signal,
         }),
         api.schedule(location, signal),
+        api.request<QueueRow[]>(`/api/v1/billing-automation/queue?${query}`, { signal }),
       ]);
-      return { history, preview, executions, attempts, calendar };
+      return { history, preview, executions, attempts, calendar, queue };
     },
   });
   const [error, setError] = useState(''),
@@ -176,6 +200,11 @@ function AutomationLocation({ location, period }: { location: string; period: st
           <Paper sx={{ p: 2 }}>
             <Stack spacing={2}>
               <Typography variant="h6">Lịch kỳ đang xem</Typography>
+              <Alert severity={data.data.preview.workerEnabled ? 'info' : 'warning'}>
+                {data.data.preview.workerEnabled
+                  ? 'Worker tự động đang bật trên máy chủ này.'
+                  : 'Worker tự động đang tắt trên máy chủ này. Chạy ngay chỉ là thao tác Development/Testing.'}
+              </Alert>
               <Typography>
                 Ngày nghiệp vụ: {data.data.preview.businessDate} · {data.data.preview.timeZone}
               </Typography>
@@ -228,7 +257,10 @@ function AutomationLocation({ location, period }: { location: string; period: st
                 {e.lastErrorCode && <Alert severity="error">{e.lastErrorCode}</Alert>}
                 {automationIssues(e.exceptionsJson).map((issue, i) => (
                   <Alert severity="warning" key={i}>
-                    {issue.code}
+                    {issueLabel[issue.code] ?? issue.code}
+                    {issue.missingInputs?.map((code) => (
+                      <Typography key={code}>Thiếu: {missingBillingInput(code)}</Typography>
+                    ))}
                     {issue.roomId && ` · Phòng ${issue.roomId}`}
                     {issue.taskId && (
                       <Button component={Link} to={`/meters?taskId=${issue.taskId}`}>
@@ -245,6 +277,22 @@ function AutomationLocation({ location, period }: { location: string; period: st
             <Typography key={a.id}>
               Lần {a.sequence} · {a.status} · {date(a.startedAt)} → {date(a.finishedAt)}
             </Typography>
+          ))}
+          <Typography variant="h6">Hàng đợi bền vững (30 lượt gần nhất)</Typography>
+          {data.data.queue.length === 0 && (
+            <Typography>Chưa có lượt chạy được scheduler đưa vào hàng đợi.</Typography>
+          )}
+          {data.data.queue.map((j) => (
+            <Paper key={j.id} sx={{ p: 2 }}>
+              <Typography>
+                {j.name} · {j.state} · Lần {j.attempts}/4
+              </Typography>
+              <Typography>
+                Đến lượt / thử lại: {date(j.availableAt)}
+                {j.lockedUntil ? ` · Lease đến ${date(j.lockedUntil)}` : ''}
+              </Typography>
+              {j.lastErrorCode && <Alert severity="warning">{j.lastErrorCode}</Alert>}
+            </Paper>
           ))}
           <RepresentativeForm location={location} period={period} />
           <DeliveryMonitor location={location} />

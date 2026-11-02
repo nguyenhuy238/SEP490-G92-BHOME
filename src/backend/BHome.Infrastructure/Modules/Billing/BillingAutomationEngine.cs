@@ -14,6 +14,17 @@ namespace BHome.Infrastructure.Modules.Billing;
 internal sealed partial class BillingAutomationEngine(BHomeDbContext db,IBillingAutomationSchedules schedules,TimeProvider clock,IInvoiceRepository invoiceRepository,IPropertyRepository propertyRepository,IStaffLocationAccess staffAccess):IBillingAutomationEngine
 {
     private DateOnly Today=>BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+    public async Task<IReadOnlyList<BillingQueueView>> QueueAsync(Guid location,DateOnly period,CancellationToken t)
+    {
+        var key=period.ToString("yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture);
+        return await db.Database.SqlQuery<BillingQueueView>($"""
+            SELECT j."Id",j."Name",j."State",j."Attempts",j."AvailableAt",j."LockedUntil",j."LastErrorCode"
+            FROM "BackgroundJobs" j JOIN "BillingAutomationPlans" p ON j."PayloadJson"->>'PlanId'=p."Id"::text
+            WHERE p."LocationId"={location} AND j."PayloadJson"->>'BillingPeriod'={key}
+              AND j."Name" IN ('billing-meter','billing-draft','billing-final')
+            ORDER BY j."AvailableAt" DESC LIMIT 30
+            """).ToArrayAsync(t);
+    }
     public async Task<IReadOnlyList<BillingAutomationAttempt>> AttemptsAsync(Guid location,DateOnly period,CancellationToken t)=>await (from a in db.Set<BillingAutomationAttempt>().AsNoTracking() join e in db.Set<BillingAutomationExecution>() on a.ExecutionId equals e.Id where e.LocationId==location&&e.BillingPeriod==period orderby a.StartedAt descending select a).Take(100).ToArrayAsync(t);
     internal static DateTimeOffset DueAt(DateOnly date)=>new(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(new TimeOnly(23,59,59)),TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")),TimeSpan.Zero);
     private Task<bool> ActiveRole(Guid actor,string role,CancellationToken t)=>(from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join r in db.Roles on grant.RoleId equals r.Id where u.Id==actor&&u.IsActive&&r.Name==role select u.Id).AnyAsync(t);

@@ -16,6 +16,7 @@ export type AutomationPlan = {
 };
 export type AutomationPreview = {
   developerActionsEnabled: boolean;
+  workerEnabled?: boolean;
   timeZone: string;
   businessDate: string;
   phases: { phase: string; scheduledDate: string; eligible: boolean }[];
@@ -54,7 +55,7 @@ export function automationCalendar(plan: AutomationPlan): BillingSchedule | null
 }
 export function automationIssues(
   json: string,
-): { roomId?: string; code: string; taskId?: string }[] {
+): { roomId?: string; code: string; taskId?: string; missingInputs?: string[] }[] {
   try {
     const value: unknown = JSON.parse(json);
     return Array.isArray(value) ? value.filter((x) => x && typeof x.code === 'string') : [];
