@@ -11,7 +11,10 @@ import { Box, Heading, ui } from '../../components/WorkspaceKit';
 import { staffColors as s } from '../../theme/theme';
 
 export type SignerState = 'unsigned' | 'waiting' | 'signed';
-export function signerState(signatures: readonly Signature[], signerId: string | null): SignerState {
+export function signerState(
+  signatures: readonly Signature[],
+  signerId: string | null,
+): SignerState {
   const mine = signatures.filter((signature) => signature.signerUserId === signerId);
   if (mine.some((signature) => signature.status === 'Signed')) return 'signed';
   return mine.some((signature) => !['Failed', 'Simulated'].includes(signature.status))

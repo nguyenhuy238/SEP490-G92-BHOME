@@ -23,23 +23,27 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(c => new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
-                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,c.DraftMetadata!="{}")).ToArrayAsync(t);
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent, c.DraftMetadata != "{}")).ToArrayAsync(t);
         return new(items, page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
-    public async Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId,CancellationToken t)=>await db.Set<ContractFinalInspection>().Where(i=>i.ContractId==contractId).OrderByDescending(i=>i.Version).Take(100).ToArrayAsync(t);
-    public async Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId,Guid roomId,DateOnly today,CancellationToken t)=>await
-        (from r in db.Set<MeterReading>().AsNoTracking() join task in db.Set<OperationalTask>() on r.TaskId equals task.Id join meter in db.Set<Meter>() on r.MeterId equals meter.Id join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
-         where task.ContractId==contractId&&meter.RoomId==roomId&&meter.IsActive&&task.Purpose==ReadingPurpose.Final&&task.ReadingDate==today&&task.Status==MeterTaskStatus.Completed&&e.IsUploaded&&e.IsLinked
-         select new HandoverReading(r.Id,meter.Code,(int)meter.UtilityType,task.ReadingDate,r.ConfirmedValue,e.Id,e.ObjectKey,e.ImageHash)).ToArrayAsync(t);
-    public Task<bool> StaffAssignedAsync(Guid staffId,Guid locationId,DateOnly today,CancellationToken t)=>db.StaffLocationAssignments.AnyAsync(a=>a.StaffUserId==staffId&&a.LocationId==locationId&&a.StartDate<=today&&a.EndDate>=today,t);
-    public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId,CancellationToken t)=>await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h=>h.ContractId==contractId).OrderByDescending(h=>h.Version).Take(100).ToArrayAsync(t);
-    public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId,DateOnly today,CancellationToken t)=>await
-        (from m in db.Set<ContractMoveOut>().AsNoTracking() join c in db.Set<Contract>() on m.ContractId equals c.Id
-         where m.InspectionStaffId==staffId && m.Status!=MoveOutStatus.Completed && m.InspectionScheduledAt!=null && c.Room.Location.IsActive &&
-           db.StaffLocationAssignments.Any(a=>a.StaffUserId==staffId&&a.LocationId==c.Room.LocationId&&a.StartDate<=today&&a.EndDate>=today)
+    public async Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId, CancellationToken t) => await db.Set<ContractFinalInspection>().Where(i => i.ContractId == contractId).OrderByDescending(i => i.Version).Take(100).ToArrayAsync(t);
+    public async Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId, Guid roomId, DateOnly today, CancellationToken t) => await
+        (from r in db.Set<MeterReading>().AsNoTracking()
+         join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
+         join meter in db.Set<Meter>() on r.MeterId equals meter.Id
+         join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
+         where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.Status == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
+         select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, e.Id, e.ObjectKey, e.ImageHash)).ToArrayAsync(t);
+    public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) => db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId && a.StartDate <= today && a.EndDate >= today, t);
+    public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t) => await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h => h.ContractId == contractId).OrderByDescending(h => h.Version).Take(100).ToArrayAsync(t);
+    public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t) => await
+        (from m in db.Set<ContractMoveOut>().AsNoTracking()
+         join c in db.Set<Contract>() on m.ContractId equals c.Id
+         where m.InspectionStaffId == staffId && m.Status != MoveOutStatus.Completed && m.InspectionScheduledAt != null && c.Room.Location.IsActive &&
+           db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
          orderby m.InspectionScheduledAt
-         select new MoveOutAssignment(c.Id,c.RoomId,c.Room.RoomNumber,c.Room.Location.Name,m.Status.ToString(),m.ProposedDate,m.InspectionScheduledAt!.Value,m.Version)).Take(100).ToArrayAsync(t);
+         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt!.Value, m.Version)).Take(100).ToArrayAsync(t);
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
         // All contract writes lock the same authoritative Room row. This serializes activation, renewal,
@@ -83,7 +87,7 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
     public async Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t) =>
-        await db.Set<Contract>().AsNoTracking().Where(c=>c.RoomId==roomId&&c.TenantUserId==tenantId).OrderBy(c=>c.StartDate).Take(501).ToArrayAsync(t);
+        await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && c.TenantUserId == tenantId).OrderBy(c => c.StartDate).Take(501).ToArrayAsync(t);
     public async Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t) =>
         await db.Set<DepositVerification>().Where(d => d.ContractId == contractId).SumAsync(d => (decimal?)d.Amount, t) ?? 0;
     public Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t) =>

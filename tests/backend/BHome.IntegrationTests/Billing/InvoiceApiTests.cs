@@ -56,17 +56,36 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var room = new Room { LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
         var resident = new Resident { RoomId = room.Id, TenantUserId = tenant.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
         var second = new Resident { RoomId = room.Id, TenantUserId = other.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Other", VerificationStatus = IdentityVerificationStatus.Verified };
-        Contract ContractFor(Resident person) => new() { RoomId = room.Id, OwnerSignerId = owner.Id, TenantUserId = person.TenantUserId!.Value,
-            RepresentativeResidentId = person.Id, Status = ContractStatus.Active, StartDate = period.AddMonths(-1), EndDate = period.AddMonths(4),
-            MonthlyRent = 3000000, RequiredDeposit = 0, Terms = "SYNTHETIC TEST", ActivatedAt = DateTimeOffset.UtcNow, ActivatedByUserId = owner.Id,
-            Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.Representative }] };
+        Contract ContractFor(Resident person) => new()
+        {
+            RoomId = room.Id,
+            OwnerSignerId = owner.Id,
+            TenantUserId = person.TenantUserId!.Value,
+            RepresentativeResidentId = person.Id,
+            Status = ContractStatus.Active,
+            StartDate = period.AddMonths(-1),
+            EndDate = period.AddMonths(4),
+            MonthlyRent = 3000000,
+            RequiredDeposit = 0,
+            Terms = "SYNTHETIC TEST",
+            ActivatedAt = DateTimeOffset.UtcNow,
+            ActivatedByUserId = owner.Id,
+            Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.Representative }]
+        };
         var contract = ContractFor(resident); var secondContract = ContractFor(second);
         db.AddRange(location, type, room, resident, second, contract, secondContract,
             new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
         foreach (var (category, code, rate) in new[] { (ChargeCategory.Rent, "RENT", 3000000m), (ChargeCategory.Electricity, "ELECTRICITY", 3500m), (ChargeCategory.Water, "WATER", 15000m) })
-            db.Add(new BillingPolicy { LocationId = location.Id, Category = category, ChargeCode = code, Name = "Synthetic " + code,
+            db.Add(new BillingPolicy
+            {
+                LocationId = location.Id,
+                Category = category,
+                ChargeCode = code,
+                Name = "Synthetic " + code,
                 Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered,
-                Rate = rate, EffectiveFrom = period.AddYears(-1) });
+                Rate = rate,
+                EffectiveFrom = period.AddYears(-1)
+            });
         await db.SaveChangesAsync();
         return new(owner, staff, tenant, other, location.Id, room.Id, contract.Id, period);
     }
@@ -172,9 +191,20 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var w = await Setup();
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
         var existing = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == w.Contract);
-        var duplicate = new Contract { RoomId = w.Room, OwnerSignerId = existing.OwnerSignerId, TenantUserId = existing.TenantUserId,
-            RepresentativeResidentId = existing.RepresentativeResidentId, StartDate = existing.StartDate, EndDate = existing.EndDate,
-            MonthlyRent = existing.MonthlyRent, RequiredDeposit = 0, Status = ContractStatus.Active, ActivatedAt = DateTimeOffset.UtcNow, ActivatedByUserId = existing.OwnerSignerId };
+        var duplicate = new Contract
+        {
+            RoomId = w.Room,
+            OwnerSignerId = existing.OwnerSignerId,
+            TenantUserId = existing.TenantUserId,
+            RepresentativeResidentId = existing.RepresentativeResidentId,
+            StartDate = existing.StartDate,
+            EndDate = existing.EndDate,
+            MonthlyRent = existing.MonthlyRent,
+            RequiredDeposit = 0,
+            Status = ContractStatus.Active,
+            ActivatedAt = DateTimeOffset.UtcNow,
+            ActivatedByUserId = existing.OwnerSignerId
+        };
         db.Add(duplicate);
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Equal("23514", Assert.IsType<PostgresException>(error.InnerException).SqlState);

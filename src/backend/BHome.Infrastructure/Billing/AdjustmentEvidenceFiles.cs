@@ -14,8 +14,14 @@ internal sealed class AdjustmentEvidenceFiles(DbContextOptions<BHomeDbContext> o
     public async Task<AdjustmentEvidenceView> UploadAsync(Guid invoiceId, Guid actor, byte[] content, string contentType, CancellationToken t)
     {
         await using var db = new BHomeDbContext(options);
-        var file = new InvoiceAdjustmentEvidence { InvoiceId = invoiceId, UploaderId = actor, ContentType = contentType, Length = content.Length,
-            CleanupAfter = clock.GetUtcNow().AddDays(1) };
+        var file = new InvoiceAdjustmentEvidence
+        {
+            InvoiceId = invoiceId,
+            UploaderId = actor,
+            ContentType = contentType,
+            Length = content.Length,
+            CleanupAfter = clock.GetUtcNow().AddDays(1)
+        };
         file.ObjectKey = $"invoice-adjustments/{invoiceId:N}/{file.Id:N}";
         db.Add(file); await db.SaveChangesAsync(t); // Durable orphan intent before the upload.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));

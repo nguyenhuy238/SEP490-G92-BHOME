@@ -557,30 +557,53 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
   if (done)
     return (
       <Box
-        sx={{ position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'rgba(15,23,42,.45)', p: 2, display: 'grid', placeItems: 'center' }}
+        sx={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1300,
+          bgcolor: 'rgba(15,23,42,.45)',
+          p: 2,
+          display: 'grid',
+          placeItems: 'center',
+        }}
       >
-        <Paper role="dialog" aria-modal="true" aria-labelledby="bulk-room-success-title" sx={{ width: 'min(720px, 100%)' }}>
-        <DialogTitle component="h1" id="bulk-room-success-title">Đã tạo phòng chờ cấu hình</DialogTitle>
-        <DialogContent>
-          <Alert severity="success">
-            Đã tạo {codes.length} phòng ở trạng thái IN_SETUP / UNAVAILABLE. Chưa phát sinh tài sản
-            thực tế hoặc chi phí mua sắm.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button component={Link} to={`/locations/${location}/assets`}>
-            Nhập kho & phân bổ
-          </Button>
-          <Button component={Link} to={closeTo} variant="contained">
-            Xem danh sách phòng
-          </Button>
-        </DialogActions>
+        <Paper
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-room-success-title"
+          sx={{ width: 'min(720px, 100%)' }}
+        >
+          <DialogTitle component="h1" id="bulk-room-success-title">
+            Đã tạo phòng chờ cấu hình
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="success">
+              Đã tạo {codes.length} phòng ở trạng thái IN_SETUP / UNAVAILABLE. Chưa phát sinh tài
+              sản thực tế hoặc chi phí mua sắm.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button component={Link} to={`/locations/${location}/assets`}>
+              Nhập kho & phân bổ
+            </Button>
+            <Button component={Link} to={closeTo} variant="contained">
+              Xem danh sách phòng
+            </Button>
+          </DialogActions>
         </Paper>
       </Box>
     );
   return (
     <Box
-      sx={{ position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'rgba(15,23,42,.45)', p: { xs: 1, sm: 3 }, display: 'grid', placeItems: 'center' }}
+      sx={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1300,
+        bgcolor: 'rgba(15,23,42,.45)',
+        p: { xs: 1, sm: 3 },
+        display: 'grid',
+        placeItems: 'center',
+      }}
     >
       <Paper
         role="dialog"
@@ -588,98 +611,99 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
         aria-labelledby="bulk-room-dialog-title"
         sx={{ width: 'min(1120px, 100%)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
       >
-      <DialogTitle
-        component="h1"
-        id="bulk-room-dialog-title"
-        sx={{ fontSize: 24, fontWeight: 850, pb: 1 }}
-      >
-        Tạo phòng vật lý hàng loạt
-      </DialogTitle>
-      <DialogContent sx={{ pt: '12px !important' }}>
-        <Typography color="text.secondary" sx={{ mb: 3 }}>
-          Chọn cấu hình mẫu và quy tắc đánh số. Mã phòng được kiểm tra trùng trong cơ sở trước khi
-          lưu.
-        </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) minmax(0,1fr)' },
-            gap: 3,
-          }}
+        <DialogTitle
+          component="h1"
+          id="bulk-room-dialog-title"
+          sx={{ fontSize: 24, fontWeight: 850, pb: 1 }}
         >
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Typography component="h2" sx={{ fontSize: 17, fontWeight: 800, mb: 2 }}>
-              Thông tin cơ bản
-            </Typography>
-            <Stack sx={{ gap: 2 }}>
-            <Select
-              label="Cơ sở"
-              value={location}
-              options={db.records.locations}
-              onChange={(v) => {
-                setLocation(v);
-                setType('');
-              }}
-            />
-            <Select
-              label="Loại phòng"
-              value={type}
-              all="Chọn loại phòng"
-              options={db.records['room-types'].filter(
-                (t) => t.locationId === location && t.status === 'Đang áp dụng',
-              )}
-              onChange={setType}
-            />
-            <Button component={Link} to="/room-types">
-              Quản lý mẫu loại phòng
-            </Button>
-            {selectedType && (
-              <Alert severity="info">
-                {selectedType.attributes.area} m² · tối đa {selectedType.attributes.maxOccupants}{' '}
-                người · {currency(selectedType.amount)}/tháng
-              </Alert>
-            )}
+          Tạo phòng vật lý hàng loạt
+        </DialogTitle>
+        <DialogContent sx={{ pt: '12px !important' }}>
+          <Typography color="text.secondary" sx={{ mb: 3 }}>
+            Chọn cấu hình mẫu và quy tắc đánh số. Mã phòng được kiểm tra trùng trong cơ sở trước khi
+            lưu.
+          </Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) minmax(0,1fr)' },
+              gap: 3,
+            }}
+          >
+            <Paper variant="outlined" sx={{ p: 2.5 }}>
+              <Typography component="h2" sx={{ fontSize: 17, fontWeight: 800, mb: 2 }}>
+                Thông tin cơ bản
+              </Typography>
+              <Stack sx={{ gap: 2 }}>
+                <Select
+                  label="Cơ sở"
+                  value={location}
+                  options={db.records.locations}
+                  onChange={(v) => {
+                    setLocation(v);
+                    setType('');
+                  }}
+                />
+                <Select
+                  label="Loại phòng"
+                  value={type}
+                  all="Chọn loại phòng"
+                  options={db.records['room-types'].filter(
+                    (t) => t.locationId === location && t.status === 'Đang áp dụng',
+                  )}
+                  onChange={setType}
+                />
+                <Button component={Link} to="/room-types">
+                  Quản lý mẫu loại phòng
+                </Button>
+                {selectedType && (
+                  <Alert severity="info">
+                    {selectedType.attributes.area} m² · tối đa{' '}
+                    {selectedType.attributes.maxOccupants} người · {currency(selectedType.amount)}
+                    /tháng
+                  </Alert>
+                )}
+              </Stack>
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 2.5 }}>
+              <Typography component="h2" sx={{ fontSize: 17, fontWeight: 800, mb: 2 }}>
+                Tiền tố & đánh số
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                <TextField
+                  label="Các tầng (cách nhau dấu phẩy)"
+                  value={floors}
+                  onChange={(e) => setFloors(e.target.value)}
+                  helperText="Ví dụ: 1,2,3"
+                />
+                <TextField
+                  label="Tiền tố mã phòng"
+                  value={prefix}
+                  onChange={(e) => setPrefix(e.target.value)}
+                />
+                <TextField
+                  label="Số thứ tự bắt đầu"
+                  type="number"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                  helperText="Nhập 1 hoặc mã đầy đủ như 401"
+                />
+                <TextField
+                  label="Số phòng mỗi tầng"
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                />
+              </Box>
+            </Paper>
+          </Box>
+          <Paper variant="outlined" sx={{ mt: 3, p: 2.5, bgcolor: '#f8fafc' }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+              <Typography sx={{ fontSize: 17, fontWeight: 800 }}>
+                Xem trước {codes.length} mã phòng
+              </Typography>
+              <Chip label="Trạng thái mới: IN_SETUP / UNAVAILABLE" color="warning" />
             </Stack>
-          </Paper>
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Typography component="h2" sx={{ fontSize: 17, fontWeight: 800, mb: 2 }}>
-              Tiền tố & đánh số
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                label="Các tầng (cách nhau dấu phẩy)"
-                value={floors}
-                onChange={(e) => setFloors(e.target.value)}
-                helperText="Ví dụ: 1,2,3"
-              />
-              <TextField
-                label="Tiền tố mã phòng"
-                value={prefix}
-                onChange={(e) => setPrefix(e.target.value)}
-              />
-              <TextField
-                label="Số thứ tự bắt đầu"
-                type="number"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-                helperText="Nhập 1 hoặc mã đầy đủ như 401"
-              />
-              <TextField
-                label="Số phòng mỗi tầng"
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-            </Box>
-          </Paper>
-        </Box>
-        <Paper variant="outlined" sx={{ mt: 3, p: 2.5, bgcolor: '#f8fafc' }}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
-            <Typography sx={{ fontSize: 17, fontWeight: 800 }}>
-              Xem trước {codes.length} mã phòng
-            </Typography>
-            <Chip label="Trạng thái mới: IN_SETUP / UNAVAILABLE" color="warning" />
-          </Stack>
             <Stack
               direction="row"
               sx={{ gap: 1, flexWrap: 'wrap', maxHeight: 210, overflowY: 'auto' }}
@@ -693,23 +717,25 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
                 {validation}
               </Alert>
             )}
-        </Paper>
-        {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
-          </Alert>
-        )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button component={Link} to={closeTo} disabled={busy}>Hủy</Button>
-        <Button
-          variant="contained"
-          disabled={busy || !selectedType || !!validation || codes.length === 0}
-          onClick={() => setConfirm(true)}
-        >
-          Tạo {codes.length} phòng
-        </Button>
-      </DialogActions>
+          </Paper>
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button component={Link} to={closeTo} disabled={busy}>
+            Hủy
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy || !selectedType || !!validation || codes.length === 0}
+            onClick={() => setConfirm(true)}
+          >
+            Tạo {codes.length} phòng
+          </Button>
+        </DialogActions>
         <ConfirmDialog
           title="Xác nhận tạo phòng?"
           open={confirm}

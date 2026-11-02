@@ -22,10 +22,20 @@ public sealed partial class AdjustmentService
             var request = await Request(id, t); var invoice = await Invoice(request.InvoiceId, t);
             if (request.Decision is not null) throw new AdjustmentException(409, "adjustment_already_decided");
             var financial = await repository.FinancialsAsync(invoice.Id, t);
-            var decision = new InvoiceAdjustmentDecision { RequestId = id, InvoiceId = invoice.Id, Outcome = approve ? "Approved" : "Rejected",
-                InvoiceStatus = invoice.Status, Reason = x.Reason, OwnerId = Actor, DecidedAt = Now,
-                EffectiveBefore = financial.EffectivePayableAmount, EffectiveAfter = financial.EffectivePayableAmount,
-                BeforeAmount = financial.EffectivePayableAmount, PaidAtDecision = financial.AllocatedPayments };
+            var decision = new InvoiceAdjustmentDecision
+            {
+                RequestId = id,
+                InvoiceId = invoice.Id,
+                Outcome = approve ? "Approved" : "Rejected",
+                InvoiceStatus = invoice.Status,
+                Reason = x.Reason,
+                OwnerId = Actor,
+                DecidedAt = Now,
+                EffectiveBefore = financial.EffectivePayableAmount,
+                EffectiveAfter = financial.EffectivePayableAmount,
+                BeforeAmount = financial.EffectivePayableAmount,
+                PaidAtDecision = financial.AllocatedPayments
+            };
             if (approve)
             {
                 if (request.InvoiceStatus != invoice.Status || invoice.Version != x.ExpectedInvoiceVersion || x.ExpectedFinancialVersion != financial.FinancialVersion)
@@ -49,14 +59,26 @@ public sealed partial class AdjustmentService
             }
             repository.Add(decision); request.Decision = decision;
             Remember(key, "decision", command, id);
-            repository.Add(new InvoiceAdjustmentEvent { RequestId = id, InvoiceId = invoice.Id, RequesterId = request.RequesterId,
-                Name = "invoice.adjustment.decided.v1", OccurredAt = Now });
+            repository.Add(new InvoiceAdjustmentEvent
+            {
+                RequestId = id,
+                InvoiceId = invoice.Id,
+                RequesterId = request.RequesterId,
+                Name = "invoice.adjustment.decided.v1",
+                OccurredAt = Now
+            });
             repository.Audit(Actor, approve ? "InvoiceAdjustmentApproved" : "InvoiceAdjustmentRejected", id, Now);
             var balance = AdjustmentRules.Balance(financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal +
                 (approve && invoice.Status == InvoiceStatus.Final ? decision.Delta : 0), financial.AllocatedPayments);
-            var after = financial with { EffectivePayableAmount = balance.Payable, OutstandingAmount = balance.Outstanding, PotentialExcessAmount = balance.Excess,
+            var after = financial with
+            {
+                EffectivePayableAmount = balance.Payable,
+                OutstandingAmount = balance.Outstanding,
+                PotentialExcessAmount = balance.Excess,
                 ApprovedAdjustmentTotal = financial.ApprovedAdjustmentTotal + (approve && invoice.Status == InvoiceStatus.Final ? decision.Delta : 0),
-                FinancialVersion = financial.FinancialVersion + (approve && invoice.Status == InvoiceStatus.Final ? 1 : 0), ReviewStatus = balance.Excess > 0 ? "PendingReview" : "None" };
+                FinancialVersion = financial.FinancialVersion + (approve && invoice.Status == InvoiceStatus.Final ? 1 : 0),
+                ReviewStatus = balance.Excess > 0 ? "PendingReview" : "None"
+            };
             if (invoice.Status == InvoiceStatus.Draft) after = after with { OriginalIssuedAmount = invoice.Total, EffectivePayableAmount = invoice.Total, OutstandingAmount = invoice.Total };
             return View(request, invoice, after);
         }, t);

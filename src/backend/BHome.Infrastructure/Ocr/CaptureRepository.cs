@@ -170,20 +170,20 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
                     db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
                         (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate && previous.Purpose != ReadingPurpose.Final))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
-            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(),x.DueAt,x.AssignedStaffUserId,x.AutomationPlanId,x.Version,x.LocationId,x.Meter.RoomId));
-    public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t,MeterTaskQuery? q=null)
+            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(), x.DueAt, x.AssignedStaffUserId, x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId));
+    public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null)
     {
-        var rows=scope.VisibleTasks.AsNoTracking();
-        if(q?.LocationId is {} location)rows=rows.Where(x=>x.LocationId==location);
-        if(q?.RoomId is {} room)rows=rows.Where(x=>x.Meter.RoomId==room);
-        if(q?.Status is {} status)rows=rows.Where(x=>x.Status==status);
-        if(q?.DueDate is {} date)
+        var rows = scope.VisibleTasks.AsNoTracking();
+        if (q?.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
+        if (q?.RoomId is { } room) rows = rows.Where(x => x.Meter.RoomId == room);
+        if (q?.Status is { } status) rows = rows.Where(x => x.Status == status);
+        if (q?.DueDate is { } date)
         {
-            var zone=TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
-            var start=new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue),zone));
-            var end=start.AddDays(1);rows=rows.Where(x=>x.DueAt>=start&&x.DueAt<end);
+            var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+            var start = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue), zone));
+            var end = start.AddDays(1); rows = rows.Where(x => x.DueAt >= start && x.DueAt < end);
         }
-        return await TaskSummaries(rows.OrderByDescending(x=>x.ReadingDate).ThenBy(x=>x.Id).Skip(((q?.Page??1)-1)*100).Take(100)).ToListAsync(t);
+        return await TaskSummaries(rows.OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Skip(((q?.Page ?? 1) - 1) * 100).Take(100)).ToListAsync(t);
     }
     public async Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t) =>
         await TaskSummaries(scope.VisibleTasks.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();

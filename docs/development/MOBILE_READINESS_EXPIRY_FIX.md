@@ -9,11 +9,11 @@ JOB-02 / GBR-01/02/18, [BH-40 traceability](BH40_TRACEABILITY.md),
 [API conventions](../api/API_CONVENTIONS.md).
 Không thay đổi quy tắc nhắc hạn, quyền Owner/Tenant/Staff, API contract hoặc schema mới.
 
-| Lỗi | Bằng chứng | Khắc phục / acceptance |
-| --- | --- | --- |
-| HTTPS readiness thất bại | LAN TLS hợp lệ, live 200, ready 503; database `bhome` thiếu bảng `ContractExpiryNotices` và 21 migration sau `UnifiedOperationalTasks` | Sao lưu local, dừng API, áp dụng migration hiện có; ready 200 và không còn pending |
-| Log gây nhầm khi dùng API đang chạy | Log standalone cũ có MSB3027/MSB3021 do API khác khóa DLL | Supervisor chẩn đoán HTTPS hiện tại; chỉ dẫn output Visual Studio khi dùng lại API, cả stdout/stderr khi tự tạo API |
-| Công cụ nâng cấp có thể chạy binary cũ | .NET 8 `dotnet run --artifacts-path` đã chạy default output cũ trong lần kiểm tra đầu | Build riêng rồi chạy đường dẫn DLL chính xác; chế độ `-Check` phải liệt kê migration hiện tại và không ghi database |
+| Lỗi                                    | Bằng chứng                                                                                                                             | Khắc phục / acceptance                                                                                              |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| HTTPS readiness thất bại               | LAN TLS hợp lệ, live 200, ready 503; database `bhome` thiếu bảng `ContractExpiryNotices` và 21 migration sau `UnifiedOperationalTasks` | Sao lưu local, dừng API, áp dụng migration hiện có; ready 200 và không còn pending                                  |
+| Log gây nhầm khi dùng API đang chạy    | Log standalone cũ có MSB3027/MSB3021 do API khác khóa DLL                                                                              | Supervisor chẩn đoán HTTPS hiện tại; chỉ dẫn output Visual Studio khi dùng lại API, cả stdout/stderr khi tự tạo API |
+| Công cụ nâng cấp có thể chạy binary cũ | .NET 8 `dotnet run --artifacts-path` đã chạy default output cũ trong lần kiểm tra đầu                                                  | Build riêng rồi chạy đường dẫn DLL chính xác; chế độ `-Check` phải liệt kê migration hiện tại và không ghi database |
 
 ## Thay đổi
 
@@ -49,16 +49,16 @@ Giữ kiểm tra TLS, không tự đổi firewall/trust store và không tự mi
 
 ## Kiểm chứng
 
-| Kiểm tra thực thi | Kết quả |
-| --- | --- |
-| `powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/MobileDevelopment.Tests.ps1` | PASS 75 assertions |
-| `npm.cmd run test --workspace src/mobile -- mobileApiProbe expoStartup` (Node 22 qua `Use-LocalTools.ps1`) | PASS 29/29, 2 files |
+| Kiểm tra thực thi                                                                                                                                                                                                                                                                               | Kết quả                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/MobileDevelopment.Tests.ps1`                                                                                                                                                                                                 | PASS 75 assertions                                                                                                                       |
+| `npm.cmd run test --workspace src/mobile -- mobileApiProbe expoStartup` (Node 22 qua `Use-LocalTools.ps1`)                                                                                                                                                                                      | PASS 29/29, 2 files                                                                                                                      |
 | `dotnet test tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj --artifacts-path .tools/mobile-readiness-tests --filter "FullyQualifiedName~ExpiryJobDeduplicatesParallelRunsPreservesOccupancyAndScopesRecipients\|FullyQualifiedName~ApiFoundationTests" --verbosity minimal` | PASS 21/21, PostgreSQL/MinIO Docker riêng; gồm endpoint expiry, phạm vi Tenant, Staff 403, chạy job lặp/song song và không đổi occupancy |
-| `Update-LocalDatabase.ps1 -Check` trước sửa local | 21 pending; đối chiếu SQL sau check vẫn chưa có bảng expiry, lịch sử không đổi |
-| `Update-LocalDatabase.ps1` sau sao lưu/dừng API | PASS 21 migration commit atomically; không còn pending |
-| `node scripts/Diagnose-MobileApi.cjs https://192.168.0.106:7240 .tools/mobile-tls/root-ca.cer` | PASS live/ready 200, anonymous Contracts 401, CA sai và hostname sai bị từ chối |
-| `node scripts/Test-ExpoMobile.cjs 192.168.0.106 8081` | PASS status và manifest iOS đúng host LAN |
-| `git diff --check` | PASS |
+| `Update-LocalDatabase.ps1 -Check` trước sửa local                                                                                                                                                                                                                                               | 21 pending; đối chiếu SQL sau check vẫn chưa có bảng expiry, lịch sử không đổi                                                           |
+| `Update-LocalDatabase.ps1` sau sao lưu/dừng API                                                                                                                                                                                                                                                 | PASS 21 migration commit atomically; không còn pending                                                                                   |
+| `node scripts/Diagnose-MobileApi.cjs https://192.168.0.106:7240 .tools/mobile-tls/root-ca.cer`                                                                                                                                                                                                  | PASS live/ready 200, anonymous Contracts 401, CA sai và hostname sai bị từ chối                                                          |
+| `node scripts/Test-ExpoMobile.cjs 192.168.0.106 8081`                                                                                                                                                                                                                                           | PASS status và manifest iOS đúng host LAN                                                                                                |
+| `git diff --check`                                                                                                                                                                                                                                                                              | PASS                                                                                                                                     |
 
 Backup local bằng `pg_dump --format=custom`, xác minh archive bằng `pg_restore --list`:
 `.tools/mobile-repair-20261102-103026-before-upgrade.dump` (ignored, không commit).

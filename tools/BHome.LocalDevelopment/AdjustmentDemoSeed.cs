@@ -38,15 +38,38 @@ internal static class AdjustmentDemoSeed
                 continue;
             }
             Add(db, 20 + room, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = labels[room], Capacity = 3, Status = RoomStatus.Available });
-            for (var person = 0; person < 3; person++) Add(db, 40 + room * 3 + person, new Resident { RoomId = Id(20 + room), TenantUserId = User(3 + person), OwnerUserId = User(1),
-                DisplayLabel = $"Khách tổng hợp {(char)('A' + person)} ({labels[room]})", ResidentType = ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Verified,
-                ConfirmedByUserId = User(2), ConfirmedAt = DateTimeOffset.UtcNow });
-            for (var utility = 0; utility < 2; utility++) Add(db, 60 + room * 2 + utility, new Meter { RoomId = Id(20 + room), Code = $"SYN-ADJ-{room}-{utility}", UtilityType = (UtilityType)utility,
-                Display = MeterDisplay.Digital, DecimalPlaces = 2, InstalledOn = period.AddMonths(-4) });
+            for (var person = 0; person < 3; person++) Add(db, 40 + room * 3 + person, new Resident
+            {
+                RoomId = Id(20 + room),
+                TenantUserId = User(3 + person),
+                OwnerUserId = User(1),
+                DisplayLabel = $"Khách tổng hợp {(char)('A' + person)} ({labels[room]})",
+                ResidentType = ResidentType.Representative,
+                VerificationStatus = IdentityVerificationStatus.Verified,
+                ConfirmedByUserId = User(2),
+                ConfirmedAt = DateTimeOffset.UtcNow
+            });
+            for (var utility = 0; utility < 2; utility++) Add(db, 60 + room * 2 + utility, new Meter
+            {
+                RoomId = Id(20 + room),
+                Code = $"SYN-ADJ-{room}-{utility}",
+                UtilityType = (UtilityType)utility,
+                Display = MeterDisplay.Digital,
+                DecimalPlaces = 2,
+                InstalledOn = period.AddMonths(-4)
+            });
         }
         foreach (var (number, category, code, rate) in new[] { (80, ChargeCategory.Rent, "RENT", 3000000m), (81, ChargeCategory.Electricity, "ELECTRICITY", 3500m), (82, ChargeCategory.Water, "WATER", 15000m) })
-            if (!await db.Set<BillingPolicy>().AnyAsync(p => p.Id == Id(number), t)) Add(db, number, new BillingPolicy { LocationId = Id(10), Category = category, ChargeCode = code, Name = "Giá tổng hợp adjustment " + code,
-                Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered, Rate = rate, EffectiveFrom = period.AddYears(-1) });
+            if (!await db.Set<BillingPolicy>().AnyAsync(p => p.Id == Id(number), t)) Add(db, number, new BillingPolicy
+            {
+                LocationId = Id(10),
+                Category = category,
+                ChargeCode = code,
+                Name = "Giá tổng hợp adjustment " + code,
+                Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered,
+                Rate = rate,
+                EffectiveFrom = period.AddYears(-1)
+            });
         await db.SaveChangesAsync(t); await tx.CommitAsync(t);
     }
 }

@@ -67,10 +67,22 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
             var evidence = await repository.EvidenceAsync(x.EvidenceIds, t);
             if (evidence.Length != x.EvidenceIds.Length || evidence.Any(e => e.InvoiceId != invoiceId || e.UploaderId != Actor || e.RequestId != null || !e.Uploaded || e.CleanupAfter <= Now))
                 throw new AdjustmentException(400, "adjustment_evidence_invalid");
-            var request = new InvoiceAdjustmentRequest { InvoiceId = invoiceId, RequesterId = Actor, InvoiceLineId = x.InvoiceLineId,
-                ChargeCode = line?.ChargeCode, CurrentAmount = line is null ? financial.EffectivePayableAmount : line.Amount + (invoice.Status == InvoiceStatus.Final ? await repository.ChargeAdjustmentsAsync(invoiceId, line.ChargeCode, t) : 0), ProposedAmount = x.ProposedAmount is { } amount ? decimal.Truncate(amount) : null,
-                Reason = x.Reason, InvoiceSnapshot = JsonSerializer.Serialize(new { Total = invoice.Total.ToString("0", System.Globalization.CultureInfo.InvariantCulture), invoice.Version, invoice.Status, Lines = InvoiceService.View(invoice).Lines }),
-                InvoiceStatus = invoice.Status, InvoiceVersion = invoice.Version, FinancialVersion = financial.FinancialVersion, SubmittedAt = Now, Evidence = evidence.ToList() };
+            var request = new InvoiceAdjustmentRequest
+            {
+                InvoiceId = invoiceId,
+                RequesterId = Actor,
+                InvoiceLineId = x.InvoiceLineId,
+                ChargeCode = line?.ChargeCode,
+                CurrentAmount = line is null ? financial.EffectivePayableAmount : line.Amount + (invoice.Status == InvoiceStatus.Final ? await repository.ChargeAdjustmentsAsync(invoiceId, line.ChargeCode, t) : 0),
+                ProposedAmount = x.ProposedAmount is { } amount ? decimal.Truncate(amount) : null,
+                Reason = x.Reason,
+                InvoiceSnapshot = JsonSerializer.Serialize(new { Total = invoice.Total.ToString("0", System.Globalization.CultureInfo.InvariantCulture), invoice.Version, invoice.Status, Lines = InvoiceService.View(invoice).Lines }),
+                InvoiceStatus = invoice.Status,
+                InvoiceVersion = invoice.Version,
+                FinancialVersion = financial.FinancialVersion,
+                SubmittedAt = Now,
+                Evidence = evidence.ToList()
+            };
             foreach (var file in evidence) file.RequestId = request.Id;
             repository.Add(request); Remember(key, "submit", command, request.Id);
             repository.Add(new InvoiceAdjustmentEvent { RequestId = request.Id, InvoiceId = invoiceId, RequesterId = Actor, Name = "invoice.adjustment.requested.v1", OccurredAt = Now });
