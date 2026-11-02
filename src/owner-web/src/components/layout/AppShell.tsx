@@ -57,6 +57,7 @@ import { demoAuth } from '../../services/demoAuth';
 import { isMockMode } from '../../services/config';
 import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
+import { NotificationBell } from '../../features/notifications/NotificationBell';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -76,6 +77,8 @@ const iconMap: Record<string, typeof Building2> = {
   'temporary-residence': ShieldCheck,
   meters: Gauge,
   invoices: Receipt,
+  'billing-automation': CalendarDays,
+  'invoice-adjustments': Receipt,
   payments: Wallet,
   debts: Wallet,
   incidents: TriangleAlert,
@@ -92,7 +95,17 @@ const navGroups = [
   ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'handovers', 'temporary-residence']],
   [
     'Tài chính & Hóa đơn',
-    ['meters', 'invoices', 'payments', 'debts', 'expenses', 'reports', 'what-if'],
+    [
+      'meters',
+      'invoices',
+      'billing-automation',
+      'invoice-adjustments',
+      'payments',
+      'debts',
+      'expenses',
+      'reports',
+      'what-if',
+    ],
   ],
   ['Sự cố & Bảo trì', ['incidents', 'maintenance']],
   ['Thông báo', ['notifications']],
@@ -116,6 +129,8 @@ const navLabels: Record<string, string> = {
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
   invoices: 'Hóa đơn',
+  'billing-automation': 'Lịch tự động',
+  'invoice-adjustments': 'Điều chỉnh hóa đơn',
   payments: 'Thanh toán / Đối soát',
   debts: 'Công nợ',
   incidents: 'Quản lý sự cố',
@@ -341,16 +356,20 @@ export function AppShell() {
               </MenuItem>
             ))}
           </TextField>
-          <IconButton aria-label="Thông báo" onClick={() => navigate('/notifications')}>
-            <Badge
-              badgeContent={
-                data?.records.notifications.filter((row) => row.status === 'Chưa đọc').length || 0
-              }
-              color="error"
-            >
-              <Bell size={19} />
-            </Badge>
-          </IconButton>
+          {isMockMode ? (
+            <IconButton aria-label="Thông báo" onClick={() => navigate('/notifications')}>
+              <Badge
+                badgeContent={
+                  data?.records.notifications.filter((row) => row.status === 'Chưa đọc').length || 0
+                }
+                color="error"
+              >
+                <Bell size={19} />
+              </Badge>
+            </IconButton>
+          ) : (
+            <NotificationBell />
+          )}
           {isMockMode && (
             <Tooltip title="Khôi phục dữ liệu demo">
               <IconButton aria-label="Khôi phục demo" onClick={() => setResetOpen(true)}>

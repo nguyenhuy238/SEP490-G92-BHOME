@@ -15,6 +15,7 @@ public sealed class Resident : AuditableEntity
     public ResidentType ResidentType { get; set; }
     public IdentityVerificationStatus VerificationStatus { get; set; }
     public Guid OwnerUserId { get; set; }
+    public Guid? TenantUserId { get; set; }
     public string IdentityData { get; set; } = "{}";
     public string? IdentityHmac { get; set; }
     public string? HmacKeyVersion { get; set; }

@@ -83,6 +83,760 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("SigningCertificates", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SummaryJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("BillingAutomationAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationExecution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("BillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<int>("CreatedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExceptionsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("ExistingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("LastStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LockToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId", "LastStartedAt");
+
+                    b.HasIndex("PlanId", "BillingPeriod", "Phase")
+                        .IsUnique();
+
+                    b.ToTable("BillingAutomationExecutions", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AuthorizeAutomaticFinalization")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("AuthorizedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BillingScheduleVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BillingSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MeterDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MeterDueDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MeterDueMonthOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorizedByUserId");
+
+                    b.HasIndex("LocationId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("LocationId", "EffectiveFrom", "Version");
+
+                    b.ToTable("BillingAutomationPlans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BillingAutomationPlan_Calendar", "\"Version\">0 AND \"BillingScheduleVersion\">0 AND \"MeterDay\" BETWEEN 1 AND 31 AND \"MeterDueDay\" BETWEEN 1 AND 31 AND \"MeterDueMonthOffset\" BETWEEN 0 AND 2 AND \"TimeZone\"='Asia/Ho_Chi_Minh' AND (NOT \"AuthorizeAutomaticFinalization\" OR \"Enabled\") AND EXTRACT(DAY FROM \"EffectiveFrom\")=1");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingRepresentativeSelection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("BillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SelectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SelectedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("SelectedByUserId");
+
+                    b.HasIndex("RoomId", "BillingPeriod", "Version")
+                        .IsUnique();
+
+                    b.ToTable("BillingRepresentativeSelections", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DraftDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DraftMonthOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DueDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DueMonthOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FinalDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FinalMonthOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PartialMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RateDate")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RentSource")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Rounding")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId")
+                        .IsUnique();
+
+                    b.ToTable("BillingSchedules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BillingSchedule_Settings", "\"RateDate\" IN (0,1) AND \"RentSource\" IN (0,1) AND \"PartialMonth\" IN (0,1) AND \"Rounding\" IN (0,1) AND \"DraftDay\" BETWEEN 1 AND 31 AND \"FinalDay\" BETWEEN 1 AND 31 AND \"DueDay\" BETWEEN 1 AND 31 AND \"DraftMonthOffset\" BETWEEN 0 AND 2 AND \"FinalMonthOffset\" BETWEEN 0 AND 2 AND \"DueMonthOffset\" BETWEEN 0 AND 2 AND \"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AutomationFinalizationPlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AutomationPlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("BillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("FinalizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FinalizedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LocationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string[]>("MissingInputs")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<Guid>("RepresentativeContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RepresentativeTenantUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RoomNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ScheduleSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateOnly>("ScheduledFinalDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutomationFinalizationPlanId");
+
+                    b.HasIndex("AutomationPlanId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("FinalizedByUserId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("RepresentativeContractId");
+
+                    b.HasIndex("RepresentativeTenantUserId");
+
+                    b.HasIndex("RoomId", "BillingPeriod")
+                        .IsUnique();
+
+                    b.ToTable("Invoices", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Invoice_Final", "\"Status\" = 0 OR (\"FinalizedAt\" IS NOT NULL AND \"FinalizedByUserId\" IS NOT NULL AND cardinality(\"MissingInputs\") = 0 AND \"DueDate\" >= \"ScheduledFinalDate\")");
+
+                            t.HasCheckConstraint("CK_Invoice_State", "\"Status\" IN (0,1) AND \"Version\" > 0 AND \"Total\" >= 0 AND EXTRACT(DAY FROM \"BillingPeriod\") = 1");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentCommand", b =>
+                {
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Operation")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ActorId", "Key", "Operation");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("InvoiceAdjustmentCommands", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BeforeAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<string>("ChargeCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<decimal?>("CorrectedAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Delta")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("EffectiveAfter")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("EffectiveBefore")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("InvoiceStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("PaidAtDecision")
+                        .HasPrecision(28)
+                        .HasColumnType("numeric(28,0)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Sequence"));
+
+                    b.Property<string>("SourceFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("Sequence")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId", "InvoiceStatus", "Outcome");
+
+                    b.ToTable("InvoiceAdjustmentDecisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AdjustmentDecision_Values", "\"Outcome\" IN ('Approved','Rejected') AND \"InvoiceStatus\" IN (0,1) AND length(btrim(\"Reason\")) > 0 AND \"EffectiveBefore\" >= 0 AND \"EffectiveAfter\" >= 0 AND \"BeforeAmount\" >= 0 AND (\"CorrectedAmount\" IS NULL OR \"CorrectedAmount\" >= 0) AND \"EffectiveAfter\" = \"EffectiveBefore\" + \"Delta\" AND ((\"Outcome\" = 'Approved' AND \"CorrectedAmount\" IS NOT NULL AND \"Delta\" = \"CorrectedAmount\" - \"BeforeAmount\") OR (\"Outcome\" = 'Rejected' AND \"CorrectedAmount\" IS NULL AND \"Delta\" = 0))");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentEvent", b =>
+                {
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("RequestId", "Name");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.ToTable("InvoiceAdjustmentEvents", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CleanupAfter")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Uploaded")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("UploaderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("UploaderId");
+
+                    b.HasIndex("RequestId", "CleanupAfter");
+
+                    b.ToTable("InvoiceAdjustmentEvidence", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AdjustmentEvidence_Values", "\"Length\" > 0 AND \"Length\" <= 5242880 AND \"ContentType\" IN ('image/png','image/jpeg')");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChargeCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CurrentAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<int>("FinancialVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InvoiceLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InvoiceSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("InvoiceStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InvoiceVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("ProposedAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId", "SubmittedAt");
+
+                    b.HasIndex("RequesterId", "SubmittedAt");
+
+                    b.ToTable("InvoiceAdjustmentRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AdjustmentRequest_Values", "\"CurrentAmount\" >= 0 AND (\"ProposedAmount\" IS NULL OR \"ProposedAmount\" >= 0) AND length(btrim(\"Reason\")) > 0 AND \"InvoiceVersion\" > 0 AND \"InvoiceStatus\" IN (0,1)");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceIssuedEvent", b =>
+                {
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AutomationPlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("InvoiceId");
+
+                    b.HasIndex("AutomationPlanId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.ToTable("InvoiceIssuedEvents", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal?>("CalculatedAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChargeCode")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<decimal?>("ConfirmedReading")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid?>("CorrectionRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MeterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("OccupiedDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PeriodDays")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PolicyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("PolicyVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("PreviousReading")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateOnly>("RateDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrectionRequestId");
+
+                    b.HasIndex("MeterReadingId");
+
+                    b.HasIndex("PolicyId");
+
+                    b.HasIndex("InvoiceId", "ChargeCode")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceLine_Amounts", "\"Rate\" >= 0 AND \"Quantity\" >= 0 AND \"Amount\" >= 0 AND \"OccupiedDays\" BETWEEN 1 AND \"PeriodDays\" AND \"PeriodDays\" BETWEEN 28 AND 31");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceRecipient", b =>
+                {
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("InvoiceId", "TenantUserId");
+
+                    b.HasIndex("TenantUserId");
+
+                    b.ToTable("InvoiceRecipients", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.Meter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -268,8 +1022,17 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("AssignmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AutomationPlanId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateOnly?>("BillingPeriod")
                         .HasColumnType("date");
+
+                    b.Property<Guid?>("BillingRoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BillingUtilityType")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -352,6 +1115,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AssignmentId");
 
+                    b.HasIndex("AutomationPlanId");
+
                     b.HasIndex("ContractId");
 
                     b.HasIndex("MeterId")
@@ -370,6 +1135,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Purpose\" = 2 AND \"Status\" <> 3");
 
+                    b.HasIndex("BillingRoomId", "BillingUtilityType", "BillingPeriod")
+                        .IsUnique()
+                        .HasFilter("\"Kind\"=0 AND \"Purpose\"=1");
+
                     b.HasIndex("LocationId", "Status", "DueAt");
 
                     b.ToTable("OperationalTasks", null, t =>
@@ -379,6 +1148,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Task_Kind", "\"Kind\" IN (0,1) AND ((\"Kind\" = 0 AND \"MeterId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)) OR (\"Kind\" = 1 AND \"MeterId\" IS NULL AND \"ContractId\" IS NULL AND \"BillingPeriod\" IS NULL AND \"DueAt\" IS NOT NULL AND length(trim(\"Title\")) > 0 AND length(trim(\"Requirements\")) > 0))");
 
                             t.HasCheckConstraint("CK_Task_Period", "(\"Purpose\" IN (0,2) AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)");
+
+                            t.HasCheckConstraint("CK_Task_RoomPeriod", "(\"Kind\"<>0 OR \"Purpose\"<>1 OR (\"BillingRoomId\" IS NOT NULL AND \"BillingUtilityType\" IN (0,1))) AND (\"AutomationPlanId\" IS NULL OR (\"Kind\"=0 AND \"Purpose\"=1))");
 
                             t.HasCheckConstraint("CK_Task_State", "\"Status\" IN (0,1,2,3,4) AND \"Priority\" IN (0,1) AND \"Version\" > 0");
 
@@ -464,6 +1235,481 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("StaffUserId", "StartDate", "EndDate");
 
                     b.ToTable("StaffLocationAssignments");
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.NotificationDeliveryAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("NotificationDeliveryAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.NotificationPublication", b =>
+                {
+                    b.Property<string>("EventKey")
+                        .HasMaxLength(220)
+                        .HasColumnType("character varying(220)");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RecipientCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("EventKey");
+
+                    b.ToTable("NotificationPublications", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.UserNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AudienceRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeliveryAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("DeliveryLastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryLastErrorCode")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid?>("DeliveryLeaseToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeliveryLockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryProviderReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("DeliveryState")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(220)
+                        .HasColumnType("character varying(220)");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("NextDeliveryAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RelatedObjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelatedObjectType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid?>("SourceTaskNotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("SourceTaskNotificationId");
+
+                    b.HasIndex("DeliveryState", "NextDeliveryAt");
+
+                    b.HasIndex("RecipientUserId", "EventKey")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientUserId", "ReadAt", "CreatedAt");
+
+                    b.ToTable("UserNotifications", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.BankReferenceClaim", b =>
+                {
+                    b.Property<string>("NormalizedReference")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid?>("AllocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DepositVerificationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("NormalizedReference");
+
+                    b.HasIndex("AllocationId")
+                        .IsUnique();
+
+                    b.HasIndex("DepositVerificationId")
+                        .IsUnique();
+
+                    b.ToTable("BankReferenceClaims", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BankReferenceClaim_Target", "(\"AllocationId\" IS NULL) <> (\"DepositVerificationId\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AllocatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PaidByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TransferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VerifiedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("PaidByUserId");
+
+                    b.HasIndex("TransferId")
+                        .IsUnique();
+
+                    b.HasIndex("VerifiedByUserId");
+
+                    b.ToTable("PaymentAllocations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentAllocation_Amount", "\"Amount\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentCommand", b =>
+                {
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Operation")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ActorId", "Key", "Operation");
+
+                    b.ToTable("PaymentCommands", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentConfirmedEvent", b =>
+                {
+                    b.Property<Guid>("AllocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("AllocationId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.ToTable("PaymentConfirmedEvents", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentReconciliation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Sequence"));
+
+                    b.Property<Guid>("TransferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("TransferId", "OccurredAt");
+
+                    b.ToTable("PaymentReconciliations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentReconciliation_Decision", "\"Decision\" IN ('PendingReview','Allocated','Rejected')");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<string>("BankReference")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<bool>("IsDevelopmentDemo")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NormalizedReference")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ProposedInvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProviderIdentity")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("StatementReference")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("TransferDescription")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VerificationReason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("VerificationSource")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VerifiedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProposedInvoiceId");
+
+                    b.HasIndex("VerifiedAt");
+
+                    b.HasIndex("VerifiedByUserId");
+
+                    b.HasIndex("ProviderIdentity", "NormalizedReference")
+                        .IsUnique();
+
+                    b.ToTable("PaymentTransfers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentTransfer_Values", "\"Amount\" > 0 AND \"Currency\" = 'VND' AND length(\"NormalizedReference\") > 0 AND \"NormalizedReference\" = upper(btrim(\"BankReference\"))");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.ReceivingBankAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountHolder")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(19)
+                        .HasColumnType("character varying(19)");
+
+                    b.Property<string>("BankIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)");
+
+                    b.Property<DateTimeOffset>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ConfirmedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDevelopmentDemo")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("LocationId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ReceivingBankAccounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReceivingBankAccount_Format", "\"BankIdentifier\" ~ '^[0-9]{6}$' AND \"AccountNumber\" ~ '^[0-9]{6,19}$' AND \"AccountHolder\" ~ '^[A-Z0-9 ]{5,50}$' AND \"Version\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("BHome.Domain.PropertyManagement.Asset", b =>
@@ -1029,6 +2275,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("HoldingContractId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsDevelopmentDemo")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
@@ -1093,11 +2342,12 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("RepresentativeResidentId");
 
                     b.HasIndex("RoomId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_Contract_ActiveRoom")
+                        .HasDatabaseName("IX_Contract_ActiveRoom")
                         .HasFilter("\"Status\" = 3");
 
                     b.HasIndex("TenantUserId");
+
+                    b.HasIndex("Status", "EndDate", "Id");
 
                     b.ToTable("Contracts", null, t =>
                         {
@@ -1109,6 +2359,113 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_Contract_Terms", "\"EndDate\" > \"StartDate\" AND \"MonthlyRent\" > 0 AND \"RequiredDeposit\" >= 0");
                         });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractDocumentFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DevelopmentOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TemplateId")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int?>("TemplateVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("ContractId", "SnapshotHash", "TemplateId", "TemplateVersion")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 0");
+
+                    b.ToTable("ContractDocumentFiles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContractDocumentFile_Length", "\"Length\" > 0 AND \"Length\" <= 10485760");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractExpiryNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientId", "CreatedAt");
+
+                    b.HasIndex("ContractId", "EndDate", "Stage", "RecipientId")
+                        .IsUnique();
+
+                    b.ToTable("ContractExpiryNotices", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractFileUpload", b =>
@@ -1128,6 +2485,198 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("CleanupAfter");
 
                     b.ToTable("ContractFileUploads", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractFinalInspection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BaselineContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BaselineSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("BaselineVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("InspectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("NoAdditionalCharges")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ObservedSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("OwnerDecision")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OwnerReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StaffId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaselineContractId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("ContractId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ContractFinalInspections", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandover", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ElectricityReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset?>("StaffConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("StaffConfirmedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("TenantConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantConfirmedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("TenantConfirmedVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WaterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId")
+                        .IsUnique();
+
+                    b.HasIndex("ElectricityReadingId");
+
+                    b.HasIndex("StaffConfirmedBy");
+
+                    b.HasIndex("TenantConfirmedBy");
+
+                    b.HasIndex("WaterReadingId");
+
+                    b.ToTable("ContractHandovers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContractHandover_State", "\"Version\" > 0 AND \"Status\" BETWEEN 0 AND 2 AND (\"TenantConfirmedVersion\" IS NULL OR \"TenantConfirmedVersion\" = \"Version\") AND (\"Status\" <> 2 OR (\"TenantConfirmedVersion\" IS NOT NULL AND \"TenantConfirmedVersion\" = \"Version\" AND \"TenantConfirmedAt\" IS NOT NULL AND \"StaffConfirmedAt\" IS NOT NULL AND \"TenantConfirmedBy\" IS NOT NULL AND \"StaffConfirmedBy\" IS NOT NULL))");
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandoverHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ElectricityReadingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WaterReadingId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("ElectricityReadingId");
+
+                    b.HasIndex("WaterReadingId");
+
+                    b.HasIndex("ContractId", "OccurredAt");
+
+                    b.ToTable("ContractHandoverHistory", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractInspectionEvidence", b =>
@@ -1205,6 +2754,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("InspectionScheduledAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("InspectionStaffId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsExpiry")
                         .HasColumnType("boolean");
 
@@ -1244,6 +2796,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("WaterReadingId")
                         .HasColumnType("uuid");
 
@@ -1256,7 +2812,52 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WaterReadingId");
 
+                    b.HasIndex("InspectionStaffId", "InspectionScheduledAt");
+
                     b.ToTable("ContractMoveOuts", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractMoveOutHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("ContractId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ContractMoveOutHistory", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractOperation", b =>
@@ -1327,6 +2928,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("FinancialSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("LedgerReference")
                         .HasMaxLength(200)
@@ -1543,6 +3148,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("TenantUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1554,6 +3162,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("ConfirmedByUserId");
 
                     b.HasIndex("RoomId");
+
+                    b.HasIndex("TenantUserId");
 
                     b.HasIndex("OwnerUserId", "HmacKeyVersion", "IdentityHmac")
                         .IsUnique()
@@ -1976,6 +3586,270 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationAttempt", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationExecution", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationPlan", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorizedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingRepresentativeSelection", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SelectedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingSchedule", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationFinalizationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("FinalizedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("RepresentativeContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RepresentativeTenantUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentCommand", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentDecision", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithOne("Decision")
+                        .HasForeignKey("BHome.Domain.Billing.InvoiceAdjustmentDecision", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentEvent", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentEvidence", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithMany("Evidence")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploaderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceIssuedEvent", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.InvoiceAdjustmentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("CorrectionRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("MeterReadingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.PropertyManagement.BillingPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceRecipient", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany("Recipients")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.Meter", b =>
                 {
                     b.HasOne("BHome.Domain.PropertyManagement.Room", "Room")
@@ -2041,6 +3915,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AssignmentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
                         .HasForeignKey("ContractId")
@@ -2095,6 +3974,146 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.NotificationDeliveryAttempt", b =>
+                {
+                    b.HasOne("BHome.Domain.Notifications.UserNotification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.UserNotification", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.StaffOperations.OperationalTaskNotification", null)
+                        .WithMany()
+                        .HasForeignKey("SourceTaskNotificationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.BankReferenceClaim", b =>
+                {
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentAllocation", null)
+                        .WithMany()
+                        .HasForeignKey("AllocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.TenantContracts.DepositVerification", null)
+                        .WithMany()
+                        .HasForeignKey("DepositVerificationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentAllocation", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("PaidByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
+                        .WithMany()
+                        .HasForeignKey("TransferId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentCommand", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentConfirmedEvent", b =>
+                {
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentAllocation", null)
+                        .WithMany()
+                        .HasForeignKey("AllocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentReconciliation", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
+                        .WithMany()
+                        .HasForeignKey("TransferId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentTransfer", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.ReceivingBankAccount", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -2286,6 +4305,120 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Navigation("Room");
                 });
 
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractDocumentFile", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractExpiryNotice", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractFinalInspection", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("BaselineContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandover", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("ElectricityReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StaffConfirmedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantConfirmedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("WaterReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandoverHistory", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("ElectricityReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("WaterReadingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractInspectionEvidence", b =>
                 {
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
@@ -2308,10 +4441,30 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ElectricityReadingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("InspectionStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BHome.Domain.Billing.MeterReading", null)
                         .WithMany()
                         .HasForeignKey("WaterReadingId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractMoveOutHistory", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractResident", b =>
@@ -2380,6 +4533,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Room");
                 });
@@ -2465,6 +4623,20 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Recipients");
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
+                {
+                    b.Navigation("Decision");
+
+                    b.Navigation("Evidence");
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.Contract", b =>

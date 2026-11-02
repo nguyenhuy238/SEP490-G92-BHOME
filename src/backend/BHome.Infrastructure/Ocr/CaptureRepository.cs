@@ -161,12 +161,39 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         var task = new OperationalTask { LocationId = meter.LocationId, Title = "Meter reading", MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
         db.Add(task); Audit("MeterTaskAssigned", "Task", task.Id); await Save(t); return new(task.Id);
     }
-    public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => await scope.VisibleTasks.AsNoTracking()
-        .OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Take(100)
+    private IQueryable<MeterTaskSummary> TaskSummaries(IQueryable<OperationalTask> tasks) => tasks
         .Select(x => new MeterTaskSummary(x.Id, x.MeterId!.Value, x.Meter.Room.Location.Name, x.Meter.Room.RoomNumber, x.Meter.Code,
             x.Meter.UtilityType, x.Meter.Display, x.Meter.DecimalPlaces, x.Purpose, x.ReadingDate, x.BillingPeriod, x.Status,
-            db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId).OrderByDescending(r => r.ConfirmedAt).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
-            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault())).ToListAsync(t);
+            x.Status == MeterTaskStatus.Completed
+                ? db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => r.PreviousValue).FirstOrDefault()
+                : db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId &&
+                    db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
+                        (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate && previous.Purpose != ReadingPurpose.Final))))
+                    .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
+            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(),x.DueAt,x.AssignedStaffUserId,x.AutomationPlanId,x.Version,x.LocationId,x.Meter.RoomId));
+    public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t,MeterTaskQuery? q=null)
+    {
+        var rows=scope.VisibleTasks.AsNoTracking();
+        if(q?.LocationId is {} location)rows=rows.Where(x=>x.LocationId==location);
+        if(q?.RoomId is {} room)rows=rows.Where(x=>x.Meter.RoomId==room);
+        if(q?.Status is {} status)rows=rows.Where(x=>x.Status==status);
+        if(q?.DueDate is {} date)
+        {
+            var zone=TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+            var start=new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue),zone));
+            var end=start.AddDays(1);rows=rows.Where(x=>x.DueAt>=start&&x.DueAt<end);
+        }
+        return await TaskSummaries(rows.OrderByDescending(x=>x.ReadingDate).ThenBy(x=>x.Id).Skip(((q?.Page??1)-1)*100).Take(100)).ToListAsync(t);
+    }
+    public async Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t) =>
+        await TaskSummaries(scope.VisibleTasks.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+    public async Task<ConfirmedReading> ReadingAsync(Guid id, CancellationToken t)
+    {
+        var row = await db.Set<MeterReading>().AsNoTracking()
+            .SingleOrDefaultAsync(r => r.Id == id && scope.VisibleTasks.Any(task => task.Id == r.TaskId), t)
+            ?? throw new OcrAccessException();
+        return Reading(row);
+    }
 
     public async Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken t)
     {
@@ -230,6 +257,9 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         // Verify the private object still exists before committing its reference.
         await storage.CopyToAsync(evidence.ObjectKey, Stream.Null, t);
         var proposed = task.OcrImageHash == evidence.ImageHash ? task.OcrProposedValue : null;
+        // PostgreSQL timestamptz stores microseconds. Match it before returning the first response.
+        var confirmedAt = clock.GetUtcNow();
+        confirmedAt = confirmedAt.AddTicks(-(confirmedAt.Ticks % 10));
         var row = new MeterReading
         {
             TaskId = taskId,
@@ -241,7 +271,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
             Consumption = previous is null ? null : x.ConfirmedValue - previous.ConfirmedValue,
             Status = proposed.HasValue && proposed != x.ConfirmedValue ? MeterReadingStatus.Corrected : MeterReadingStatus.Confirmed,
             ConfirmedByUserId = Actor,
-            ConfirmedAt = clock.GetUtcNow()
+            ConfirmedAt = confirmedAt
         };
         db.Add(row); task.Status = MeterTaskStatus.Completed; task.CompletedAt = row.ConfirmedAt; evidence.IsLinked = true;
         Audit("MeterReadingConfirmed", "MeterReading", row.Id); await Save(t); await tx.CommitAsync(t); return Reading(row);

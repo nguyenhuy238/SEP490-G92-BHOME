@@ -97,6 +97,7 @@ $global:prepared += $LanIp
     function node {
         $global:LASTEXITCODE = if ($global:failReadiness) { 1 } else { 0 }
         if ($args.Count -eq 2 -and $args[0] -eq '-p') { $global:LASTEXITCODE = 0; '22.23.4' }
+        elseif ($args[0] -like '*Diagnose-MobileApi.cjs') { $global:apiDiagnoses++ }
         elseif ($args[0] -like '*Test-ExpoMobile.cjs') {
             $global:metroChecks++
             $global:LASTEXITCODE = if ($global:failMetro) { 1 } else { 0 }
@@ -151,6 +152,14 @@ $global:prepared += $LanIp
         $global:stopped += [int]$args[1]
         $global:LASTEXITCODE = 0
     }
+    function Get-Date {
+        if ($global:failReadiness) {
+            $global:readinessClock++
+            return (Microsoft.PowerShell.Utility\Get-Date).AddMinutes($global:readinessClock)
+        }
+        Microsoft.PowerShell.Utility\Get-Date
+    }
+    function Start-Sleep { param($Seconds) }
     $global:computerName = 'synthetic-pc.local'; $global:serverId = 'SYNTHETIC-CA-A'; $global:modelDownloads = 0; $global:hostnameChecks = 0; $global:metroChecks = 0
     $global:addressCalls = 0; $global:prepared = @(); $global:started = 0; $global:stopped = @()
     & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null
@@ -210,10 +219,23 @@ $global:prepared += $LanIp
     catch { if ($_.Exception.Message -notlike 'API ports belong to a different process*') { throw } }
     Assert-Equal $global:prepared.Count 0 'foreign API rejected before configuration changes'
     $global:foreignApi = $false; $global:noApi = $true; $global:failReadiness = $true
-    $global:started = 0; $global:addressCalls = 0
+    $global:started = 0; $global:addressCalls = 0; $global:apiDiagnoses = 0; $global:readinessClock = 0
     try { & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null; throw 'Failed API readiness was accepted.' }
-    catch { if ($_.Exception.Message -notlike 'API HTTPS readiness failed*') { throw } }
+    catch {
+        if ($_.Exception.Message -notlike 'API HTTPS readiness failed*') { throw }
+        Assert-Equal $_.Exception.Message.Contains('Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.') $true 'owned API diagnostics point to both build output and stderr'
+    }
     Assert-Equal $global:started 0 'never start Metro after failed verified HTTPS readiness'
+    Assert-Equal $global:apiDiagnoses 1 'diagnose actual HTTPS endpoint on readiness failure'
+    $global:noApi = $false; $global:readinessClock = 0; $global:addressCalls = 0
+    try { & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null; throw 'Unhealthy existing API was accepted.' }
+    catch {
+        if ($_.Exception.Message -notlike 'API HTTPS readiness failed*') { throw }
+        Assert-Equal $_.Exception.Message.Contains('Check the running API/Visual Studio output') $true 'reused API failure does not direct users to stale standalone logs'
+        Assert-Equal $_.Exception.Message.Contains('scripts/Update-LocalDatabase.ps1 -Check') $true 'provide read-only database diagnosis before suggesting migration'
+    }
+    Assert-Equal $global:apiDiagnoses 2 'diagnose existing API without launching a duplicate'
+    Assert-Equal $global:stopped.Contains(123) $false 'unhealthy debugger API remains owned by user'
     $global:failReadiness = $false; $global:failModels = $true; $global:noApi = $false
     $global:prepared = @(); $global:started = 0; $global:addressCalls = 0
     Remove-Item -LiteralPath (Join-Path $testRoot '.tools/ocr-models/charset.txt')
@@ -221,6 +243,41 @@ $global:prepared += $LanIp
     catch { if ($_.Exception.Message -ne 'Synthetic model download failure.') { throw } }
     Assert-Equal $global:started 0 'never open Metro after model download failure'
     Assert-Equal $global:prepared.Count 0 'model download failure is visible before modifying API configuration'
+
+    # The upgrade wrapper must execute the freshly built DLL, never stale `dotnet run`
+    # output. Mock only the process boundary; no test connects to a user database.
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts/Update-LocalDatabase.ps1') -Destination (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1')
+    [IO.File]::WriteAllText((Join-Path $testRoot '.env'), 'ConnectionStrings__Database=Host=127.0.0.1;Database=bhome;Username=synthetic;Password=synthetic')
+    $global:databaseCalls = @(); $global:failDatabaseBuild = $false
+    function dotnet {
+        $global:databaseCalls += ,@($args)
+        if ($args[0] -eq 'build') { $global:LASTEXITCODE = if ($global:failDatabaseBuild) { 1 } else { 0 }; return }
+        if ($args[0] -notlike '*BHome.DatabaseUpgrade.dll') { throw 'Must execute the isolated DLL directly.' }
+        $global:LASTEXITCODE = if ($args -contains '--check') { 2 } else { 0 }
+    }
+    $savedConnection = $env:ConnectionStrings__Database
+    try {
+        $env:ConnectionStrings__Database = 'synthetic-original'
+        & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check
+        Assert-Equal $global:databaseCalls.Count 2 'pending read-only inspection builds then executes exactly once'
+        Assert-Equal ($global:databaseCalls[0] -contains '--artifacts-path') $true 'build isolated from running API DLLs'
+        Assert-Equal $global:databaseCalls[1][0] (Join-Path $testRoot '.tools/database-upgrade/bin/BHome.DatabaseUpgrade/debug/BHome.DatabaseUpgrade.dll') 'execute the current isolated migration assembly'
+        Assert-Equal ($global:databaseCalls[1] -contains '--check') $true 'forward read-only mode to runner'
+        Assert-Equal $env:ConnectionStrings__Database 'synthetic-original' 'restore caller connection after inspection'
+        $global:databaseCalls = @()
+        & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env')
+        Assert-Equal ($global:databaseCalls[1] -contains '--check') $false 'explicit upgrade retains migration mode'
+        $global:databaseCalls = @(); $global:failDatabaseBuild = $true
+        try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check; throw 'Failed database build was accepted.' }
+        catch { if ($_.Exception.Message -ne 'Local database tool build failed.') { throw } }
+        Assert-Equal $global:databaseCalls.Count 1 'never execute a stale runner after build failure'
+        Assert-Equal $env:ConnectionStrings__Database 'synthetic-original' 'restore caller connection after build failure'
+        $global:databaseCalls = @()
+        [IO.File]::WriteAllText((Join-Path $testRoot '.env'), 'ConnectionStrings__Database=Host=remote.invalid;Database=bhome')
+        try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check; throw 'Remote database was accepted.' }
+        catch { if ($_.Exception.Message -notlike 'Refusing migration:*') { throw } }
+        Assert-Equal $global:databaseCalls.Count 0 'remote database rejected before build or inspection'
+    } finally { $env:ConnectionStrings__Database = $savedConnection }
     Write-Output "PASS $checks mobile network/launcher assertions."
 } finally {
     $resolvedTestRoot = [IO.Path]::GetFullPath($testRoot)

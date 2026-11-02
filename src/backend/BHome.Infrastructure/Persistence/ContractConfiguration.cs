@@ -28,7 +28,7 @@ internal static class ContractConfiguration
             e.HasIndex(c => c.HoldingContractId).IsUnique().HasFilter("\"HoldingContractId\" IS NOT NULL");
             e.HasIndex(c => c.HoldingAllocationReference).IsUnique().HasFilter("\"HoldingAllocationReference\" IS NOT NULL");
             e.Property(c => c.Terms).HasMaxLength(12000); e.Property(c => c.SnapshotHash).HasMaxLength(64);
-            e.HasIndex(c => c.RoomId).IsUnique().HasFilter("\"Status\" = 3").HasDatabaseName("UX_Contract_ActiveRoom");
+            e.HasIndex(c => c.RoomId).HasFilter("\"Status\" = 3").HasDatabaseName("IX_Contract_ActiveRoom");
             e.HasIndex(c => c.PreviousContractId).IsUnique().HasFilter("\"PreviousContractId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)");
             e.HasMany(c => c.Residents).WithOne().HasForeignKey(r => r.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(c => c.Signatures).WithOne().HasForeignKey(s => s.ContractId).OnDelete(DeleteBehavior.Restrict);
@@ -59,6 +59,8 @@ internal static class ContractConfiguration
         b.Entity<ContractMoveOut>(e =>
         {
             e.ToTable("ContractMoveOuts"); e.HasIndex(m => m.ContractId).IsUnique();
+            e.Property(m=>m.Version).IsConcurrencyToken();e.HasIndex(m=>new{m.InspectionStaffId,m.InspectionScheduledAt});
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(m=>m.InspectionStaffId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contract>().WithMany().HasForeignKey(m => m.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterReading>().WithMany().HasForeignKey(m => m.ElectricityReadingId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterReading>().WithMany().HasForeignKey(m => m.WaterReadingId).OnDelete(DeleteBehavior.Restrict);
@@ -76,6 +78,7 @@ internal static class ContractConfiguration
         {
             e.ToTable("ContractSettlementReviews"); e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Decision).HasMaxLength(2000); e.Property(x => x.LedgerReference).HasMaxLength(200);
+            e.Property(x=>x.FinancialSnapshot).HasColumnType("jsonb");
             e.HasIndex(x => new { x.ContractId, x.ReviewedAt });
         });
         b.Entity<ContractFileUpload>(e =>

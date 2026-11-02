@@ -132,7 +132,7 @@ public sealed class PostgresFoundationTests : IAsyncLifetime
             """).SingleAsync());
         Assert.True(await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'Contracts'
-                AND indexname = 'UX_Contract_ActiveRoom' AND indexdef LIKE 'CREATE UNIQUE INDEX%') AS "Value"
+                AND indexname = 'IX_Contract_ActiveRoom' AND indexdef LIKE 'CREATE INDEX%') AS "Value"
             """).SingleAsync());
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());

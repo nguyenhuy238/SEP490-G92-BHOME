@@ -82,6 +82,80 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
 
     [Fact]
+    public async Task DevelopmentWorkflowUsesPrivateRealPdfAndDistinctSimulationEvidenceBeforeActivation()
+    {
+        var w = await Setup(); var outside = await Setup();
+        await using (var setup = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var setupDb = setup.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC TYPE", DefaultCapacity = 2 };
+            setupDb.Add(type); (await setupDb.Set<Room>().FindAsync(w.Room))!.RoomTypeId = type.Id; await setupDb.SaveChangesAsync();
+        }
+        await using var host = fixture.Factory.WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ContractWorkflow:SimulatedSigningEnabled"] = "true",
+                ["ContractPdf:TemplateId"] = "main-contract-development-v1"
+            }));
+            b.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IContractSigningProvider>();
+                s.AddScoped(typeof(IContractSigningProvider), typeof(ViettelMySignContractAdapter).Assembly
+                    .GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!);
+            });
+        });
+        Actor InHost(Actor a) { var client = host.CreateClient(); client.DefaultRequestHeaders.Authorization = a.Client.DefaultRequestHeaders.Authorization; return new(client, a.Id); }
+        var owner = InHost(w.Owner); var tenant = InHost(w.Tenant); var staff = InHost(w.Staff);
+        var configuration = await Success<ContractWorkflowConfiguration>(await owner.Client.GetAsync("/api/v1/contracts/configuration"));
+        Assert.True(configuration.Template.Available); Assert.True(configuration.Template.DevelopmentOnly); Assert.Equal("Simulated", configuration.SigningMode);
+        var prepared = await Success<ContractPreparation>(await staff.Client.GetAsync($"/api/v1/contracts/preparation?locationId={w.Location}"));
+        Assert.Contains(prepared.Rooms, r => r.Id == w.Room); Assert.DoesNotContain(prepared.Rooms, r => r.Id == outside.Room);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.Client.GetAsync("/api/v1/contracts/preparation")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync("/api/v1/contracts/preparation/accounts")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(owner, $"/api/v1/contracts/preparation/residents/{w.Resident}/account", new TenantAccountLink(w.Tenant.Id))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"/api/v1/contracts/preparation/residents/{w.Resident}/account", new TenantAccountLink(outside.Tenant.Id))).StatusCode);
+        var id = (await Success<ContractId>(await Post(staff, "/api/v1/contracts", Input(w)))).Id;
+        var wrong = Input(w) with { TenantUserId = outside.Tenant.Id };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(staff, "/api/v1/contracts", wrong)).StatusCode);
+        var preview = await Success<ContractDocumentView>(await Post(owner, Path(id, "previews")));
+        var replay = await Success<ContractDocumentView>(await Post(owner, Path(id, "previews")));
+        Assert.Equal(preview.Id, replay.Id); Assert.True(preview.DevelopmentOnly);
+        var pdf = await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}"));
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(pdf));
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, "previews"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, Path(id, "activate"))).StatusCode);
+        foreach (var actor in new[] { owner, tenant })
+        {
+            await Success<SignatureView>(await Post(actor, Path(id, "signing"), new SigningInput(Guid.Empty)));
+            var signed = await Success<ContractView>(await Post(actor, Path(id, "signing/sync")));
+            Assert.True(signed.IsDevelopmentDemo); Assert.Contains(signed.Signatures, s => s.SignerUserId == actor.Id && s.Status == "Simulated");
+            Assert.DoesNotContain(signed.Signatures, s => s.Status == "Signed");
+        }
+        Assert.False((await Success<ActivationReadiness>(await owner.Client.GetAsync(Path(id, "activation-readiness")))).Ready);
+        await Deposit(w, id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, Path(id, "activate"))).StatusCode);
+        var active = await Success<ContractView>(await Post(owner, Path(id, "activate")));
+        Assert.Equal("Active", active.Status);
+        Assert.Single(await Success<DepositVerificationView[]>(await owner.Client.GetAsync(Path(id, "deposit-verifications"))));
+        Assert.Contains(await Success<ContractHistoryView[]>(await tenant.Client.GetAsync(Path(id, "history"))), a => a.Action == "ContractSignatureSimulated");
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().FindAsync(w.Room))!.Status);
+        Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == id).ToArrayAsync());
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"IsDevelopmentDemo\" = false WHERE \"Id\" = {id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractDocumentFiles\" SET \"FileHash\" = 'tampered' WHERE \"ContractId\" = {id}"));
+        var objectStorage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
+        await ContractFileCleanup.CleanupAsync(db, objectStorage, DateTimeOffset.UtcNow.AddDays(2), default);
+        Assert.Equal(pdf, await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}")));
+        var documentFile = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == preview.Id);
+        using var tampered = new MemoryStream("SYNTHETIC TAMPERING"u8.ToArray());
+        await objectStorage.PutAsync(documentFile.ObjectKey, tampered, tampered.Length, "application/pdf", default);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
+    }
+
+    [Fact]
     public async Task ListScopesBeforeCountingAndPagingAndReturnsOnlySafeSummaries()
     {
         var a = await Setup(); var b = await Setup(); var own = await Draft(a); var another = await Draft(b);
@@ -107,6 +181,76 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Factory.CreateClient().GetAsync("/api/v1/contracts")).StatusCode);
         foreach (var query in new[] { "page=0", "page=-1", "pageSize=0", "pageSize=101", "page=2147483647&pageSize=100", "status=Invented", "status=99", "locationId=00000000-0000-0000-0000-000000000000" })
             Assert.Equal(HttpStatusCode.BadRequest, (await a.Owner.Client.GetAsync("/api/v1/contracts?" + query)).StatusCode);
+    }
+
+    [Fact]
+    public async Task MoveInHandoverRequiresScopedStaffRealReadingsEvidenceAndSameVersionConfirmations()
+    {
+        var w = await Setup(); var outside = await Setup(); var id = await Active(w);
+        var readingIds = new List<Guid>();
+        foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
+        {
+            Guid meterId;
+            await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+                var meter = new Meter { RoomId = w.Room, Code = "SYNTHETIC-HANDOVER-" + type, UtilityType = type, InstalledOn = Today.AddDays(-1) }; db.Add(meter); await db.SaveChangesAsync(); meterId = meter.Id;
+            }
+            var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meterId, ReadingPurpose.Initial, Today, null, null)));
+            using var image = new ByteArrayContent(Image()); image.Headers.ContentType = new("image/png");
+            var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", image));
+            var reading = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true, 100, evidence.Id)));
+            readingIds.Add(reading.Id);
+        }
+        using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
+        var picture = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), photo));
+        var input = new HandoverInput(0, Today, "SYNTHETIC room condition", "SYNTHETIC keys checklist", "", [], readingIds[0], readingIds[1], [picture.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { EvidenceIds = [] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { ElectricityReadingId = readingIds[1] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { Date = Today.AddDays(1) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Owner, Path(id, "handover"), input)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(outside.Staff, Path(id, "handover"), input)).StatusCode);
+        var first = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), input)); Assert.Equal(1, first.Version);
+        await using (var direct = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var store = direct.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            await Assert.ThrowsAsync<PostgresException>(() => store.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractHandovers\" SET \"Status\"=2, \"TenantConfirmedAt\"={now}, \"StaffConfirmedAt\"={now}, \"TenantConfirmedBy\"={w.Tenant.Id}, \"StaffConfirmedBy\"={w.Staff.Id} WHERE \"ContractId\"={id}"));
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(outside.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/disputes"), new HandoverDecision(1, "SYNTHETIC discrepancy")));
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        using var correctedPhoto = new ByteArrayContent(Image()); correctedPhoto.Headers.ContentType = new("image/png");
+        var replacement = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), correctedPhoto));
+        var second = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), input with { Version = 1, RoomCondition = "SYNTHETIC corrected", EvidenceIds = [replacement.Id] })); Assert.Equal(2, second.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, ""))).StatusCode);
+        await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(2, "")));
+        var confirmed = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(2, ""))); Assert.Equal("Confirmed", confirmed.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "handover"), input with { Version = 2 })).StatusCode);
+        Assert.Equal(5, (await Success<HandoverHistoryView[]>(await w.Owner.Client.GetAsync(Path(id, "handover/history")))).Length);
+        Assert.Equal(Image(), await w.Tenant.Client.GetByteArrayAsync(Path(id, $"handover/evidence/{picture.Id}")));
+        Assert.Equal(Image(), await w.Tenant.Client.GetByteArrayAsync(Path(id, $"handover/meter-evidence/{readingIds[0]}")));
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"handover/meter-evidence/{readingIds[0]}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"handover/evidence/{picture.Id}"))).StatusCode);
+        var json = await w.Tenant.Client.GetStringAsync(Path(id, "handover")); Assert.DoesNotContain("objectKey", json, StringComparison.OrdinalIgnoreCase);
+        await using var verify = fixture.Factory.Services.CreateAsyncScope(); var stored = verify.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractHandovers\" SET \"Version\"=3 WHERE \"ContractId\"={id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"ContractHandoverHistory\" WHERE \"ContractId\"={id}"));
+        await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"MeterReadings\" WHERE \"Id\"={readingIds[0]}"));
+        await Success<MoveOutView>(await Post(w.Tenant,Path(id,"termination-requests"),new TerminationInput(Today,"Synthetic moveout")));
+        await Success<MoveOutView>(await Post(w.Owner,Path(id,"move-out/approve")));
+        await Success<MoveOutView>(await Post(w.Owner,Path(id,"move-out/schedule"),new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1),w.Staff.Id)));
+        var electricity=await FinalReading(w,id,UtilityType.Electricity);var water=await FinalReading(w,id,UtilityType.Water);
+        using var finalPhoto=new ByteArrayContent(Image());finalPhoto.Headers.ContentType=new("image/png");
+        var finalFile=(await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id,"move-out/evidence"),finalPhoto))).Id;
+        var inspected=await Success<MoveOutView>(await Post(w.Staff,Path(id,"move-out/inspection"),new InspectionInput(electricity,water,"Synthetic final inspection",[finalFile],[],"SYNTHETIC final condition","Keys returned")));
+        var comparison=Assert.Single((await w.Owner.Client.GetFromJsonAsync<FinalInspectionView[]>(Path(id,"move-out/inspections")))!);
+        Assert.Equal("SYNTHETIC corrected",comparison.Baseline.RoomCondition);Assert.Equal("SYNTHETIC final condition",comparison.Observed.RoomCondition);
+        Assert.Equal(HttpStatusCode.Forbidden,(await Post(w.Staff,Path(id,"move-out/inspection-review"),new InspectionReviewInput(1,true,"Checked"))).StatusCode);
+        await Success<MoveOutView>(await Post(w.Owner,Path(id,"move-out/inspection-review"),new InspectionReviewInput(1,true,"Synthetic Owner confirmed")));
+        Assert.Equal(HttpStatusCode.Conflict,(await Post(w.Owner,Path(id,"move-out/inspection-review"),new InspectionReviewInput(1,true,"Cannot review twice"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await outside.Tenant.Client.GetAsync(Path(id,"move-out/inspections"))).StatusCode);
     }
 
     [Fact]
@@ -210,6 +354,10 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         var original = await db.Set<Contract>().SingleAsync(c => c.Id == id); var renewal = await db.Set<Contract>().SingleAsync(c => c.Id == next);
         Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.MonthlyRent); Assert.Equal(ContractStatus.Active, renewal.Status);
         Assert.Equal(4000000, renewal.MonthlyRent); Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        var versions=(await w.Tenant.Client.GetFromJsonAsync<ContractVersionView[]>(Path(next,"versions")))!;
+        Assert.Equal(2,versions.Length);Assert.Contains(versions,c=>c.Id==id&&c.Status=="Superseded"&&c.MonthlyRent==3000000);
+        Assert.Contains(versions,c=>c.Id==next&&c.PreviousContractId==id&&c.Terms=="NEW TEST TERMS");
+        var outsider=await User(Roles.Tenant);Assert.Equal(HttpStatusCode.NotFound,(await outsider.Client.GetAsync(Path(next,"versions"))).StatusCode);
     }
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private static byte[] Image()
@@ -219,11 +367,12 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         Guid meter;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var m = new Meter { RoomId = w.Room, Code = "SYNTHETIC-" + type, UtilityType = type, InstalledOn = Today.AddDays(-10) };
-            db.Add(m); await db.SaveChangesAsync(); meter = m.Id;
+            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var m = await db.Set<Meter>().SingleOrDefaultAsync(m=>m.RoomId==w.Room&&m.UtilityType==type&&m.IsActive);
+            if(m is null){m=new Meter { RoomId = w.Room, Code = "SYNTHETIC-" + type, UtilityType = type, InstalledOn = Today.AddDays(-10) };db.Add(m);await db.SaveChangesAsync();}meter=m.Id;
         }
         foreach (var purpose in new[] { ReadingPurpose.Initial, ReadingPurpose.Final })
         {
+            if(purpose==ReadingPurpose.Initial){await using var s=fixture.Factory.Services.CreateAsyncScope();if(await s.ServiceProvider.GetRequiredService<BHomeDbContext>().Set<MeterReading>().AnyAsync(r=>r.MeterId==meter))continue;}
             var response = await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter, purpose, purpose == ReadingPurpose.Initial ? Today.AddDays(-10) : Today, null, purpose == ReadingPurpose.Final ? contractId : null));
             var task = (await Success<IdResult>(response)).Id;
             using var binary = new ByteArrayContent(Image()); binary.Headers.ContentType = new("image/png");
@@ -251,6 +400,10 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
+        var assignment=(await w.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!.Single(a=>a.ContractId==id);
+        Assert.Equal("Approved",assignment.Status);Assert.Equal(w.Room,assignment.RoomId);
+        var history=(await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id,"move-out/history")))!;
+        Assert.Equal(3,history.Length);Assert.Equal("Scheduled",history[0].Action);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
@@ -429,17 +582,24 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     [Fact]
     public async Task ProductionAdapterAndPdfSignerCompleteTwoPartyContractThroughApiWithSyntheticRemoteCa()
     {
-        var w = await Setup(); var id = await Draft(w);
+        var w = await Setup();
+        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts",
+            Input(w) with { Terms = "Dữ liệu kiểm thử: Nguyễn Ánh; điều khoản từ bản chụp đã lưu." }))).Id;
         using var remote = new SyntheticRemoteSigningProvider();
-        await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
-            s.RemoveAll<IContractSigningProvider>();
-            s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
-            s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
-            s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
-            s.RemoveAll<IContractDocumentRenderer>();
-            s.AddSingleton<IContractDocumentRenderer, SyntheticContractRenderer>();
-        }));
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId
+            }));
+            b.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IContractSigningProvider>();
+                s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
+                s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
+                s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
+            });
+        });
         foreach (var (signer, subscriber) in new[] { (w.Owner, "SYNTHETIC-OWNER"), (w.Tenant, "SYNTHETIC-TENANT") })
         {
             var actor = new Actor(host.CreateClient(), signer.Id);
@@ -468,7 +628,61 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         Assert.Equal(2, fields.Count);
         Assert.All(fields, name => Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity()));
         Assert.True(signatures.SignatureCoversWholeDocument(fields[^1]));
+        Assert.Equal(id.ToString(), document.GetDocumentInfo().GetMoreInfo("BHomeContractId"));
+        Assert.Equal(ContractPdfRendererTests.TemplateId, document.GetDocumentInfo().GetMoreInfo("BHomeTemplateId"));
+        Assert.Contains("Nguyễn Ánh", ContractPdfRendererTests.Text(document));
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(Path(id, "document"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task ActualAdapterCannotContinueADevelopmentPdfInProductionAfterFirstPartySigns()
+    {
+        var w = await Setup(); var id = await Draft(w);
+        using var remote = new SyntheticRemoteSigningProvider();
+        using var productionPolicy = ContractPdfRendererTests.Backend("Production");
+        WebApplicationFactory<Program> Host(bool production) => fixture.Factory.WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId
+            }));
+            b.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IContractSigningProvider>();
+                s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
+                s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
+                s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
+                if (production)
+                {
+                    s.RemoveAll<IContractDocumentRenderer>();
+                    s.AddScoped<IContractDocumentRenderer>(p => new ContractPdfRenderer(
+                        p.GetRequiredService<Microsoft.Extensions.Options.IOptions<ContractPdfOptions>>(),
+                        productionPolicy.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>()));
+                }
+            });
+        });
+        await using var testingHost = Host(false);
+        await using var productionHost = Host(true);
+        var owner = new Actor(testingHost.CreateClient(), w.Owner.Id);
+        var tenant = new Actor(testingHost.CreateClient(), w.Tenant.Id);
+        owner.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
+        tenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
+        var ownerCertificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(owner,
+            "/api/v1/digital-signing/certificates", new { providerUserId = "SYNTHETIC-OWNER", serialNumber = (string?)null }));
+        var tenantCertificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(tenant,
+            "/api/v1/digital-signing/certificates", new { providerUserId = "SYNTHETIC-TENANT", serialNumber = (string?)null }));
+        await Success<SignatureView>(await Post(owner, Path(id, "signing"), new SigningInput(ownerCertificate.Id)));
+        await Success<ContractView>(await Post(owner, Path(id, "signing/sync")));
+        var productionTenant = new Actor(productionHost.CreateClient(), w.Tenant.Id);
+        productionTenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
+        var denied = await Post(productionTenant, Path(id, "signing"), new SigningInput(tenantCertificate.Id));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, denied.StatusCode);
+        Assert.Contains("contract_template_not_approved", await denied.Content.ReadAsStringAsync());
+        Assert.Equal(1, remote.RequestCount);
+        var contract = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
+        Assert.Equal("PendingSigning", contract.Status);
+        Assert.Equal(w.Owner.Id, Assert.Single(contract.Signatures).SignerUserId);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
     }
 
     [Fact]
@@ -538,7 +752,7 @@ public sealed class ContractFixture : IAsyncLifetime
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey }));
             b.ConfigureTestServices(s =>
         {
-            ProductionSigningProviderType = s.Last(d => d.ServiceType == typeof(IContractSigningProvider)).ImplementationType!;
+            ProductionSigningProviderType = typeof(ViettelMySignContractAdapter);
             s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, TestOnlySigningProvider>();
             s.RemoveAll<IContractSettlementLedger>(); s.AddSingleton<IContractSettlementLedger>(Ledger);
         });

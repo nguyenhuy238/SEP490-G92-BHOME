@@ -20,7 +20,7 @@ import {
   Row,
   ui,
 } from '../components/WorkspaceKit';
-import { ChoiceField } from '../components/WorkflowControls';
+import { ChoiceField, Input } from '../components/WorkflowControls';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
@@ -82,7 +82,7 @@ export function StaffHomeScreen() {
                 detail="Công việc được phép truy cập"
               />
             )}
-            {(query.loading || query.error) && <QueryState {...query} />}
+            {(query.loading || !!query.error) && <QueryState {...query} />}
           </View>
         ))}
       </View>
@@ -118,6 +118,12 @@ export function StaffHomeScreen() {
           onPress={() => go('move-out')}
         />
         <InfoRow
+          title="Bàn giao nhận phòng"
+          icon="key-outline"
+          detail="Biên bản nhận phòng và xác nhận của Tenant"
+          onPress={() => go('move-in')}
+        />
+        <InfoRow
           title="Thông báo công việc"
           icon="bell-outline"
           detail="Cập nhật và yêu cầu phối hợp"
@@ -130,13 +136,20 @@ export function StaffHomeScreen() {
 
 export function MeterTasksScreen() {
   const { role } = useWorkspace();
-  const query = useWorkspaceQuery<MeterTask[]>('/api/v1/capture/meter-tasks');
   const [location, setLocation] = useState('');
-  const [filter, setFilter] = useState('open');
-  const items =
-    query.data?.filter(
-      (task) => (!location || task.location === location) && (filter === 'all' || task.status < 2),
-    ) ?? [];
+  const [room, setRoom] = useState(''),
+    [due, setDue] = useState(''),
+    [page, setPage] = useState(1);
+  const [filter, setFilter] = useState('');
+  const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations');
+  const rooms = useWorkspaceQuery<Named[]>(
+    location ? `/api/v1/capture/locations/${location}/rooms` : null,
+  );
+  const validDue = !due || /^\d{4}-\d{2}-\d{2}$/.test(due);
+  const query = useWorkspaceQuery<MeterTask[]>(
+    `/api/v1/capture/meter-tasks?page=${page}${location ? '&locationId=' + location : ''}${room ? '&roomId=' + room : ''}${filter ? '&status=' + filter : ''}${due && validDue ? '&dueDate=' + due : ''}`,
+  );
+  const items = query.data ?? [];
   return (
     <>
       <Heading
@@ -146,23 +159,48 @@ export function MeterTasksScreen() {
       <ChoiceField
         label="Cơ sở"
         value={location}
-        options={[
-          { id: '', label: 'Tất cả cơ sở được phép' },
-          ...[...new Set(query.data?.map((task) => task.location) ?? [])].map((id) => ({
-            id,
-            label: id,
-          })),
-        ]}
-        onChange={setLocation}
+        options={[{ id: '', label: 'Tất cả cơ sở được phép' }, ...(locations.data ?? [])]}
+        onChange={(v) => {
+          setLocation(v);
+          setRoom('');
+          setPage(1);
+        }}
       />
+      {!!locations.error && <QueryState {...locations} />}
+      <ChoiceField
+        label="Phòng lọc tác vụ"
+        value={room}
+        disabled={!location}
+        options={[{ id: '', label: 'Tất cả phòng' }, ...(rooms.data ?? [])]}
+        onChange={(v) => {
+          setRoom(v);
+          setPage(1);
+        }}
+      />
+      {!!rooms.error && <QueryState {...rooms} />}
+      <Input
+        label="Hạn ghi số (yyyy-MM-dd)"
+        value={due}
+        onChange={(v) => {
+          setDue(v);
+          setPage(1);
+        }}
+      />
+      {!validDue && <Text style={ui.red}>Nhập ngày theo yyyy-MM-dd.</Text>}
       <ChoiceField
         label="Trạng thái tác vụ"
         value={filter}
         options={[
-          { id: 'open', label: 'Chờ ghi chỉ số' },
-          { id: 'all', label: 'Tất cả' },
+          { id: '', label: 'Tất cả' },
+          { id: '0', label: 'Được giao' },
+          { id: '1', label: 'Đang xử lý' },
+          { id: '2', label: 'Đã xác nhận' },
+          { id: '3', label: 'Đã hủy' },
         ]}
-        onChange={setFilter}
+        onChange={(v) => {
+          setFilter(v);
+          setPage(1);
+        }}
       />
       <QueryState {...query} />
       {items.map((task) => (
@@ -183,6 +221,8 @@ export function MeterTasksScreen() {
                 : `Kỳ: ${task.billingPeriod ? displayContractDate(task.billingPeriod) : 'Chưa xác định'}`}
           </Text>
           <Text>Ngày ghi: {displayContractDate(task.readingDate)}</Text>
+          <Text>Hạn ghi số: {task.dueAt ? formatInstant(task.dueAt) : 'Chưa cấu hình'}</Text>
+          {task.automationPlanId && <Pill>Tác vụ tự động</Pill>}
           <Text>Chỉ số trước: {task.previousValue ?? 'Chưa có'}</Text>
           {role === 'Staff' && task.status < 2 && (
             <Action
@@ -192,6 +232,13 @@ export function MeterTasksScreen() {
               Chụp ảnh / Nhập & xác nhận
             </Action>
           )}
+          {role === 'Staff' && task.status === 2 && (
+            <Action
+              onPress={() => router.push({ pathname: '/meter', params: { taskId: task.id } })}
+            >
+              Xem kết quả đã xác nhận
+            </Action>
+          )}
         </Box>
       ))}
       {query.data && !items.length && (
@@ -199,6 +246,19 @@ export function MeterTasksScreen() {
           <Text>Không có tác vụ ghi chỉ số phù hợp.</Text>
         </Box>
       )}
+      <Row>
+        <Action secondary disabled={page === 1 || query.loading} onPress={() => setPage(page - 1)}>
+          Trang trước
+        </Action>
+        <Text>Trang {page}</Text>
+        <Action
+          secondary
+          disabled={items.length < 100 || query.loading}
+          onPress={() => setPage(page + 1)}
+        >
+          Trang sau
+        </Action>
+      </Row>
     </>
   );
 }

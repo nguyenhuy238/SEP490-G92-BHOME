@@ -42,7 +42,11 @@ function Wait-MobileApi([string]$Address) {
         if ($script:ownedApi -and $script:ownedApi.HasExited) { break }
         Start-Sleep -Seconds 2
     } while ((Get-Date) -lt $deadline)
-    throw 'API HTTPS readiness failed. Check .tools/mobile-dev-api.stderr.log, local database/storage and Development settings. If migrations are pending, stop the API and use scripts/Update-LocalDatabase.ps1. No TLS checks were bypassed.'
+    # Diagnose the API that was actually probed. Logs from a previous standalone run
+    # can be stale when this launcher reuses a Visual Studio API.
+    & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
+    $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
+    throw "API HTTPS readiness failed. $logHint If readiness returns HTTP 503, run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check. If migrations are pending, back up the local database, stop the API, run the same command without -Check, then restart the API. Also check local database/storage and Development settings. No TLS checks were bypassed."
 }
 
 function Wait-MobileMetro([string]$Address) {

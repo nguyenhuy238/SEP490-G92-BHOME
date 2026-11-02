@@ -9,8 +9,11 @@ import { investmentSummary } from './model';
 import { DataList, EditDrawer, Panel, PropertyBoundary, Select } from './PropertyUI';
 import { currency, dateLabel, matches } from './propertyUtils';
 import { usePropertyMutation } from './usePropertyMutation';
+import { isMockMode } from '../../services/config';
+import { BillingConfigurationPage } from '../invoices/BillingConfigurationPage';
 
 export function Pricing() {
+  if (!isMockMode) return <BillingConfigurationPage />;
   return <PropertyBoundary>{(db) => <PricingContent db={db} />}</PropertyBoundary>;
 }
 function PricingContent({ db }: { db: DemoDatabase }) {
