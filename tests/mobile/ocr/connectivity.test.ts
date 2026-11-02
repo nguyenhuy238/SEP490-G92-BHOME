@@ -73,6 +73,7 @@ it('coalesces concurrent expired requests into one token rotation and retries ea
   const store = storage();
   let refreshes = 0;
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/health/ready')) return new Response('Healthy');
     if (String(url).endsWith('/login')) return new Response(JSON.stringify(validSession));
     if (String(url).endsWith('/refresh')) {
       refreshes++;
@@ -205,6 +206,7 @@ it('reports the refresh outage rather than rewriting it as expired authenticatio
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response(JSON.stringify(validSession)))
     .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+    .mockResolvedValueOnce(new Response('Healthy'))
     .mockResolvedValueOnce(new Response(JSON.stringify({ correlationId }), { status: 503 }));
   const sessions = new MobileSessions(store, 'https://api.test', fetcher);
   await sessions.login('https://api.test', 'owner@example.invalid', 'synthetic');
@@ -215,7 +217,71 @@ it('reports the refresh outage rather than rewriting it as expired authenticatio
   });
   expect(sessions.snapshot.session).toBeNull();
   expect(await store.read()).toBeNull();
-  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(fetcher).toHaveBeenCalledTimes(4);
+});
+
+it('preserves an existing session when connectivity disappears before token refresh', async () => {
+  const store = storage();
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(JSON.stringify(validSession)))
+    .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+    .mockRejectedValueOnce(new TypeError('offline'))
+    .mockResolvedValueOnce(new Response('Healthy'))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...validSession, accessToken: 'reconnected' })),
+    )
+    .mockResolvedValueOnce(new Response('{}'));
+  const sessions = new MobileSessions(store, 'https://api.test', fetcher);
+  await sessions.login('https://api.test', 'owner@example.invalid', 'synthetic');
+  await expect(sessions.snapshot.api!.request('/api/v1/contracts')).rejects.toMatchObject({
+    code: 'network_unavailable',
+  });
+  expect(sessions.snapshot.session).toEqual(validSession);
+  expect(await store.read()).toContain('synthetic-refresh');
+  await sessions.reconnect();
+  await sessions.snapshot.api!.request('/api/v1/contracts');
+  expect(new Headers(fetcher.mock.calls.at(-1)![1]?.headers).get('Authorization')).toBe(
+    'Bearer reconnected',
+  );
+  expect(sessions.snapshot.restoreError).toBeUndefined();
+});
+
+it('retries a read once at the same origin after a brief network switch', async () => {
+  vi.useFakeTimers();
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockRejectedValueOnce(new TypeError('offline'))
+    .mockResolvedValueOnce(new Response('{"items":[]}'));
+  const request = api(fetcher).request('/api/v1/contracts');
+  await vi.advanceTimersByTimeAsync(750);
+  await expect(request).resolves.toEqual({ items: [] });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    'https://api.test/api/v1/contracts',
+    'https://api.test/api/v1/contracts',
+  ]);
+});
+
+it('bounds read retries while offline and cancels the retry delay on navigation', async () => {
+  vi.useFakeTimers();
+  const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('offline'));
+  const failure = api(fetcher)
+    .request('/api/v1/contracts')
+    .catch((error: unknown) => error);
+  await vi.advanceTimersByTimeAsync(750);
+  expect(await failure).toMatchObject({ code: 'network_unavailable' });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  fetcher.mockClear();
+  const controller = new AbortController();
+  const cancelled = api(fetcher)
+    .request('/api/v1/contracts', { signal: controller.signal })
+    .catch((error: unknown) => error);
+  await vi.advanceTimersByTimeAsync(0);
+  controller.abort();
+  expect(await cancelled).toMatchObject({ name: 'AbortError' });
+  await vi.advanceTimersByTimeAsync(750);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 it('does not let a slow saved-session read overwrite a newer login', async () => {
   let finish!: (value: string | null) => void;

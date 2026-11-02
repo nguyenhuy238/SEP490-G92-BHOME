@@ -13,7 +13,7 @@ export const screenRoles = {
   shifts: ['Staff'],
   rooms: ['Staff'],
   'debt-follow-up': ['Staff'],
-  'task-detail': ['Staff'],
+  'task-detail': ['Owner', 'Staff'],
   'owner-home': ['Owner'],
   approvals: ['Owner'],
   operations: ['Owner'],
@@ -27,6 +27,7 @@ export const screenRoles = {
   checklist: ['Tenant'],
   profile: ['Owner', 'Staff', 'Tenant'],
   notifications: ['Owner', 'Staff', 'Tenant'],
+  'send-notification': ['Staff'],
   security: ['Owner', 'Staff', 'Tenant'],
   preferences: ['Owner', 'Staff', 'Tenant'],
 } satisfies Record<string, MobileRole[]>;
@@ -65,10 +66,10 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
       { screen: 'profile', title: 'Tài khoản', icon: 'account-cog-outline' },
     ],
     Staff: [
-      { screen: 'staff-home', title: 'Ca trực', icon: 'clipboard-check-outline' },
-      { screen: 'work-orders', title: 'Công việc', icon: 'calendar-month-outline' },
-      { screen: 'meter-reading', title: 'Điện nước', icon: 'meter-electric-outline' },
-      { screen: 'profile', title: 'Tài khoản', icon: 'badge-account-outline' },
+      { screen: 'staff-home', title: 'Trang chủ', icon: 'home-outline' },
+      { screen: 'work-orders', title: 'Công việc', icon: 'clipboard-check-outline' },
+      { screen: 'notifications', title: 'Thông báo', icon: 'bell-outline' },
+      { screen: 'profile', title: 'Cá nhân', icon: 'account' },
     ],
     Tenant: [
       { screen: 'tenant-home', title: 'Trang chủ', icon: 'home-outline' },
@@ -77,3 +78,19 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
       { screen: 'profile', title: 'Tài khoản', icon: 'account-outline' },
     ],
   };
+
+export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): WorkspaceScreen {
+  if (role === 'Staff') {
+    if (['profile', 'security', 'preferences'].includes(screen)) return 'profile';
+    if (['work-orders', 'task-detail', 'shifts', 'report-incident'].includes(screen))
+      return 'work-orders';
+    if (['notifications', 'send-notification'].includes(screen)) return 'notifications';
+    return 'staff-home';
+  }
+  if (['contract', 'checklist', 'residence', 'contract-request'].includes(screen))
+    return 'tenant-home';
+  if (['security', 'preferences'].includes(screen)) return 'profile';
+  if (screen === 'task-detail') return role === 'Owner' ? 'operations' : 'work-orders';
+  if (['adjustment', 'billing-history'].includes(screen)) return 'invoice';
+  return screen;
+}

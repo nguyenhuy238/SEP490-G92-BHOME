@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContractDetail } from '../../../../../packages/client-core/src/useContractDetail';
 import {
   contractActions,
@@ -28,6 +28,11 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
+import { SigningCertificates } from './SigningCertificates';
+import { ContractWorkflowPanel } from './ContractWorkflowPanel';
+import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -51,14 +56,12 @@ export function ContractDetailPanel({
   onChanged: (id?: string) => void;
 }) {
   const detail = useContractDetail(api, id, 'Owner');
+  const cache = useQueryClient();
   const [action, setAction] = useState<ContractAction | null>(null);
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const [notice, setNotice] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
-  const [declare, setDeclare] = useState(false),
-    [subscriber, setSubscriber] = useState(''),
-    [serial, setSerial] = useState('');
   const lock = useRef(false);
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
@@ -85,10 +88,18 @@ export function ContractDetailPanel({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  const actions = contractActions(c, m, 'Owner', actorId);
+  if (c.onboardingDraft) return <MainDraftDetailPanel id={c.id} onChanged={() => onChanged()} />;
+  const actions = contractActions(c, m, 'Owner', actorId).filter(
+    (a) => !['move-out/settlement', 'move-out/schedule'].includes(a.operation),
+  );
   const signer = c.ownerSignerId === actorId;
   return (
     <Stack spacing={2}>
+      {c.isDevelopmentDemo && (
+        <Alert severity="warning">
+          HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.
+        </Alert>
+      )}
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <StatusChip label={text(c.status)} />
         <Chip size="small" label={text(c.kind)} />
@@ -101,8 +112,15 @@ export function ContractDetailPanel({
       <ChartCard title="Thông tin hợp đồng" subtitle={c.id}>
         <Stack spacing={1}>
           <Typography>
+            Phòng {c.roomNumber || c.roomId}
+            {c.locationName ? ` · ${c.locationName}` : ''}
+          </Typography>
+          <Typography>
             Kỳ thuê: {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
           </Typography>
+          {c.actualEndDate && (
+            <Typography>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Typography>
+          )}
           <Typography>
             Tiền thuê: <strong>{formatContractMoney(c.monthlyRent)}</strong> / tháng
           </Typography>
@@ -111,8 +129,12 @@ export function ContractDetailPanel({
             {formatContractMoney(c.appliedHoldingDeposit)}
           </Typography>
           <Typography>
-            {c.residentIds.length} người ở · Đại diện: {c.representativeResidentId}
+            {c.residentIds.length} người ở · Đại diện:{' '}
+            {c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId}
           </Typography>
+          {!!c.occupants?.length && (
+            <Typography>{c.occupants.map((o) => o.label).join(', ')}</Typography>
+          )}
           {c.previousContractId && (
             <Button onClick={() => onChanged(c.previousContractId!)}>Xem hợp đồng trước</Button>
           )}
@@ -133,7 +155,11 @@ export function ContractDetailPanel({
       </ChartCard>
       <ChartCard
         title="Chữ ký và tài liệu"
-        subtitle="Owner và Tenant ký bằng chứng thư của chính mình"
+        subtitle={
+          c.isDevelopmentDemo
+            ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
+            : 'Owner và Tenant ký bằng chứng thư của chính mình'
+        }
       >
         <Stack spacing={1}>
           {[
@@ -161,50 +187,20 @@ export function ContractDetailPanel({
             </Paper>
           ))}
           <Button
-            disabled={busy || !c.signatures.some((s) => s.status === 'Signed')}
+            disabled={busy || !c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status))}
             onClick={() =>
               void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
             }
           >
             Tải tài liệu ký
           </Button>
-          {signer && (
-            <Button disabled={busy} onClick={() => setDeclare((v) => !v)}>
-              Khai báo chứng thư MySign của bạn
-            </Button>
-          )}
-          {declare && signer && (
-            <Stack spacing={1}>
-              <TextField
-                label="Mã thuê bao MySign của bạn"
-                value={subscriber}
-                disabled={busy}
-                onChange={(e) => setSubscriber(e.target.value)}
-              />
-              <TextField
-                label="Số serial (tùy chọn)"
-                value={serial}
-                disabled={busy}
-                onChange={(e) => setSerial(e.target.value)}
-              />
-              <Button
-                disabled={
-                  busy || !subscriber.trim() || subscriber.length > 100 || serial.length > 100
-                }
-                onClick={() =>
-                  void run(async () => {
-                    await api.declareCertificate(subscriber.trim(), serial.trim());
-                    setNotice('Đã truy vấn và lưu chứng thư từ nhà cung cấp.');
-                    setDeclare(false);
-                  })
-                }
-              >
-                Tra cứu và lưu chứng thư
-              </Button>
-            </Stack>
-          )}
+          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
         </Stack>
       </ChartCard>
+      <ContractWorkflowPanel api={api} contract={c} />
+      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+        <ContractHandoverPanel api={api} id={c.id} />
+      )}
       {r && (
         <ChartCard
           title="Điều kiện kích hoạt"
@@ -290,6 +286,7 @@ export function ContractDetailPanel({
           </Stack>
         </ChartCard>
       )}
+      {m && <ContractLifecyclePanel api={api} contract={c} moveOut={m} onChanged={detail.reload} />}
       <ChartCard title="Thao tác theo trạng thái">
         <Stack spacing={1}>
           {actions.map((a) => (
@@ -325,6 +322,7 @@ export function ContractDetailPanel({
             detail.reload();
           }}
           onSuccess={(next) => {
+            void cache.invalidateQueries({ queryKey: ['contract-workflow', id] });
             setAction(null);
             setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được tải lại.');
             detail.reload();

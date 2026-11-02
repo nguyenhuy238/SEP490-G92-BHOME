@@ -42,6 +42,9 @@ public sealed class OperationalTask : AuditableEntity
     // Meter details remain in the existing table to preserve reading/evidence FKs and API IDs.
     // Kind and database constraints distinguish these from Owner-verified operational work.
     public Guid? ContractId { get; set; }
+    public Guid? BillingRoomId { get; set; }
+    public UtilityType? BillingUtilityType { get; set; }
+    public Guid? AutomationPlanId { get; set; }
     public Guid? MeterId { get; set; }
     public Meter Meter { get; set; } = null!;
     public ReadingPurpose Purpose { get; set; }

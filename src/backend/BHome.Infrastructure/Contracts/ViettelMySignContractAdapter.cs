@@ -21,6 +21,7 @@ internal sealed class ViettelMySignContractAdapter(BHomeDbContext db, ICurrentUs
         if (certificate is null || certificate.OwnerUserId != user.UserId || certificate.Provider != SigningProviders.ViettelMySign)
             throw ContractException.Missing();
         if (certificate.Locked || !certificate.IsValidAt(clock.GetUtcNow())) throw ContractException.Conflict("signing_certificate_not_valid");
+        await renderer.ValidateAsync(document, t);
         try
         {
             var credentials = await remote.ListCredentialsAsync(certificate.ProviderUserId, certificate.SerialNumber, t);
@@ -85,24 +86,6 @@ internal sealed class ContractMySignAccount(IConfiguration config) : IViettelAcc
     }
 }
 
-// No iText package is included in the backend. Register a reviewed/licensed implementation explicitly.
-internal sealed class UnconfiguredContractPdfSigner : IPdfSigner
-{
-    public PreparedSignature Prepare(byte[] pdf, IReadOnlyList<X509Certificate2> chain, DateTimeOffset at, VisibleSignature? visible)
-        => throw new IntegrationUnavailableException("approved PDF signing implementation/license");
-    public byte[] Complete(byte[] pdf, string fieldName, byte[] digest, IReadOnlyList<X509Certificate2> chain, byte[] signature)
-        => throw new IntegrationUnavailableException("approved PDF signing implementation/license");
-}
-internal sealed class UnconfiguredContractRenderer : IContractDocumentRenderer
-{
-    public Task<byte[]> RenderAsync(ContractDocument document, CancellationToken t)
-        => throw new IntegrationUnavailableException("approved authoritative contract PDF template");
-}
-internal sealed class PendingContractSettlementLedger : IContractSettlementLedger
-{
-    public Task<SettlementLedgerState?> ReadAsync(Guid contractId, Guid electricityReadingId, Guid waterReadingId, CancellationToken t)
-        => Task.FromResult<SettlementLedgerState?>(null);
-}
 internal sealed class UnconfiguredContractHoldingLedger : IContractHoldingLedger
 {
     public Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId, Guid tenantUserId, decimal requiredDeposit, CancellationToken t)

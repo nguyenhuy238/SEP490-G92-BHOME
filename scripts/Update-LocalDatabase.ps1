@@ -1,4 +1,4 @@
-param([string]$EnvironmentFile = '.env')
+param([string]$EnvironmentFile = '.env', [switch]$Check)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
@@ -17,7 +17,17 @@ Push-Location $repo
 try {
     $env:ConnectionStrings__Database = $connectionText
     # The guarded runner applies all migrations in one transaction; no API/user-secrets startup.
-    dotnet run --project tools/BHome.DatabaseUpgrade
+    # Isolate output from the API binaries that Visual Studio may currently be using.
+    $artifacts = Join-Path $repo '.tools/database-upgrade'
+    # .NET 8 `dotnet run` can select stale default output with --artifacts-path.
+    # Build and execute the exact isolated DLL so inspection uses current migrations.
+    dotnet build tools/BHome.DatabaseUpgrade --artifacts-path $artifacts --verbosity quiet
+    if ($LASTEXITCODE -ne 0) { throw 'Local database tool build failed.' }
+    $runner = Join-Path $artifacts 'bin/BHome.DatabaseUpgrade/debug/BHome.DatabaseUpgrade.dll'
+    $runnerArguments = @($runner)
+    if ($Check) { $runnerArguments += '--check' }
+    & dotnet @runnerArguments
+    if ($Check -and $LASTEXITCODE -eq 2) { return }
     if ($LASTEXITCODE -ne 0) { throw 'Local migration failed. Do not reset/drop the database; inspect the migration error.' }
 } finally {
     $env:ConnectionStrings__Database = $previousConnection

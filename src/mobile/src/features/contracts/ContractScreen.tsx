@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
 import { View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../../lib/randomUUID';
 import {
   contractActions,
   contractClient,
@@ -23,18 +23,42 @@ import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceK
 import { ChoiceField } from '../../components/WorkflowControls';
 import { ContractActionForm, SigningCertificates } from './ContractActionForm';
 import { ContractDraftForm } from './ContractDraftForm';
+import { MainDraftScreen } from './MainDraftScreen';
+import { MainDraftStart } from './MainDraftStart';
 import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
+import { ContractWorkflowPanel } from './ContractWorkflowPanel';
+import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+import { ContractExpiryPanel } from './ContractExpiryPanel';
+import { ContractProgress } from './ContractProgress';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
   const { role } = useWorkspace();
-  const params = useLocalSearchParams<{ contractId?: string }>();
+  const params = useLocalSearchParams<{
+    contractId?: string;
+    mainDraftId?: string;
+    roomId?: string;
+    representativeResidentId?: string;
+    residentIds?: string;
+  }>();
+  const [mainDraftId, setMainDraftId] = useState('');
   const [selected, setSelected] = useState(''),
     [create, setCreate] = useState(prepare);
   const [page, setPage] = useState(1),
     [filter, setFilter] = useState(''),
     [revision, setRevision] = useState(0);
+  const [assignments, setAssignments] = useState<
+    {
+      contractId: string;
+      roomNumber: string;
+      locationName: string;
+      scheduledAt: string;
+      status: string;
+    }[]
+  >([]);
+  const [assignmentError, setAssignmentError] = useState('');
   const [listing, setListing] = useState<{
     data: ContractPage | null;
     error: string;
@@ -45,6 +69,22 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       transport ? contractClient((path, init, type) => transport.request(path, init, type)) : null,
     [transport],
   );
+  useEffect(() => {
+    if (!client || role !== 'Staff') return;
+    const c = new AbortController();
+    async function loadAssignments() {
+      setAssignmentError('');
+      setAssignments([]);
+      try {
+        const items = await client!.moveOutAssignments(c.signal);
+        if (!c.signal.aborted) setAssignments(items);
+      } catch (e) {
+        if (!c.signal.aborted) setAssignmentError(contractError(e));
+      }
+    }
+    void loadAssignments();
+    return () => c.abort();
+  }, [client, role, revision]);
   useEffect(() => {
     if (!client) return;
     const controller = new AbortController();
@@ -71,7 +111,65 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   }
   const id = selected || deepId;
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
+  if (
+    (mainDraftId || params.mainDraftId || (create && params.roomId)) &&
+    ['Owner', 'Staff'].includes(role)
+  ) {
+    let references: {
+      initialId?: string;
+      roomId: string;
+      representativeResidentId: string;
+      residentIds: string[];
+    } | null = null;
+    try {
+      const existing = mainDraftId || params.mainDraftId;
+      const residents: unknown = JSON.parse(params.residentIds ?? '[]');
+      if (!Array.isArray(residents)) throw new Error('invalid');
+      references = {
+        initialId: existing ? guid(existing) : undefined,
+        roomId: params.roomId ? guid(params.roomId) : '',
+        representativeResidentId: params.representativeResidentId
+          ? guid(params.representativeResidentId)
+          : '',
+        residentIds: residents.map((value) => guid(String(value))),
+      };
+    } catch {
+      /* Invalid route references do not reach the API. */
+    }
+    if (!references)
+      return (
+        <Text>Tham chiếu hồ sơ không hợp lệ. Hãy mở lại từ tiếp nhận hoặc danh sách hợp đồng.</Text>
+      );
+    return (
+      <MainDraftScreen
+        {...references}
+        onCancel={() => {
+          setCreate(false);
+          setMainDraftId('');
+          router.setParams({ mainDraftId: '', roomId: '' });
+        }}
+        onList={() => {
+          setCreate(false);
+          setMainDraftId('');
+          setRevision((v) => v + 1);
+          router.setParams({ mainDraftId: '', roomId: '' });
+        }}
+      />
+    );
+  }
   if (create && role === 'Staff')
+    return (
+      <MainDraftStart
+        api={client}
+        onCancel={() => setCreate(false)}
+        onList={() => {
+          setCreate(false);
+          setRevision((v) => v + 1);
+          router.setParams({ mainDraftId: '', roomId: '' });
+        }}
+      />
+    );
+  if (create && ['Owner', 'Staff'].includes(role))
     return (
       <ContractDraftForm
         api={client}
@@ -110,8 +208,31 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     <>
       <Heading
         title="Hợp đồng & Vòng đời"
-        detail="UC-15 / UC-16 / UC-19 • Dữ liệu trong phạm vi tài khoản"
+        detail="Theo dõi hợp đồng trong phạm vi tài khoản của bạn."
       />
+      {['Owner', 'Tenant'].includes(role) && (
+        <ContractExpiryPanel api={client} onOpen={setSelected} />
+      )}
+      {role === 'Staff' && (
+        <Box>
+          <Heading title="Lịch kiểm tra trả phòng được giao" />
+          {!!assignmentError && <Text style={ui.red}>{assignmentError}</Text>}
+          {!assignments.length && !assignmentError && (
+            <Text>Chưa có lịch được giao trong Location đang phụ trách.</Text>
+          )}
+          {assignments.map((a) => (
+            <Box key={a.contractId}>
+              <Text>
+                Phòng {a.roomNumber} · {a.locationName} · {formatInstant(a.scheduledAt)}
+              </Text>
+              <Text>{text(a.status)}</Text>
+              <Action onPress={() => setSelected(a.contractId)}>
+                Mở kiểm tra phòng {a.roomNumber}
+              </Action>
+            </Box>
+          ))}
+        </Box>
+      )}
       <ChoiceField
         label="Trạng thái hợp đồng"
         value={filter}
@@ -128,7 +249,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         <Button disabled={listing.loading} onPress={() => setRevision((v) => v + 1)}>
           Tải lại
         </Button>
-        {role === 'Staff' && (
+        {['Owner', 'Staff'].includes(role) && (
           <Button onPress={() => setCreate(true)}>Tạo nháp hợp đồng thuê</Button>
         )}
       </Row>
@@ -147,7 +268,9 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
             {text(c.kind)} · {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
           </Text>
           <Text style={ui.money}>{formatContractMoney(c.monthlyRent)} / tháng</Text>
-          <Action onPress={() => setSelected(c.id)}>Xem hợp đồng</Action>
+          <Action onPress={() => (c.onboardingDraft ? setMainDraftId(c.id) : setSelected(c.id))}>
+            Xem hợp đồng
+          </Action>
         </Box>
       ))}
       {!!listing.data && (
@@ -202,15 +325,38 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
+  if (c.onboardingDraft)
+    return (
+      <MainDraftScreen
+        initialId={c.id}
+        roomId={c.roomId}
+        representativeResidentId={c.representativeResidentId}
+        residentIds={c.residentIds}
+        onCancel={() => {
+          router.setParams({ contractId: '', mainDraftId: '' });
+          onNext('');
+        }}
+        onList={() => {
+          router.setParams({ contractId: '', mainDraftId: '' });
+          onNext('');
+        }}
+      />
+    );
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = contractActions(c, m, role, actorId);
+  const actions = contractActions(c, m, role, actorId).filter(
+    (a) => !['move-out/inspection', 'move-out/settlement'].includes(a.operation),
+  );
   const action = actions.find((a) => a.operation === selectedAction);
   const signer =
     ['Owner', 'Tenant'].includes(role) && [c.ownerSignerId, c.tenantUserId].includes(actorId);
   return (
     <>
       <Heading title={text(c.kind)} detail={c.id} />
+      {c.isDevelopmentDemo && (
+        <Text style={ui.red}>HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.</Text>
+      )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
+      <ContractProgress contract={c} readiness={r} />
       <Button
         disabled={uploading}
         onPress={() => {
@@ -224,14 +370,23 @@ function LiveContractDetail({
       <Box>
         <Heading title="Kỳ thuê & Người ở" />
         <Text>
+          Phòng {c.roomNumber || c.roomId}
+          {c.locationName ? ` · ${c.locationName}` : ''}
+        </Text>
+        <Text>
           {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
         </Text>
         <Text>Tiền thuê: {formatContractMoney(c.monthlyRent)} / tháng</Text>
+        {c.actualEndDate && (
+          <Text>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Text>
+        )}
         <Text>Cọc yêu cầu: {formatContractMoney(c.requiredDeposit)}</Text>
         <Text>Cọc giữ chỗ áp dụng: {formatContractMoney(c.appliedHoldingDeposit)}</Text>
         <Text>
-          {c.residentIds.length} người ở · Đại diện: {c.representativeResidentId}
+          {c.residentIds.length} người ở · Đại diện:{' '}
+          {c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId}
         </Text>
+        {!!c.occupants?.length && <Text>{c.occupants.map((o) => o.label).join(', ')}</Text>}
         {c.previousContractId && (
           <Button onPress={() => onNext(c.previousContractId!)}>Xem hợp đồng trước</Button>
         )}
@@ -262,11 +417,16 @@ function LiveContractDetail({
             {!c.signatures.some((x) => x.signerUserId === s.id) && <Text>Chưa có yêu cầu ký</Text>}
           </View>
         ))}
-        {['Owner', 'Tenant'].includes(role) && c.signatures.some((s) => s.status === 'Signed') && (
-          <ContractEvidence api={api} contractId={id} pdf />
-        )}
-        {signer && <SigningCertificates api={api} />}
+        {['Owner', 'Tenant'].includes(role) &&
+          c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
+            <ContractEvidence api={api} contractId={id} pdf />
+          )}
+        {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
       </Box>
+      <ContractWorkflowPanel api={api} contract={c} role={role} />
+      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+        <ContractHandoverPanel api={api} contract={c} role={role} />
+      )}
       {r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />
@@ -319,7 +479,9 @@ function LiveContractDetail({
           />
           <CameraCapture
             label="Chụp và tải ảnh hiện trạng"
-            disabled={uploading || !uploadChecked || availableEvidence.length >= 5}
+            reviewActionLabel="Tải ảnh trả phòng"
+            reviewNotice="Ảnh được lưu riêng tư làm bằng chứng trả phòng; ảnh tạm trên thiết bị được xóa sau khi tải hoặc rời màn hình. Không chụp giấy tờ cá nhân."
+            disabled={uploading || !uploadChecked || evidence.length >= 5}
             reviewBeforeSubmit
             onCapture={async (bytes) => {
               if (uploadLock.current) return;
@@ -372,6 +534,19 @@ function LiveContractDetail({
             </View>
           ))}
         </Box>
+      )}
+      {m && (
+        <ContractLifecyclePanel
+          api={api}
+          id={id}
+          role={role}
+          moveOut={m}
+          evidenceIds={availableEvidence}
+          onChanged={() => {
+            setEvidence([]);
+            detail.reload();
+          }}
+        />
       )}
       <Box>
         <Heading title="Thao tác theo trạng thái" />

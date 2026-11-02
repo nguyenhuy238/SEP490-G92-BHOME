@@ -1,5 +1,8 @@
 import React from 'react';
-import { Redirect, useLocalSearchParams, router } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
+import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
+import { NotificationsScreen } from '../../screens/NotificationsScreen';
+import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentPanel';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { RequestHistory } from '../../components/WorkflowControls';
@@ -9,6 +12,7 @@ import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/wor
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
+import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import {
   TenantHome,
   TenantInvoice,
@@ -25,6 +29,17 @@ import {
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
 import { ContractScreen } from '../../features/contracts/ContractScreen';
+import {
+  OperationalTasksScreen,
+  OperationalTaskDetail,
+} from '../../screens/OperationalTaskScreens';
+import {
+  TenantHomeScreen,
+  MeterTasksScreen,
+  OwnerOperationsScreen,
+  UnavailableWorkspaceScreen,
+} from '../../screens/LiveWorkspaceScreens';
+import { AccountSecurityScreen } from '../../screens/AccountSecurityScreen';
 import {
   ContractPreparation,
   Inspection,
@@ -72,6 +87,7 @@ const screens = {
   incidents: TenantIncidents,
   profile: Profile,
   notifications: Notifications,
+  'send-notification': StaffNotificationScreen,
   security: SecuritySettings,
   preferences: NotificationPreferences,
 };
@@ -96,56 +112,73 @@ export default function WorkspaceRoute() {
       </WorkspaceShell>
     );
   const Screen = screens[screen];
-  if (!preview && screen === 'owner-home')
+  if (!preview) {
+    let content: React.ReactNode;
+    if (
+      [
+        'signing',
+        'contract',
+        'contract-request',
+        'prepare-contract',
+        'move-out',
+        'move-in',
+        'checklist',
+      ].includes(screen)
+    )
+      content = <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />;
+    else
+      switch (screen) {
+        case 'invoice':
+          content = <TenantInvoicesScreen />;
+          break;
+        case 'billing-history':
+          content = <TenantPaymentHistoryScreen />;
+          break;
+        case 'owner-home':
+          content = <OwnerOverviewScreen />;
+          break;
+        case 'staff-home':
+          content = <StaffHome />;
+          break;
+        case 'tenant-home':
+          content = <TenantHomeScreen />;
+          break;
+        case 'work-orders':
+          content = <OperationalTasksScreen />;
+          break;
+        case 'approvals':
+          content = <OperationalTasksScreen approvals />;
+          break;
+        case 'operations':
+          content = <OwnerOperationsScreen />;
+          break;
+        case 'task-detail':
+          content = <OperationalTaskDetail />;
+          break;
+        case 'meter-reading':
+          content = <MeterTasksScreen />;
+          break;
+        case 'notifications':
+          content = <NotificationsScreen />;
+          break;
+        case 'security':
+          content = <AccountSecurityScreen />;
+          break;
+        case 'profile':
+        case 'onboarding':
+        case 'rooms':
+        case 'send-notification':
+          content = <Screen />;
+          break;
+        default:
+          content = <UnavailableWorkspaceScreen screen={screen} />;
+      }
     return (
       <WorkspaceShell screen={screen}>
-        <OwnerOverviewScreen />
+        <React.Fragment key={screen}>{content}</React.Fragment>
       </WorkspaceShell>
     );
-  if (
-    !preview &&
-    ['signing', 'contract', 'contract-request', 'prepare-contract', 'move-out'].includes(screen)
-  )
-    return (
-      <WorkspaceShell screen={screen}>
-        <ContractScreen key={screen} prepare={screen === 'prepare-contract'} />
-      </WorkspaceShell>
-    );
-  // Never fill an authenticated account with synthetic finance/identity records.
-  // Screens without a confirmed backend adapter keep the explicit unavailable state.
-  if (!preview && !['profile', 'onboarding', 'rooms'].includes(screen))
-    return (
-      <WorkspaceShell screen={screen}>
-        <Heading
-          title={screen === homeScreen[role] ? 'Chào mừng đến BHOME' : 'Chức năng chưa triển khai'}
-        />
-        <Box>
-          <Text>
-            Bạn đã đăng nhập với vai trò {role}. Màn hình này chưa có API nghiệp vụ được kết nối.
-          </Text>
-          <Text>Thông tin tài khoản thật sẽ hiển thị sau khi có hợp đồng API tương ứng.</Text>
-          <Action icon="file-document-outline" onPress={() => go('signing')}>
-            Hợp đồng & Vòng đời
-          </Action>
-          {role === 'Staff' && (
-            <>
-              <Action onPress={() => go('onboarding')}>Tiếp nhận cư dân & CCCD</Action>
-              <Action secondary onPress={() => go('rooms')}>
-                Phòng & Người ở
-              </Action>
-            </>
-          )}
-          {role !== 'Tenant' && (
-            <Action icon="camera-outline" onPress={() => router.push('/capture')}>
-              Mở tác nghiệp OCR
-            </Action>
-          )}
-          <Action secondary onPress={() => go('profile')}>
-            Tài khoản & Đăng xuất
-          </Action>
-        </Box>
-      </WorkspaceShell>
-    );
+  }
   return (
     <WorkspaceShell screen={screen}>
       <Screen />

@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Dialog, Portal, Button, Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
 import { homeScreen, sessionRole, type MobileRole, type WorkspaceScreen } from './navigation';
 
 interface WorkspaceContext {
+  registerExitGuard: (guard: () => boolean, onLeave: () => void) => () => void;
+  requestNavigation: (action: () => void) => void;
   scrollRevision: number;
   resetScroll: () => void;
   requests: { id: string; kind: string; role: MobileRole; summary: string }[];
@@ -21,17 +23,37 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
   const [previewRole, setPreviewRole] = useState<MobileRole | null>(null);
   const [message, setMessage] = useState('');
+  const [confirmExit, setConfirmExit] = useState(false);
+  const exitGuard = useRef<{ shouldBlock: () => boolean; onLeave: () => void } | null>(null);
+  const pendingNavigation = useRef<(() => void) | null>(null);
+  const registerExitGuard = useCallback((guard: () => boolean, onLeave: () => void) => {
+    const entry = { shouldBlock: guard, onLeave };
+    exitGuard.current = entry;
+    return () => {
+      if (exitGuard.current === entry) exitGuard.current = null;
+    };
+  }, []);
+  const requestNavigation = useCallback((action: () => void) => {
+    if (exitGuard.current?.shouldBlock()) {
+      pendingNavigation.current = action;
+      setConfirmExit(true);
+    } else action();
+  }, []);
   const [scrollRevision, setScrollRevision] = useState(0);
   const [requests, setRequests] = useState<WorkspaceContext['requests']>([]);
   const requestId = React.useRef(0);
   const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
   const go = (screen: WorkspaceScreen, params?: Record<string, string>) =>
-    router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } });
+    requestNavigation(() =>
+      router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } }),
+    );
   return (
     <Context.Provider
       value={{
         role,
+        registerExitGuard,
+        requestNavigation,
         scrollRevision,
         resetScroll: () => setScrollRevision((value) => value + 1),
         preview,
@@ -47,11 +69,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           setPreviewRole(next);
           router.replace({ pathname: '/workspace/[screen]', params: { screen: homeScreen[next] } });
         },
-        leavePreview: () => {
-          setPreviewRole(null);
-          setRequests([]);
-          router.replace('/');
-        },
+        leavePreview: () =>
+          requestNavigation(() => {
+            setPreviewRole(null);
+            setRequests([]);
+            router.replace('/');
+          }),
         unavailable: (action = 'Thao tác này') =>
           setMessage(
             `${action} chưa được kết nối API. Chưa có dữ liệu hay giao dịch nào được gửi hoặc thay đổi.`,
@@ -60,6 +83,40 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
       <Portal>
+        <Dialog
+          visible={confirmExit}
+          onDismiss={() => {
+            setConfirmExit(false);
+            pendingNavigation.current = null;
+          }}
+        >
+          <Dialog.Title>Rời quy trình tiếp nhận?</Dialog.Title>
+          <Dialog.Content>
+            <Text>Thông tin chưa xác nhận có thể bị mất. Hồ sơ đã lưu vẫn được giữ lại.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => {
+                setConfirmExit(false);
+                pendingNavigation.current = null;
+              }}
+            >
+              Tiếp tục nhập
+            </Button>
+            <Button
+              onPress={() => {
+                const action = pendingNavigation.current;
+                pendingNavigation.current = null;
+                exitGuard.current?.onLeave();
+                exitGuard.current = null;
+                setConfirmExit(false);
+                action?.();
+              }}
+            >
+              Rời quy trình
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
         <Dialog visible={!!message} onDismiss={() => setMessage('')}>
           <Dialog.Title>Chưa kết nối dịch vụ</Dialog.Title>
           <Dialog.Content>

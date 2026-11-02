@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   actionPayload,
+  canUseCertificate,
+  certificateStatus,
   contractActions,
   contractClient,
   contractError,
@@ -11,6 +13,7 @@ import {
   mutationKeys,
   vnd,
   type ContractRequest,
+  type Certificate,
   type ContractView,
   type MoveOut,
 } from '../../../packages/client-core/src/contracts';
@@ -57,6 +60,48 @@ const move = (status: string): MoveOut => ({
 });
 const operations = (c: ContractView, m: MoveOut | null, role: string, actor = owner) =>
   contractActions(c, m, role, actor).map((a) => a.operation);
+describe('signing certificate selection and transport', () => {
+  const certificate: Certificate = {
+    id,
+    provider: 'MySign',
+    providerUserIdHint: '***001',
+    serialNumber: 'SYNTHETIC',
+    subject: 'Synthetic',
+    validFrom: '2020-01-01T00:00:00Z',
+    validTo: '2099-01-01T00:00:00Z',
+    usable: true,
+    locked: false,
+  };
+  it('rejects locked, expired, future and malformed certificates despite a stale usable flag', () => {
+    expect(canUseCertificate(certificate)).toBe(true);
+    expect(canUseCertificate({ ...certificate, locked: true })).toBe(false);
+    expect(certificateStatus({ ...certificate, validTo: '2020-01-01T00:00:00Z' })).toBe(
+      'Đã hết hạn',
+    );
+    expect(canUseCertificate({ ...certificate, validFrom: '2098-01-01T00:00:00Z' })).toBe(false);
+    expect(canUseCertificate({ ...certificate, validTo: 'invalid' })).toBe(false);
+    expect(canUseCertificate({ ...certificate, usable: false })).toBe(false);
+  });
+  it('uses the existing owner-scoped lock endpoint and never sends subscriber data', async () => {
+    const request = vi.fn<ContractRequest>().mockResolvedValue(undefined);
+    const api = contractClient(request);
+    await api.lockCertificate(id, true);
+    expect(request).toHaveBeenCalledWith(`/api/v1/digital-signing/certificates/${id}/lock`, {
+      method: 'POST',
+      body: JSON.stringify({ locked: true }),
+    });
+    expect(() => api.lockCertificate('../another', false)).toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+  it('explains missing approved templates and invalid certificates without reporting success', () => {
+    expect(contractError({ status: 503, code: 'contract_template_not_configured' })).toContain(
+      'Chưa có mẫu PDF hợp đồng được phê duyệt',
+    );
+    expect(contractError({ status: 409, code: 'signing_certificate_not_valid' })).toContain(
+      'Chứng thư đã bị khóa hoặc không còn hiệu lực',
+    );
+  });
+});
 describe('contract role and state actions', () => {
   it('excludes Owner decisions and signing from Staff, and exposes preparation only for valid state', () => {
     expect(operations(draft, null, 'Staff')).toEqual([]);

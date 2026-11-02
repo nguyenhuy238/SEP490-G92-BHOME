@@ -78,7 +78,7 @@ public sealed class ContractServiceTests
         {
             var c = await Create(); c.Status = ContractStatus.PendingActivation;
             var bytes = Encoding.UTF8.GetBytes("TEST ONLY verified PDF boundary"); var hash = Convert.ToHexString(SHA256.HashData(bytes));
-            foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId }) c.Signatures.Add(new ContractSignature
+            foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId ?? throw new InvalidOperationException("Signing fixture requires an existing Tenant account.") }) c.Signatures.Add(new ContractSignature
             {
                 ContractId = c.Id,
                 SignerUserId = signer,
@@ -96,9 +96,8 @@ public sealed class ContractServiceTests
 
     [Theory]
     [InlineData(RoomStatus.OnHold)]
-    [InlineData(RoomStatus.Occupied)]
     [InlineData(RoomStatus.Unavailable)]
-    public async Task DraftRequiresAvailableRoomWithoutChangingItsStatus(RoomStatus status)
+    public async Task DraftRejectsHeldOrUnavailableRoomWithoutChangingItsStatus(RoomStatus status)
     {
         var r = new Rig(); r.Room.Status = status;
         var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.CreateAsync(r.Draft, Guid.NewGuid(), default));
@@ -106,6 +105,14 @@ public sealed class ContractServiceTests
         Assert.Equal(status, r.Room.Status);
         Assert.Empty(r.Contracts);
         Assert.Empty(r.Operations);
+    }
+
+    [Fact]
+    public async Task SharedRoomDraftIsAllowedWhenOccupantsAndCapacityDoNotConflict()
+    {
+        var r = new Rig(); r.Room.Status = RoomStatus.Occupied;
+        await r.Service.CreateAsync(r.Draft, Guid.NewGuid(), default);
+        Assert.Single(r.Contracts); Assert.Equal(RoomStatus.Occupied, r.Room.Status);
     }
 
     [Fact]
@@ -127,7 +134,7 @@ public sealed class ContractServiceTests
         var r = new Rig(); var c = await r.Ready();
         if (invalid == "signature") c.Signatures.RemoveAt(0);
         if (invalid == "deposit") r.Deposits.Clear();
-        if (invalid == "room") r.Repo.ConflictsAsync(default, default, default, default, default).ReturnsForAnyArgs(true);
+        if (invalid == "room") r.Repo.ConflictsAsync(default, default, default, default, default!, default).ReturnsForAnyArgs(true);
         if (invalid == "terms") c.Terms = "tampered";
         if (invalid == "identity") r.Resident.VerificationStatus = IdentityVerificationStatus.Pending;
         Assert.Equal(409, (await Assert.ThrowsAsync<ContractException>(() => r.Service.ActivateAsync(c.Id, Guid.NewGuid(), default))).Status);
@@ -229,6 +236,37 @@ public sealed class ContractServiceTests
         r.Signing.PrepareAsync(default!, default, default, default).ReturnsForAnyArgs<SigningPreparation>(_ => throw new IntegrationUnavailableException("test-only"));
         await Assert.ThrowsAsync<IntegrationUnavailableException>(() => r.Service.RequestSigningAsync(c.Id, new(Guid.NewGuid()), Guid.NewGuid(), default));
         Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Empty(c.Signatures); Assert.Equal(RoomStatus.Available, r.Room.Status);
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SIGN03_AmbiguousProviderTimeoutOrNetworkFailureRemainsInManualReviewWithoutResending(bool timeout)
+    {
+        var r = new Rig(); var c = await r.Create(); var key = Guid.NewGuid(); var input = new SigningInput(Guid.NewGuid());
+        var source = "%PDF-1.7 SYNTHETIC PROVIDER BOUNDARY"u8.ToArray();
+        r.Signing.PrepareAsync(default!, default, default, default).ReturnsForAnyArgs(new SigningPreparation(
+            source, source, "synthetic-field", "synthetic-digest", "synthetic-data-to-sign", "synthetic-chain", "synthetic-user", "synthetic-credential"));
+        Exception failure = timeout ? new OperationCanceledException("Synthetic provider timeout") : new HttpRequestException("Synthetic provider outage");
+        r.Signing.RequestAsync(default!, default).ReturnsForAnyArgs(Task.FromException<string>(failure));
+
+        await Assert.ThrowsAsync<IntegrationUnavailableException>(() => r.Service.RequestSigningAsync(c.Id, input, key, default));
+        var signature = Assert.Single(c.Signatures);
+        Assert.Equal(SignatureStatus.ManualReview, signature.Status);
+        Assert.Null(signature.SignedAt); Assert.Null(signature.SignedObjectKey); Assert.Null(signature.ProviderReference);
+        var replay = await r.Service.RequestSigningAsync(c.Id, input, key, default);
+        Assert.Equal(signature.Id, replay.Id); Assert.Equal("ManualReview", replay.Status);
+        await r.Signing.Received(1).PrepareAsync(Arg.Any<ContractDocument>(), input.CertificateId, null, Arg.Any<CancellationToken>());
+        await r.Signing.Received(1).RequestAsync(Arg.Any<ContractSignature>(), Arg.Any<CancellationToken>());
+        Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Equal(RoomStatus.Available, r.Room.Status);
+    }
+    [Fact]
+    public async Task SIGN02_AnotherOwnerCannotSignOnBehalfOfEitherContractSigner()
+    {
+        var r = new Rig(); var c = await r.Create(); r.User.UserId = Guid.NewGuid();
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestSigningAsync(c.Id, new(Guid.NewGuid()), Guid.NewGuid(), default));
+        Assert.Equal(403, error.Status); Assert.Equal("contract_signer_required", error.Code);
+        Assert.Empty(c.Signatures); Assert.Equal(ContractStatus.Draft, c.Status);
+        await r.Signing.DidNotReceiveWithAnyArgs().PrepareAsync(default!, default, default, default);
     }
     [Theory]
     [InlineData(Roles.Tenant)]

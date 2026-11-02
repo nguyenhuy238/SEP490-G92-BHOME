@@ -1,16 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
   draftPayload,
   mutationKeys,
+  text,
   type ContractClient,
-  type NamedOption,
-  type ResidentOption,
 } from '../../../../../packages/client-core/src/contracts';
+import { useContractPreparation } from '../../../../../packages/client-core/src/useContractPreparation';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
+import { useWorkspace } from '../workspace/WorkspaceProvider';
 
 export function ContractDraftForm({
   api,
@@ -21,58 +22,29 @@ export function ContractDraftForm({
   onCancel: () => void;
   onCreated: (id: string) => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [location, setLocation] = useState('');
-  const [locations, setLocations] = useState<NamedOption[]>([]),
-    [rooms, setRooms] = useState<NamedOption[]>([]),
-    [people, setPeople] = useState<ResidentOption[]>([]);
+  const { role } = useWorkspace();
+  const [values, setValues] = useState<Record<string, string>>({}),
+    [location, setLocation] = useState('');
   const [residents, setResidents] = useState<string[]>([]),
+    [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(false),
-    [error, setError] = useState(''),
-    [revision, setRevision] = useState(0);
-  const [keys] = useState(() => mutationKeys(randomUUID));
-  const lock = useRef(false);
-  useEffect(() => {
-    const c = new AbortController();
-    void api
-      .locations(c.signal)
-      .then(setLocations)
-      .catch((e) => {
-        if (!c.signal.aborted) setError(contractError(e));
-      });
-    return () => c.abort();
-  }, [api, revision]);
-  useEffect(() => {
-    if (!location) return;
-    const c = new AbortController();
-    async function load() {
-      setLoading(true);
-      try {
-        const [r, p] = await Promise.all([
-          api.rooms(location, c.signal),
-          api.residents(location, c.signal),
-        ]);
-        if (!c.signal.aborted) {
-          setRooms(r);
-          setPeople(p);
-        }
-      } catch (e) {
-        if (!c.signal.aborted) setError(contractError(e));
-      } finally {
-        if (!c.signal.aborted) setLoading(false);
-      }
-    }
-    void load();
-    return () => c.abort();
-  }, [api, location, revision]);
+    [error, setError] = useState('');
+  const lock = useRef(false),
+    [keys] = useState(() => mutationKeys(randomUUID));
+  const query = useContractPreparation(api, location, role === 'Owner');
+  const p = query.data?.preparation,
+    template = query.data?.configuration.template;
+  const eligible = (p?.residents ?? []).filter((r) => r.roomId === values.roomId && r.verified);
+  const representative = eligible.find((r) => r.id === values.representativeResidentId);
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
-  const eligible = people.filter((r) => r.roomId === values.roomId && r.verificationStatus === 1);
   async function save() {
     if (lock.current) return;
     let body;
     try {
-      body = draftPayload(values, residents);
+      body = draftPayload(
+        { ...values, tenantUserId: representative?.tenantUserId ?? '' },
+        residents,
+      );
     } catch (e) {
       setError((e as Error).message);
       return;
@@ -81,9 +53,9 @@ export function ContractDraftForm({
     setBusy(true);
     setError('');
     try {
-      const result = await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
+      const r = await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
       keys.confirmed('draft', body);
-      onCreated(result.id);
+      onCreated(r.id);
     } catch (e) {
       setError(contractError(e));
     } finally {
@@ -95,98 +67,148 @@ export function ContractDraftForm({
     <>
       <Heading
         title="Chuẩn bị hợp đồng thuê"
-        detail="UC-15 • Nháp chưa giữ chỗ hoặc kích hoạt phòng"
+        detail={`Bước ${step + 1}/3 · ${['Cấu hình', 'Phòng & Người ở', 'Điều khoản'][step]}`}
       />
+      {query.loading && <Text>Đang tải lựa chọn…</Text>}
+      {!!query.error && <Text style={ui.red}>{query.error}</Text>}
       <Box>
-        <ChoiceField
-          label="Cơ sở được phân công"
-          value={location}
-          disabled={busy}
-          options={locations}
-          onChange={(v) => {
-            setLocation(v);
-            setRooms([]);
-            setPeople([]);
-            setResidents([]);
-            set('roomId', '');
-            set('representativeResidentId', '');
-          }}
-        />
-        <ChoiceField
-          label="Phòng"
-          value={values.roomId ?? ''}
-          disabled={busy || loading}
-          options={rooms}
-          onChange={(v) => {
-            set('roomId', v);
-            set('representativeResidentId', '');
-            setResidents([]);
-          }}
-        />
-        <Heading title="Người ở đã xác minh" />
-        {eligible.map((r) => (
-          <Checkbox.Item
-            key={r.id}
-            label={r.displayLabel}
-            disabled={busy}
-            status={residents.includes(r.id) ? 'checked' : 'unchecked'}
-            onPress={() => {
-              setResidents((ids) =>
-                ids.includes(r.id) ? ids.filter((i) => i !== r.id) : [...ids, r.id],
-              );
-              if (values.representativeResidentId === r.id) set('representativeResidentId', '');
-            }}
-          />
-        ))}
-        {!!values.roomId && !eligible.length && (
-          <Text>Chưa có người ở đã xác minh. Hoàn tất tiếp nhận và xác nhận CCCD trước.</Text>
+        {step === 0 && template && (
+          <>
+            <Heading title={template.title} detail={`Phiên bản ${template.version}`} />
+            <Text>{template.notice}</Text>
+            <Text>{template.fields.join(', ')}</Text>
+            <Text>
+              {query.data?.configuration.signingMode === 'Simulated'
+                ? 'SIMULATED SIGNING — không có giá trị pháp lý'
+                : 'Ký bằng nhà cung cấp điện tử'}
+            </Text>
+            {!template.available && <Text style={ui.red}>{text(template.blocker ?? '')}</Text>}
+            <Text>{text(query.data?.configuration.holdingBlocker ?? '')}</Text>
+          </>
         )}
-        <ChoiceField
-          label="Người đại diện"
-          value={values.representativeResidentId ?? ''}
-          disabled={busy}
-          options={eligible
-            .filter((r) => residents.includes(r.id))
-            .map((r) => ({ id: r.id, label: r.displayLabel }))}
-          onChange={(v) => set('representativeResidentId', v)}
-        />
-        {[
-          { name: 'ownerSignerId', label: 'UUID tài khoản Owner ký' },
-          { name: 'tenantUserId', label: 'UUID tài khoản Tenant ký' },
-          { name: 'startDate', label: 'Ngày bắt đầu (dd/MM/yyyy)' },
-          { name: 'endDate', label: 'Ngày hết hạn (dd/MM/yyyy)' },
-          { name: 'monthlyRent', label: 'Tiền thuê tháng (VND)' },
-          { name: 'requiredDeposit', label: 'Cọc yêu cầu (VND)' },
-          { name: 'terms', label: 'Điều khoản đã thống nhất' },
-          { name: 'holdingContractId', label: 'UUID hợp đồng giữ chỗ (tùy chọn)' },
-        ].map((f) => (
-          <Input
-            key={f.name}
-            label={f.label}
-            value={values[f.name] ?? ''}
-            disabled={busy}
-            numeric={['monthlyRent', 'requiredDeposit'].includes(f.name)}
-            multiline={f.name === 'terms'}
-            onChange={(v) => set(f.name, v)}
-          />
-        ))}
-        <Text variant="bodySmall">
-          Mã tài khoản bên ký khác mã hồ sơ người ở. Backend kiểm tra tài khoản có sẵn, vai trò,
-          phòng và cọc; Staff không ký thay.
-        </Text>
+        {step === 1 && (
+          <>
+            <ChoiceField
+              label="Cơ sở"
+              value={location}
+              options={p?.locations ?? []}
+              disabled={busy || query.loading}
+              onChange={(v) => {
+                setLocation(v);
+                set('roomId', '');
+                set('representativeResidentId', '');
+                setResidents([]);
+              }}
+            />
+            <ChoiceField
+              label="Phòng sẵn sàng"
+              value={values.roomId ?? ''}
+              options={p?.rooms ?? []}
+              disabled={busy || query.loading || !location}
+              onChange={(v) => {
+                set('roomId', v);
+                set('representativeResidentId', '');
+                setResidents([]);
+              }}
+            />
+            <Heading title="Người ở đã xác minh" />
+            {eligible.map((r) => (
+              <Checkbox.Item
+                key={r.id}
+                label={r.label}
+                disabled={busy}
+                status={residents.includes(r.id) ? 'checked' : 'unchecked'}
+                onPress={() => {
+                  setResidents((ids) =>
+                    ids.includes(r.id) ? ids.filter((id) => id !== r.id) : [...ids, r.id],
+                  );
+                  if (representative?.id === r.id) set('representativeResidentId', '');
+                }}
+              />
+            ))}
+            {!!values.roomId && !eligible.length && (
+              <Text>Chưa có người ở đã xác minh. Hoàn tất tiếp nhận trước.</Text>
+            )}
+            <ChoiceField
+              label="Người đại diện"
+              value={values.representativeResidentId ?? ''}
+              options={eligible.filter((r) => residents.includes(r.id))}
+              disabled={busy}
+              onChange={(v) => set('representativeResidentId', v)}
+            />
+            {representative && (
+              <Text>
+                {representative.tenantUserId
+                  ? 'Đã liên kết tài khoản Tenant ký hợp đồng.'
+                  : 'Owner cần liên kết tài khoản Tenant với hồ sơ đã xác minh trên Owner Web.'}
+              </Text>
+            )}
+            <ChoiceField
+              label="Owner ký hợp đồng"
+              value={values.ownerSignerId ?? ''}
+              options={p?.ownerSigners ?? []}
+              disabled={busy}
+              onChange={(v) => set('ownerSignerId', v)}
+            />
+          </>
+        )}
+        {step === 2 && (
+          <>
+            <Text>
+              Hợp đồng thuê chính · {p?.rooms.find((r) => r.id === values.roomId)?.label} ·{' '}
+              {representative?.label} · {residents.length} người ở
+            </Text>
+            {[
+              ['startDate', 'Ngày bắt đầu (dd/MM/yyyy)'],
+              ['endDate', 'Ngày hết hạn (dd/MM/yyyy)'],
+              ['monthlyRent', 'Tiền thuê tháng (VND)'],
+              ['requiredDeposit', 'Cọc yêu cầu (VND)'],
+              ['terms', 'Điều khoản đã thống nhất'],
+            ].map(([name, label]) => (
+              <Input
+                key={name}
+                label={label}
+                value={values[name] ?? ''}
+                disabled={busy}
+                numeric={['monthlyRent', 'requiredDeposit'].includes(name)}
+                multiline={name === 'terms'}
+                onChange={(v) => set(name, v)}
+              />
+            ))}
+          </>
+        )}
       </Box>
       {!!error && <Text style={ui.red}>{error}</Text>}
-      <Action disabled={busy || loading || !eligible.length} onPress={() => void save()}>
-        {busy ? 'Đang lưu…' : 'Lưu bản nháp'}
-      </Action>
-      <Action
-        secondary
-        disabled={busy}
-        onPress={() => {
-          setError('');
-          setRevision((v) => v + 1);
-        }}
-      >
+      {step > 0 && (
+        <Action secondary disabled={busy} onPress={() => setStep((v) => v - 1)}>
+          Quay lại
+        </Action>
+      )}
+      {step < 2 ? (
+        <Action
+          disabled={busy || query.loading || !!query.error || !template?.available}
+          onPress={() => {
+            if (
+              step === 1 &&
+              (!representative?.tenantUserId ||
+                !residents.includes(representative.id) ||
+                !values.ownerSignerId)
+            ) {
+              setError('Chọn phòng, người ở và đại diện đã liên kết tài khoản Tenant.');
+              return;
+            }
+            setError('');
+            setStep((v) => v + 1);
+          }}
+        >
+          Tiếp theo
+        </Action>
+      ) : (
+        <Action disabled={busy || query.loading || !!query.error} onPress={() => void save()}>
+          {busy ? 'Đang lưu…' : 'Lưu bản nháp'}
+        </Action>
+      )}
+      <Action secondary disabled={busy} onPress={query.reload}>
         Tải lại lựa chọn
       </Action>
       <Action secondary disabled={busy} onPress={onCancel}>

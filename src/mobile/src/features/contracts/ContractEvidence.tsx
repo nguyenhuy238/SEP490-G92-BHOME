@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
   type ContractClient,
@@ -14,12 +14,18 @@ export function ContractEvidence({
   api,
   contractId,
   evidenceId,
+  previewId,
+  handover = false,
+  readingId,
   pdf = false,
   number,
 }: {
   api: ContractClient;
   contractId: string;
   evidenceId?: string;
+  previewId?: string;
+  handover?: boolean;
+  readingId?: string;
   pdf?: boolean;
   number?: number;
 }) {
@@ -38,9 +44,15 @@ export function ContractEvidence({
     abort.current = controller;
     try {
       if (Platform.OS === 'web') {
-        const blob = pdf
-          ? await api.document(contractId, controller.signal)
-          : await api.evidence(contractId, evidenceId!, controller.signal);
+        const blob = readingId
+          ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+          : handover
+            ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
+            : previewId
+              ? await api.preview(contractId, previewId, controller.signal)
+              : pdf
+                ? await api.document(contractId, controller.signal)
+                : await api.evidence(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
@@ -53,9 +65,15 @@ export function ContractEvidence({
           setError('Thiết bị chưa hỗ trợ mở hoặc lưu tài liệu.');
           return;
         }
-        const bytes = pdf
-          ? await api.documentBytes(contractId, controller.signal)
-          : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
+        const bytes = readingId
+          ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
+          : handover
+            ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
+            : previewId
+              ? await api.previewBytes(contractId, previewId, controller.signal)
+              : pdf
+                ? await api.documentBytes(contractId, controller.signal)
+                : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const directory = new Directory(Paths.cache, 'bhome-contract-downloads');
         directory.create({ idempotent: true, intermediates: true });
@@ -82,7 +100,13 @@ export function ContractEvidence({
   return (
     <>
       <Button disabled={busy} loading={busy} onPress={() => void download()}>
-        {pdf ? 'Mở hoặc lưu tài liệu ký' : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`}
+        {readingId
+          ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
+          : previewId
+            ? 'Mở hoặc lưu PDF xem trước'
+            : pdf
+              ? 'Mở hoặc lưu tài liệu ký'
+              : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`}
       </Button>
       {!!error && <Text style={ui.red}>{error}</Text>}
     </>

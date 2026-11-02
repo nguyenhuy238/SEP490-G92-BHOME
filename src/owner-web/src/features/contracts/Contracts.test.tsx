@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import {
   contractActions,
   contractClient,
+  actionPayload,
   mutationKeys,
   type ContractRequest,
   type ContractView,
@@ -42,6 +43,31 @@ const draft: ContractView = {
   holdingContractId: null,
   appliedHoldingDeposit: '0',
 };
+
+it('uses a separate simulated action without a certificate and permits the second signer after a simulation', () => {
+  const demo = {
+    ...draft,
+    status: 'PendingSigning',
+    isDevelopmentDemo: true,
+    signatures: [
+      { id: owner, signerUserId: owner, status: 'Simulated', signedAt: '2026-10-30T02:00:00Z' },
+    ],
+  };
+  const signing = contractActions(demo, null, 'Tenant', tenant).find(
+    (a) => a.operation === 'signing',
+  )!;
+  expect(signing.label).toContain('Mô phỏng');
+  expect(signing.fields).toEqual([]);
+  expect(actionPayload(signing, {}, demo)).toEqual({
+    certificateId: '00000000-0000-0000-0000-000000000000',
+  });
+  expect(
+    contractActions(demo, null, 'Staff', tenant).some((a) => a.operation.startsWith('signing')),
+  ).toBe(false);
+  expect(contractActions(demo, null, 'Owner', owner).some((a) => a.operation === 'signing')).toBe(
+    false,
+  );
+});
 function mount(element: React.ReactNode) {
   const query = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -77,7 +103,36 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
     else if (path.endsWith('/move-out')) {
       if (!m) throw { status: 404 };
       result = m;
-    } else result = c;
+    } else if (
+      [
+        '/previews',
+        '/deposit-verifications',
+        '/history',
+        '/handover/history',
+        '/versions',
+        '/inspections',
+      ].some((s) => path.endsWith(s))
+    )
+      result = [];
+    else if (path.endsWith('/handover')) throw { status: 404 };
+    else if (path.endsWith('/inspection-preparation'))
+      result = { baseline: null, finalReadings: [], otherTenantsRemain: false };
+    else if (path.endsWith('/settlement-summary'))
+      result = {
+        verifiedSecurityDeposit: '0',
+        appliedHoldingDeposit: '0',
+        contractSpecificOutstanding: null,
+        approvedFinalCharges: null,
+        approvedDeductions: null,
+        refundAmount: null,
+        invoices: [],
+        unresolvedItems: ['confirmed_handover_baseline_required'],
+        otherActiveContracts: false,
+        resolved: false,
+        reference: 'BH40-TEST',
+        transferVerificationStatus: 'PendingReview',
+      };
+    else result = c;
     return result as T;
   });
   return {
@@ -200,6 +255,8 @@ it('shows provider unavailability and never marks signing successful from a fail
       provider: 'MySign',
       serialNumber: 'SYNTHETIC',
       providerUserIdHint: '***001',
+      validFrom: '2020-01-01T00:00:00Z',
+      validTo: '2099-01-01T00:00:00Z',
       locked: false,
       usable: true,
     },
@@ -275,4 +332,18 @@ it('discards an aborted lookup when the user switches contract before its respon
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.data?.contract.id).toBe(tenant);
   expect((get.mock.calls[0]![1] as AbortSignal).aborted).toBe(true);
+});
+it('keeps onboarding drafts out of lifecycle reads and actions even for Owner deep links', async () => {
+  const c = {
+    ...draft,
+    status: 'Draft',
+    onboardingDraft: true,
+    tenantUserId: null,
+    signatures: [],
+  };
+  const { api, request } = setup(c);
+  const { result } = renderHook(() => useContractDetail(api, id, 'Owner'));
+  await waitFor(() => expect(result.current.data?.contract.id).toBe(id));
+  expect(request.mock.calls.map(([path]) => path)).toEqual([`/api/v1/contracts/${id}`]);
+  expect(contractActions(c, null, 'Owner', owner)).toEqual([]);
 });

@@ -69,7 +69,8 @@ public sealed record RoomDto(Guid Id, Guid LocationId, Guid? RoomTypeId, string 
 public sealed record AssetDto(Guid Id, Guid LocationId, Guid? RoomId, string? CommonArea,
     string? Code, string Name, string Category, string Condition, AssetStatus Status, int Version);
 public sealed record PolicyDto(Guid Id, Guid LocationId, Guid? RoomTypeId, Guid? RoomId,
-    ChargeCategory Category, string ChargeCode, string Name, ChargingMethod Method, decimal Rate,
+    ChargeCategory Category, string ChargeCode, string Name, ChargingMethod Method,
+    [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version, DateTimeOffset? FirstUsedAt = null);
 public sealed record ResolvedPrices(Guid RoomId, DateOnly EffectiveOn, IReadOnlyList<PolicyDto> Charges,
     IReadOnlyList<string> MissingRequiredCharges);

@@ -29,6 +29,8 @@ const TemporaryResidencePage = lazy(
 );
 const MetersPage = lazy(() => import('../features/meters/pages/MetersPage'));
 const InvoicesPage = lazy(() => import('../features/invoices/pages/InvoicesPage'));
+const AutomationPage = lazy(() => import('../features/invoices/AutomationPage'));
+const AdjustmentsPage = lazy(() => import('../features/adjustments/AdjustmentsPage'));
 const PaymentsPage = lazy(() => import('../features/payments/pages/PaymentsPage'));
 const DebtsPage = lazy(() => import('../features/debts/pages/DebtsPage'));
 const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPage'));
@@ -61,6 +63,7 @@ export function AppRouter() {
             <Route path="/locations/:locationId" element={<LocationWorkspace />}>
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<LocationOverview />} />
+              <Route path="rooms/new" element={<CreateRooms />} />
               <Route path="rooms" element={<RoomsPage />} />
               <Route path="room-types" element={<RoomTypesPage />} />
               <Route path="assets" element={<AssetsPage />} />
@@ -83,6 +86,8 @@ export function AppRouter() {
             <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
             <Route path="/meters" element={<MetersPage />} />
             <Route path="/invoices" element={<InvoicesPage />} />
+            <Route path="/billing-automation" element={<AutomationPage />} />
+            <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/debts" element={<DebtsPage />} />
             <Route path="/incidents" element={<IncidentsPage />} />

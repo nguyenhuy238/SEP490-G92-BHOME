@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Image, Platform, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
@@ -7,6 +7,7 @@ import { Button, SegmentedButtons, Text } from 'react-native-paper';
 import { styles } from './Controls';
 import { ownCapture } from '../lib/captureFiles';
 import { captureLensOptions } from '../lib/captureLenses';
+import { DocumentCameraView } from './DocumentCameraView';
 
 // Only URIs created by this component in the application's cache are accepted for deletion.
 function remove(uri: string) {
@@ -21,14 +22,24 @@ export function CameraCapture({
   onCapture,
   retainPreview = false,
   reviewBeforeSubmit = false,
+  reviewActionLabel = 'Dùng ảnh này để OCR',
+  reviewNotice = 'Kiểm tra ảnh rõ chữ, không lóa. Ảnh chỉ nằm trong bộ nhớ đệm tạm thời và được xóa sau xử lý hoặc khi rời ứng dụng.',
   documentSide,
+  presentation = 'inline',
+  onManual,
+  onPhotoCaptured,
 }: {
   label: string;
   disabled: boolean;
   onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
   retainPreview?: boolean;
   reviewBeforeSubmit?: boolean;
+  reviewActionLabel?: string;
+  reviewNotice?: string;
   documentSide?: 'front' | 'back';
+  presentation?: 'inline' | 'document';
+  onManual?: () => void;
+  onPhotoCaptured?: () => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
@@ -45,11 +56,48 @@ export function CameraCapture({
   const pending = useRef('');
   const alive = useRef(true);
   const generation = useRef(0);
-  const clearFiles = () => {
+  const workingLock = useRef(false);
+  const permissionLock = useRef(false);
+  const permissionAccess = useRef({ permission, requestPermission });
+  const [requestingPermission, setRequestingPermission] = useState(false);
+  useEffect(() => {
+    permissionAccess.current = { permission, requestPermission };
+  }, [permission, requestPermission]);
+  const clearFiles = useCallback(() => {
     for (const uri of files.current) remove(uri);
     files.current.clear();
     pending.current = '';
-  };
+  }, []);
+  const openCamera = useCallback(async () => {
+    if (permissionLock.current || workingLock.current) return;
+    permissionLock.current = true;
+    const epoch = ++generation.current;
+    clearFiles();
+    setPreview('');
+    setError('');
+    setReady(false);
+    setRequestingPermission(true);
+    try {
+      const access = permissionAccess.current;
+      const allowed = access.permission?.granted || (await access.requestPermission()).granted;
+      if (!alive.current || epoch !== generation.current) return;
+      if (!allowed) {
+        setError('Cần cấp quyền camera trong Cài đặt để chụp ảnh. Nhập thủ công vẫn khả dụng.');
+        return;
+      }
+      setLens('');
+      setLenses([]);
+      setZoom(0);
+      setCameraGeneration((value) => value + 1);
+      setOpen(true);
+    } catch {
+      if (alive.current && epoch === generation.current)
+        setError('Không mở được camera. Bạn có thể thử lại hoặc nhập thủ công.');
+    } finally {
+      permissionLock.current = false;
+      if (alive.current) setRequestingPermission(false);
+    }
+  }, [clearFiles]);
   useEffect(() => {
     alive.current = true;
     const sub = AppState.addEventListener('change', (state) => {
@@ -69,9 +117,16 @@ export function CameraCapture({
       invalidate();
       sub.remove();
     };
-  }, []);
+  }, [clearFiles]);
+  useEffect(() => {
+    if (presentation !== 'document') return;
+    // Let the modal mount before requesting the native camera permission/view.
+    const start = setTimeout(() => void openCamera(), 0);
+    return () => clearTimeout(start);
+  }, [presentation, openCamera]);
   const take = async () => {
-    if (!camera.current || working || !ready) return;
+    if (!camera.current || workingLock.current || disabled || !ready) return;
+    workingLock.current = true;
     setWorking(true);
     setError('');
     const epoch = generation.current;
@@ -112,6 +167,7 @@ export function CameraCapture({
         pending.current = saved;
         setPreview(saved);
         setOpen(false);
+        onPhotoCaptured?.();
         return;
       }
       const bytes = await file.bytes();
@@ -136,10 +192,12 @@ export function CameraCapture({
         }
       }
       if (alive.current) setWorking(false);
+      workingLock.current = false;
     }
   };
   const submitPending = async () => {
-    if (!pending.current || working || disabled) return;
+    if (!pending.current || workingLock.current || disabled) return;
+    workingLock.current = true;
     const uri = pending.current;
     const epoch = generation.current;
     setWorking(true);
@@ -160,30 +218,59 @@ export function CameraCapture({
         setWorking(false);
         setPreview('');
       }
+      workingLock.current = false;
     }
   };
+  if (presentation === 'document')
+    return (
+      <DocumentCameraView
+        camera={
+          open && !preview ? (
+            <CameraView
+              ref={camera}
+              key={cameraGeneration}
+              style={{ flex: 1 }}
+              facing="back"
+              mode="picture"
+              autofocus="off"
+              onCameraReady={() => setReady(true)}
+              onMountError={() => {
+                setOpen(false);
+                setReady(false);
+                setError('Không mở được camera. Hãy thử lại hoặc nhập thủ công.');
+              }}
+            />
+          ) : null
+        }
+        preview={preview}
+        documentSide={documentSide}
+        working={working}
+        disabled={disabled}
+        ready={ready && open}
+        requestingPermission={requestingPermission}
+        error={error}
+        onTake={() => void take()}
+        onUse={() => void submitPending()}
+        onRetake={() => {
+          clearFiles();
+          setPreview('');
+          setReady(false);
+          setOpen(true);
+        }}
+        onRequestPermission={() => void openCamera()}
+        onManual={() => {
+          clearFiles();
+          onManual?.();
+        }}
+      />
+    );
   return (
     <View style={styles.row}>
       <Button
         mode="outlined"
         disabled={disabled || working}
         loading={working}
-        onPress={async () => {
-          clearFiles();
-          setPreview('');
-          setError('');
-          const allowed = permission?.granted || (await requestPermission()).granted;
-          if (!allowed) {
-            setError('Cần cấp quyền camera trong Cài đặt để chụp ảnh. Nhập thủ công vẫn khả dụng.');
-            return;
-          }
-          setReady(false);
-          setLens('');
-          setLenses([]);
-          setZoom(0);
-          setCameraGeneration((value) => value + 1);
-          setOpen(true);
-        }}
+        onPress={() => void openCamera()}
       >
         {label}
       </Button>
@@ -231,7 +318,8 @@ export function CameraCapture({
                 }}
               >
                 <Text style={{ color: 'white', backgroundColor: '#172b4d', padding: 4 }}>
-                  {documentSide === 'front' ? 'MẶT TRƯỚC CCCD' : 'MẶT SAU CCCD'} • Đủ 4 góc
+                  {documentSide === 'front' ? 'MẶT TRƯỚC CCCD' : 'MẶT SAU CCCD'} • Căn giấy tờ trong
+                  khung
                 </Text>
               </View>
             )}
@@ -315,17 +403,14 @@ export function CameraCapture({
       )}
       {reviewBeforeSubmit && !!preview && (
         <View style={{ gap: 8 }}>
-          <Text>
-            Kiểm tra ảnh rõ chữ, không lóa. Ảnh chỉ nằm trong bộ nhớ đệm tạm thời và được xóa sau xử
-            lý hoặc khi rời ứng dụng.
-          </Text>
+          <Text>{reviewNotice}</Text>
           <Button
             mode="contained"
             disabled={disabled || working}
             loading={working}
             onPress={() => void submitPending()}
           >
-            Dùng ảnh này để OCR
+            {reviewActionLabel}
           </Button>
           <Button
             disabled={working}

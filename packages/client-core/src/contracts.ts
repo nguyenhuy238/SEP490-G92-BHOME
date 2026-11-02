@@ -1,5 +1,6 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
 import { ApiError, requestDiagnostic } from './api';
+import { groupVietnameseIntegerDigits } from './localization';
 export const contractStates = [
   'Draft',
   'PendingSigning',
@@ -10,6 +11,7 @@ export const contractStates = [
   'Cancelled',
 ] as const;
 export interface ContractSummary {
+  onboardingDraft?: boolean;
   id: string;
   roomId: string;
   locationId: string;
@@ -34,6 +36,7 @@ export interface Signature {
   signedAt: string | null;
 }
 export interface ContractView {
+  onboardingDraft?: boolean;
   id: string;
   roomId: string;
   kind: string;
@@ -47,18 +50,120 @@ export interface ContractView {
   residentIds: string[];
   signatures: Signature[];
   activatedAt: string | null;
+  actualEndDate?: string | null;
   ownerSignerId: string;
-  tenantUserId: string;
+  tenantUserId: string | null;
   representativeResidentId: string;
   holdingContractId: string | null;
   appliedHoldingDeposit: string;
+  isDevelopmentDemo?: boolean;
+  roomNumber?: string;
+  locationName?: string;
+  occupants?: { id: string; label: string; representative: boolean }[] | null;
   locationId: string;
+}
+export interface ContractTemplate {
+  id: string;
+  version: number;
+  title: string;
+  notice: string;
+  available: boolean;
+  developmentOnly: boolean;
+  blocker: string | null;
+  fields: string[];
+}
+export interface ContractConfiguration {
+  template: ContractTemplate;
+  signingMode: string;
+  holdingBlocker: string;
+  settlementBlocker: string;
+}
+export interface Preparation {
+  locations: NamedOption[];
+  rooms: (NamedOption & { locationId: string; status: string })[];
+  residents: (NamedOption & {
+    roomId: string;
+    tenantUserId: string | null;
+    verified: boolean;
+    residentType?: string;
+  })[];
+  ownerSigners: NamedOption[];
+}
+export interface PreviewDocument {
+  id: string;
+  contractId: string;
+  kind: string;
+  snapshotHash: string;
+  templateId: string | null;
+  templateVersion: number | null;
+  developmentOnly: boolean;
+  recordedAt: string;
+}
+export interface ContractAudit {
+  action: string;
+  actorId: string | null;
+  occurredAt: string;
+}
+export interface DepositVerification {
+  id: string;
+  bankTransactionReference: string;
+  amount: string;
+  verificationReason: string;
+  verifiedByUserId: string;
+  verifiedAt: string;
 }
 export interface Readiness {
   ready: boolean;
   verifiedDeposit: string;
   remainingDeposit: string;
   blockers: string[];
+}
+export interface HandoverAsset {
+  id: string;
+  name: string;
+  inventoryCondition: string;
+  observedCondition: string;
+}
+export interface HandoverReading {
+  id: string;
+  meterCode: string;
+  utilityType: number;
+  date: string;
+  value: string;
+  evidenceId: string;
+  evidenceHash: string;
+}
+export interface HandoverSnapshot {
+  date: string;
+  roomNumber: string;
+  roomCondition: string;
+  keysAndAccess: string;
+  notes: string;
+  assets: HandoverAsset[];
+  electricity: HandoverReading;
+  water: HandoverReading;
+  evidenceIds: string[];
+}
+export interface HandoverView {
+  version: number;
+  status: string;
+  snapshot: HandoverSnapshot;
+  tenantConfirmedVersion: number | null;
+  tenantConfirmedAt: string | null;
+  staffConfirmedAt: string | null;
+}
+export interface HandoverHistory {
+  version: number;
+  action: string;
+  actorId: string;
+  occurredAt: string;
+  note: string;
+  snapshot: HandoverSnapshot;
+}
+export interface HandoverChoices {
+  assets: HandoverAsset[];
+  readings: HandoverReading[];
+  evidence: PreviewDocument[];
 }
 export interface MoveOut {
   id: string;
@@ -72,6 +177,65 @@ export interface MoveOut {
   electricityReadingId: string | null;
   waterReadingId: string | null;
   evidenceIds: string[];
+  inspectionStaffId?: string | null;
+  version?: number;
+}
+export interface ContractExpiryNotice {
+  id: string;
+  contractId: string;
+  roomNumber: string;
+  locationName: string;
+  endDate: string;
+  stage: string;
+  createdAt: string;
+}
+export interface FinalInspection {
+  id: string;
+  version: number;
+  baselineContractId: string;
+  baselineVersion: number;
+  baseline: HandoverSnapshot;
+  observed: HandoverSnapshot;
+  staffId: string;
+  inspectedAt: string;
+  ownerDecision: string | null;
+  ownerReason: string | null;
+  reviewedAt: string | null;
+}
+export interface InspectionPreparation {
+  baseline: HandoverView | null;
+  baselineContractId: string | null;
+  finalReadings: HandoverReading[];
+  otherTenantsRemain: boolean;
+}
+export interface SettlementSummary {
+  contractId: string;
+  depositContractId: string;
+  roomNumber: string;
+  verifiedSecurityDeposit: string;
+  appliedHoldingDeposit: string;
+  contractSpecificOutstanding: string | null;
+  approvedFinalCharges: string | null;
+  approvedDeductions: string | null;
+  refundAmount: string | null;
+  invoices: {
+    invoiceId: string;
+    billingPeriod: string;
+    shared: boolean;
+    financials: {
+      originalIssuedAmount: string;
+      approvedAdjustmentTotal: string;
+      effectivePayableAmount: string;
+      allocatedPayments: string;
+      outstandingAmount: string;
+      potentialExcessAmount: string;
+    };
+  }[];
+  unresolvedItems: string[];
+  otherActiveContracts: boolean;
+  resolved: boolean;
+  reference: string;
+  transferVerificationStatus: string;
 }
 export interface SettlementReview {
   id: string;
@@ -86,6 +250,7 @@ export interface Certificate {
   providerUserIdHint: string;
   serialNumber: string;
   subject: string;
+  validFrom: string;
   validTo: string;
   locked: boolean;
   usable: boolean;
@@ -120,6 +285,57 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    expiryReminders: (signal?: AbortSignal) =>
+      request<ContractExpiryNotice[]>(`${root}/expiry-reminders`, { signal }),
+    inspections: (id: string, signal?: AbortSignal) =>
+      request<FinalInspection[]>(`${root}/${id}/move-out/inspections`, { signal }),
+    inspectionPreparation: (id: string, signal?: AbortSignal) =>
+      request<InspectionPreparation>(`${root}/${id}/move-out/inspection-preparation`, { signal }),
+    settlementSummary: (id: string, signal?: AbortSignal) =>
+      request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
+    moveOutHistory: (id: string, signal?: AbortSignal) =>
+      request<{ version: number; action: string; occurredAt: string }[]>(
+        `${root}/${id}/move-out/history`,
+        { signal },
+      ),
+    moveOutAssignments: (signal?: AbortSignal) =>
+      request<
+        {
+          contractId: string;
+          roomNumber: string;
+          locationName: string;
+          scheduledAt: string;
+          status: string;
+        }[]
+      >(`${root}/move-out-assignments`, { signal }),
+    inspectionStaff: async (locationId: string, signal?: AbortSignal) => {
+      const [staff, assignments] = await Promise.all([
+        request<NamedOption[]>('/api/v1/capture/staff', { signal }),
+        request<{ staffUserId: string; startDate: string; endDate: string }[]>(
+          `/api/v1/staff-location-assignments?locationId=${guid(locationId)}`,
+          { signal },
+        ),
+      ]);
+      const today = businessToday();
+      return staff.filter((s) =>
+        assignments.some(
+          (a) => a.staffUserId === s.id && a.startDate <= today && a.endDate >= today,
+        ),
+      );
+    },
+    versions: (id: string, signal?: AbortSignal) =>
+      request<
+        {
+          id: string;
+          previousContractId: string | null;
+          kind: string;
+          status: string;
+          startDate: string;
+          endDate: string;
+          monthlyRent: string | null;
+          terms: string;
+        }[]
+      >(`${root}/${id}/versions`, { signal }),
     list: async (page = 1, status = '', locationId = '', signal?: AbortSignal) => {
       const result = await request<ContractPage>(
         `${root}?${new URLSearchParams({ page: String(page), pageSize: '20', ...(status ? { status } : {}), ...(locationId ? { locationId } : {}) })}`,
@@ -147,6 +363,62 @@ export function contractClient(request: ContractRequest) {
         throw new ApiError(502, { code: 'invalid_response' });
       return result;
     },
+    configuration: (signal?: AbortSignal) =>
+      request<ContractConfiguration>(root + '/configuration', { signal }),
+    handover: (id: string, signal?: AbortSignal) =>
+      request<HandoverView>(root + '/' + id + '/handover', { signal }),
+    handoverHistory: (id: string, signal?: AbortSignal) =>
+      request<HandoverHistory[]>(root + '/' + id + '/handover/history', { signal }),
+    handoverChoices: (id: string, signal?: AbortSignal) =>
+      request<HandoverChoices>(root + '/' + id + '/handover/choices', { signal }),
+    handoverEvidence: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Blob>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'blob'),
+    handoverEvidenceBytes: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'bytes'),
+    handoverMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Blob>(root + '/' + id + '/handover/meter-evidence/' + readingId, { signal }, 'blob'),
+    handoverMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        root + '/' + id + '/handover/meter-evidence/' + readingId,
+        { signal },
+        'bytes',
+      ),
+    uploadHandover: (id: string, bytes: BodyInit, contentType: string) =>
+      request<{ id: string }>(root + '/' + id + '/handover/evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType },
+        body: bytes,
+      }),
+    preparation: (locationId = '', signal?: AbortSignal) =>
+      request<Preparation>(
+        root + '/preparation' + (locationId ? '?locationId=' + locationId : ''),
+        { signal },
+      ),
+    tenantAccounts: (signal?: AbortSignal) =>
+      request<NamedOption[]>(root + '/preparation/accounts', { signal }),
+    linkTenant: (residentId: string, tenantUserId: string) =>
+      request<void>(root + '/preparation/residents/' + residentId + '/account', {
+        method: 'POST',
+        body: JSON.stringify({ tenantUserId }),
+      }),
+    previews: (id: string, signal?: AbortSignal) =>
+      request<PreviewDocument[]>(root + '/' + id + '/previews', { signal }),
+    preview: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        root + '/' + id + '/previews/' + fileId,
+        { signal, headers: { Accept: 'application/pdf' } },
+        'blob',
+      ),
+    previewBytes: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        root + '/' + id + '/previews/' + fileId,
+        { signal, headers: { Accept: 'application/pdf' } },
+        'bytes',
+      ),
+    audit: (id: string, signal?: AbortSignal) =>
+      request<ContractAudit[]>(root + '/' + id + '/history', { signal }),
+    deposits: (id: string, signal?: AbortSignal) =>
+      request<DepositVerification[]>(root + '/' + id + '/deposit-verifications', { signal }),
     get: (id: string, signal?: AbortSignal) => request<ContractView>(`${root}/${id}`, { signal }),
     readiness: (id: string, signal?: AbortSignal) =>
       request<Readiness>(`${root}/${id}/activation-readiness`, { signal }),
@@ -159,6 +431,11 @@ export function contractClient(request: ContractRequest) {
       request<Certificate>(certificates, {
         method: 'POST',
         body: JSON.stringify({ providerUserId, serialNumber: serialNumber || null }),
+      }),
+    lockCertificate: (id: string, locked: boolean) =>
+      request<void>(`${certificates}/${guid(id)}/lock`, {
+        method: 'POST',
+        body: JSON.stringify({ locked }),
       }),
     locations: (signal?: AbortSignal) =>
       request<NamedOption[]>('/api/v1/capture/locations', { signal }),
@@ -214,6 +491,17 @@ export function contractClient(request: ContractRequest) {
   };
 }
 export type ContractClient = ReturnType<typeof contractClient>;
+export function certificateStatus(certificate: Certificate, now = Date.now()) {
+  if (certificate.locked) return 'Đã khóa';
+  const from = Date.parse(certificate.validFrom),
+    to = Date.parse(certificate.validTo);
+  if (Number.isFinite(to) && to <= now) return 'Đã hết hạn';
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from > now || !certificate.usable)
+    return 'Chưa dùng được';
+  return 'Có thể dùng';
+}
+export const canUseCertificate = (certificate: Certificate) =>
+  certificateStatus(certificate) === 'Có thể dùng';
 export const labels: Record<string, string> = {
   Main: 'Hợp đồng thuê',
   Renewal: 'Gia hạn',
@@ -228,6 +516,60 @@ export const labels: Record<string, string> = {
   Dispatching: 'Đang gửi yêu cầu ký',
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
+  Simulated: 'SIMULATED SIGNING — không có giá trị pháp lý',
+  Confirmed: 'Đã xác nhận bàn giao',
+  Disputed: 'Cần sửa nội dung bàn giao',
+  Recorded: 'Ghi nhận phiên bản bàn giao',
+  TenantConfirmed: 'Tenant xác nhận nhận phòng',
+  ContractDraftCreated: 'Lập bản nháp hợp đồng',
+  ContractPreviewGenerated: 'Tạo tài liệu xem trước',
+  ContractSigningInitiated: 'Bắt đầu quy trình ký',
+  ContractSigningPrepared: 'Chuẩn bị tài liệu ký',
+  ContractSigningDispatching: 'Gửi yêu cầu ký',
+  ContractSigningRequested: 'Đã gửi yêu cầu ký',
+  ContractSignatureSimulated: 'Mô phỏng thao tác ký (Development)',
+  ContractSignatureVerified: 'Xác minh chữ ký điện tử',
+  ContractDepositVerified: 'Owner xác minh cọc',
+  ContractActivated: 'Owner kích hoạt hợp đồng',
+  ContractRenewalPrepared: 'Lập bản gia hạn chờ ký',
+  ContractRenewalCancelled: 'Hủy bản gia hạn đang chờ',
+  ContractSigningNeedsReview: 'Cần kiểm tra yêu cầu ký tại nhà cung cấp',
+  ContractSigningFailed: 'Nhà cung cấp báo ký thất bại',
+  ContractSigningReferenceRecovered: 'Khôi phục tham chiếu yêu cầu ký',
+  ContractMoveOutRequested: 'Gửi yêu cầu trả phòng',
+  ContractMoveOutApproved: 'Owner duyệt yêu cầu trả phòng',
+  ContractInspectionScheduled: 'Đặt lịch kiểm tra trả phòng',
+  ContractMoveOutInspected: 'Lưu biên bản kiểm tra trả phòng',
+  ContractSettlementReviewed: 'Owner ghi nhận xem xét quyết toán',
+  ContractTerminationCompleted: 'Hoàn tất chấm dứt hợp đồng',
+  ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
+  ContractHandoverRecorded: 'Ghi nhận phiên bản bàn giao',
+  ContractHandoverDisputed: 'Tenant yêu cầu sửa bàn giao',
+  ContractHandoverTenantConfirmed: 'Tenant xác nhận bàn giao',
+  ContractHandoverCompleted: 'Staff hoàn tất bàn giao',
+  ContractHandoverEvidenceAdded: 'Tải ảnh nhận phòng',
+  handover_version_changed:
+    'Biên bản đã thay đổi. Tải lại và kiểm tra phiên bản mới trước khi xác nhận.',
+  handover_correction_required: 'Staff cần lưu nội dung đã sửa trước khi Tenant xác nhận lại.',
+  tenant_handover_confirmation_required:
+    'Cần Tenant xác nhận đúng phiên bản hiện tại trước khi Staff hoàn tất.',
+  confirmed_handover_readings_required:
+    'Cần đủ chỉ số điện và nước đã xác nhận, kèm ảnh, đúng phòng và ngày bàn giao.',
+  handover_already_confirmed: 'Biên bản đã hoàn tất; nội dung và bằng chứng được giữ nguyên.',
+  invalid_handover_input:
+    'Kiểm tra ngày bàn giao, hiện trạng, chìa khóa, tài sản và từ 1 đến 5 ảnh.',
+  handover_evidence_integrity_failed:
+    'Bằng chứng bàn giao không còn khớp bản đã lưu. Cần kiểm tra tại máy chủ.',
+  resident_account_already_linked:
+    'Hồ sơ đã liên kết tài khoản khác hoặc có lịch sử hợp đồng khác. Không thể liên kết lại.',
+  development_demo_disabled:
+    'Hợp đồng demo chỉ có thể xử lý trong Development/Testing đã bật mô phỏng.',
+  signing_mode_mismatch: 'Chế độ ký của hợp đồng không khớp cấu hình máy chủ.',
+  tenant_account_link_required:
+    'Owner cần liên kết tài khoản Tenant với hồ sơ đại diện đã xác minh.',
+  tenant_account_mismatch: 'Tài khoản Tenant không khớp người đại diện.',
+  holding_policy_and_verified_allocation_required:
+    'Giữ phòng / chuyển cọc: chờ chính sách OQ-03 và sổ phân bổ cọc đã xác minh.',
   Failed: 'Ký thất bại',
   ManualReview: 'Cần kiểm tra tại nhà cung cấp',
   Requested: 'Chờ Owner duyệt',
@@ -240,6 +582,12 @@ export const labels: Record<string, string> = {
   location_not_active: 'Location chưa hoạt động.',
   room_not_available: 'Phòng chưa sẵn sàng.',
   signed_terms_changed: 'Nội dung hợp đồng không khớp bản đã đưa đi ký.',
+  contract_template_not_configured:
+    'Chưa có mẫu PDF hợp đồng được phê duyệt. Liên hệ Owner để hoàn tất cấu hình trước khi ký.',
+  signing_certificate_not_valid:
+    'Chứng thư đã bị khóa hoặc không còn hiệu lực. Tải lại chứng thư trước khi ký.',
+  signing_certificate_no_longer_available:
+    'Nhà cung cấp không còn trả về chứng thư đã chọn. Hãy kiểm tra và khai báo lại chứng thư của bạn.',
   contract_not_in_effective_period: 'Chưa đến hoặc đã qua kỳ hiệu lực.',
   verified_signature_evidence_required: 'Cần đủ bằng chứng ký đã xác minh của Owner và Tenant.',
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',
@@ -260,6 +608,11 @@ export const labels: Record<string, string> = {
   move_out_not_ready_for_inspection:
     'Cần duyệt yêu cầu, đặt lịch và đến ngày trả phòng trước khi lập biên bản.',
   settlement_unresolved: 'Nghĩa vụ quyết toán chưa hoàn tất hoặc đã thay đổi.',
+  settlement_review_changed:
+    'Số liệu quyết toán đã thay đổi. Tải lại để đối chiếu và xác nhận phiên bản mới.',
+  move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
+  inspection_changed_or_reviewed:
+    'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
   move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
@@ -312,11 +665,7 @@ export function contractError(error: unknown): string {
 }
 export function formatContractMoney(value: string) {
   if (!/^\d+$/.test(value)) return '—';
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(BigInt(value));
+  return groupVietnameseIntegerDigits(value) + '\u00a0₫';
 }
 export function dateOnly(value: string): string {
   const iso = /^\d{2}\/\d{2}\/\d{4}$/.test(value) ? value.split('/').reverse().join('-') : value;
@@ -364,7 +713,7 @@ export function guid(value: string) {
     throw new Error('Mã định danh phải là UUID hợp lệ.');
   return value;
 }
-function required(value: string, max: number) {
+export function required(value: string, max: number) {
   if (!value.trim() || value.trim().length > max)
     throw new Error(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
   return value.trim();
@@ -397,6 +746,7 @@ export function contractActions(
   role: string,
   actorId: string,
 ): ContractAction[] {
+  if (c.onboardingDraft) return [];
   const owner = role === 'Owner',
     staff = role === 'Staff',
     tenant = role === 'Tenant' && c.tenantUserId === actorId;
@@ -404,7 +754,7 @@ export function contractActions(
   const active = c.status === 'Active',
     waiting = ['Draft', 'PendingSigning', 'PendingActivation'].includes(c.status);
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
-  const open = c.signatures.some((s) => !['Signed', 'Failed'].includes(s.status));
+  const open = c.signatures.some((s) => !['Signed', 'Simulated', 'Failed'].includes(s.status));
   const result: ContractAction[] = [];
   if (
     signer &&
@@ -415,9 +765,13 @@ export function contractActions(
     result.push(
       action(
         'signing',
-        'Yêu cầu ký MySign',
-        [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
-        'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
+        c.isDevelopmentDemo ? 'Mô phỏng ký (Development)' : 'Yêu cầu ký MySign',
+        c.isDevelopmentDemo
+          ? []
+          : [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
+        c.isDevelopmentDemo
+          ? 'SIMULATED SIGNING: chỉ thử nghiệm, không phải chữ ký điện tử có giá trị pháp lý.'
+          : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
       ),
     );
   if (signer && mine.some((s) => s.status === 'Pending'))
@@ -560,6 +914,8 @@ export function actionPayload(
   c: ContractView,
   evidenceIds: string[] = [],
 ): Record<string, unknown> | undefined {
+  if (a.operation === 'signing' && c.isDevelopmentDemo)
+    return { certificateId: '00000000-0000-0000-0000-000000000000' };
   if (!a.fields.length) return undefined;
   const body: Record<string, unknown> = {};
   for (const f of a.fields) {

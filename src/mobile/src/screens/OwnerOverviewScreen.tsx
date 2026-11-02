@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { router } from 'expo-router';
 import { ActivityIndicator, Text } from 'react-native-paper';
-import { Action, Box, Heading, Metric, ui } from '../components/WorkspaceKit';
+import { Action, Box, Heading, Metric, QuickActions, ui } from '../components/WorkspaceKit';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage } from '../lib/api';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { loadOwnerOverview, type OwnerOverview } from '../services/ownerOverview';
 
 export function OwnerOverviewScreen() {
-  const { api, baseUrl, session } = useSession();
+  const { api, session } = useSession();
   const { go } = useWorkspace();
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState<{
@@ -35,7 +36,26 @@ export function OwnerOverviewScreen() {
   return (
     <>
       <Heading title="Tổng quan BHOME" detail="Cơ sở, phòng và hợp đồng trong phạm vi tài khoản" />
-      <Text variant="bodySmall">API: {baseUrl}</Text>
+      <Box style={ui.dark}>
+        <Text variant="labelSmall" style={ui.white}>
+          CHỦ CƠ SỞ
+        </Text>
+        <Text variant="headlineSmall" style={ui.white}>
+          Theo dõi vận hành BHOME
+        </Text>
+        <Text style={ui.white}>Cơ sở, công việc và hợp đồng của bạn</Text>
+      </Box>
+      <QuickActions
+        items={[
+          { label: 'Phê duyệt', icon: 'clipboard-check-outline', onPress: () => go('approvals') },
+          { label: 'Vận hành', icon: 'tune-variant', onPress: () => go('operations') },
+          {
+            label: 'Thiết lập',
+            icon: 'office-building-outline',
+            onPress: () => router.push('/setup'),
+          },
+        ]}
+      />
       <Action
         secondary
         disabled={state.loading}
@@ -70,7 +90,7 @@ export function OwnerOverviewScreen() {
             label="Phòng đang ở"
             value={String(state.data.occupiedRooms)}
             icon="home-account"
-            detail="Trạng thái Occupied từ máy chủ"
+            detail="Phòng hiện đang có người thuê"
           />
           <Metric
             label="Hợp đồng"

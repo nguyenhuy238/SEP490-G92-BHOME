@@ -29,9 +29,12 @@ Set-Setting "IdentityProtection__HmacKeys__$hmacVersion" (New-Secret32) -OnlyIfM
 $tlsDir = Join-Path $repo '.tools/mobile-tls'
 New-Item -ItemType Directory -Path $tlsDir -Force | Out-Null
 $pfxPath = Join-Path $tlsDir 'api.pfx'; $caPath = Join-Path $tlsDir 'root-ca.cer'; $ipPath = Join-Path $tlsDir 'lan-ip.txt'
+$developmentHost = [string](Get-MobileDevelopmentHost)
+$hostPath = Join-Path $tlsDir 'dns-host.txt'
 $existingPassword = [regex]::Match($configText, '(?m)^Kestrel__Certificates__Default__Password=([^\r\n]+)').Groups[1].Value
 $renewCertificate = -not (Test-Path -LiteralPath $pfxPath) -or -not (Test-Path -LiteralPath $caPath) -or
-    -not (Test-Path -LiteralPath $ipPath) -or [IO.File]::ReadAllText($ipPath).Trim() -ne $LanIp -or -not $existingPassword
+    -not (Test-Path -LiteralPath $ipPath) -or [IO.File]::ReadAllText($ipPath).Trim() -ne $LanIp -or -not $existingPassword -or
+    -not (Test-Path -LiteralPath $hostPath) -or [IO.File]::ReadAllText($hostPath).Trim() -ne $developmentHost
 if (-not $renewCertificate) {
     try {
         $currentCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxPath, $existingPassword)
@@ -52,11 +55,14 @@ if ($renewCertificate) {
         $ca = New-SelfSignedCertificate -Type Custom -Subject 'CN=BHOME Local Mobile CA' -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy NonExportable -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(2) -KeyUsage CertSign,CRLSign -TextExtension @('2.5.29.19={critical}{text}ca=1')
         Write-Warning 'A new local CA was created. Install and explicitly trust the public CA on your iPhone.'
     }
-    $server = New-SelfSignedCertificate -Type Custom -Subject "CN=$LanIp" -Signer $ca -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -KeyExportPolicy Exportable -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddMonths(6) -KeyUsage DigitalSignature,KeyEncipherment -TextExtension @("2.5.29.17={text}IPAddress=$LanIp&DNS=localhost", '2.5.29.37={text}1.3.6.1.5.5.7.3.1')
+    $subjectAlternativeNames = "IPAddress=$LanIp&DNS=localhost"
+    if ($developmentHost) { $subjectAlternativeNames += "&DNS=$developmentHost" }
+    $server = New-SelfSignedCertificate -Type Custom -Subject "CN=$LanIp" -Signer $ca -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -KeyExportPolicy Exportable -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddMonths(6) -KeyUsage DigitalSignature,KeyEncipherment -TextExtension @("2.5.29.17={text}$subjectAlternativeNames", '2.5.29.37={text}1.3.6.1.5.5.7.3.1')
     $existingPassword = New-Secret32
     Export-PfxCertificate -Cert $server -FilePath $pfxPath -Password (ConvertTo-SecureString $existingPassword -AsPlainText -Force) | Out-Null
     Export-Certificate -Cert $ca -FilePath $caPath -Type CERT | Out-Null
     [IO.File]::WriteAllText($ipPath, $LanIp)
+    [IO.File]::WriteAllText($hostPath, $developmentHost)
 }
 Set-Setting 'Kestrel__Certificates__Default__Path' $pfxPath
 Set-Setting 'Kestrel__Certificates__Default__Password' $existingPassword
@@ -64,7 +70,7 @@ Set-Setting 'Ocr__Enabled' 'true'
 Set-Setting 'Ocr__ModelDirectory' (Join-Path $repo '.tools/ocr-models')
 Set-Setting 'MobileDevelopment__Enabled' 'true'
 Set-Setting 'MobileDevelopment__RootCertificate' $caPath
-Set-Setting 'AllowedHosts' "localhost;127.0.0.1;$LanIp"
+Set-Setting 'AllowedHosts' ((@('localhost', '127.0.0.1', $LanIp, $developmentHost) | Where-Object { $_ }) -join ';')
 [IO.File]::WriteAllText($configurationPath, $configText, [Text.UTF8Encoding]::new($false))
 foreach ($line in ($configText -split '\r?\n')) {
     if ($line -match '^(ConnectionStrings__[^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
@@ -74,16 +80,28 @@ foreach ($line in ($configText -split '\r?\n')) {
 # Visual Studio does not load .env. Keep its Development-only user secrets aligned
 # with the mobile launcher, including explicit endpoints that override localhost launch URLs.
 # Pipe JSON through stdin so certificate passwords/identity keys never appear in process arguments.
-$mobileSettings = @{}
-foreach ($line in ($configText -split '\r?\n')) {
-    if ($line -match '^((?:IdentityProtection|Ocr|Kestrel|MobileDevelopment|ObjectStorage|Capture)__[^=]+|AllowedHosts)=(.*)$') {
-        $mobileSettings[$Matches[1].Replace('__', ':')] = $Matches[2]
-    }
-}
+$mobileSettings = Get-MobileBackendSettings $configText
 $mobileSettings['Kestrel:Endpoints:MobileHttps:Url'] = 'https://0.0.0.0:7240'
 $mobileSettings['Kestrel:Endpoints:MobileHttps:Certificate:Path'] = $pfxPath
 $mobileSettings['Kestrel:Endpoints:MobileHttps:Certificate:Password'] = $existingPassword
 $mobileSettings['Kestrel:Endpoints:MobileHttp:Url'] = 'http://0.0.0.0:5240'
+# Never install or trust a root automatically. Reuse only an existing, trusted
+# ASP.NET localhost certificate; exporting it stays inside the ignored TLS directory.
+$localhostPfx = $null
+$trustedLocalhost = Get-ChildItem Cert:\CurrentUser\My | Where-Object {
+    $_.Subject -eq 'CN=localhost' -and $_.HasPrivateKey -and
+    $_.Extensions.Oid.Value -contains '1.3.6.1.4.1.311.84.1.1' -and
+    $_.NotAfter -gt (Get-Date).AddDays(7) -and $_.Verify()
+} | Sort-Object NotAfter -Descending | Select-Object -First 1
+if ($trustedLocalhost) {
+    $localhostPfx = Join-Path (Split-Path -Parent $pfxPath) 'localhost.pfx'
+    Export-PfxCertificate -Cert $trustedLocalhost -FilePath $localhostPfx -Password (ConvertTo-SecureString $existingPassword -AsPlainText -Force) | Out-Null
+    Write-Output 'Browser HTTPS: using the already-trusted localhost development certificate; LAN certificate unchanged.'
+} else {
+    Write-Warning 'No trusted localhost development certificate found. Browser HTTPS requires explicit certificate trust; see docs/development/MOBILE_LIVE_WORKSPACE.md.'
+}
+$sniSettings = Get-MobileHttpsSniSettings $pfxPath $existingPassword $localhostPfx
+foreach ($key in $sniSettings.Keys) { $mobileSettings[$key] = $sniSettings[$key] }
 $apiProject = [xml][IO.File]::ReadAllText((Join-Path $repo 'src/backend/BHome.Api/BHome.Api.csproj'))
 $secretsId = [string]$apiProject.Project.PropertyGroup.UserSecretsId
 if (-not $secretsId) { throw 'API project has no UserSecretsId for Visual Studio mobile configuration.' }

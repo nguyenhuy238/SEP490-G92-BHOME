@@ -132,14 +132,28 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
-        services.AddScoped<BHome.Application.Contracts.IContractSigningProvider, BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
-        services.AddScoped<BHome.Application.Contracts.IContractDocumentRenderer, BHome.Infrastructure.Contracts.UnconfiguredContractRenderer>();
-        services.AddScoped<BHome.Application.Contracts.IContractSettlementLedger, BHome.Infrastructure.Contracts.PendingContractSettlementLedger>();
+        services.AddScoped<BHome.Application.Contracts.MainDraftService>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
+        services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
+        services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
+        services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
+        services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningProvider>(p => p.GetRequiredService<BHome.Application.Contracts.IContractWorkflowMode>().SimulatedSigningEnabled
+            ? p.GetRequiredService<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>()
+            : p.GetRequiredService<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>());
+        services.AddScoped<BHome.Application.Contracts.IContractWorkflowRepository, BHome.Infrastructure.Contracts.ContractWorkflowRepository>();
+        services.AddScoped<BHome.Application.Contracts.IContractHandoverRepository, BHome.Infrastructure.Contracts.ContractHandoverRepository>();
+        services.AddOptions<BHome.Infrastructure.Contracts.ContractPdfOptions>().Bind(configuration.GetSection(BHome.Infrastructure.Contracts.ContractPdfOptions.Section))
+            .Validate(o => o.IsValid(), "ContractPdf:TemplateId must be an embedded template identifier of at most 80 ASCII letters, digits or hyphens.").ValidateOnStart();
+        services.AddScoped<BHome.Application.Contracts.IContractDocumentRenderer, BHome.Infrastructure.Contracts.ContractPdfRenderer>();
+        services.AddScoped<BHome.Application.Contracts.IContractSettlementLedger, BHome.Infrastructure.Contracts.ContractSettlementLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.UnconfiguredContractHoldingLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
-        services.AddSingleton<BHome.DigitalSigning.Application.IPdfSigner, BHome.Infrastructure.Contracts.UnconfiguredContractPdfSigner>();
+        BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractPdfSigning(services);
         services.AddScoped<BHome.DigitalSigning.Application.IViettelAccountSource, BHome.Infrastructure.Contracts.ContractMySignAccount>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
@@ -156,6 +170,41 @@ public static class DependencyInjection
         services.AddScoped<OcrWorkflowService>();
         services.AddScoped<ICaptureRepository, CaptureRepository>();
         services.AddScoped<CaptureService>();
+        services.AddScoped<BHome.Application.Billing.IInvoiceRepository, BHome.Infrastructure.Billing.InvoiceRepository>();
+        services.AddScoped<BHome.Application.Billing.IAdjustmentRepository, BHome.Infrastructure.Billing.AdjustmentRepository>();
+        services.AddScoped<BHome.Application.Billing.IAdjustmentEvidenceFiles, BHome.Infrastructure.Billing.AdjustmentEvidenceFiles>();
+        services.AddScoped<BHome.Application.Billing.AdjustmentService>();
+        services.AddHostedService<BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup>();
+        services.AddScoped<BHome.Application.Billing.InvoiceService>();
+        services.AddScoped<BHome.Application.Billing.IBillingAutomationSchedules, BHome.Infrastructure.Modules.Billing.Persistence.BillingAutomationSchedules>();
+        services.AddScoped<BHome.Application.Billing.BillingAutomationService>();
+        services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine, BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
+        services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
+        services.AddSingleton(p => new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing", configuration.GetValue<bool>("Jobs:Enabled")));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IJobScheduleContributor, BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Application.Notifications.INotificationRepository, BHome.Infrastructure.Modules.Notifications.NotificationRepository>();
+        services.AddScoped<BHome.Application.Notifications.NotificationService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>();
+        services.AddScoped<BHome.Application.Notifications.INotificationEventPublisher>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<BHome.Application.Notifications.NotificationAutomationService>();
+        services.AddOptions<BHome.Application.Notifications.NotificationDeliveryOptions>().Bind(configuration.GetSection("NotificationDelivery")).Validate(o => o.Valid(), "Invalid notification delivery retry policy.").ValidateOnStart();
+        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.Notifications.NotificationDeliveryOptions>>().Value);
+        services.AddScoped<BHome.Application.Notifications.INotificationDeliveryStore, BHome.Infrastructure.Modules.Notifications.NotificationDeliveryStore>();
+        services.AddScoped<BHome.Application.Notifications.NotificationDeliveryService>();
+        services.AddScoped<BHome.Application.Notifications.NotificationDeliveryAdministration>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
+        services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
+        services.AddSingleton(provider => new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
+            provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
+        services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
+        services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
@@ -164,6 +213,11 @@ public static class DependencyInjection
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<IBackgroundJobQueue, PostgresJobQueue>();
+        services.AddScoped<BHome.Infrastructure.Contracts.ContractExpiryProcessor>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<BHome.Application.Contracts.ContractExpiryService>();
+        services.AddHostedService<BHome.Infrastructure.Contracts.ContractExpiryScheduler>();
         services.AddHostedService<PostgresJobWorker>();
         return services;
     }

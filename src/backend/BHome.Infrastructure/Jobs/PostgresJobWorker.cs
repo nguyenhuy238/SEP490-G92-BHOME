@@ -39,6 +39,8 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var handlers = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().ToDictionary(h => h.Name, StringComparer.Ordinal);
+        var names = handlers.Keys.ToArray();
         BackgroundJobRecord? job;
         var now = DateTimeOffset.UtcNow;
         var lockToken = Guid.NewGuid();
@@ -47,8 +49,9 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
             // Row locks and a lease allow multiple API instances without simultaneous normal claims.
             job = await db.BackgroundJobs.FromSqlInterpolated($"""
                 SELECT * FROM "BackgroundJobs"
-                WHERE ("State" = 'Pending' AND "AvailableAt" <= {now})
-                   OR ("State" = 'Processing' AND "LockedUntil" < {now})
+                WHERE "Name" = ANY({names}) AND
+                  (("State" = 'Pending' AND "AvailableAt" <= {now})
+                   OR ("State" = 'Processing' AND "LockedUntil" < {now}))
                 ORDER BY "AvailableAt" LIMIT 1 FOR UPDATE SKIP LOCKED
                 """).FirstOrDefaultAsync(stoppingToken);
             if (job is null) return false;
@@ -74,8 +77,7 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
         timeout.CancelAfter(TimeSpan.FromSeconds(60));
         try
         {
-            var handler = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().SingleOrDefault(h => h.Name == job.Name)
-                ?? throw new InvalidOperationException("No handler registered.");
+            var handler = handlers[job.Name];
             await handler.ExecuteAsync(new JobExecution(job.Id, job.IdempotencyKey, job.PayloadJson), timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
             var updated = await db.BackgroundJobs.Where(j => j.Id == job.Id && j.LockToken == lockToken)
