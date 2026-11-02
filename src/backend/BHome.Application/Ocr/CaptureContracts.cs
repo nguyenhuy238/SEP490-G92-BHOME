@@ -17,6 +17,14 @@ public sealed record ResidentInput(Guid RoomId, [Required, StringLength(150)] st
 public sealed record MeterInput(Guid RoomId, [Required, StringLength(80)] string Code,
     UtilityType UtilityType, MeterDisplay Display, [Range(0, 4)] int DecimalPlaces, DateOnly InstalledOn);
 public sealed record MeterTaskInput(Guid MeterId, ReadingPurpose Purpose, DateOnly ReadingDate, DateOnly? BillingPeriod, Guid? ContractId = null);
+public sealed class MeterTaskQuery
+{
+    public Guid? LocationId{get;set;}
+    public Guid? RoomId{get;set;}
+    public DateOnly? DueDate{get;set;}
+    public MeterTaskStatus? Status{get;set;}
+    public int Page{get;set;}=1;
+}
 public sealed record IdentityConfirmation(
     bool HumanConfirmed, [Required, StringLength(12, MinimumLength = 12)] string CitizenIdentityNumber,
     [Required, StringLength(150)] string FullName, DateOnly DateOfBirth,
@@ -63,7 +71,7 @@ public interface ICaptureRepository
     Task<IdResult> CreateMeterAsync(MeterInput input, CancellationToken token);
     Task<IReadOnlyList<NamedResource>> MetersAsync(Guid locationId, CancellationToken token);
     Task<IdResult> CreateTaskAsync(MeterTaskInput input, CancellationToken token);
-    Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken token);
+    Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken token,MeterTaskQuery? query=null);
     Task<MeterTaskSummary> TaskAsync(Guid taskId, CancellationToken token);
     Task<ConfirmedReading> ReadingAsync(Guid readingId, CancellationToken token);
     Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken token);

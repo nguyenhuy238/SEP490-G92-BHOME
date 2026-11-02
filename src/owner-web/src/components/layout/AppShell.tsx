@@ -57,6 +57,7 @@ import { demoAuth } from '../../services/demoAuth';
 import { isMockMode } from '../../services/config';
 import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
+import { NotificationBell } from '../../features/notifications/NotificationBell';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -355,16 +356,20 @@ export function AppShell() {
               </MenuItem>
             ))}
           </TextField>
-          <IconButton aria-label="Thông báo" onClick={() => navigate('/notifications')}>
-            <Badge
-              badgeContent={
-                data?.records.notifications.filter((row) => row.status === 'Chưa đọc').length || 0
-              }
-              color="error"
-            >
-              <Bell size={19} />
-            </Badge>
-          </IconButton>
+          {isMockMode ? (
+            <IconButton aria-label="Thông báo" onClick={() => navigate('/notifications')}>
+              <Badge
+                badgeContent={
+                  data?.records.notifications.filter((row) => row.status === 'Chưa đọc').length || 0
+                }
+                color="error"
+              >
+                <Bell size={19} />
+              </Badge>
+            </IconButton>
+          ) : (
+            <NotificationBell />
+          )}
           {isMockMode && (
             <Tooltip title="Khôi phục dữ liệu demo">
               <IconButton aria-label="Khôi phục demo" onClick={() => setResetOpen(true)}>

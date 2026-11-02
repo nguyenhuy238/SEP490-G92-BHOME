@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -49,13 +50,14 @@ export default function ContractsPage() {
   );
 }
 function LiveContractsPage() {
+  const [deepParams] = useSearchParams();
   const api = useContractsApi();
   const { session } = useAuth();
   const actorId = session?.userId ?? '';
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
     [location, setLocation] = useState('');
-  const [selected, setSelected] = useState(''),
+  const [selected, setSelected] = useState(deepParams.get('contractId') ?? ''),
     [selectedLocation, setSelectedLocation] = useState('');
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),

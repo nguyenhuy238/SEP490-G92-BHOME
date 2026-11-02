@@ -34,6 +34,17 @@ public sealed partial class PaymentLedgerTests
         var confirmed=await staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{taskId}/confirm",new MeterConfirmation(true,value,evidence.Id));confirmed.EnsureSuccessStatusCode();return(await confirmed.Content.ReadFromJsonAsync<ConfirmedReading>())!;
     }
     [Fact]
+    public async Task MeterTaskFiltersApplyBeforeLimitAndKeepStaffScope()
+    {
+        var(w,p,_)=await MeterWorkspace();await RunMeter(w);using var staff=await Client(w.Staff);using var owner=await Client(w.Owner);
+        var day=CurrentPeriod().AddDays(9);
+        var path=$"/api/v1/capture/meter-tasks?locationId={w.Location}&roomId={w.Room}&dueDate={day:yyyy-MM-dd}&status=0";
+        var tasks=(await staff.GetFromJsonAsync<MeterTaskSummary[]>(path))!;Assert.Equal(2,tasks.Length);Assert.All(tasks,x=>Assert.Equal(p.Id,x.AutomationPlanId));
+        Assert.Empty((await staff.GetFromJsonAsync<MeterTaskSummary[]>(path.Replace("status=0","status=2")))!);
+        Assert.Empty((await staff.GetFromJsonAsync<MeterTaskSummary[]>(path.Replace(w.Location.ToString(),Guid.NewGuid().ToString())))!);
+        Assert.Equal(HttpStatusCode.BadRequest,(await owner.GetAsync("/api/v1/capture/meter-tasks?page=0")).StatusCode);
+    }
+    [Fact]
     public async Task MeterJobAndManualRequestsShareRoomTypePeriodKeyAndHumanConfirmation()
     {
         var(w,p,meters)=await MeterWorkspace();

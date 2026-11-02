@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native-paper';
 import {
   formatContractMoney,
@@ -25,11 +26,12 @@ export function TenantInvoicesScreen() {
   return <TenantInvoiceList key={session?.userId} />;
 }
 function TenantInvoiceList() {
+  const { invoiceId } = useLocalSearchParams<{ invoiceId?: string }>();
   const { go } = useWorkspace();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
   const [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+    [selected, setSelected] = useState(invoiceId ?? '');
   const list = useWorkspaceQuery<Page<Invoice>>(
     allowed ? `/api/v1/invoices?page=${page}&pageSize=20` : null,
   );

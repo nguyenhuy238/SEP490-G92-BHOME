@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { errorMessage } from '../../lib/api';
 import { useSession } from '../../lib/SessionProvider';
 
@@ -27,12 +27,13 @@ export function useWorkspaceQuery<T>(path: string | null) {
     );
     return () => controller.abort();
   }, [api, path, revision]);
+  const reload = useCallback(() => setRevision((v) => v + 1), []);
   const current =
     state?.api === api && state?.path === path && state?.revision === revision ? state : null;
   return {
     data: current?.data ?? null,
     error: current?.error ?? '',
     loading: !!api && !!path && !current,
-    reload: () => setRevision((v) => v + 1),
+    reload,
   };
 }

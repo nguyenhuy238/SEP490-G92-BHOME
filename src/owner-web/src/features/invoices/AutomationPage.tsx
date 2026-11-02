@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -42,10 +42,11 @@ export default function AutomationPage() {
   );
 }
 export function LiveAutomationPage() {
+  const [params] = useSearchParams();
   const api = useInvoiceApi();
   const { session } = useAuth();
-  const [location, setLocation] = useState(''),
-    [period, setPeriod] = useState('');
+  const [location, setLocation] = useState(params.get('locationId') ?? ''),
+    [period, setPeriod] = useState(params.get('period') ?? '');
   const locations = useQuery({
     queryKey: ['automation-locations', session?.userId],
     queryFn: ({ signal }) =>

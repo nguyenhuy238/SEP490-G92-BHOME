@@ -44,12 +44,12 @@ export default function AdjustmentsPage() {
       {isMockMode ? (
         <Alert severity="info">Bật chế độ API để sử dụng luồng điều chỉnh hóa đơn.</Alert>
       ) : (
-        <OwnerAdjustmentList invoiceId={params.get('invoiceId') ?? ''} />
+        <OwnerAdjustmentList invoiceId={params.get('invoiceId') ?? ''} requestId={params.get('requestId') ?? ''} />
       )}
     </>
   );
 }
-export function OwnerAdjustmentList({ invoiceId = '' }: { invoiceId?: string }) {
+export function OwnerAdjustmentList({ invoiceId = '', requestId = '' }: { invoiceId?: string; requestId?: string }) {
   const api = useAdjustmentApi(),
     { session } = useAuth();
   const actor = session?.userId ?? '';
@@ -58,7 +58,7 @@ export function OwnerAdjustmentList({ invoiceId = '' }: { invoiceId?: string }) 
     [invoice, setInvoice] = useState(invoiceId),
     [status, setStatus] = useState(''),
     [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+    [selected, setSelected] = useState(requestId);
   const filter = { page, locationId: location, roomId: room, invoiceId: invoice, status };
   const list = useQuery({
     queryKey: ['adjustments', actor, filter],

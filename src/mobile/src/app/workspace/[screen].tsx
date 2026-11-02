@@ -1,6 +1,7 @@
 import React from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
+import { NotificationsScreen } from '../../screens/NotificationsScreen';
 import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentPanel';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
@@ -36,7 +37,6 @@ import {
   TenantHomeScreen,
   MeterTasksScreen,
   OwnerOperationsScreen,
-  TaskNotificationsScreen,
   UnavailableWorkspaceScreen,
 } from '../../screens/LiveWorkspaceScreens';
 import { AccountSecurityScreen } from '../../screens/AccountSecurityScreen';
@@ -158,12 +158,7 @@ export default function WorkspaceRoute() {
           content = <MeterTasksScreen />;
           break;
         case 'notifications':
-          content =
-            role === 'Tenant' ? (
-              <UnavailableWorkspaceScreen screen={screen} />
-            ) : (
-              <TaskNotificationsScreen />
-            );
+          content = <NotificationsScreen />;
           break;
         case 'security':
           content = <AccountSecurityScreen />;

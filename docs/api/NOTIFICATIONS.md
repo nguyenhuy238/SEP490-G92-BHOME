@@ -66,3 +66,12 @@ GET `delivery-status?page=&pageSize=&state=&locationId=` chỉ Owner (`locations
 trả capability và trạng thái vận hành đã loại recipient identity, title, banking/provider refs.
 Đây là màn quản trị riêng; inbox vẫn recipient-only. Failed/PendingReview cần operator review;
 không có endpoint tự reset giới hạn, không đổi Paid/Invoice hoặc hoàn tiền do lỗi thông báo.
+
+Web `/notifications` và Mobile workspace `notifications` lấy API thật, polling 30 giây,
+read-all/read-one và target lookup trước khi điều hướng. Bell không suy ra trạng thái từ demo.
+Client chỉ ánh xạ loại hồ sơ đã biết sang route nội bộ; không nhận URL từ notification.
+Invoice/Contract/Adjustment/MeterTask deep links vẫn đi qua API quyền của hồ sơ.
+Owner có màn đọc OperationalTask thật; xử lý nghiệp vụ task hiện hành vẫn trên Mobile.
+Capture GET `meter-tasks` bổ sung optional query `locationId`, `roomId`, `dueDate` (ngày VN),
+`status` (enum numeric), `page` (mỗi trang tối đa 100). Bộ lọc áp dụng trước giới hạn,
+giữ nguyên array contract và kiểm tra Staff assignment hiện tại. Không lọc bằng PII.

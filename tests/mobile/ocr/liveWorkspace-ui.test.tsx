@@ -208,7 +208,9 @@ import {
 import {
   TaskNotificationsScreen,
   TenantHomeScreen,
+  MeterTasksScreen,
 } from '../../../src/mobile/src/screens/LiveWorkspaceScreens';
+import { NotificationsScreen } from '../../../src/mobile/src/screens/NotificationsScreen';
 import { AccountSecurityScreen } from '../../../src/mobile/src/screens/AccountSecurityScreen';
 import { TenantInvoicesScreen } from '../../../src/mobile/src/screens/TenantInvoicesScreen';
 import { TenantPaymentPanel } from '../../../src/mobile/src/screens/TenantPaymentPanel';
@@ -251,6 +253,87 @@ beforeEach(() => {
   mocks.copy.mockReset().mockResolvedValue(true);
 });
 afterEach(cleanup);
+it('opens a Tenant invoice only after authorized target resolution and read persistence', async () => {
+  mocks.role = 'Tenant';
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/target')) return json({ objectType: 'Invoice', objectId: id });
+    if (init?.method === 'POST') return new Response(null, { status: 204 });
+    return json(
+      page([
+        {
+          id,
+          category: 'Invoice',
+          title: 'Hóa đơn tự động tổng hợp',
+          summary: 'Đã phát hành',
+          createdAt: '2026-11-02T00:00:00Z',
+          readAt: null,
+        },
+      ]),
+    );
+  });
+  setApi(fetcher);
+  render(<NotificationsScreen />);
+  await screen.findByText('Hóa đơn tự động tổng hợp');
+  fireEvent.click(screen.getByText('Mở hồ sơ liên quan'));
+  await waitFor(() => expect(mocks.go).toHaveBeenCalledWith('invoice', { invoiceId: id }));
+  expect(
+    fetcher.mock.calls.some(
+      ([url, init]) => String(url).endsWith('/read') && init?.method === 'POST',
+    ),
+  ).toBe(true);
+});
+it('does not open or mark a notification when its target permission was revoked', async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      String(url).endsWith('/target')
+        ? json({}, 404)
+        : json(
+            page([
+              {
+                id,
+                category: 'Task',
+                title: 'Tác vụ tổng hợp',
+                summary: 'Được giao',
+                createdAt: '2026-11-02T00:00:00Z',
+                readAt: null,
+              },
+            ]),
+          ),
+    );
+  setApi(fetcher);
+  render(<NotificationsScreen />);
+  await screen.findByText('Tác vụ tổng hợp');
+  fireEvent.click(screen.getByText('Mở hồ sơ liên quan'));
+  await screen.findByText(/HTTP 404/);
+  expect(mocks.go).not.toHaveBeenCalled();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+it('sends assigned meter task filters to the server before paging', async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      json(String(url).includes('/meter-tasks') ? [] : [{ id, label: 'Cơ sở tổng hợp' }]),
+    );
+  setApi(fetcher);
+  render(<MeterTasksScreen />);
+  await screen.findByText('Cơ sở tổng hợp');
+  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: id } });
+  fireEvent.change(screen.getByLabelText('Hạn ghi số (yyyy-MM-dd)'), {
+    target: { value: '2026-11-10' },
+  });
+  fireEvent.change(screen.getByLabelText('Trạng thái tác vụ'), { target: { value: '2' } });
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(
+        ([url]) =>
+          String(url).includes(`locationId=${id}`) &&
+          String(url).includes('dueDate=2026-11-10') &&
+          String(url).includes('status=2'),
+      ),
+    ).toBe(true),
+  );
+});
 
 it('shows real transfer instructions, copies exact amount and removes QR when the shared invoice becomes Paid', async () => {
   mocks.role = 'Tenant';

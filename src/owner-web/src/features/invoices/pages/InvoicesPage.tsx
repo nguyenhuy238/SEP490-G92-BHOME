@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -38,12 +38,13 @@ export default function InvoicesPage() {
   return isMockMode ? <ResourcePage kind="invoices" variant="table" /> : <LiveInvoicesPage />;
 }
 export function LiveInvoicesPage() {
+  const [deepParams] = useSearchParams();
   const api = useInvoiceApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const cache = useQueryClient();
   const [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+    [selected, setSelected] = useState(deepParams.get('invoiceId') ?? '');
   const [roomId, setRoomId] = useState(''),
     [period, setPeriod] = useState(''),
     [contractId, setContractId] = useState('');
