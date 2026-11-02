@@ -229,7 +229,8 @@ function LocationContent({ db }: { db: DemoDatabase }) {
               : []),
           ]}
           description={
-            editing.source || !db.records.locations.some((location) => location.id === editing.record.id)
+            editing.source ||
+            !db.records.locations.some((location) => location.id === editing.record.id)
               ? 'Chỉ sao chép mẫu loại phòng, yêu cầu trang bị, chính sách giá cấp cơ sở/loại phòng và nội quy. Không sao chép phòng, cư dân, hợp đồng, giao dịch hoặc kho tài sản.'
               : undefined
           }

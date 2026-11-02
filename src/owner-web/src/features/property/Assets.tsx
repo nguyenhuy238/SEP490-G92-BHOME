@@ -313,7 +313,8 @@ function AssetContent({ db }: { db: DemoDatabase }) {
               },
               {
                 label: 'Phòng tại thời điểm ghi nhận',
-                value: (e) => db.records.rooms.find((room) => room.id === e.roomId)?.code || 'Kho / chung',
+                value: (e) =>
+                  db.records.rooms.find((room) => room.id === e.roomId)?.code || 'Kho / chung',
               },
               { label: 'Hoạt động', value: (e) => e.description },
               { label: 'Chi phí / khấu hao', value: (e) => (e.amount ? currency(e.amount) : '—') },
@@ -445,7 +446,8 @@ function AssetContent({ db }: { db: DemoDatabase }) {
             save({
               kind: 'assetEvent',
               assetId: eventAsset,
-              eventKind: values.eventKind as 'REPAIR' | 'REPLACEMENT' | 'DEPRECIATION' | 'INSPECTION',
+              eventKind: values.eventKind as
+                'REPAIR' | 'REPLACEMENT' | 'DEPRECIATION' | 'INSPECTION',
               date: values.date,
               amount: Number(values.amount || 0),
               note: values.note,
@@ -660,7 +662,8 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
               (target === 'room'
                 ? !room
                 : target === 'roomType'
-                  ? !roomTypeId || !targetRooms.length ||
+                  ? !roomTypeId ||
+                    !targetRooms.length ||
                     picked.some(
                       ([assetId, quantity]) =>
                         quantity * targetRooms.length > availableQuantity(db, assetId),

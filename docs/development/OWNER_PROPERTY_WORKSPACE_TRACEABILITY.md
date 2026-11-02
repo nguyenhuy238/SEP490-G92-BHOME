@@ -17,16 +17,16 @@ schema hoặc quy tắc phân quyền backend.
 
 ## Hành vi frontend mock đã triển khai
 
-| Yêu cầu | Component / state | Kiểm chứng |
-| --- | --- | --- |
-| Tạo Cơ sở → Loại phòng → Phòng | `ConfigurationPages`, `Rooms` | Route/build và property flow tests |
-| Copy cấu hình | `location` command | Chỉ copy loại phòng, định mức, chính sách không theo phòng và nội quy; test không copy Room/Asset/Contract/Tenant/Expense |
-| Phòng mới chờ cấu hình | `createRooms` command | `IN_SETUP / UNAVAILABLE`, kiểm tra trùng mã |
-| Danh mục, nhập kho, cấp phát đơn lẻ/đồng loại | `Assets`, `allocate` command | Mỗi phòng có allocation riêng; tổng số lượng bị chặn theo tồn kho |
-| Timeline tài sản | `assetEvent` | Nhập kho, cấp phát, thu hồi, tình trạng, sửa chữa, thay mới, khấu hao, kiểm tra |
-| Chính sách giá/phí có phiên bản | `priceVersion` | Tạo bản mới và đóng bản cũ vào ngày liền trước; không sửa đè |
-| Nội quy vận hành có phiên bản | `operatingRuleVersion` | Giữ bản cũ và chặn khoảng hiệu lực chồng lấn |
-| Tổng quan lấp đầy | `LocationOverview` | KPI hiện tại và timeline chỉ từ mốc hợp đồng có dữ liệu |
+| Yêu cầu                                       | Component / state             | Kiểm chứng                                                                                                                |
+| --------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Tạo Cơ sở → Loại phòng → Phòng                | `ConfigurationPages`, `Rooms` | Route/build và property flow tests                                                                                        |
+| Copy cấu hình                                 | `location` command            | Chỉ copy loại phòng, định mức, chính sách không theo phòng và nội quy; test không copy Room/Asset/Contract/Tenant/Expense |
+| Phòng mới chờ cấu hình                        | `createRooms` command         | `IN_SETUP / UNAVAILABLE`, kiểm tra trùng mã                                                                               |
+| Danh mục, nhập kho, cấp phát đơn lẻ/đồng loại | `Assets`, `allocate` command  | Mỗi phòng có allocation riêng; tổng số lượng bị chặn theo tồn kho                                                         |
+| Timeline tài sản                              | `assetEvent`                  | Nhập kho, cấp phát, thu hồi, tình trạng, sửa chữa, thay mới, khấu hao, kiểm tra                                           |
+| Chính sách giá/phí có phiên bản               | `priceVersion`                | Tạo bản mới và đóng bản cũ vào ngày liền trước; không sửa đè                                                              |
+| Nội quy vận hành có phiên bản                 | `operatingRuleVersion`        | Giữ bản cũ và chặn khoảng hiệu lực chồng lấn                                                                              |
+| Tổng quan lấp đầy                             | `LocationOverview`            | KPI hiện tại và timeline chỉ từ mốc hợp đồng có dữ liệu                                                                   |
 
 ## Ranh giới bắt buộc trước production
 
@@ -46,4 +46,3 @@ schema hoặc quy tắc phân quyền backend.
 - `npm run build`: PASS.
 - `npx vitest run --pool=threads --reporter=verbose`: PASS, 96/96 tests.
 - `git diff --check`: PASS.
-

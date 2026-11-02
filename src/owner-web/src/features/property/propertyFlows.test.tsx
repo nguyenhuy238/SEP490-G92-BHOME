@@ -109,9 +109,9 @@ it('copies setup templates without copying operational Location data', async () 
   expect(after.records.contracts.some((row) => row.locationId === destination.id)).toBe(false);
   expect(after.records.tenants.some((row) => row.locationId === destination.id)).toBe(false);
   expect(after.records.expenses.some((row) => row.locationId === destination.id)).toBe(false);
-  expect(
-    after.property!.operatingRules.some((rule) => rule.locationId === destination.id),
-  ).toBe(true);
+  expect(after.property!.operatingRules.some((rule) => rule.locationId === destination.id)).toBe(
+    true,
+  );
 });
 
 it('updates inventory on purchase and does not count assignment as a second investment', async () => {
@@ -182,7 +182,8 @@ it('updates inventory on purchase and does not count assignment as a second inve
   const afterEvent = await repository.read();
   expect(
     afterEvent.property!.events.some(
-      (event) => event.assetId === purchase.id && event.kind === 'REPAIR' && event.amount === 250_000,
+      (event) =>
+        event.assetId === purchase.id && event.kind === 'REPAIR' && event.amount === 250_000,
     ),
   ).toBe(true);
 });

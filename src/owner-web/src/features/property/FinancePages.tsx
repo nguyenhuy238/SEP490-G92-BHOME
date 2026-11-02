@@ -248,8 +248,7 @@ function PriceEditor({
         waterRate: base?.attributes.waterRate || '0',
         environmentRate: base?.attributes.environmentRate || '0',
         securityRate: base?.attributes.securityRate || '0',
-        otherServiceRate:
-          base?.attributes.otherServiceRate || base?.attributes.serviceRate || '0',
+        otherServiceRate: base?.attributes.otherServiceRate || base?.attributes.serviceRate || '0',
         start: base ? '' : DEMO_DATE,
         end: '',
       }}
@@ -268,22 +267,22 @@ function PriceEditor({
       onClose={onClose}
       onSave={(v) => {
         const record = makeRecord('pricing', {
-            name: v.name,
-            code: `GIA-${crypto.randomUUID().slice(0, 8)}`,
-            locationId: location,
-            amount: Number(v.rent),
-            date: v.start,
-            endDate: v.end,
-            attributes: {
-              scope,
-              targetId: v.target,
-              electricityRate: v.electricityRate,
-              waterRate: v.waterRate,
-              environmentRate: v.environmentRate,
-              securityRate: v.securityRate,
-              otherServiceRate: v.otherServiceRate,
-            },
-          });
+          name: v.name,
+          code: `GIA-${crypto.randomUUID().slice(0, 8)}`,
+          locationId: location,
+          amount: Number(v.rent),
+          date: v.start,
+          endDate: v.end,
+          attributes: {
+            scope,
+            targetId: v.target,
+            electricityRate: v.electricityRate,
+            waterRate: v.waterRate,
+            environmentRate: v.environmentRate,
+            securityRate: v.securityRate,
+            otherServiceRate: v.otherServiceRate,
+          },
+        });
         return base
           ? save({ kind: 'priceVersion', previousId: base.id, record })
           : save({ kind: 'price', record });

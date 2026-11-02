@@ -591,9 +591,7 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
         'environmentRate',
         'securityRate',
         'otherServiceRate',
-      ].every((k) =>
-        money(Number(r.attributes[k] || 0)),
-      ),
+      ].every((k) => money(Number(r.attributes[k] || 0))),
       'Phí phải là số nguyên VND không âm.',
     );
     assert(
