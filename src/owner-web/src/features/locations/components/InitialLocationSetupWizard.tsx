@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Card,
-  CardActionArea,
   CardContent,
   Chip,
   Dialog,
@@ -12,21 +11,16 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControlLabel,
   Grid,
   IconButton,
   InputAdornment,
   MenuItem,
   Paper,
   Radio,
-  RadioGroup,
-  Select,
   Stack,
   Step,
   StepButton,
-  StepLabel,
   Stepper,
-  Switch,
   Table,
   TableBody,
   TableCell,
@@ -34,34 +28,22 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   BadgeDollarSign,
   Building2,
-  Check,
   CheckCircle2,
   Copy,
-  DoorOpen,
-  Edit2,
-  Flame,
-  Info,
   Layers3,
   Package,
   Plus,
-  RefreshCw,
-  Scale,
-  ScrollText,
   Sparkles,
   Trash2,
-  Wind,
   X,
-  Zap,
 } from 'lucide-react';
 import type { DemoDatabase, PortalRecord } from '../../../types/portal';
 import {
@@ -73,20 +55,26 @@ import {
 } from '../mock/locationConfigMock';
 import type {
   AssetCatalogItem,
-  FeeCalculationMethod,
   FeePolicyItem,
   GeneratedRoomDraft,
   HouseRuleItem,
-  RentalRateItem,
   RoomAssetAssignmentDraft,
   RoomTypeDraft,
 } from '../types/locationConfig';
+
+export interface InitialLocationSetupResult {
+  roomTypes: RoomTypeDraft[];
+  rooms: GeneratedRoomDraft[];
+  feePolicies: FeePolicyItem[];
+  houseRules: HouseRuleItem[];
+  rateOverrides: Record<string, number>;
+}
 
 interface InitialLocationSetupWizardProps {
   open: boolean;
   onClose: () => void;
   db: DemoDatabase;
-  onComplete: (newLocationRecord: PortalRecord, wizardData: any) => void;
+  onComplete: (newLocationRecord: PortalRecord, wizardData: InitialLocationSetupResult) => void;
 }
 
 const WIZARD_STEPS = [
@@ -117,13 +105,13 @@ export function InitialLocationSetupWizard({
   const [floors, setFloors] = useState<number>(4);
   const [contactPhone, setContactPhone] = useState('0908 123 456');
   const [contactEmail, setContactEmail] = useState('contact.skyview@bhome.vn');
-  const [description, setDescription] = useState('Cơ sở thông minh với thang máy thẻ từ, khóa vân tay và sân thượng chill');
+  const [description, setDescription] = useState(
+    'Cơ sở thông minh với thang máy thẻ từ, khóa vân tay và sân thượng chill',
+  );
   const [operationalStatus, setOperationalStatus] = useState<'ACTIVE' | 'PREPARING'>('PREPARING');
 
   // Step 2: Room Types
   const [roomTypes, setRoomTypes] = useState<RoomTypeDraft[]>(INITIAL_ROOM_TYPES);
-  const [editingRoomType, setEditingRoomType] = useState<RoomTypeDraft | null>(null);
-  const [isRoomTypeDialogOpen, setIsRoomTypeDialogOpen] = useState(false);
 
   // Step 3: Rooms
   const [rooms, setRooms] = useState<GeneratedRoomDraft[]>([
@@ -138,21 +126,21 @@ export function InitialLocationSetupWizard({
   const [bulkFloor, setBulkFloor] = useState<number>(2);
   const [bulkRoomTypeId, setBulkRoomTypeId] = useState<string>('type-studio');
   const [bulkPrefix, setBulkPrefix] = useState<string>('P.');
-  const [bulkStartNumber, setBulkStartNumber] = useState<number>(1);
+  const [bulkStartNumber] = useState<number>(1);
   const [bulkQuantity, setBulkQuantity] = useState<number>(4);
 
   // Step 4: Asset Configuration
-  const [assetCatalog, setAssetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
-  const [roomTypeTemplates, setRoomTypeTemplates] = useState(INITIAL_ROOM_TYPE_REQUIREMENTS);
+  const [assetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
+  const [roomTypeTemplates] = useState(INITIAL_ROOM_TYPE_REQUIREMENTS);
   const [selectedTemplateRoomType, setSelectedTemplateRoomType] = useState<string>('type-studio');
-  const [roomAssetAssignments, setRoomAssetAssignments] = useState<RoomAssetAssignmentDraft[]>([]);
+  const [, setRoomAssetAssignments] = useState<RoomAssetAssignmentDraft[]>([]);
   const [templateAppliedNotice, setTemplateAppliedNotice] = useState<string | null>(null);
 
   // Step 5: Rental Rates
   const [rateOverrides, setRateOverrides] = useState<Record<string, number>>({});
 
   // Step 6: Fee Policies
-  const [feePolicies, setFeePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
+  const [feePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
   const [previewKwh, setPreviewKwh] = useState<number>(150);
   const [previewM3, setPreviewM3] = useState<number>(12);
 
@@ -253,7 +241,9 @@ export function InitialLocationSetupWizard({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
       {/* Wizard Header */}
-      <DialogTitle sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <DialogTitle
+        sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
         <Stack direction="row" spacing={1.5} alignItems="center">
           <Box
             sx={{
@@ -273,7 +263,8 @@ export function InitialLocationSetupWizard({
               Thiết lập cấu hình cơ sở ban đầu (Setup Wizard)
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Quy trình từng bước hướng dẫn thiết lập loại phòng, tạo phòng, tài sản, giá và nội quy cho cơ sở mới
+              Quy trình từng bước hướng dẫn thiết lập loại phòng, tạo phòng, tài sản, giá và nội quy
+              cho cơ sở mới
             </Typography>
           </Box>
         </Stack>
@@ -307,7 +298,9 @@ export function InitialLocationSetupWizard({
       </Box>
 
       {/* Step Content */}
-      <DialogContent sx={{ p: 3, minHeight: 520, maxHeight: 'calc(85vh - 160px)', overflowY: 'auto' }}>
+      <DialogContent
+        sx={{ p: 3, minHeight: 520, maxHeight: 'calc(85vh - 160px)', overflowY: 'auto' }}
+      >
         {/* STEP 1: Location Information */}
         {activeStep === 0 && (
           <Box>
@@ -315,7 +308,8 @@ export function InitialLocationSetupWizard({
               Bước 1: Thông tin cơ sở & Phương thức thiết lập
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Nhập các thuộc tính cơ bản của cơ sở và lựa chọn tạo mới hoàn toàn hoặc sao chép mẫu từ một cơ sở đang hoạt động.
+              Nhập các thuộc tính cơ bản của cơ sở và lựa chọn tạo mới hoàn toàn hoặc sao chép mẫu
+              từ một cơ sở đang hoạt động.
             </Typography>
 
             {/* Setup Mode Selection Cards */}
@@ -367,7 +361,8 @@ export function InitialLocationSetupWizard({
                         Sao chép từ cơ sở có sẵn (Copy Configuration)
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Thừa hưởng toàn bộ mẫu loại phòng, định mức trang bị và biểu phí từ một cơ sở đang vận hành tốt.
+                        Thừa hưởng toàn bộ mẫu loại phòng, định mức trang bị và biểu phí từ một cơ
+                        sở đang vận hành tốt.
                       </Typography>
                     </Box>
                   </Stack>
@@ -494,13 +489,19 @@ export function InitialLocationSetupWizard({
         {/* STEP 2: Room Type Configuration */}
         {activeStep === 1 && (
           <Box>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 2 }}
+            >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Bước 2: Cấu hình các mẫu loại phòng
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Định nghĩa các phân khúc phòng (diện tích chuẩn, sức chứa, giá thuê mặc định và tiện nghi).
+                  Định nghĩa các phân khúc phòng (diện tích chuẩn, sức chứa, giá thuê mặc định và
+                  tiện nghi).
                 </Typography>
               </Box>
               <Button
@@ -529,10 +530,23 @@ export function InitialLocationSetupWizard({
             <Grid container spacing={2}>
               {roomTypes.map((rt) => (
                 <Grid item xs={12} md={4} key={rt.id}>
-                  <Card variant="outlined" sx={{ borderRadius: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      borderRadius: 2.5,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
                     <CardContent sx={{ flex: 1, p: 2.5 }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Chip size="small" label={rt.code} color="primary" sx={{ fontWeight: 800 }} />
+                        <Chip
+                          size="small"
+                          label={rt.code}
+                          color="primary"
+                          sx={{ fontWeight: 800 }}
+                        />
                         <Chip
                           size="small"
                           label={rt.status === 'ACTIVE' ? 'Đang áp dụng' : 'Bản nháp'}
@@ -544,7 +558,11 @@ export function InitialLocationSetupWizard({
                       <Typography variant="h6" sx={{ fontWeight: 800, mt: 1.5 }}>
                         {rt.name}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40 }}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2, minHeight: 40 }}
+                      >
                         {rt.description}
                       </Typography>
 
@@ -571,14 +589,21 @@ export function InitialLocationSetupWizard({
                           <Typography variant="caption" color="text.secondary">
                             Giá thuê mặc định:
                           </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 800, color: 'primary.main' }}
+                          >
                             {rt.defaultRate.toLocaleString()} VND/tháng
                           </Typography>
                         </Stack>
                       </Stack>
 
                       <Box sx={{ mt: 2 }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mb: 0.5 }}
+                        >
                           Trang bị tiêu chuẩn:
                         </Typography>
                         <Stack direction="row" flexWrap="wrap" gap={0.5}>
@@ -590,7 +615,11 @@ export function InitialLocationSetupWizard({
                     </CardContent>
 
                     <Divider />
-                    <Stack direction="row" justifyContent="flex-end" sx={{ p: 1, gap: 1, bgcolor: '#f8fafc' }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="flex-end"
+                      sx={{ p: 1, gap: 1, bgcolor: '#f8fafc' }}
+                    >
                       <Button
                         size="small"
                         startIcon={<Copy size={14} />}
@@ -610,7 +639,9 @@ export function InitialLocationSetupWizard({
                         size="small"
                         color="error"
                         disabled={roomTypes.length <= 1}
-                        onClick={() => setRoomTypes((prev) => prev.filter((item) => item.id !== rt.id))}
+                        onClick={() =>
+                          setRoomTypes((prev) => prev.filter((item) => item.id !== rt.id))
+                        }
                       >
                         Xóa
                       </Button>
@@ -629,12 +660,16 @@ export function InitialLocationSetupWizard({
               Bước 3: Danh sách phòng & Tạo phòng hàng loạt
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              Tạo phòng theo sơ đồ tầng. Các phòng sẽ tự động thừa hưởng diện tích và giá thuê mặc định từ Loại phòng được gán.
+              Tạo phòng theo sơ đồ tầng. Các phòng sẽ tự động thừa hưởng diện tích và giá thuê mặc
+              định từ Loại phòng được gán.
             </Typography>
 
             {/* Bulk Creator Form */}
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, mb: 3, bgcolor: '#f8fafc' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
+              >
                 <Layers3 size={18} /> Công cụ tạo phòng hàng loạt theo tầng
               </Typography>
               <Grid container spacing={2} alignItems="center">
@@ -686,7 +721,9 @@ export function InitialLocationSetupWizard({
                     size="small"
                     label="Số lượng phòng"
                     value={bulkQuantity}
-                    onChange={(e) => setBulkQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    onChange={(e) =>
+                      setBulkQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))
+                    }
                   />
                 </Grid>
                 <Grid item xs={12} sm={2}>
@@ -703,7 +740,12 @@ export function InitialLocationSetupWizard({
             </Paper>
 
             {/* Generated Rooms Table */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 1.5 }}
+            >
               <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                 Danh sách phòng đã cấu hình ({rooms.length} phòng)
               </Typography>
@@ -731,14 +773,23 @@ export function InitialLocationSetupWizard({
                         <TableCell sx={{ fontWeight: 800 }}>{room.code}</TableCell>
                         <TableCell>Tầng {room.floor}</TableCell>
                         <TableCell>
-                          <Chip size="small" label={rType?.name || 'Tiêu chuẩn'} sx={{ fontWeight: 700 }} />
+                          <Chip
+                            size="small"
+                            label={rType?.name || 'Tiêu chuẩn'}
+                            sx={{ fontWeight: 700 }}
+                          />
                         </TableCell>
                         <TableCell>{rType?.area || 25} m² (Thừa hưởng)</TableCell>
                         <TableCell sx={{ fontWeight: 750, color: 'primary.main' }}>
                           {(rType?.defaultRate || 5500000).toLocaleString()} VND
                         </TableCell>
                         <TableCell>
-                          <Chip size="small" label="Sẵn sàng" color="success" sx={{ fontSize: 11 }} />
+                          <Chip
+                            size="small"
+                            label="Sẵn sàng"
+                            color="success"
+                            sx={{ fontSize: 11 }}
+                          />
                         </TableCell>
                         <TableCell>
                           <IconButton
@@ -765,7 +816,8 @@ export function InitialLocationSetupWizard({
               Bước 4: Danh mục tài sản, Định mức & Phân bổ vào phòng
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              Cấu trúc 3 cấp độ: Danh mục tài sản (Cấp 1), Định mức theo loại phòng (Cấp 2), Phân bổ tài sản vào từng phòng (Cấp 3).
+              Cấu trúc 3 cấp độ: Danh mục tài sản (Cấp 1), Định mức theo loại phòng (Cấp 2), Phân bổ
+              tài sản vào từng phòng (Cấp 3).
             </Typography>
 
             {templateAppliedNotice && (
@@ -782,10 +834,17 @@ export function InitialLocationSetupWizard({
               {/* Asset Catalog Column */}
               <Grid item xs={12} md={4}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, height: '100%' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
                     <Package size={18} /> Danh mục tài sản mẫu (Cấp 1)
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mb: 2 }}
+                  >
                     Các trang thiết bị nội thất & điện máy tiêu chuẩn của BHOME.
                   </Typography>
 
@@ -818,9 +877,17 @@ export function InitialLocationSetupWizard({
               {/* Room Type Template Column */}
               <Grid item xs={12} md={8}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, height: '100%' }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ mb: 1.5 }}
+                  >
                     <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
                         <Layers3 size={18} /> Định mức theo loại phòng (Cấp 2)
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -876,9 +943,16 @@ export function InitialLocationSetupWizard({
                     </Table>
                   </TableContainer>
 
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pt: 1 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ pt: 1 }}
+                  >
                     <Typography variant="caption" color="text.secondary">
-                      Áp dụng định mức này cho toàn bộ {rooms.filter((r) => r.roomTypeId === selectedTemplateRoomType).length} phòng thuộc loại này.
+                      Áp dụng định mức này cho toàn bộ{' '}
+                      {rooms.filter((r) => r.roomTypeId === selectedTemplateRoomType).length} phòng
+                      thuộc loại này.
                     </Typography>
                     <Button
                       variant="contained"
@@ -902,7 +976,8 @@ export function InitialLocationSetupWizard({
               Bước 5: Giá thuê phòng & Phân cấp định giá
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              Phân cấp định giá: <strong>Giá chuẩn loại phòng → Giá áp dụng → Giá điều chỉnh riêng từng phòng</strong>.
+              Phân cấp định giá:{' '}
+              <strong>Giá chuẩn loại phòng → Giá áp dụng → Giá điều chỉnh riêng từng phòng</strong>.
             </Typography>
 
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2.5 }}>
@@ -934,7 +1009,9 @@ export function InitialLocationSetupWizard({
                         <TableCell sx={{ color: 'text.secondary' }}>
                           {defaultRate.toLocaleString()} VND
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 800, color: isOverridden ? '#b45309' : 'primary.main' }}>
+                        <TableCell
+                          sx={{ fontWeight: 800, color: isOverridden ? '#b45309' : 'primary.main' }}
+                        >
                           {appliedRate.toLocaleString()} VND
                         </TableCell>
                         <TableCell>
@@ -1001,8 +1078,9 @@ export function InitialLocationSetupWizard({
                 Cảnh báo khung giá điện & nước sinh hoạt theo quy định pháp luật
               </Typography>
               <Typography variant="body2">
-                Giá điện nước cho người thuê nhà để ở tuân thủ theo biểu giá của EVN và Quyết định của UBND tỉnh/thành phố.
-                Vui lòng đảm bảo đơn giá cấu hình không vượt quá trần quy định hiện hành.
+                Giá điện nước cho người thuê nhà để ở tuân thủ theo biểu giá của EVN và Quyết định
+                của UBND tỉnh/thành phố. Vui lòng đảm bảo đơn giá cấu hình không vượt quá trần quy
+                định hiện hành.
               </Typography>
             </Alert>
 
@@ -1024,11 +1102,25 @@ export function InitialLocationSetupWizard({
                           <TableCell sx={{ fontWeight: 750 }}>
                             {fee.name}
                             {fee.isRegulatoryControlled && (
-                              <Chip size="small" label="Khung giá nhà nước" color="warning" sx={{ ml: 1, fontSize: 10 }} />
+                              <Chip
+                                size="small"
+                                label="Khung giá nhà nước"
+                                color="warning"
+                                sx={{ ml: 1, fontSize: 10 }}
+                              />
                             )}
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={fee.calculationMethod === 'PER_KWH' ? 'Theo kWh' : fee.calculationMethod === 'PER_M3' ? 'Theo m³' : 'Theo phòng'} />
+                            <Chip
+                              size="small"
+                              label={
+                                fee.calculationMethod === 'PER_KWH'
+                                  ? 'Theo kWh'
+                                  : fee.calculationMethod === 'PER_M3'
+                                    ? 'Theo m³'
+                                    : 'Theo phòng'
+                              }
+                            />
                           </TableCell>
                           <TableCell sx={{ fontWeight: 800 }}>
                             {fee.unitPrice.toLocaleString()} {fee.unit}
@@ -1046,11 +1138,19 @@ export function InitialLocationSetupWizard({
               {/* Occupied Room Monthly Charge Preview */}
               <Grid item xs={12} md={5}>
                 <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 800, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
                     <BadgeDollarSign size={18} /> Mô phỏng chi phí hàng tháng của phòng
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                    Mô phỏng bảng kê hóa đơn dự kiến của một khách thuê dựa trên mức tiêu thụ điện nước giả định.
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mb: 2 }}
+                  >
+                    Mô phỏng bảng kê hóa đơn dự kiến của một khách thuê dựa trên mức tiêu thụ điện
+                    nước giả định.
                   </Typography>
 
                   <Grid container spacing={1.5} sx={{ mb: 2 }}>
@@ -1116,8 +1216,17 @@ export function InitialLocationSetupWizard({
                       <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                         Tổng tiền dự kiến trên hóa đơn:
                       </Typography>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 850, color: 'primary.main' }}>
-                        {(5500000 + previewKwh * 3800 + previewM3 * 22000 + 300000).toLocaleString()} VND
+                      <Typography
+                        variant="subtitle1"
+                        sx={{ fontWeight: 850, color: 'primary.main' }}
+                      >
+                        {(
+                          5500000 +
+                          previewKwh * 3800 +
+                          previewM3 * 22000 +
+                          300000
+                        ).toLocaleString()}{' '}
+                        VND
                       </Typography>
                     </Stack>
                   </Stack>
@@ -1130,13 +1239,19 @@ export function InitialLocationSetupWizard({
         {/* STEP 7: House Rules & Policies */}
         {activeStep === 6 && (
           <Box>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 2 }}
+            >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Bước 7: Nội quy & Quy định vận hành cơ sở
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Cấu hình các quy định về giờ giấc, người thăm, an toàn PCCC, và chính sách tiền cọc.
+                  Cấu hình các quy định về giờ giấc, người thăm, an toàn PCCC, và chính sách tiền
+                  cọc.
                 </Typography>
               </Box>
               <Button
@@ -1175,7 +1290,12 @@ export function InitialLocationSetupWizard({
                       flexDirection: 'column',
                     }}
                   >
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      sx={{ mb: 1 }}
+                    >
                       <Chip
                         size="small"
                         label={rule.name}
@@ -1183,7 +1303,11 @@ export function InitialLocationSetupWizard({
                         variant="outlined"
                         sx={{ fontWeight: 700, fontSize: 11 }}
                       />
-                      <Chip size="small" label={`Phiên bản ${rule.version}`} sx={{ fontWeight: 800 }} />
+                      <Chip
+                        size="small"
+                        label={`Phiên bản ${rule.version}`}
+                        sx={{ fontWeight: 800 }}
+                      />
                     </Stack>
 
                     <Typography variant="subtitle2" sx={{ fontWeight: 800, mt: 0.5 }}>
@@ -1235,7 +1359,8 @@ export function InitialLocationSetupWizard({
                   Đã hoàn tất cấu hình — Sẵn sàng đưa vào vận hành
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Kiểm tra lại toàn bộ danh mục thông tin đã thiết lập trước khi lưu và chuyển vào không gian quản lý chi tiết.
+                  Kiểm tra lại toàn bộ danh mục thông tin đã thiết lập trước khi lưu và chuyển vào
+                  không gian quản lý chi tiết.
                 </Typography>
               </Box>
             </Stack>
@@ -1285,7 +1410,11 @@ export function InitialLocationSetupWizard({
                       <Typography variant="body2" color="text.secondary">
                         Loại phòng:
                       </Typography>
-                      <Chip size="small" label={`${roomTypes.length} loại phòng sẵn sàng`} color="primary" />
+                      <Chip
+                        size="small"
+                        label={`${roomTypes.length} loại phòng sẵn sàng`}
+                        color="primary"
+                      />
                     </Stack>
                     <Stack direction="row" justifyContent="space-between">
                       <Typography variant="body2" color="text.secondary">
@@ -1297,13 +1426,21 @@ export function InitialLocationSetupWizard({
                       <Typography variant="body2" color="text.secondary">
                         Biểu phí điện nước:
                       </Typography>
-                      <Chip size="small" label={`${feePolicies.length} khoản phí đã cấu hình`} color="info" />
+                      <Chip
+                        size="small"
+                        label={`${feePolicies.length} khoản phí đã cấu hình`}
+                        color="info"
+                      />
                     </Stack>
                     <Stack direction="row" justifyContent="space-between">
                       <Typography variant="body2" color="text.secondary">
                         Nội quy cơ sở:
                       </Typography>
-                      <Chip size="small" label={`${houseRules.length} quy định hiệu lực`} color="default" />
+                      <Chip
+                        size="small"
+                        label={`${houseRules.length} quy định hiệu lực`}
+                        color="default"
+                      />
                     </Stack>
                   </Stack>
                 </Paper>

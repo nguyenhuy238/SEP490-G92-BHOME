@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, Chip, Paper, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Button, Paper, Stack, Tab, Tabs, Typography } from '@mui/material';
 import {
   ArrowLeft,
   Building2,
-  Calendar,
-  Clock,
   Coins,
   Copy,
   DoorOpen,
   History,
-  Layers3,
   Package,
   Scale,
   ScrollText,
@@ -20,7 +17,7 @@ import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { usePortalData } from '../../../hooks/usePortalData';
-import type { DemoDatabase, PortalRecord } from '../../../types/portal';
+import type { PortalRecord } from '../../../types/portal';
 import { CopyConfigurationWizard } from '../components/CopyConfigurationWizard';
 import { InitialLocationSetupWizard } from '../components/InitialLocationSetupWizard';
 import { LocationAssetsTab } from '../components/tabs/LocationAssetsTab';
@@ -152,9 +149,7 @@ export function LocationWorkspace() {
 
       {/* 8 Section Navigation Tabs */}
       <Tabs
-        value={
-          LOCATION_WORKSPACE_TABS.some(([key]) => key === activeTab) ? activeTab : 'overview'
-        }
+        value={LOCATION_WORKSPACE_TABS.some(([key]) => key === activeTab) ? activeTab : 'overview'}
         variant="scrollable"
         scrollButtons="auto"
         sx={{ mb: 3, borderBottom: '1px solid', borderColor: 'divider' }}
@@ -188,22 +183,19 @@ export function LocationWorkspace() {
 
       {activeTab === 'pricing' && <LocationPricingTab db={db} location={selected} />}
 
-      {activeTab === 'rules' && <LocationRulesTab db={db} location={selected} />}
+      {activeTab === 'rules' && <LocationRulesTab />}
 
-      {activeTab === 'history' && <LocationHistoryTab db={db} location={selected} />}
+      {activeTab === 'history' && <LocationHistoryTab />}
 
       {activeTab === 'settings' && (
         <LocationSettingsTab
-          db={db}
           location={selected}
           onLaunchCopyWizard={() => setIsCopyWizardOpen(true)}
         />
       )}
 
       {/* If any other route was triggered */}
-      {!LOCATION_WORKSPACE_TABS.some(([key]) => key === activeTab) && (
-        <Outlet />
-      )}
+      {!LOCATION_WORKSPACE_TABS.some(([key]) => key === activeTab) && <Outlet />}
 
       {/* Integrated Setup & Copy Modals */}
       <InitialLocationSetupWizard

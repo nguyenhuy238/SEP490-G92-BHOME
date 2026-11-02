@@ -21,16 +21,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  AlertTriangle,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  History,
-  Info,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, History, Info, Sparkles, X } from 'lucide-react';
 import type { HouseRuleItem, PolicyVersionRecord } from '../types/locationConfig';
 
 interface PolicyVersioningDialogProps {
@@ -48,16 +39,16 @@ export function PolicyVersioningDialog({
   onSaveNewVersion,
   onUpdateDraft,
 }: PolicyVersioningDialogProps) {
+  const [proposedValue, setProposedValue] = useState(policy?.content ?? '');
+  const [effectiveDate, setEffectiveDate] = useState('2026-12-01');
+  const [changeNote, setChangeNote] = useState('');
+  const [scheduledStatus, setScheduledStatus] = useState<'SCHEDULED' | 'ACTIVE'>('SCHEDULED');
+
   if (!policy) return null;
 
   const isApplied = policy.isAppliedToContracts;
   const currentVersion = policy.version || 'V1';
   const nextVersionNumber = `V${parseInt(currentVersion.replace(/\D/g, '') || '1', 10) + 1}`;
-
-  const [proposedValue, setProposedValue] = useState(policy.content);
-  const [effectiveDate, setEffectiveDate] = useState('2026-12-01');
-  const [changeNote, setChangeNote] = useState('');
-  const [scheduledStatus, setScheduledStatus] = useState<'SCHEDULED' | 'ACTIVE'>('SCHEDULED');
 
   const handleSave = () => {
     if (isApplied) {
@@ -89,7 +80,9 @@ export function PolicyVersioningDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <DialogTitle
+        sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
         <Stack direction="row" spacing={1.5} alignItems="center">
           <Box
             sx={{
@@ -106,7 +99,9 @@ export function PolicyVersioningDialog({
           </Box>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              {isApplied ? 'Quản lý phiên bản quy định & Kiểm soát thay đổi' : 'Chỉnh sửa quy định bản nháp'}
+              {isApplied
+                ? 'Quản lý phiên bản quy định & Kiểm soát thay đổi'
+                : 'Chỉnh sửa quy định bản nháp'}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Mã quy định: {policy.id} · {policy.name}
@@ -138,9 +133,9 @@ export function PolicyVersioningDialog({
               Cảnh báo bảo vệ hợp đồng đang hiệu lực (Trường hợp B)
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              Quy định này đã được áp dụng trong các hợp đồng thuê đang có hiệu lực. Để đảm bảo tính pháp lý
-              và lưu vết lịch sử kiểm toán, hệ thống khóa chỉnh sửa trực tiếp. Vui lòng tạo một phiên bản mới
-              để lên lịch áp dụng với mốc thời gian hiệu lực tương ứng.
+              Quy định này đã được áp dụng trong các hợp đồng thuê đang có hiệu lực. Để đảm bảo tính
+              pháp lý và lưu vết lịch sử kiểm toán, hệ thống khóa chỉnh sửa trực tiếp. Vui lòng tạo
+              một phiên bản mới để lên lịch áp dụng với mốc thời gian hiệu lực tương ứng.
             </Typography>
           </Alert>
         ) : (
@@ -159,8 +154,8 @@ export function PolicyVersioningDialog({
               Quy định bản nháp chưa áp dụng (Trường hợp A)
             </Typography>
             <Typography variant="body2">
-              Quy định này đang ở trạng thái Nháp và chưa được liên kết vào bất kỳ hợp đồng thuê nào. Mọi chỉnh sửa
-              sẽ có hiệu lực ngay lập tức mà không cần tạo phiên bản mới.
+              Quy định này đang ở trạng thái Nháp và chưa được liên kết vào bất kỳ hợp đồng thuê
+              nào. Mọi chỉnh sửa sẽ có hiệu lực ngay lập tức mà không cần tạo phiên bản mới.
             </Typography>
           </Alert>
         )}
@@ -178,7 +173,12 @@ export function PolicyVersioningDialog({
                 height: '100%',
               }}
             >
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 1.5 }}
+              >
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#475569' }}>
                   Phiên bản hiện tại đang áp dụng
                 </Typography>
@@ -223,12 +223,19 @@ export function PolicyVersioningDialog({
                 height: '100%',
               }}
             >
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 1.5 }}
+              >
                 <Typography
                   variant="subtitle2"
                   sx={{ fontWeight: 800, color: isApplied ? '#c2410c' : '#15803d' }}
                 >
-                  {isApplied ? `Đề xuất phiên bản mới (${nextVersionNumber})` : 'Cập nhật nội dung bản nháp'}
+                  {isApplied
+                    ? `Đề xuất phiên bản mới (${nextVersionNumber})`
+                    : 'Cập nhật nội dung bản nháp'}
                 </Typography>
                 <Chip
                   size="small"
@@ -274,9 +281,7 @@ export function PolicyVersioningDialog({
                       SelectProps={{ native: true }}
                       label="Trạng thái kích hoạt"
                       value={scheduledStatus}
-                      onChange={(e) =>
-                        setScheduledStatus(e.target.value as 'SCHEDULED' | 'ACTIVE')
-                      }
+                      onChange={(e) => setScheduledStatus(e.target.value as 'SCHEDULED' | 'ACTIVE')}
                       sx={{ bgcolor: '#ffffff' }}
                     >
                       <option value="SCHEDULED">Lên lịch theo ngày hiệu lực</option>
@@ -303,7 +308,10 @@ export function PolicyVersioningDialog({
         {/* Version History Table */}
         <Box sx={{ mt: 3 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}
+            >
               <History size={16} /> Lịch sử thay đổi & Lưu vết phiên bản
             </Typography>
             <Chip size="small" label={`${sampleHistory.length} phiên bản đã ghi nhận`} />
@@ -334,9 +342,7 @@ export function PolicyVersioningDialog({
                         }}
                       />
                     </TableCell>
-                    <TableCell sx={{ fontSize: 13, color: '#334155' }}>
-                      {item.value}
-                    </TableCell>
+                    <TableCell sx={{ fontSize: 13, color: '#334155' }}>{item.value}</TableCell>
                     <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
                       {item.effectiveDate}
                     </TableCell>
@@ -347,15 +353,15 @@ export function PolicyVersioningDialog({
                           item.status === 'ACTIVE'
                             ? 'Đang áp dụng'
                             : item.status === 'SCHEDULED'
-                            ? 'Đã lên lịch'
-                            : 'Lịch sử'
+                              ? 'Đã lên lịch'
+                              : 'Lịch sử'
                         }
                         color={
                           item.status === 'ACTIVE'
                             ? 'success'
                             : item.status === 'SCHEDULED'
-                            ? 'warning'
-                            : 'default'
+                              ? 'warning'
+                              : 'default'
                         }
                         sx={{ fontWeight: 700, fontSize: 11 }}
                       />

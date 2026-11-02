@@ -10,40 +10,20 @@ import {
   DialogTitle,
   Divider,
   Grid,
-  IconButton,
   MenuItem,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  AlertTriangle,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Edit2,
-  History,
-  Info,
-  Plus,
-  ScrollText,
-  Sparkles,
-} from 'lucide-react';
-import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
+import { Clock, Edit2, History, Plus, Sparkles } from 'lucide-react';
 import { INITIAL_HOUSE_RULES } from '../../mock/locationConfigMock';
-import type { HouseRuleItem, PolicyCategory, PolicyVersionRecord } from '../../types/locationConfig';
+import type {
+  HouseRuleItem,
+  PolicyCategory,
+  PolicyVersionRecord,
+} from '../../types/locationConfig';
 import { PolicyVersioningDialog } from '../PolicyVersioningDialog';
-
-interface LocationRulesTabProps {
-  db: DemoDatabase;
-  location: PortalRecord;
-}
 
 const CATEGORY_NAMES: Record<string, string> = {
   ACCESS_HOURS: 'Giờ giấc & Ra vào',
@@ -57,12 +37,14 @@ const CATEGORY_NAMES: Record<string, string> = {
   OTHER_OPERATIONS: 'Vận hành khác',
 };
 
-export function LocationRulesTab({ db, location }: LocationRulesTabProps) {
+export function LocationRulesTab() {
   const [houseRules, setHouseRules] = useState<HouseRuleItem[]>(INITIAL_HOUSE_RULES);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   // Policy versioning dialog state
-  const [selectedPolicyForVersion, setSelectedPolicyForVersion] = useState<HouseRuleItem | null>(null);
+  const [selectedPolicyForVersion, setSelectedPolicyForVersion] = useState<HouseRuleItem | null>(
+    null,
+  );
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
 
   // Add rule dialog
@@ -72,9 +54,10 @@ export function LocationRulesTab({ db, location }: LocationRulesTabProps) {
   const [newRuleContent, setNewRuleContent] = useState('');
   const [newRuleEffectiveDate, setNewRuleEffectiveDate] = useState('2026-12-01');
 
-  const filteredRules = selectedCategory === 'ALL'
-    ? houseRules
-    : houseRules.filter((r) => r.category === selectedCategory);
+  const filteredRules =
+    selectedCategory === 'ALL'
+      ? houseRules
+      : houseRules.filter((r) => r.category === selectedCategory);
 
   const handleOpenVersionDialog = (rule: HouseRuleItem) => {
     setSelectedPolicyForVersion(rule);
@@ -140,14 +123,22 @@ export function LocationRulesTab({ db, location }: LocationRulesTabProps) {
           Cơ chế kiểm soát phiên bản quy định & Bảo toàn dữ liệu lịch sử
         </Typography>
         <Typography variant="body2">
-          Các nội quy đã liên kết với hợp đồng thuê đang hiệu lực (được đánh dấu <strong>Đã áp dụng vào hợp đồng</strong>)
-          sẽ không thể ghi đè trực tiếp. Mọi thay đổi sẽ kích hoạt quy trình tạo phiên bản mới (V1 → V2) kèm ngày bắt đầu hiệu lực,
-          đảm bảo tính minh bạch và tránh tranh chấp pháp lý.
+          Các nội quy đã liên kết với hợp đồng thuê đang hiệu lực (được đánh dấu{' '}
+          <strong>Đã áp dụng vào hợp đồng</strong>) sẽ không thể ghi đè trực tiếp. Mọi thay đổi sẽ
+          kích hoạt quy trình tạo phiên bản mới (V1 → V2) kèm ngày bắt đầu hiệu lực, đảm bảo tính
+          minh bạch và tránh tranh chấp pháp lý.
         </Typography>
       </Alert>
 
       {/* Filter and Action Bar */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }} flexWrap="wrap" gap={1.5}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 2.5 }}
+        flexWrap="wrap"
+        gap={1.5}
+      >
         <Stack direction="row" spacing={1.5} alignItems="center">
           <TextField
             select
@@ -194,7 +185,12 @@ export function LocationRulesTab({ db, location }: LocationRulesTabProps) {
                   bgcolor: '#ffffff',
                 }}
               >
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 1.5 }}
+                >
                   <Chip
                     size="small"
                     label={CATEGORY_NAMES[rule.category] || rule.category}
@@ -277,7 +273,12 @@ export function LocationRulesTab({ db, location }: LocationRulesTabProps) {
       />
 
       {/* Add Rule Dialog */}
-      <Dialog open={isAddDialogOpen} onClose={() => setIsAddDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 800 }}>Thêm nội quy & quy định mới</DialogTitle>
         <DialogContent sx={{ py: 2 }}>
           <Grid container spacing={2}>

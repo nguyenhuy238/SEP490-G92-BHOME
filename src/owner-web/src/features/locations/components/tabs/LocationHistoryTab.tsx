@@ -1,58 +1,55 @@
 import { useState } from 'react';
-import {
-  Box,
-  Chip,
-  Divider,
-  Grid,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Box, Chip, Divider, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import {
   Calendar,
   CheckCircle2,
   Clock,
-  Filter,
   History,
   Package,
   Sparkles,
   UserRound,
   Wrench,
-  Zap,
 } from 'lucide-react';
-import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
 import { INITIAL_OPERATIONAL_HISTORY } from '../../mock/locationConfigMock';
 import type { OperationalHistoryItem } from '../../types/locationConfig';
 
-interface LocationHistoryTabProps {
-  db: DemoDatabase;
-  location: PortalRecord;
-}
-
-export function LocationHistoryTab({ db, location }: LocationHistoryTabProps) {
+export function LocationHistoryTab() {
   const [filterEvent, setFilterEvent] = useState<string>('ALL');
   const [historyList] = useState<OperationalHistoryItem[]>(INITIAL_OPERATIONAL_HISTORY);
 
-  const filteredHistory = filterEvent === 'ALL'
-    ? historyList
-    : historyList.filter((item) => item.event === filterEvent);
+  const filteredHistory =
+    filterEvent === 'ALL' ? historyList : historyList.filter((item) => item.event === filterEvent);
 
   const getEventBadge = (event: OperationalHistoryItem['event']) => {
     switch (event) {
       case 'MAINTENANCE_COMPLETED':
-        return { label: 'Bảo trì hoàn tất', color: 'success' as const, icon: <CheckCircle2 size={15} /> };
+        return {
+          label: 'Bảo trì hoàn tất',
+          color: 'success' as const,
+          icon: <CheckCircle2 size={15} />,
+        };
       case 'ASSET_REPLACED':
         return { label: 'Thay thế tài sản', color: 'warning' as const, icon: <Wrench size={15} /> };
       case 'ASSET_INSTALLED':
-        return { label: 'Lắp đặt thiết bị', color: 'primary' as const, icon: <Package size={15} /> };
+        return {
+          label: 'Lắp đặt thiết bị',
+          color: 'primary' as const,
+          icon: <Package size={15} />,
+        };
       case 'CONDITION_UPDATED':
         return { label: 'Cập nhật hiện trạng', color: 'info' as const, icon: <Clock size={15} /> };
       case 'POLICY_UPDATED':
-        return { label: 'Cập nhật phiên bản quy định', color: 'secondary' as const, icon: <Sparkles size={15} /> };
+        return {
+          label: 'Cập nhật phiên bản quy định',
+          color: 'secondary' as const,
+          icon: <Sparkles size={15} />,
+        };
       case 'ROOM_SETUP_COMPLETED':
-        return { label: 'Nghiệm thu setup phòng', color: 'success' as const, icon: <CheckCircle2 size={15} /> };
+        return {
+          label: 'Nghiệm thu setup phòng',
+          color: 'success' as const,
+          icon: <CheckCircle2 size={15} />,
+        };
       default:
         return { label: event, color: 'default' as const, icon: <History size={15} /> };
     }
@@ -62,13 +59,23 @@ export function LocationHistoryTab({ db, location }: LocationHistoryTabProps) {
     <Box>
       {/* Header and Filter */}
       <Paper variant="outlined" sx={{ p: 2.5, mb: 3, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={2}
+        >
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}
+            >
               <History size={20} color="#255dde" /> Lịch sử vận hành & Bảo dưỡng tài sản
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Nhật ký theo dõi các sự kiện sửa chữa, thay thế linh kiện, nghiệm thu bàn giao và nâng cấp hạ tầng cơ sở.
+              Nhật ký theo dõi các sự kiện sửa chữa, thay thế linh kiện, nghiệm thu bàn giao và nâng
+              cấp hạ tầng cơ sở.
             </Typography>
           </Box>
 
@@ -136,7 +143,12 @@ export function LocationHistoryTab({ db, location }: LocationHistoryTabProps) {
                   },
                 }}
               >
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 1 }}
+                >
                   <Stack direction="row" spacing={1.5} alignItems="center">
                     <Chip
                       size="small"
@@ -154,7 +166,16 @@ export function LocationHistoryTab({ db, location }: LocationHistoryTabProps) {
                     )}
                   </Stack>
 
-                  <Typography variant="caption" sx={{ fontWeight: 750, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 750,
+                      color: 'text.secondary',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                    }}
+                  >
                     <Calendar size={14} /> {item.date}
                   </Typography>
                 </Stack>
@@ -169,7 +190,13 @@ export function LocationHistoryTab({ db, location }: LocationHistoryTabProps) {
 
                 <Divider sx={{ my: 1 }} />
 
-                <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  flexWrap="wrap"
+                  gap={1}
+                >
                   <Stack direction="row" spacing={2} alignItems="center">
                     {item.condition && (
                       <Typography variant="caption" color="text.secondary">
@@ -183,7 +210,12 @@ export function LocationHistoryTab({ db, location }: LocationHistoryTabProps) {
                     )}
                   </Stack>
 
-                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: 'text.secondary' }}>
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    alignItems="center"
+                    sx={{ color: 'text.secondary' }}
+                  >
                     <UserRound size={14} />
                     <Typography variant="caption" sx={{ fontWeight: 700 }}>
                       {item.actor}

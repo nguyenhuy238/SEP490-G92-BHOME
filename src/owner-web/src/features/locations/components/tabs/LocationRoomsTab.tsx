@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -13,7 +12,6 @@ import {
   Divider,
   Grid,
   IconButton,
-  InputAdornment,
   MenuItem,
   Paper,
   Stack,
@@ -28,19 +26,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  Building2,
-  CheckCircle2,
-  Copy,
-  DoorOpen,
-  Edit2,
-  Filter,
-  Layers3,
-  Plus,
-  Sparkles,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Copy, DoorOpen, Edit2, Filter, Layers3, Plus, Sparkles, Trash2 } from 'lucide-react';
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
 import { INITIAL_ROOM_TYPES } from '../../mock/locationConfigMock';
 import type { GeneratedRoomDraft, RoomTypeDraft } from '../../types/locationConfig';
@@ -65,7 +51,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
       code: r.code,
       floor: parseInt(r.attributes.floor || '1', 10),
       roomTypeId: r.category || 'type-studio',
-      status: (r.status === 'AVAILABLE' || r.status.includes('Trống')) ? 'AVAILABLE' : 'UNAVAILABLE',
+      status: r.status === 'AVAILABLE' || r.status.includes('Trống') ? 'AVAILABLE' : 'UNAVAILABLE',
     }));
 
   const [localRooms, setLocalRooms] = useState<GeneratedRoomDraft[]>(
@@ -89,7 +75,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
   const [bulkFloor, setBulkFloor] = useState<number>(2);
   const [bulkTypeId, setBulkTypeId] = useState<string>('type-studio');
   const [bulkPrefix, setBulkPrefix] = useState<string>('P.');
-  const [bulkStart, setBulkStart] = useState<number>(1);
+  const [bulkStart] = useState<number>(1);
   const [bulkQty, setBulkQty] = useState<number>(4);
 
   // Filtered rooms
@@ -138,8 +124,18 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           onChange={(_, val) => setActiveSubTab(val)}
           sx={{ borderBottom: '1px solid #e2e8f0' }}
         >
-          <Tab value="inventory" label={`Danh sách phòng (${localRooms.length})`} icon={<DoorOpen size={16} />} iconPosition="start" />
-          <Tab value="types" label={`Mẫu loại phòng (${roomTypes.length})`} icon={<Layers3 size={16} />} iconPosition="start" />
+          <Tab
+            value="inventory"
+            label={`Danh sách phòng (${localRooms.length})`}
+            icon={<DoorOpen size={16} />}
+            iconPosition="start"
+          />
+          <Tab
+            value="types"
+            label={`Mẫu loại phòng (${roomTypes.length})`}
+            icon={<Layers3 size={16} />}
+            iconPosition="start"
+          />
         </Tabs>
 
         <Stack direction="row" spacing={1.5}>
@@ -182,7 +178,16 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           {/* Filters Bar */}
           <Paper variant="outlined" sx={{ p: 2, mb: 2.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
             <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <Typography variant="body2" sx={{ fontWeight: 750, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 750,
+                  color: 'text.secondary',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                }}
+              >
                 <Filter size={16} /> Bộ lọc:
               </Typography>
 
@@ -247,7 +252,11 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                       <TableCell sx={{ fontWeight: 800 }}>{room.code}</TableCell>
                       <TableCell>Tầng {room.floor}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={rType?.name || 'Tiêu chuẩn'} sx={{ fontWeight: 700 }} />
+                        <Chip
+                          size="small"
+                          label={rType?.name || 'Tiêu chuẩn'}
+                          sx={{ fontWeight: 700 }}
+                        />
                       </TableCell>
                       <TableCell>{rType?.area || 25} m²</TableCell>
                       <TableCell sx={{ fontWeight: 800, color: 'primary.main' }}>
@@ -272,7 +281,9 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => setLocalRooms((prev) => prev.filter((r) => r.code !== room.code))}
+                          onClick={() =>
+                            setLocalRooms((prev) => prev.filter((r) => r.code !== room.code))
+                          }
                         >
                           <Trash2 size={16} />
                         </IconButton>
@@ -282,7 +293,10 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 })}
                 {filteredRooms.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}>
+                    <TableCell
+                      colSpan={8}
+                      sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}
+                    >
                       Không có phòng nào phù hợp với bộ lọc đã chọn.
                     </TableCell>
                   </TableRow>
@@ -298,7 +312,10 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
         <Grid container spacing={2}>
           {roomTypes.map((rt) => (
             <Grid item xs={12} md={4} key={rt.id}>
-              <Card variant="outlined" sx={{ borderRadius: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Card
+                variant="outlined"
+                sx={{ borderRadius: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}
+              >
                 <CardContent sx={{ flex: 1, p: 2.5 }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Chip size="small" label={rt.code} color="primary" sx={{ fontWeight: 800 }} />
@@ -347,7 +364,11 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   </Stack>
 
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mb: 0.5 }}
+                    >
                       Tiện ích & Trang bị tiêu chuẩn:
                     </Typography>
                     <Stack direction="row" flexWrap="wrap" gap={0.5}>
@@ -359,7 +380,11 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 </CardContent>
 
                 <Divider />
-                <Stack direction="row" justifyContent="flex-end" sx={{ p: 1, gap: 1, bgcolor: '#f8fafc' }}>
+                <Stack
+                  direction="row"
+                  justifyContent="flex-end"
+                  sx={{ p: 1, gap: 1, bgcolor: '#f8fafc' }}
+                >
                   <Button
                     size="small"
                     startIcon={<Copy size={14} />}
@@ -393,11 +418,17 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
       )}
 
       {/* Bulk Create Rooms Modal */}
-      <Dialog open={isBulkDialogOpen} onClose={() => setIsBulkDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={isBulkDialogOpen}
+        onClose={() => setIsBulkDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 800 }}>Tạo phòng hàng loạt theo sơ đồ tầng</DialogTitle>
         <DialogContent sx={{ py: 2 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-            Tự động sinh mã phòng theo quy tắc đánh số tầng (Ví dụ: Tầng 2 → P.201, P.202, P.203, P.204).
+            Tự động sinh mã phòng theo quy tắc đánh số tầng (Ví dụ: Tầng 2 → P.201, P.202, P.203,
+            P.204).
           </Typography>
 
           <Grid container spacing={2}>
@@ -459,7 +490,11 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           <Button variant="outlined" onClick={() => setIsBulkDialogOpen(false)}>
             Hủy
           </Button>
-          <Button variant="contained" onClick={handleBulkGenerate} startIcon={<Sparkles size={16} />}>
+          <Button
+            variant="contained"
+            onClick={handleBulkGenerate}
+            startIcon={<Sparkles size={16} />}
+          >
             Sinh danh sách phòng
           </Button>
         </DialogActions>
@@ -467,7 +502,12 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
 
       {/* Edit Room Type Dialog */}
       {editingType && (
-        <Dialog open={isTypeDialogOpen} onClose={() => setIsTypeDialogOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={isTypeDialogOpen}
+          onClose={() => setIsTypeDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
           <DialogTitle sx={{ fontWeight: 800 }}>Cấu hình mẫu loại phòng</DialogTitle>
           <DialogContent sx={{ py: 2 }}>
             <Grid container spacing={2}>
@@ -496,7 +536,9 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   size="small"
                   label="Diện tích chuẩn (m²)"
                   value={editingType.area}
-                  onChange={(e) => setEditingType({ ...editingType, area: parseInt(e.target.value, 10) || 20 })}
+                  onChange={(e) =>
+                    setEditingType({ ...editingType, area: parseInt(e.target.value, 10) || 20 })
+                  }
                 />
               </Grid>
               <Grid item xs={6}>
@@ -506,7 +548,12 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   size="small"
                   label="Sức chứa tối đa (người)"
                   value={editingType.maxOccupants}
-                  onChange={(e) => setEditingType({ ...editingType, maxOccupants: parseInt(e.target.value, 10) || 2 })}
+                  onChange={(e) =>
+                    setEditingType({
+                      ...editingType,
+                      maxOccupants: parseInt(e.target.value, 10) || 2,
+                    })
+                  }
                 />
               </Grid>
               <Grid item xs={12}>
@@ -516,7 +563,12 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   size="small"
                   label="Giá thuê mặc định (VND/tháng)"
                   value={editingType.defaultRate}
-                  onChange={(e) => setEditingType({ ...editingType, defaultRate: parseInt(e.target.value, 10) || 5000000 })}
+                  onChange={(e) =>
+                    setEditingType({
+                      ...editingType,
+                      defaultRate: parseInt(e.target.value, 10) || 5000000,
+                    })
+                  }
                 />
               </Grid>
               <Grid item xs={12}>

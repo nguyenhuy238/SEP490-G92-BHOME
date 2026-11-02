@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardActionArea,
-  CardContent,
   Checkbox,
   Chip,
   Dialog,
@@ -13,9 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControlLabel,
   Grid,
-  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -33,7 +30,6 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Building2,
@@ -45,11 +41,10 @@ import {
   RefreshCw,
   Scale,
   ScrollText,
-  ShieldAlert,
   Sparkles,
   X,
 } from 'lucide-react';
-import type { DemoDatabase, PortalRecord } from '../../../types/portal';
+import type { DemoDatabase } from '../../../types/portal';
 import type {
   CopyActionChoice,
   CopyConfigurationGroup,
@@ -89,7 +84,8 @@ const AVAILABLE_GROUPS: Omit<GroupMeta, 'count'>[] = [
   {
     group: 'ASSET_TEMPLATES',
     title: 'Định mức trang bị tài sản',
-    description: 'Định mức số lượng và chủng loại nội thất, điện máy bàn giao theo từng loại phòng.',
+    description:
+      'Định mức số lượng và chủng loại nội thất, điện máy bàn giao theo từng loại phòng.',
     icon: Package,
   },
   {
@@ -154,9 +150,7 @@ export function CopyConfigurationWizard({
   const locations = db.records.locations;
 
   // Step 1: Source & Destination
-  const [sourceId, setSourceId] = useState(
-    initialSourceLocationId || locations[0]?.id || '',
-  );
+  const [sourceId, setSourceId] = useState(initialSourceLocationId || locations[0]?.id || '');
   const [destinationId, setDestinationId] = useState(
     initialDestinationLocationId || locations[1]?.id || 'new-loc-draft',
   );
@@ -187,7 +181,9 @@ export function CopyConfigurationWizard({
   const destLocation = locations.find((l) => l.id === destinationId);
 
   // Calculate items count for source location
-  const sourceRoomTypes = db.records['room-types'].filter((t) => t.locationId === sourceLocation?.id);
+  const sourceRoomTypes = db.records['room-types'].filter(
+    (t) => t.locationId === sourceLocation?.id,
+  );
   const sourceRooms = db.records.rooms.filter((r) => r.locationId === sourceLocation?.id);
 
   const getGroupCount = (group: CopyConfigurationGroup): number => {
@@ -235,15 +231,17 @@ export function CopyConfigurationWizard({
           group === 'ROOM_TYPES'
             ? 'Căn hộ Studio Ban công'
             : group === 'FEE_POLICIES'
-            ? 'Tiền điện (3.800 VND/kWh)'
-            : group === 'ASSET_TEMPLATES'
-            ? 'Định mức Studio tiêu chuẩn'
-            : group === 'HOUSE_RULES'
-            ? 'Giờ giấc & Giờ yên tĩnh'
-            : `${meta.title} — Mục mẫu A`,
+              ? 'Tiền điện (3.800 VND/kWh)'
+              : group === 'ASSET_TEMPLATES'
+                ? 'Định mức Studio tiêu chuẩn'
+                : group === 'HOUSE_RULES'
+                  ? 'Giờ giấc & Giờ yên tĩnh'
+                  : `${meta.title} — Mục mẫu A`,
         sourceValue: 'Đang áp dụng tại cơ sở nguồn',
         destinationValue: destLocation ? 'Đã có cấu hình khác' : 'Chưa thiết lập',
-        conflictStatus: destLocation ? ('DIFFERENT' as CopyConflictStatus) : ('NEW' as CopyConflictStatus),
+        conflictStatus: destLocation
+          ? ('DIFFERENT' as CopyConflictStatus)
+          : ('NEW' as CopyConflictStatus),
         action: actionChoices[group] || 'COPY',
       },
       {
@@ -252,12 +250,12 @@ export function CopyConfigurationWizard({
           group === 'ROOM_TYPES'
             ? 'Phòng Gác lửng Cao cấp'
             : group === 'FEE_POLICIES'
-            ? 'Tiền nước (22.000 VND/m³)'
-            : group === 'ASSET_TEMPLATES'
-            ? 'Định mức Căn hộ 1PN'
-            : group === 'HOUSE_RULES'
-            ? 'Quy định khách thăm & qua đêm'
-            : `${meta.title} — Mục mẫu B`,
+              ? 'Tiền nước (22.000 VND/m³)'
+              : group === 'ASSET_TEMPLATES'
+                ? 'Định mức Căn hộ 1PN'
+                : group === 'HOUSE_RULES'
+                  ? 'Quy định khách thăm & qua đêm'
+                  : `${meta.title} — Mục mẫu B`,
         sourceValue: 'Đang áp dụng tại cơ sở nguồn',
         destinationValue: 'Chưa thiết lập',
         conflictStatus: 'NEW' as CopyConflictStatus,
@@ -292,7 +290,9 @@ export function CopyConfigurationWizard({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <DialogTitle
+        sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
         <Stack direction="row" spacing={1.5} alignItems="center">
           <Box
             sx={{
@@ -312,7 +312,8 @@ export function CopyConfigurationWizard({
               Công cụ sao chép cấu hình cơ sở (Copy Configuration Wizard)
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Tái sử dụng mẫu loại phòng, định mức trang bị, biểu phí điện nước và nội quy giữa các cơ sở
+              Tái sử dụng mẫu loại phòng, định mức trang bị, biểu phí điện nước và nội quy giữa các
+              cơ sở
             </Typography>
           </Box>
         </Stack>
@@ -343,11 +344,14 @@ export function CopyConfigurationWizard({
               Bước 1: Chọn cơ sở nguồn & Cơ sở đích tiếp nhận
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Chọn một cơ sở đã thiết lập hoàn chỉnh để kế thừa cấu hình mẫu. Các dữ liệu hợp đồng khách thuê,
-              giao dịch thanh toán và hồ sơ cá nhân sẽ không bị sao chép.
+              Chọn một cơ sở đã thiết lập hoàn chỉnh để kế thừa cấu hình mẫu. Các dữ liệu hợp đồng
+              khách thuê, giao dịch thanh toán và hồ sơ cá nhân sẽ không bị sao chép.
             </Typography>
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 750, mb: 1.5, color: 'text.secondary' }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 750, mb: 1.5, color: 'text.secondary' }}
+            >
               Chọn cơ sở nguồn (Sao chép từ):
             </Typography>
 
@@ -355,8 +359,12 @@ export function CopyConfigurationWizard({
               {locations.map((loc) => {
                 const isSelected = loc.id === sourceId;
                 const locRooms = db.records.rooms.filter((r) => r.locationId === loc.id);
-                const occupiedRooms = locRooms.filter((r) => r.status.includes('thuê') || r.status === 'OCCUPIED');
-                const occRate = locRooms.length ? Math.round((occupiedRooms.length / locRooms.length) * 100) : 85;
+                const occupiedRooms = locRooms.filter(
+                  (r) => r.status.includes('thuê') || r.status === 'OCCUPIED',
+                );
+                const occRate = locRooms.length
+                  ? Math.round((occupiedRooms.length / locRooms.length) * 100)
+                  : 85;
 
                 return (
                   <Grid item xs={12} md={4} key={loc.id}>
@@ -383,11 +391,19 @@ export function CopyConfigurationWizard({
                         <Typography variant="subtitle1" sx={{ fontWeight: 800, mt: 1 }}>
                           {loc.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mb: 1.5 }}
+                        >
                           {loc.attributes.address || 'Chưa cập nhật địa chỉ'}
                         </Typography>
 
-                        <Stack direction="row" spacing={2} sx={{ pt: 1, borderTop: '1px dashed #e2e8f0' }}>
+                        <Stack
+                          direction="row"
+                          spacing={2}
+                          sx={{ pt: 1, borderTop: '1px dashed #e2e8f0' }}
+                        >
                           <Box>
                             <Typography variant="caption" color="text.secondary">
                               Số phòng
@@ -400,7 +416,10 @@ export function CopyConfigurationWizard({
                             <Typography variant="caption" color="text.secondary">
                               Lấp đầy
                             </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 750, color: 'success.main' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 750, color: 'success.main' }}
+                            >
                               {occRate}%
                             </Typography>
                           </Box>
@@ -422,7 +441,10 @@ export function CopyConfigurationWizard({
 
             <Divider sx={{ my: 3 }} />
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 750, mb: 1.5, color: 'text.secondary' }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 750, mb: 1.5, color: 'text.secondary' }}
+            >
               Chọn cơ sở đích (Sao chép đến):
             </Typography>
 
@@ -467,13 +489,19 @@ export function CopyConfigurationWizard({
         {/* STEP 2: Choose What to Copy */}
         {activeStep === 1 && (
           <Box>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 1.5 }}
+            >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Bước 2: Chọn các nhóm cấu hình cần sao chép
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Cơ sở nguồn: <strong>{sourceLocation?.name}</strong> · Tích chọn các thành phần bạn muốn nhân bản.
+                  Cơ sở nguồn: <strong>{sourceLocation?.name}</strong> · Tích chọn các thành phần
+                  bạn muốn nhân bản.
                 </Typography>
               </Box>
               <Stack direction="row" spacing={1}>
@@ -547,7 +575,12 @@ export function CopyConfigurationWizard({
                         {meta.description}
                       </Typography>
 
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        sx={{ mt: 1 }}
+                      >
                         <Chip
                           size="small"
                           label={`${count} mục`}
@@ -559,7 +592,10 @@ export function CopyConfigurationWizard({
                           }}
                         />
                         {isChecked && (
-                          <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 750 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ color: 'primary.main', fontWeight: 750 }}
+                          >
                             Đã chọn
                           </Typography>
                         )}
@@ -591,7 +627,8 @@ export function CopyConfigurationWizard({
 
             <Alert severity="info" icon={<Scale size={18} />} sx={{ mb: 2.5, borderRadius: 2 }}>
               Mô phỏng kiểm tra xung đột: Các mục được đánh dấu <strong>Khác cấu hình</strong> hoặc{' '}
-              <strong>Đã tồn tại</strong> có thể được tạo thành phiên bản mới hoặc bỏ qua để giữ nguyên đặc thù của cơ sở đích.
+              <strong>Đã tồn tại</strong> có thể được tạo thành phiên bản mới hoặc bỏ qua để giữ
+              nguyên đặc thù của cơ sở đích.
             </Alert>
 
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2.5 }}>
@@ -607,7 +644,7 @@ export function CopyConfigurationWizard({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {previewData.map((groupPreview) => (
+                  {previewData.map((groupPreview) =>
                     groupPreview.items.map((item, itemIdx) => {
                       const conflictBadge = CONFLICT_CONFIG[item.conflictStatus];
                       const currentAction = actionChoices[groupPreview.group] || 'COPY';
@@ -634,9 +671,7 @@ export function CopyConfigurationWizard({
                               />
                             </TableCell>
                           )}
-                          <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>
-                            {item.name}
-                          </TableCell>
+                          <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>{item.name}</TableCell>
                           <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
                             {item.sourceValue}
                           </TableCell>
@@ -670,8 +705,8 @@ export function CopyConfigurationWizard({
                           </TableCell>
                         </TableRow>
                       );
-                    })
-                  ))}
+                    }),
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -725,7 +760,11 @@ export function CopyConfigurationWizard({
                 </Grid>
                 <Grid item xs={12}>
                   <Divider sx={{ my: 1 }} />
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mb: 1 }}
+                  >
                     Các nhóm cấu hình đã chọn ({selectedGroups.length} nhóm):
                   </Typography>
                   <Stack direction="row" flexWrap="wrap" gap={1}>
@@ -751,9 +790,10 @@ export function CopyConfigurationWizard({
                 Nguyên tắc phân lập cấu hình độc lập
               </Typography>
               <Typography variant="body2">
-                Sau khi sao chép hoàn tất, cơ sở đích hoạt động hoàn toàn độc lập. Mọi chỉnh sửa giá phòng hoặc nội quy
-                tại <strong>{destLocation ? destLocation.name : newTargetName}</strong> sẽ không gây ảnh hưởng đến dữ liệu
-                của cơ sở nguồn <strong>{sourceLocation?.name}</strong>.
+                Sau khi sao chép hoàn tất, cơ sở đích hoạt động hoàn toàn độc lập. Mọi chỉnh sửa giá
+                phòng hoặc nội quy tại{' '}
+                <strong>{destLocation ? destLocation.name : newTargetName}</strong> sẽ không gây ảnh
+                hưởng đến dữ liệu của cơ sở nguồn <strong>{sourceLocation?.name}</strong>.
               </Typography>
             </Alert>
           </Box>

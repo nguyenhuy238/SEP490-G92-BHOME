@@ -2,8 +2,6 @@ import { useState } from 'react';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   Dialog,
   DialogActions,
@@ -11,7 +9,6 @@ import {
   DialogTitle,
   Divider,
   Grid,
-  IconButton,
   InputAdornment,
   LinearProgress,
   MenuItem,
@@ -21,33 +18,34 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  AlertCircle,
   ArrowRight,
   Building2,
   CheckCircle2,
   Copy,
   DoorOpen,
   Edit2,
-  Filter,
-  Layers3,
   Plus,
   Search,
-  Sparkles,
   TrendingUp,
   UserRound,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
-import { usePortalData } from '../../../hooks/usePortalData';
-import type { DemoDatabase, PortalRecord } from '../../../types/portal';
+import { usePortalAction, usePortalData } from '../../../hooks/usePortalData';
+import { makeRecord } from '../../../services/mock/seed';
+import type { PortalRecord } from '../../../types/portal';
 import { CopyConfigurationWizard } from '../components/CopyConfigurationWizard';
-import { InitialLocationSetupWizard } from '../components/InitialLocationSetupWizard';
+import {
+  InitialLocationSetupWizard,
+  type InitialLocationSetupResult,
+} from '../components/InitialLocationSetupWizard';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
 
 export function LocationsListPage() {
   const portal = usePortal();
   const query = usePortalData();
+  const action = usePortalAction();
   const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,48 +97,58 @@ export function LocationsListPage() {
     setIsCopyWizardOpen(true);
   };
 
-  const handleSetupComplete = (newLocationRecord: PortalRecord, wizardData: any) => {
-    db.records.locations.push(newLocationRecord);
-    if (wizardData.roomTypes) {
-      wizardData.roomTypes.forEach((rt: any) => {
-        db.records['room-types'].push({
-          id: `${rt.id}-${newLocationRecord.id}`,
-          code: `${newLocationRecord.code}-${rt.code}`,
-          name: rt.name,
-          locationId: newLocationRecord.id,
-          status: 'Đang áp dụng',
-          amount: rt.defaultRate,
-          attributes: {
-            area: String(rt.area),
-            maxOccupants: String(rt.maxOccupants),
-            amenities: rt.facilities?.join(' · ') || 'Wifi',
-          },
-        });
-      });
-    }
+  const handleSetupComplete = (
+    newLocationRecord: PortalRecord,
+    wizardData: InitialLocationSetupResult,
+  ) => {
+    const roomTypes = wizardData.roomTypes.map((roomType) =>
+      makeRecord('room-types', {
+        id: `${roomType.id}-${newLocationRecord.id}`,
+        code: `${newLocationRecord.code}-${roomType.code}`,
+        name: roomType.name,
+        locationId: newLocationRecord.id,
+        status: 'Đang áp dụng',
+        amount: roomType.defaultRate,
+        attributes: {
+          area: String(roomType.area),
+          maxOccupants: String(roomType.maxOccupants),
+          amenities: roomType.facilities?.join(' · ') || 'Wifi',
+        },
+      }),
+    );
+    const rooms = wizardData.rooms.map((room) =>
+      makeRecord('rooms', {
+        id: `room-${newLocationRecord.id}-${room.code}`,
+        code: room.code,
+        name: `Phòng ${room.code}`,
+        locationId: newLocationRecord.id,
+        category: `${room.roomTypeId}-${newLocationRecord.id}`,
+        amount: 5500000,
+        status: 'Trống khai thác',
+        attributes: {
+          floor: String(room.floor),
+          area: '25',
+          maxOccupants: '2',
+          setupStatus: 'READY',
+        },
+      }),
+    );
 
-    if (wizardData.rooms) {
-      wizardData.rooms.forEach((r: any) => {
-        db.records.rooms.push({
-          id: `room-${newLocationRecord.id}-${r.code}`,
-          code: r.code,
-          name: `Phòng ${r.code}`,
-          locationId: newLocationRecord.id,
-          category: `type-studio-${newLocationRecord.id}`,
-          amount: 5500000,
-          status: 'Trống khai thác',
-          attributes: {
-            floor: String(r.floor),
-            area: '25',
-            maxOccupants: '2',
-            setupStatus: 'READY',
-          },
-        });
-      });
-    }
-
-    setSuccessToast(`Đã tạo và kích hoạt thành công cơ sở "${newLocationRecord.name}".`);
-    navigate(`/locations/${newLocationRecord.id}/overview`);
+    action.mutate(
+      async () => {
+        await portal.repository.save('locations', newLocationRecord);
+        await Promise.all([
+          ...roomTypes.map((roomType) => portal.repository.save('room-types', roomType)),
+          ...rooms.map((room) => portal.repository.save('rooms', room)),
+        ]);
+      },
+      {
+        onSuccess: () => {
+          setSuccessToast(`Đã tạo và kích hoạt thành công cơ sở "${newLocationRecord.name}".`);
+          navigate(`/locations/${newLocationRecord.id}/overview`);
+        },
+      },
+    );
   };
 
   const handleCopySuccess = (result: {
@@ -157,12 +165,13 @@ export function LocationsListPage() {
 
   const handleSaveQuickEdit = () => {
     if (editingLocation) {
-      const idx = db.records.locations.findIndex((l) => l.id === editingLocation.id);
-      if (idx >= 0) {
-        db.records.locations[idx] = structuredClone(editingLocation);
-      }
-      setEditingLocation(null);
-      setSuccessToast(`Đã lưu thay đổi cho cơ sở "${editingLocation.name}".`);
+      const updatedLocation = structuredClone(editingLocation);
+      action.mutate(() => portal.repository.save('locations', updatedLocation), {
+        onSuccess: () => {
+          setEditingLocation(null);
+          setSuccessToast(`Đã lưu thay đổi cho cơ sở "${updatedLocation.name}".`);
+        },
+      });
     }
   };
 
@@ -311,7 +320,12 @@ export function LocationsListPage() {
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750 }}>
                   TỶ LỆ LẤP ĐẦY TOÀN CHUỖI
                 </Typography>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mt: 0.5 }}
+                >
                   <Typography variant="h4" sx={{ fontWeight: 850, color: 'primary.main' }}>
                     {overallOccupancy}%
                   </Typography>
@@ -403,7 +417,12 @@ export function LocationsListPage() {
                 }}
               >
                 {/* Header with Badges */}
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 1.5 }}
+                >
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Box
                       sx={{
@@ -469,7 +488,12 @@ export function LocationsListPage() {
                 <Divider sx={{ mb: 2 }} />
 
                 {/* Occupancy and Room Metrics */}
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 0.75 }}
+                >
                   <Typography variant="caption" color="text.secondary">
                     {occupied}/{locRooms.length || 24} phòng đang thuê ({available} phòng trống)
                   </Typography>
@@ -486,8 +510,18 @@ export function LocationsListPage() {
                 />
 
                 {/* Manager & Configuration Status */}
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: 'text.secondary' }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 2 }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    alignItems="center"
+                    sx={{ color: 'text.secondary' }}
+                  >
                     <UserRound size={14} />
                     <Typography variant="caption" sx={{ fontWeight: 700 }} noWrap>
                       {manager}
@@ -569,8 +603,15 @@ export function LocationsListPage() {
 
       {/* Quick Edit Dialog */}
       {editingLocation && (
-        <Dialog open={!!editingLocation} onClose={() => setEditingLocation(null)} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ fontWeight: 800 }}>Chỉnh sửa thông tin cơ sở: {editingLocation.name}</DialogTitle>
+        <Dialog
+          open={!!editingLocation}
+          onClose={() => setEditingLocation(null)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 800 }}>
+            Chỉnh sửa thông tin cơ sở: {editingLocation.name}
+          </DialogTitle>
           <DialogContent sx={{ py: 2 }}>
             <Grid container spacing={2}>
               <Grid item xs={8}>
@@ -627,7 +668,9 @@ export function LocationsListPage() {
                   size="small"
                   label="Trạng thái vận hành"
                   value={editingLocation.status}
-                  onChange={(e) => setEditingLocation({ ...editingLocation, status: e.target.value })}
+                  onChange={(e) =>
+                    setEditingLocation({ ...editingLocation, status: e.target.value })
+                  }
                 >
                   <MenuItem value="Đang vận hành">Đang vận hành</MenuItem>
                   <MenuItem value="Tạm ngừng">Tạm ngừng</MenuItem>

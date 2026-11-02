@@ -3,14 +3,7 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
   Grid,
   IconButton,
   MenuItem,
@@ -29,12 +22,10 @@ import {
 } from '@mui/material';
 import {
   Bath,
-  CheckCircle2,
   DoorClosed,
   Flame,
   Layers3,
   Package,
-  Plus,
   Refrigerator,
   ShowerHead,
   Sparkles,
@@ -58,25 +49,77 @@ interface LocationAssetsTabProps {
 }
 
 export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'templates' | 'assignment'>('assignment');
+  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'templates' | 'assignment'>(
+    'assignment',
+  );
 
-  const [assetCatalog, setAssetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
+  const [assetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
   const [selectedRoomType, setSelectedRoomType] = useState<string>('type-studio');
-  const [roomTypeTemplates, setRoomTypeTemplates] = useState(INITIAL_ROOM_TYPE_REQUIREMENTS);
+  const [roomTypeTemplates] = useState(INITIAL_ROOM_TYPE_REQUIREMENTS);
 
   // Mock initial room assignments
   const rooms = db.records.rooms.filter((r) => r.locationId === location.id);
-  const roomCodes = rooms.length ? rooms.map((r) => r.code) : ['P.101', 'P.102', 'P.201', 'P.202', 'P.301'];
+  const roomCodes = rooms.length
+    ? rooms.map((r) => r.code)
+    : ['P.101', 'P.102', 'P.201', 'P.202', 'P.301'];
 
   const [assignments, setAssignments] = useState<RoomAssetAssignmentDraft[]>([
-    { roomCode: 'P.101', catalogId: 'cat-ac', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.101', catalogId: 'cat-fridge', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.101', catalogId: 'cat-bed', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.101', catalogId: 'cat-heater', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.102', catalogId: 'cat-ac', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.102', catalogId: 'cat-fridge', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.201', catalogId: 'cat-ac', quantity: 1, condition: 'Active', source: 'TEMPLATE' },
-    { roomCode: 'P.201', catalogId: 'cat-tv', quantity: 1, condition: 'Active', source: 'OVERRIDE' },
+    {
+      roomCode: 'P.101',
+      catalogId: 'cat-ac',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.101',
+      catalogId: 'cat-fridge',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.101',
+      catalogId: 'cat-bed',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.101',
+      catalogId: 'cat-heater',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.102',
+      catalogId: 'cat-ac',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.102',
+      catalogId: 'cat-fridge',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.201',
+      catalogId: 'cat-ac',
+      quantity: 1,
+      condition: 'Active',
+      source: 'TEMPLATE',
+    },
+    {
+      roomCode: 'P.201',
+      catalogId: 'cat-tv',
+      quantity: 1,
+      condition: 'Active',
+      source: 'OVERRIDE',
+    },
   ]);
 
   const [filterRoom, setFilterRoom] = useState<string>('ALL');
@@ -100,7 +143,9 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
     });
 
     setAssignments(newItems);
-    setApplyNotification(`Đã áp dụng định mức gồm ${templateReqs.length} hạng mục thiết bị cho toàn bộ ${roomCodes.length} phòng.`);
+    setApplyNotification(
+      `Đã áp dụng định mức gồm ${templateReqs.length} hạng mục thiết bị cho toàn bộ ${roomCodes.length} phòng.`,
+    );
   };
 
   const getAssetIcon = (id: string) => {
@@ -128,9 +173,8 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
     }
   };
 
-  const filteredAssignments = filterRoom === 'ALL'
-    ? assignments
-    : assignments.filter((a) => a.roomCode === filterRoom);
+  const filteredAssignments =
+    filterRoom === 'ALL' ? assignments : assignments.filter((a) => a.roomCode === filterRoom);
 
   return (
     <Box>
@@ -140,9 +184,24 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
           onChange={(_, val) => setActiveSubTab(val)}
           sx={{ borderBottom: '1px solid #e2e8f0' }}
         >
-          <Tab value="assignment" label="Phân bổ tài sản vào phòng (Cấp 3)" icon={<Package size={16} />} iconPosition="start" />
-          <Tab value="templates" label="Định mức theo loại phòng (Cấp 2)" icon={<Layers3 size={16} />} iconPosition="start" />
-          <Tab value="catalog" label="Danh mục tài sản mẫu (Cấp 1)" icon={<DoorClosed size={16} />} iconPosition="start" />
+          <Tab
+            value="assignment"
+            label="Phân bổ tài sản vào phòng (Cấp 3)"
+            icon={<Package size={16} />}
+            iconPosition="start"
+          />
+          <Tab
+            value="templates"
+            label="Định mức theo loại phòng (Cấp 2)"
+            icon={<Layers3 size={16} />}
+            iconPosition="start"
+          />
+          <Tab
+            value="catalog"
+            label="Danh mục tài sản mẫu (Cấp 1)"
+            icon={<DoorClosed size={16} />}
+            iconPosition="start"
+          />
         </Tabs>
 
         {activeSubTab === 'assignment' && (
@@ -188,7 +247,8 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
               </TextField>
 
               <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                Tổng tài sản đã phân bổ: <strong>{assignments.reduce((s, a) => s + a.quantity, 0)} thiết bị</strong>
+                Tổng tài sản đã phân bổ:{' '}
+                <strong>{assignments.reduce((s, a) => s + a.quantity, 0)} thiết bị</strong>
               </Typography>
             </Stack>
           </Paper>
@@ -259,13 +319,19 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
       {/* LEVEL 2: Room Type Asset Templates */}
       {activeSubTab === 'templates' && (
         <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 2.5 }}
+          >
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                 Định mức trang bị tiêu chuẩn cho từng loại phòng
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Quy định số lượng và chủng loại thiết bị bàn giao tối thiểu cho từng phân khúc phòng.
+                Quy định số lượng và chủng loại thiết bị bàn giao tối thiểu cho từng phân khúc
+                phòng.
               </Typography>
             </Box>
 
@@ -353,7 +419,11 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                       </Typography>
                       <Chip size="small" label={item.category} sx={{ fontSize: 10 }} />
                     </Stack>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mt: 0.5, mb: 1 }}
+                    >
                       {item.description}
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 800, color: 'primary.main' }}>

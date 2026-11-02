@@ -10,35 +10,19 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  AlertCircle,
-  ArrowRight,
   BadgeDollarSign,
-  BedDouble,
-  Building2,
-  Calendar,
   CheckCircle2,
-  Clock,
   Copy,
   DoorOpen,
   Layers3,
   Package,
-  Plus,
-  Scale,
   ScrollText,
   Sparkles,
   TrendingUp,
-  TriangleAlert,
-  UserRound,
-  UsersRound,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
-import {
-  roomStatus,
-  roomStatuses,
-  roomSummary,
-  type RoomStatus,
-} from '../../../property/model';
+import { roomStatus, roomStatuses } from '../../../property/model';
 import { currency } from '../../../property/propertyUtils';
 import { MOCK_OCCUPANCY_TREND } from '../../mock/locationConfigMock';
 
@@ -75,9 +59,9 @@ export function LocationOverviewTab({
     db.records.staff.find((s) => s.locationId === location.id)?.name ||
     'Chưa phân công';
 
-  const floors = [
-    ...new Set(rooms.map((room) => room.attributes.floor || '1')),
-  ].sort((a, b) => Number(b) - Number(a));
+  const floors = [...new Set(rooms.map((room) => room.attributes.floor || '1'))].sort(
+    (a, b) => Number(b) - Number(a),
+  );
 
   return (
     <Box>
@@ -109,12 +93,16 @@ export function LocationOverviewTab({
               {location.name}
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-              {location.attributes.address || 'Chưa cập nhật địa chỉ'} · {location.attributes.floors || 4}{' '}
-              tầng · Phụ trách: {manager}
+              {location.attributes.address || 'Chưa cập nhật địa chỉ'} ·{' '}
+              {location.attributes.floors || 4} tầng · Phụ trách: {manager}
             </Typography>
           </Grid>
           <Grid item xs={12} md={4}>
-            <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
+            >
               <Button
                 variant="contained"
                 onClick={onLaunchSetupWizard}
@@ -255,13 +243,19 @@ export function LocationOverviewTab({
         {/* Occupancy Trend Chart */}
         <Grid item xs={12} md={7}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, height: '100%' }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 2 }}
+            >
               <Box>
                 <Typography
                   variant="subtitle1"
                   sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}
                 >
-                  <TrendingUp size={20} color="#255dde" /> Biến động tỷ lệ lấp đầy (6 tháng gần nhất)
+                  <TrendingUp size={20} color="#255dde" /> Biến động tỷ lệ lấp đầy (6 tháng gần
+                  nhất)
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Biểu đồ theo dõi công suất khai thác và xu hướng cư trú thực tế
@@ -381,7 +375,12 @@ export function LocationOverviewTab({
                       Định mức tài sản
                     </Typography>
                   </Stack>
-                  <Chip size="small" label="10 thiết bị danh mục" color="success" sx={{ fontSize: 11 }} />
+                  <Chip
+                    size="small"
+                    label="10 thiết bị danh mục"
+                    color="success"
+                    sx={{ fontSize: 11 }}
+                  />
                 </Stack>
               </Paper>
 
@@ -393,7 +392,12 @@ export function LocationOverviewTab({
                       Giá thuê & Biểu phí
                     </Typography>
                   </Stack>
-                  <Chip size="small" label="6 biểu phí đang áp dụng" color="success" sx={{ fontSize: 11 }} />
+                  <Chip
+                    size="small"
+                    label="6 biểu phí đang áp dụng"
+                    color="success"
+                    sx={{ fontSize: 11 }}
+                  />
                 </Stack>
               </Paper>
 
@@ -405,7 +409,12 @@ export function LocationOverviewTab({
                       Nội quy & Quy định
                     </Typography>
                   </Stack>
-                  <Chip size="small" label="Phiên bản V1 hiệu lực" color="info" sx={{ fontSize: 11 }} />
+                  <Chip
+                    size="small"
+                    label="Phiên bản V1 hiệu lực"
+                    color="info"
+                    sx={{ fontSize: 11 }}
+                  />
                 </Stack>
               </Paper>
             </Stack>
@@ -428,7 +437,8 @@ export function LocationOverviewTab({
               Không gian phòng theo tầng
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Chọn Room Card để xem chi tiết phòng, hiện trạng tài sản và thông tin hợp đồng đang thuê.
+              Chọn Room Card để xem chi tiết phòng, hiện trạng tài sản và thông tin hợp đồng đang
+              thuê.
             </Typography>
           </Box>
         </Stack>
@@ -465,7 +475,6 @@ export function LocationOverviewTab({
                 {floorRooms.map((room) => {
                   const status = roomStatus(room);
                   const config = roomStatuses[status];
-                  const summary = roomSummary(db, room);
                   const type = db.records['room-types'].find((item) => item.id === room.category);
 
                   return (

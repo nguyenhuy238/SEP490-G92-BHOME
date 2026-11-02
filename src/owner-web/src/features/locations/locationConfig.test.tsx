@@ -1,17 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
 import { theme } from '../../theme/theme';
 import { prepareProperty } from '../property/mockProperty';
 import { createSeed } from '../../services/mock/seed';
-import { InitialLocationSetupWizard } from './components/InitialLocationSetupWizard';
 import { CopyConfigurationWizard } from './components/CopyConfigurationWizard';
 import { PolicyVersioningDialog } from './components/PolicyVersioningDialog';
 import { LocationOverviewTab } from './components/tabs/LocationOverviewTab';
 import { LocationPricingTab } from './components/tabs/LocationPricingTab';
-import { LocationRulesTab } from './components/tabs/LocationRulesTab';
 import { LocationHistoryTab } from './components/tabs/LocationHistoryTab';
 import type { HouseRuleItem } from './types/locationConfig';
 
@@ -96,16 +94,13 @@ describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', 
   it('renders Copy Configuration Wizard with 4 steps in Vietnamese', () => {
     render(
       <ThemeProvider theme={theme}>
-        <CopyConfigurationWizard
-          open={true}
-          onClose={vi.fn()}
-          db={db}
-          onCopySuccess={vi.fn()}
-        />
+        <CopyConfigurationWizard open={true} onClose={vi.fn()} db={db} onCopySuccess={vi.fn()} />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText(/Bước 1: Chọn cơ sở nguồn & Cơ sở đích tiếp nhận/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Bước 1: Chọn cơ sở nguồn & Cơ sở đích tiếp nhận/i),
+    ).toBeInTheDocument();
     expect(screen.getByText('Chọn cơ sở nguồn (Sao chép từ):')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Tiếp tục/i }));
@@ -133,14 +128,16 @@ describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', 
 
     fireEvent.click(screen.getByRole('tab', { name: /Biểu phí điện, nước & Dịch vụ/i }));
 
-    expect(screen.getByText(/Cảnh báo quy định biểu giá điện & nước sinh hoạt của Nhà nước/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cảnh báo quy định biểu giá điện & nước sinh hoạt của Nhà nước/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Mô phỏng chi phí hàng tháng của phòng/i)).toBeInTheDocument();
   });
 
   it('renders Operational History Tab in Vietnamese with timeline', () => {
     render(
       <ThemeProvider theme={theme}>
-        <LocationHistoryTab db={db} location={sampleLocation} />
+        <LocationHistoryTab />
       </ThemeProvider>,
     );
 

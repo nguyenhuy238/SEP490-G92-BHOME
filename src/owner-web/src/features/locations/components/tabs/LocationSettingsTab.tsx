@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   Divider,
   Grid,
   MenuItem,
@@ -12,45 +11,51 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  Building2,
-  CheckCircle2,
-  Copy,
-  Save,
-  Settings,
-  Sparkles,
-} from 'lucide-react';
-import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
+import { Copy, Save, Settings } from 'lucide-react';
+import { usePortal } from '../../../../app/PortalProvider';
+import { usePortalAction } from '../../../../hooks/usePortalData';
+import type { PortalRecord } from '../../../../types/portal';
 
 interface LocationSettingsTabProps {
-  db: DemoDatabase;
   location: PortalRecord;
   onLaunchCopyWizard: () => void;
 }
 
-export function LocationSettingsTab({
-  db,
-  location,
-  onLaunchCopyWizard,
-}: LocationSettingsTabProps) {
+export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSettingsTabProps) {
+  const portal = usePortal();
+  const action = usePortalAction();
   const [name, setName] = useState(location.name);
   const [code, setCode] = useState(location.code);
   const [address, setAddress] = useState(location.attributes.address || '');
   const [floors, setFloors] = useState(location.attributes.floors || '4');
   const [phone, setPhone] = useState(location.attributes.phone || '0908 123 456');
   const [email, setEmail] = useState(location.attributes.email || 'property@bhome.vn');
-  const [status, setStatus] = useState(location.status.includes('vận hành') ? 'ACTIVE' : 'PREPARING');
+  const [status, setStatus] = useState(
+    location.status.includes('vận hành') ? 'ACTIVE' : 'PREPARING',
+  );
   const [saveNotice, setSaveNotice] = useState(false);
 
   const handleSave = () => {
-    location.name = name;
-    location.code = code;
-    location.attributes.address = address;
-    location.attributes.floors = floors;
-    location.attributes.phone = phone;
-    location.attributes.email = email;
-    setSaveNotice(true);
-    setTimeout(() => setSaveNotice(false), 4000);
+    const updatedLocation: PortalRecord = {
+      ...location,
+      name,
+      code,
+      status: status === 'ACTIVE' ? 'Đang vận hành' : 'Chuẩn bị vận hành',
+      attributes: {
+        ...location.attributes,
+        address,
+        floors,
+        phone,
+        email,
+      },
+    };
+
+    action.mutate(() => portal.repository.save('locations', updatedLocation), {
+      onSuccess: () => {
+        setSaveNotice(true);
+        setTimeout(() => setSaveNotice(false), 4000);
+      },
+    });
   };
 
   return (
@@ -65,7 +70,10 @@ export function LocationSettingsTab({
         {/* Core Settings Form */}
         <Grid item xs={12} md={8}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, bgcolor: '#ffffff' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 800, mb: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}
+            >
               <Settings size={20} color="#255dde" /> Thông tin thuộc tính cơ sở
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -147,7 +155,12 @@ export function LocationSettingsTab({
             <Divider sx={{ my: 3 }} />
 
             <Stack direction="row" justifyContent="flex-end" spacing={1.5}>
-              <Button variant="contained" onClick={handleSave} startIcon={<Save size={16} />}>
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                startIcon={<Save size={16} />}
+                disabled={action.isPending}
+              >
                 Lưu thay đổi
               </Button>
             </Stack>
@@ -157,11 +170,15 @@ export function LocationSettingsTab({
         {/* Clone & Export Actions */}
         <Grid item xs={12} md={4}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
+            >
               <Copy size={18} color="#255dde" /> Sao chép cấu hình cơ sở
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Nhân bản loại phòng, biểu phí điện nước, định mức trang bị và nội quy từ cơ sở này sang cơ sở khác trong chuỗi BHOME.
+              Nhân bản loại phòng, biểu phí điện nước, định mức trang bị và nội quy từ cơ sở này
+              sang cơ sở khác trong chuỗi BHOME.
             </Typography>
 
             <Button

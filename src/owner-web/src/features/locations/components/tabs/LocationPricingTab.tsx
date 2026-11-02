@@ -10,9 +10,7 @@ import {
   DialogTitle,
   Divider,
   Grid,
-  IconButton,
   InputAdornment,
-  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -26,20 +24,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  AlertTriangle,
-  BadgeDollarSign,
-  CheckCircle2,
-  Coins,
-  Edit2,
-  Info,
-  Scale,
-  Sparkles,
-  Zap,
-} from 'lucide-react';
+import { AlertTriangle, BadgeDollarSign, Coins, Edit2, Scale } from 'lucide-react';
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
 import { INITIAL_FEE_POLICIES, INITIAL_ROOM_TYPES } from '../../mock/locationConfigMock';
-import type { FeeCalculationMethod, FeePolicyItem } from '../../types/locationConfig';
+import type { FeePolicyItem } from '../../types/locationConfig';
 
 interface LocationPricingTabProps {
   db: DemoDatabase;
@@ -75,7 +63,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
   });
 
   // Fee Policies
-  const [feePolicies, setFeePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
+  const [feePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
 
   // Estimator preview
   const [previewKwh, setPreviewKwh] = useState<number>(140);
@@ -100,8 +88,18 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           onChange={(_, val) => setActiveSubTab(val)}
           sx={{ borderBottom: '1px solid #e2e8f0' }}
         >
-          <Tab value="rates" label="Giá thuê phòng & Điều chỉnh cá nhân" icon={<Scale size={16} />} iconPosition="start" />
-          <Tab value="fees" label="Biểu phí điện, nước & Dịch vụ" icon={<Coins size={16} />} iconPosition="start" />
+          <Tab
+            value="rates"
+            label="Giá thuê phòng & Điều chỉnh cá nhân"
+            icon={<Scale size={16} />}
+            iconPosition="start"
+          />
+          <Tab
+            value="fees"
+            label="Biểu phí điện, nước & Dịch vụ"
+            icon={<Coins size={16} />}
+            iconPosition="start"
+          />
         </Tabs>
       </Stack>
 
@@ -113,8 +111,9 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               Cơ chế phân cấp định giá phòng
             </Typography>
             <Typography variant="body2">
-              Các phòng tự động thừa hưởng đơn giá thuê từ <strong>Mẫu loại phòng</strong> đã cấu hình.
-              Chủ cơ sở có thể đặt giá thuê riêng cho từng phòng đặc thù (phòng góc, view thoáng, có ban công lớn) mà không làm thay đổi giá chuẩn của loại phòng chung.
+              Các phòng tự động thừa hưởng đơn giá thuê từ <strong>Mẫu loại phòng</strong> đã cấu
+              hình. Chủ cơ sở có thể đặt giá thuê riêng cho từng phòng đặc thù (phòng góc, view
+              thoáng, có ban công lớn) mà không làm thay đổi giá chuẩn của loại phòng chung.
             </Typography>
           </Alert>
 
@@ -134,7 +133,9 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               </TableHead>
               <TableBody>
                 {roomList.map((room) => {
-                  const rType = INITIAL_ROOM_TYPES.find((t) => t.id === (room.category || 'type-studio'));
+                  const rType = INITIAL_ROOM_TYPES.find(
+                    (t) => t.id === (room.category || 'type-studio'),
+                  );
                   const defaultRate = rType?.defaultRate || 5500000;
                   const override = rateOverrides[room.code];
                   const isOverridden = override !== undefined;
@@ -145,12 +146,18 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       <TableCell sx={{ fontWeight: 800 }}>{room.code}</TableCell>
                       <TableCell>Tầng {room.floor || 1}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={rType?.name || 'Studio'} sx={{ fontWeight: 700 }} />
+                        <Chip
+                          size="small"
+                          label={rType?.name || 'Studio'}
+                          sx={{ fontWeight: 700 }}
+                        />
                       </TableCell>
                       <TableCell sx={{ color: 'text.secondary' }}>
                         {defaultRate.toLocaleString()} VND
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 850, color: isOverridden ? '#b45309' : 'primary.main' }}>
+                      <TableCell
+                        sx={{ fontWeight: 850, color: isOverridden ? '#b45309' : 'primary.main' }}
+                      >
                         {appliedRate.toLocaleString()} VND / tháng
                       </TableCell>
                       <TableCell>
@@ -205,8 +212,10 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               Cảnh báo quy định biểu giá điện & nước sinh hoạt của Nhà nước
             </Typography>
             <Typography variant="body2">
-              Đơn giá bán lẻ điện cho người thuê nhà để ở tuân thủ theo biểu giá của EVN và hướng dẫn của Bộ Công Thương.
-              Đơn giá nước sinh hoạt căn cứ theo quy định của Ủy ban Nhân dân cấp tỉnh/thành phố. Vui lòng kiểm tra kỹ khung giá hiện hành trước khi chốt biểu phí.
+              Đơn giá bán lẻ điện cho người thuê nhà để ở tuân thủ theo biểu giá của EVN và hướng
+              dẫn của Bộ Công Thương. Đơn giá nước sinh hoạt căn cứ theo quy định của Ủy ban Nhân
+              dân cấp tỉnh/thành phố. Vui lòng kiểm tra kỹ khung giá hiện hành trước khi chốt biểu
+              phí.
             </Typography>
           </Alert>
 
@@ -230,11 +239,19 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                         <TableCell sx={{ fontWeight: 750 }}>
                           {fee.name}
                           {fee.isRegulatoryControlled && (
-                            <Chip size="small" label="Khung giá nhà nước" color="warning" sx={{ ml: 1, fontSize: 10 }} />
+                            <Chip
+                              size="small"
+                              label="Khung giá nhà nước"
+                              color="warning"
+                              sx={{ ml: 1, fontSize: 10 }}
+                            />
                           )}
                         </TableCell>
                         <TableCell>
-                          <Chip size="small" label={METHOD_LABELS[fee.calculationMethod] || fee.calculationMethod} />
+                          <Chip
+                            size="small"
+                            label={METHOD_LABELS[fee.calculationMethod] || fee.calculationMethod}
+                          />
                         </TableCell>
                         <TableCell sx={{ fontWeight: 800 }}>
                           {fee.unitPrice.toLocaleString()} {fee.unit}
@@ -255,11 +272,19 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
             {/* Estimated Monthly Charge Preview Calculator */}
             <Grid item xs={12} md={5}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 800, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+                >
                   <BadgeDollarSign size={18} /> Mô phỏng chi phí hàng tháng của phòng
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                  Mô phỏng bảng kê hóa đơn dự kiến của một khách thuê dựa trên mức tiêu thụ điện nước giả định.
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 2 }}
+                >
+                  Mô phỏng bảng kê hóa đơn dự kiến của một khách thuê dựa trên mức tiêu thụ điện
+                  nước giả định.
                 </Typography>
 
                 <Grid container spacing={1.5} sx={{ mb: 2 }}>
@@ -326,7 +351,8 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       Tổng tiền dự kiến trên hóa đơn:
                     </Typography>
                     <Typography variant="subtitle1" sx={{ fontWeight: 850, color: 'primary.main' }}>
-                      {(5500000 + previewKwh * 3800 + previewM3 * 22000 + 300000).toLocaleString()} VND
+                      {(5500000 + previewKwh * 3800 + previewM3 * 22000 + 300000).toLocaleString()}{' '}
+                      VND
                     </Typography>
                   </Stack>
                 </Stack>
@@ -338,13 +364,19 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
       {/* Override Room Rate Dialog */}
       {overrideTargetRoom && (
-        <Dialog open={!!overrideTargetRoom} onClose={() => setOverrideTargetRoom(null)} maxWidth="xs" fullWidth>
+        <Dialog
+          open={!!overrideTargetRoom}
+          onClose={() => setOverrideTargetRoom(null)}
+          maxWidth="xs"
+          fullWidth
+        >
           <DialogTitle sx={{ fontWeight: 800 }}>
             Đặt giá thuê riêng cho phòng {overrideTargetRoom}
           </DialogTitle>
           <DialogContent sx={{ py: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Nhập giá thuê áp dụng riêng cho phòng này. Mức giá này sẽ ưu tiên áp dụng khi lập hợp đồng thuê mới.
+              Nhập giá thuê áp dụng riêng cho phòng này. Mức giá này sẽ ưu tiên áp dụng khi lập hợp
+              đồng thuê mới.
             </Typography>
             <TextField
               fullWidth
