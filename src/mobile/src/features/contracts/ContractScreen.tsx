@@ -27,6 +27,7 @@ import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -37,6 +38,16 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const [page, setPage] = useState(1),
     [filter, setFilter] = useState(''),
     [revision, setRevision] = useState(0);
+  const [assignments, setAssignments] = useState<
+    {
+      contractId: string;
+      roomNumber: string;
+      locationName: string;
+      scheduledAt: string;
+      status: string;
+    }[]
+  >([]);
+  const [assignmentError, setAssignmentError] = useState('');
   const [listing, setListing] = useState<{
     data: ContractPage | null;
     error: string;
@@ -47,6 +58,22 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       transport ? contractClient((path, init, type) => transport.request(path, init, type)) : null,
     [transport],
   );
+  useEffect(() => {
+    if (!client || role !== 'Staff') return;
+    const c = new AbortController();
+    async function loadAssignments() {
+      setAssignmentError('');
+      setAssignments([]);
+      try {
+        const items = await client!.moveOutAssignments(c.signal);
+        if (!c.signal.aborted) setAssignments(items);
+      } catch (e) {
+        if (!c.signal.aborted) setAssignmentError(contractError(e));
+      }
+    }
+    void loadAssignments();
+    return () => c.abort();
+  }, [client, role, revision]);
   useEffect(() => {
     if (!client) return;
     const controller = new AbortController();
@@ -114,6 +141,26 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         title="Hợp đồng & Vòng đời"
         detail="UC-15 / UC-16 / UC-19 • Dữ liệu trong phạm vi tài khoản"
       />
+      {role === 'Staff' && (
+        <Box>
+          <Heading title="Lịch kiểm tra trả phòng được giao" />
+          {!!assignmentError && <Text style={ui.red}>{assignmentError}</Text>}
+          {!assignments.length && !assignmentError && (
+            <Text>Chưa có lịch được giao trong Location đang phụ trách.</Text>
+          )}
+          {assignments.map((a) => (
+            <Box key={a.contractId}>
+              <Text>
+                Phòng {a.roomNumber} · {a.locationName} · {formatInstant(a.scheduledAt)}
+              </Text>
+              <Text>{text(a.status)}</Text>
+              <Action onPress={() => setSelected(a.contractId)}>
+                Mở kiểm tra phòng {a.roomNumber}
+              </Action>
+            </Box>
+          ))}
+        </Box>
+      )}
       <ChoiceField
         label="Trạng thái hợp đồng"
         value={filter}
@@ -205,7 +252,9 @@ function LiveContractDetail({
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = contractActions(c, m, role, actorId);
+  const actions = contractActions(c, m, role, actorId).filter(
+    (a) => !['move-out/inspection', 'move-out/settlement'].includes(a.operation),
+  );
   const action = actions.find((a) => a.operation === selectedAction);
   const signer =
     ['Owner', 'Tenant'].includes(role) && [c.ownerSignerId, c.tenantUserId].includes(actorId);
@@ -337,7 +386,7 @@ function LiveContractDetail({
             label="Chụp và tải ảnh hiện trạng"
             reviewActionLabel="Tải ảnh trả phòng"
             reviewNotice="Ảnh được lưu riêng tư làm bằng chứng trả phòng; ảnh tạm trên thiết bị được xóa sau khi tải hoặc rời màn hình. Không chụp giấy tờ cá nhân."
-            disabled={uploading || !uploadChecked || availableEvidence.length >= 5}
+            disabled={uploading || !uploadChecked || evidence.length >= 5}
             reviewBeforeSubmit
             onCapture={async (bytes) => {
               if (uploadLock.current) return;
@@ -390,6 +439,19 @@ function LiveContractDetail({
             </View>
           ))}
         </Box>
+      )}
+      {m && (
+        <ContractLifecyclePanel
+          api={api}
+          id={id}
+          role={role}
+          moveOut={m}
+          evidenceIds={availableEvidence}
+          onChanged={() => {
+            setEvidence([]);
+            detail.reload();
+          }}
+        />
       )}
       <Box>
         <Heading title="Thao tác theo trạng thái" />
