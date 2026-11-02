@@ -70,3 +70,7 @@ plan thuộc cơ sở/kỳ: `{id,name,state,attempts,availableAt,lockedUntil,las
 Không trả PayloadJson hoặc khóa provider. Preview thêm `workerEnabled` phản ánh Jobs:Enabled
 của máy chủ đang phục vụ. UI phân biệt worker tắt với Developer Run Now, hiển thị lần thử lại
 thực tế của queue; execution PendingInputs vẫn hiển thị từng missing input bằng tiếng Việt.
+Worker nhận job theo danh sách IBackgroundJobHandler.Name đã đăng ký (`Name = ANY(...)`),
+giữ job của module chưa được triển khai ở Pending thay vì nhận rồi làm cạn retry.
+Trước khi nâng cấp demo phải dừng các binary worker cũ dùng chung database; binary trước thay đổi
+này chưa có bộ lọc handler. Lịch sử Failed do binary demo cũ nhận nhầm job được giữ nguyên.

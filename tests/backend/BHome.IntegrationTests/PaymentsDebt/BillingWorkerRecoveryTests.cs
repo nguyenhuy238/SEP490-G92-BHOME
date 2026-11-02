@@ -14,12 +14,14 @@ public sealed partial class PaymentLedgerTests
     [Fact]
     public async Task ExistingPostgresWorkerRecoversExpiredQueueAndBusinessLeasesWithoutDuplicateTasks()
     {
-        var(w,p,_)=await MeterWorkspace();var key=Guid.NewGuid().ToString();Guid executionId;
+        var(w,p,_)=await MeterWorkspace();var key=Guid.NewGuid().ToString();var unknown=Guid.NewGuid().ToString();Guid executionId;
         await using(var scope=fixture.Factory.Services.CreateAsyncScope())
         {
             var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
             var e=new BillingAutomationExecution{PlanId=p.Id,LocationId=w.Location,BillingPeriod=CurrentPeriod(),Phase="Meter",Status="Processing",Attempts=1,LastStartedAt=DateTimeOffset.UtcNow.AddMinutes(-5),LockedUntil=DateTimeOffset.UtcNow.AddMinutes(-3),LockToken=Guid.NewGuid()};db.Add(e);await db.SaveChangesAsync();executionId=e.Id;
             await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new("billing-meter",key,JsonSerializer.Serialize(new BillingJobInput(p.Id,CurrentPeriod()))),default);
+            await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new("future-module.synthetic",unknown,"{}"),default);
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BackgroundJobs\" SET \"AvailableAt\"={DateTimeOffset.UtcNow.AddDays(-2)} WHERE \"Name\"='future-module.synthetic' AND \"IdempotencyKey\"={unknown}");
             // Persisted state left by an interrupted process; the real worker performs recovery below.
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BackgroundJobs\" SET \"State\"='Processing',\"Attempts\"=1,\"LockedUntil\"={DateTimeOffset.UtcNow.AddMinutes(-3)},\"AvailableAt\"={DateTimeOffset.UtcNow.AddDays(-1)} WHERE \"Name\"='billing-meter' AND \"IdempotencyKey\"={key}");
         }
@@ -37,6 +39,7 @@ public sealed partial class PaymentLedgerTests
         {
             var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
             Assert.Equal(1,await db.Database.SqlQuery<int>($"SELECT COUNT(*)::int AS \"Value\" FROM \"BackgroundJobs\" WHERE \"Name\"='billing-meter' AND \"IdempotencyKey\"={key} AND \"State\"='Completed' AND \"Attempts\"=2").SingleAsync());
+            Assert.Equal(1,await db.Database.SqlQuery<int>($"SELECT COUNT(*)::int AS \"Value\" FROM \"BackgroundJobs\" WHERE \"Name\"='future-module.synthetic' AND \"IdempotencyKey\"={unknown} AND \"State\"='Pending' AND \"Attempts\"=0").SingleAsync());
             Assert.Equal("Completed",(await db.Set<BillingAutomationExecution>().AsNoTracking().SingleAsync(e=>e.Id==executionId)).Status);
             Assert.Contains(await db.Set<BillingAutomationAttempt>().Where(a=>a.ExecutionId==executionId).ToArrayAsync(),a=>a.Status=="LeaseExpired");
             Assert.Equal(2,await db.Set<OperationalTask>().CountAsync(t=>t.AutomationPlanId==p.Id));
