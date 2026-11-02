@@ -28,7 +28,12 @@ public sealed record TerminationInput(DateOnly ProposedDate,
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
 public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadingId,
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
-    [Required, MinLength(1), MaxLength(5)] Guid[] EvidenceIds);
+    [Required, MinLength(1), MaxLength(5)] Guid[] EvidenceIds,
+    HandoverAssetInput[]? Assets=null,string? RoomCondition=null,string? KeysAndAccess=null,int? ExpectedVersion=null);
+public sealed record InspectionReviewInput(int Version,bool Confirmed,string Reason);
+public sealed record FinalInspectionView(Guid Id,int Version,Guid BaselineContractId,int BaselineVersion,HandoverSnapshot Baseline,
+    HandoverSnapshot Observed,Guid StaffId,DateTimeOffset InspectedAt,string? OwnerDecision,string? OwnerReason,DateTimeOffset? ReviewedAt);
+public sealed record InspectionPreparation(HandoverView? Baseline,Guid? BaselineContractId,IReadOnlyList<HandoverReading> FinalReadings,bool OtherTenantsRemain);
 public sealed record SettlementInput([Required, StringLength(2000, MinimumLength = 1)] string Decision);
 public sealed record CompletionInput(DateOnly ActualEndDate);
 public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLength = 1)] string ProviderReference);
@@ -118,6 +123,8 @@ public interface IContractRepository
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);
     Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId,CancellationToken t);
+    Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId,CancellationToken t);
+    Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId,Guid roomId,DateOnly today,CancellationToken t);
     Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId,DateOnly today,CancellationToken t);
     Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t);
     Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t);

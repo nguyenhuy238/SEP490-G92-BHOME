@@ -2052,6 +2052,72 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("ContractFileUploads", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractFinalInspection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BaselineContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BaselineSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("BaselineVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("InspectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ObservedSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("OwnerDecision")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OwnerReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StaffId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaselineContractId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("ContractId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ContractFinalInspections", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractHandover", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3691,6 +3757,32 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractFinalInspection", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("BaselineContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StaffId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

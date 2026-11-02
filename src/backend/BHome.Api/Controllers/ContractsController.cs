@@ -35,6 +35,12 @@ public sealed class ContractsController(ContractService service) : ControllerBas
     public Task<IReadOnlyList<MoveOutAssignment>> Assignments(CancellationToken t)=>service.AssignmentsAsync(t);
     [HttpGet("{id:guid}/move-out/history")]
     public Task<IReadOnlyList<MoveOutHistoryView>> MoveHistory(Guid id,CancellationToken t)=>service.MoveOutHistoryAsync(id,t);
+    [HttpGet("{id:guid}/move-out/inspection-preparation"),Authorize(Roles=Roles.Owner+","+Roles.Staff)]
+    public Task<InspectionPreparation> InspectionPreparation(Guid id,CancellationToken t)=>service.InspectionPreparationAsync(id,t);
+    [HttpGet("{id:guid}/move-out/inspections")]
+    public Task<IReadOnlyList<FinalInspectionView>> Inspections(Guid id,CancellationToken t)=>service.FinalInspectionsAsync(id,t);
+    [HttpPost("{id:guid}/move-out/inspection-review"),Authorize(Roles=Roles.Owner)]
+    public Task<MoveOutView> InspectionReview(Guid id,InspectionReviewInput x,CancellationToken t)=>service.ReviewInspectionAsync(id,x,Key(),t);
     [HttpGet("{id:guid}/deposit-verifications"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<DepositVerificationView>> Deposits(Guid id, CancellationToken t) => service.DepositsAsync(id, t);
     [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

@@ -27,6 +27,11 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         return new(items, page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
+    public async Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId,CancellationToken t)=>await db.Set<ContractFinalInspection>().Where(i=>i.ContractId==contractId).OrderByDescending(i=>i.Version).Take(100).ToArrayAsync(t);
+    public async Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId,Guid roomId,DateOnly today,CancellationToken t)=>await
+        (from r in db.Set<MeterReading>().AsNoTracking() join task in db.Set<OperationalTask>() on r.TaskId equals task.Id join meter in db.Set<Meter>() on r.MeterId equals meter.Id join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
+         where task.ContractId==contractId&&meter.RoomId==roomId&&meter.IsActive&&task.Purpose==ReadingPurpose.Final&&task.ReadingDate==today&&task.Status==MeterTaskStatus.Completed&&e.IsUploaded&&e.IsLinked
+         select new HandoverReading(r.Id,meter.Code,(int)meter.UtilityType,task.ReadingDate,r.ConfirmedValue,e.Id,e.ObjectKey,e.ImageHash)).ToArrayAsync(t);
     public Task<bool> StaffAssignedAsync(Guid staffId,Guid locationId,DateOnly today,CancellationToken t)=>db.StaffLocationAssignments.AnyAsync(a=>a.StaffUserId==staffId&&a.LocationId==locationId&&a.StartDate<=today&&a.EndDate>=today,t);
     public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId,CancellationToken t)=>await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h=>h.ContractId==contractId).OrderByDescending(h=>h.Version).Take(100).ToArrayAsync(t);
     public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId,DateOnly today,CancellationToken t)=>await
@@ -85,7 +90,7 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         db.Set<DepositVerification>().SingleOrDefaultAsync(d => d.BankTransactionReference == reference, t);
     public Task<ContractMoveOut?> MoveOutAsync(Guid contractId, CancellationToken t) => db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == contractId, t);
     public async Task<IReadOnlyList<ContractInspectionEvidence>> InspectionEvidenceAsync(Guid contractId, CancellationToken t) =>
-        await db.Set<ContractInspectionEvidence>().Where(e => e.ContractId == contractId).Take(5).ToArrayAsync(t);
+        await db.Set<ContractInspectionEvidence>().Where(e => e.ContractId == contractId).Take(50).ToArrayAsync(t);
     public async Task<IReadOnlyList<ContractSettlementReview>> SettlementReviewsAsync(Guid contractId, CancellationToken t) =>
         await db.Set<ContractSettlementReview>().AsNoTracking().Where(r => r.ContractId == contractId).OrderByDescending(r => r.ReviewedAt).ThenBy(r => r.Id).Take(100).ToArrayAsync(t);
     public Task<bool> ValidFinalReadingAsync(Guid readingId, Guid contractId, Guid roomId, UtilityType type, DateOnly readingDate, CancellationToken t) =>

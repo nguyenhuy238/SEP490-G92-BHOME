@@ -131,6 +131,21 @@ public sealed class ContractMoveOutHistory : AuditableEntity
     public Guid ActorId { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
 }
+public sealed class ContractFinalInspection : AuditableEntity
+{
+    public Guid ContractId { get; set; }
+    public int Version { get; set; }
+    public Guid BaselineContractId { get; set; }
+    public int BaselineVersion { get; set; }
+    public string BaselineSnapshot { get; set; } = "{}";
+    public string ObservedSnapshot { get; set; } = "{}";
+    public Guid StaffId { get; set; }
+    public DateTimeOffset InspectedAt { get; set; }
+    public string? OwnerDecision { get; set; }
+    public string? OwnerReason { get; set; }
+    public Guid? OwnerId { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
+}
 
 // Durable upload intent, written in its own transaction before object storage is called.
 public sealed class ContractFileUpload

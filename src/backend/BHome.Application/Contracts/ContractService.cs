@@ -454,6 +454,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (await Replay(key, "inspection", new { id, x }, t) is not null) return View(m);
             if (m.Status != MoveOutStatus.Approved || m.InspectionScheduledAt is null || Today < m.ProposedDate)
                 throw ContractException.Conflict("move_out_not_ready_for_inspection");
+            if(m.InspectionStaffId is {} staff&&staff!=Actor)throw ContractException.Missing();
+            if(x.ExpectedVersion is {} expected&&expected!=m.Version)throw ContractException.Conflict("move_out_version_changed");
             if (!await repository.ValidFinalReadingAsync(x.ElectricityReadingId, c.Id, c.RoomId, UtilityType.Electricity, Today, t) ||
                 !await repository.ValidFinalReadingAsync(x.WaterReadingId, c.Id, c.RoomId, UtilityType.Water, Today, t))
                 throw ContractException.Conflict("confirmed_final_readings_required");
@@ -463,6 +465,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             foreach (var e in evidence) { await storage.CopyToAsync(e.ObjectKey, Stream.Null, t); e.IsLinked = true; }
             m.ElectricityReadingId = x.ElectricityReadingId; m.WaterReadingId = x.WaterReadingId; m.InspectionNotes = x.Notes.Trim();
             m.InspectedByUserId = Actor; m.InspectedAt = clock.GetUtcNow(); m.Status = MoveOutStatus.Inspected;
+            await RecordFinalInspection(c,m,x,t);m.Version++;MoveOutEvent(m,"Inspected");
             m.PendingReason = "financial_ledger_and_deposit_policy"; Audit("ContractMoveOutInspected", id);
             Remember(key, "inspection", new { id, x }, m.Id); return View(m);
         }, t);
@@ -533,7 +536,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return await Mutate(id, [Roles.Staff], async c =>
         {
             var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
-            if (m.Status != MoveOutStatus.Approved || (await repository.InspectionEvidenceAsync(id, t)).Count >= 5)
+            if (m.Status != MoveOutStatus.Approved || (await repository.InspectionEvidenceAsync(id, t)).Count >= 50)
                 throw ContractException.Conflict("inspection_upload_not_allowed");
             var e = new ContractInspectionEvidence { ContractId = id, UploadedByUserId = Actor, ContentType = type };
             e.ObjectKey = $"contracts/{id:N}/inspection/{e.Id:N}";
