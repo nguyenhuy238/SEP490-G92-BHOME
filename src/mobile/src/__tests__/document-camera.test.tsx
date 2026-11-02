@@ -252,7 +252,10 @@ it('discards a capture that completes after the app goes to background', async (
     />,
   );
   await screen.findByTestId('native-camera');
-  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
+  const shutter = screen.getByRole('button', { name: 'Chụp ảnh mặt trước' });
+  await waitFor(() => expect((shutter as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(shutter);
+  await waitFor(() => expect(native.take).toHaveBeenCalledOnce());
   act(() => native.listeners.forEach((cb) => cb('background')));
   await act(async () => finish({ width: 2000, height: 1200, release: native.release }));
   expect(native.files.size).toBe(0);

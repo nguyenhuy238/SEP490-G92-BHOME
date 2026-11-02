@@ -13,8 +13,13 @@ import {
 } from '../../../src/mobile/src/services/workspaceData';
 
 describe('mobile workspace access boundaries', () => {
-  it('keeps exactly Home and Profile tabs for Staff without changing other roles', () => {
-    expect(tabs.Staff.map((tab) => tab.screen)).toEqual(['staff-home', 'profile']);
+  it('keeps the four onboarding Staff tabs without changing other roles', () => {
+    expect(tabs.Staff.map((tab) => tab.screen)).toEqual([
+      'staff-home',
+      'work-orders',
+      'notifications',
+      'profile',
+    ]);
     expect(tabs.Owner).toHaveLength(4);
     expect(tabs.Tenant).toHaveLength(4);
   });

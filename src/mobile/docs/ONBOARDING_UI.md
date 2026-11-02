@@ -71,9 +71,16 @@ Test mới kiểm tra chuyển bước, giữ form, nhiều người, OCR lỗi/
 xác nhận server thất bại, xóa dữ liệu tạm khi background, chữ ký một/hai bên,
 navigation có cảnh báo và safe area bottom 24dp chỉ được cộng một lần ngoài thanh 60dp.
 
-Test cũ `tests/mobile/ocr/workspace.test.ts` vẫn yêu cầu Staff chỉ có hai tab.
-Kỳ vọng này trái yêu cầu mới bốn tab; file nằm ngoài phạm vi được phép sửa nên giữ nguyên,
-không bỏ qua hoặc loại khỏi bộ test. Test mới kiểm tra đúng bốn tab và quyền truy cập của chúng.
+Test cũ `tests/mobile/ocr/workspace.test.ts` từng yêu cầu Staff chỉ có hai tab, trái yêu cầu
+onboarding mới bốn tab. Theo yêu cầu sửa lỗi CI ngày 02/11/2026, đã cập nhật test cũ để kiểm tra
+đúng thứ tự `staff-home`, `work-orders`, `notifications`, `profile`. Không đổi navigation,
+không bỏ qua test hoặc giảm các kiểm tra phân quyền; giữ nguyên kiểm tra tab Owner/Tenant.
+Các số liệu một test thất bại ở những giai đoạn bên dưới là kết quả trước lần sửa CI này.
+
+Lượt sửa CI này cũng ổn định test chụp ảnh khi app chuyển nền: chờ shutter được bật và native
+capture đã bắt đầu trước khi phát AppState background, thay vì giả định camera sẵn sàng ngay khi mount.
+Giữ nguyên kiểm tra hủy preview, giải phóng file và không gửi ảnh. Kết quả kiểm tra lại:
+mobile 310/310 PASS; Owner Web 97/97 PASS; lint toàn dự án PASS. Không sửa code camera hoặc nghiệp vụ.
 
 Android JS/assets đã được export kiểm tra bằng Expo CLI vào `.expo/qa-android` (ignored).
 Export bundle không thay thế kiểm thử camera, bàn phím và bố cục trên điện thoại Android thực tế.
