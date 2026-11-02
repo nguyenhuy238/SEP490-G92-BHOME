@@ -59,6 +59,10 @@ export function ContractWorkflowPanel({
   contract: ContractView;
 }) {
   const id = contract.id;
+  const versions = useQuery({
+    queryKey: ['contract-versions', id, contract.status],
+    queryFn: ({ signal }) => api.versions(id, signal),
+  });
   const query = useQuery({
     queryKey: [
       'contract-workflow',
@@ -99,6 +103,23 @@ export function ContractWorkflowPanel({
   }
   return (
     <Stack spacing={2}>
+      {versions.error && (
+        <Alert severity="error">
+          {contractError(versions.error)}
+          <Button onClick={() => void versions.refetch()}>Tải lại phiên bản</Button>
+        </Alert>
+      )}
+      <ChartCard title="Các phiên bản và điều khoản" subtitle="Phiên bản cũ được giữ sau gia hạn">
+        {versions.data?.map((v) => (
+          <Stack key={v.id} spacing={1}>
+            <Typography>
+              {text(v.kind)} · {text(v.status)} · {v.startDate} → {v.endDate} ·{' '}
+              {v.monthlyRent === null ? '' : formatContractMoney(v.monthlyRent)}
+            </Typography>
+            <Typography sx={{ whiteSpace: 'pre-wrap' }}>{v.terms}</Typography>
+          </Stack>
+        ))}
+      </ChartCard>
       {query.isFetching && <LinearProgress />}
       {query.error && (
         <Alert severity="error">

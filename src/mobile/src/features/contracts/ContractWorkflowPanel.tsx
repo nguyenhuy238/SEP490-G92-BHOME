@@ -15,6 +15,7 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ContractEvidence } from './ContractEvidence';
+import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 
 export function ContractWorkflowPanel({
   api,
@@ -37,6 +38,9 @@ export function ContractWorkflowPanel({
   const [keys] = useState(() => mutationKeys(randomUUID)),
     lock = useRef(false);
   const privileged = ['Owner', 'Tenant'].includes(role);
+  const versions = useWorkspaceQuery<Awaited<ReturnType<ContractClient['versions']>>>(
+    `/api/v1/contracts/${contract.id}/versions`,
+  );
   useEffect(() => {
     const c = new AbortController();
     async function load() {
@@ -76,6 +80,20 @@ export function ContractWorkflowPanel({
   }
   return (
     <>
+      <Box>
+        <Heading title="Các phiên bản hợp đồng" />
+        {!!versions.error && <Text style={ui.red}>{versions.error}</Text>}
+        {versions.data?.map((v) => (
+          <Text key={v.id}>
+            {text(v.kind)} · {text(v.status)} · {v.startDate} → {v.endDate}
+            {v.monthlyRent !== null ? ' · ' + formatContractMoney(v.monthlyRent) : ''}
+            {v.terms ? '\n' + v.terms : ''}
+          </Text>
+        ))}
+        <Action secondary onPress={versions.reload}>
+          Tải lại phiên bản
+        </Action>
+      </Box>
       {loading && <Text>Đang tải tài liệu và lịch sử…</Text>}
       {!!error && <Text style={ui.red}>{error}</Text>}
       {privileged && (

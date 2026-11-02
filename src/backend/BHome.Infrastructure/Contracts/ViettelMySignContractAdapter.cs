@@ -86,11 +86,6 @@ internal sealed class ContractMySignAccount(IConfiguration config) : IViettelAcc
     }
 }
 
-internal sealed class PendingContractSettlementLedger : IContractSettlementLedger
-{
-    public Task<SettlementLedgerState?> ReadAsync(Guid contractId, Guid electricityReadingId, Guid waterReadingId, CancellationToken t)
-        => Task.FromResult<SettlementLedgerState?>(null);
-}
 internal sealed class UnconfiguredContractHoldingLedger : IContractHoldingLedger
 {
     public Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId, Guid tenantUserId, decimal requiredDeposit, CancellationToken t)

@@ -91,6 +91,8 @@ public static class ContractDemoSeed
         await tx.CommitAsync(t);
         await InvoiceDemoSeed.PrepareAsync(db, t);
         await PaymentDemoSeed.PrepareAsync(db, t);
+        await AdjustmentDemoSeed.PrepareAsync(db, t);
+        await ContractLifecycleDemoSeed.PrepareAsync(db,t);
         using var storage = new MinioClient().WithEndpoint(endpoint).WithCredentials(config["ObjectStorage:AccessKey"], config["ObjectStorage:SecretKey"]).Build();
         if (!await storage.BucketExistsAsync(new BucketExistsArgs().WithBucket("contract-demo"), t))
             await storage.MakeBucketAsync(new MakeBucketArgs().WithBucket("contract-demo"), t);
@@ -103,6 +105,11 @@ public static class ContractDemoSeed
             Cv2.PutText(synthetic, "100 - NOT A REAL PHOTO", new Point(20, 190), HersheyFonts.HersheySimplex, 0.8, Scalar.Black, 2);
             await File.WriteAllBytesAsync(System.IO.Path.Combine(artifacts, "synthetic-evidence.png"), synthetic.ImEncode(".png"), t);
         }
-        Console.WriteLine("Đã seed/kiểm tra fixture hợp đồng. Tài khoản owner/staff/tenant1/tenant2/tenant3.contract.demo; mật khẩu giữ trong cấu hình local, không in ra log. Không reset dữ liệu.");
+        await ContractLifecycleDemoSeed.HistoricalParentAsync(services,t);
+        // Invoke the registered idempotent handler in this guarded demo database. Re-running the
+        // initializer after API scenarios makes their daily reminders visible without clock changes.
+        await scope.ServiceProvider.GetServices<BHome.Application.Jobs.IBackgroundJobHandler>().Single(h=>h.Name=="contract-expiry")
+            .ExecuteAsync(new(Guid.NewGuid(),"guarded-demo-refresh","{}"),t);
+        Console.WriteLine("Đã seed/kiểm tra fixture hợp đồng. Tài khoản owner/staff/tenant1/tenant2/tenant3.contract.demo; mật khẩu giữ trong cấu hình local, không in ra log. Không reset dữ liệu. BH40 có precondition lịch sử dùng clock local và simulated signing.");
     }
 }

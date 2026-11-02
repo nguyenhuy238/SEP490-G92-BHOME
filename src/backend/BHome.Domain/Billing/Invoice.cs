@@ -28,6 +28,8 @@ public sealed class BillingSchedule : AuditableEntity
 
 public sealed class Invoice : AuditableEntity
 {
+    public Guid? AutomationPlanId{get;set;}
+    public Guid? AutomationFinalizationPlanId{get;set;}
     public Guid RoomId { get; set; }
     public Guid LocationId { get; set; }
     public string RoomNumber { get; set; } = "";
@@ -64,6 +66,8 @@ public sealed class InvoiceLine
     public int OccupiedDays { get; set; }
     public int PeriodDays { get; set; }
     public decimal Amount { get; set; }
+    public decimal? CalculatedAmount { get; set; }
+    public Guid? CorrectionRequestId { get; set; }
     public Guid? MeterReadingId { get; set; }
     public decimal? PreviousReading { get; set; }
     public decimal? ConfirmedReading { get; set; }
@@ -74,6 +78,14 @@ public sealed class InvoiceRecipient
 {
     public Guid InvoiceId { get; set; }
     public Guid TenantUserId { get; set; }
+}
+// Committed with issuance; consumers never infer issuance from a draft or an uncommitted job.
+public sealed class InvoiceIssuedEvent
+{
+    public Guid InvoiceId{get;set;}
+    public Guid OwnerUserId{get;set;}
+    public Guid? AutomationPlanId{get;set;}
+    public DateTimeOffset OccurredAt{get;set;}
 }
 
 public static class InvoiceMath

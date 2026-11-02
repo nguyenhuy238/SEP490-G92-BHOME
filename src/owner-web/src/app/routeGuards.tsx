@@ -12,7 +12,15 @@ function useOwnerSession() {
 export function ProtectedRoute() {
   const owner = useOwnerSession(),
     location = useLocation();
-  return owner ? <Outlet /> : <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  return owner ? (
+    <Outlet />
+  ) : (
+    <Navigate
+      to="/login"
+      replace
+      state={{ from: location.pathname + location.search + location.hash }}
+    />
+  );
 }
 export function LoginRoute() {
   const owner = useOwnerSession(),

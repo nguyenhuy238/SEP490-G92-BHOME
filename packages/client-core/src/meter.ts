@@ -24,6 +24,12 @@ export interface MeterTask {
   previousValue: string | null;
   contractId?: string | null;
   confirmedReadingId?: string | null;
+  dueAt?: string | null;
+  assignedStaffUserId?: string | null;
+  automationPlanId?: string | null;
+  version?: number;
+  locationId?: string;
+  roomId?: string;
 }
 
 export function meterClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {

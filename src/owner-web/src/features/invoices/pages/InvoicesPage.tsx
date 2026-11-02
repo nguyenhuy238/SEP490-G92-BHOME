@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -37,12 +38,13 @@ export default function InvoicesPage() {
   return isMockMode ? <ResourcePage kind="invoices" variant="table" /> : <LiveInvoicesPage />;
 }
 export function LiveInvoicesPage() {
+  const [deepParams] = useSearchParams();
   const api = useInvoiceApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const cache = useQueryClient();
   const [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+    [selected, setSelected] = useState(deepParams.get('invoiceId') ?? '');
   const [roomId, setRoomId] = useState(''),
     [period, setPeriod] = useState(''),
     [contractId, setContractId] = useState('');
@@ -248,6 +250,9 @@ export function LiveInvoicesPage() {
               <Typography variant="h6">
                 Chi tiết hóa đơn · Phòng {invoice.roomNumber} · {invoice.billingPeriod.slice(0, 7)}
               </Typography>
+              <Button component={Link} to={`/invoice-adjustments?invoiceId=${invoice.id}`}>
+                Yêu cầu điều chỉnh của hóa đơn
+              </Button>
               <Typography>
                 {invoice.status === 'Final'
                   ? 'Đã phát hành — chi phí được giữ nguyên'

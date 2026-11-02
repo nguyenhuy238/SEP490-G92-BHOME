@@ -25,6 +25,7 @@ vi.mock('expo-router', () => ({
 vi.mock('expo-crypto', () => ({ randomUUID: () => crypto.randomUUID() }));
 vi.mock('expo-clipboard', () => ({ setStringAsync: (...args: unknown[]) => mocks.copy(...args) }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   View: ({ children }: Children) => <div>{children}</div>,
   Image: () => <img alt="Ảnh kết quả" />,
   AppState: {
@@ -172,7 +173,22 @@ vi.mock('../../../src/mobile/src/components/WorkflowControls', () => ({
   ),
 }));
 vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({
-  CameraCapture: () => <span>Camera</span>,
+  CameraCapture: ({
+    label,
+    disabled,
+    onCapture,
+  }: {
+    label: string;
+    disabled: boolean;
+    onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
+  }) =>
+    label === 'Chụp ảnh bằng chứng điều chỉnh' ? (
+      <button disabled={disabled} onClick={() => void onCapture(new Uint8Array([137, 80, 78, 71]))}>
+        {label}
+      </button>
+    ) : (
+      <span>Camera</span>
+    ),
 }));
 vi.mock('../../../src/mobile/src/lib/SessionProvider', () => ({
   useSession: () => ({
@@ -192,10 +208,14 @@ import {
 import {
   TaskNotificationsScreen,
   TenantHomeScreen,
+  MeterTasksScreen,
 } from '../../../src/mobile/src/screens/LiveWorkspaceScreens';
+import { NotificationsScreen } from '../../../src/mobile/src/screens/NotificationsScreen';
 import { AccountSecurityScreen } from '../../../src/mobile/src/screens/AccountSecurityScreen';
 import { TenantInvoicesScreen } from '../../../src/mobile/src/screens/TenantInvoicesScreen';
 import { TenantPaymentPanel } from '../../../src/mobile/src/screens/TenantPaymentPanel';
+import { TenantAdjustmentPanel } from '../../../src/mobile/src/screens/TenantAdjustmentPanel';
+import type { Invoice } from '../../../packages/client-core/src/invoices';
 
 const id = '00000000-0000-0000-0000-000000000001';
 const fileId = '00000000-0000-0000-0000-000000000002';
@@ -233,6 +253,87 @@ beforeEach(() => {
   mocks.copy.mockReset().mockResolvedValue(true);
 });
 afterEach(cleanup);
+it('opens a Tenant invoice only after authorized target resolution and read persistence', async () => {
+  mocks.role = 'Tenant';
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/target')) return json({ objectType: 'Invoice', objectId: id });
+    if (init?.method === 'POST') return new Response(null, { status: 204 });
+    return json(
+      page([
+        {
+          id,
+          category: 'Invoice',
+          title: 'Hóa đơn tự động tổng hợp',
+          summary: 'Đã phát hành',
+          createdAt: '2026-11-02T00:00:00Z',
+          readAt: null,
+        },
+      ]),
+    );
+  });
+  setApi(fetcher);
+  render(<NotificationsScreen />);
+  await screen.findByText('Hóa đơn tự động tổng hợp');
+  fireEvent.click(screen.getByText('Mở hồ sơ liên quan'));
+  await waitFor(() => expect(mocks.go).toHaveBeenCalledWith('invoice', { invoiceId: id }));
+  expect(
+    fetcher.mock.calls.some(
+      ([url, init]) => String(url).endsWith('/read') && init?.method === 'POST',
+    ),
+  ).toBe(true);
+});
+it('does not open or mark a notification when its target permission was revoked', async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      String(url).endsWith('/target')
+        ? json({}, 404)
+        : json(
+            page([
+              {
+                id,
+                category: 'Task',
+                title: 'Tác vụ tổng hợp',
+                summary: 'Được giao',
+                createdAt: '2026-11-02T00:00:00Z',
+                readAt: null,
+              },
+            ]),
+          ),
+    );
+  setApi(fetcher);
+  render(<NotificationsScreen />);
+  await screen.findByText('Tác vụ tổng hợp');
+  fireEvent.click(screen.getByText('Mở hồ sơ liên quan'));
+  await screen.findByText(/HTTP 404/);
+  expect(mocks.go).not.toHaveBeenCalled();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+it('sends assigned meter task filters to the server before paging', async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      json(String(url).includes('/meter-tasks') ? [] : [{ id, label: 'Cơ sở tổng hợp' }]),
+    );
+  setApi(fetcher);
+  render(<MeterTasksScreen />);
+  await screen.findByText('Cơ sở tổng hợp');
+  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: id } });
+  fireEvent.change(screen.getByLabelText('Hạn ghi số (yyyy-MM-dd)'), {
+    target: { value: '2026-11-10' },
+  });
+  fireEvent.change(screen.getByLabelText('Trạng thái tác vụ'), { target: { value: '2' } });
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(
+        ([url]) =>
+          String(url).includes(`locationId=${id}`) &&
+          String(url).includes('dueDate=2026-11-10') &&
+          String(url).includes('status=2'),
+      ),
+    ).toBe(true),
+  );
+});
 
 it('shows real transfer instructions, copies exact amount and removes QR when the shared invoice becomes Paid', async () => {
   mocks.role = 'Tenant';
@@ -247,33 +348,31 @@ it('shows real transfer instructions, copies exact amount and removes QR when th
     qrImageDataUri: 'data:image/png;base64,AA==',
     isDevelopmentDemo: true,
   };
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async (url) =>
-      json(
-        String(url).endsWith('/payment')
-          ? {
-              paymentStatus: settled ? 'Paid' : 'Unpaid',
-              outstandingAmount: settled ? '0' : '100000',
-              paidAmount: settled ? '100000' : '0',
-              dueDate: '2026-11-01',
-              overdueDays: 0,
-              pendingReview: false,
-              history: settled
-                ? [
-                    {
-                      id: 'allocation',
-                      amount: '100000',
-                      paidAt: '2026-11-01T01:00:00Z',
-                      paidBy: 'Khách thuê khác trong hóa đơn',
-                      verifiedAt: '2026-11-01T02:00:00Z',
-                    },
-                  ]
-                : [],
-            }
-          : instructions,
-      ),
-    );
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    json(
+      String(url).endsWith('/payment')
+        ? {
+            paymentStatus: settled ? 'Paid' : 'Unpaid',
+            outstandingAmount: settled ? '0' : '100000',
+            paidAmount: settled ? '100000' : '0',
+            dueDate: '2026-11-01',
+            overdueDays: 0,
+            pendingReview: false,
+            history: settled
+              ? [
+                  {
+                    id: 'allocation',
+                    amount: '100000',
+                    paidAt: '2026-11-01T01:00:00Z',
+                    paidBy: 'Khách thuê khác trong hóa đơn',
+                    verifiedAt: '2026-11-01T02:00:00Z',
+                  },
+                ]
+              : [],
+          }
+        : instructions,
+    ),
+  );
   setApi(fetcher);
   render(<TenantPaymentPanel invoiceId={id} />);
   await screen.findByText('Tài khoản tổng hợp demo. Không chuyển tiền thật.');
@@ -333,6 +432,8 @@ it('Tenant reads persisted invoice consumption and amount without a fake payment
       return json({ availability: 'ReceivingAccountUnavailable' });
     if (route.includes('/payment-invoices'))
       return json(page([{ invoiceId: 'bill', paymentStatus: 'Unpaid' }]));
+    if (route.includes('/invoice-adjustments') || route.includes('/adjustments?'))
+      return json(page([]));
     return json(route.includes('/invoices/bill') ? invoice : page([invoice]));
   });
   setApi(fetcher);
@@ -383,6 +484,148 @@ function setApi(fetcher: typeof fetch) {
     fetcher,
   );
 }
+const adjustmentInvoice: Invoice = {
+  id: 'bill',
+  locationId: id,
+  roomId: id,
+  locationName: 'Synthetic',
+  roomNumber: 'P101',
+  billingPeriod: '2026-10-01',
+  status: 'Final',
+  version: 2,
+  total: '100000',
+  missingInputs: [],
+  dueDate: '2026-11-30',
+  scheduledFinalDate: '2026-11-01',
+  finalizedAt: '2026-11-01T00:00:00Z',
+  representativeTenantUserId: 'tenant',
+  lines: [],
+};
+it('Tenant uploads private evidence and retries the same adjustment command without inventing success', async () => {
+  mocks.role = 'Tenant';
+  mocks.actor = 'tenant';
+  let attempts = 0;
+  const request = {
+    id: 'request',
+    invoiceId: 'bill',
+    status: 'Pending',
+    chargeCode: null,
+    submittedAt: '2026-11-01T00:00:00Z',
+    reason: 'Sai khoản thuê',
+    currentAmount: '100000',
+    proposedAmount: '90000',
+    decision: null,
+    evidence: [],
+    financials: null,
+  };
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    const route = String(url);
+    if (init?.method === 'PUT') return json({ id: fileId, contentType: 'image/jpeg', length: 4 });
+    if (init?.method === 'POST') {
+      attempts++;
+      return attempts === 1 ? json({}, 503) : json(request);
+    }
+    if (route.endsWith('/invoice-adjustments/request')) return json(request);
+    return json(page([]));
+  });
+  setApi(fetcher);
+  render(<TenantAdjustmentPanel invoice={adjustmentInvoice} />);
+  fireEvent.click(screen.getByText('Yêu cầu điều chỉnh'));
+  expect((screen.getByText('Gửi yêu cầu cho Owner') as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu điều chỉnh'), {
+    target: { value: 'Sai khoản thuê' },
+  });
+  fireEvent.change(screen.getByLabelText('Giá trị đề xuất (VND, tùy chọn)'), {
+    target: { value: '90000' },
+  });
+  fireEvent.click(screen.getByLabelText('Tôi đã kiểm tra ảnh bằng chứng'));
+  fireEvent.click(screen.getByText('Chụp ảnh bằng chứng điều chỉnh'));
+  await screen.findByText('Đã tải 1/5 ảnh.');
+  fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+  fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+  await screen.findByText('Chưa xác nhận thành công. Hãy tải lại và thử lại.');
+  expect(attempts).toBe(1);
+  expect(screen.queryByText('Kết quả yêu cầu')).toBeNull();
+  fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+  await screen.findByText('Kết quả yêu cầu');
+  await screen.findByText('Chờ Owner xem xét');
+  const posts = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST');
+  expect(posts).toHaveLength(2);
+  expect(new Headers(posts[0]![1]!.headers).get('Idempotency-Key')).toBe(
+    new Headers(posts[1]![1]!.headers).get('Idempotency-Key'),
+  );
+  expect(JSON.parse(posts[1]![1]!.body as string)).toEqual({
+    invoiceLineId: null,
+    proposedAmount: '90000',
+    reason: 'Sai khoản thuê',
+    evidenceIds: [fileId],
+    expectedInvoiceVersion: 2,
+  });
+});
+it('Tenant sees the Owner rejection and no approval control', async () => {
+  mocks.role = 'Tenant';
+  mocks.actor = 'tenant';
+  const request = {
+    id: 'request',
+    status: 'Rejected',
+    chargeCode: null,
+    submittedAt: '2026-11-01T00:00:00Z',
+    reason: 'Sai khoản thuê',
+    currentAmount: '100000',
+    proposedAmount: '90000',
+    evidence: [],
+    decision: {
+      reason: 'Không có sai lệch sau kiểm tra',
+      delta: '0',
+      decidedAt: '2026-11-01T01:00:00Z',
+    },
+    financials: null,
+  };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      json(
+        String(url).endsWith('/invoice-adjustments/request')
+          ? request
+          : String(url).includes('/invoice-adjustments?')
+            ? page([request])
+            : page([]),
+      ),
+    );
+  setApi(fetcher);
+  render(<TenantAdjustmentPanel invoice={adjustmentInvoice} />);
+  fireEvent.click(await screen.findByText('Xem yêu cầu của tôi'));
+  await screen.findByText('Quyết định Owner: Không có sai lệch sau kiểm tra');
+  expect(screen.queryByText('Phê duyệt điều chỉnh')).toBeNull();
+});
+it('Tenant retains visible excess after a downward paid adjustment without a refund success', async () => {
+  mocks.role = 'Tenant';
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    json(
+      String(url).endsWith('/payment')
+        ? {
+            paymentStatus: 'Paid',
+            outstandingAmount: '0',
+            paidAmount: '100000',
+            payableAmount: '90000',
+            originalIssuedAmount: '100000',
+            approvedAdjustmentTotal: '-10000',
+            potentialExcessAmount: '10000',
+            reviewStatus: 'PendingReview',
+            history: [],
+            dueDate: '2026-11-30',
+            overdueDays: 0,
+            pendingReview: true,
+          }
+        : { availability: 'Settled' },
+    ),
+  );
+  setApi(fetcher);
+  render(<TenantPaymentPanel invoiceId="bill" />);
+  await screen.findByText(/Tiền thừa chờ xem xét: 10.000/);
+  expect(screen.queryByText('Sao chép số tiền')).toBeNull();
+  expect(screen.queryByText(/Hoàn tiền thành công/)).toBeNull();
+});
 
 it('uses server list, pagination and role navigation instead of preview work orders', async () => {
   const fetcher = vi

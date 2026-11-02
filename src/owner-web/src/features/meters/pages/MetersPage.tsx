@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -17,16 +18,18 @@ import { PageHeader } from '../../../components/common/PortalUI';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useMeterApi } from '../useMeterApi';
+import { MeterAssignment } from '../MeterAssignment';
 
 export default function MetersPage() {
   return isMockMode ? <ResourcePage kind="meters" variant="table" /> : <LiveMetersPage />;
 }
 
 export function LiveMetersPage() {
+  const [deepParams] = useSearchParams();
   const api = useMeterApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState(deepParams.get('taskId') ?? '');
   const [taskId, setTaskId] = useState('');
   const tasks = useQuery({
     queryKey: ['meter-tasks', actor],
@@ -118,6 +121,17 @@ export function LiveMetersPage() {
               <Typography>
                 Chỉ số trước: {detail.data.previousValue ?? 'Chưa có baseline xác nhận'}
               </Typography>
+              <Typography>
+                Hạn ghi số: {detail.data.dueAt ? formatInstant(detail.data.dueAt) : 'Chưa cấu hình'}
+              </Typography>
+              <MeterAssignment
+                key={detail.data.id + ':' + detail.data.version}
+                task={detail.data}
+                saved={() => {
+                  void detail.refetch();
+                  void tasks.refetch();
+                }}
+              />
               {!readingId && (
                 <Alert severity="info">
                   {detail.data.status === 3

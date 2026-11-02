@@ -104,7 +104,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
             if (x.PaidByUserId is { } payer && !await repository.EligiblePayerAsync(invoice.Id, payer, t))
                 throw new PaymentException(400, "payer_not_invoice_viewer");
-            var outstanding = invoice.Total - await repository.AllocatedAsync(invoice.Id, t);
+            var outstanding = (await repository.FinancialsAsync(invoice.Id, t)).OutstandingAmount;
             var reason = PaymentRules.ReviewReason(transfer.Amount, outstanding, transfer.TransferDescription,
                 PaymentRules.InvoiceReference(invoice.Id), await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t));
             var review = new PaymentReconciliation { TransferId = transfer.Id, InvoiceId = invoice.Id, ActorId = Actor, OccurredAt = Now,
@@ -178,16 +178,18 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         var invoice = await Invoice(id, t);
         var scope = Scope;
         var history = await repository.HistoryAsync(id, t);
-        var paid = history.Sum(entry => entry.Allocation.Amount);
-        var outstanding = invoice.Total - paid;
+        var financial = await repository.FinancialsAsync(id, t);
+        var paid = financial.AllocatedPayments;
+        var outstanding = financial.OutstandingAmount;
         var payers = scope.Owner ? await repository.PayersAsync(id,t) : [];
         return new(id, invoice.Status != InvoiceStatus.Final ? "NotIssued" : outstanding <= 0 ? "Paid" : "Unpaid",
-            invoice.Total, paid, outstanding, invoice.DueDate, invoice.Status == InvoiceStatus.Final ? PaymentRules.OverdueDays(invoice.DueDate, Today, outstanding) : 0,
-            PaymentRules.InvoiceReference(invoice.Id), await repository.PendingReviewAsync(id, t),
+            financial.EffectivePayableAmount, paid, outstanding, invoice.DueDate, invoice.Status == InvoiceStatus.Final ? PaymentRules.OverdueDays(invoice.DueDate, Today, outstanding) : 0,
+            PaymentRules.InvoiceReference(invoice.Id), financial.PotentialExcessAmount > 0 || await repository.PendingReviewAsync(id, t),
             history.Select(entry => new PaymentHistoryView(entry.Allocation.Id, entry.Allocation.Amount, entry.Transfer.OccurredAt,
                 entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
                     scope.Owner ? payers.FirstOrDefault(p=>p.UserId==entry.Allocation.PaidByUserId)?.DisplayLabel??"Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
-                scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray());
+                scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray(),
+            financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus);
     }
     public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id,CancellationToken t)
     { Owner();_=await Invoice(id,t);return await repository.PayersAsync(id,t); }

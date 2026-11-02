@@ -25,6 +25,8 @@ export interface InvoiceLine {
   meterReadingId: string | null;
   previousReading: string | null;
   confirmedReading: string | null;
+  calculatedAmount?: string | null;
+  correctionRequestId?: string | null;
 }
 export interface Invoice {
   id: string;
@@ -154,6 +156,8 @@ export function missingBillingInput(code: string): string {
     confirmed_reading_Water: 'Chỉ số nước hợp lệ đã xác nhận',
     baseline_Electricity: 'Chỉ số điện trước',
     baseline_Water: 'Chỉ số nước trước',
+    draft_correction_source_changed:
+      'Nguồn tính phí đã thay đổi; Owner cần kiểm tra correction đã duyệt',
   };
   return labels[code] ?? 'Đầu vào cần kiểm tra';
 }

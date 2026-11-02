@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native-paper';
 import {
   formatContractMoney,
@@ -16,6 +17,7 @@ import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { TenantPaymentPanel } from './TenantPaymentPanel';
+import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
 import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
 export function TenantInvoicesScreen() {
@@ -24,11 +26,12 @@ export function TenantInvoicesScreen() {
   return <TenantInvoiceList key={session?.userId} />;
 }
 function TenantInvoiceList() {
+  const { invoiceId } = useLocalSearchParams<{ invoiceId?: string }>();
   const { go } = useWorkspace();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
   const [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+    [selected, setSelected] = useState(invoiceId ?? '');
   const list = useWorkspaceQuery<Page<Invoice>>(
     allowed ? `/api/v1/invoices?page=${page}&pageSize=20` : null,
   );
@@ -56,9 +59,16 @@ function TenantInvoiceList() {
           Về danh sách hóa đơn
         </Action>
         <QueryState {...detail} />
+        <Action secondary onPress={() => detail.reload()}>
+          Tải lại hóa đơn
+        </Action>
         {detail.data && (
           <>
             <InvoiceDetail invoice={detail.data} />
+            <TenantAdjustmentPanel
+              key={detail.data.id + ':' + detail.data.version}
+              invoice={detail.data}
+            />
             {detail.data.status === 'Final' && (
               <TenantPaymentPanel key={detail.data.id} invoiceId={detail.data.id} />
             )}
@@ -153,6 +163,9 @@ export function InvoiceDetail({ invoice }: { invoice: Invoice }) {
             </Text>
           )}
           <Text style={ui.money}>{formatContractMoney(line.amount)}</Text>
+          {line.calculatedAmount != null && (
+            <Text>Trước correction đã duyệt: {formatContractMoney(line.calculatedAmount)}</Text>
+          )}
         </Box>
       ))}
       <Box>

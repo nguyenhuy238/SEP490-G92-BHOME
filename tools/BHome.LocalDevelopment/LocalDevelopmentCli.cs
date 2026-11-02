@@ -21,7 +21,15 @@ internal static class LocalDevelopmentCli
             var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
             var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
             services.AddInfrastructure(config);
+            if(args.Length==1&&args[0] is "seed-contract-demo" or "seed-billing-automation-demo" or "demo-billing-retry")
+            {
+                services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")??""));
+                services.AddSingleton<LifecycleSeedActor>();
+                services.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p=>p.GetRequiredService<LifecycleSeedActor>());
+            }
             await using var provider = services.BuildServiceProvider();
+            if(args.SequenceEqual(new[]{"seed-billing-automation-demo"})){await BillingAutomationDemoSeed.PrepareAsync(provider);return 0;}
+            if(args.SequenceEqual(new[]{"demo-billing-retry"})){await BillingAutomationDemoSeed.RetryAsync(provider);return 0;}
             if (args.SequenceEqual(new[] { "seed-contract-demo" }))
             {
                 await ContractDemoSeed.RunAsync(provider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password);
@@ -51,4 +59,11 @@ internal static class LocalDevelopmentCli
             return 1;
         }
     }
+}
+internal sealed class DemoHostEnvironment(string environment):Microsoft.Extensions.Hosting.IHostEnvironment
+{
+    public string EnvironmentName{get;set;}=environment;
+    public string ApplicationName{get;set;}="BHome.LocalDevelopment";
+    public string ContentRootPath{get;set;}=Directory.GetCurrentDirectory();
+    public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider{get;set;}=new Microsoft.Extensions.FileProviders.NullFileProvider();
 }

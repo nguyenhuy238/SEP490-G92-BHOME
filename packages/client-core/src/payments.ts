@@ -21,6 +21,11 @@ export interface InvoicePayment {
   transferReference: string;
   pendingReview: boolean;
   history: VerifiedPayment[];
+  originalIssuedAmount?: string;
+  approvedAdjustmentTotal?: string;
+  potentialExcessAmount?: string;
+  financialVersion?: number;
+  reviewStatus?: string;
 }
 export interface TransferInstructions {
   invoiceId: string;
@@ -225,7 +230,8 @@ export function paymentError(error: unknown) {
     payer_not_invoice_viewer: 'Người trả phải thuộc danh sách khách có quyền trên hóa đơn.',
     allocated_payment_cannot_be_rejected: 'Không thể từ chối giao dịch đã phân bổ.',
     bank_transfer_rejected: 'Giao dịch đã bị từ chối phân bổ.',
-    development_payment_unavailable: 'Giao dịch tổng hợp chỉ được đối soát trong Development/Testing.',
+    development_payment_unavailable:
+      'Giao dịch tổng hợp chỉ được đối soát trong Development/Testing.',
     final_invoice_required: 'Chỉ đối soát vào hóa đơn đã phát hành.',
     payment_concurrent_or_duplicate_effect:
       'Có thay đổi hoặc tham chiếu đã được xử lý. Tải lại để kiểm tra.',

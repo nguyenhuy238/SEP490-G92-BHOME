@@ -6,6 +6,7 @@ import { colors as c } from '../theme/theme';
 import { homeScreen, tabs, type WorkspaceScreen } from '../features/workspace/navigation';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { ui } from './WorkspaceKit';
+import { NotificationBadge } from './NotificationBadge';
 
 export function WorkspaceShell({
   screen,
@@ -90,6 +91,7 @@ export function WorkspaceShell({
             accessibilityLabel="Thông báo"
           />
           {preview && <Badge size={8} style={styles.badge} />}
+          {!preview && <NotificationBadge />}
         </View>
         <IconButton
           icon="account-circle"

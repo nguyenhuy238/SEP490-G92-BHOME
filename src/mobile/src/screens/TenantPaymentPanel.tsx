@@ -7,6 +7,7 @@ import {
   displayContractDate,
 } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
+import { signedVnd } from '../../../../packages/client-core/src/adjustments';
 import {
   paymentText,
   type InvoicePayment,
@@ -55,11 +56,26 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
             </Pill>
             <Text>Còn phải trả: {formatContractMoney(state.outstandingAmount)}</Text>
             <Text>Đã ghi nhận: {formatContractMoney(state.paidAmount)}</Text>
+            {state.originalIssuedAmount !== undefined && (
+              <>
+                <Text>Tiền hóa đơn gốc: {formatContractMoney(state.originalIssuedAmount)}</Text>
+                <Text>
+                  Điều chỉnh sau phát hành: {signedVnd(state.approvedAdjustmentTotal ?? '0')}
+                </Text>
+                <Text>Nghĩa vụ hiện hành: {formatContractMoney(state.payableAmount)}</Text>
+              </>
+            )}
+            {state.reviewStatus === 'PendingReview' && (
+              <Text style={ui.red}>
+                Tiền thừa chờ xem xét: {formatContractMoney(state.potentialExcessAmount ?? '0')}.
+                Chưa hoàn tiền hoặc chuyển credit.
+              </Text>
+            )}
             <Text>
               Hạn thanh toán: {displayContractDate(state.dueDate)} · Quá hạn: {state.overdueDays}{' '}
               ngày
             </Text>
-            {state.pendingReview && (
+            {state.pendingReview && state.reviewStatus !== 'PendingReview' && (
               <Text>
                 Owner đang đối soát giao dịch. Trạng thái chỉ thay đổi sau khi tiền được xác minh.
               </Text>

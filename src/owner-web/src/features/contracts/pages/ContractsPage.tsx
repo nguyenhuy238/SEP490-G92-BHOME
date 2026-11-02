@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -49,13 +50,14 @@ export default function ContractsPage() {
   );
 }
 function LiveContractsPage() {
+  const [deepParams] = useSearchParams();
   const api = useContractsApi();
   const { session } = useAuth();
   const actorId = session?.userId ?? '';
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
     [location, setLocation] = useState('');
-  const [selected, setSelected] = useState(''),
+  const [selected, setSelected] = useState(deepParams.get('contractId') ?? ''),
     [selectedLocation, setSelectedLocation] = useState('');
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
@@ -67,6 +69,10 @@ function LiveContractsPage() {
   const list = useQuery({
     queryKey: ['contracts', actorId, page, status, location],
     queryFn: ({ signal }) => api.list(page, status, location, signal),
+  });
+  const reminders = useQuery({
+    queryKey: ['contract-expiry-reminders', actorId],
+    queryFn: ({ signal }) => api.expiryReminders(signal),
   });
   return (
     <>
@@ -81,6 +87,27 @@ function LiveContractsPage() {
       />
       <Stack spacing={2}>
         <ContractConfigurationPanel api={api} />
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Typography variant="h6">Nhắc gia hạn / trả phòng</Typography>
+          <Button onClick={() => void reminders.refetch()} disabled={reminders.isFetching}>
+            Tải lại nhắc hết hạn
+          </Button>
+          {reminders.error && <Alert severity="error">{contractError(reminders.error)}</Alert>}
+          {reminders.data?.length === 0 && (
+            <Typography>Chưa có nhắc hết hạn đã được xử lý.</Typography>
+          )}
+          {(reminders.data ?? []).map((n) => (
+            <Alert
+              key={n.id}
+              severity="warning"
+              action={<Button onClick={() => setSelected(n.contractId)}>Mở hợp đồng</Button>}
+            >
+              Phòng {n.roomNumber} · {n.locationName} ·{' '}
+              {n.stage === 'Expired' ? 'Đã hết hạn' : 'Sắp hết hạn'}{' '}
+              {displayContractDate(n.endDate)}. Cần gia hạn hoặc xử lý trả phòng.
+            </Alert>
+          ))}
+        </Paper>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <TextField
             select

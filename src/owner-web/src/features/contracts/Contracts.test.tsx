@@ -104,12 +104,34 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
       if (!m) throw { status: 404 };
       result = m;
     } else if (
-      ['/previews', '/deposit-verifications', '/history', '/handover/history'].some((s) =>
-        path.endsWith(s),
-      )
+      [
+        '/previews',
+        '/deposit-verifications',
+        '/history',
+        '/handover/history',
+        '/versions',
+        '/inspections',
+      ].some((s) => path.endsWith(s))
     )
       result = [];
     else if (path.endsWith('/handover')) throw { status: 404 };
+    else if (path.endsWith('/inspection-preparation'))
+      result = { baseline: null, finalReadings: [], otherTenantsRemain: false };
+    else if (path.endsWith('/settlement-summary'))
+      result = {
+        verifiedSecurityDeposit: '0',
+        appliedHoldingDeposit: '0',
+        contractSpecificOutstanding: null,
+        approvedFinalCharges: null,
+        approvedDeductions: null,
+        refundAmount: null,
+        invoices: [],
+        unresolvedItems: ['confirmed_handover_baseline_required'],
+        otherActiveContracts: false,
+        resolved: false,
+        reference: 'BH40-TEST',
+        transferVerificationStatus: 'PendingReview',
+      };
     else result = c;
     return result as T;
   });

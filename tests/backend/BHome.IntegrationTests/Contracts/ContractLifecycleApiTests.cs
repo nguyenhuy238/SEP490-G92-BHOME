@@ -238,6 +238,19 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractHandovers\" SET \"Version\"=3 WHERE \"ContractId\"={id}"));
         await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"ContractHandoverHistory\" WHERE \"ContractId\"={id}"));
         await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"MeterReadings\" WHERE \"Id\"={readingIds[0]}"));
+        await Success<MoveOutView>(await Post(w.Tenant,Path(id,"termination-requests"),new TerminationInput(Today,"Synthetic moveout")));
+        await Success<MoveOutView>(await Post(w.Owner,Path(id,"move-out/approve")));
+        await Success<MoveOutView>(await Post(w.Owner,Path(id,"move-out/schedule"),new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1),w.Staff.Id)));
+        var electricity=await FinalReading(w,id,UtilityType.Electricity);var water=await FinalReading(w,id,UtilityType.Water);
+        using var finalPhoto=new ByteArrayContent(Image());finalPhoto.Headers.ContentType=new("image/png");
+        var finalFile=(await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id,"move-out/evidence"),finalPhoto))).Id;
+        var inspected=await Success<MoveOutView>(await Post(w.Staff,Path(id,"move-out/inspection"),new InspectionInput(electricity,water,"Synthetic final inspection",[finalFile],[],"SYNTHETIC final condition","Keys returned")));
+        var comparison=Assert.Single((await w.Owner.Client.GetFromJsonAsync<FinalInspectionView[]>(Path(id,"move-out/inspections")))!);
+        Assert.Equal("SYNTHETIC corrected",comparison.Baseline.RoomCondition);Assert.Equal("SYNTHETIC final condition",comparison.Observed.RoomCondition);
+        Assert.Equal(HttpStatusCode.Forbidden,(await Post(w.Staff,Path(id,"move-out/inspection-review"),new InspectionReviewInput(1,true,"Checked"))).StatusCode);
+        await Success<MoveOutView>(await Post(w.Owner,Path(id,"move-out/inspection-review"),new InspectionReviewInput(1,true,"Synthetic Owner confirmed")));
+        Assert.Equal(HttpStatusCode.Conflict,(await Post(w.Owner,Path(id,"move-out/inspection-review"),new InspectionReviewInput(1,true,"Cannot review twice"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await outside.Tenant.Client.GetAsync(Path(id,"move-out/inspections"))).StatusCode);
     }
 
     [Fact]
@@ -341,6 +354,10 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         var original = await db.Set<Contract>().SingleAsync(c => c.Id == id); var renewal = await db.Set<Contract>().SingleAsync(c => c.Id == next);
         Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.MonthlyRent); Assert.Equal(ContractStatus.Active, renewal.Status);
         Assert.Equal(4000000, renewal.MonthlyRent); Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        var versions=(await w.Tenant.Client.GetFromJsonAsync<ContractVersionView[]>(Path(next,"versions")))!;
+        Assert.Equal(2,versions.Length);Assert.Contains(versions,c=>c.Id==id&&c.Status=="Superseded"&&c.MonthlyRent==3000000);
+        Assert.Contains(versions,c=>c.Id==next&&c.PreviousContractId==id&&c.Terms=="NEW TEST TERMS");
+        var outsider=await User(Roles.Tenant);Assert.Equal(HttpStatusCode.NotFound,(await outsider.Client.GetAsync(Path(next,"versions"))).StatusCode);
     }
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private static byte[] Image()
@@ -350,11 +367,12 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         Guid meter;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var m = new Meter { RoomId = w.Room, Code = "SYNTHETIC-" + type, UtilityType = type, InstalledOn = Today.AddDays(-10) };
-            db.Add(m); await db.SaveChangesAsync(); meter = m.Id;
+            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var m = await db.Set<Meter>().SingleOrDefaultAsync(m=>m.RoomId==w.Room&&m.UtilityType==type&&m.IsActive);
+            if(m is null){m=new Meter { RoomId = w.Room, Code = "SYNTHETIC-" + type, UtilityType = type, InstalledOn = Today.AddDays(-10) };db.Add(m);await db.SaveChangesAsync();}meter=m.Id;
         }
         foreach (var purpose in new[] { ReadingPurpose.Initial, ReadingPurpose.Final })
         {
+            if(purpose==ReadingPurpose.Initial){await using var s=fixture.Factory.Services.CreateAsyncScope();if(await s.ServiceProvider.GetRequiredService<BHomeDbContext>().Set<MeterReading>().AnyAsync(r=>r.MeterId==meter))continue;}
             var response = await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter, purpose, purpose == ReadingPurpose.Initial ? Today.AddDays(-10) : Today, null, purpose == ReadingPurpose.Final ? contractId : null));
             var task = (await Success<IdResult>(response)).Id;
             using var binary = new ByteArrayContent(Image()); binary.Headers.ContentType = new("image/png");
@@ -382,6 +400,10 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
+        var assignment=(await w.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!.Single(a=>a.ContractId==id);
+        Assert.Equal("Approved",assignment.Status);Assert.Equal(w.Room,assignment.RoomId);
+        var history=(await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id,"move-out/history")))!;
+        Assert.Equal(3,history.Length);Assert.Equal("Scheduled",history[0].Action);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;

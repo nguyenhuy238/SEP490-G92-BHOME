@@ -58,3 +58,48 @@ Ngày date-only giữ nguyên ISO trên wire; giờ lịch nhập ở Việt Nam
   Client giải thích lỗi bằng tiếng Việt; không suy diễn thành Signed hoặc Active.
   `signing_certificate_not_valid` và `signing_certificate_no_longer_available` có thông báo riêng.
 - Quyết định và giới hạn: [DIGITAL_SIGNING_COMPLETION.md](../development/DIGITAL_SIGNING_COMPLETION.md).
+
+
+# BH-40 — Contract lifecycle
+
+Tái sử dụng `/api/v1/contracts/{id}` renewal/signing/activation, termination-requests,
+expiry-move-out, move-out/approve/schedule/inspection/settlement/complete hiện có.
+Mutation JSON cần Idempotency-Key GUID. Auth ở service, object scope lấy từ DB.
+
+- GET `{id}/versions`: Owner/Tenant sở hữu, Staff assigned; cùng chain previous/next;
+  Staff chỉ dates/status, không rent/terms. Renewal chỉ Active khi ngày hiệu lực và đủ ký/cọc.
+- POST `{id}/move-out/schedule`: Owner hoặc Staff assigned, `{scheduledAt UTC,staffUserId?,
+  expectedVersion?}`. Staff không chỉ định người ngoài assignment Location. Owner để trống
+  assignee sẽ hiển thị chưa phân công; không tự chọn một người. Không đóng Contract.
+- GET `move-out-assignments`: Staff, tối đa 100 lịch được giao trong Locations hiện có quyền.
+- GET `{id}/move-out/history`: Owner/Tenant của Contract hoặc Staff assigned; append-only.
+MoveOut response bổ sung inspectionStaffId/version. Version 1 request, tăng khi approve/schedule.
+Không thêm reject/cancel termination. Không dùng tenancy của người khác để mở evidence.
+
+GET `{id}/move-out/inspection-preparation`: Owner/Staff lấy confirmed handover snapshot của
+Contract hoặc ancestor renewal và danh sách confirmed Final readings hôm nay đúng Contract.
+InspectionInput thêm assets `{id,condition}[]`, roomCondition, keysAndAccess, expectedVersion.
+Snapshot baseline không lấy Asset condition hiện tại. Legacy inspection thiếu baseline giữ
+blocker; không thể resolve production settlement. Final reading là observation của Contract,
+không reset baseline hoặc tự tạo phí cho cả phòng khi co-Tenants vẫn ở.
+GET `{id}/move-out/inspections`: so sánh baseline/observed và Owner review, scoped như Contract.
+POST `{id}/move-out/inspection-review`: Owner `{version,confirmed,reason}`; confirmed=false
+yêu cầu reinspection, giữ lần cũ. Mỗi version chỉ một review, không ghi đè snapshot/ảnh.
+
+GET `{id}/move-out/settlement-summary`: Owner/Tenant của Contract, Staff 403. Cọc lấy từ
+root Contract của renewal chain, không cộng lại từng phiên bản; shared invoices là context,
+không liability cá nhân. Summary trả source financials BH-41, unresolvedItems, reference hash,
+resolved, nullable deductions/refund/final charges. Owner inspection review có thêm
+noAdditionalCharges để xác nhận không có khoản inspection riêng cần tính; nếu chưa xác nhận
+giữ Pending, không tự tính damage fee. Kỳ chưa Final, usage chưa billed, pending disputes,
+bank review, excess, deposit/holding chưa giải quyết đều chặn resolved.
+POST settlement bổ sung expectedReference (bắt buộc khi resolved) chống xác nhận snapshot cũ.
+History lưu FinancialSnapshot bất biến và source reference, không tạo allocation/refund mới.
+
+JOB-02: `contract-expiry` dùng BackgroundJobs hiện có, scheduler chạy lúc khởi động và mỗi
+ngày theo Asia/Ho_Chi_Minh khi `Jobs:Enabled=true`. Worker bounded retry/lease hiện có;
+handler re-read dưới Room lock, unique Contract/enddate/stage/recipient. Upcoming30 áp dụng
+0..30 ngày trước hạn; Expired khi ngày hiện tại vượt EndDate. Không tự đóng hoặc đổi Room.
+GET `expiry-reminders`: Owner xem nhắc hợp đồng hiện hành (mỗi hợp đồng một nhắc), Tenant
+chỉ nhận nhắc của mình; Staff 403. Tối đa 100 nhắc mới nhất, loại hợp đồng đã kết thúc/gia hạn.
+Notices được lưu để xem trong Web/Mobile; external push/email consumer vẫn chưa triển khai.

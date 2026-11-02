@@ -13,6 +13,11 @@ InstructionsOnly với hướng dẫn chính xác, không cắt số tiền ho�
 
 Theo BF-06/UC-22/23/25 và [quyết định BH-25](../development/BH25_TRACEABILITY.md).
 Invoice Final không bị sửa; trạng thái thanh toán được suy từ allocation ledger.
+BH-41 bổ sung [approved adjustment effects](INVOICE_ADJUSTMENTS.md): payableAmount là
+issued amount + tổng delta Approved/Final. Response payment có originalIssuedAmount,
+approvedAdjustmentTotal, potentialExcessAmount, financialVersion, reviewStatus. Outstanding
+không âm; phần dư được trả riêng PendingReview, không tự refund/credit. Debt/QR/allocation
+dùng cùng nghĩa vụ hiệu lực, không cộng lại correction đã nằm trong issued amount.
 Amounts là decimal strings VND nguyên. Lỗi theo ProblemDetails có code/correlationId.
 
 | Method | `/api/v1` route                                     | Quyền / body                                                                                                                                                                          |

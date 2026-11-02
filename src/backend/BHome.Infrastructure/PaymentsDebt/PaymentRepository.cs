@@ -4,6 +4,7 @@ using BHome.Domain.Billing;
 using BHome.Domain.PaymentsDebt;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Billing;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -50,6 +51,7 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
          orderby allocation.AllocatedAt descending, allocation.Id
          select new PaymentLedgerEntry(allocation, transfer)).ToArrayAsync(t);
     public async Task<decimal> AllocatedAsync(Guid invoiceId, CancellationToken t) => await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == invoiceId).SumAsync(a => (decimal?)a.Amount, t) ?? 0m;
+    public Task<BHome.Application.Billing.InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t) => db.FinancialsAsync(invoiceId, t);
     public Task<bool> ReferenceClaimedAsync(string reference, CancellationToken t) => db.Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == reference, t);
     public Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t) => db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == payerId, t);
     public Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t) => db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId == invoiceId && r.Decision == "PendingReview" &&
@@ -91,16 +93,24 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
                 a.StaffUserId==scope.ActorId && a.StartDate<=scope.Today && a.EndDate>=scope.Today)));
     public async Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope,PaymentQuery query,CancellationToken t)
     {
-        var source=VisibleInvoices(scope).Where(i=>(query.LocationId==null||i.LocationId==query.LocationId)&&(query.RoomId==null||i.RoomId==query.RoomId)&&
-            (query.BillingPeriod==null||i.BillingPeriod==query.BillingPeriod)&&(query.InvoiceIds==null||query.InvoiceIds.Contains(i.Id))).Select(i=>new {i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,i.Total,
-                Paid=db.Set<PaymentAllocation>().Where(a=>a.InvoiceId==i.Id).Sum(a=>(decimal?)a.Amount)??0m});
-        var filtered=source.Where(i=>(!query.OutstandingOnly || i.Total>i.Paid)&&(!query.OverdueOnly || i.Total>i.Paid && i.DueDate<scope.Today)&&
-            (query.PaymentStatus==null||query.PaymentStatus=="Paid"&&i.Total<=i.Paid||query.PaymentStatus=="Unpaid"&&i.Total>i.Paid));
+        var source=db.Financials(VisibleInvoices(scope).Where(i=>(query.LocationId==null||i.LocationId==query.LocationId)&&(query.RoomId==null||i.RoomId==query.RoomId)&&
+            (query.BillingPeriod==null||i.BillingPeriod==query.BillingPeriod)&&(query.InvoiceIds==null||query.InvoiceIds.Contains(i.Id))));
+        var filtered=source.Where(i=>(!query.OutstandingOnly || i.Original+i.Adjustments>i.Paid)&&(!query.OverdueOnly || i.Original+i.Adjustments>i.Paid && i.DueDate<scope.Today)&&
+            (query.PaymentStatus==null||query.PaymentStatus=="Paid"&&i.Original+i.Adjustments<=i.Paid||query.PaymentStatus=="Unpaid"&&i.Original+i.Adjustments>i.Paid));
         var count=await filtered.CountAsync(t);
         var rows=await filtered.OrderBy(i=>i.DueDate).ThenBy(i=>i.Id).Skip((query.Page-1)*query.PageSize).Take(query.PageSize).ToArrayAsync(t);
-        var items=rows.Select(i=>new DebtInvoiceView(i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,
-            scope.Staff&&!scope.Owner&&!scope.Tenant?null:decimal.Truncate(i.Total),scope.Staff&&!scope.Owner&&!scope.Tenant?null:decimal.Truncate(i.Paid),decimal.Truncate(i.Total-i.Paid),
-            i.Total<=i.Paid?"Paid":"Unpaid",PaymentRules.OverdueDays(i.DueDate,scope.Today,i.Total-i.Paid))).ToArray();
+        var entitled=scope.Staff&&scope.Tenant&&!scope.Owner
+            ? await db.Set<InvoiceRecipient>().Where(r=>rows.Select(i=>i.Id).Contains(r.InvoiceId)&&r.TenantUserId==scope.ActorId).Select(r=>r.InvoiceId).ToArrayAsync(t)
+            : [];
+        var items=rows.Select(i=>
+        {
+            var v=i.View();
+            var limited=scope.Staff&&!scope.Owner&&(!scope.Tenant||!entitled.Contains(i.Id));
+            return new DebtInvoiceView(i.Id,i.LocationId,i.RoomId,i.LocationName,i.RoomNumber,i.BillingPeriod,i.DueDate,
+                limited?null:v.EffectivePayableAmount,limited?null:v.AllocatedPayments,v.OutstandingAmount,
+                v.OutstandingAmount<=0?"Paid":"Unpaid",PaymentRules.OverdueDays(i.DueDate,scope.Today,v.OutstandingAmount),
+                limited?null:v.OriginalIssuedAmount,limited?null:v.ApprovedAdjustmentTotal,limited?null:v.PotentialExcessAmount);
+        }).ToArray();
         return new(items,query.Page,query.PageSize,count);
     }
     public async Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentScope scope,PaymentQuery query,CancellationToken t)

@@ -17,6 +17,14 @@ public sealed record ResidentInput(Guid RoomId, [Required, StringLength(150)] st
 public sealed record MeterInput(Guid RoomId, [Required, StringLength(80)] string Code,
     UtilityType UtilityType, MeterDisplay Display, [Range(0, 4)] int DecimalPlaces, DateOnly InstalledOn);
 public sealed record MeterTaskInput(Guid MeterId, ReadingPurpose Purpose, DateOnly ReadingDate, DateOnly? BillingPeriod, Guid? ContractId = null);
+public sealed class MeterTaskQuery
+{
+    public Guid? LocationId{get;set;}
+    public Guid? RoomId{get;set;}
+    public DateOnly? DueDate{get;set;}
+    public MeterTaskStatus? Status{get;set;}
+    public int Page{get;set;}=1;
+}
 public sealed record IdentityConfirmation(
     bool HumanConfirmed, [Required, StringLength(12, MinimumLength = 12)] string CitizenIdentityNumber,
     [Required, StringLength(150)] string FullName, DateOnly DateOfBirth,
@@ -35,7 +43,7 @@ public sealed record IdentityConfirmationResult(Guid Id, IdentityVerificationSta
 public sealed record MeterTaskSummary(Guid Id, Guid MeterId, string Location, string Room, string MeterCode,
     UtilityType UtilityType, MeterDisplay Display, int DecimalPlaces, ReadingPurpose Purpose,
     DateOnly ReadingDate, DateOnly? BillingPeriod, MeterTaskStatus Status, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousValue,
-    Guid? ContractId = null, Guid? ConfirmedReadingId = null);
+    Guid? ContractId = null, Guid? ConfirmedReadingId = null,DateTimeOffset? DueAt=null,Guid? AssignedStaffUserId=null,Guid? AutomationPlanId=null,int Version=1,Guid? LocationId=null,Guid? RoomId=null);
 public sealed record ConfirmedReading(Guid Id, Guid TaskId, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousValue,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? Consumption, MeterReadingStatus Status, DateTimeOffset ConfirmedAt);
@@ -63,7 +71,7 @@ public interface ICaptureRepository
     Task<IdResult> CreateMeterAsync(MeterInput input, CancellationToken token);
     Task<IReadOnlyList<NamedResource>> MetersAsync(Guid locationId, CancellationToken token);
     Task<IdResult> CreateTaskAsync(MeterTaskInput input, CancellationToken token);
-    Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken token);
+    Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken token,MeterTaskQuery? query=null);
     Task<MeterTaskSummary> TaskAsync(Guid taskId, CancellationToken token);
     Task<ConfirmedReading> ReadingAsync(Guid readingId, CancellationToken token);
     Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken token);

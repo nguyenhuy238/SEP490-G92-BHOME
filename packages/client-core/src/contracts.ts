@@ -47,6 +47,7 @@ export interface ContractView {
   residentIds: string[];
   signatures: Signature[];
   activatedAt: string | null;
+  actualEndDate?: string | null;
   ownerSignerId: string;
   tenantUserId: string;
   representativeResidentId: string;
@@ -168,6 +169,65 @@ export interface MoveOut {
   electricityReadingId: string | null;
   waterReadingId: string | null;
   evidenceIds: string[];
+  inspectionStaffId?: string | null;
+  version?: number;
+}
+export interface ContractExpiryNotice {
+  id: string;
+  contractId: string;
+  roomNumber: string;
+  locationName: string;
+  endDate: string;
+  stage: string;
+  createdAt: string;
+}
+export interface FinalInspection {
+  id: string;
+  version: number;
+  baselineContractId: string;
+  baselineVersion: number;
+  baseline: HandoverSnapshot;
+  observed: HandoverSnapshot;
+  staffId: string;
+  inspectedAt: string;
+  ownerDecision: string | null;
+  ownerReason: string | null;
+  reviewedAt: string | null;
+}
+export interface InspectionPreparation {
+  baseline: HandoverView | null;
+  baselineContractId: string | null;
+  finalReadings: HandoverReading[];
+  otherTenantsRemain: boolean;
+}
+export interface SettlementSummary {
+  contractId: string;
+  depositContractId: string;
+  roomNumber: string;
+  verifiedSecurityDeposit: string;
+  appliedHoldingDeposit: string;
+  contractSpecificOutstanding: string | null;
+  approvedFinalCharges: string | null;
+  approvedDeductions: string | null;
+  refundAmount: string | null;
+  invoices: {
+    invoiceId: string;
+    billingPeriod: string;
+    shared: boolean;
+    financials: {
+      originalIssuedAmount: string;
+      approvedAdjustmentTotal: string;
+      effectivePayableAmount: string;
+      allocatedPayments: string;
+      outstandingAmount: string;
+      potentialExcessAmount: string;
+    };
+  }[];
+  unresolvedItems: string[];
+  otherActiveContracts: boolean;
+  resolved: boolean;
+  reference: string;
+  transferVerificationStatus: string;
 }
 export interface SettlementReview {
   id: string;
@@ -217,6 +277,57 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    expiryReminders: (signal?: AbortSignal) =>
+      request<ContractExpiryNotice[]>(`${root}/expiry-reminders`, { signal }),
+    inspections: (id: string, signal?: AbortSignal) =>
+      request<FinalInspection[]>(`${root}/${id}/move-out/inspections`, { signal }),
+    inspectionPreparation: (id: string, signal?: AbortSignal) =>
+      request<InspectionPreparation>(`${root}/${id}/move-out/inspection-preparation`, { signal }),
+    settlementSummary: (id: string, signal?: AbortSignal) =>
+      request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
+    moveOutHistory: (id: string, signal?: AbortSignal) =>
+      request<{ version: number; action: string; occurredAt: string }[]>(
+        `${root}/${id}/move-out/history`,
+        { signal },
+      ),
+    moveOutAssignments: (signal?: AbortSignal) =>
+      request<
+        {
+          contractId: string;
+          roomNumber: string;
+          locationName: string;
+          scheduledAt: string;
+          status: string;
+        }[]
+      >(`${root}/move-out-assignments`, { signal }),
+    inspectionStaff: async (locationId: string, signal?: AbortSignal) => {
+      const [staff, assignments] = await Promise.all([
+        request<NamedOption[]>('/api/v1/capture/staff', { signal }),
+        request<{ staffUserId: string; startDate: string; endDate: string }[]>(
+          `/api/v1/staff-location-assignments?locationId=${guid(locationId)}`,
+          { signal },
+        ),
+      ]);
+      const today = businessToday();
+      return staff.filter((s) =>
+        assignments.some(
+          (a) => a.staffUserId === s.id && a.startDate <= today && a.endDate >= today,
+        ),
+      );
+    },
+    versions: (id: string, signal?: AbortSignal) =>
+      request<
+        {
+          id: string;
+          previousContractId: string | null;
+          kind: string;
+          status: string;
+          startDate: string;
+          endDate: string;
+          monthlyRent: string | null;
+          terms: string;
+        }[]
+      >(`${root}/${id}/versions`, { signal }),
     list: async (page = 1, status = '', locationId = '', signal?: AbortSignal) => {
       const result = await request<ContractPage>(
         `${root}?${new URLSearchParams({ page: String(page), pageSize: '20', ...(status ? { status } : {}), ...(locationId ? { locationId } : {}) })}`,
@@ -489,6 +600,11 @@ export const labels: Record<string, string> = {
   move_out_not_ready_for_inspection:
     'Cần duyệt yêu cầu, đặt lịch và đến ngày trả phòng trước khi lập biên bản.',
   settlement_unresolved: 'Nghĩa vụ quyết toán chưa hoàn tất hoặc đã thay đổi.',
+  settlement_review_changed:
+    'Số liệu quyết toán đã thay đổi. Tải lại để đối chiếu và xác nhận phiên bản mới.',
+  move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
+  inspection_changed_or_reviewed:
+    'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
   move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
@@ -593,7 +709,7 @@ export function guid(value: string) {
     throw new Error('Mã định danh phải là UUID hợp lệ.');
   return value;
 }
-function required(value: string, max: number) {
+export function required(value: string, max: number) {
   if (!value.trim() || value.trim().length > max)
     throw new Error(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
   return value.trim();

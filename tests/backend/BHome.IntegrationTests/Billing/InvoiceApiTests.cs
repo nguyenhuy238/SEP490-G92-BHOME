@@ -20,7 +20,7 @@ using OpenCvSharp;
 namespace BHome.IntegrationTests.Billing;
 
 [Trait("Category", "Docker")]
-public sealed class InvoiceApiTests(CaptureFixture fixture) : IClassFixture<CaptureFixture>
+public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixture<CaptureFixture>
 {
     private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
     private sealed record Actor(Guid Id, HttpClient Client);

@@ -7,7 +7,7 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.Billing;
 
-public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock)
+public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock,IBillingAutomationSchedules? automation=null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new InvoiceException(401, "authentication_required");
     private bool Owner => user.IsInRole(Roles.Owner);
@@ -66,7 +66,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         var result = await repository.ListAsync(scope, page, pageSize, roomId, t);
         return new(result.Items.Select(View).ToArray(), page, pageSize, result.TotalCount);
     }
-    public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t)
+    public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t,Guid? expectedAutomationPlanId=null)
     {
         RequireOwner();
         if (x.RoomId == Guid.Empty || x.RepresentativeContractId == Guid.Empty || x.BillingPeriod == default ||
@@ -81,12 +81,20 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             }
             var room = await repository.RoomAsync(x.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
-            var schedule = await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required");
+            var plan=automation is null?null:await automation.ForPeriodAsync(room.LocationId,x.BillingPeriod,t);
+            if(expectedAutomationPlanId is {} expected)
+            {
+                if(plan?.Id!=expected||!await automation!.AuthorizedAsync(plan,Actor,x.BillingPeriod,false,t))throw new InvoiceException(409,"automation_authorization_changed");
+                var selection=await automation.RepresentativeAsync(x.RoomId,x.BillingPeriod,t);
+                var eligible=await repository.OccupanciesAsync(x.RoomId,x.BillingPeriod,x.BillingPeriod.AddMonths(1).AddDays(-1),t);
+                if(selection is null&&eligible.Count!=1||selection is not null&&selection.ContractId!=x.RepresentativeContractId)throw new InvoiceException(409,"representative_selection_required");
+            }
+            var schedule = plan is null?await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required"):BillingAutomationService.Calendar(plan);
             if (Today < InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DraftDay, schedule.DraftMonthOffset))
                 throw new InvoiceException(409, "draft_date_not_reached");
             var invoice = new Invoice { RoomId = room.Id, LocationId = room.LocationId, RoomNumber = room.RoomNumber,
                 LocationName = room.Location.Name, BillingPeriod = x.BillingPeriod, RepresentativeContractId = x.RepresentativeContractId,
-                CreatedByUserId = Actor, ScheduleSnapshot = JsonSerializer.Serialize(schedule),
+                CreatedByUserId = Actor,AutomationPlanId=expectedAutomationPlanId, ScheduleSnapshot = JsonSerializer.Serialize(schedule),
                 ScheduledFinalDate = InvoiceMath.CalendarDate(x.BillingPeriod, schedule.FinalDay, schedule.FinalMonthOffset),
                 DueDate = InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DueDay, schedule.DueMonthOffset) };
             await CalculateAsync(invoice, schedule, t); repository.Add(invoice);
@@ -94,7 +102,16 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         }, t);
     }
 
-    public async Task<InvoiceView> RefreshAsync(Guid id, int version, CancellationToken t)
+    private async Task ScheduledAuthority(Invoice invoice,Guid? expected,CancellationToken t)
+    {
+        if(expected is null)return;
+        var plan=automation is null?null:await automation.ForPeriodAsync(invoice.LocationId,invoice.BillingPeriod,t);
+        if(plan?.Id!=expected||!await automation!.AuthorizedAsync(plan,Actor,invoice.BillingPeriod,true,t))throw new InvoiceException(409,"automation_authorization_changed");
+        if(BillingAutomationService.CalendarKey(JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!)!=BillingAutomationService.CalendarKey(BillingAutomationService.Calendar(plan)))throw new InvoiceException(409,"automation_calendar_conflict");
+        if(await repository.HasPendingAdjustmentsAsync(invoice.Id,t))throw new InvoiceException(409,"invoice_adjustment_pending");
+    }
+    private static IEnumerable<InvoiceLineView> Charges(Invoice i)=>View(i).Lines.Select(line=>line with{Id=Guid.Empty});
+    public async Task<InvoiceView> RefreshAsync(Guid id, int version, CancellationToken t,Guid? expectedAutomationPlanId=null)
     {
         RequireOwner();
         var initial = await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found");
@@ -102,6 +119,18 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         {
             var invoice = await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found");
             if (invoice.Status != InvoiceStatus.Draft || invoice.Version != version) throw new InvoiceException(409, "invoice_changed_or_final");
+            await ScheduledAuthority(invoice,expectedAutomationPlanId,t);
+            if(expectedAutomationPlanId is not null)
+            {
+                if((await repository.DraftCorrectionsAsync(id,t)).Count>0)throw new InvoiceException(409,"approved_draft_requires_review");
+                var check=new Invoice{RoomId=invoice.RoomId,LocationId=invoice.LocationId,BillingPeriod=invoice.BillingPeriod,RepresentativeContractId=invoice.RepresentativeContractId};
+                await CalculateAsync(check,JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!,t,id);
+                if(Charges(invoice).SequenceEqual(Charges(check))&&invoice.MissingInputs.Order().SequenceEqual(check.MissingInputs.Order())&&check.Recipients.All(r=>invoice.Recipients.Any(old=>old.TenantUserId==r.TenantUserId)))return View(invoice);
+                repository.RemoveLines(invoice);
+                foreach(var line in check.Lines){line.InvoiceId=id;invoice.Lines.Add(line);repository.Add(line);}
+                foreach(var recipient in check.Recipients.Where(r=>invoice.Recipients.All(old=>old.TenantUserId!=r.TenantUserId)))invoice.Recipients.Add(new(){InvoiceId=id,TenantUserId=recipient.TenantUserId});
+                invoice.Total=check.Total;invoice.MissingInputs=check.MissingInputs;invoice.Version++;repository.Audit(Actor,"InvoiceDraftScheduledRefresh",id,clock.GetUtcNow());return View(invoice);
+            }
             repository.RemoveLines(invoice);
             await CalculateAsync(invoice, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t);
             foreach (var line in invoice.Lines) repository.Add(line);
@@ -109,7 +138,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         }, t);
     }
 
-    public async Task<InvoiceView> FinalizeAsync(Guid id, int version, CancellationToken t)
+    public async Task<InvoiceView> FinalizeAsync(Guid id, int version, CancellationToken t,Guid? expectedAutomationPlanId=null)
     {
         RequireOwner();
         if (version < 1) throw new InvoiceException(400, "invalid_invoice_version");
@@ -119,26 +148,28 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             var invoice = await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found");
             // The Room/period business key and lock make repeated/concurrent finalization a single effect.
             if (invoice.Status == InvoiceStatus.Final) return View(invoice);
+            await ScheduledAuthority(invoice,expectedAutomationPlanId,t);
             if (invoice.Version != version) throw new InvoiceException(409, "invoice_changed_or_final");
             if (Today < invoice.ScheduledFinalDate) throw new InvoiceException(409, "finalization_date_not_reached");
             var room = await repository.RoomAsync(invoice.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
             var check = new Invoice { RoomId = invoice.RoomId, LocationId = invoice.LocationId,
                 BillingPeriod = invoice.BillingPeriod, RepresentativeContractId = invoice.RepresentativeContractId };
-            await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t);
+            await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t, invoice.Id);
             if (check.MissingInputs.Length > 0) throw new InvoiceException(409, "confirmed_billing_inputs_required");
-            static IEnumerable<InvoiceLineView> Charges(Invoice i) => View(i).Lines.Select(line => line with { Id = Guid.Empty });
             if (invoice.MissingInputs.Length > 0 || !Charges(invoice).SequenceEqual(Charges(check)) ||
                 !invoice.Recipients.Select(r => r.TenantUserId).Order().SequenceEqual(check.Recipients.Select(r => r.TenantUserId).Order()))
                 throw new InvoiceException(409, "draft_refresh_and_review_required");
             invoice.Status = InvoiceStatus.Final; invoice.Version++;
             var now = clock.GetUtcNow();
             invoice.FinalizedAt = now.AddTicks(-(now.Ticks % 10)); invoice.FinalizedByUserId = Actor;
+            invoice.AutomationFinalizationPlanId=expectedAutomationPlanId;
+            repository.Add(new InvoiceIssuedEvent{InvoiceId=id,OwnerUserId=Actor,AutomationPlanId=expectedAutomationPlanId,OccurredAt=invoice.FinalizedAt.Value});
             repository.Audit(Actor, "InvoiceFinalized", id, clock.GetUtcNow()); return View(invoice);
         }, t);
     }
 
-    private async Task CalculateAsync(Invoice invoice, BillingSchedule schedule, CancellationToken t)
+    private async Task CalculateAsync(Invoice invoice, BillingSchedule schedule, CancellationToken t, Guid? correctionsFor = null)
     {
         var start = invoice.BillingPeriod; var end = start.AddMonths(1).AddDays(-1);
         var occupants = await repository.OccupanciesAsync(invoice.RoomId, start, end, t);
@@ -181,15 +212,22 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 MeterReadingId = reading?.Reading.Id, PreviousReading = reading?.Reading.PreviousValue, ConfirmedReading = reading?.Reading.ConfirmedValue });
             if (policy.Id != Guid.Empty) used.Add(policy.Id);
         }
+        foreach (var correction in (await repository.DraftCorrectionsAsync(correctionsFor ?? invoice.Id, t)).GroupBy(d => d.ChargeCode).Select(g => g.OrderByDescending(d => d.Sequence).First()))
+        {
+            var line = invoice.Lines.SingleOrDefault(l => l.ChargeCode == correction.ChargeCode);
+            if (line is null || AdjustmentRules.SourceFingerprint(line) != correction.SourceFingerprint)
+            { missing.Add("draft_correction_source_changed"); continue; }
+            line.CalculatedAmount = line.Amount; line.Amount = correction.CorrectedAmount!.Value; line.CorrectionRequestId = correction.RequestId;
+        }
         invoice.MissingInputs = missing.Distinct().ToArray();
         invoice.Total = invoice.Lines.Sum(l => l.Amount);
         if (invoice.Total >= 1_000_000_000_000_000_000m) throw new InvoiceException(400, "invoice_amount_out_of_range");
         await repository.RecordPolicyUsageAsync(used.Distinct().ToArray(), clock.GetUtcNow(), t);
     }
 
-    private static InvoiceView View(Invoice i) => new(i.Id, i.RoomId, i.LocationId, i.RoomNumber, i.LocationName,
+    internal static InvoiceView View(Invoice i) => new(i.Id, i.RoomId, i.LocationId, i.RoomNumber, i.LocationName,
         i.BillingPeriod, i.Status.ToString(), i.Version, i.Total, i.MissingInputs, i.ScheduledFinalDate, i.DueDate, i.FinalizedAt,
         i.RepresentativeTenantUserId, i.Lines.OrderBy(l => l.ChargeCode).Select(l => new InvoiceLineView(l.Id, l.Category.ToString(),
             l.ChargeCode, l.Name, l.PolicyId, l.PolicyVersion, l.RateDate, l.Rate, l.Quantity, l.OccupiedDays, l.PeriodDays,
-            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading)).ToArray());
+            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading, l.CalculatedAmount, l.CorrectionRequestId)).ToArray());
 }

@@ -12,6 +12,10 @@ Nguồn nghiệp vụ: [quyết định và traceability](../development/BH21_TR
 Thay DBR-06 bằng unique Room + tháng theo quyết định người dùng 01/11/2026.
 Owner quản trị toàn chuỗi; Tenant chỉ đọc hóa đơn có snapshot recipient của mình;
 Staff không truy cập số tiền/DTO hóa đơn. Không có Payment/Paid trong API này.
+BH-41 thêm [luồng correction/adjustment](INVOICE_ADJUSTMENTS.md). InvoiceLine trả thêm
+calculatedAmount/correctionRequestId khi có correction đã duyệt trước Final. Refresh/Finalize
+áp correction khi fingerprint nguồn khớp; nguồn đổi trả missing input để Owner review lại.
+Final total vẫn là số tiền đã phát hành; effective balance đọc qua Payment API riêng.
 
 | Method | `/api/v1` route                           | Quyền, dữ liệu                                                            |
 | ------ | ----------------------------------------- | ------------------------------------------------------------------------- |

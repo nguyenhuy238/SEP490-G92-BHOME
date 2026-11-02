@@ -31,6 +31,7 @@ import {
   type InvoicePayment,
 } from '../../../../../packages/client-core/src/payments';
 import { usePaymentApi } from './usePaymentApi';
+import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
@@ -69,7 +70,21 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
               {state.data.overdueDays} ngày
             </Typography>
             <Typography>Nội dung chuyển khoản: {state.data.transferReference}</Typography>
-            {state.data.pendingReview && (
+            {state.data.originalIssuedAmount !== undefined && (
+              <Typography>
+                Tiền gốc: {formatContractMoney(state.data.originalIssuedAmount)} · Điều chỉnh:{' '}
+                {signedVnd(state.data.approvedAdjustmentTotal ?? '0')} · Nghĩa vụ hiện hành:{' '}
+                {formatContractMoney(state.data.payableAmount)}
+              </Typography>
+            )}
+            {state.data.reviewStatus === 'PendingReview' && (
+              <Alert severity="warning">
+                Tiền thừa chờ xem xét:{' '}
+                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Chưa hoàn tiền hoặc
+                chuyển credit.
+              </Alert>
+            )}
+            {state.data.pendingReview && state.data.reviewStatus !== 'PendingReview' && (
               <Alert severity="info">
                 Có giao dịch đang chờ đối soát. Số dư chỉ thay đổi sau phân bổ được xác minh.
               </Alert>

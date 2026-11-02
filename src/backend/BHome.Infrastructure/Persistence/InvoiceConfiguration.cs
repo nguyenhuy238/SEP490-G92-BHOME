@@ -44,6 +44,8 @@ internal sealed class InvoiceLineConfiguration : IEntityTypeConfiguration<Invoic
     {
         e.ToTable("InvoiceLines", t => t.HasCheckConstraint("CK_InvoiceLine_Amounts", "\"Rate\" >= 0 AND \"Quantity\" >= 0 AND \"Amount\" >= 0 AND \"OccupiedDays\" BETWEEN 1 AND \"PeriodDays\" AND \"PeriodDays\" BETWEEN 28 AND 31"));
         e.Property(x => x.Rate).HasPrecision(18, 4); e.Property(x => x.Quantity).HasPrecision(18, 4); e.Property(x => x.Amount).HasPrecision(18, 0);
+        e.Property(x => x.CalculatedAmount).HasPrecision(18, 0);
+        e.HasOne<InvoiceAdjustmentRequest>().WithMany().HasForeignKey(x => x.CorrectionRequestId).OnDelete(DeleteBehavior.Restrict);
         e.Property(x => x.PreviousReading).HasPrecision(18, 4); e.Property(x => x.ConfirmedReading).HasPrecision(18, 4);
         e.Property(x => x.ChargeCode).HasMaxLength(80); e.Property(x => x.Name).HasMaxLength(150);
         e.HasIndex(x => new { x.InvoiceId, x.ChargeCode }).IsUnique();

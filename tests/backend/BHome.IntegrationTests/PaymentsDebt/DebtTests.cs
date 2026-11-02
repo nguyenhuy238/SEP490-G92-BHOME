@@ -13,6 +13,22 @@ namespace BHome.IntegrationTests.PaymentsDebt;
 public sealed partial class PaymentLedgerTests
 {
     [Fact]
+    public async Task StaffTenantRoleCombinationDoesNotExposeFullFinancialDetailsOutsideOwnEntitlement()
+    {
+        var own=await Setup();var outside=await Setup();
+        await using(var scope=fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db=scope.ServiceProvider.GetRequiredService<BHomeDbContext>();var users=scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var actor=(await users.FindByIdAsync(own.Tenants[0].ToString()))!;Assert.True((await users.AddToRoleAsync(actor,Roles.Staff)).Succeeded);
+            var today=DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow,"Asia/Ho_Chi_Minh").DateTime);
+            db.Add(new StaffLocationAssignment(outside.Location,actor.Id,own.Owner,today.AddDays(-1),today.AddDays(1)));await db.SaveChangesAsync();
+        }
+        using var client=await Client(own.Tenants[0]);
+        var operational=(await client.GetFromJsonAsync<PagedResult<DebtInvoiceView>>($"/api/v1/debts?locationId={outside.Location}"))!.Items.Single();
+        Assert.Null(operational.PayableAmount);Assert.Null(operational.PaidAmount);Assert.Null(operational.OriginalIssuedAmount);Assert.Null(operational.ApprovedAdjustmentTotal);Assert.Null(operational.PotentialExcessAmount);
+        var personal=(await client.GetFromJsonAsync<PagedResult<DebtInvoiceView>>($"/api/v1/debts?locationId={own.Location}"))!.Items.Single();Assert.Equal(100000,personal.PayableAmount);
+    }
+    [Fact]
     public async Task DebtHistoryFiltersAndStaffScopeUseSharedInvoiceOnceAndRemovePaidDebt()
     {
         var w=await Setup();using var owner=await Client(w.Owner);using var tenant=await Client(w.Tenants[1]);using var staff=await Client(w.Staff);
