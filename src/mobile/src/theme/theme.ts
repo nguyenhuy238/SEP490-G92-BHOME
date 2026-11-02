@@ -20,6 +20,23 @@ export const colors = {
   amber: '#a86108',
   amberSoft: '#fff8e8',
 };
+
+// Staff dashboard tokens are scoped so Owner and Tenant keep their current palette.
+export const staffColors = {
+  navy: '#193653',
+  background: '#F5F7FB',
+  accent: '#F59E0B',
+  blue: '#2563EB',
+  blueSoft: '#E8F0FE',
+  purple: '#8054C7',
+  purpleSoft: '#F1EBFA',
+  green: '#16804A',
+  greenSoft: '#E8F7EE',
+  orange: '#CE7B16',
+  orangeSoft: '#FFF3E3',
+  red: '#D44747',
+  redSoft: '#FDECEC',
+};
 export const theme = {
   ...MD3LightTheme,
   roundness: 3,

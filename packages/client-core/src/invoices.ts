@@ -1,4 +1,5 @@
 import { ApiError } from './api';
+import { groupVietnameseIntegerDigits } from './localization';
 
 // Keep decimal strings exact, including amounts beyond Number.MAX_SAFE_INTEGER.
 export function formatBillingDecimal(value: string | number): string {
@@ -6,7 +7,7 @@ export function formatBillingDecimal(value: string | number): string {
   if (!/^\d+(?:\.\d{1,4})?$/.test(text)) return '—';
   const [whole, digits = ''] = text.split('.');
   const fraction = digits.replace(/0+$/, '');
-  return new Intl.NumberFormat('vi-VN').format(BigInt(whole!)) + (fraction ? ',' + fraction : '');
+  return groupVietnameseIntegerDigits(whole!) + (fraction ? ',' + fraction : '');
 }
 
 export interface InvoiceLine {

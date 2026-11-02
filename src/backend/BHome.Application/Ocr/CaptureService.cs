@@ -31,9 +31,10 @@ public sealed class CaptureService(ICaptureRepository repository, ICurrentUser u
     public Task<IdResult> CreateMeterAsync(MeterInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateMeterAsync(x, t));
     public Task<IReadOnlyList<NamedResource>> MetersAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.MetersAsync(id, t));
     public Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateTaskAsync(x, t));
-    public Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t,MeterTaskQuery? q=null) => Allow(Operators, () => {
-        if(q is not null&&(q.Page<1||q.Page>int.MaxValue/100||q.Status is {} status&&!Enum.IsDefined(status)))throw new CaptureValidationException("invalid_meter_task_filter");
-        return repository.TasksAsync(t,q);
+    public Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null) => Allow(Operators, () =>
+    {
+        if (q is not null && (q.Page < 1 || q.Page > int.MaxValue / 100 || q.Status is { } status && !Enum.IsDefined(status))) throw new CaptureValidationException("invalid_meter_task_filter");
+        return repository.TasksAsync(t, q);
     });
     public Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.TaskAsync(id, t));
     public Task<ConfirmedReading> ReadingAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.ReadingAsync(id, t));

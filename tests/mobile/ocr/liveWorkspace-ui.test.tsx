@@ -283,24 +283,22 @@ it('opens a Tenant invoice only after authorized target resolution and read pers
   ).toBe(true);
 });
 it('does not open or mark a notification when its target permission was revoked', async () => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async (url) =>
-      String(url).endsWith('/target')
-        ? json({}, 404)
-        : json(
-            page([
-              {
-                id,
-                category: 'Task',
-                title: 'Tác vụ tổng hợp',
-                summary: 'Được giao',
-                createdAt: '2026-11-02T00:00:00Z',
-                readAt: null,
-              },
-            ]),
-          ),
-    );
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    String(url).endsWith('/target')
+      ? json({}, 404)
+      : json(
+          page([
+            {
+              id,
+              category: 'Task',
+              title: 'Tác vụ tổng hợp',
+              summary: 'Được giao',
+              createdAt: '2026-11-02T00:00:00Z',
+              readAt: null,
+            },
+          ]),
+        ),
+  );
   setApi(fetcher);
   render(<NotificationsScreen />);
   await screen.findByText('Tác vụ tổng hợp');

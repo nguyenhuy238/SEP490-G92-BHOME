@@ -9,15 +9,15 @@ queue/worker hoặc JOB-02 bằng subsystem khác. Consumer/inbox mới trong No
 các nguồn cũ, giữ route task notifications và read-state tương thích. Shared DI/schema/client
 integration cần team review theo MODULES.md; phiên này đã được giao triển khai xuyên các lớp.
 
-| Yêu cầu | Thành phần | Acceptance |
-| --- | --- | --- |
-| Lịch Owner, phiên bản theo kỳ | BillingSchedule hiện có + immutable automation plans/snapshot | Sai role/timezone/order/version từ chối; kỳ trước không lấy plan tương lai |
-| JOB-09 | Queue/handler + OperationalTask/Capture | Room/type/period unique cả manual/race; assignee current hoặc unassigned; missing/replacement surfaced |
-| Draft | InvoiceService/calculation/snapshots hiện có | Một Room/kỳ, không OCR proposal, không overwrite correction/Final |
-| Final | Owner delegation opt-in, InvoiceService revalidate | Mặc định tắt; missing/conflict/Pending request không Final; manual/auto race một effect/event |
-| Inbox | Notifications + các nguồn event hiện có | Event/recipient unique, private audience, read bền vững, mở object reauthorize |
-| JOB-04 | Worker/queue hiện có + durable delivery state | Provider unconfigured không success; retry bounded/stable provider key, không rollback finance |
-| Clients/demo | Existing navigation/screens + isolated seed | Owner settings/monitor/inbox; Staff Capture tasks; Tenant entitled invoices/notices; browser real API |
+| Yêu cầu                       | Thành phần                                                    | Acceptance                                                                                             |
+| ----------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Lịch Owner, phiên bản theo kỳ | BillingSchedule hiện có + immutable automation plans/snapshot | Sai role/timezone/order/version từ chối; kỳ trước không lấy plan tương lai                             |
+| JOB-09                        | Queue/handler + OperationalTask/Capture                       | Room/type/period unique cả manual/race; assignee current hoặc unassigned; missing/replacement surfaced |
+| Draft                         | InvoiceService/calculation/snapshots hiện có                  | Một Room/kỳ, không OCR proposal, không overwrite correction/Final                                      |
+| Final                         | Owner delegation opt-in, InvoiceService revalidate            | Mặc định tắt; missing/conflict/Pending request không Final; manual/auto race một effect/event          |
+| Inbox                         | Notifications + các nguồn event hiện có                       | Event/recipient unique, private audience, read bền vững, mở object reauthorize                         |
+| JOB-04                        | Worker/queue hiện có + durable delivery state                 | Provider unconfigured không success; retry bounded/stable provider key, không rollback finance         |
+| Clients/demo                  | Existing navigation/screens + isolated seed                   | Owner settings/monitor/inbox; Staff Capture tasks; Tenant entitled invoices/notices; browser real API  |
 
 Owner phải chọn đại diện tính hóa đơn khi có nhiều eligible Contracts và chưa có Invoice;
 không tự chọn người/rent precedence từ GUID. Đây là cùng input RepresentativeContractId của

@@ -1,7 +1,7 @@
 // Synthetic billing bootstrap through real APIs; target is the isolated contract demo only.
 const fs = require('node:fs'),
   path = require('node:path'),
-  crypto = require('node:crypto'),
+  nodeCrypto = require('node:crypto'),
   assert = require('node:assert/strict');
 const output = path.join(__dirname, '../.tools/contract-demo');
 const settings = JSON.parse(
@@ -10,7 +10,7 @@ const settings = JSON.parse(
 const base = process.env.BHOME_INVOICE_DEMO_API || 'http://localhost:5540';
 const id = (n) => `de000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const operationKey = (input) => {
-  const h = crypto
+  const h = nodeCrypto
     .createHash('sha256')
     .update('invoice-demo/' + input)
     .digest('hex');

@@ -5,14 +5,14 @@ JOB-02 (30 ngày), GBR-01/02/04/09/10/13/18; SDS và HUY_*; guides Contract/BH-2
 Đã xác nhận member/QHuy, working tree sạch, HEAD 3983fc7. Git.txt gốc không có trong checkout;
 theo AGENTS.md, chỉ commit local, không push/merge/deploy.
 
-| Hành vi | Thành phần | Acceptance |
-| --- | --- | --- |
-| Gia hạn | ContractService hiện có, signing/preview/readiness/version chain | Chưa effective không Active; signed versions/history/cọc root giữ nguyên; duplicate/race |
-| Yêu cầu/duyệt/lịch kiểm tra | ContractMoveOut, assignee hiện hành, audit | Owner duyệt không đóng; Staff thấy lịch được giao; Tenant khác 404 |
-| Inspection | Snapshot handover đã xác nhận, asset checklist, confirmed readings/evidence | Baseline bất biến; Owner xác nhận; co-tenant không bị reset meter/charge |
-| Settlement | IContractSettlementLedger thật + BH-41 financial projection | Shared debt là contextual/unallocated, không nợ riêng; deposit/refund policy thiếu → Pending |
-| Close/release | Re-read fingerprint dưới Room lock chung payment/adjustment | A đóng B/C vẫn Active/Occupied; last eligible mới Available; stale review chặn |
-| Expiry | Job-02 handler/event durable unique Contract/enddate/window | Lặp không duplicate, không auto-close; notification consumer pending |
+| Hành vi                     | Thành phần                                                                  | Acceptance                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Gia hạn                     | ContractService hiện có, signing/preview/readiness/version chain            | Chưa effective không Active; signed versions/history/cọc root giữ nguyên; duplicate/race     |
+| Yêu cầu/duyệt/lịch kiểm tra | ContractMoveOut, assignee hiện hành, audit                                  | Owner duyệt không đóng; Staff thấy lịch được giao; Tenant khác 404                           |
+| Inspection                  | Snapshot handover đã xác nhận, asset checklist, confirmed readings/evidence | Baseline bất biến; Owner xác nhận; co-tenant không bị reset meter/charge                     |
+| Settlement                  | IContractSettlementLedger thật + BH-41 financial projection                 | Shared debt là contextual/unallocated, không nợ riêng; deposit/refund policy thiếu → Pending |
+| Close/release               | Re-read fingerprint dưới Room lock chung payment/adjustment                 | A đóng B/C vẫn Active/Occupied; last eligible mới Available; stale review chặn               |
+| Expiry                      | Job-02 handler/event durable unique Contract/enddate/window                 | Lặp không duplicate, không auto-close; notification consumer pending                         |
 
 Quyết định phạm vi an toàn: không thêm công thức khấu trừ, refund/credit hay chia nợ chung.
 Ledger chỉ có thể resolved khi verified deposit = required deposit = 0, không holding chưa xác

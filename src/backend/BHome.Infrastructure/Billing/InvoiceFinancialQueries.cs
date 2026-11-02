@@ -30,7 +30,13 @@ internal static class InvoiceFinancialQueries
 {
     public static IQueryable<InvoiceFinancialRow> Financials(this BHomeDbContext db, IQueryable<Invoice> invoices) => invoices.Select(i => new InvoiceFinancialRow
     {
-        Id = i.Id, LocationId = i.LocationId, RoomId = i.RoomId, LocationName = i.LocationName, RoomNumber = i.RoomNumber, BillingPeriod = i.BillingPeriod, DueDate = i.DueDate,
+        Id = i.Id,
+        LocationId = i.LocationId,
+        RoomId = i.RoomId,
+        LocationName = i.LocationName,
+        RoomNumber = i.RoomNumber,
+        BillingPeriod = i.BillingPeriod,
+        DueDate = i.DueDate,
         Original = i.Total,
         Adjustments = db.Set<InvoiceAdjustmentDecision>().Where(d => d.InvoiceId == i.Id && d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved").Sum(d => (decimal?)d.Delta) ?? 0m,
         Paid = db.Set<PaymentAllocation>().Where(a => a.InvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m,

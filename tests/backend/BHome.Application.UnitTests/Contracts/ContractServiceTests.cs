@@ -78,7 +78,7 @@ public sealed class ContractServiceTests
         {
             var c = await Create(); c.Status = ContractStatus.PendingActivation;
             var bytes = Encoding.UTF8.GetBytes("TEST ONLY verified PDF boundary"); var hash = Convert.ToHexString(SHA256.HashData(bytes));
-            foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId }) c.Signatures.Add(new ContractSignature
+            foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId ?? throw new InvalidOperationException("Signing fixture requires an existing Tenant account.") }) c.Signatures.Add(new ContractSignature
             {
                 ContractId = c.Id,
                 SignerUserId = signer,

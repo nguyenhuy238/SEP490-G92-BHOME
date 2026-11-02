@@ -11,7 +11,7 @@ public sealed record ContractWorkflowConfiguration(ContractTemplateView Template
     string? HoldingBlocker, string? SettlementBlocker);
 public sealed record ContractChoice(Guid Id, string Label);
 public sealed record ContractRoomChoice(Guid Id, string Label, Guid LocationId, string Status);
-public sealed record ContractResidentChoice(Guid Id, Guid RoomId, string Label, Guid? TenantUserId, bool Verified);
+public sealed record ContractResidentChoice(Guid Id, Guid RoomId, string Label, Guid? TenantUserId, bool Verified, string ResidentType = "Representative");
 public sealed record ContractPreparation(IReadOnlyList<ContractChoice> Locations, IReadOnlyList<ContractRoomChoice> Rooms,
     IReadOnlyList<ContractResidentChoice> Residents, IReadOnlyList<ContractChoice> OwnerSigners);
 public sealed record TenantAccountLink(Guid TenantUserId);

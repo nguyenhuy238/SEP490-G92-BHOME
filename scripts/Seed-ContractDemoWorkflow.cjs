@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
+const nodeCrypto = require('node:crypto');
 const settings = JSON.parse(
   fs
     .readFileSync(path.join(__dirname, '../.tools/contract-demo/runtime.json'), 'utf8')
@@ -12,7 +12,7 @@ const base = 'http://localhost:5540',
   root = '/api/v1/contracts';
 const id = (n) => `de000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function key(value) {
-  const h = crypto
+  const h = nodeCrypto
     .createHash('sha256')
     .update('bhome-contract-demo/' + value)
     .digest('hex');
@@ -33,7 +33,9 @@ async function call(token, route, body, operation) {
     let code = '';
     try {
       code = (await r.json()).code ?? '';
-    } catch {}
+    } catch {
+      // Non-JSON error responses still report the HTTP status and route below.
+    }
     throw new Error(`Demo API ${r.status}: ${route} ${code}`);
   }
   return r.status === 204 ? null : r.json();

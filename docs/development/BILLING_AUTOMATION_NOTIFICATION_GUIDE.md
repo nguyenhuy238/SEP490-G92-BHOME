@@ -22,14 +22,14 @@ refund/credit/deposit policy hoặc provider thật khi chưa có specification/
 
 ## 2. Workflow đã nối
 
-| Workflow | Backend / DB | Owner Web | Staff Mobile | Tenant Mobile | Demo thật |
-| --- | --- | --- | --- | --- | --- |
-| Lịch tự động theo cơ sở/kỳ | Version + snapshot bất biến | Cấu hình, lịch sử, preview | Không có quyền sửa | Không có quyền sửa | API/DB + Web |
-| JOB-09 | Room/type/kỳ unique; current assignment | Theo dõi lỗi, phân công task | Lọc và mở luồng ghi số hiện có | Không có quyền tác nghiệp | API/MinIO; Web Mobile xem kết quả |
-| JOB-10 Draft | InvoiceService và snapshots hiện có | Xem Draft, missing inputs | Không có quyền tài chính | Viewer entitlement hiện có | API tạo Draft thiếu dữ liệu |
-| JOB-10 Final | Opt-in Owner, revalidate, immutable Final | Lịch, kết quả, manual hiện có | Không có quyền phát hành | Xem Final chung của phòng | API/worker + cả ba Tenant mở UI |
-| Inbox và nguồn sự kiện | Persistent + recipient/event unique | Bell, inbox, read, deep links | Inbox Task, quyền hiện tại | Invoice/Payment/Adjustment/Contract | Web/Mobile web + DB |
-| JOB-04 | Lease/retry/attempts bền vững | Theo dõi delivery | Inbox vẫn hoạt động | Inbox vẫn hoạt động | Provider **Unconfigured**; retry provider bằng integration test |
+| Workflow                   | Backend / DB                              | Owner Web                     | Staff Mobile                   | Tenant Mobile                       | Demo thật                                                       |
+| -------------------------- | ----------------------------------------- | ----------------------------- | ------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
+| Lịch tự động theo cơ sở/kỳ | Version + snapshot bất biến               | Cấu hình, lịch sử, preview    | Không có quyền sửa             | Không có quyền sửa                  | API/DB + Web                                                    |
+| JOB-09                     | Room/type/kỳ unique; current assignment   | Theo dõi lỗi, phân công task  | Lọc và mở luồng ghi số hiện có | Không có quyền tác nghiệp           | API/MinIO; Web Mobile xem kết quả                               |
+| JOB-10 Draft               | InvoiceService và snapshots hiện có       | Xem Draft, missing inputs     | Không có quyền tài chính       | Viewer entitlement hiện có          | API tạo Draft thiếu dữ liệu                                     |
+| JOB-10 Final               | Opt-in Owner, revalidate, immutable Final | Lịch, kết quả, manual hiện có | Không có quyền phát hành       | Xem Final chung của phòng           | API/worker + cả ba Tenant mở UI                                 |
+| Inbox và nguồn sự kiện     | Persistent + recipient/event unique       | Bell, inbox, read, deep links | Inbox Task, quyền hiện tại     | Invoice/Payment/Adjustment/Contract | Web/Mobile web + DB                                             |
+| JOB-04                     | Lease/retry/attempts bền vững             | Theo dõi delivery             | Inbox vẫn hoạt động            | Inbox vẫn hoạt động                 | Provider **Unconfigured**; retry provider bằng integration test |
 
 Ghi số và upload ảnh tổng hợp đã thực hiện qua API thật. Smoke Mobile web mở task đã xác nhận;
 không coi đây là bằng chứng camera/native notification trên iPhone/Android thật.
@@ -46,16 +46,16 @@ month-offset 0–2 của calendar hiện có. Ngày nghiệp vụ dùng `Billing
 ở `Asia/Ho_Chi_Minh`; timestamps lưu UTC. Ngày 29–31 co về cuối tháng ngắn bằng InvoiceMath.
 Không tự tạo lịch nếu Location chưa có cấu hình.
 
-| Mục | Khóa / hành vi |
-| --- | --- |
-| Plan | Location + Version; chọn EffectiveFrom lớn nhất ≤ kỳ, sau đó Version lớn nhất |
-| Queue billing | Handler + plan/period/phase/UTC-minute; enqueue ON CONFLICT DO NOTHING |
-| Execution | PlanId + BillingPeriod + Phase; lease 2 phút, lock token, append-only attempts |
-| Meter task | Room + UtilityType + BillingPeriod, dùng chung manual/auto, kể cả task đã hủy |
-| Invoice | Room + BillingPeriod, dùng chung manual/auto và financial locks hiện có |
-| Issuance event | InvoiceId unique, commit cùng transaction chuyển Final |
-| In-app | RecipientUserId + EventKey unique; publication marker và inbox cùng transaction |
-| External request | `notification/{notificationId:N}/external`, ổn định qua retry |
+| Mục              | Khóa / hành vi                                                                  |
+| ---------------- | ------------------------------------------------------------------------------- |
+| Plan             | Location + Version; chọn EffectiveFrom lớn nhất ≤ kỳ, sau đó Version lớn nhất   |
+| Queue billing    | Handler + plan/period/phase/UTC-minute; enqueue ON CONFLICT DO NOTHING          |
+| Execution        | PlanId + BillingPeriod + Phase; lease 2 phút, lock token, append-only attempts  |
+| Meter task       | Room + UtilityType + BillingPeriod, dùng chung manual/auto, kể cả task đã hủy   |
+| Invoice          | Room + BillingPeriod, dùng chung manual/auto và financial locks hiện có         |
+| Issuance event   | InvoiceId unique, commit cùng transaction chuyển Final                          |
+| In-app           | RecipientUserId + EventKey unique; publication marker và inbox cùng transaction |
+| External request | `notification/{notificationId:N}/external`, ổn định qua retry                   |
 
 Worker chỉ claim `Name = ANY(registered handler names)`, dùng `FOR UPDATE SKIP LOCKED` và lease
 2 phút; timeout xử lý 60 giây; tối đa 4 lần, backoff `2^attempt * 5 + jitter(0..4)` giây.
@@ -96,15 +96,15 @@ có Task FK bắt buộc nên được giữ làm nguồn, không biến thành 
 Module `Notifications` mới dùng nguồn event hiện có, `NotificationPublication` dedup và common inbox.
 Đánh dấu đọc tương thích hai chiều với legacy Task notifications; không bỏ route cũ.
 
-| Nguồn | Người nhận | Target / key |
-| --- | --- | --- |
-| InvoiceIssuedEvents | Owner của invoice/event + InvoiceRecipients | Invoice; `invoice:{invoiceId}` |
-| PaymentConfirmedEvents + allocation | Owner xác minh/invoice + InvoiceRecipients | Invoice; `payment:{allocationId}` |
-| Adjustment requested | Owner của invoice | Adjustment; `adjustment:{requestId}:{eventName}` |
-| Adjustment decided | Requester; Approved thêm thông báo balance an toàn cho viewer khác | Requester → Adjustment; viewer khác → Invoice |
-| ContractExpiryNotices | Owner/Tenant hợp lệ từ JOB-02 | Contract; `contract-expiry:{noticeId}` |
-| OperationalTaskNotifications | Recipient Owner hoặc Staff còn assignment, generated task đúng assignee | MeterTask / OperationalTask; `task:{sourceId}` |
-| Billing PendingInputs | Owner đã cấp quyền trong plan | AutomationExecution; `billing-exception:{executionId}` |
+| Nguồn                               | Người nhận                                                              | Target / key                                           |
+| ----------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------ |
+| InvoiceIssuedEvents                 | Owner của invoice/event + InvoiceRecipients                             | Invoice; `invoice:{invoiceId}`                         |
+| PaymentConfirmedEvents + allocation | Owner xác minh/invoice + InvoiceRecipients                              | Invoice; `payment:{allocationId}`                      |
+| Adjustment requested                | Owner của invoice                                                       | Adjustment; `adjustment:{requestId}:{eventName}`       |
+| Adjustment decided                  | Requester; Approved thêm thông báo balance an toàn cho viewer khác      | Requester → Adjustment; viewer khác → Invoice          |
+| ContractExpiryNotices               | Owner/Tenant hợp lệ từ JOB-02                                           | Contract; `contract-expiry:{noticeId}`                 |
+| OperationalTaskNotifications        | Recipient Owner hoặc Staff còn assignment, generated task đúng assignee | MeterTask / OperationalTask; `task:{sourceId}`         |
+| Billing PendingInputs               | Owner đã cấp quyền trong plan                                           | AutomationExecution; `billing-exception:{executionId}` |
 
 Consumer xử lý batch tối đa 25/source/lần, enqueue theo UTC minute. Inbox UI polling 30 giây/
 refresh; có thể có độ trễ batch khi backlog. Không thêm realtime subsystem khác.
@@ -134,23 +134,23 @@ Unconfigured không tạo delivery attempt hoặc receipt giả. Owner thấy da
 Chi tiết DTO/quyền: [BILLING_AUTOMATION.md](../api/BILLING_AUTOMATION.md),
 [NOTIFICATIONS.md](../api/NOTIFICATIONS.md). Tất cả dưới `/api/v1`.
 
-| API | Quyền / mục đích |
-| --- | --- |
-| PUT billing-automation | Owner lưu immutable plan, expected plan/calendar versions |
-| GET billing-automation/{locationId}?period= | Owner lấy plan áp dụng |
-| GET billing-automation/{locationId}/history | Owner xem version history |
-| GET billing-automation/preview?locationId=&period= | Ngày VN, phase dates, eligibility sơ bộ, dev/worker flags |
-| GET billing-automation/executions, attempts, queue?locationId=&period= | Owner kết quả, 100 attempts / 30 queue rows gần nhất; không queue payload |
-| POST billing-automation/run-now | Owner, Development/Testing; `{locationId,billingPeriod,phase}`; không force/bypass date |
-| GET/PUT billing-automation/representative | Owner chọn Contract đại diện Room/kỳ trước khi có invoice |
-| POST billing-automation/meter-tasks/{id}/assignment | Owner, `{staffUserId,expectedVersion}` |
-| GET notifications?page=&pageSize=&category=&unread= | Own inbox; categories Contract/Invoice/Payment/Adjustment/Task |
-| GET notifications/unread-count | Own unread count |
-| POST notifications/{id}/read, notifications/read-all | Own read state, idempotent timestamp |
-| GET notifications/{id}/target | Reauthorize related object; unavailable trả 404 |
-| POST notifications/process-events | Owner, Development/Testing; gọi common consumer |
-| GET notifications/delivery-status?locationId=&state=&page= | Owner, redacted retry/failure monitoring |
-| GET capture/meter-tasks?locationId=&roomId=&dueDate=&status=&page= | Existing array API; server filters trước giới hạn 100/trang; dueDate theo ngày VN |
+| API                                                                    | Quyền / mục đích                                                                        |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| PUT billing-automation                                                 | Owner lưu immutable plan, expected plan/calendar versions                               |
+| GET billing-automation/{locationId}?period=                            | Owner lấy plan áp dụng                                                                  |
+| GET billing-automation/{locationId}/history                            | Owner xem version history                                                               |
+| GET billing-automation/preview?locationId=&period=                     | Ngày VN, phase dates, eligibility sơ bộ, dev/worker flags                               |
+| GET billing-automation/executions, attempts, queue?locationId=&period= | Owner kết quả, 100 attempts / 30 queue rows gần nhất; không queue payload               |
+| POST billing-automation/run-now                                        | Owner, Development/Testing; `{locationId,billingPeriod,phase}`; không force/bypass date |
+| GET/PUT billing-automation/representative                              | Owner chọn Contract đại diện Room/kỳ trước khi có invoice                               |
+| POST billing-automation/meter-tasks/{id}/assignment                    | Owner, `{staffUserId,expectedVersion}`                                                  |
+| GET notifications?page=&pageSize=&category=&unread=                    | Own inbox; categories Contract/Invoice/Payment/Adjustment/Task                          |
+| GET notifications/unread-count                                         | Own unread count                                                                        |
+| POST notifications/{id}/read, notifications/read-all                   | Own read state, idempotent timestamp                                                    |
+| GET notifications/{id}/target                                          | Reauthorize related object; unavailable trả 404                                         |
+| POST notifications/process-events                                      | Owner, Development/Testing; gọi common consumer                                         |
+| GET notifications/delivery-status?locationId=&state=&page=             | Owner, redacted retry/failure monitoring                                                |
+| GET capture/meter-tasks?locationId=&roomId=&dueDate=&status=&page=     | Existing array API; server filters trước giới hạn 100/trang; dueDate theo ngày VN       |
 
 Calendar tài chính giữ `/billing-schedules`; không tạo nguồn giá thứ hai. Capture DTO bổ sung
 dueAt/assignment/plan/version/locationId/roomId. Các API hợp đồng, invoice, payment, adjustment nguồn giữ nguyên.
@@ -248,14 +248,14 @@ Browser harness dùng ignoreHTTPSErrors trong context test riêng, không thay c
 
 Kỳ 11/2026, business date 02/11/2026, API/DB/MinIO thật:
 
-| Demo | Kết quả thực hiện |
-| --- | --- |
-| A JOB-09 | AUTO101-SHARED có 2 tasks cho 3 contracts, Staff nhận thông báo, API upload ảnh synthetic và human-confirm; Mobile mở đúng confirmed task |
-| B Draft | Tạo Draft thật trước khi confirm; missing confirmed electricity/water được quan sát và lưu manifest |
-| C Final | AUTO101 đủ dữ liệu → Final **3.117.500 VND**; AUTO102 thiếu water meter/chỉ số và AUTO103 retry thiếu readings vẫn Draft; future plan chưa tới ngày không chạy |
-| D Payment | Statement sai reference giữ history/reject; statement synthetic khớp reference được Owner verify/allocate một lần; A/B/C Paid, outstanding=0, nhận Payment notification |
-| E Adjustment | Approved giảm 1.000 VND và một Rejected; requester nhận outcome, viewer khác chỉ thông báo balance; Final gốc vẫn 3.117.500; excess 1.000 PendingReview, không giả refund/credit |
-| F Replay/retry | API lặp/song song Meter/Draft/Final và reseed; real PostgreSQL timeout rồi handler retry; constraint/DB proof không task/invoice/inbox trùng |
+| Demo           | Kết quả thực hiện                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A JOB-09       | AUTO101-SHARED có 2 tasks cho 3 contracts, Staff nhận thông báo, API upload ảnh synthetic và human-confirm; Mobile mở đúng confirmed task                                        |
+| B Draft        | Tạo Draft thật trước khi confirm; missing confirmed electricity/water được quan sát và lưu manifest                                                                              |
+| C Final        | AUTO101 đủ dữ liệu → Final **3.117.500 VND**; AUTO102 thiếu water meter/chỉ số và AUTO103 retry thiếu readings vẫn Draft; future plan chưa tới ngày không chạy                   |
+| D Payment      | Statement sai reference giữ history/reject; statement synthetic khớp reference được Owner verify/allocate một lần; A/B/C Paid, outstanding=0, nhận Payment notification          |
+| E Adjustment   | Approved giảm 1.000 VND và một Rejected; requester nhận outcome, viewer khác chỉ thông báo balance; Final gốc vẫn 3.117.500; excess 1.000 PendingReview, không giả refund/credit |
+| F Replay/retry | API lặp/song song Meter/Draft/Final và reseed; real PostgreSQL timeout rồi handler retry; constraint/DB proof không task/invoice/inbox trùng                                     |
 
 DB proof snapshot: **5 periodic tasks, 3 invoices, 3 viewers của shared Final, 1 verified allocation,
 1 InvoiceIssuedEvent, 1 PaymentConfirmedEvent, 2 Failed execution attempts, 0 duplicate keys**.
@@ -273,23 +273,23 @@ Artifacts ignored ở `.tools/contract-demo/`: `automation-fixture.json`, `autom
 
 ## 10. Verification đã chạy
 
-| Kiểm tra | Kết quả / log ignored |
-| --- | --- |
-| API build | PASS, 0 warning/error; `.tools/jobs-api-build.log` |
-| PostgreSQL/MinIO integration toàn bộ | PASS **396/396**; `.tools/jobs-integration-tests.log` |
-| Worker routing/lease và foundation sau sửa worker | PASS **6/6**; `.tools/jobs-worker-foundation-tests.log` |
-| Application unit | PASS **177/177**; `.tools/jobs-application-tests.log` |
-| Domain unit | PASS **83/83**; `.tools/jobs-domain-tests.log` |
-| Owner Web tests | PASS **94/94**; `.tools/jobs-owner-tests.log` |
-| Owner Web build/typecheck/lint | PASS; `.tools/jobs-owner-build.log`, commands npm scripts |
-| Mobile tests | PASS **243/243**; `.tools/jobs-mobile-tests.log` |
-| Mobile typecheck/lint | PASS, npm scripts |
-| iOS và Android Expo export | PASS cả hai; `.tools/jobs-mobile-export.log` |
-| API seed/reseed/replay | PASS; `.tools/jobs-demo-api.log`, jobs-demo-reseed.log, jobs-demo-verify.log |
-| Real browser smoke | PASS Owner + Tenant A/B/C + Staff; `.tools/jobs-demo-ui.log`, zero page errors |
-| Read-only DB proof | PASS; `.tools/jobs-demo-db.log` |
-| Native camera/push, real email delivery | NOT RUN / provider chưa cấu hình |
-| Formal ST/AT, performance/coverage targets | NOT RUN; Tester chịu trách nhiệm, không suy ra tỷ lệ từ smoke |
+| Kiểm tra                                          | Kết quả / log ignored                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| API build                                         | PASS, 0 warning/error; `.tools/jobs-api-build.log`                             |
+| PostgreSQL/MinIO integration toàn bộ              | PASS **396/396**; `.tools/jobs-integration-tests.log`                          |
+| Worker routing/lease và foundation sau sửa worker | PASS **6/6**; `.tools/jobs-worker-foundation-tests.log`                        |
+| Application unit                                  | PASS **177/177**; `.tools/jobs-application-tests.log`                          |
+| Domain unit                                       | PASS **83/83**; `.tools/jobs-domain-tests.log`                                 |
+| Owner Web tests                                   | PASS **94/94**; `.tools/jobs-owner-tests.log`                                  |
+| Owner Web build/typecheck/lint                    | PASS; `.tools/jobs-owner-build.log`, commands npm scripts                      |
+| Mobile tests                                      | PASS **243/243**; `.tools/jobs-mobile-tests.log`                               |
+| Mobile typecheck/lint                             | PASS, npm scripts                                                              |
+| iOS và Android Expo export                        | PASS cả hai; `.tools/jobs-mobile-export.log`                                   |
+| API seed/reseed/replay                            | PASS; `.tools/jobs-demo-api.log`, jobs-demo-reseed.log, jobs-demo-verify.log   |
+| Real browser smoke                                | PASS Owner + Tenant A/B/C + Staff; `.tools/jobs-demo-ui.log`, zero page errors |
+| Read-only DB proof                                | PASS; `.tools/jobs-demo-db.log`                                                |
+| Native camera/push, real email delivery           | NOT RUN / provider chưa cấu hình                                               |
+| Formal ST/AT, performance/coverage targets        | NOT RUN; Tester chịu trách nhiệm, không suy ra tỷ lệ từ smoke                  |
 
 Các trường hợp được kiểm tra: wrong role/current assignment, IDOR/cross-Tenant, invalid/stale
 configuration, effective versions, confirmed-vs-OCR, meter replacement, unassigned tasks, manual/auto
@@ -323,21 +323,21 @@ camera/push hoặc việc upload lên store. Không có số coverage/performanc
 
 ## 11. Local commits và ownership
 
-| Hash | Commit | Description |
-| --- | --- | --- |
-| 79a519f | feat(jobs): configure billing automation schedules | Immutable effective plans, calendar validation, explicit delegation |
-| 40ca7a7 | feat(meter): automate periodic reading tasks | Existing scheduler/queue, unique room/type/kỳ, Staff scope |
-| b8a741b | feat(invoice): automate draft invoice generation | Existing service, representative selection, snapshots/corrections |
-| 51ef519 | feat(invoice): automate scheduled finalization | Revalidation, immutable issuance, manual/auto race |
-| 784cc5b | feat(notification): add persistent notification inbox | Recipient isolation, read states, authorized targets |
-| fa29176 | feat(notification): publish billing and payment events | Committed sources, audiences, event dedup |
-| e4526a9 | feat(notification): handle delivery retries | Leases, bounded retry, provider ambiguity, redacted monitoring |
-| b004e6e | feat(jobs): connect owner automation dashboard | Settings/history, exceptions, safe Dev Run Now |
-| 0cb6811 | feat(notification): connect web and mobile inbox | Real API inbox/bells, Staff filters, target routes |
-| cf6ff68 | fix(jobs): expose scoped worker retry monitoring | Actual queue retry times, worker flag, lease recovery test |
-| f654c80 | fix(web): retain notification deep links during authentication | Preserve query/hash during session restoration |
-| e875051 | chore(demo): add billing automation scenarios | Isolated fixtures, real API/DB/browser scripts, timeout/retry |
-| fc6a087 | fix(jobs): claim only registered background handlers | Unsupported jobs remain Pending without losing attempts |
+| Hash    | Commit                                                         | Description                                                         |
+| ------- | -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 79a519f | feat(jobs): configure billing automation schedules             | Immutable effective plans, calendar validation, explicit delegation |
+| 40ca7a7 | feat(meter): automate periodic reading tasks                   | Existing scheduler/queue, unique room/type/kỳ, Staff scope          |
+| b8a741b | feat(invoice): automate draft invoice generation               | Existing service, representative selection, snapshots/corrections   |
+| 51ef519 | feat(invoice): automate scheduled finalization                 | Revalidation, immutable issuance, manual/auto race                  |
+| 784cc5b | feat(notification): add persistent notification inbox          | Recipient isolation, read states, authorized targets                |
+| fa29176 | feat(notification): publish billing and payment events         | Committed sources, audiences, event dedup                           |
+| e4526a9 | feat(notification): handle delivery retries                    | Leases, bounded retry, provider ambiguity, redacted monitoring      |
+| b004e6e | feat(jobs): connect owner automation dashboard                 | Settings/history, exceptions, safe Dev Run Now                      |
+| 0cb6811 | feat(notification): connect web and mobile inbox               | Real API inbox/bells, Staff filters, target routes                  |
+| cf6ff68 | fix(jobs): expose scoped worker retry monitoring               | Actual queue retry times, worker flag, lease recovery test          |
+| f654c80 | fix(web): retain notification deep links during authentication | Preserve query/hash during session restoration                      |
+| e875051 | chore(demo): add billing automation scenarios                  | Isolated fixtures, real API/DB/browser scripts, timeout/retry       |
+| fc6a087 | fix(jobs): claim only registered background handlers           | Unsupported jobs remain Pending without losing attempts             |
 
 Mỗi commit trên có 3 dòng English body thực tế; xem `git show -s --format=full <hash>`.
 Commit guide này được tạo sau bảng; hash cuối cùng được báo trong kết quả bàn giao.

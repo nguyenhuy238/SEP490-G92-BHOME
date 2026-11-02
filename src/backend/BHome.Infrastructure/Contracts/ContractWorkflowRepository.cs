@@ -21,7 +21,7 @@ internal sealed class ContractWorkflowRepository(BHomeDbContext db) : IContractW
         var ids = rooms.Select(r => r.Id).ToArray();
         var residents = await db.Set<Resident>().AsNoTracking().Where(r => ids.Contains(r.RoomId))
             .OrderBy(r => r.DisplayLabel).Take(500).Select(r => new ContractResidentChoice(r.Id, r.RoomId, r.DisplayLabel, r.TenantUserId,
-                r.VerificationStatus == IdentityVerificationStatus.Verified)).ToArrayAsync(t);
+                r.VerificationStatus == IdentityVerificationStatus.Verified, r.ResidentType.ToString())).ToArrayAsync(t);
         var owners = await (from account in db.Users.AsNoTracking()
                             join grant in db.UserRoles on account.Id equals grant.UserId
                             join role in db.Roles on grant.RoleId equals role.Id

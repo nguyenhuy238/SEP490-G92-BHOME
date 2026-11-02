@@ -6,7 +6,7 @@ public sealed record NotificationDelivery(string IdempotencyKey, string Recipien
 
 public interface INotificationProvider
 {
-    bool IsConfigured=>false;
-    bool SupportsIdempotency=>false;
+    bool IsConfigured => false;
+    bool SupportsIdempotency => false;
     Task<string> DeliverAsync(NotificationDelivery delivery, CancellationToken cancellationToken);
 }

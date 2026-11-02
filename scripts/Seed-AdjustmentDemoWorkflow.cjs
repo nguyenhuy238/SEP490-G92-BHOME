@@ -1,7 +1,7 @@
 // Isolated synthetic data only. Uses real signing/capture/billing/manual-payment APIs; no bank callback mock.
 const fs = require('node:fs'),
   path = require('node:path'),
-  crypto = require('node:crypto'),
+  nodeCrypto = require('node:crypto'),
   assert = require('node:assert/strict');
 const output = path.join(__dirname, '../.tools/contract-demo');
 const settings = JSON.parse(
@@ -11,7 +11,7 @@ const base = process.env.BHOME_ADJUSTMENT_DEMO_API || 'http://localhost:5540';
 const id = (n) => `fa410000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const user = (n) => `de000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function key(text) {
-  const h = crypto
+  const h = nodeCrypto
     .createHash('sha256')
     .update('bhome-adjustment-demo/' + text)
     .digest('hex');

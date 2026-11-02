@@ -81,10 +81,23 @@ public static class AdjustmentRules
     public static string SourceFingerprint(InvoiceLine line)
     {
         static string D(decimal value) => value.ToString("G29", System.Globalization.CultureInfo.InvariantCulture);
-        var value = new { line.Category, line.ChargeCode, line.Name, line.PolicyId, line.PolicyVersion, line.RateDate,
-            Rate = D(line.Rate), Quantity = D(line.Quantity), line.OccupiedDays, line.PeriodDays,
-            Amount = D(line.CalculatedAmount ?? line.Amount), line.MeterReadingId,
-            Previous = line.PreviousReading is { } p ? D(p) : null, Confirmed = line.ConfirmedReading is { } c ? D(c) : null };
+        var value = new
+        {
+            line.Category,
+            line.ChargeCode,
+            line.Name,
+            line.PolicyId,
+            line.PolicyVersion,
+            line.RateDate,
+            Rate = D(line.Rate),
+            Quantity = D(line.Quantity),
+            line.OccupiedDays,
+            line.PeriodDays,
+            Amount = D(line.CalculatedAmount ?? line.Amount),
+            line.MeterReadingId,
+            Previous = line.PreviousReading is { } p ? D(p) : null,
+            Confirmed = line.ConfirmedReading is { } c ? D(c) : null
+        };
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value)));
     }
 }

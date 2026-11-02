@@ -1,6 +1,10 @@
 export const locale = 'vi-VN';
 export const currency = 'VND';
 export const businessTimeZone = 'Asia/Ho_Chi_Minh';
+// Callers validate unsigned integer digits. String grouping also works on native
+// Intl implementations that cannot format BigInt, without losing large amounts.
+export const groupVietnameseIntegerDigits = (digits: string) =>
+  digits.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 export const formatVnd = (value: number) =>
   new Intl.NumberFormat(locale, {
     style: 'currency',
