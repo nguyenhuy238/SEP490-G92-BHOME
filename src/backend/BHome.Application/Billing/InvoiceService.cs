@@ -7,7 +7,7 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.Billing;
 
-public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock)
+public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock,IBillingAutomationSchedules? automation=null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new InvoiceException(401, "authentication_required");
     private bool Owner => user.IsInRole(Roles.Owner);
@@ -81,7 +81,8 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             }
             var room = await repository.RoomAsync(x.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
-            var schedule = await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required");
+            var plan=automation is null?null:await automation.ForPeriodAsync(room.LocationId,x.BillingPeriod,t);
+            var schedule = plan is null?await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required"):BillingAutomationService.Calendar(plan);
             if (Today < InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DraftDay, schedule.DraftMonthOffset))
                 throw new InvoiceException(409, "draft_date_not_reached");
             var invoice = new Invoice { RoomId = room.Id, LocationId = room.LocationId, RoomNumber = room.RoomNumber,

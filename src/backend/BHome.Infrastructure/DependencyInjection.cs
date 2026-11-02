@@ -166,6 +166,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.AdjustmentService>();
         services.AddHostedService<BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup>();
         services.AddScoped<BHome.Application.Billing.InvoiceService>();
+        services.AddScoped<BHome.Application.Billing.IBillingAutomationSchedules,BHome.Infrastructure.Modules.Billing.Persistence.BillingAutomationSchedules>();
+        services.AddScoped<BHome.Application.Billing.BillingAutomationService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
         services.AddSingleton(provider=>new BHome.Application.PaymentsDebt.PaymentRuntimeMode(

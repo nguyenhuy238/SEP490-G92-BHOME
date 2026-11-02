@@ -83,6 +83,69 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("SigningCertificates", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AuthorizeAutomaticFinalization")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("AuthorizedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BillingScheduleVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BillingSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MeterDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MeterDueDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MeterDueMonthOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorizedByUserId");
+
+                    b.HasIndex("LocationId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("LocationId", "EffectiveFrom", "Version");
+
+                    b.ToTable("BillingAutomationPlans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BillingAutomationPlan_Calendar", "\"Version\">0 AND \"BillingScheduleVersion\">0 AND \"MeterDay\" BETWEEN 1 AND 31 AND \"MeterDueDay\" BETWEEN 1 AND 31 AND \"MeterDueMonthOffset\" BETWEEN 0 AND 2 AND \"TimeZone\"='Asia/Ho_Chi_Minh' AND (NOT \"AuthorizeAutomaticFinalization\" OR \"Enabled\") AND EXTRACT(DAY FROM \"EffectiveFrom\")=1");
+                        });
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.BillingSchedule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3184,6 +3247,21 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationPlan", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorizedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BHome.Domain.Billing.BillingSchedule", b =>
