@@ -5,6 +5,12 @@ namespace BHome.Application.Contracts;
 
 public sealed partial class ContractService
 {
+    private void MoveOutEvent(ContractMoveOut m,string action)=>repository.Add(new ContractMoveOutHistory{ContractId=m.ContractId,Version=m.Version,Action=action,
+        Snapshot=System.Text.Json.JsonSerializer.Serialize(View(m)),ActorId=Actor,OccurredAt=clock.GetUtcNow()});
+    public async Task<IReadOnlyList<MoveOutHistoryView>> MoveOutHistoryAsync(Guid id,CancellationToken t)
+    {await Load(id,[Roles.Owner,Roles.Staff,Roles.Tenant],t);return(await repository.MoveOutHistoryAsync(id,t)).Select(h=>new MoveOutHistoryView(h.Version,h.Action,h.ActorId,h.OccurredAt,h.Snapshot)).ToArray();}
+    public Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(CancellationToken t)
+    {Role(Roles.Staff);return repository.AssignmentsAsync(Actor,Today,t);}
     public async Task<IReadOnlyList<ContractVersionView>> VersionsAsync(Guid id,CancellationToken t)
     {
         var contract=await Load(id,[Roles.Owner,Roles.Staff,Roles.Tenant],t);

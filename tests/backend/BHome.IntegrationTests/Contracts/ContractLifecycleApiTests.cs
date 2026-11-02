@@ -386,6 +386,10 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
+        var assignment=(await w.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!.Single(a=>a.ContractId==id);
+        Assert.Equal("Approved",assignment.Status);Assert.Equal(w.Room,assignment.RoomId);
+        var history=(await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id,"move-out/history")))!;
+        Assert.Equal(3,history.Length);Assert.Equal("Scheduled",history[0].Action);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;

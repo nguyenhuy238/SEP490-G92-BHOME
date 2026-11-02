@@ -77,7 +77,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(s => new SignatureView(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt)).ToArray(), c.ActivatedAt,
         c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "");
     private static MoveOutView View(ContractMoveOut m) => new(m.Id, m.Status.ToString(), m.ProposedDate, m.Reason, m.InspectionScheduledAt, m.PendingReason,
-        m.InspectionNotes, m.InspectedAt, m.ElectricityReadingId, m.WaterReadingId, []);
+        m.InspectionNotes, m.InspectedAt, m.ElectricityReadingId, m.WaterReadingId, [],m.InspectionStaffId,m.Version);
     public async Task<ContractView> GetAsync(Guid id, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
@@ -418,7 +418,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 IsExpiry = expiry,
                 Status = MoveOutStatus.Requested
             };
-            repository.Add(m); Audit("ContractMoveOutRequested", id); Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, m.Id); return View(m);
+            repository.Add(m); MoveOutEvent(m,"Requested"); Audit("ContractMoveOutRequested", id); Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, m.Id); return View(m);
         }, t);
     }
     public async Task<MoveOutView> GetMoveOutAsync(Guid id, CancellationToken t)
@@ -432,7 +432,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
         if (await Replay(key, "terminate-approve", id, t) is not null) return View(m);
         if (c.Status != ContractStatus.Active || m.Status != MoveOutStatus.Requested) throw ContractException.Conflict("move_out_not_pending_approval");
-        m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow();
+        m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow();m.Version++;MoveOutEvent(m,"Approved");
         Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", id, m.Id); return View(m);
     }, t);
     public Task<MoveOutView> ScheduleInspectionAsync(Guid id, InspectionScheduleInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Staff], async c =>
@@ -440,7 +440,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
         if (await Replay(key, "inspection-schedule", new { id, x }, t) is not null) return View(m);
         if (m.Status != MoveOutStatus.Approved || x.ScheduledAt < clock.GetUtcNow() || x.ScheduledAt.Offset != TimeSpan.Zero) throw ContractException.Invalid("invalid_inspection_schedule");
-        m.InspectionScheduledAt = x.ScheduledAt; Audit("ContractInspectionScheduled", id); Remember(key, "inspection-schedule", new { id, x }, m.Id); return View(m);
+        if(x.ExpectedVersion is {} version&&version!=m.Version)throw ContractException.Conflict("move_out_version_changed");
+        var staff=x.StaffUserId??(user.IsInRole(Roles.Staff)?Actor:(Guid?)null);
+        if(staff==Guid.Empty||staff is {} assignee&&(!await repository.ActiveUserInRoleAsync(assignee,Roles.Staff,t)||!await repository.StaffAssignedAsync(assignee,c.Room.LocationId,Today,t)))throw ContractException.Invalid("inspection_staff_not_assigned");
+        m.InspectionStaffId=staff;m.InspectionScheduledAt = x.ScheduledAt;m.Version++;MoveOutEvent(m,"Scheduled"); Audit("ContractInspectionScheduled", id); Remember(key, "inspection-schedule", new { id, x }, m.Id); return View(m);
     }, t);
     public Task<MoveOutView> InspectAsync(Guid id, InspectionInput x, Guid key, CancellationToken t)
     {

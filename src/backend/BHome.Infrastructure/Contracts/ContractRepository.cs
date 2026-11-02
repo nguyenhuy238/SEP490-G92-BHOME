@@ -27,6 +27,14 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         return new(items, page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
+    public Task<bool> StaffAssignedAsync(Guid staffId,Guid locationId,DateOnly today,CancellationToken t)=>db.StaffLocationAssignments.AnyAsync(a=>a.StaffUserId==staffId&&a.LocationId==locationId&&a.StartDate<=today&&a.EndDate>=today,t);
+    public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId,CancellationToken t)=>await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h=>h.ContractId==contractId).OrderByDescending(h=>h.Version).Take(100).ToArrayAsync(t);
+    public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId,DateOnly today,CancellationToken t)=>await
+        (from m in db.Set<ContractMoveOut>().AsNoTracking() join c in db.Set<Contract>() on m.ContractId equals c.Id
+         where m.InspectionStaffId==staffId && m.Status!=MoveOutStatus.Completed && m.InspectionScheduledAt!=null && c.Room.Location.IsActive &&
+           db.StaffLocationAssignments.Any(a=>a.StaffUserId==staffId&&a.LocationId==c.Room.LocationId&&a.StartDate<=today&&a.EndDate>=today)
+         orderby m.InspectionScheduledAt
+         select new MoveOutAssignment(c.Id,c.RoomId,c.Room.RoomNumber,c.Room.Location.Name,m.Status.ToString(),m.ProposedDate,m.InspectionScheduledAt!.Value,m.Version)).Take(100).ToArrayAsync(t);
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
         // All contract writes lock the same authoritative Room row. This serializes activation, renewal,

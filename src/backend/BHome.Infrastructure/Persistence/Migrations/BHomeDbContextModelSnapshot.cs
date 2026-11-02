@@ -2250,6 +2250,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("InspectionScheduledAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("InspectionStaffId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsExpiry")
                         .HasColumnType("boolean");
 
@@ -2289,6 +2292,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("WaterReadingId")
                         .HasColumnType("uuid");
 
@@ -2301,7 +2308,52 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WaterReadingId");
 
+                    b.HasIndex("InspectionStaffId", "InspectionScheduledAt");
+
                     b.ToTable("ContractMoveOuts", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractMoveOutHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("ContractId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ContractMoveOutHistory", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractOperation", b =>
@@ -3723,10 +3775,30 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ElectricityReadingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("InspectionStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BHome.Domain.Billing.MeterReading", null)
                         .WithMany()
                         .HasForeignKey("WaterReadingId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractMoveOutHistory", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractResident", b =>

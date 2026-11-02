@@ -25,7 +25,7 @@ public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, [Required, StringLength(2000, MinimumLength = 1)] string VerificationReason);
 public sealed record TerminationInput(DateOnly ProposedDate,
     [Required, StringLength(2000, MinimumLength = 1)] string Reason);
-public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt);
+public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
 public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadingId,
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
     [Required, MinLength(1), MaxLength(5)] Guid[] EvidenceIds);
@@ -45,7 +45,9 @@ public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandli
 public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, string Reason,
     DateTimeOffset? InspectionScheduledAt, string PendingReason, string? InspectionNotes = null,
     DateTimeOffset? InspectedAt = null, Guid? ElectricityReadingId = null, Guid? WaterReadingId = null,
-    IReadOnlyList<Guid>? EvidenceIds = null);
+    IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1);
+public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
+public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset ScheduledAt, int Version);
 public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt);
 
 public sealed class ContractException(int status, string code) : Exception(code)
@@ -110,10 +112,13 @@ public interface IContractRepository
     Task<Room?> RoomAsync(Guid id, CancellationToken t);
     Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t);
     Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t);
+    Task<bool> StaffAssignedAsync(Guid staffId,Guid locationId,DateOnly today,CancellationToken t);
     Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
     Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);
+    Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId,CancellationToken t);
+    Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId,DateOnly today,CancellationToken t);
     Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t);
     Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t);
     Task<ContractMoveOut?> MoveOutAsync(Guid contractId, CancellationToken t);

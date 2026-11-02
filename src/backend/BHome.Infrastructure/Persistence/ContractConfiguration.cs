@@ -59,6 +59,8 @@ internal static class ContractConfiguration
         b.Entity<ContractMoveOut>(e =>
         {
             e.ToTable("ContractMoveOuts"); e.HasIndex(m => m.ContractId).IsUnique();
+            e.Property(m=>m.Version).IsConcurrencyToken();e.HasIndex(m=>new{m.InspectionStaffId,m.InspectionScheduledAt});
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(m=>m.InspectionStaffId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contract>().WithMany().HasForeignKey(m => m.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterReading>().WithMany().HasForeignKey(m => m.ElectricityReadingId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterReading>().WithMany().HasForeignKey(m => m.WaterReadingId).OnDelete(DeleteBehavior.Restrict);
