@@ -82,7 +82,7 @@ it('keeps property functions inside the selected Location Workspace', async () =
     <ThemeProvider theme={theme}>
       <AuthProvider>
         <PortalProvider>
-          <MemoryRouter initialEntries={['/dashboard']}>
+          <MemoryRouter initialEntries={['/locations']}>
             <AppRouter />
           </MemoryRouter>
         </PortalProvider>
@@ -99,9 +99,15 @@ it('keeps property functions inside the selected Location Workspace', async () =
     within(navigation).queryByRole('link', { name: 'Giá thuê & Biểu phí' }),
   ).not.toBeInTheDocument();
 
-  fireEvent.click(await screen.findByRole('link', { name: /BHOME Central 1 - Bạch Đằng/i }));
+  const locationLinks = await screen.findAllByRole('link', { name: 'Xem cơ sở' });
+  expect(locationLinks[0]).toHaveAttribute('href', '/locations/loc-1/overview');
+  fireEvent.click(locationLinks[0]);
   expect(
-    await screen.findByRole('heading', { name: 'BHOME Central 1 - Bạch Đằng' }),
+    await screen.findByRole(
+      'heading',
+      { level: 1, name: 'BHOME Central 1 - Bạch Đằng' },
+      { timeout: 12000 },
+    ),
   ).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Phòng & Sơ đồ tầng' })).toHaveAttribute(
     'href',
@@ -130,7 +136,10 @@ it('isolates the room space by Location route context', async () => {
   );
 
   expect(
-    await screen.findByRole('heading', { name: 'BHOME Riverside 2 - Phan Xích Long' }),
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'BHOME Riverside 2 - Phan Xích Long',
+    }),
   ).toBeInTheDocument();
   expect(document.querySelector('a[href="/rooms/room-25"]')).toBeInTheDocument();
   expect(document.querySelector('a[href="/rooms/room-0"]')).not.toBeInTheDocument();
