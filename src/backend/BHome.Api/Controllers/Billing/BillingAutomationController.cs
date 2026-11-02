@@ -21,4 +21,8 @@ public sealed class BillingAutomationController(BillingAutomationService service
     public Task<BillingAutomationExecution?> Run(BillingRunInput x,CancellationToken t)=>operations.RunAsync(x,t);
     [HttpPost("meter-tasks/{taskId:guid}/assignment")]
     public async Task<IActionResult> Assign(Guid taskId,MeterAssignmentInput x,CancellationToken t){await operations.AssignAsync(taskId,x,t);return NoContent();}
+    [HttpGet("representative")]
+    public Task<BillingRepresentativeSelection?> Representative([FromQuery]Guid roomId,[FromQuery]DateOnly period,CancellationToken t)=>operations.RepresentativeAsync(roomId,period,t);
+    [HttpPut("representative")]
+    public Task<BillingRepresentativeSelection> Select(BillingRepresentativeInput x,CancellationToken t)=>operations.SelectAsync(x,t);
 }

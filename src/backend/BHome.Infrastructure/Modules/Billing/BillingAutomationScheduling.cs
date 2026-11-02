@@ -18,10 +18,14 @@ internal sealed class BillingAutomationScheduling(BHomeDbContext db,IBillingAuto
             foreach(var period in new[]{month,month.AddMonths(-1),month.AddMonths(-2)})
             {
                 var plan=await schedules.ForPeriodAsync(location,period,t);
-                if(plan?.Enabled!=true||today<InvoiceMath.CalendarDate(period,plan.MeterDay,0))continue;
-                var execution=await db.Set<BillingAutomationExecution>().AsNoTracking().SingleOrDefaultAsync(e=>e.PlanId==plan.Id&&e.BillingPeriod==period&&e.Phase=="Meter",t);
+                if(plan?.Enabled!=true)continue;
+                foreach(var phase in new[]{"Meter","Draft"})
+                {
+                if(today<BillingAutomationEngine.ScheduledDate(plan,period,phase))continue;
+                var execution=await db.Set<BillingAutomationExecution>().AsNoTracking().SingleOrDefaultAsync(e=>e.PlanId==plan.Id&&e.BillingPeriod==period&&e.Phase==phase,t);
                 if(execution?.Status=="Completed"||execution is{Status:"Failed",Attempts:>=4})continue;
-                await queue.EnqueueAsync(new("billing-meter",$"{plan.Id:N}/{period:yyyyMM}/Meter/{now:yyyyMMddHHmm}",JsonSerializer.Serialize(new BillingJobInput(plan.Id,period))),t);
+                await queue.EnqueueAsync(new(phase=="Meter"?"billing-meter":"billing-draft",$"{plan.Id:N}/{period:yyyyMM}/{phase}/{now:yyyyMMddHHmm}",JsonSerializer.Serialize(new BillingJobInput(plan.Id,period))),t);
+                }
             }
             after=locations[^1];
         }

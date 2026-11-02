@@ -1,5 +1,7 @@
 using System.Text.Json;
 using BHome.Application.Billing;
+using BHome.Application.IdentityAccess;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
@@ -9,7 +11,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing;
 
-internal sealed partial class BillingAutomationEngine(BHomeDbContext db,IBillingAutomationSchedules schedules,TimeProvider clock):IBillingAutomationEngine
+internal sealed partial class BillingAutomationEngine(BHomeDbContext db,IBillingAutomationSchedules schedules,TimeProvider clock,IInvoiceRepository invoiceRepository,IPropertyRepository propertyRepository,IStaffLocationAccess staffAccess):IBillingAutomationEngine
 {
     private DateOnly Today=>DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(),"Asia/Ho_Chi_Minh").DateTime);
     internal static DateTimeOffset DueAt(DateOnly date)=>new(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(new TimeOnly(23,59,59)),TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")),TimeSpan.Zero);
@@ -19,8 +21,10 @@ internal sealed partial class BillingAutomationEngine(BHomeDbContext db,IBilling
     {
         var selected=await schedules.ForPeriodAsync(p.LocationId,period,t);
         return selected?.Id==p.Id&&p.Enabled&&await ActiveRole(p.AuthorizedByUserId,Roles.Owner,t)&&await db.Locations.AnyAsync(l=>l.Id==p.LocationId&&l.IsActive,t)
-            &&Today>=InvoiceMath.CalendarDate(period,p.MeterDay,0)&&phase=="Meter";
+            &&Today>=ScheduledDate(p,period,phase);
     }
+    internal static DateOnly ScheduledDate(BillingAutomationPlan p,DateOnly period,string phase)=>phase switch
+    {"Meter"=>InvoiceMath.CalendarDate(period,p.MeterDay,0),"Draft"=>InvoiceMath.CalendarDate(period,BillingAutomationService.Calendar(p).DraftDay,BillingAutomationService.Calendar(p).DraftMonthOffset),_=>throw new InvoiceException(400,"invalid_billing_job_phase")};
     public async Task<BillingAutomationExecution?> ExecuteAsync(BillingJobInput x,string phase,CancellationToken t)
     {
         BillingAutomationService.ValidatePeriod(x.BillingPeriod);
@@ -39,15 +43,16 @@ internal sealed partial class BillingAutomationEngine(BHomeDbContext db,IBilling
         var sequence=e.Attempts;var started=e.LastStartedAt;var errors=new List<object>();var existing=0;
         try
         {
-            Guid? after=null;var end=InvoiceMath.CalendarDate(x.BillingPeriod,p.MeterDay,0);
+            Guid? after=null;var from=phase=="Meter"?InvoiceMath.CalendarDate(x.BillingPeriod,p.MeterDay,0):x.BillingPeriod;var end=phase=="Meter"?from:x.BillingPeriod.AddMonths(1).AddDays(-1);
             while(true)
             {
                 var rooms=await db.Set<Room>().AsNoTracking().Where(r=>r.LocationId==p.LocationId&&r.Status==RoomStatus.Occupied&&(after==null||r.Id.CompareTo(after.Value)>0)&&
-                    db.Set<Contract>().Any(c=>c.RoomId==r.Id&&c.ActivatedAt!=null&&(c.Status==ContractStatus.Active||c.Status==ContractStatus.Superseded||c.Status==ContractStatus.Terminated)&&c.StartDate<=end&&(c.ActualEndDate??c.EndDate)>=end))
+                    db.Set<Contract>().Any(c=>c.RoomId==r.Id&&c.ActivatedAt!=null&&(c.Status==ContractStatus.Active||c.Status==ContractStatus.Superseded||c.Status==ContractStatus.Terminated)&&c.StartDate<=end&&(c.ActualEndDate??c.EndDate)>=from))
                     .OrderBy(r=>r.Id).Select(r=>r.Id).Take(100).ToArrayAsync(t);
                 if(rooms.Length==0)break;
                 foreach(var room in rooms)
                 {
+                    if(phase=="Draft"){existing+=await GenerateDraft(p,x.BillingPeriod,room,errors,t);continue;}
                     db.ChangeTracker.Clear();await using var tx=await db.Database.BeginTransactionAsync(t);
                     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({p.LocationId.ToString()},0))",t);
                     var lockedRoom=await db.Set<Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\"={room} FOR UPDATE").SingleAsync(t);
@@ -69,7 +74,7 @@ internal sealed partial class BillingAutomationEngine(BHomeDbContext db,IBilling
             var current=await db.Set<BillingAutomationExecution>().SingleAsync(r=>r.Id==e.Id,t);
             if(current.LockToken!=token)return;
             current.Status=status;current.LastErrorCode=code;current.ExceptionsJson=JsonSerializer.Serialize(errors);current.ExistingCount=existing;
-            current.CreatedCount=await db.Set<OperationalTask>().CountAsync(task=>task.AutomationPlanId==p.Id&&task.BillingPeriod==x.BillingPeriod,t);
+            current.CreatedCount=phase=="Meter"?await db.Set<OperationalTask>().CountAsync(task=>task.AutomationPlanId==p.Id&&task.BillingPeriod==x.BillingPeriod,t):await db.Set<Invoice>().CountAsync(i=>i.AutomationPlanId==p.Id&&i.BillingPeriod==x.BillingPeriod,t);
             current.FinishedAt=clock.GetUtcNow();current.LockedUntil=null;current.LockToken=null;
             db.Add(new BillingAutomationAttempt{ExecutionId=e.Id,Sequence=sequence,Status=status,StartedAt=started,FinishedAt=current.FinishedAt.Value,SummaryJson=JsonSerializer.Serialize(new{current.CreatedCount,current.ExistingCount,errors,errorCode=code})});
             await db.SaveChangesAsync(t);await tx.CommitAsync(t);

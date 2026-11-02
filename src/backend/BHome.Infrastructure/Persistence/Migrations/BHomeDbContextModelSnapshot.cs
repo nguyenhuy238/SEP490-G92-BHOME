@@ -245,6 +245,42 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingRepresentativeSelection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("BillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SelectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SelectedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("SelectedByUserId");
+
+                    b.HasIndex("RoomId", "BillingPeriod", "Version")
+                        .IsUnique();
+
+                    b.ToTable("BillingRepresentativeSelections", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.BillingSchedule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -309,6 +345,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AutomationPlanId")
                         .HasColumnType("uuid");
 
                     b.Property<DateOnly>("BillingPeriod")
@@ -377,6 +416,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AutomationPlanId");
 
                     b.HasIndex("CreatedByUserId");
 
@@ -3398,6 +3439,27 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingRepresentativeSelection", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SelectedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.BillingSchedule", b =>
                 {
                     b.HasOne("BHome.Domain.Locations.Location", null)
@@ -3409,6 +3471,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
                 {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")

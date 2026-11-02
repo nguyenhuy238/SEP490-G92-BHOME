@@ -28,6 +28,7 @@ public sealed class BillingSchedule : AuditableEntity
 
 public sealed class Invoice : AuditableEntity
 {
+    public Guid? AutomationPlanId{get;set;}
     public Guid RoomId { get; set; }
     public Guid LocationId { get; set; }
     public string RoomNumber { get; set; } = "";

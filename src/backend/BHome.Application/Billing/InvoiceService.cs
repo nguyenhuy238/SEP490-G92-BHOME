@@ -66,7 +66,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         var result = await repository.ListAsync(scope, page, pageSize, roomId, t);
         return new(result.Items.Select(View).ToArray(), page, pageSize, result.TotalCount);
     }
-    public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t)
+    public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t,Guid? expectedAutomationPlanId=null)
     {
         RequireOwner();
         if (x.RoomId == Guid.Empty || x.RepresentativeContractId == Guid.Empty || x.BillingPeriod == default ||
@@ -82,12 +82,19 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             var room = await repository.RoomAsync(x.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
             var plan=automation is null?null:await automation.ForPeriodAsync(room.LocationId,x.BillingPeriod,t);
+            if(expectedAutomationPlanId is {} expected)
+            {
+                if(plan?.Id!=expected||!await automation!.AuthorizedAsync(plan,Actor,x.BillingPeriod,false,t))throw new InvoiceException(409,"automation_authorization_changed");
+                var selection=await automation.RepresentativeAsync(x.RoomId,x.BillingPeriod,t);
+                var eligible=await repository.OccupanciesAsync(x.RoomId,x.BillingPeriod,x.BillingPeriod.AddMonths(1).AddDays(-1),t);
+                if(selection is null&&eligible.Count!=1||selection is not null&&selection.ContractId!=x.RepresentativeContractId)throw new InvoiceException(409,"representative_selection_required");
+            }
             var schedule = plan is null?await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required"):BillingAutomationService.Calendar(plan);
             if (Today < InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DraftDay, schedule.DraftMonthOffset))
                 throw new InvoiceException(409, "draft_date_not_reached");
             var invoice = new Invoice { RoomId = room.Id, LocationId = room.LocationId, RoomNumber = room.RoomNumber,
                 LocationName = room.Location.Name, BillingPeriod = x.BillingPeriod, RepresentativeContractId = x.RepresentativeContractId,
-                CreatedByUserId = Actor, ScheduleSnapshot = JsonSerializer.Serialize(schedule),
+                CreatedByUserId = Actor,AutomationPlanId=expectedAutomationPlanId, ScheduleSnapshot = JsonSerializer.Serialize(schedule),
                 ScheduledFinalDate = InvoiceMath.CalendarDate(x.BillingPeriod, schedule.FinalDay, schedule.FinalMonthOffset),
                 DueDate = InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DueDay, schedule.DueMonthOffset) };
             await CalculateAsync(invoice, schedule, t); repository.Add(invoice);

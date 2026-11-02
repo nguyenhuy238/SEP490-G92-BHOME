@@ -27,3 +27,15 @@ internal sealed class MeterPeriodUniquenessConfiguration:IEntityTypeConfiguratio
         e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r=>r.AutomationPlanId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+internal sealed class BillingRepresentativeConfiguration:IEntityTypeConfiguration<BillingRepresentativeSelection>
+{
+    public void Configure(EntityTypeBuilder<BillingRepresentativeSelection> e)
+    {
+        e.ToTable("BillingRepresentativeSelections");e.HasKey(r=>r.Id);e.HasIndex(r=>new{r.RoomId,r.BillingPeriod,r.Version}).IsUnique();
+        e.HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(r=>r.RoomId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(r=>r.ContractId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<BHome.Infrastructure.Persistence.ApplicationUser>().WithMany().HasForeignKey(r=>r.SelectedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+internal sealed class InvoiceAutomationConfiguration:IEntityTypeConfiguration<Invoice>
+{public void Configure(EntityTypeBuilder<Invoice> e)=>e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r=>r.AutomationPlanId).OnDelete(DeleteBehavior.Restrict);}

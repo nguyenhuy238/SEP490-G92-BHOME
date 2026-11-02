@@ -14,7 +14,11 @@ public interface IBillingAutomationSchedules
     Task<BillingAutomationPlan?> ForPeriodAsync(Guid locationId,DateOnly period,CancellationToken t);
     Task<IReadOnlyList<BillingAutomationPlan>> HistoryAsync(Guid locationId,CancellationToken t);
     Task<BillingAutomationPlan> SaveAsync(BillingAutomationWrite input,Guid actor,DateTimeOffset now,CancellationToken t);
+    Task<bool> AuthorizedAsync(BillingAutomationPlan plan,Guid actor,DateOnly period,bool finalization,CancellationToken t);
+    Task<BillingRepresentativeSelection?> RepresentativeAsync(Guid room,DateOnly period,CancellationToken t);
+    Task<BillingRepresentativeSelection> SelectRepresentativeAsync(BillingRepresentativeInput input,Guid actor,DateTimeOffset now,CancellationToken t);
 }
+public sealed record BillingRepresentativeInput(Guid RoomId,DateOnly BillingPeriod,Guid ContractId,int ExpectedVersion);
 public sealed class BillingAutomationService(IBillingAutomationSchedules schedules,ICurrentUser user,PermissionAccess permissions,TimeProvider clock)
 {
     private async Task<Guid> Owner(Guid location,CancellationToken t)

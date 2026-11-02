@@ -35,3 +35,13 @@ xem; generated task chỉ Staff được giao trong Location hiện còn phụ t
 Capture DTO bổ sung dueAt, assignedStaffUserId, automationPlanId, version, locationId, roomId.
 Schema mới snapshot Room/type được trigger derive từ Meter cho cả manual/scheduled inserts.
 Migration dừng nếu dữ liệu cũ đã trùng; không xóa lịch sử để ép migration thành công.
+
+JOB-10 Draft handler `billing-draft`, phase `Draft`, gọi InvoiceService.Generate với Owner
+delegation từ plan đã lưu; Owner active/role và plan hiệu lực được revalidate trong Location/
+Room transaction hiện có. Financial calculation không sao chép sang job. Invoice.AutomationPlanId
+trace nguồn tạo; Room/period unique hiện có dùng chung manual/scheduled/race.
+GET/PUT `representative` dùng `{roomId,billingPeriod,contractId,expectedVersion}` khi lưu,
+GET query roomId/period. Owner chọn eligible Contract; snapshot selection append-only.
+Đã có Invoice không đổi selection. Nhiều Contracts nhưng thiếu selection giữ execution PendingInputs;
+không tự chọn GUID/tiền thuê. Draft đã có không refresh/overwrite, giữ approved corrections,
+Final và viewer snapshots. Thiếu giá/chỉ số lưu MissingInputs, không dùng OCR proposal.
