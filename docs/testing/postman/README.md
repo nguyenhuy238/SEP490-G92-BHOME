@@ -1,34 +1,5 @@
 # Kiểm thử API với Postman
 
-## Kiểm thử sự cố đơn giản — request 119–135
-
-Mở `BHome.Simple.postman_collection.json`. Phần sự cố gồm **17 request tiếng Việt**,
-nối tiếp ngay sau request 118, không chia thư mục. Tổng collection **142 request**,
-giữ nguyên 125 request cũ.
-
-Chuẩn bị:
-
-1. Dùng lại `baseUrl`, `ownerAccessToken`, `staffAccessToken`, `locationId` và `staffUserId` ở phần trước.
-2. Điền `incidentRoomId` là ID phòng thuộc cơ sở đó. Cơ sở phải đang hoạt động, nhân viên còn được phân công.
-3. Gửi lần lượt **119 → 135**; riêng **130**, mở **Body → binary** và chọn một ảnh PNG giả lập (tối đa 5.000.000 bytes).
-
-Luồng chính:
-
-- **119–123:** nhân viên báo sự cố, chủ trọ phân loại và giao việc.
-- **124–129:** nhân viên đề xuất, chủ trọ duyệt, nhân viên bắt đầu sửa.
-- **130–134:** tải ảnh, gửi kết quả và chủ trọ nghiệm thu.
-- **135:** xem trạng thái sự cố sau nghiệm thu.
-
-ID và version tự lưu từ response thành công; không nhập bằng tay. Các bước GET lấy version thật
-từ Backend trước khi thay đổi dữ liệu. Request 123 tự đặt hạn mẫu sau 2 ngày nếu `incidentDueAt`
-trống/hết hạn; có thể sửa biến này nếu cần. Đây chỉ là thời hạn kiểm thử.
-
-Mỗi lần gửi thay đổi dùng UUID mới trong `Idempotency-Key`. Không có request tự gửi ngầm.
-Dùng dữ liệu giả lập, áp migration Incident trước khi kiểm thử và thực hiện bước 79 ngừng cơ sở sau cùng.
-Chi tiết API: [Incident API](../../api/INCIDENT_MAINTENANCE.md).
-
-## Collection nền và Task hiện có
-
 Import hai file:
 
 - `BHome.Simple.postman_collection.json`

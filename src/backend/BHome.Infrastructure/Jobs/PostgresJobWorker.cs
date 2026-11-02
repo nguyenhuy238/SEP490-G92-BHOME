@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Jobs;
 internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOptions<JobWorkerOptions> options,
     ILogger<PostgresJobWorker> logger) : BackgroundService
 {
-    internal const int MaxAttempts = 4;
+    private const int MaxAttempts = 4;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
