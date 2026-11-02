@@ -215,7 +215,7 @@ export function LocationsListPage() {
             alignItems: 'center',
           }}
         >
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             <CheckCircle2 size={18} />
             <Typography variant="body2" sx={{ fontWeight: 700 }}>
               {successToast}
@@ -229,9 +229,9 @@ export function LocationsListPage() {
 
       {/* Chain Metric KPI Bar */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750 }}>
                   TỔNG SỐ CƠ SỞ
@@ -257,9 +257,9 @@ export function LocationsListPage() {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750 }}>
                   TỔNG SỐ PHÒNG
@@ -285,9 +285,9 @@ export function LocationsListPage() {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750 }}>
                   ĐANG THUÊ / TRỐNG
@@ -313,18 +313,16 @@ export function LocationsListPage() {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Box sx={{ width: '100%' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750 }}>
                   TỶ LỆ LẤP ĐẦY TOÀN CHUỖI
                 </Typography>
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mt: 0.5 }}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}
                 >
                   <Typography variant="h4" sx={{ fontWeight: 850, color: 'primary.main' }}>
                     {overallOccupancy}%
@@ -344,25 +342,27 @@ export function LocationsListPage() {
 
       {/* Filter and Search Bar */}
       <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={7}>
+        <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+          <Grid size={{ xs: 12, sm: 7 }}>
             <TextField
               fullWidth
               size="small"
               placeholder="Tìm kiếm theo tên cơ sở, mã cơ sở hoặc địa chỉ..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={18} color="#64748b" />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={18} color="#64748b" />
+                    </InputAdornment>
+                  ),
+                },
               }}
               sx={{ bgcolor: '#ffffff' }}
             />
           </Grid>
-          <Grid item xs={12} sm={5}>
+          <Grid size={{ xs: 12, sm: 5 }}>
             <TextField
               fullWidth
               select
@@ -400,7 +400,7 @@ export function LocationsListPage() {
             'Chưa phân công';
 
           return (
-            <Grid item xs={12} md={6} lg={4} key={loc.id}>
+            <Grid key={loc.id} size={{ xs: 12, md: 6, lg: 4 }}>
               <Paper
                 variant="outlined"
                 sx={{
@@ -419,11 +419,9 @@ export function LocationsListPage() {
                 {/* Header with Badges */}
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 1.5 }}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
                 >
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Box
                       sx={{
                         width: 38,
@@ -490,9 +488,7 @@ export function LocationsListPage() {
                 {/* Occupancy and Room Metrics */}
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 0.75 }}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}
                 >
                   <Typography variant="caption" color="text.secondary">
                     {occupied}/{locRooms.length || 24} phòng đang thuê ({available} phòng trống)
@@ -512,15 +508,12 @@ export function LocationsListPage() {
                 {/* Manager & Configuration Status */}
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 2 }}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}
                 >
                   <Stack
                     direction="row"
                     spacing={0.75}
-                    alignItems="center"
-                    sx={{ color: 'text.secondary' }}
+                    sx={{ alignItems: 'center', color: 'text.secondary' }}
                   >
                     <UserRound size={14} />
                     <Typography variant="caption" sx={{ fontWeight: 700 }} noWrap>
@@ -543,7 +536,7 @@ export function LocationsListPage() {
                 {/* Action Buttons */}
                 <Box sx={{ mt: 'auto', pt: 1.5, borderTop: '1px solid #f1f5f9' }}>
                   <Grid container spacing={1}>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Button
                         fullWidth
                         size="small"
@@ -554,7 +547,7 @@ export function LocationsListPage() {
                         Sao chép
                       </Button>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Button
                         fullWidth
                         size="small"
@@ -565,7 +558,7 @@ export function LocationsListPage() {
                         Sửa
                       </Button>
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                       <Button
                         fullWidth
                         component={Link}
@@ -614,7 +607,7 @@ export function LocationsListPage() {
           </DialogTitle>
           <DialogContent sx={{ py: 2 }}>
             <Grid container spacing={2}>
-              <Grid item xs={8}>
+              <Grid size={{ xs: 8 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -623,7 +616,7 @@ export function LocationsListPage() {
                   onChange={(e) => setEditingLocation({ ...editingLocation, name: e.target.value })}
                 />
               </Grid>
-              <Grid item xs={4}>
+              <Grid size={{ xs: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -632,7 +625,7 @@ export function LocationsListPage() {
                   onChange={(e) => setEditingLocation({ ...editingLocation, code: e.target.value })}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -646,7 +639,7 @@ export function LocationsListPage() {
                   }
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -661,7 +654,7 @@ export function LocationsListPage() {
                   }
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <TextField
                   fullWidth
                   select

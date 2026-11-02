@@ -83,7 +83,7 @@ export function PolicyVersioningDialog({
       <DialogTitle
         sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
               width: 38,
@@ -162,7 +162,7 @@ export function PolicyVersioningDialog({
 
         {/* Current vs Proposed Version Comparison */}
         <Grid container spacing={2.5}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               variant="outlined"
               sx={{
@@ -175,9 +175,7 @@ export function PolicyVersioningDialog({
             >
               <Stack
                 direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{ mb: 1.5 }}
+                sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#475569' }}>
                   Phiên bản hiện tại đang áp dụng
@@ -212,7 +210,7 @@ export function PolicyVersioningDialog({
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               variant="outlined"
               sx={{
@@ -225,9 +223,7 @@ export function PolicyVersioningDialog({
             >
               <Stack
                 direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{ mb: 1.5 }}
+                sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
               >
                 <Typography
                   variant="subtitle2"
@@ -261,24 +257,24 @@ export function PolicyVersioningDialog({
 
               {isApplied && (
                 <Grid container spacing={1.5} sx={{ mt: 1 }}>
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       size="small"
                       type="date"
                       label="Ngày bắt đầu hiệu lực"
-                      InputLabelProps={{ shrink: true }}
+                      slotProps={{ inputLabel: { shrink: true } }}
                       value={effectiveDate}
                       onChange={(e) => setEffectiveDate(e.target.value)}
                       sx={{ bgcolor: '#ffffff' }}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       size="small"
                       select
-                      SelectProps={{ native: true }}
+                      slotProps={{ select: { native: true } }}
                       label="Trạng thái kích hoạt"
                       value={scheduledStatus}
                       onChange={(e) => setScheduledStatus(e.target.value as 'SCHEDULED' | 'ACTIVE')}
@@ -288,7 +284,7 @@ export function PolicyVersioningDialog({
                       <option value="ACTIVE">Áp dụng ngay</option>
                     </TextField>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -307,7 +303,10 @@ export function PolicyVersioningDialog({
 
         {/* Version History Table */}
         <Box sx={{ mt: 3 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Stack
+            direction="row"
+            sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
+          >
             <Typography
               variant="subtitle2"
               sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}

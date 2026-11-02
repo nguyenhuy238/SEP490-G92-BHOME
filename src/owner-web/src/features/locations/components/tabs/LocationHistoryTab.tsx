@@ -61,10 +61,7 @@ export function LocationHistoryTab() {
       <Paper variant="outlined" sx={{ p: 2.5, mb: 3, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
         <Stack
           direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          gap={2}
+          sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}
         >
           <Box>
             <Typography
@@ -145,11 +142,9 @@ export function LocationHistoryTab() {
               >
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 1 }}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
                 >
-                  <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <Chip
                       size="small"
                       label={badge.label}
@@ -192,12 +187,14 @@ export function LocationHistoryTab() {
 
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  flexWrap="wrap"
-                  gap={1}
+                  sx={{
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                  }}
                 >
-                  <Stack direction="row" spacing={2} alignItems="center">
+                  <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                     {item.condition && (
                       <Typography variant="caption" color="text.secondary">
                         Tình trạng sau bảo trì: <strong>{item.condition}</strong>
@@ -213,8 +210,7 @@ export function LocationHistoryTab() {
                   <Stack
                     direction="row"
                     spacing={0.75}
-                    alignItems="center"
-                    sx={{ color: 'text.secondary' }}
+                    sx={{ alignItems: 'center', color: 'text.secondary' }}
                   >
                     <UserRound size={14} />
                     <Typography variant="caption" sx={{ fontWeight: 700 }}>

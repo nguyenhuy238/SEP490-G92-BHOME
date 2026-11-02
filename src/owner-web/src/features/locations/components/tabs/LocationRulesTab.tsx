@@ -133,13 +133,15 @@ export function LocationRulesTab() {
       {/* Filter and Action Bar */}
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2.5 }}
-        flexWrap="wrap"
-        gap={1.5}
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 1.5,
+          mb: 2.5,
+        }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <TextField
             select
             size="small"
@@ -173,7 +175,7 @@ export function LocationRulesTab() {
           const isApplied = rule.isAppliedToContracts;
 
           return (
-            <Grid item xs={12} md={6} key={rule.id}>
+            <Grid key={rule.id} size={{ xs: 12, md: 6 }}>
               <Paper
                 variant="outlined"
                 sx={{
@@ -187,9 +189,7 @@ export function LocationRulesTab() {
               >
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 1.5 }}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
                 >
                   <Chip
                     size="small"
@@ -198,7 +198,7 @@ export function LocationRulesTab() {
                     variant="outlined"
                     sx={{ fontWeight: 750, fontSize: 11 }}
                   />
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Chip
                       size="small"
                       label={isApplied ? 'Đã áp dụng vào hợp đồng' : 'Bản nháp'}
@@ -240,8 +240,11 @@ export function LocationRulesTab() {
 
                 <Divider sx={{ my: 1.5 }} />
 
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Clock size={14} color="#64748b" />
                     <Typography variant="caption" color="text.secondary">
                       Hiệu lực: {rule.effectiveDate}
@@ -282,7 +285,7 @@ export function LocationRulesTab() {
         <DialogTitle sx={{ fontWeight: 800 }}>Thêm nội quy & quy định mới</DialogTitle>
         <DialogContent sx={{ py: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -292,7 +295,7 @@ export function LocationRulesTab() {
                 placeholder="Ví dụ: Quy định sử dụng ban công và phơi đồ"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 select
@@ -311,18 +314,18 @@ export function LocationRulesTab() {
                 <MenuItem value="OTHER_OPERATIONS">Vận hành khác</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 size="small"
                 type="date"
                 label="Ngày bắt đầu hiệu lực"
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 value={newRuleEffectiveDate}
                 onChange={(e) => setNewRuleEffectiveDate(e.target.value)}
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
                 multiline

@@ -68,7 +68,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
 
       <Grid container spacing={3}>
         {/* Core Settings Form */}
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, bgcolor: '#ffffff' }}>
             <Typography
               variant="subtitle1"
@@ -81,7 +81,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
             </Typography>
 
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={8}>
+              <Grid size={{ xs: 12, sm: 8 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -90,7 +90,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
                   onChange={(e) => setName(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -99,7 +99,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
                   onChange={(e) => setCode(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -108,7 +108,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
                   onChange={(e) => setAddress(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -118,7 +118,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
                   onChange={(e) => setFloors(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -127,7 +127,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
                   onChange={(e) => setPhone(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -136,7 +136,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   select
@@ -154,7 +154,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
 
             <Divider sx={{ my: 3 }} />
 
-            <Stack direction="row" justifyContent="flex-end" spacing={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
               <Button
                 variant="contained"
                 onClick={handleSave}
@@ -168,7 +168,7 @@ export function LocationSettingsTab({ location, onLaunchCopyWizard }: LocationSe
         </Grid>
 
         {/* Clone & Export Actions */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
             <Typography
               variant="subtitle2"

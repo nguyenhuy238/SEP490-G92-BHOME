@@ -49,7 +49,12 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
   // Room rates state
   const rooms = db.records.rooms.filter((r) => r.locationId === location.id);
   const roomList = rooms.length
-    ? rooms
+    ? rooms.map((room) => ({
+        id: room.id,
+        code: room.code,
+        floor: room.attributes.floor || '1',
+        category: room.category,
+      }))
     : [
         { id: 'r-1', code: 'P.101', floor: '1', category: 'type-studio' },
         { id: 'r-2', code: 'P.102', floor: '1', category: 'type-studio' },
@@ -82,7 +87,10 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}
+      >
         <Tabs
           value={activeSubTab}
           onChange={(_, val) => setActiveSubTab(val)}
@@ -221,7 +229,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
           <Grid container spacing={3}>
             {/* Fee Policies Table */}
-            <Grid item xs={12} md={7}>
+            <Grid size={{ xs: 12, md: 7 }}>
               <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2.5 }}>
                 <Table size="small">
                   <TableHead sx={{ bgcolor: '#f8fafc' }}>
@@ -270,7 +278,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
             </Grid>
 
             {/* Estimated Monthly Charge Preview Calculator */}
-            <Grid item xs={12} md={5}>
+            <Grid size={{ xs: 12, md: 5 }}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
                 <Typography
                   variant="subtitle2"
@@ -288,7 +296,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                 </Typography>
 
                 <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -298,7 +306,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       onChange={(e) => setPreviewKwh(parseInt(e.target.value, 10) || 0)}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -311,7 +319,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                 </Grid>
 
                 <Stack spacing={1} sx={{ pt: 1, borderTop: '1px dashed #cbd5e1' }}>
-                  <Stack direction="row" justifyContent="space-between">
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
                       Tiền thuê phòng Studio:
                     </Typography>
@@ -319,7 +327,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       5.500.000 VND
                     </Typography>
                   </Stack>
-                  <Stack direction="row" justifyContent="space-between">
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
                       Tiền điện ({previewKwh} kWh × 3.800):
                     </Typography>
@@ -327,7 +335,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       {(previewKwh * 3800).toLocaleString()} VND
                     </Typography>
                   </Stack>
-                  <Stack direction="row" justifyContent="space-between">
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
                       Tiền nước ({previewM3} m³ × 22.000):
                     </Typography>
@@ -335,7 +343,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       {(previewM3 * 22000).toLocaleString()} VND
                     </Typography>
                   </Stack>
-                  <Stack direction="row" justifyContent="space-between">
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
                       Phí rác, an ninh & Wi-Fi:
                     </Typography>
@@ -346,7 +354,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
                   <Divider sx={{ my: 0.5 }} />
 
-                  <Stack direction="row" justifyContent="space-between">
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                       Tổng tiền dự kiến trên hóa đơn:
                     </Typography>
@@ -385,8 +393,10 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               label="Giá thuê mới (VND/tháng)"
               value={overrideValue}
               onChange={(e) => setOverrideValue(parseInt(e.target.value, 10) || 0)}
-              InputProps={{
-                endAdornment: <InputAdornment position="end">VND</InputAdornment>,
+              slotProps={{
+                input: {
+                  endAdornment: <InputAdornment position="end">VND</InputAdornment>,
+                },
               }}
             />
           </DialogContent>

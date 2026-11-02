@@ -178,7 +178,10 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}
+      >
         <Tabs
           value={activeSubTab}
           onChange={(_, val) => setActiveSubTab(val)}
@@ -229,7 +232,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
       {activeSubTab === 'assignment' && (
         <Box>
           <Paper variant="outlined" sx={{ p: 2, mb: 2.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <TextField
                 select
                 size="small"
@@ -273,7 +276,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                     <TableRow key={idx} hover>
                       <TableCell sx={{ fontWeight: 800 }}>{item.roomCode}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           {getAssetIcon(item.catalogId)}
                           <span>{catalogItem?.name || item.catalogId}</span>
                         </Stack>
@@ -321,9 +324,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
         <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5 }}>
           <Stack
             direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 2.5 }}
+            sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}
           >
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -366,7 +367,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                   return (
                     <TableRow key={req.catalogId}>
                       <TableCell sx={{ fontWeight: 700 }}>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           {getAssetIcon(req.catalogId)}
                           <span>{catItem?.name}</span>
                         </Stack>
@@ -396,9 +397,9 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
       {activeSubTab === 'catalog' && (
         <Grid container spacing={2}>
           {assetCatalog.map((item) => (
-            <Grid item xs={12} sm={6} md={4} key={item.id}>
+            <Grid key={item.id} size={{ xs: 12, sm: 6, md: 4 }}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, height: '100%' }}>
-                <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
                   <Box
                     sx={{
                       width: 42,
@@ -413,7 +414,10 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                     {getAssetIcon(item.id)}
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack
+                      direction="row"
+                      sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                    >
                       <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                         {item.name}
                       </Typography>

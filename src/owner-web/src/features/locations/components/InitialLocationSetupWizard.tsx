@@ -45,6 +45,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { makeRecord } from '../../../services/mock/seed';
 import type { DemoDatabase, PortalRecord } from '../../../types/portal';
 import {
   INITIAL_ASSET_CATALOG,
@@ -211,7 +212,7 @@ export function InitialLocationSetupWizard({
   // Complete wizard
   const handleFinish = () => {
     const newId = `loc-${Date.now()}`;
-    const newLocRecord: PortalRecord = {
+    const newLocRecord = makeRecord('locations', {
       id: newId,
       code: locationCode,
       name: locationName,
@@ -226,7 +227,7 @@ export function InitialLocationSetupWizard({
         amenities: 'Thang máy · Khóa vân tay · Camera 24/7 · Wi-Fi Mesh',
         setupStatus: 'FULLY_CONFIGURED',
       },
-    };
+    });
 
     onComplete(newLocRecord, {
       roomTypes,
@@ -244,7 +245,7 @@ export function InitialLocationSetupWizard({
       <DialogTitle
         sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
               width: 40,
@@ -314,7 +315,7 @@ export function InitialLocationSetupWizard({
 
             {/* Setup Mode Selection Cards */}
             <Grid container spacing={2} sx={{ mb: 3.5 }}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Paper
                   variant="outlined"
                   sx={{
@@ -327,7 +328,7 @@ export function InitialLocationSetupWizard({
                   }}
                   onClick={() => setSetupMode('SCRATCH')}
                 >
-                  <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <Radio checked={setupMode === 'SCRATCH'} />
                     <Box>
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -341,7 +342,7 @@ export function InitialLocationSetupWizard({
                 </Paper>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Paper
                   variant="outlined"
                   sx={{
@@ -354,7 +355,7 @@ export function InitialLocationSetupWizard({
                   }}
                   onClick={() => setSetupMode('COPY')}
                 >
-                  <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <Radio checked={setupMode === 'COPY'} />
                     <Box>
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -397,7 +398,7 @@ export function InitialLocationSetupWizard({
 
             {/* Location Form Fields */}
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={8}>
+              <Grid size={{ xs: 12, sm: 8 }}>
                 <TextField
                   fullWidth
                   required
@@ -407,7 +408,7 @@ export function InitialLocationSetupWizard({
                   onChange={(e) => setLocationName(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   required
@@ -418,7 +419,7 @@ export function InitialLocationSetupWizard({
                   placeholder="CS-04"
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   required
@@ -428,7 +429,7 @@ export function InitialLocationSetupWizard({
                   onChange={(e) => setAddress(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   required
@@ -437,10 +438,10 @@ export function InitialLocationSetupWizard({
                   label="Số tầng"
                   value={floors}
                   onChange={(e) => setFloors(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  InputProps={{ inputProps: { min: 1, max: 20 } }}
+                  slotProps={{ htmlInput: { min: 1, max: 20 } }}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -449,7 +450,7 @@ export function InitialLocationSetupWizard({
                   onChange={(e) => setContactPhone(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -458,7 +459,7 @@ export function InitialLocationSetupWizard({
                   onChange={(e) => setContactEmail(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   multiline
@@ -469,7 +470,7 @@ export function InitialLocationSetupWizard({
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   select
@@ -491,9 +492,7 @@ export function InitialLocationSetupWizard({
           <Box>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 2 }}
+              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}
             >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -509,18 +508,20 @@ export function InitialLocationSetupWizard({
                 size="small"
                 startIcon={<Plus size={16} />}
                 onClick={() => {
-                  setEditingRoomType({
-                    id: `type-${Date.now()}`,
-                    name: 'Studio Sang trọng',
-                    code: 'DLX-STD',
-                    area: 28,
-                    maxOccupants: 2,
-                    defaultRate: 6000000,
-                    description: 'Phòng studio tiện nghi cao cấp có ban công riêng',
-                    facilities: ['Máy lạnh', 'Máy nước nóng', 'Smart TV', 'Ban công riêng'],
-                    status: 'ACTIVE',
-                  });
-                  setIsRoomTypeDialogOpen(true);
+                  setRoomTypes((current) => [
+                    ...current,
+                    {
+                      id: `type-${Date.now()}`,
+                      name: 'Studio Sang trọng',
+                      code: 'DLX-STD',
+                      area: 28,
+                      maxOccupants: 2,
+                      defaultRate: 6000000,
+                      description: 'Phòng studio tiện nghi cao cấp có ban công riêng',
+                      facilities: ['Máy lạnh', 'Máy nước nóng', 'Smart TV', 'Ban công riêng'],
+                      status: 'ACTIVE',
+                    },
+                  ]);
                 }}
               >
                 Thêm loại phòng
@@ -529,7 +530,7 @@ export function InitialLocationSetupWizard({
 
             <Grid container spacing={2}>
               {roomTypes.map((rt) => (
-                <Grid item xs={12} md={4} key={rt.id}>
+                <Grid key={rt.id} size={{ xs: 12, md: 4 }}>
                   <Card
                     variant="outlined"
                     sx={{
@@ -540,7 +541,10 @@ export function InitialLocationSetupWizard({
                     }}
                   >
                     <CardContent sx={{ flex: 1, p: 2.5 }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Stack
+                        direction="row"
+                        sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                      >
                         <Chip
                           size="small"
                           label={rt.code}
@@ -569,7 +573,7 @@ export function InitialLocationSetupWizard({
                       <Divider sx={{ my: 1.5 }} />
 
                       <Stack spacing={1}>
-                        <Stack direction="row" justifyContent="space-between">
+                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="caption" color="text.secondary">
                             Diện tích chuẩn:
                           </Typography>
@@ -577,7 +581,7 @@ export function InitialLocationSetupWizard({
                             {rt.area} m²
                           </Typography>
                         </Stack>
-                        <Stack direction="row" justifyContent="space-between">
+                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="caption" color="text.secondary">
                             Sức chứa tối đa:
                           </Typography>
@@ -585,7 +589,7 @@ export function InitialLocationSetupWizard({
                             {rt.maxOccupants} người
                           </Typography>
                         </Stack>
-                        <Stack direction="row" justifyContent="space-between">
+                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="caption" color="text.secondary">
                             Giá thuê mặc định:
                           </Typography>
@@ -606,7 +610,7 @@ export function InitialLocationSetupWizard({
                         >
                           Trang bị tiêu chuẩn:
                         </Typography>
-                        <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                           {rt.facilities.map((fac) => (
                             <Chip key={fac} label={fac} size="small" sx={{ fontSize: 11 }} />
                           ))}
@@ -617,8 +621,7 @@ export function InitialLocationSetupWizard({
                     <Divider />
                     <Stack
                       direction="row"
-                      justifyContent="flex-end"
-                      sx={{ p: 1, gap: 1, bgcolor: '#f8fafc' }}
+                      sx={{ justifyContent: 'flex-end', p: 1, gap: 1, bgcolor: '#f8fafc' }}
                     >
                       <Button
                         size="small"
@@ -672,8 +675,8 @@ export function InitialLocationSetupWizard({
               >
                 <Layers3 size={18} /> Công cụ tạo phòng hàng loạt theo tầng
               </Typography>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={3}>
+              <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                <Grid size={{ xs: 12, sm: 3 }}>
                   <TextField
                     fullWidth
                     select
@@ -689,7 +692,7 @@ export function InitialLocationSetupWizard({
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={3}>
+                <Grid size={{ xs: 12, sm: 3 }}>
                   <TextField
                     fullWidth
                     select
@@ -705,7 +708,7 @@ export function InitialLocationSetupWizard({
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={6} sm={2}>
+                <Grid size={{ xs: 6, sm: 2 }}>
                   <TextField
                     fullWidth
                     size="small"
@@ -714,7 +717,7 @@ export function InitialLocationSetupWizard({
                     onChange={(e) => setBulkPrefix(e.target.value)}
                   />
                 </Grid>
-                <Grid item xs={6} sm={2}>
+                <Grid size={{ xs: 6, sm: 2 }}>
                   <TextField
                     fullWidth
                     type="number"
@@ -726,7 +729,7 @@ export function InitialLocationSetupWizard({
                     }
                   />
                 </Grid>
-                <Grid item xs={12} sm={2}>
+                <Grid size={{ xs: 12, sm: 2 }}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -742,9 +745,7 @@ export function InitialLocationSetupWizard({
             {/* Generated Rooms Table */}
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 1.5 }}
+              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
             >
               <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                 Danh sách phòng đã cấu hình ({rooms.length} phòng)
@@ -832,7 +833,7 @@ export function InitialLocationSetupWizard({
 
             <Grid container spacing={2.5}>
               {/* Asset Catalog Column */}
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, height: '100%' }}>
                   <Typography
                     variant="subtitle2"
@@ -859,7 +860,10 @@ export function InitialLocationSetupWizard({
                           bgcolor: '#f8fafc',
                         }}
                       >
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Stack
+                          direction="row"
+                          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                        >
                           <Typography variant="body2" sx={{ fontWeight: 750 }}>
                             {item.name}
                           </Typography>
@@ -875,13 +879,11 @@ export function InitialLocationSetupWizard({
               </Grid>
 
               {/* Room Type Template Column */}
-              <Grid item xs={12} md={8}>
+              <Grid size={{ xs: 12, md: 8 }}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, height: '100%' }}>
                   <Stack
                     direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    sx={{ mb: 1.5 }}
+                    sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
                   >
                     <Box>
                       <Typography
@@ -945,9 +947,7 @@ export function InitialLocationSetupWizard({
 
                   <Stack
                     direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    sx={{ pt: 1 }}
+                    sx={{ alignItems: 'center', justifyContent: 'space-between', pt: 1 }}
                   >
                     <Typography variant="caption" color="text.secondary">
                       Áp dụng định mức này cho toàn bộ{' '}
@@ -1037,8 +1037,10 @@ export function InitialLocationSetupWizard({
                                 return next;
                               });
                             }}
-                            InputProps={{
-                              endAdornment: <InputAdornment position="end">VND</InputAdornment>,
+                            slotProps={{
+                              input: {
+                                endAdornment: <InputAdornment position="end">VND</InputAdornment>,
+                              },
                             }}
                             sx={{ width: 190 }}
                           />
@@ -1085,7 +1087,7 @@ export function InitialLocationSetupWizard({
             </Alert>
 
             <Grid container spacing={2.5}>
-              <Grid item xs={12} md={7}>
+              <Grid size={{ xs: 12, md: 7 }}>
                 <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2.5 }}>
                   <Table size="small">
                     <TableHead sx={{ bgcolor: '#f8fafc' }}>
@@ -1136,7 +1138,7 @@ export function InitialLocationSetupWizard({
               </Grid>
 
               {/* Occupied Room Monthly Charge Preview */}
-              <Grid item xs={12} md={5}>
+              <Grid size={{ xs: 12, md: 5 }}>
                 <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
                   <Typography
                     variant="subtitle2"
@@ -1154,7 +1156,7 @@ export function InitialLocationSetupWizard({
                   </Typography>
 
                   <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -1164,7 +1166,7 @@ export function InitialLocationSetupWizard({
                         onChange={(e) => setPreviewKwh(parseInt(e.target.value, 10) || 0)}
                       />
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -1177,7 +1179,7 @@ export function InitialLocationSetupWizard({
                   </Grid>
 
                   <Stack spacing={1} sx={{ pt: 1, borderTop: '1px dashed #cbd5e1' }}>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Tiền thuê phòng Studio:
                       </Typography>
@@ -1185,7 +1187,7 @@ export function InitialLocationSetupWizard({
                         5.500.000 VND
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Tiền điện ({previewKwh} kWh × 3.800):
                       </Typography>
@@ -1193,7 +1195,7 @@ export function InitialLocationSetupWizard({
                         {(previewKwh * 3800).toLocaleString()} VND
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Tiền nước ({previewM3} m³ × 22.000):
                       </Typography>
@@ -1201,7 +1203,7 @@ export function InitialLocationSetupWizard({
                         {(previewM3 * 22000).toLocaleString()} VND
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Phí rác, an ninh & Wi-Fi:
                       </Typography>
@@ -1212,7 +1214,7 @@ export function InitialLocationSetupWizard({
 
                     <Divider sx={{ my: 0.5 }} />
 
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                         Tổng tiền dự kiến trên hóa đơn:
                       </Typography>
@@ -1241,9 +1243,7 @@ export function InitialLocationSetupWizard({
           <Box>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 2 }}
+              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}
             >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -1278,7 +1278,7 @@ export function InitialLocationSetupWizard({
 
             <Grid container spacing={2}>
               {houseRules.map((rule) => (
-                <Grid item xs={12} md={6} key={rule.id}>
+                <Grid key={rule.id} size={{ xs: 12, md: 6 }}>
                   <Paper
                     variant="outlined"
                     sx={{
@@ -1292,9 +1292,7 @@ export function InitialLocationSetupWizard({
                   >
                     <Stack
                       direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      sx={{ mb: 1 }}
+                      sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
                     >
                       <Chip
                         size="small"
@@ -1319,7 +1317,10 @@ export function InitialLocationSetupWizard({
 
                     <Divider sx={{ my: 1.5 }} />
 
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack
+                      direction="row"
+                      sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                    >
                       <Typography variant="caption" color="text.secondary">
                         Hiệu lực: {rule.effectiveDate}
                       </Typography>
@@ -1340,7 +1341,7 @@ export function InitialLocationSetupWizard({
         {/* STEP 8: Review & Finish */}
         {activeStep === 7 && (
           <Box>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 3 }}>
               <Box
                 sx={{
                   width: 48,
@@ -1366,13 +1367,13 @@ export function InitialLocationSetupWizard({
             </Stack>
 
             <Grid container spacing={2.5}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5 }}>
                     Thông tin cơ sở & Quy mô
                   </Typography>
                   <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Tên & Mã cơ sở:
                       </Typography>
@@ -1380,7 +1381,7 @@ export function InitialLocationSetupWizard({
                         {locationName} ({locationCode})
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Quy mô phòng:
                       </Typography>
@@ -1388,11 +1389,11 @@ export function InitialLocationSetupWizard({
                         {floors} tầng · {rooms.length} phòng đã tạo
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Địa chỉ:
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }} textAlign="right">
+                      <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>
                         {address}
                       </Typography>
                     </Stack>
@@ -1400,13 +1401,13 @@ export function InitialLocationSetupWizard({
                 </Paper>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#f8fafc' }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5 }}>
                     Danh mục cấu hình đã sẵn sàng
                   </Typography>
                   <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Loại phòng:
                       </Typography>
@@ -1416,13 +1417,13 @@ export function InitialLocationSetupWizard({
                         color="primary"
                       />
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Tài sản & Tiện nghi:
                       </Typography>
                       <Chip size="small" label="10 thiết bị danh mục đã gán" color="success" />
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Biểu phí điện nước:
                       </Typography>
@@ -1432,7 +1433,7 @@ export function InitialLocationSetupWizard({
                         color="info"
                       />
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Nội quy cơ sở:
                       </Typography>

@@ -293,7 +293,7 @@ export function CopyConfigurationWizard({
       <DialogTitle
         sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
               width: 38,
@@ -367,7 +367,7 @@ export function CopyConfigurationWizard({
                   : 85;
 
                 return (
-                  <Grid item xs={12} md={4} key={loc.id}>
+                  <Grid key={loc.id} size={{ xs: 12, md: 4 }}>
                     <Card
                       variant="outlined"
                       sx={{
@@ -379,7 +379,10 @@ export function CopyConfigurationWizard({
                       }}
                     >
                       <CardActionArea onClick={() => setSourceId(loc.id)} sx={{ p: 2 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Stack
+                          direction="row"
+                          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                        >
                           <Chip
                             size="small"
                             label={loc.code}
@@ -448,8 +451,8 @@ export function CopyConfigurationWizard({
               Chọn cơ sở đích (Sao chép đến):
             </Typography>
 
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={6}>
+            <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   select
@@ -471,7 +474,7 @@ export function CopyConfigurationWizard({
                 </TextField>
               </Grid>
               {destinationId === 'new-loc-draft' && (
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     size="small"
@@ -491,9 +494,7 @@ export function CopyConfigurationWizard({
           <Box>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 1.5 }}
+              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
             >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -521,7 +522,7 @@ export function CopyConfigurationWizard({
                 const IconComponent = meta.icon;
 
                 return (
-                  <Grid item xs={12} sm={6} md={3} key={meta.group}>
+                  <Grid key={meta.group} size={{ xs: 12, sm: 6, md: 3 }}>
                     <Paper
                       variant="outlined"
                       sx={{
@@ -535,7 +536,10 @@ export function CopyConfigurationWizard({
                       }}
                       onClick={() => handleToggleGroup(meta.group)}
                     >
-                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                      <Stack
+                        direction="row"
+                        sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}
+                      >
                         <Box
                           sx={{
                             width: 36,
@@ -577,9 +581,7 @@ export function CopyConfigurationWizard({
 
                       <Stack
                         direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        sx={{ mt: 1 }}
+                        sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1 }}
                       >
                         <Chip
                           size="small"
@@ -716,7 +718,7 @@ export function CopyConfigurationWizard({
         {/* STEP 4: Confirm Copy */}
         {activeStep === 3 && (
           <Box>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2.5 }}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2.5 }}>
               <Box
                 sx={{
                   width: 48,
@@ -742,7 +744,7 @@ export function CopyConfigurationWizard({
 
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5, mb: 3, bgcolor: '#f8fafc' }}>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="caption" color="text.secondary">
                     Cơ sở nguồn
                   </Typography>
@@ -750,7 +752,7 @@ export function CopyConfigurationWizard({
                     {sourceLocation?.name} ({sourceLocation?.code})
                   </Typography>
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="caption" color="text.secondary">
                     Cơ sở đích tiếp nhận
                   </Typography>
@@ -758,7 +760,7 @@ export function CopyConfigurationWizard({
                     {destLocation ? destLocation.name : newTargetName}
                   </Typography>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Divider sx={{ my: 1 }} />
                   <Typography
                     variant="caption"
@@ -767,7 +769,7 @@ export function CopyConfigurationWizard({
                   >
                     Các nhóm cấu hình đã chọn ({selectedGroups.length} nhóm):
                   </Typography>
-                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                     {selectedGroups.map((group) => {
                       const meta = AVAILABLE_GROUPS.find((g) => g.group === group)!;
                       return (

@@ -118,7 +118,10 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
   return (
     <Box>
       {/* Sub navigation tabs */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}
+      >
         <Tabs
           value={activeSubTab}
           onChange={(_, val) => setActiveSubTab(val)}
@@ -177,7 +180,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
         <Box>
           {/* Filters Bar */}
           <Paper variant="outlined" sx={{ p: 2, mb: 2.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <Typography
                 variant="body2"
                 sx={{
@@ -311,13 +314,16 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
       {activeSubTab === 'types' && (
         <Grid container spacing={2}>
           {roomTypes.map((rt) => (
-            <Grid item xs={12} md={4} key={rt.id}>
+            <Grid key={rt.id} size={{ xs: 12, md: 4 }}>
               <Card
                 variant="outlined"
                 sx={{ borderRadius: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}
               >
                 <CardContent sx={{ flex: 1, p: 2.5 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Stack
+                    direction="row"
+                    sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                  >
                     <Chip size="small" label={rt.code} color="primary" sx={{ fontWeight: 800 }} />
                     <Chip
                       size="small"
@@ -337,7 +343,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   <Divider sx={{ my: 1.5 }} />
 
                   <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">
                         Diện tích tiêu chuẩn:
                       </Typography>
@@ -345,7 +351,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                         {rt.area} m²
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">
                         Sức chứa tối đa:
                       </Typography>
@@ -353,7 +359,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                         {rt.maxOccupants} người
                       </Typography>
                     </Stack>
-                    <Stack direction="row" justifyContent="space-between">
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="caption" color="text.secondary">
                         Giá thuê mặc định:
                       </Typography>
@@ -371,7 +377,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                     >
                       Tiện ích & Trang bị tiêu chuẩn:
                     </Typography>
-                    <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                       {rt.facilities.map((fac) => (
                         <Chip key={fac} label={fac} size="small" sx={{ fontSize: 11 }} />
                       ))}
@@ -382,8 +388,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 <Divider />
                 <Stack
                   direction="row"
-                  justifyContent="flex-end"
-                  sx={{ p: 1, gap: 1, bgcolor: '#f8fafc' }}
+                  sx={{ justifyContent: 'flex-end', p: 1, gap: 1, bgcolor: '#f8fafc' }}
                 >
                   <Button
                     size="small"
@@ -432,7 +437,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           </Typography>
 
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 select
@@ -448,7 +453,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 ))}
               </TextField>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 select
@@ -464,7 +469,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 ))}
               </TextField>
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={{ xs: 6 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -474,7 +479,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 placeholder="P."
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={{ xs: 6 }}>
               <TextField
                 fullWidth
                 type="number"
@@ -511,7 +516,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           <DialogTitle sx={{ fontWeight: 800 }}>Cấu hình mẫu loại phòng</DialogTitle>
           <DialogContent sx={{ py: 2 }}>
             <Grid container spacing={2}>
-              <Grid item xs={8}>
+              <Grid size={{ xs: 8 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -520,7 +525,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   onChange={(e) => setEditingType({ ...editingType, name: e.target.value })}
                 />
               </Grid>
-              <Grid item xs={4}>
+              <Grid size={{ xs: 4 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -529,7 +534,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   onChange={(e) => setEditingType({ ...editingType, code: e.target.value })}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -541,7 +546,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   }
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -556,7 +561,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   }
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -571,7 +576,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                   }
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   multiline

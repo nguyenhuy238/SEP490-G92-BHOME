@@ -351,14 +351,16 @@ export const INITIAL_OPERATIONAL_HISTORY: OperationalHistoryItem[] = [
     relatedAsset: 'Khung giường gỗ 1.6m (Phòng 102)',
     roomCode: 'P.102',
     condition: 'Bình thường',
-    description: 'Ghi nhận vết trầy xước nhẹ khi bàn giao nhận phòng cho khách thuê, kết cấu vững chắc.',
+    description:
+      'Ghi nhận vết trầy xước nhẹ khi bàn giao nhận phòng cho khách thuê, kết cấu vững chắc.',
     actor: 'Lê Thị Thu Hà (Nhân viên)',
   },
   {
     id: 'hist-4',
     date: '2026-09-01',
     event: 'POLICY_UPDATED',
-    description: 'Cập nhật phiên bản biểu giá điện V2 (3.800 VND/kWh) áp dụng cho chu kỳ thanh toán mới.',
+    description:
+      'Cập nhật phiên bản biểu giá điện V2 (3.800 VND/kWh) áp dụng cho chu kỳ thanh toán mới.',
     actor: 'Chủ cơ sở (Quản trị viên)',
   },
   {

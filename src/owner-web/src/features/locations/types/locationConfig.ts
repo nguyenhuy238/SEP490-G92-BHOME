@@ -24,7 +24,14 @@ export interface GeneratedRoomDraft {
 export interface AssetCatalogItem {
   id: string;
   name: string;
-  category: 'Appliances' | 'Furniture' | 'Sanitary' | 'Electronics';
+  category:
+    | 'Appliances'
+    | 'Furniture'
+    | 'Sanitary'
+    | 'Electronics'
+    | 'Điện máy'
+    | 'Nội thất'
+    | 'Thiết bị vệ sinh';
   defaultCost: number;
   iconName: string;
   description: string;
@@ -55,12 +62,7 @@ export interface RentalRateItem {
 }
 
 export type FeeCalculationMethod =
-  | 'FIXED_AMOUNT'
-  | 'PER_KWH'
-  | 'PER_M3'
-  | 'PER_PERSON'
-  | 'PER_ROOM'
-  | 'PER_BILLING_PERIOD';
+  'FIXED_AMOUNT' | 'PER_KWH' | 'PER_M3' | 'PER_PERSON' | 'PER_ROOM' | 'PER_BILLING_PERIOD';
 
 export interface FeePolicyItem {
   id: string;
@@ -127,7 +129,15 @@ export interface OperationalHistoryItem {
     | 'ROOM_SETUP_COMPLETED';
   relatedAsset?: string;
   roomCode?: string;
-  condition?: 'Good' | 'Fair' | 'Needs Repair' | 'Repaired' | 'Active';
+  condition?:
+    | 'Good'
+    | 'Fair'
+    | 'Needs Repair'
+    | 'Repaired'
+    | 'Active'
+    | 'Tốt'
+    | 'Hoạt động tốt'
+    | 'Bình thường';
   cost?: number;
   description: string;
   actor: string;
@@ -185,4 +195,3 @@ export interface CopyGroupPreview {
   count: number;
   items: CopyGroupItemPreview[];
 }
-

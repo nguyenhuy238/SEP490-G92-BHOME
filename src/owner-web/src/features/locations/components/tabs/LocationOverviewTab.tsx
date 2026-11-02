@@ -75,9 +75,9 @@ export function LocationOverviewTab({
           color: '#ffffff',
         }}
       >
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={8}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+        <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1 }}>
               <Chip
                 size="small"
                 label={location.code}
@@ -97,11 +97,11 @@ export function LocationOverviewTab({
               {location.attributes.floors || 4} tầng · Phụ trách: {manager}
             </Typography>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Stack
               direction="row"
               spacing={1.5}
-              justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
+              sx={{ justifyContent: { xs: 'flex-start', md: 'flex-end' } }}
             >
               <Button
                 variant="contained"
@@ -135,7 +135,7 @@ export function LocationOverviewTab({
 
       {/* KPI Metric Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5, textAlign: 'center' }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750 }}>
               TỔNG SỐ PHÒNG
@@ -149,7 +149,7 @@ export function LocationOverviewTab({
           </Paper>
         </Grid>
 
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Paper
             variant="outlined"
             sx={{ p: 2, borderRadius: 2.5, textAlign: 'center', bgcolor: '#f0fdf4' }}
@@ -166,7 +166,7 @@ export function LocationOverviewTab({
           </Paper>
         </Grid>
 
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Paper
             variant="outlined"
             sx={{ p: 2, borderRadius: 2.5, textAlign: 'center', bgcolor: '#eff6ff' }}
@@ -183,7 +183,7 @@ export function LocationOverviewTab({
           </Paper>
         </Grid>
 
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Paper
             variant="outlined"
             sx={{ p: 2, borderRadius: 2.5, textAlign: 'center', bgcolor: '#fffbeb' }}
@@ -200,7 +200,7 @@ export function LocationOverviewTab({
           </Paper>
         </Grid>
 
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Paper
             variant="outlined"
             sx={{ p: 2, borderRadius: 2.5, textAlign: 'center', bgcolor: '#f8fafc' }}
@@ -217,7 +217,7 @@ export function LocationOverviewTab({
           </Paper>
         </Grid>
 
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Paper
             variant="outlined"
             sx={{ p: 2, borderRadius: 2.5, textAlign: 'center', bgcolor: '#faf5ff' }}
@@ -241,13 +241,11 @@ export function LocationOverviewTab({
       {/* Main Grid: Occupancy Trend & Setup Health */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Occupancy Trend Chart */}
-        <Grid item xs={12} md={7}>
+        <Grid size={{ xs: 12, md: 7 }}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, height: '100%' }}>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 2 }}
+              sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}
             >
               <Box>
                 <Typography
@@ -308,7 +306,7 @@ export function LocationOverviewTab({
 
             <Divider sx={{ my: 2 }} />
 
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="caption" color="text.secondary">
                 Dữ liệu tổng hợp từ hợp đồng thuê phòng và biên bản bàn giao nhận phòng.
               </Typography>
@@ -320,7 +318,7 @@ export function LocationOverviewTab({
         </Grid>
 
         {/* Configuration Completeness Checklist */}
-        <Grid item xs={12} md={5}>
+        <Grid size={{ xs: 12, md: 5 }}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2.5, height: '100%' }}>
             <Typography
               variant="subtitle1"
@@ -334,8 +332,11 @@ export function LocationOverviewTab({
 
             <Stack spacing={1.5}>
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Layers3 size={16} color="#255dde" />
                     <Typography variant="body2" sx={{ fontWeight: 750 }}>
                       Loại phòng
@@ -351,8 +352,11 @@ export function LocationOverviewTab({
               </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <DoorOpen size={16} color="#255dde" />
                     <Typography variant="body2" sx={{ fontWeight: 750 }}>
                       Sơ đồ phòng
@@ -368,8 +372,11 @@ export function LocationOverviewTab({
               </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Package size={16} color="#255dde" />
                     <Typography variant="body2" sx={{ fontWeight: 750 }}>
                       Định mức tài sản
@@ -385,8 +392,11 @@ export function LocationOverviewTab({
               </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <BadgeDollarSign size={16} color="#255dde" />
                     <Typography variant="body2" sx={{ fontWeight: 750 }}>
                       Giá thuê & Biểu phí
@@ -402,8 +412,11 @@ export function LocationOverviewTab({
               </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc' }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <ScrollText size={16} color="#255dde" />
                     <Typography variant="body2" sx={{ fontWeight: 750 }}>
                       Nội quy & Quy định
