@@ -65,7 +65,26 @@ const blockers: Record<string, string> = {
   final_usage_not_covered_by_invoice: 'Chỉ số chốt chưa được bao phủ bởi hóa đơn đã phát hành.',
 };
 export function settlementBlocker(value: string) {
+  if (value.startsWith('unbilled_final_usage_pending:'))
+    return 'Chỉ số chốt chưa được bao phủ bởi hóa đơn đã phát hành.';
   if (value.startsWith('final_invoice_coverage_required:'))
     return 'Thiếu hóa đơn đã phát hành cho kỳ ' + value.split(':')[1];
   return blockers[value] ?? 'Cần đối chiếu: ' + value;
+}
+export function moveOutActionLabel(action: string) {
+  return (
+    (
+      {
+        Requested: 'Gửi yêu cầu',
+        Approved: 'Đã duyệt',
+        Scheduled: 'Đặt lịch',
+        Inspected: 'Đã kiểm tra',
+        InspectionConfirmed: 'Xác nhận kiểm tra',
+        ReinspectionRequired: 'Kiểm tra lại',
+        Settled: 'Đã quyết toán',
+        PendingSettlement: 'Chờ quyết toán',
+        Completed: 'Hoàn tất',
+      } as Record<string, string>
+    )[action] ?? action
+  );
 }

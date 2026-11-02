@@ -24,7 +24,21 @@ const summary: SettlementSummary = {
   approvedFinalCharges: null,
   approvedDeductions: null,
   refundAmount: null,
-  invoices: [],
+  invoices: [
+    {
+      invoiceId: id,
+      billingPeriod: '2026-11-01',
+      shared: true,
+      financials: {
+        originalIssuedAmount: '100000',
+        approvedAdjustmentTotal: '-10000',
+        effectivePayableAmount: '90000',
+        allocatedPayments: '0',
+        outstandingAmount: '90000',
+        potentialExcessAmount: '0',
+      },
+    },
+  ],
   unresolvedItems: [
     'shared_liability_allocation_pending',
     'deposit_deduction_refund_policy_required',
@@ -66,6 +80,7 @@ it('shows unallocated shared debt and unknown refund, submits the displayed fing
   );
   expect(await screen.findByText(/Hóa đơn chung còn nợ/)).toBeVisible();
   expect(screen.getByText(/Hoàn tiền: Chờ xác minh/)).toBeVisible();
+  expect(screen.getByText(/Điều chỉnh −10.000/)).toBeVisible();
   expect(screen.queryByText(/đủ điều kiện xem xét hoàn tất/)).toBeNull();
   fireEvent.change(screen.getByLabelText('Lý do / căn cứ của Owner'), {
     target: { value: 'Còn nghĩa vụ cần đối chiếu' },

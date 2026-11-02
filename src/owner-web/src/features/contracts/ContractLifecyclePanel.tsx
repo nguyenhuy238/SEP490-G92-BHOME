@@ -30,6 +30,7 @@ import {
   useContractLifecycle,
 } from '../../../../../packages/client-core/src/useContractLifecycle';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { ChartCard } from '../../components/common/PortalUI';
 
 export function ContractLifecyclePanel({
@@ -234,7 +235,7 @@ export function ContractLifecyclePanel({
                 Kỳ {displayContractDate(i.billingPeriod)} ·{' '}
                 {i.shared ? 'Hóa đơn chung phòng' : 'Hóa đơn'} · Gốc{' '}
                 {money(i.financials.originalIssuedAmount)} · Điều chỉnh{' '}
-                {money(i.financials.approvedAdjustmentTotal)} · Phải thu{' '}
+                {signedVnd(i.financials.approvedAdjustmentTotal)} · Phải thu{' '}
                 {money(i.financials.effectivePayableAmount)} · Đã trả{' '}
                 {money(i.financials.allocatedPayments)} · Còn nợ{' '}
                 {money(i.financials.outstandingAmount)} · Dư{' '}

@@ -11,10 +11,12 @@ import {
   type MoveOut,
 } from '../../../../../packages/client-core/src/contracts';
 import {
+  moveOutActionLabel,
   settlementBlocker,
   useContractLifecycle,
 } from '../../../../../packages/client-core/src/useContractLifecycle';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 
@@ -256,7 +258,7 @@ export function ContractLifecyclePanel({
               </Text>
               <Text>
                 Gốc {money(i.financials.originalIssuedAmount)} · Điều chỉnh{' '}
-                {money(i.financials.approvedAdjustmentTotal)} · Phải thu{' '}
+                {signedVnd(i.financials.approvedAdjustmentTotal)} · Phải thu{' '}
                 {money(i.financials.effectivePayableAmount)}
               </Text>
               <Text>
@@ -344,7 +346,7 @@ export function ContractLifecyclePanel({
       )}
       {q.history.map((h) => (
         <Text key={h.version} variant="bodySmall">
-          {formatInstant(h.occurredAt)} · Phiên bản {h.version} · {h.action}
+          {formatInstant(h.occurredAt)} · Phiên bản {h.version} · {moveOutActionLabel(h.action)}
         </Text>
       ))}
     </Box>
