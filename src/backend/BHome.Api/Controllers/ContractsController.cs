@@ -8,7 +8,7 @@ namespace BHome.Api.Controllers;
 [ApiController, Route("api/v1/contracts"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [RequestSizeLimit(65536)]
-public sealed class ContractsController(ContractService service) : ControllerBase
+public sealed class ContractsController(ContractService service,ContractExpiryService expiry) : ControllerBase
 {
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) && key != Guid.Empty
         ? key : throw ContractException.Invalid("idempotency_key_required");
@@ -20,6 +20,8 @@ public sealed class ContractsController(ContractService service) : ControllerBas
 
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
+    [HttpGet("expiry-reminders"),Authorize(Roles=Roles.Owner+","+Roles.Tenant)]
+    public Task<IReadOnlyList<ContractExpiryNoticeView>> ExpiryReminders(CancellationToken t)=>expiry.ListAsync(t);
     [HttpGet("preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<ContractPreparation> Preparation([FromQuery] Guid? locationId, CancellationToken t) => service.PreparationAsync(locationId, t);
     [HttpGet("preparation/accounts"), Authorize(Roles = Roles.Owner)]

@@ -1947,6 +1947,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantUserId");
 
+                    b.HasIndex("Status", "EndDate", "Id");
+
                     b.ToTable("Contracts", null, t =>
                         {
                             t.HasCheckConstraint("CK_Contract_Activation", "\"Status\" <> 3 OR (\"ActivatedAt\" IS NOT NULL AND \"ActivatedByUserId\" IS NOT NULL)");
@@ -2031,6 +2033,39 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_ContractDocumentFile_Length", "\"Length\" > 0 AND \"Length\" <= 10485760");
                         });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractExpiryNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientId", "CreatedAt");
+
+                    b.HasIndex("ContractId", "EndDate", "Stage", "RecipientId")
+                        .IsUnique();
+
+                    b.ToTable("ContractExpiryNotices", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractFileUpload", b =>
@@ -3764,6 +3799,21 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractExpiryNotice", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

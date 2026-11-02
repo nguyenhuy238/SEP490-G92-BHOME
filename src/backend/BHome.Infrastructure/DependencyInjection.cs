@@ -180,6 +180,11 @@ public static class DependencyInjection
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<IBackgroundJobQueue, PostgresJobQueue>();
+        services.AddScoped<BHome.Infrastructure.Contracts.ContractExpiryProcessor>();
+        services.AddScoped<IBackgroundJobHandler>(p=>p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p=>p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<BHome.Application.Contracts.ContractExpiryService>();
+        services.AddHostedService<BHome.Infrastructure.Contracts.ContractExpiryScheduler>();
         services.AddHostedService<PostgresJobWorker>();
         return services;
     }

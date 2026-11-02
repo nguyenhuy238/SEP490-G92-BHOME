@@ -171,6 +171,15 @@ export interface MoveOut {
   inspectionStaffId?: string | null;
   version?: number;
 }
+export interface ContractExpiryNotice {
+  id: string;
+  contractId: string;
+  roomNumber: string;
+  locationName: string;
+  endDate: string;
+  stage: string;
+  createdAt: string;
+}
 export interface FinalInspection {
   id: string;
   version: number;
@@ -267,6 +276,8 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    expiryReminders: (signal?: AbortSignal) =>
+      request<ContractExpiryNotice[]>(`${root}/expiry-reminders`, { signal }),
     inspections: (id: string, signal?: AbortSignal) =>
       request<FinalInspection[]>(`${root}/${id}/move-out/inspections`, { signal }),
     inspectionPreparation: (id: string, signal?: AbortSignal) =>

@@ -28,6 +28,7 @@ import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+import { ContractExpiryPanel } from './ContractExpiryPanel';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -141,6 +142,9 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         title="Hợp đồng & Vòng đời"
         detail="UC-15 / UC-16 / UC-19 • Dữ liệu trong phạm vi tài khoản"
       />
+      {['Owner', 'Tenant'].includes(role) && (
+        <ContractExpiryPanel api={client} onOpen={setSelected} />
+      )}
       {role === 'Staff' && (
         <Box>
           <Heading title="Lịch kiểm tra trả phòng được giao" />

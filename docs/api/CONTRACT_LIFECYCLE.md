@@ -95,3 +95,11 @@ giữ Pending, không tự tính damage fee. Kỳ chưa Final, usage chưa bille
 bank review, excess, deposit/holding chưa giải quyết đều chặn resolved.
 POST settlement bổ sung expectedReference (bắt buộc khi resolved) chống xác nhận snapshot cũ.
 History lưu FinancialSnapshot bất biến và source reference, không tạo allocation/refund mới.
+
+JOB-02: `contract-expiry` dùng BackgroundJobs hiện có, scheduler chạy lúc khởi động và mỗi
+ngày theo Asia/Ho_Chi_Minh khi `Jobs:Enabled=true`. Worker bounded retry/lease hiện có;
+handler re-read dưới Room lock, unique Contract/enddate/stage/recipient. Upcoming30 áp dụng
+0..30 ngày trước hạn; Expired khi ngày hiện tại vượt EndDate. Không tự đóng hoặc đổi Room.
+GET `expiry-reminders`: Owner xem nhắc hợp đồng hiện hành (mỗi hợp đồng một nhắc), Tenant
+chỉ nhận nhắc của mình; Staff 403. Tối đa 100 nhắc mới nhất, loại hợp đồng đã kết thúc/gia hạn.
+Notices được lưu để xem trong Web/Mobile; external push/email consumer vẫn chưa triển khai.
