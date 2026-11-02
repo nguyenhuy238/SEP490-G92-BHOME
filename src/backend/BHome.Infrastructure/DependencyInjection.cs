@@ -177,6 +177,11 @@ public static class DependencyInjection
         services.AddScoped<IJobScheduleContributor,BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
         services.AddScoped<BHome.Application.Notifications.INotificationRepository,BHome.Infrastructure.Modules.Notifications.NotificationRepository>();
         services.AddScoped<BHome.Application.Notifications.NotificationService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>();
+        services.AddScoped<BHome.Application.Notifications.INotificationEventPublisher>(p=>p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<IBackgroundJobHandler>(p=>p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<IJobScheduleContributor>(p=>p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<BHome.Application.Notifications.NotificationAutomationService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
         services.AddSingleton(provider=>new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
