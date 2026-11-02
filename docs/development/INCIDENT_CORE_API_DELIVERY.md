@@ -27,7 +27,7 @@ Backend slice đã có report → Owner review/assign → Staff inspect/propose 
 - `PropertyService.cs`: chặn đổi Asset condition/status qua API cấu hình trong khi còn Work Order mở, kể cả Assigned; dùng cùng Location lock.
 - `BHomeDbContext.cs`: append-only checks; `PostgresJobWorker.MaxAttempts` được mở internal để handler dùng cùng retry limit hiện có, không tạo policy mới.
 - Migration `20261030162807_IncidentMaintenanceCore` và snapshot: thêm 10 bảng, FK/check/index/unique keys, PostgreSQL append-only triggers và downgrade guard. Không đổi bảng Task/Meter hay numeric values cũ.
-- Test mới ở ba project backend dưới `IncidentMaintenance`; cập nhật permission acceptance matrix. API docs, module/permission docs, Postman README và collection Incident riêng được bổ sung.
+- Test mới ở ba project backend dưới `IncidentMaintenance`; cập nhật permission acceptance matrix. API docs, module/permission docs, Postman README và các request sự cố nối tiếp trong collection Simple được bổ sung.
 
 Transaction command: actor/key advisory lock → Location advisory lock → Room row lock khi có tenancy/Room. Scope và trạng thái đọc lại sau lock. Work Order transition, expense, history, audit, notification intent và command result commit cùng transaction. Không gọi external notification trong transaction nghiệp vụ; queue delivery xử lý sau commit. File intent riêng giữ quyền cleanup qua rollback, không phụ thuộc business FK chưa commit.
 
@@ -60,6 +60,15 @@ Các lần lỗi/giới hạn khi chạy công cụ:
 - Các lượt build/test Incident đã chạy đều PASS; đã bổ sung test rồi chạy lại sau các thay đổi cost-required, Asset guard, multi-role và reporting lookups. Không xem kết quả bộ ít ca trước đó là bằng chứng cho source cuối.
 
 ## Rollout và giới hạn còn lại
+
+Cập nhật ngày 02/11/2026 theo yêu cầu người dùng: bỏ collection Incident riêng, rút gọn còn
+**17 request tiếng Việt, đánh số 119–135** nối tiếp ngay sau request 118 trong
+`docs/testing/postman/BHome.Simple.postman_collection.json`; không dùng thư mục con.
+Giữ nguyên 125 request cũ và biến/script của chúng; tổng **142 request**, dùng lại cơ sở/token/nhân viên
+đã chuẩn bị. Chỉ cần thêm ID phòng và chọn một ảnh sau sửa chữa. Các bước GET lấy version thật từ Backend;
+không tự gửi request ngầm. Kiểm tra JSON, 181 script compile và 34 lượt response Incident giả lập PASS.
+Đây là thay đổi tổ chức Postman, không thay API/nghiệp vụ Backend và không chạy lại hoặc bổ sung số liệu
+test Backend ở bảng trên. Các số liệu Postman 63 request/64 script/126 ca ở phần bàn giao ban đầu là lịch sử trước lần rút gọn này.
 
 - **Chưa áp migration lên DB phát triển `bhome` hoặc production**. Đã đọc metadata DB local trước scaffold để xác nhận chưa có module này. Cần review/backup và áp EF migration trước chạy API mới; không drop/reset DB. Downgrade khi có Incident/upload intent bị chặn để giữ history.
 - Private MinIO/S3 phải sẵn sàng cho upload/download/verify mandatory evidence. Không có secret mới trong source. Cleanup lease là giới hạn kỹ thuật cho upload không hoàn tất, không phải policy xóa bằng chứng nghiệp vụ.

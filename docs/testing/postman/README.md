@@ -1,28 +1,31 @@
 # Kiểm thử API với Postman
 
-## Incident và Maintenance Backend
+## Kiểm thử sự cố đơn giản — request 119–135
 
-Import thêm `BHome.Incidents.postman_collection.json` (63 request). Có thể dùng Environment hiện có;
-collection mới khai báo các biến riêng `incidentLocationId`, `incidentRoomId`, `incidentAssetId`,
-`incidentId`, `incidentVersion`, `workOrderId`, `workOrderVersion`, `incidentEvidenceId` và `emergencyActionId`.
-Điền `baseUrl`, token Owner/Staff/Tenant giả lập và `staffUserId`; token trong file được để trống.
-Location/Room/Asset phải tồn tại, Staff được phân công ngày hiện hành. Tenant Emergency cần Active Contract
-và kỳ cư trú hợp lệ tại Room. Áp migration Incident trước khi gọi; không chạy trên dữ liệu production.
+Mở `BHome.Simple.postman_collection.json`. Phần sự cố gồm **17 request tiếng Việt**,
+nối tiếp ngay sau request 118, không chia thư mục. Tổng collection **142 request**,
+giữ nguyên 125 request cũ.
 
-- Folder 01: Normal → review → assign → proposal → approve → start → result/evidence → verify/expense.
-- Folder 02: nhánh rework, chạy khi Work Order đang PendingVerification, trước bước verify của folder 01.
-- Folder 03: Tenant Emergency → Staff acknowledge/action/receipt → Owner quyết định chi phí; không reminder 15/30 phút.
-- Folder 04: Owner direct completion, không Work Order.
-- Folder 05/06: scoped reads, notification/read state và các ca từ chối quyền/input.
+Chuẩn bị:
 
-Không Run All vì các folder sử dụng nhánh trạng thái khác nhau. Các upload binary cần chọn ảnh PNG giả lập
-tại Body; request submit multipart có thể thêm `images` tùy chọn. Giới hạn 5 ảnh mỗi nhóm, 5.000.000 bytes/ảnh.
-GET ngay trước mỗi mutation lấy version mới; response command chỉ trả ID. Script chỉ cập nhật biến trên
-response thành công, không tự gửi request khác hoặc lưu token vào source.
+1. Dùng lại `baseUrl`, `ownerAccessToken`, `staffAccessToken`, `locationId` và `staffUserId` ở phần trước.
+2. Điền `incidentRoomId` là ID phòng thuộc cơ sở đó. Cơ sở phải đang hoạt động, nhân viên còn được phân công.
+3. Gửi lần lượt **119 → 135**; riêng **130**, mở **Body → binary** và chọn một ảnh PNG giả lập (tối đa 5.000.000 bytes).
 
-Mặc định mỗi mutation tạo UUID key mới. Muốn thử replay, đặt `incidentIdempotencyKey` thành UUID cố định,
-gửi lại đúng request/input; xóa biến đó trước command tiếp theo. Cùng key khác payload → 409.
-Chi tiết contract/quyền và giới hạn: [Incident API](../../api/INCIDENT_MAINTENANCE.md).
+Luồng chính:
+
+- **119–123:** nhân viên báo sự cố, chủ trọ phân loại và giao việc.
+- **124–129:** nhân viên đề xuất, chủ trọ duyệt, nhân viên bắt đầu sửa.
+- **130–134:** tải ảnh, gửi kết quả và chủ trọ nghiệm thu.
+- **135:** xem trạng thái sự cố sau nghiệm thu.
+
+ID và version tự lưu từ response thành công; không nhập bằng tay. Các bước GET lấy version thật
+từ Backend trước khi thay đổi dữ liệu. Request 123 tự đặt hạn mẫu sau 2 ngày nếu `incidentDueAt`
+trống/hết hạn; có thể sửa biến này nếu cần. Đây chỉ là thời hạn kiểm thử.
+
+Mỗi lần gửi thay đổi dùng UUID mới trong `Idempotency-Key`. Không có request tự gửi ngầm.
+Dùng dữ liệu giả lập, áp migration Incident trước khi kiểm thử và thực hiện bước 79 ngừng cơ sở sau cùng.
+Chi tiết API: [Incident API](../../api/INCIDENT_MAINTENANCE.md).
 
 ## Collection nền và Task hiện có
 

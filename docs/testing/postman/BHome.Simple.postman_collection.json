@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "95bb127b-ef91-4786-9ab4-9c9f18c41614",
-    "name": "BHOME — API đơn giản: Auth, Property và Operational Tasks",
+    "name": "BHOME — API đơn giản: Đăng nhập, Nhà trọ, Công việc và Sự cố",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "FE-02 / UC-01/02; BF-01 / UC-04..06 / GBR-01..03/08 / DBR-01/13. Có sẵn biến baseUrl, ownerAccessToken, staffAccessToken, staffUserId, locationId và chainVersion. Import thêm BHome.Local.postman_environment.json rồi chọn BHOME Local; nếu không chọn Environment thì dùng Collection Variables có sẵn. Request 24 tự lưu Owner token; 25 tự lưu Staff token + userId; 26 tự lưu Location ID khi response thành công và đúng role/dữ liệu. Các URL/Body/Authorization tham chiếu biến tự động. Send từng request; không Run toàn bộ khi chưa điền dữ liệu còn thiếu. 01–23: JWT/refresh/logout; 24–35: login Owner/Staff, xem/đổi tên Chain duy nhất (25a/25b), tạo Location và assignment; 36–50: Location/Room Type/Room/Asset; 51–63: giá/phí; 64–76: phân quyền/lỗi; 77–80: ngừng sử dụng. Áp dụng migration mới nhất, gồm 20261030023603_SingleSystemChain trên database test trước khi gọi API mới. baseUrl mặc định https://localhost:7240; sửa một lần trong Environment hoặc Collection Variables nếu API chạy địa chỉ khác. ROOM_TYPE_ID/ROOM_ID/ASSET_ID/POLICY_ID và version của các tài nguyên vẫn điền tay; Location ID và Staff ID dùng biến có sẵn. PUT phải lấy version mới nhất từ GET. D0 >= hôm nay theo Asia/Ho_Chi_Minh; D1 > hôm nay và > D0; D2 >= D1. Thay placeholder ngày trong Body và query bằng YYYY-MM-DD. Giá/phí là số giả lập kiểm thử, không phải quy định giá vận hành. Enum dùng số; không có DELETE. Dùng Location mới mỗi lượt test để tránh trùng số phòng/tên type/mã asset. Test script kiểm tra response và lưu token/ID và chainVersion khi thành công; không tự gửi request khác. Phần 01–23 kiểm thử JWT/refresh/logout vẫn giữ token riêng để tránh làm sai bài test reuse/thu hồi. Token hết hạn thì login lại đúng role; không dùng token đã logout. 08–15 test reuse R0 sẽ thu hồi session đó; giữ riêng token cũ. Nếu 429, chờ Retry-After. Chỉ dùng account/dữ liệu test. Chi tiết: docs/api/PROPERTY_MANAGEMENT.md. Collection chưa được chạy live trên server của người dùng. Hệ thống có một Chain duy nhất; Location tự thuộc Chain chung, không gửi chainId. Không có API tạo/xóa Chain. 25a/25b tự lưu chainVersion; chỉ Owner xem/đổi tên. Quyết định linh hoạt: 60a–60e test PUT sửa policy tương lai chưa sử dụng, có audit và kiểm tra version. Chỉ sửa name/rate/kỳ; không đổi scope/mã. Giá đã hiệu lực hoặc firstUsedAt có giá trị tiếp tục khóa. Repository chưa có luồng Invoice, mốc sử dụng dành cho tích hợp billing sau này. Áp dụng migration FlexibleFutureBillingPolicies trước khi test PUT.\n\n81–118: BF-02 / UC-10–12 / DBR-01: Task create/assign/update, Staff execute, Owner verify/rework/cancel, evidence private, notifications và negative cases. Chạy 81–106 sau setup 24/25/26/28 và TRƯỚC bước 79 ngừng Location; 107–108 là nhánh hủy riêng, 109–118 là kiểm tra lỗi (111–113 cần dữ liệu/token tùy chọn). 81 tự tạo UUID idempotency và deadline test sau hiện tại nếu thiếu/hết hạn; 82 dùng lại key/payload để kiểm tra retry. Các mutation khác có UUID mới mỗi Send. 94: chọn file PNG/JPEG giả lập ở Body binary, không multipart; sau đó 95 lấy version mới. Token/ID runtime không commit. Task priority dùng Normal/High dạng chuỗi, khác enum số của Property API. Migration bắt buộc: ContractActivationLifecycle + UnifiedOperationalTasks. Hướng dẫn đầy đủ tại docs/api/OPERATIONAL_TASKS.md và docs/testing/postman/README.md."
+    "description": "FE-02 / UC-01/02; BF-01 / UC-04..06 / GBR-01..03/08 / DBR-01/13. Có sẵn biến baseUrl, ownerAccessToken, staffAccessToken, staffUserId, locationId và chainVersion. Import thêm BHome.Local.postman_environment.json rồi chọn BHOME Local; nếu không chọn Environment thì dùng Collection Variables có sẵn. Request 24 tự lưu Owner token; 25 tự lưu Staff token + userId; 26 tự lưu Location ID khi response thành công và đúng role/dữ liệu. Các URL/Body/Authorization tham chiếu biến tự động. Send từng request; không Run toàn bộ khi chưa điền dữ liệu còn thiếu. 01–23: JWT/refresh/logout; 24–35: login Owner/Staff, xem/đổi tên Chain duy nhất (25a/25b), tạo Location và assignment; 36–50: Location/Room Type/Room/Asset; 51–63: giá/phí; 64–76: phân quyền/lỗi; 77–80: ngừng sử dụng. Áp dụng migration mới nhất, gồm 20261030023603_SingleSystemChain trên database test trước khi gọi API mới. baseUrl mặc định https://localhost:7240; sửa một lần trong Environment hoặc Collection Variables nếu API chạy địa chỉ khác. ROOM_TYPE_ID/ROOM_ID/ASSET_ID/POLICY_ID và version của các tài nguyên vẫn điền tay; Location ID và Staff ID dùng biến có sẵn. PUT phải lấy version mới nhất từ GET. D0 >= hôm nay theo Asia/Ho_Chi_Minh; D1 > hôm nay và > D0; D2 >= D1. Thay placeholder ngày trong Body và query bằng YYYY-MM-DD. Giá/phí là số giả lập kiểm thử, không phải quy định giá vận hành. Enum dùng số; không có DELETE. Dùng Location mới mỗi lượt test để tránh trùng số phòng/tên type/mã asset. Test script kiểm tra response và lưu token/ID và chainVersion khi thành công; không tự gửi request khác. Phần 01–23 kiểm thử JWT/refresh/logout vẫn giữ token riêng để tránh làm sai bài test reuse/thu hồi. Token hết hạn thì login lại đúng role; không dùng token đã logout. 08–15 test reuse R0 sẽ thu hồi session đó; giữ riêng token cũ. Nếu 429, chờ Retry-After. Chỉ dùng account/dữ liệu test. Chi tiết: docs/api/PROPERTY_MANAGEMENT.md. Collection chưa được chạy live trên server của người dùng. Hệ thống có một Chain duy nhất; Location tự thuộc Chain chung, không gửi chainId. Không có API tạo/xóa Chain. 25a/25b tự lưu chainVersion; chỉ Owner xem/đổi tên. Quyết định linh hoạt: 60a–60e test PUT sửa policy tương lai chưa sử dụng, có audit và kiểm tra version. Chỉ sửa name/rate/kỳ; không đổi scope/mã. Giá đã hiệu lực hoặc firstUsedAt có giá trị tiếp tục khóa. Repository chưa có luồng Invoice, mốc sử dụng dành cho tích hợp billing sau này. Áp dụng migration FlexibleFutureBillingPolicies trước khi test PUT.\n\n81–118: BF-02 / UC-10–12 / DBR-01: Task create/assign/update, Staff execute, Owner verify/rework/cancel, evidence private, notifications và negative cases. Chạy 81–106 sau setup 24/25/26/28 và TRƯỚC bước 79 ngừng Location; 107–108 là nhánh hủy riêng, 109–118 là kiểm tra lỗi (111–113 cần dữ liệu/token tùy chọn). 81 tự tạo UUID idempotency và deadline test sau hiện tại nếu thiếu/hết hạn; 82 dùng lại key/payload để kiểm tra retry. Các mutation khác có UUID mới mỗi Send. 94: chọn file PNG/JPEG giả lập ở Body binary, không multipart; sau đó 95 lấy version mới. Token/ID runtime không commit. Task priority dùng Normal/High dạng chuỗi, khác enum số của Property API. Migration bắt buộc: ContractActivationLifecycle + UnifiedOperationalTasks. Hướng dẫn đầy đủ tại docs/api/OPERATIONAL_TASKS.md và docs/testing/postman/README.md.\n\n119–135: kiểm thử sự cố theo luồng chính, nối tiếp ngay sau các request trước. Nhân viên báo sự cố → chủ trọ phân loại/giao việc → nhân viên đề xuất → chủ trọ duyệt → nhân viên sửa và gửi ảnh → chủ trọ nghiệm thu. Dùng lại baseUrl, ownerAccessToken, staffAccessToken, locationId và staffUserId; điền thêm incidentRoomId. Các ID/version tự lưu từ response thành công. Request 123 tự đặt hạn mẫu sau 2 ngày nếu incidentDueAt trống/hết hạn; đây là dữ liệu kiểm thử. Request 130 chọn một ảnh PNG ở Body binary. Gửi lần lượt 119 đến 135 trên cơ sở đang hoạt động; thực hiện bước ngừng sử dụng cơ sở sau cùng. Không có thư mục hoặc request tự gửi ngầm. Chi tiết: docs/testing/postman/README.md."
   },
   "item": [
     {
@@ -5787,6 +5787,750 @@
           }
         }
       ]
+    },
+    {
+      "name": "119 — Nhân viên báo sự cố → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents",
+        "description": "Dùng nhân viên đang phụ trách cơ sở. Điền incidentRoomId là phòng thuộc locationId; các token và staffUserId dùng lại phần trước. Không cần ảnh ở bước này.",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "locationId",
+              "value": "{{locationId}}",
+              "type": "text"
+            },
+            {
+              "key": "roomId",
+              "value": "{{incidentRoomId}}",
+              "type": "text"
+            },
+            {
+              "key": "severity",
+              "value": "Normal",
+              "type": "text"
+            },
+            {
+              "key": "description",
+              "value": "Vòi nước trong phòng bị rò, cần kiểm tra và sửa chữa.",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.incidentId || '')) scope.set('incidentId', data.incidentId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "120 — Xem sự cố, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+        "description": "Gửi request này trước bước tiếp theo. Tự lưu incidentVersion do Backend trả về."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('incidentVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "121 — Chủ trọ phân loại sự cố → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/review",
+        "description": "Chủ trọ xem xét và xác nhận loại sự cố trước khi giao việc.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{incidentVersion}},\n  \"type\": \"Kỹ thuật\",\n  \"category\": \"Nước\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "122 — Xem sự cố, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+        "description": "Gửi request này trước bước tiếp theo. Tự lưu incidentVersion do Backend trả về."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('incidentVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "123 — Chủ trọ giao nhân viên sửa chữa → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/work-orders",
+        "description": "Giao cho staffUserId đang phụ trách locationId. Hạn mẫu tự đặt sau 2 ngày nếu biến incidentDueAt trống/hết hạn; có thể sửa biến này để dùng ngày hẹn kiểm thử khác.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{incidentVersion}},\n  \"staffId\": \"{{staffUserId}}\",\n  \"expectedOutcome\": \"Khắc phục rò nước và kiểm tra hoạt động bình thường.\",\n  \"targetCompletionAt\": \"{{incidentDueAt}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "const due = Date.parse(pm.variables.get('incidentDueAt') || '');",
+              "if (!Number.isFinite(due) || due <= Date.now()) scope.set('incidentDueAt', new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.workOrderId || '')) scope.set('workOrderId', data.workOrderId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "124 — Xem công việc sửa chữa, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+        "description": "Tự lưu workOrderVersion do Backend trả về; không cần nhập version bằng tay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('workOrderVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "125 — Nhân viên đề xuất cách sửa và chi phí → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/proposal",
+        "description": "Dữ liệu khảo sát và dự toán giả lập. Chưa cần tải ảnh trước sửa trong luồng rút gọn.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"inspectionResult\": \"Khớp nối vòi nước bị lỏng.\",\n  \"solution\": \"Siết lại khớp nối và thay gioăng bị hỏng.\",\n  \"estimatedMinutes\": 60,\n  \"estimatedCost\": 100000,\n  \"evidenceIds\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "126 — Xem công việc sửa chữa, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+        "description": "Tự lưu workOrderVersion do Backend trả về; không cần nhập version bằng tay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('workOrderVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "127 — Chủ trọ duyệt đề xuất sửa chữa → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/plan-decision",
+        "description": "Chủ trọ duyệt phương án. Công việc chỉ bắt đầu khi nhân viên gửi bước 129.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"approve\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "128 — Xem công việc sửa chữa, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+        "description": "Tự lưu workOrderVersion do Backend trả về; không cần nhập version bằng tay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('workOrderVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "129 — Nhân viên bắt đầu sửa chữa → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/start",
+        "description": "Chỉ thực hiện sau khi đề xuất đã được chủ trọ duyệt.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{workOrderVersion}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "130 — Nhân viên tải ảnh sau sửa chữa → 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}/evidence?kind=Completion&workOrderId={{workOrderId}}",
+        "description": "Mở Body → binary, chọn một ảnh PNG giả lập, tối đa 5.000.000 bytes. Tự lưu incidentEvidenceId; không nhập đường dẫn ảnh vào JSON.",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.resourceId || '')) scope.set('incidentEvidenceId', data.resourceId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "131 — Xem công việc sửa chữa, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+        "description": "Tự lưu workOrderVersion do Backend trả về; không cần nhập version bằng tay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('workOrderVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "132 — Nhân viên gửi kết quả chờ nghiệm thu → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/submit",
+        "description": "Gửi kết quả và ảnh ở bước 130 cho chủ trọ kiểm tra.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"note\": \"Đã sửa xong, kiểm tra không còn rò nước.\",\n  \"evidenceIds\": [\n    \"{{incidentEvidenceId}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "133 — Xem công việc sửa chữa, lấy phiên bản mới → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}",
+        "description": "Tự lưu workOrderVersion do Backend trả về; không cần nhập version bằng tay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('workOrderVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "134 — Chủ trọ nghiệm thu và ghi chi phí thực tế → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/verify",
+        "description": "Chi phí giả lập bằng dự toán. Nếu sửa actualCost khác dự toán, điền costVarianceReason. Backend tự xử lý trạng thái và liên kết chi phí.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{workOrderVersion}},\n  \"actualCost\": 100000,\n  \"result\": \"Đã kiểm tra, kết quả sửa chữa đạt yêu cầu.\",\n  \"costVarianceReason\": null,\n  \"assetCondition\": \"Hoạt động bình thường sau sửa chữa.\",\n  \"assetStatus\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HTTP 200', function () { pm.response.to.have.status(200); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "135 — Xem sự cố sau nghiệm thu → 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/v1/incidents/{{incidentId}}",
+        "description": "Với một công việc đã nghiệm thu, sự cố chuyển sang Resolved. Không còn công việc bắt buộc khác chưa hoàn tất."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "  if (Number.isInteger(data.version) && data.version > 0) scope.set('incidentVersion', String(data.version));",
+              "}"
+            ]
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -5905,6 +6649,41 @@
     },
     {
       "key": "tenantAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentRoomId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workOrderVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentEvidenceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentDueAt",
       "value": "",
       "type": "string"
     }
