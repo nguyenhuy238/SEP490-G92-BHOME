@@ -29,11 +29,6 @@ app.Use(async (context, next) =>
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
     }
-    if (context.Request.Path.StartsWithSegments("/api/v1/incidents") || context.Request.Path.StartsWithSegments("/api/v1/work-orders"))
-    {
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers.Pragma = "no-cache";
-    }
     await next(context);
     if (context.Response.StatusCode == StatusCodes.Status403Forbidden && context.User.Identity?.IsAuthenticated == true)
     {
