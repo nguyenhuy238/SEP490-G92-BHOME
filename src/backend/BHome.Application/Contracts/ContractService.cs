@@ -519,8 +519,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (final is not { AllObligationsResolved: true, DepositResolved: true, TransfersVerified: true } || string.IsNullOrWhiteSpace(final.DecisionReference) || final.DecisionReference != m.SettlementLedgerReference)
             throw ContractException.Conflict("settlement_unresolved");
         c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate;
-        c.Room.Status = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t) ? RoomStatus.Occupied : RoomStatus.Available;
-        m.Status = MoveOutStatus.Completed;
+        c.Room.Status = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t) ? RoomStatus.Occupied : c.Room.Status==RoomStatus.Occupied?RoomStatus.Available:c.Room.Status;
+        m.Status = MoveOutStatus.Completed;m.Version++;MoveOutEvent(m,"Completed");
         foreach (var r in c.Residents) r.ResidenceTo = x.ActualEndDate;
         Audit("ContractTerminationCompleted", id); Remember(key, "complete", new { id, x }, id); return View(c);
     }, t);
