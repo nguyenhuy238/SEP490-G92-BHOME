@@ -14,10 +14,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
     {
         var status = exception switch
         {
-            BHome.Application.Notifications.NotificationException notification => notification.Status,
-            BHome.Application.Billing.AdjustmentException adjustment => adjustment.Status,
-            BHome.Application.PaymentsDebt.PaymentException payment => payment.Status,
-            BHome.Application.Billing.InvoiceException invoice => invoice.Status,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Status,
             PropertyException property => property.Status,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
             ContractException contract => contract.Status,
@@ -53,10 +50,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         context.Response.ContentType = "application/problem+json";
         var code = exception switch
         {
-            BHome.Application.Notifications.NotificationException notification => notification.Code,
-            BHome.Application.Billing.AdjustmentException adjustment => adjustment.Code,
-            BHome.Application.PaymentsDebt.PaymentException payment => payment.Code,
-            BHome.Application.Billing.InvoiceException invoice => invoice.Code,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Code,
             PropertyException property => property.Code,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Code,
             ContractException contract => contract.Code,
