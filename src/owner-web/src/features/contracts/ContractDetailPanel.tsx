@@ -31,6 +31,7 @@ import { ContractActionDialog } from './ContractActionDialog';
 import { SigningCertificates } from './SigningCertificates';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -86,7 +87,9 @@ export function ContractDetailPanel({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  const actions = contractActions(c, m, 'Owner', actorId);
+  const actions = contractActions(c, m, 'Owner', actorId).filter(
+    (a) => !['move-out/settlement', 'move-out/schedule'].includes(a.operation),
+  );
   const signer = c.ownerSignerId === actorId;
   return (
     <Stack spacing={2}>
@@ -278,6 +281,7 @@ export function ContractDetailPanel({
           </Stack>
         </ChartCard>
       )}
+      {m && <ContractLifecyclePanel api={api} contract={c} moveOut={m} onChanged={detail.reload} />}
       <ChartCard title="Thao tác theo trạng thái">
         <Stack spacing={1}>
           {actions.map((a) => (

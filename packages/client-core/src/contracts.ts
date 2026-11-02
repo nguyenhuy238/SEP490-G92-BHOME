@@ -168,6 +168,56 @@ export interface MoveOut {
   electricityReadingId: string | null;
   waterReadingId: string | null;
   evidenceIds: string[];
+  inspectionStaffId?: string | null;
+  version?: number;
+}
+export interface FinalInspection {
+  id: string;
+  version: number;
+  baselineContractId: string;
+  baselineVersion: number;
+  baseline: HandoverSnapshot;
+  observed: HandoverSnapshot;
+  staffId: string;
+  inspectedAt: string;
+  ownerDecision: string | null;
+  ownerReason: string | null;
+  reviewedAt: string | null;
+}
+export interface InspectionPreparation {
+  baseline: HandoverView | null;
+  baselineContractId: string | null;
+  finalReadings: HandoverReading[];
+  otherTenantsRemain: boolean;
+}
+export interface SettlementSummary {
+  contractId: string;
+  depositContractId: string;
+  roomNumber: string;
+  verifiedSecurityDeposit: string;
+  appliedHoldingDeposit: string;
+  contractSpecificOutstanding: string | null;
+  approvedFinalCharges: string | null;
+  approvedDeductions: string | null;
+  refundAmount: string | null;
+  invoices: {
+    invoiceId: string;
+    billingPeriod: string;
+    shared: boolean;
+    financials: {
+      originalIssuedAmount: string;
+      approvedAdjustmentTotal: string;
+      effectivePayableAmount: string;
+      allocatedPayments: string;
+      outstandingAmount: string;
+      potentialExcessAmount: string;
+    };
+  }[];
+  unresolvedItems: string[];
+  otherActiveContracts: boolean;
+  resolved: boolean;
+  reference: string;
+  transferVerificationStatus: string;
 }
 export interface SettlementReview {
   id: string;
@@ -217,6 +267,42 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    inspections: (id: string, signal?: AbortSignal) =>
+      request<FinalInspection[]>(`${root}/${id}/move-out/inspections`, { signal }),
+    inspectionPreparation: (id: string, signal?: AbortSignal) =>
+      request<InspectionPreparation>(`${root}/${id}/move-out/inspection-preparation`, { signal }),
+    settlementSummary: (id: string, signal?: AbortSignal) =>
+      request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
+    moveOutHistory: (id: string, signal?: AbortSignal) =>
+      request<{ version: number; action: string; occurredAt: string }[]>(
+        `${root}/${id}/move-out/history`,
+        { signal },
+      ),
+    moveOutAssignments: (signal?: AbortSignal) =>
+      request<
+        {
+          contractId: string;
+          roomNumber: string;
+          locationName: string;
+          scheduledAt: string;
+          status: string;
+        }[]
+      >(`${root}/move-out-assignments`, { signal }),
+    inspectionStaff: async (locationId: string, signal?: AbortSignal) => {
+      const [staff, assignments] = await Promise.all([
+        request<NamedOption[]>('/api/v1/capture/staff', { signal }),
+        request<{ staffUserId: string; startDate: string; endDate: string }[]>(
+          `/api/v1/staff-location-assignments?locationId=${guid(locationId)}`,
+          { signal },
+        ),
+      ]);
+      const today = businessToday();
+      return staff.filter((s) =>
+        assignments.some(
+          (a) => a.staffUserId === s.id && a.startDate <= today && a.endDate >= today,
+        ),
+      );
+    },
     versions: (id: string, signal?: AbortSignal) =>
       request<
         {
@@ -606,7 +692,7 @@ export function guid(value: string) {
     throw new Error('Mã định danh phải là UUID hợp lệ.');
   return value;
 }
-function required(value: string, max: number) {
+export function required(value: string, max: number) {
   if (!value.trim() || value.trim().length > max)
     throw new Error(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
   return value.trim();
