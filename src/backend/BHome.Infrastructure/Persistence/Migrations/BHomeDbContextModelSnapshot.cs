@@ -83,6 +83,105 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("SigningCertificates", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SummaryJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("BillingAutomationAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationExecution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("BillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<int>("CreatedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExceptionsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("ExistingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("LastStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LockToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId", "LastStartedAt");
+
+                    b.HasIndex("PlanId", "BillingPeriod", "Phase")
+                        .IsUnique();
+
+                    b.ToTable("BillingAutomationExecutions", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationPlan", b =>
                 {
                     b.Property<Guid>("Id")
@@ -852,8 +951,17 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("AssignmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AutomationPlanId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateOnly?>("BillingPeriod")
                         .HasColumnType("date");
+
+                    b.Property<Guid?>("BillingRoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BillingUtilityType")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -936,6 +1044,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AssignmentId");
 
+                    b.HasIndex("AutomationPlanId");
+
                     b.HasIndex("ContractId");
 
                     b.HasIndex("MeterId")
@@ -954,6 +1064,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Purpose\" = 2 AND \"Status\" <> 3");
 
+                    b.HasIndex("BillingRoomId", "BillingUtilityType", "BillingPeriod")
+                        .IsUnique()
+                        .HasFilter("\"Kind\"=0 AND \"Purpose\"=1");
+
                     b.HasIndex("LocationId", "Status", "DueAt");
 
                     b.ToTable("OperationalTasks", null, t =>
@@ -963,6 +1077,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Task_Kind", "\"Kind\" IN (0,1) AND ((\"Kind\" = 0 AND \"MeterId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)) OR (\"Kind\" = 1 AND \"MeterId\" IS NULL AND \"ContractId\" IS NULL AND \"BillingPeriod\" IS NULL AND \"DueAt\" IS NOT NULL AND length(trim(\"Title\")) > 0 AND length(trim(\"Requirements\")) > 0))");
 
                             t.HasCheckConstraint("CK_Task_Period", "(\"Purpose\" IN (0,2) AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)");
+
+                            t.HasCheckConstraint("CK_Task_RoomPeriod", "(\"Kind\"<>0 OR \"Purpose\"<>1 OR (\"BillingRoomId\" IS NOT NULL AND \"BillingUtilityType\" IN (0,1))) AND (\"AutomationPlanId\" IS NULL OR (\"Kind\"=0 AND \"Purpose\"=1))");
 
                             t.HasCheckConstraint("CK_Task_State", "\"Status\" IN (0,1,2,3,4) AND \"Priority\" IN (0,1) AND \"Version\" > 0");
 
@@ -3249,6 +3365,24 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationAttempt", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationExecution", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.Billing.BillingAutomationPlan", b =>
                 {
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
@@ -3507,6 +3641,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Domain.Locations.StaffLocationAssignment", null)
                         .WithMany()
                         .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationPlanId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)

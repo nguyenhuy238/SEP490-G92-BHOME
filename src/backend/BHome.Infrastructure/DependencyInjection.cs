@@ -168,6 +168,11 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.InvoiceService>();
         services.AddScoped<BHome.Application.Billing.IBillingAutomationSchedules,BHome.Infrastructure.Modules.Billing.Persistence.BillingAutomationSchedules>();
         services.AddScoped<BHome.Application.Billing.BillingAutomationService>();
+        services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine,BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
+        services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
+        services.AddSingleton(p=>new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
+        services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter","Meter",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IJobScheduleContributor,BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
         services.AddSingleton(provider=>new BHome.Application.PaymentsDebt.PaymentRuntimeMode(

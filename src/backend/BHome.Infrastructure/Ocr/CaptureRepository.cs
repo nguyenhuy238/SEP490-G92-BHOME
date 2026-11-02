@@ -170,7 +170,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
                     db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
                         (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate && previous.Purpose != ReadingPurpose.Final))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
-            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault()));
+            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(),x.DueAt,x.AssignedStaffUserId,x.AutomationPlanId,x.Version,x.LocationId,x.Meter.RoomId));
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t) => await TaskSummaries(scope.VisibleTasks.AsNoTracking()
         .OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Take(100)).ToListAsync(t);
     public async Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t) =>

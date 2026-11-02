@@ -11,18 +11,20 @@ internal sealed class ContractExpiryScheduler(IServiceScopeFactory scopes,IOptio
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if(!options.Value.Enabled)return;
+        DateOnly? lastDay=null;
         while(!stoppingToken.IsCancellationRequested)
         {
             var local=TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(),"Asia/Ho_Chi_Minh");
             try
             {
                 await using var scope=scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new(ContractExpiryProcessor.JobName,local.ToString("yyyy-MM-dd"),"{}"),stoppingToken);
+                var day=DateOnly.FromDateTime(local.DateTime);
+                if(lastDay!=day){await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new(ContractExpiryProcessor.JobName,local.ToString("yyyy-MM-dd"),"{}"),stoppingToken);lastDay=day;}
+                foreach(var contributor in scope.ServiceProvider.GetServices<IJobScheduleContributor>())await contributor.EnqueueDueAsync(stoppingToken);
             }
             catch(OperationCanceledException)when(stoppingToken.IsCancellationRequested){break;}
             catch(Exception e){logger.LogError("Contract expiry scheduling failed with {ErrorCode}",e.GetType().Name);await Task.Delay(TimeSpan.FromSeconds(30),stoppingToken);continue;}
-            var next=new DateTimeOffset(local.Date.AddDays(1),local.Offset);
-            await Task.Delay(next-clock.GetUtcNow(),stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(options.Value.PollSeconds),stoppingToken);
         }
     }
 }

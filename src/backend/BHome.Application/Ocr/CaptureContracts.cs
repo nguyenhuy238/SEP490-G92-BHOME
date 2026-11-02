@@ -35,7 +35,7 @@ public sealed record IdentityConfirmationResult(Guid Id, IdentityVerificationSta
 public sealed record MeterTaskSummary(Guid Id, Guid MeterId, string Location, string Room, string MeterCode,
     UtilityType UtilityType, MeterDisplay Display, int DecimalPlaces, ReadingPurpose Purpose,
     DateOnly ReadingDate, DateOnly? BillingPeriod, MeterTaskStatus Status, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousValue,
-    Guid? ContractId = null, Guid? ConfirmedReadingId = null);
+    Guid? ContractId = null, Guid? ConfirmedReadingId = null,DateTimeOffset? DueAt=null,Guid? AssignedStaffUserId=null,Guid? AutomationPlanId=null,int Version=1,Guid? LocationId=null,Guid? RoomId=null);
 public sealed record ConfirmedReading(Guid Id, Guid TaskId, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousValue,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? Consumption, MeterReadingStatus Status, DateTimeOffset ConfirmedAt);

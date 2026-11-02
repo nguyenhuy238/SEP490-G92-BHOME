@@ -18,3 +18,20 @@ Location lock chung với cấu hình giá/lịch, append-only và có actor/tim
 Không có plan thì manual invoice vẫn dùng calendar hiện có; có plan cho kỳ thì manual và
 scheduled Generate cùng dùng snapshot của kỳ đó. Invoice đã tạo giữ ScheduleSnapshot riêng.
 Tự động Final mặc định chưa được ủy quyền ở dữ liệu cũ; phải Owner chọn rõ trong plan.
+
+JOB-09 handler `billing-meter` nhận `{planId,billingPeriod}` từ queue hiện có. Scheduler
+JOB-02 được mở rộng bằng contributors, không thêm scheduler/queue thứ hai; expiry vẫn daily.
+Contributor enqueue các kỳ hiện tại và hai kỳ trước (calendar hiện có cho offset tối đa 2),
+không enqueue trước ngày cấu hình; pending được đánh giá lại theo phút, Completed không
+tự enqueue lại. Task uniqueness là Room/type/period, kể cả task manual hoặc đã Cancelled;
+thay meter giữ exception cần Owner review, không tự tạo consumption mới.
+
+GET `executions?locationId=&period=`: Owner xem trạng thái/attempts/counts/exceptions.
+POST `run-now` `{locationId,billingPeriod,phase:"Meter"}` chỉ Development/Testing + Owner,
+gọi cùng engine/handler policy và không bỏ qua ngày/ủy quyền/uniqueness; chưa đến hạn trả 204.
+POST `meter-tasks/{id}/assignment` `{staffUserId,expectedVersion}`: Owner chọn current Staff
+assignment, không cho sửa task closed/stale. Task không có assignee vẫn tồn tại và chỉ Owner
+xem; generated task chỉ Staff được giao trong Location hiện còn phụ trách mới đọc/confirm.
+Capture DTO bổ sung dueAt, assignedStaffUserId, automationPlanId, version, locationId, roomId.
+Schema mới snapshot Room/type được trigger derive từ Meter cho cả manual/scheduled inserts.
+Migration dừng nếu dữ liệu cũ đã trùng; không xóa lịch sử để ép migration thành công.
