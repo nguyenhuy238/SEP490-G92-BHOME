@@ -29,6 +29,8 @@ public sealed class ContractsController(ContractService service) : ControllerBas
     { await service.LinkTenantAccountAsync(residentId, input, t); return NoContent(); }
     [HttpGet("{id:guid}/history")]
     public Task<IReadOnlyList<ContractHistoryView>> History(Guid id, CancellationToken t) => service.HistoryAsync(id, t);
+    [HttpGet("{id:guid}/versions")]
+    public Task<IReadOnlyList<ContractVersionView>> Versions(Guid id,CancellationToken t)=>service.VersionsAsync(id,t);
     [HttpGet("{id:guid}/deposit-verifications"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<DepositVerificationView>> Deposits(Guid id, CancellationToken t) => service.DepositsAsync(id, t);
     [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

@@ -217,6 +217,19 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    versions: (id: string, signal?: AbortSignal) =>
+      request<
+        {
+          id: string;
+          previousContractId: string | null;
+          kind: string;
+          status: string;
+          startDate: string;
+          endDate: string;
+          monthlyRent: string | null;
+          terms: string;
+        }[]
+      >(`${root}/${id}/versions`, { signal }),
     list: async (page = 1, status = '', locationId = '', signal?: AbortSignal) => {
       const result = await request<ContractPage>(
         `${root}?${new URLSearchParams({ page: String(page), pageSize: '20', ...(status ? { status } : {}), ...(locationId ? { locationId } : {}) })}`,

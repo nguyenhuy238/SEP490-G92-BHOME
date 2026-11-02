@@ -160,7 +160,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return Mutate(id, [Roles.Owner, Roles.Staff], async c =>
         {
             if (await Replay(key, "renewal", new { id, x }, t) is { } prior) return new ContractId(prior);
-            if (c.Status != ContractStatus.Active || x.EndDate <= c.EndDate || await repository.MoveOutAsync(c.Id, t) is not null)
+            if (c.Status != ContractStatus.Active || c.EndDate.Year >= 9999 || x.EndDate <= c.EndDate || await repository.MoveOutAsync(c.Id, t) is not null)
                 throw ContractException.Conflict("contract_not_renewable");
             if (await repository.OpenRenewalAsync(c.Id, t)) throw ContractException.Conflict("renewal_already_pending");
             var next = new Contract
@@ -228,6 +228,12 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.PreviousContractId is null && c.Room.Status is not (RoomStatus.Available or RoomStatus.Occupied)) blockers.Add("room_not_available");
         if (!Intact(c)) blockers.Add("signed_terms_changed");
         if (c.StartDate > Today || c.EndDate < Today) blockers.Add("contract_not_in_effective_period");
+        if (c.PreviousContractId is { } parentId)
+        {
+            var parent = await repository.FindAsync(parentId, t);
+            if (parent is null || parent.Status != ContractStatus.Active || parent.RoomId != c.RoomId || parent.TenantUserId != c.TenantUserId ||
+                parent.EndDate.AddDays(1) != c.StartDate || await repository.MoveOutAsync(parentId, t) is not null) blockers.Add("renewal_parent_not_active");
+        }
         foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId })
             if (!c.Signatures.Any(s => s.SignerUserId == signer && CompleteSignature(s, c) && s.SignedAt is not null &&
                 s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)))

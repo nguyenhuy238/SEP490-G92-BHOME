@@ -69,6 +69,8 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active, t);
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
+    public async Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t) =>
+        await db.Set<Contract>().AsNoTracking().Where(c=>c.RoomId==roomId&&c.TenantUserId==tenantId).OrderBy(c=>c.StartDate).Take(501).ToArrayAsync(t);
     public async Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t) =>
         await db.Set<DepositVerification>().Where(d => d.ContractId == contractId).SumAsync(d => (decimal?)d.Amount, t) ?? 0;
     public Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t) =>

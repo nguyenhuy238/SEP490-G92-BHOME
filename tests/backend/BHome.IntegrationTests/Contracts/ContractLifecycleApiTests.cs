@@ -341,6 +341,10 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         var original = await db.Set<Contract>().SingleAsync(c => c.Id == id); var renewal = await db.Set<Contract>().SingleAsync(c => c.Id == next);
         Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.MonthlyRent); Assert.Equal(ContractStatus.Active, renewal.Status);
         Assert.Equal(4000000, renewal.MonthlyRent); Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        var versions=(await w.Tenant.Client.GetFromJsonAsync<ContractVersionView[]>(Path(next,"versions")))!;
+        Assert.Equal(2,versions.Length);Assert.Contains(versions,c=>c.Id==id&&c.Status=="Superseded"&&c.MonthlyRent==3000000);
+        Assert.Contains(versions,c=>c.Id==next&&c.PreviousContractId==id&&c.Terms=="NEW TEST TERMS");
+        var outsider=await User(Roles.Tenant);Assert.Equal(HttpStatusCode.NotFound,(await outsider.Client.GetAsync(Path(next,"versions"))).StatusCode);
     }
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private static byte[] Image()

@@ -13,6 +13,8 @@ public sealed record ContractDraftInput(Guid RoomId, Guid OwnerSignerId, Guid Te
 public sealed record RenewalInput(DateOnly EndDate, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent,
     [Required, StringLength(12000, MinimumLength = 1)] string Terms);
 public sealed record ContractId(Guid Id);
+public sealed record ContractVersionView(Guid Id, Guid? PreviousContractId, string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? MonthlyRent, string Terms);
 public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
     string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent);
@@ -111,6 +113,7 @@ public interface IContractRepository
     Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
     Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
+    Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);
     Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t);
     Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t);
     Task<ContractMoveOut?> MoveOutAsync(Guid contractId, CancellationToken t);
