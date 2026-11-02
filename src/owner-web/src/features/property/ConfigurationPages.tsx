@@ -223,14 +223,14 @@ function LocationContent({ db }: { db: DemoDatabase }) {
                       })),
                     ],
                     helper:
-                      'Chỉ sao chép loại phòng, định mức tài sản và chính sách giá/phí; không sao chép dữ liệu vận hành.',
+                      'Chỉ sao chép loại phòng, định mức tài sản, chính sách giá/phí và nội quy; không sao chép dữ liệu vận hành.',
                   } satisfies FormField,
                 ]
               : []),
           ]}
           description={
             editing.source || !db.records.locations.some((location) => location.id === editing.record.id)
-              ? 'Chỉ sao chép mẫu loại phòng, yêu cầu trang bị và chính sách giá cấp cơ sở/loại phòng. Không sao chép phòng, cư dân, hợp đồng, giao dịch hoặc kho tài sản.'
+              ? 'Chỉ sao chép mẫu loại phòng, yêu cầu trang bị, chính sách giá cấp cơ sở/loại phòng và nội quy. Không sao chép phòng, cư dân, hợp đồng, giao dịch hoặc kho tài sản.'
               : undefined
           }
           onClose={() => setEditing(null)}

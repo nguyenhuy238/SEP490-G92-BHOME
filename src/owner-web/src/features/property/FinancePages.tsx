@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { usePortal } from '../../app/PortalProvider';
 import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import { makeRecord, DEMO_DATE } from '../../services/mock/seed';
-import type { DemoDatabase } from '../../types/portal';
+import type { DemoDatabase, PortalRecord } from '../../types/portal';
 import { investmentSummary } from './model';
 import { DataList, EditDrawer, Panel, PropertyBoundary, Select } from './PropertyUI';
 import { currency, dateLabel, matches } from './propertyUtils';
@@ -19,7 +19,11 @@ export function Pricing() {
 function PricingContent({ db }: { db: DemoDatabase }) {
   const portal = usePortal(),
     save = usePropertyMutation();
-  const [editing, setEditing] = useState<{ location: string; scope: string } | null>(null);
+  const [editing, setEditing] = useState<{
+    location: string;
+    scope: string;
+    base?: PortalRecord;
+  } | null>(null);
   const [scope, setScope] = useState(''),
     [tab, setTab] = useState(0),
     [newPrice, setNewPrice] = useState(false),
@@ -53,6 +57,29 @@ function PricingContent({ db }: { db: DemoDatabase }) {
       <Alert severity="info" sx={{ mb: 2 }}>
         Đây là cấu hình minh họa. Thứ tự áp dụng và tính tiền chính thức do backend quyết định; giao
         diện chưa thực hiện tính hóa đơn.
+      </Alert>
+      <Alert severity="warning" sx={{ mb: 2 }}>
+        Điện phải đối chiếu Thông tư 60/2025/TT-BCT và biểu giá đang có hiệu lực. Giá nước do UBND
+        cấp tỉnh ban hành theo khu vực. Phí vệ sinh, an ninh và dịch vụ khác phải ghi rõ căn cứ,
+        phạm vi và thỏa thuận; không được gắn nhãn “phí Nhà nước” nếu không có văn bản áp dụng.
+        <Stack direction="row" sx={{ gap: 1, mt: 1, flexWrap: 'wrap' }}>
+          <Button
+            component="a"
+            href="https://vanban.chinhphu.vn/?classid=1&docid=216125&orggroupid=4&pageid=27160"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Quy định giá điện
+          </Button>
+          <Button
+            component="a"
+            href="https://vanban.chinhphu.vn/?docid=203448&pageid=27160"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Khung giá nước sạch
+          </Button>
+        </Stack>
       </Alert>
       <Panel title="Chính sách giá">
         <Stack
@@ -111,10 +138,29 @@ function PricingContent({ db }: { db: DemoDatabase }) {
             },
             { label: 'Nước / m³', value: (r) => currency(Number(r.attributes.waterRate || 0)) },
             {
-              label: 'Phí dịch vụ / tháng',
-              value: (r) => currency(Number(r.attributes.serviceRate || 0)),
+              label: 'Vệ sinh / An ninh / Khác',
+              value: (r) =>
+                [
+                  r.attributes.environmentRate,
+                  r.attributes.securityRate,
+                  r.attributes.otherServiceRate || r.attributes.serviceRate,
+                ]
+                  .map((value) => currency(Number(value || 0)))
+                  .join(' / '),
             },
             { label: 'Hiệu lực', value: (r) => `${dateLabel(r.date)} → ${dateLabel(r.endDate)}` },
+            {
+              label: 'Thao tác',
+              value: (r) => (
+                <Button
+                  onClick={() =>
+                    setEditing({ location: r.locationId, scope: r.attributes.scope, base: r })
+                  }
+                >
+                  Tạo phiên bản mới
+                </Button>
+              ),
+            },
           ]}
         />
       </Panel>
@@ -156,6 +202,7 @@ function PricingContent({ db }: { db: DemoDatabase }) {
           db={db}
           onClose={() => setEditing(null)}
           save={save}
+          base={editing.base}
         />
       )}
     </>
@@ -168,12 +215,14 @@ function PriceEditor({
   db,
   onClose,
   save,
+  base,
 }: {
   location: string;
   scope: string;
   db: DemoDatabase;
   onClose: () => void;
   save: ReturnType<typeof usePropertyMutation>;
+  base?: PortalRecord;
 }) {
   const targets =
     scope === 'location'
@@ -185,15 +234,23 @@ function PriceEditor({
             .map((r) => ({ id: r.id, name: r.code }));
   return (
     <EditDrawer
-      title="Phiên bản giá & Phí"
+      title={base ? 'Tạo phiên bản chính sách kế tiếp' : 'Phiên bản giá & Phí'}
+      description={
+        base
+          ? 'Phiên bản cũ được giữ nguyên lịch sử và kết thúc vào ngày liền trước ngày hiệu lực mới.'
+          : 'Mỗi chính sách có phạm vi và khoảng hiệu lực riêng; không ghi đè hóa đơn hoặc hợp đồng đã chốt.'
+      }
       initial={{
-        target: targets[0]?.id || '',
-        name: '',
-        rent: '0',
-        electricityRate: '0',
-        waterRate: '0',
-        serviceRate: '0',
-        start: DEMO_DATE,
+        target: base?.attributes.targetId || targets[0]?.id || '',
+        name: base ? `${base.name} — phiên bản mới` : '',
+        rent: String(base?.amount || 0),
+        electricityRate: base?.attributes.electricityRate || '0',
+        waterRate: base?.attributes.waterRate || '0',
+        environmentRate: base?.attributes.environmentRate || '0',
+        securityRate: base?.attributes.securityRate || '0',
+        otherServiceRate:
+          base?.attributes.otherServiceRate || base?.attributes.serviceRate || '0',
+        start: base ? '' : DEMO_DATE,
         end: '',
       }}
       fields={[
@@ -202,15 +259,15 @@ function PriceEditor({
         { key: 'rent', label: 'Giá thuê (VND/tháng)', type: 'number', required: true },
         { key: 'electricityRate', label: 'Điện (VND/kWh)', type: 'number' },
         { key: 'waterRate', label: 'Nước (VND/m³)', type: 'number' },
-        { key: 'serviceRate', label: 'Dịch vụ (VND/tháng)', type: 'number' },
+        { key: 'environmentRate', label: 'Vệ sinh môi trường (VND/tháng)', type: 'number' },
+        { key: 'securityRate', label: 'Dịch vụ an ninh trật tự (VND/tháng)', type: 'number' },
+        { key: 'otherServiceRate', label: 'Dịch vụ khác (VND/tháng)', type: 'number' },
         { key: 'start', label: 'Hiệu lực từ', type: 'date', required: true },
         { key: 'end', label: 'Hiệu lực đến (để trống nếu chưa xác định)', type: 'date' },
       ]}
       onClose={onClose}
-      onSave={(v) =>
-        save({
-          kind: 'price',
-          record: makeRecord('pricing', {
+      onSave={(v) => {
+        const record = makeRecord('pricing', {
             name: v.name,
             code: `GIA-${crypto.randomUUID().slice(0, 8)}`,
             locationId: location,
@@ -222,11 +279,15 @@ function PriceEditor({
               targetId: v.target,
               electricityRate: v.electricityRate,
               waterRate: v.waterRate,
-              serviceRate: v.serviceRate,
+              environmentRate: v.environmentRate,
+              securityRate: v.securityRate,
+              otherServiceRate: v.otherServiceRate,
             },
-          }),
-        })
-      }
+          });
+        return base
+          ? save({ kind: 'priceVersion', previousId: base.id, record })
+          : save({ kind: 'price', record });
+      }}
     />
   );
 }
