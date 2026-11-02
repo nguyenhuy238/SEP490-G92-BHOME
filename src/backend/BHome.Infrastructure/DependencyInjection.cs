@@ -175,6 +175,8 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft","Draft",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-final","Final",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IJobScheduleContributor,BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Application.Notifications.INotificationRepository,BHome.Infrastructure.Modules.Notifications.NotificationRepository>();
+        services.AddScoped<BHome.Application.Notifications.NotificationService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
         services.AddSingleton(provider=>new BHome.Application.PaymentsDebt.PaymentRuntimeMode(

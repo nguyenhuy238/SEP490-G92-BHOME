@@ -1237,6 +1237,96 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("StaffLocationAssignments");
                 });
 
+            modelBuilder.Entity("BHome.Domain.Notifications.NotificationPublication", b =>
+                {
+                    b.Property<string>("EventKey")
+                        .HasMaxLength(220)
+                        .HasColumnType("character varying(220)");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RecipientCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("EventKey");
+
+                    b.ToTable("NotificationPublications", (string)null);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.UserNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AudienceRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryState")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(220)
+                        .HasColumnType("character varying(220)");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RelatedObjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelatedObjectType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid?>("SourceTaskNotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("SourceTaskNotificationId");
+
+                    b.HasIndex("RecipientUserId", "EventKey")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientUserId", "ReadAt", "CreatedAt");
+
+                    b.ToTable("UserNotifications", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.BankReferenceClaim", b =>
                 {
                     b.Property<string>("NormalizedReference")
@@ -3826,6 +3916,25 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StaffUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.UserNotification", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.StaffOperations.OperationalTaskNotification", null)
+                        .WithMany()
+                        .HasForeignKey("SourceTaskNotificationId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.BankReferenceClaim", b =>
