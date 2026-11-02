@@ -30,11 +30,11 @@ public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadin
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
     [Required, MinLength(1), MaxLength(5)] Guid[] EvidenceIds,
     HandoverAssetInput[]? Assets=null,string? RoomCondition=null,string? KeysAndAccess=null,int? ExpectedVersion=null);
-public sealed record InspectionReviewInput(int Version,bool Confirmed,string Reason);
+public sealed record InspectionReviewInput(int Version,bool Confirmed,string Reason,bool NoAdditionalCharges=false);
 public sealed record FinalInspectionView(Guid Id,int Version,Guid BaselineContractId,int BaselineVersion,HandoverSnapshot Baseline,
     HandoverSnapshot Observed,Guid StaffId,DateTimeOffset InspectedAt,string? OwnerDecision,string? OwnerReason,DateTimeOffset? ReviewedAt);
 public sealed record InspectionPreparation(HandoverView? Baseline,Guid? BaselineContractId,IReadOnlyList<HandoverReading> FinalReadings,bool OtherTenantsRemain);
-public sealed record SettlementInput([Required, StringLength(2000, MinimumLength = 1)] string Decision);
+public sealed record SettlementInput([Required, StringLength(2000, MinimumLength = 1)] string Decision,string? ExpectedReference=null);
 public sealed record CompletionInput(DateOnly ActualEndDate);
 public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLength = 1)] string ProviderReference);
 public sealed record SignatureView(Guid Id, Guid SignerUserId, string Status, DateTimeOffset? SignedAt);
@@ -53,7 +53,7 @@ public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, 
     IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1);
 public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
 public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset ScheduledAt, int Version);
-public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt);
+public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt,string FinancialSnapshot="{}");
 
 public sealed class ContractException(int status, string code) : Exception(code)
 {
@@ -96,6 +96,20 @@ public sealed record SettlementLedgerState(bool AllObligationsResolved, bool Dep
 public interface IContractSettlementLedger
 {
     Task<SettlementLedgerState?> ReadAsync(Guid contractId, Guid electricityReadingId, Guid waterReadingId, CancellationToken t);
+}
+public sealed record SettlementInvoice(Guid InvoiceId,DateOnly BillingPeriod,bool Shared,BHome.Application.Billing.InvoiceFinancialView Financials);
+public sealed record ContractSettlementSummary(Guid ContractId,Guid DepositContractId,Guid RoomId,string RoomNumber,Guid TenantUserId,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)]decimal VerifiedSecurityDeposit,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)]decimal AppliedHoldingDeposit,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)]decimal? ContractSpecificOutstanding,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)]decimal? ApprovedFinalCharges,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)]decimal? ApprovedDeductions,
+    [property:JsonNumberHandling(JsonNumberHandling.WriteAsString|JsonNumberHandling.AllowReadingFromString)]decimal? RefundAmount,
+    IReadOnlyList<SettlementInvoice> Invoices,IReadOnlyList<string> UnresolvedItems,bool OtherActiveContracts,bool Resolved,string Reference,
+    string TransferVerificationStatus="PendingReview");
+public interface IContractSettlementDetails
+{
+    Task<ContractSettlementSummary> SummaryAsync(Guid contractId,CancellationToken t);
 }
 
 public sealed record HoldingDepositApplication(Guid HoldingContractId, Guid RoomId, Guid TenantUserId,

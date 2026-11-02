@@ -78,6 +78,7 @@ internal static class ContractConfiguration
         {
             e.ToTable("ContractSettlementReviews"); e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Decision).HasMaxLength(2000); e.Property(x => x.LedgerReference).HasMaxLength(200);
+            e.Property(x=>x.FinancialSnapshot).HasColumnType("jsonb");
             e.HasIndex(x => new { x.ContractId, x.ReviewedAt });
         });
         b.Entity<ContractFileUpload>(e =>

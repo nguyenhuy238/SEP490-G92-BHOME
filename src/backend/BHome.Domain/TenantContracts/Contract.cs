@@ -121,6 +121,7 @@ public sealed class ContractSettlementReview : AuditableEntity
     public bool Settled { get; set; }
     public Guid ReviewedByUserId { get; set; }
     public DateTimeOffset ReviewedAt { get; set; }
+    public string FinancialSnapshot { get; set; } = "{}";
 }
 public sealed class ContractMoveOutHistory : AuditableEntity
 {
@@ -145,6 +146,7 @@ public sealed class ContractFinalInspection : AuditableEntity
     public string? OwnerReason { get; set; }
     public Guid? OwnerId { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
+    public bool NoAdditionalCharges { get; set; }
 }
 
 // Durable upload intent, written in its own transaction before object storage is called.

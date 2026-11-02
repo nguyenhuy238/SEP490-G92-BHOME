@@ -5,6 +5,8 @@ namespace BHome.Application.Contracts;
 
 public sealed partial class ContractService
 {
+    public Task<ContractSettlementSummary> SettlementSummaryAsync(Guid id,CancellationToken t)=>Mutate(id,[Roles.Owner,Roles.Tenant],async c=>
+        ledger is IContractSettlementDetails details?await details.SummaryAsync(id,t):throw new ContractException(503,"settlement_summary_unavailable"),t);
     private void MoveOutEvent(ContractMoveOut m,string action)=>repository.Add(new ContractMoveOutHistory{ContractId=m.ContractId,Version=m.Version,Action=action,
         Snapshot=System.Text.Json.JsonSerializer.Serialize(View(m)),ActorId=Actor,OccurredAt=clock.GetUtcNow()});
     public async Task<IReadOnlyList<MoveOutHistoryView>> MoveOutHistoryAsync(Guid id,CancellationToken t)

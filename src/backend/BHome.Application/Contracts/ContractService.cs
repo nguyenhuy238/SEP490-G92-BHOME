@@ -481,12 +481,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             m.SettlementDecision = x.Decision.Trim(); m.Status = MoveOutStatus.PendingSettlement;
             m.SettlementApprovedByUserId = null; m.SettlementApprovedAt = null; m.SettlementLedgerReference = null;
             var result = await ledger.ReadAsync(id, m.ElectricityReadingId!.Value, m.WaterReadingId!.Value, t);
+            var summary=ledger is IContractSettlementDetails details?await details.SummaryAsync(id,t):null;
+            if(summary is {Resolved:true}&&x.ExpectedReference!=summary.Reference)throw ContractException.Conflict("settlement_review_changed");
             if (result is { AllObligationsResolved: true, DepositResolved: true, TransfersVerified: true } && !string.IsNullOrWhiteSpace(result.DecisionReference))
             {
                 m.Status = MoveOutStatus.Settled; m.SettlementApprovedByUserId = Actor; m.SettlementApprovedAt = clock.GetUtcNow(); m.PendingReason = "";
                 m.SettlementLedgerReference = result.DecisionReference;
             }
-            else m.PendingReason = "financial_ledger_and_deposit_policy";
+            else m.PendingReason = summary?.UnresolvedItems.FirstOrDefault()??"financial_ledger_and_deposit_policy";
+            m.Version++;MoveOutEvent(m,m.Status==MoveOutStatus.Settled?"Settled":"PendingSettlement");
             repository.Add(new ContractSettlementReview
             {
                 ContractId = id,
@@ -495,6 +498,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 Settled = m.Status == MoveOutStatus.Settled,
                 ReviewedByUserId = Actor,
                 ReviewedAt = clock.GetUtcNow()
+                ,FinancialSnapshot=summary is null?"{}":JsonSerializer.Serialize(summary)
             });
             Audit("ContractSettlementReviewed", id); Remember(key, "settlement", new { id, x }, m.Id); return View(m);
         }, t);
@@ -502,7 +506,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public async Task<IReadOnlyList<SettlementReviewView>> SettlementHistoryAsync(Guid id, CancellationToken t)
     {
         await Load(id, [Roles.Owner, Roles.Tenant], t);
-        return (await repository.SettlementReviewsAsync(id, t)).Select(r => new SettlementReviewView(r.Id, r.Decision, r.Settled, r.ReviewedByUserId, r.ReviewedAt)).ToArray();
+        return (await repository.SettlementReviewsAsync(id, t)).Select(r => new SettlementReviewView(r.Id, r.Decision, r.Settled, r.ReviewedByUserId, r.ReviewedAt,r.FinancialSnapshot)).ToArray();
     }
     public Task<ContractView> CompleteAsync(Guid id, CompletionInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {

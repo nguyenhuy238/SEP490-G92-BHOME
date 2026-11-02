@@ -2077,6 +2077,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("InspectedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("NoAdditionalCharges")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ObservedSnapshot")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -2490,6 +2493,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("FinancialSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("LedgerReference")
                         .HasMaxLength(200)

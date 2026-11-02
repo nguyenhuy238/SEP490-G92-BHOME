@@ -50,6 +50,7 @@ public sealed partial class ContractService
         var inspection=(await repository.FinalInspectionsAsync(id,t)).FirstOrDefault()??throw ContractException.Conflict("confirmed_handover_baseline_required");
         if(inspection.Version!=x.Version||inspection.OwnerDecision!=null||m.Status!=MoveOutStatus.Inspected)throw ContractException.Conflict("inspection_changed_or_reviewed");
         inspection.OwnerReason=HandoverText(x.Reason,2000);inspection.OwnerDecision=x.Confirmed?"Confirmed":"Reinspection";inspection.OwnerId=Actor;inspection.ReviewedAt=clock.GetUtcNow();
+        inspection.NoAdditionalCharges=x.Confirmed&&x.NoAdditionalCharges;
         if(!x.Confirmed)m.Status=MoveOutStatus.Approved;
         m.Version++;MoveOutEvent(m,x.Confirmed?"InspectionConfirmed":"ReinspectionRequired");Audit("ContractInspectionReviewed",id);Remember(key,"inspection-review",new{id,x},m.Id);return View(m);
     },t);

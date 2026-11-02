@@ -41,6 +41,8 @@ public sealed class ContractsController(ContractService service) : ControllerBas
     public Task<IReadOnlyList<FinalInspectionView>> Inspections(Guid id,CancellationToken t)=>service.FinalInspectionsAsync(id,t);
     [HttpPost("{id:guid}/move-out/inspection-review"),Authorize(Roles=Roles.Owner)]
     public Task<MoveOutView> InspectionReview(Guid id,InspectionReviewInput x,CancellationToken t)=>service.ReviewInspectionAsync(id,x,Key(),t);
+    [HttpGet("{id:guid}/move-out/settlement-summary"),Authorize(Roles=Roles.Owner+","+Roles.Tenant)]
+    public Task<ContractSettlementSummary> SettlementSummary(Guid id,CancellationToken t)=>service.SettlementSummaryAsync(id,t);
     [HttpGet("{id:guid}/deposit-verifications"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<DepositVerificationView>> Deposits(Guid id, CancellationToken t) => service.DepositsAsync(id, t);
     [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

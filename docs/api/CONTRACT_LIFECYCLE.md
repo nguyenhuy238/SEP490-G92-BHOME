@@ -85,3 +85,13 @@ không reset baseline hoặc tự tạo phí cho cả phòng khi co-Tenants vẫ
 GET `{id}/move-out/inspections`: so sánh baseline/observed và Owner review, scoped như Contract.
 POST `{id}/move-out/inspection-review`: Owner `{version,confirmed,reason}`; confirmed=false
 yêu cầu reinspection, giữ lần cũ. Mỗi version chỉ một review, không ghi đè snapshot/ảnh.
+
+GET `{id}/move-out/settlement-summary`: Owner/Tenant của Contract, Staff 403. Cọc lấy từ
+root Contract của renewal chain, không cộng lại từng phiên bản; shared invoices là context,
+không liability cá nhân. Summary trả source financials BH-41, unresolvedItems, reference hash,
+resolved, nullable deductions/refund/final charges. Owner inspection review có thêm
+noAdditionalCharges để xác nhận không có khoản inspection riêng cần tính; nếu chưa xác nhận
+giữ Pending, không tự tính damage fee. Kỳ chưa Final, usage chưa billed, pending disputes,
+bank review, excess, deposit/holding chưa giải quyết đều chặn resolved.
+POST settlement bổ sung expectedReference (bắt buộc khi resolved) chống xác nhận snapshot cũ.
+History lưu FinancialSnapshot bất biến và source reference, không tạo allocation/refund mới.
