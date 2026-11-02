@@ -21,6 +21,12 @@ internal static class LocalDevelopmentCli
             var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
             var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
             services.AddInfrastructure(config);
+            if(args.SequenceEqual(new[]{"seed-contract-demo"}))
+            {
+                services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")??""));
+                services.AddSingleton<LifecycleSeedActor>();
+                services.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p=>p.GetRequiredService<LifecycleSeedActor>());
+            }
             await using var provider = services.BuildServiceProvider();
             if (args.SequenceEqual(new[] { "seed-contract-demo" }))
             {
@@ -51,4 +57,11 @@ internal static class LocalDevelopmentCli
             return 1;
         }
     }
+}
+internal sealed class DemoHostEnvironment(string environment):Microsoft.Extensions.Hosting.IHostEnvironment
+{
+    public string EnvironmentName{get;set;}=environment;
+    public string ApplicationName{get;set;}="BHome.LocalDevelopment";
+    public string ContentRootPath{get;set;}=Directory.GetCurrentDirectory();
+    public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider{get;set;}=new Microsoft.Extensions.FileProviders.NullFileProvider();
 }
