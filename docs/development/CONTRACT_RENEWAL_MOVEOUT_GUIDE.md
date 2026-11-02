@@ -14,14 +14,14 @@ Tái sử dụng Contract/signing/preview/handover, Capture confirmed readings, 
 verified Payment allocations BH-25 và financial projection/adjustments BH-41. Không ghi lại
 Final Invoice, không ghi đè handover nhận phòng và không tạo bản sao Payment ledger.
 
-| Bước | Backend | Owner Web | Tenant Mobile | Staff Mobile | DB | Demo |
-| --- | --- | --- | --- | --- | --- | --- |
-| Renewal | Guards, ký, activation | Tạo/xem versions | Ký/xem versions | Chuẩn bị trong scope | Chain, signed history | Pending + Active |
-| Termination/lịch | Role/location, version | Duyệt/phân công | Gửi/xem yêu cầu | Lịch được giao | MoveOut/history | Đã chạy |
-| Inspection | Baseline/Final evidence | So sánh/review | Xem biên bản | Checklist/readings/ảnh | Immutable versions | API + browser |
-| Settlement | Projection/hash/guards | Review số liệu | Xem nghĩa vụ | Không quyền tài chính | Review snapshot | Resolved + Pending |
-| Closure | Re-read ledger/Room lock | Hoàn tất | Lịch sử/ngày thực tế | Trạng thái nghiệp vụ | ActualEndDate/occupancy | Shared + Last |
-| JOB-02 | Queue/scheduler/handler | Nhắc hiện hành | Nhắc của mình | Không feed tài chính | Unique notices | Worker + handler + UI |
+| Bước             | Backend                  | Owner Web        | Tenant Mobile        | Staff Mobile           | DB                      | Demo                  |
+| ---------------- | ------------------------ | ---------------- | -------------------- | ---------------------- | ----------------------- | --------------------- |
+| Renewal          | Guards, ký, activation   | Tạo/xem versions | Ký/xem versions      | Chuẩn bị trong scope   | Chain, signed history   | Pending + Active      |
+| Termination/lịch | Role/location, version   | Duyệt/phân công  | Gửi/xem yêu cầu      | Lịch được giao         | MoveOut/history         | Đã chạy               |
+| Inspection       | Baseline/Final evidence  | So sánh/review   | Xem biên bản         | Checklist/readings/ảnh | Immutable versions      | API + browser         |
+| Settlement       | Projection/hash/guards   | Review số liệu   | Xem nghĩa vụ         | Không quyền tài chính  | Review snapshot         | Resolved + Pending    |
+| Closure          | Re-read ledger/Room lock | Hoàn tất         | Lịch sử/ngày thực tế | Trạng thái nghiệp vụ   | ActualEndDate/occupancy | Shared + Last         |
+| JOB-02           | Queue/scheduler/handler  | Nhắc hiện hành   | Nhắc của mình        | Không feed tài chính   | Unique notices          | Worker + handler + UI |
 
 ## Luồng và quyền
 
@@ -88,27 +88,27 @@ Không có allocation, deduction hoặc refund phát sinh từ việc đọc/lư
 
 ## Database và API
 
-| Migration | Thay đổi |
-| --- | --- |
-| `20261102000816_MoveOutAssignments` | Assignee, concurrency version, ContractMoveOutHistory append-only |
-| `20261102000942_FinalInspectionSnapshots` | ContractFinalInspections, immutable snapshots, một Owner decision/phiên bản |
-| `20261102001234_ContractSettlementSnapshots` | FinancialSnapshot bất biến, NoAdditionalCharges |
-| `20261102002406_ContractExpiryNotices` | Nhắc hết hạn bền vững, unique Contract/enddate/stage/recipient, index quét expiry |
+| Migration                                    | Thay đổi                                                                          |
+| -------------------------------------------- | --------------------------------------------------------------------------------- |
+| `20261102000816_MoveOutAssignments`          | Assignee, concurrency version, ContractMoveOutHistory append-only                 |
+| `20261102000942_FinalInspectionSnapshots`    | ContractFinalInspections, immutable snapshots, một Owner decision/phiên bản       |
+| `20261102001234_ContractSettlementSnapshots` | FinancialSnapshot bất biến, NoAdditionalCharges                                   |
+| `20261102002406_ContractExpiryNotices`       | Nhắc hết hạn bền vững, unique Contract/enddate/stage/recipient, index quét expiry |
 
 Migration Down từ chối xóa các lịch sử liên quan đã phát sinh. Không sửa migration cũ đã áp dụng.
 
 Các đường dẫn dưới `/api/v1/contracts`; contracts/location/tenant được kiểm tra server:
 
-| API | Quyền / nội dung |
-| --- | --- |
-| GET `{id}/versions` | Owner, own Tenant, assigned Staff; Staff không nhận rent/terms trong chain projection |
-| GET `move-out-assignments` | Staff, tối đa 100 lịch của mình tại Location hiện phụ trách |
-| GET `{id}/move-out/history` | Owner, own Tenant, assigned Staff; tối đa 100 events |
-| GET `{id}/move-out/inspection-preparation` | Owner/assigned Staff; confirmed baseline và Final readings hôm nay |
-| GET `{id}/move-out/inspections` | Owner/own Tenant/assigned Staff; tối đa 100 phiên bản |
-| POST `{id}/move-out/inspection-review` | Owner; version, confirmed, reason, noAdditionalCharges |
-| GET `{id}/move-out/settlement-summary` | Owner/own Tenant; Staff 403 |
-| GET `expiry-reminders` | Owner/own Tenant; tối đa 100 nhắc hiện hành; Staff 403 |
+| API                                        | Quyền / nội dung                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| GET `{id}/versions`                        | Owner, own Tenant, assigned Staff; Staff không nhận rent/terms trong chain projection |
+| GET `move-out-assignments`                 | Staff, tối đa 100 lịch của mình tại Location hiện phụ trách                           |
+| GET `{id}/move-out/history`                | Owner, own Tenant, assigned Staff; tối đa 100 events                                  |
+| GET `{id}/move-out/inspection-preparation` | Owner/assigned Staff; confirmed baseline và Final readings hôm nay                    |
+| GET `{id}/move-out/inspections`            | Owner/own Tenant/assigned Staff; tối đa 100 phiên bản                                 |
+| POST `{id}/move-out/inspection-review`     | Owner; version, confirmed, reason, noAdditionalCharges                                |
+| GET `{id}/move-out/settlement-summary`     | Owner/own Tenant; Staff 403                                                           |
+| GET `expiry-reminders`                     | Owner/own Tenant; tối đa 100 nhắc hiện hành; Staff 403                                |
 
 Schedule bổ sung `staffUserId?`, `expectedVersion?`. Inspection bổ sung assets, roomCondition,
 keysAndAccess, expectedVersion. Settlement bổ sung expectedReference, bắt buộc khi resolved.
@@ -175,14 +175,14 @@ Browser script dùng Playwright đã có trong `.tools/contract-browser/node_mod
 dependency và Chrome đã cài. Đây là tooling developer, không thêm dependency production.
 Xem thêm [chuẩn bị browser hiện có](CONTRACT_STABILIZATION.md).
 
-| Phòng | Kết quả thực chạy ngày 02/11/2026 |
-| --- | --- |
-| LC101-RENEW-PENDING | Hai chữ ký mô phỏng; PendingActivation vì bắt đầu ngày kế tiếp; bản cũ Active |
-| LC102-RENEW-ACTIVE | Renewal Active qua API; parent Superseded, giữ terms/PDF/version chain |
-| LC103-SHARED | A Completed/Terminated; B/C Active; Room Occupied; Invoice/payment cũ còn quyền xem |
-| LC104-PENDING | Inspection confirmed; nợ chung + cọc 3 triệu → PendingSettlement; Room Occupied; không có Complete |
-| LC105-LAST | Các nguồn resolved, cọc 0; Complete qua API; Room Available |
-| LC106-UI | Staff lập inspection qua Mobile Web; Owner review/settle/complete qua Web; Tenant đọc lịch sử sau kết thúc |
+| Phòng               | Kết quả thực chạy ngày 02/11/2026                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| LC101-RENEW-PENDING | Hai chữ ký mô phỏng; PendingActivation vì bắt đầu ngày kế tiếp; bản cũ Active                              |
+| LC102-RENEW-ACTIVE  | Renewal Active qua API; parent Superseded, giữ terms/PDF/version chain                                     |
+| LC103-SHARED        | A Completed/Terminated; B/C Active; Room Occupied; Invoice/payment cũ còn quyền xem                        |
+| LC104-PENDING       | Inspection confirmed; nợ chung + cọc 3 triệu → PendingSettlement; Room Occupied; không có Complete         |
+| LC105-LAST          | Các nguồn resolved, cọc 0; Complete qua API; Room Available                                                |
+| LC106-UI            | Staff lập inspection qua Mobile Web; Owner review/settle/complete qua Web; Tenant đọc lịch sử sau kết thúc |
 
 Owner mở Hợp đồng, chọn Location hoặc UUID; xem phiên bản, phân công và bảng so sánh;
 nhập căn cứ review, đọc blockers rồi xác nhận. Staff mở Trả phòng & kiểm tra, chọn lịch được
@@ -199,19 +199,19 @@ tester cần fixture mới trong môi trường dùng một lần nếu muốn l
 
 Các log/artifacts giữ ignored dưới `.tools`, không commit generated bundles hoặc credentials.
 
-| Check đã chạy | Kết quả |
-| --- | --- |
-| Backend API + LocalDevelopment build | PASS, không warning/error ở build cuối |
-| Application UnitTests | PASS 173 |
-| Domain UnitTests | PASS 83 |
-| IntegrationTests PostgreSQL/MinIO, gồm Contract/Payment/Adjustment/security/concurrency | PASS 369/369, không skip |
-| Closure sau bổ sung actualEndDate | PASS 3, gồm shared/last/concurrent complete và stale adjustment |
-| Owner Web build/typecheck/lint | PASS |
-| Owner Web tests | PASS 87; targeted Contract tests 16, gồm signed adjustment/stale review/role reads |
-| Mobile typecheck/lint/tests | PASS 240 tests |
-| Expo iOS/Android export | PASS; không phải build/sign/install native hoặc kiểm tra thiết bị thật |
-| HTTP seed + replay / scoped DB counts | PASS |
-| Chrome browser real API | PASS Staff inspection, Owner review/settlement/closure, Tenant history, pending guard; không pageerror |
+| Check đã chạy                                                                           | Kết quả                                                                                                |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Backend API + LocalDevelopment build                                                    | PASS, không warning/error ở build cuối                                                                 |
+| Application UnitTests                                                                   | PASS 173                                                                                               |
+| Domain UnitTests                                                                        | PASS 83                                                                                                |
+| IntegrationTests PostgreSQL/MinIO, gồm Contract/Payment/Adjustment/security/concurrency | PASS 369/369, không skip                                                                               |
+| Closure sau bổ sung actualEndDate                                                       | PASS 3, gồm shared/last/concurrent complete và stale adjustment                                        |
+| Owner Web build/typecheck/lint                                                          | PASS                                                                                                   |
+| Owner Web tests                                                                         | PASS 87; targeted Contract tests 16, gồm signed adjustment/stale review/role reads                     |
+| Mobile typecheck/lint/tests                                                             | PASS 240 tests                                                                                         |
+| Expo iOS/Android export                                                                 | PASS; không phải build/sign/install native hoặc kiểm tra thiết bị thật                                 |
+| HTTP seed + replay / scoped DB counts                                                   | PASS                                                                                                   |
+| Chrome browser real API                                                                 | PASS Staff inspection, Owner review/settlement/closure, Tenant history, pending guard; không pageerror |
 
 Lượt integration đầu 368/369: kiểm thử nền cũ còn yêu cầu UX_Contract_ActiveRoom unique,
 mâu thuẫn quyết định phòng chung và migration BH-21. Sửa kỳ vọng thành IX_Contract_ActiveRoom
@@ -234,16 +234,16 @@ Danh sách chính xác theo commit: `git diff --name-only 3983fc7..HEAD`.
 
 ## Trạng thái còn lại và nghiệm thu
 
-* Implemented: renewal/version history, termination approval/schedule, immutable inspection,
+- Implemented: renewal/version history, termination approval/schedule, immutable inspection,
   ledger summary/review, revalidation/closure, shared occupancy, expiry notices và client flows.
-* Demo Ready: sáu phòng trên; simulated signing và manual verified synthetic payments.
-* Pending Business Decision: phân bổ nợ chung khi rời phòng, khấu trừ/hoàn cọc/holding,
+- Demo Ready: sáu phòng trên; simulated signing và manual verified synthetic payments.
+- Pending Business Decision: phân bổ nợ chung khi rời phòng, khấu trừ/hoàn cọc/holding,
   phí damage và final usage chưa được billed. Không có công thức mới được tự phê duyệt.
-* External Provider Blocked: bank callback/reconciliation thật, refund bank transfer và MySign
+- External Provider Blocked: bank callback/reconciliation thật, refund bank transfer và MySign
   thật chưa có bằng chứng xác minh từ lượt này.
-* Not Implemented: deduction/refund/credit posting ledger cho nhánh policy còn thiếu;
+- Not Implemented: deduction/refund/credit posting ledger cho nhánh policy còn thiếu;
   external notification delivery consumer; automatic billed final-usage settlement charge.
-* Awaiting Tester: formal ST/AT, thiết bị iOS/Android/camera native, provider sandbox,
+- Awaiting Tester: formal ST/AT, thiết bị iOS/Android/camera native, provider sandbox,
   failure/retry dài hạn, quy mô/performance, UX và policy acceptance cho các nhánh bị chặn.
 
 Bước tiếp theo theo dependency: JOB-09/10 + Notification để xử lý tác vụ/kỳ hóa đơn và delivery

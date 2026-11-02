@@ -14,7 +14,10 @@ public sealed class Contract : AuditableEntity
     public Guid RoomId { get; set; }
     public Room Room { get; set; } = null!;
     public Guid OwnerSignerId { get; set; }
-    public Guid TenantUserId { get; set; }
+    public Guid? TenantUserId { get; set; }
+    // Draft-only metadata is encrypted by the existing identity protection service.
+    public string DraftMetadata { get; set; } = "{}";
+    public int DraftVersion { get; set; } = 1;
     public Guid RepresentativeResidentId { get; set; }
     public Guid? PreviousContractId { get; set; }
     public Guid? HoldingContractId { get; set; }

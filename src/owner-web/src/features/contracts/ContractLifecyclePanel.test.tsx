@@ -1,4 +1,4 @@
-import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { expect, it, vi } from 'vitest';
 import {
@@ -115,4 +115,50 @@ it('does not fetch financial settlement data for Staff or inspection preparation
     expect(request.mock.calls.some(([p]) => p.endsWith('/settlement-summary'))).toBe(true),
   );
   expect(request.mock.calls.some(([p]) => p.endsWith('/inspection-preparation'))).toBe(false);
+});
+
+it('clears stale data during reloads and contract changes, ignores aborted responses and handles errors', async () => {
+  const { api } = setup();
+  let resolveOld!: (value: SettlementSummary) => void;
+  const old = new Promise<SettlementSummary>((resolve) => {
+    resolveOld = resolve;
+  });
+  const nextId = '00000000-0000-0000-0000-000000000002';
+  const financials = vi
+    .spyOn(api, 'settlementSummary')
+    .mockImplementationOnce(() => old)
+    .mockResolvedValueOnce({ ...summary, contractId: nextId });
+  const hook = renderHook(({ contractId }) => useContractLifecycle(api, contractId, 'Owner'), {
+    initialProps: { contractId: id },
+  });
+  expect(hook.result.current.loading).toBe(true);
+  hook.rerender({ contractId: nextId });
+  expect(hook.result.current.loading).toBe(true);
+  expect(hook.result.current.summary).toBeNull();
+  await waitFor(() => expect(hook.result.current.summary?.contractId).toBe(nextId));
+  expect(financials.mock.calls[0][1]?.aborted).toBe(true);
+  await act(async () => {
+    resolveOld(summary);
+  });
+  expect(hook.result.current.summary?.contractId).toBe(nextId);
+  financials.mockRejectedValueOnce({ status: 503 });
+  act(() => hook.result.current.reload());
+  expect(hook.result.current.loading).toBe(true);
+  expect(hook.result.current.summary).toBeNull();
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(hook.result.current.error).not.toBe('');
+  expect(hook.result.current.summary).toBeNull();
+});
+
+it('hides Owner financial data immediately when switching to Staff', async () => {
+  const { api } = setup();
+  const hook = renderHook(({ role }) => useContractLifecycle(api, id, role), {
+    initialProps: { role: 'Owner' },
+  });
+  await waitFor(() => expect(hook.result.current.summary).toEqual(summary));
+  hook.rerender({ role: 'Staff' });
+  expect(hook.result.current.summary).toBeNull();
+  expect(hook.result.current.loading).toBe(true);
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(hook.result.current.summary).toBeNull();
 });

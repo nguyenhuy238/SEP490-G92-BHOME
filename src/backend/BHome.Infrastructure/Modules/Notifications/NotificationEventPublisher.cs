@@ -11,86 +11,86 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class NotificationEventPublisher(BHomeDbContext db,IBackgroundJobQueue queue,TimeProvider clock):INotificationEventPublisher,IBackgroundJobHandler,IJobScheduleContributor
+internal sealed class NotificationEventPublisher(BHomeDbContext db, IBackgroundJobQueue queue, TimeProvider clock) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
 {
-    public string Name=>"notification-publish";
-    public Task EnqueueDueAsync(CancellationToken t)=>queue.EnqueueAsync(new(Name,clock.GetUtcNow().ToString("yyyyMMddHHmm"),"{}"),t);
-    public async Task ExecuteAsync(JobExecution job,CancellationToken t){await PublishPendingAsync(t);}
-    private sealed record Intent(Guid Recipient,string Role,Guid Location,string Category,string Title,string Summary,string Type,Guid ObjectId,Guid? TaskSource=null,DateTimeOffset? ReadAt=null);
-    private Task<bool> ActiveRole(Guid id,string role,CancellationToken t)=>(from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join r in db.Roles on grant.RoleId equals r.Id where u.Id==id&&u.IsActive&&r.Name==role select u.Id).AnyAsync(t);
-    private async Task<int> Publish(string key,Func<Task<IReadOnlyList<Intent>>> resolve,CancellationToken t)
+    public string Name => "notification-publish";
+    public Task EnqueueDueAsync(CancellationToken t) => queue.EnqueueAsync(new(Name, clock.GetUtcNow().ToString("yyyyMMddHHmm"), "{}"), t);
+    public async Task ExecuteAsync(JobExecution job, CancellationToken t) { await PublishPendingAsync(t); }
+    private sealed record Intent(Guid Recipient, string Role, Guid Location, string Category, string Title, string Summary, string Type, Guid ObjectId, Guid? TaskSource = null, DateTimeOffset? ReadAt = null);
+    private Task<bool> ActiveRole(Guid id, string role, CancellationToken t) => (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join r in db.Roles on grant.RoleId equals r.Id where u.Id == id && u.IsActive && r.Name == role select u.Id).AnyAsync(t);
+    private async Task<int> Publish(string key, Func<Task<IReadOnlyList<Intent>>> resolve, CancellationToken t)
     {
-        db.ChangeTracker.Clear();await using var tx=await db.Database.BeginTransactionAsync(t);
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"notification:"+key},0))",t);
-        if(await db.Set<NotificationPublication>().AnyAsync(p=>p.EventKey==key,t))return 0;
-        var count=0;var recipients=0;
-        foreach(var i in(await resolve()).DistinctBy(i=>i.Recipient))
+        db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"notification:" + key},0))", t);
+        if (await db.Set<NotificationPublication>().AnyAsync(p => p.EventKey == key, t)) return 0;
+        var count = 0; var recipients = 0;
+        foreach (var i in (await resolve()).DistinctBy(i => i.Recipient))
         {
-            if(!await ActiveRole(i.Recipient,i.Role,t))continue;recipients++;
-            count+=await db.Database.ExecuteSqlInterpolatedAsync($"""
+            if (!await ActiveRole(i.Recipient, i.Role, t)) continue; recipients++;
+            count += await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "UserNotifications" ("Id","RecipientUserId","AudienceRole","LocationId","Category","Title","Summary","RelatedObjectType","RelatedObjectId","EventKey","SourceTaskNotificationId","CreatedAt","ReadAt","DeliveryState")
                 VALUES ({Guid.NewGuid()},{i.Recipient},{i.Role},{i.Location},{i.Category},{i.Title},{i.Summary},{i.Type},{i.ObjectId},{key},{i.TaskSource},{clock.GetUtcNow()},{i.ReadAt},'Unconfigured')
                 ON CONFLICT ("RecipientUserId","EventKey") DO NOTHING
-                """,t);
+                """, t);
         }
-        db.Add(new NotificationPublication{EventKey=key,PublishedAt=clock.GetUtcNow(),RecipientCount=recipients});await db.SaveChangesAsync(t);await tx.CommitAsync(t);return count;
+        db.Add(new NotificationPublication { EventKey = key, PublishedAt = clock.GetUtcNow(), RecipientCount = recipients }); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return count;
     }
-    private async Task<List<Intent>> InvoiceAudience(Invoice invoice,string category,string title,string summary,CancellationToken t,Guid? extraOwner=null)
+    private async Task<List<Intent>> InvoiceAudience(Invoice invoice, string category, string title, string summary, CancellationToken t, Guid? extraOwner = null)
     {
-        var list=new List<Intent>();
-        foreach(var owner in new[]{invoice.FinalizedByUserId??invoice.CreatedByUserId,extraOwner??Guid.Empty}.Where(id=>id!=Guid.Empty).Distinct())list.Add(new(owner,Roles.Owner,invoice.LocationId,category,title,summary,"Invoice",invoice.Id));
-        foreach(var id in await db.Set<InvoiceRecipient>().Where(r=>r.InvoiceId==invoice.Id).Select(r=>r.TenantUserId).ToArrayAsync(t))list.Add(new(id,Roles.Tenant,invoice.LocationId,category,title,summary,"Invoice",invoice.Id));
+        var list = new List<Intent>();
+        foreach (var owner in new[] { invoice.FinalizedByUserId ?? invoice.CreatedByUserId, extraOwner ?? Guid.Empty }.Where(id => id != Guid.Empty).Distinct()) list.Add(new(owner, Roles.Owner, invoice.LocationId, category, title, summary, "Invoice", invoice.Id));
+        foreach (var id in await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == invoice.Id).Select(r => r.TenantUserId).ToArrayAsync(t)) list.Add(new(id, Roles.Tenant, invoice.LocationId, category, title, summary, "Invoice", invoice.Id));
         return list;
     }
     public async Task<int> PublishPendingAsync(CancellationToken t)
     {
-        var count=0;
-        var invoices=await db.Set<InvoiceIssuedEvent>().AsNoTracking().Where(e=>!db.Set<NotificationPublication>().Any(p=>p.EventKey=="invoice:"+e.InvoiceId.ToString())).OrderBy(e=>e.OccurredAt).Take(25).ToArrayAsync(t);
-        foreach(var e in invoices)count+=await Publish("invoice:"+e.InvoiceId,async()=>
+        var count = 0;
+        var invoices = await db.Set<InvoiceIssuedEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "invoice:" + e.InvoiceId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
+        foreach (var e in invoices) count += await Publish("invoice:" + e.InvoiceId, async () =>
         {
-            var i=await db.Set<Invoice>().AsNoTracking().SingleAsync(i=>i.Id==e.InvoiceId,t);
-            return i.Status!=InvoiceStatus.Final?[]:await InvoiceAudience(i,"Invoice","Hóa đơn đã phát hành",$"Kỳ {i.BillingPeriod:MM/yyyy} đã có hóa đơn chính thức. Mở hóa đơn để xem nghĩa vụ hiện hành.",t,e.OwnerUserId);
-        },t);
-        var payments=await db.Set<PaymentConfirmedEvent>().AsNoTracking().Where(e=>!db.Set<NotificationPublication>().Any(p=>p.EventKey=="payment:"+e.AllocationId.ToString())).OrderBy(e=>e.OccurredAt).Take(25).ToArrayAsync(t);
-        foreach(var e in payments)count+=await Publish("payment:"+e.AllocationId,async()=>
+            var i = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == e.InvoiceId, t);
+            return i.Status != InvoiceStatus.Final ? [] : await InvoiceAudience(i, "Invoice", "Hóa đơn đã phát hành", $"Kỳ {i.BillingPeriod:MM/yyyy} đã có hóa đơn chính thức. Mở hóa đơn để xem nghĩa vụ hiện hành.", t, e.OwnerUserId);
+        }, t);
+        var payments = await db.Set<PaymentConfirmedEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "payment:" + e.AllocationId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
+        foreach (var e in payments) count += await Publish("payment:" + e.AllocationId, async () =>
         {
-            var allocation=await db.Set<PaymentAllocation>().AsNoTracking().SingleAsync(a=>a.Id==e.AllocationId&&a.InvoiceId==e.InvoiceId,t);
-            var i=await db.Set<Invoice>().AsNoTracking().SingleAsync(i=>i.Id==e.InvoiceId,t);
-            return i.Status!=InvoiceStatus.Final?[]:await InvoiceAudience(i,"Payment","Thanh toán đã được xác minh",$"Số dư hóa đơn kỳ {i.BillingPeriod:MM/yyyy} đã được cập nhật từ giao dịch đã xác minh.",t,allocation.VerifiedByUserId);
-        },t);
-        var adjustments=await db.Set<InvoiceAdjustmentEvent>().AsNoTracking().Where(e=>!db.Set<NotificationPublication>().Any(p=>p.EventKey=="adjustment:"+e.RequestId.ToString()+":"+e.Name)).OrderBy(e=>e.OccurredAt).Take(25).ToArrayAsync(t);
-        foreach(var e in adjustments)count+=await Publish("adjustment:"+e.RequestId+":"+e.Name,async()=>
+            var allocation = await db.Set<PaymentAllocation>().AsNoTracking().SingleAsync(a => a.Id == e.AllocationId && a.InvoiceId == e.InvoiceId, t);
+            var i = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == e.InvoiceId, t);
+            return i.Status != InvoiceStatus.Final ? [] : await InvoiceAudience(i, "Payment", "Thanh toán đã được xác minh", $"Số dư hóa đơn kỳ {i.BillingPeriod:MM/yyyy} đã được cập nhật từ giao dịch đã xác minh.", t, allocation.VerifiedByUserId);
+        }, t);
+        var adjustments = await db.Set<InvoiceAdjustmentEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "adjustment:" + e.RequestId.ToString() + ":" + e.Name)).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
+        foreach (var e in adjustments) count += await Publish("adjustment:" + e.RequestId + ":" + e.Name, async () =>
         {
-            var i=await db.Set<Invoice>().AsNoTracking().SingleAsync(i=>i.Id==e.InvoiceId,t);var list=new List<Intent>();
-            if(e.Name=="invoice.adjustment.requested.v1")list.Add(new(i.FinalizedByUserId??i.CreatedByUserId,Roles.Owner,i.LocationId,"Adjustment","Có yêu cầu điều chỉnh hóa đơn",$"Kỳ {i.BillingPeriod:MM/yyyy} có yêu cầu cần Owner xem xét.","Adjustment",e.RequestId));
-            else if(e.Name=="invoice.adjustment.decided.v1")
+            var i = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == e.InvoiceId, t); var list = new List<Intent>();
+            if (e.Name == "invoice.adjustment.requested.v1") list.Add(new(i.FinalizedByUserId ?? i.CreatedByUserId, Roles.Owner, i.LocationId, "Adjustment", "Có yêu cầu điều chỉnh hóa đơn", $"Kỳ {i.BillingPeriod:MM/yyyy} có yêu cầu cần Owner xem xét.", "Adjustment", e.RequestId));
+            else if (e.Name == "invoice.adjustment.decided.v1")
             {
-                var decision=await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().SingleAsync(d=>d.RequestId==e.RequestId,t);var approved=decision.Outcome=="Approved";
-                list.Add(new(e.RequesterId,Roles.Tenant,i.LocationId,"Adjustment",approved?"Yêu cầu điều chỉnh đã được duyệt":"Yêu cầu điều chỉnh đã bị từ chối","Mở yêu cầu của bạn để xem kết quả được phép truy cập.","Adjustment",e.RequestId));
-                if(approved)foreach(var id in await db.Set<InvoiceRecipient>().Where(r=>r.InvoiceId==i.Id&&r.TenantUserId!=e.RequesterId).Select(r=>r.TenantUserId).ToArrayAsync(t))list.Add(new(id,Roles.Tenant,i.LocationId,"Adjustment","Hóa đơn có cập nhật",$"Vui lòng xem nghĩa vụ hiện hành của hóa đơn kỳ {i.BillingPeriod:MM/yyyy}.","Invoice",i.Id));
+                var decision = await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().SingleAsync(d => d.RequestId == e.RequestId, t); var approved = decision.Outcome == "Approved";
+                list.Add(new(e.RequesterId, Roles.Tenant, i.LocationId, "Adjustment", approved ? "Yêu cầu điều chỉnh đã được duyệt" : "Yêu cầu điều chỉnh đã bị từ chối", "Mở yêu cầu của bạn để xem kết quả được phép truy cập.", "Adjustment", e.RequestId));
+                if (approved) foreach (var id in await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == i.Id && r.TenantUserId != e.RequesterId).Select(r => r.TenantUserId).ToArrayAsync(t)) list.Add(new(id, Roles.Tenant, i.LocationId, "Adjustment", "Hóa đơn có cập nhật", $"Vui lòng xem nghĩa vụ hiện hành của hóa đơn kỳ {i.BillingPeriod:MM/yyyy}.", "Invoice", i.Id));
             }
             return list;
-        },t);
-        var expiries=await db.Set<ContractExpiryNotice>().AsNoTracking().Where(e=>!db.Set<NotificationPublication>().Any(p=>p.EventKey=="contract-expiry:"+e.Id.ToString())).OrderBy(e=>e.CreatedAt).Take(25).ToArrayAsync(t);
-        foreach(var e in expiries)count+=await Publish("contract-expiry:"+e.Id,async()=>
+        }, t);
+        var expiries = await db.Set<ContractExpiryNotice>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "contract-expiry:" + e.Id.ToString())).OrderBy(e => e.CreatedAt).Take(25).ToArrayAsync(t);
+        foreach (var e in expiries) count += await Publish("contract-expiry:" + e.Id, async () =>
         {
-            var c=await db.Set<Contract>().AsNoTracking().Include(c=>c.Room).SingleAsync(c=>c.Id==e.ContractId,t);var today=BillingAutomationDates.BusinessDate(clock.GetUtcNow());
-            if(c.Status!=ContractStatus.Active||c.EndDate!=e.EndDate||e.Stage!=(c.EndDate<today?"Expired":"Upcoming30"))return [];
-            return[new Intent(e.RecipientId,e.RecipientId==c.OwnerSignerId?Roles.Owner:Roles.Tenant,c.Room.LocationId,"Contract",e.Stage=="Expired"?"Hợp đồng đã đến hạn xử lý":"Hợp đồng sắp hết hạn","Vui lòng xem hợp đồng để thực hiện gia hạn hoặc trả phòng.","Contract",c.Id)];
-        },t);
-        var tasks=await db.Set<OperationalTaskNotification>().AsNoTracking().Where(e=>!db.Set<NotificationPublication>().Any(p=>p.EventKey=="task:"+e.Id.ToString())).OrderBy(e=>e.CreatedAt).Take(25).ToArrayAsync(t);
-        foreach(var e in tasks)count+=await Publish("task:"+e.Id,async()=>
+            var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleAsync(c => c.Id == e.ContractId, t); var today = BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+            if (c.Status != ContractStatus.Active || c.EndDate != e.EndDate || e.Stage != (c.EndDate < today ? "Expired" : "Upcoming30")) return [];
+            return [new Intent(e.RecipientId, e.RecipientId == c.OwnerSignerId ? Roles.Owner : Roles.Tenant, c.Room.LocationId, "Contract", e.Stage == "Expired" ? "Hợp đồng đã đến hạn xử lý" : "Hợp đồng sắp hết hạn", "Vui lòng xem hợp đồng để thực hiện gia hạn hoặc trả phòng.", "Contract", c.Id)];
+        }, t);
+        var tasks = await db.Set<OperationalTaskNotification>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "task:" + e.Id.ToString())).OrderBy(e => e.CreatedAt).Take(25).ToArrayAsync(t);
+        foreach (var e in tasks) count += await Publish("task:" + e.Id, async () =>
         {
-            var task=await db.Set<OperationalTask>().AsNoTracking().SingleAsync(task=>task.Id==e.TaskId,t);var role=await ActiveRole(e.RecipientUserId,Roles.Owner,t)?Roles.Owner:Roles.Staff;
-            if(role==Roles.Staff&&(!await db.StaffLocationAssignments.AnyAsync(a=>a.StaffUserId==e.RecipientUserId&&a.LocationId==task.LocationId&&a.StartDate<=BillingAutomationDates.BusinessDate(clock.GetUtcNow())&&a.EndDate>=BillingAutomationDates.BusinessDate(clock.GetUtcNow()),t)||task.AutomationPlanId!=null&&task.AssignedStaffUserId!=e.RecipientUserId))return [];
-            return[new Intent(e.RecipientUserId,role,task.LocationId,"Task",task.Kind==OperationalTaskKind.MeterReading?"Công việc ghi chỉ số định kỳ":"Công việc có cập nhật","Mở công việc để xem yêu cầu và thời hạn trong phạm vi được phân công.",task.Kind==OperationalTaskKind.MeterReading?"MeterTask":"OperationalTask",task.Id,e.Id,e.ReadAt)];
-        },t);
-        var issues=await db.Set<BillingAutomationExecution>().AsNoTracking().Where(e=>e.Status=="PendingInputs"&&!db.Set<NotificationPublication>().Any(p=>p.EventKey=="billing-exception:"+e.Id.ToString())).OrderBy(e=>e.LastStartedAt).Take(25).ToArrayAsync(t);
-        foreach(var e in issues)count+=await Publish("billing-exception:"+e.Id,async()=>
+            var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(task => task.Id == e.TaskId, t); var role = await ActiveRole(e.RecipientUserId, Roles.Owner, t) ? Roles.Owner : Roles.Staff;
+            if (role == Roles.Staff && (!await db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == e.RecipientUserId && a.LocationId == task.LocationId && a.StartDate <= BillingAutomationDates.BusinessDate(clock.GetUtcNow()) && a.EndDate >= BillingAutomationDates.BusinessDate(clock.GetUtcNow()), t) || task.AutomationPlanId != null && task.AssignedStaffUserId != e.RecipientUserId)) return [];
+            return [new Intent(e.RecipientUserId, role, task.LocationId, "Task", task.Kind == OperationalTaskKind.MeterReading ? "Công việc ghi chỉ số định kỳ" : "Công việc có cập nhật", "Mở công việc để xem yêu cầu và thời hạn trong phạm vi được phân công.", task.Kind == OperationalTaskKind.MeterReading ? "MeterTask" : "OperationalTask", task.Id, e.Id, e.ReadAt)];
+        }, t);
+        var issues = await db.Set<BillingAutomationExecution>().AsNoTracking().Where(e => e.Status == "PendingInputs" && !db.Set<NotificationPublication>().Any(p => p.EventKey == "billing-exception:" + e.Id.ToString())).OrderBy(e => e.LastStartedAt).Take(25).ToArrayAsync(t);
+        foreach (var e in issues) count += await Publish("billing-exception:" + e.Id, async () =>
         {
-            var plan=await db.Set<BillingAutomationPlan>().AsNoTracking().SingleAsync(p=>p.Id==e.PlanId,t);
-            return[new Intent(plan.AuthorizedByUserId,Roles.Owner,e.LocationId,"Task","Tự động hóa cần xử lý",$"Kỳ {e.BillingPeriod:MM/yyyy} còn thông tin cần bổ sung. Vui lòng xem nhật ký.","AutomationExecution",e.Id)];
-        },t);
+            var plan = await db.Set<BillingAutomationPlan>().AsNoTracking().SingleAsync(p => p.Id == e.PlanId, t);
+            return [new Intent(plan.AuthorizedByUserId, Roles.Owner, e.LocationId, "Task", "Tự động hóa cần xử lý", $"Kỳ {e.BillingPeriod:MM/yyyy} còn thông tin cần bổ sung. Vui lòng xem nhật ký.", "AutomationExecution", e.Id)];
+        }, t);
         return count;
     }
 }

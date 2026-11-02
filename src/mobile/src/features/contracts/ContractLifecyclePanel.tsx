@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
   displayContractDate,

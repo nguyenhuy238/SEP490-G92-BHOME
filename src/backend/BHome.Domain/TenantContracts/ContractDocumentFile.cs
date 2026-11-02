@@ -2,7 +2,7 @@ using BHome.Domain.Common;
 
 namespace BHome.Domain.TenantContracts;
 
-public enum ContractFileKind { Preview, HandoverEvidence }
+public enum ContractFileKind { Preview, HandoverEvidence, DraftDocx, DraftPdf }
 
 public sealed class ContractDocumentFile : AuditableEntity
 {

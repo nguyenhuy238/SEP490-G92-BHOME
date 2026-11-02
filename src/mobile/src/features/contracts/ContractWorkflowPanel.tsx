@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native-paper';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
   formatContractMoney,

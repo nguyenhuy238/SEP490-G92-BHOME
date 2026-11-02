@@ -32,6 +32,16 @@ export function useContractDetail(client: ContractClient, id: string, role: stri
       setState({ id, data: null, error: '', loading: true });
       try {
         const contract = await client.get(id, signal);
+        if (contract.onboardingDraft) {
+          if (!signal.aborted)
+            setState({
+              id,
+              data: { contract, moveOut: null, readiness: null, history: [] },
+              error: '',
+              loading: false,
+            });
+          return;
+        }
         const moveOut = await client.moveOut(id, signal).catch((e: unknown) => {
           if ((e as { status?: number })?.status === 404) return null;
           throw e;

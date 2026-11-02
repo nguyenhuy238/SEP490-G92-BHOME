@@ -419,7 +419,9 @@ function TypeContent({ db }: { db: DemoDatabase }) {
             </Button>
           </Stack>
           {requirements.length === 0 && (
-            <Typography sx={{ p: 2, borderRadius: 1.5, bgcolor: '#f8fafc', color: 'text.secondary' }}>
+            <Typography
+              sx={{ p: 2, borderRadius: 1.5, bgcolor: '#f8fafc', color: 'text.secondary' }}
+            >
               Chưa có định mức tài sản.
             </Typography>
           )}

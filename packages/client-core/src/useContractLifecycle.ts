@@ -7,27 +7,36 @@ import {
   type SettlementSummary,
 } from './contracts';
 
+interface LifecycleState {
+  loading: boolean;
+  error: string;
+  inspections: FinalInspection[];
+  preparation: InspectionPreparation | null;
+  summary: SettlementSummary | null;
+  history: { version: number; action: string; occurredAt: string }[];
+}
+const emptyLifecycle: LifecycleState = {
+  loading: true,
+  error: '',
+  inspections: [],
+  preparation: null,
+  summary: null,
+  history: [],
+};
+
 export function useContractLifecycle(api: ContractClient, id: string, role: string) {
   const [revision, setRevision] = useState(0);
   const reload = useCallback(() => setRevision((v) => v + 1), []);
-  const [state, setState] = useState<{
-    loading: boolean;
-    error: string;
-    inspections: FinalInspection[];
-    preparation: InspectionPreparation | null;
-    summary: SettlementSummary | null;
-    history: { version: number; action: string; occurredAt: string }[];
-  }>({ loading: true, error: '', inspections: [], preparation: null, summary: null, history: [] });
+  const [snapshot, setSnapshot] = useState<{
+    api: ContractClient;
+    id: string;
+    role: string;
+    revision: number;
+    data: LifecycleState;
+  } | null>(null);
   useEffect(() => {
     const c = new AbortController();
-    setState({
-      loading: true,
-      error: '',
-      inspections: [],
-      preparation: null,
-      summary: null,
-      history: [],
-    });
+    const request = { api, id, role, revision };
     void Promise.all([
       api.inspections(id, c.signal),
       role !== 'Tenant' ? api.inspectionPreparation(id, c.signal) : Promise.resolve(null),
@@ -36,14 +45,26 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
     ])
       .then(([inspections, preparation, summary, history]) => {
         if (!c.signal.aborted)
-          setState({ loading: false, error: '', inspections, preparation, summary, history });
+          setSnapshot({
+            ...request,
+            data: { loading: false, error: '', inspections, preparation, summary, history },
+          });
       })
       .catch((e) => {
-        if (!c.signal.aborted) setState((s) => ({ ...s, loading: false, error: contractError(e) }));
+        if (!c.signal.aborted)
+          setSnapshot({
+            ...request,
+            data: { ...emptyLifecycle, loading: false, error: contractError(e) },
+          });
       });
     return () => c.abort();
   }, [api, id, role, revision]);
-  return { ...state, reload };
+  const current =
+    snapshot?.api === api &&
+    snapshot.id === id &&
+    snapshot.role === role &&
+    snapshot.revision === revision;
+  return { ...(current ? snapshot.data : emptyLifecycle), reload };
 }
 
 const blockers: Record<string, string> = {

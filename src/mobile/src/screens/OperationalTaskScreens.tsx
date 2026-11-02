@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../lib/randomUUID';
 import { Checkbox, Text } from 'react-native-paper';
 import { guid, mutationKeys } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';

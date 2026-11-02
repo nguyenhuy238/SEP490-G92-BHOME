@@ -8,7 +8,7 @@ namespace BHome.Api.Controllers;
 [ApiController, Route("api/v1/contracts"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [RequestSizeLimit(65536)]
-public sealed class ContractsController(ContractService service,ContractExpiryService expiry) : ControllerBase
+public sealed class ContractsController(ContractService service, ContractExpiryService expiry) : ControllerBase
 {
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) && key != Guid.Empty
         ? key : throw ContractException.Invalid("idempotency_key_required");
@@ -20,8 +20,8 @@ public sealed class ContractsController(ContractService service,ContractExpirySe
 
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
-    [HttpGet("expiry-reminders"),Authorize(Roles=Roles.Owner+","+Roles.Tenant)]
-    public Task<IReadOnlyList<ContractExpiryNoticeView>> ExpiryReminders(CancellationToken t)=>expiry.ListAsync(t);
+    [HttpGet("expiry-reminders"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<IReadOnlyList<ContractExpiryNoticeView>> ExpiryReminders(CancellationToken t) => expiry.ListAsync(t);
     [HttpGet("preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<ContractPreparation> Preparation([FromQuery] Guid? locationId, CancellationToken t) => service.PreparationAsync(locationId, t);
     [HttpGet("preparation/accounts"), Authorize(Roles = Roles.Owner)]
@@ -32,19 +32,19 @@ public sealed class ContractsController(ContractService service,ContractExpirySe
     [HttpGet("{id:guid}/history")]
     public Task<IReadOnlyList<ContractHistoryView>> History(Guid id, CancellationToken t) => service.HistoryAsync(id, t);
     [HttpGet("{id:guid}/versions")]
-    public Task<IReadOnlyList<ContractVersionView>> Versions(Guid id,CancellationToken t)=>service.VersionsAsync(id,t);
-    [HttpGet("move-out-assignments"),Authorize(Roles=Roles.Staff)]
-    public Task<IReadOnlyList<MoveOutAssignment>> Assignments(CancellationToken t)=>service.AssignmentsAsync(t);
+    public Task<IReadOnlyList<ContractVersionView>> Versions(Guid id, CancellationToken t) => service.VersionsAsync(id, t);
+    [HttpGet("move-out-assignments"), Authorize(Roles = Roles.Staff)]
+    public Task<IReadOnlyList<MoveOutAssignment>> Assignments(CancellationToken t) => service.AssignmentsAsync(t);
     [HttpGet("{id:guid}/move-out/history")]
-    public Task<IReadOnlyList<MoveOutHistoryView>> MoveHistory(Guid id,CancellationToken t)=>service.MoveOutHistoryAsync(id,t);
-    [HttpGet("{id:guid}/move-out/inspection-preparation"),Authorize(Roles=Roles.Owner+","+Roles.Staff)]
-    public Task<InspectionPreparation> InspectionPreparation(Guid id,CancellationToken t)=>service.InspectionPreparationAsync(id,t);
+    public Task<IReadOnlyList<MoveOutHistoryView>> MoveHistory(Guid id, CancellationToken t) => service.MoveOutHistoryAsync(id, t);
+    [HttpGet("{id:guid}/move-out/inspection-preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<InspectionPreparation> InspectionPreparation(Guid id, CancellationToken t) => service.InspectionPreparationAsync(id, t);
     [HttpGet("{id:guid}/move-out/inspections")]
-    public Task<IReadOnlyList<FinalInspectionView>> Inspections(Guid id,CancellationToken t)=>service.FinalInspectionsAsync(id,t);
-    [HttpPost("{id:guid}/move-out/inspection-review"),Authorize(Roles=Roles.Owner)]
-    public Task<MoveOutView> InspectionReview(Guid id,InspectionReviewInput x,CancellationToken t)=>service.ReviewInspectionAsync(id,x,Key(),t);
-    [HttpGet("{id:guid}/move-out/settlement-summary"),Authorize(Roles=Roles.Owner+","+Roles.Tenant)]
-    public Task<ContractSettlementSummary> SettlementSummary(Guid id,CancellationToken t)=>service.SettlementSummaryAsync(id,t);
+    public Task<IReadOnlyList<FinalInspectionView>> Inspections(Guid id, CancellationToken t) => service.FinalInspectionsAsync(id, t);
+    [HttpPost("{id:guid}/move-out/inspection-review"), Authorize(Roles = Roles.Owner)]
+    public Task<MoveOutView> InspectionReview(Guid id, InspectionReviewInput x, CancellationToken t) => service.ReviewInspectionAsync(id, x, Key(), t);
+    [HttpGet("{id:guid}/move-out/settlement-summary"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<ContractSettlementSummary> SettlementSummary(Guid id, CancellationToken t) => service.SettlementSummaryAsync(id, t);
     [HttpGet("{id:guid}/deposit-verifications"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<DepositVerificationView>> Deposits(Guid id, CancellationToken t) => service.DepositsAsync(id, t);
     [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

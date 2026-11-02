@@ -32,6 +32,7 @@ import { SigningCertificates } from './SigningCertificates';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -87,6 +88,7 @@ export function ContractDetailPanel({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
+  if (c.onboardingDraft) return <MainDraftDetailPanel id={c.id} onChanged={() => onChanged()} />;
   const actions = contractActions(c, m, 'Owner', actorId).filter(
     (a) => !['move-out/settlement', 'move-out/schedule'].includes(a.operation),
   );
@@ -116,7 +118,9 @@ export function ContractDetailPanel({
           <Typography>
             Kỳ thuê: {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
           </Typography>
-          {c.actualEndDate && <Typography>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Typography>}
+          {c.actualEndDate && (
+            <Typography>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Typography>
+          )}
           <Typography>
             Tiền thuê: <strong>{formatContractMoney(c.monthlyRent)}</strong> / tháng
           </Typography>

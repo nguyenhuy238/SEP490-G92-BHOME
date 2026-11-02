@@ -5,5 +5,9 @@ export default defineConfig({
   resolve: {
     alias: { react: fileURLToPath(new URL('../../node_modules/react', import.meta.url)) },
   },
-  test: { environment: 'node', include: ['../../tests/mobile/ocr/**/*.test.{ts,tsx}'] },
+  test: {
+    environment: 'node',
+    setupFiles: ['src/__tests__/setup.ts'],
+    include: ['../../tests/mobile/ocr/**/*.test.{ts,tsx}', 'src/__tests__/**/*.test.{ts,tsx}'],
+  },
 });

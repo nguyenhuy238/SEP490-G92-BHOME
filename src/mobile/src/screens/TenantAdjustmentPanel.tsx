@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform } from 'react-native';
 import { Checkbox, Text, TextInput } from 'react-native-paper';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../lib/randomUUID';
 import {
   adjustmentClient,
   adjustmentError,

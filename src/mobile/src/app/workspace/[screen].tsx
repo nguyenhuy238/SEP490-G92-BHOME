@@ -12,6 +12,7 @@ import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/wor
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
+import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import {
   TenantHome,
   TenantInvoice,
@@ -33,7 +34,6 @@ import {
   OperationalTaskDetail,
 } from '../../screens/OperationalTaskScreens';
 import {
-  StaffHomeScreen,
   TenantHomeScreen,
   MeterTasksScreen,
   OwnerOperationsScreen,
@@ -87,6 +87,7 @@ const screens = {
   incidents: TenantIncidents,
   profile: Profile,
   notifications: Notifications,
+  'send-notification': StaffNotificationScreen,
   security: SecuritySettings,
   preferences: NotificationPreferences,
 };
@@ -137,7 +138,7 @@ export default function WorkspaceRoute() {
           content = <OwnerOverviewScreen />;
           break;
         case 'staff-home':
-          content = <StaffHomeScreen />;
+          content = <StaffHome />;
           break;
         case 'tenant-home':
           content = <TenantHomeScreen />;
@@ -166,6 +167,7 @@ export default function WorkspaceRoute() {
         case 'profile':
         case 'onboarding':
         case 'rooms':
+        case 'send-notification':
           content = <Screen />;
           break;
         default:

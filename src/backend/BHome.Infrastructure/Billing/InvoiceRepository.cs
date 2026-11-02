@@ -58,7 +58,7 @@ internal sealed class InvoiceRepository(BHomeDbContext db) : IInvoiceRepository
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();
         var links = await db.Set<Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null).ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t);
         return contracts.Select(c => new BillingOccupancy(c, c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from) && links.ContainsKey(r.ResidentId))
-            .Select(r => links[r.ResidentId]).Append(c.TenantUserId).Distinct().ToArray())).ToArray();
+            .Select(r => links[r.ResidentId]).Append(c.TenantUserId ?? throw new InvoiceException(409, "active_tenant_account_required")).Distinct().ToArray())).ToArray();
     }
     public async Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t)
     {
@@ -85,7 +85,7 @@ internal sealed class InvoiceRepository(BHomeDbContext db) : IInvoiceRepository
         foreach (var policy in await db.Set<BillingPolicy>().Where(p => ids.Contains(p.Id)).ToArrayAsync(t)) policy.RecordUsage(at);
     }
     public void Add(object entity) => db.Add(entity);
-    public Task<bool> HasPendingAdjustmentsAsync(Guid invoiceId,CancellationToken t)=>db.Set<InvoiceAdjustmentRequest>().AnyAsync(r=>r.InvoiceId==invoiceId&&r.Decision==null,t);
+    public Task<bool> HasPendingAdjustmentsAsync(Guid invoiceId, CancellationToken t) => db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == invoiceId && r.Decision == null, t);
     public async Task<IReadOnlyList<InvoiceAdjustmentDecision>> DraftCorrectionsAsync(Guid invoiceId, CancellationToken t) =>
         await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().Where(d => d.InvoiceId == invoiceId && d.Outcome == "Approved" && d.InvoiceStatus == InvoiceStatus.Draft).ToArrayAsync(t);
     public void Audit(Guid actor, string action, Guid invoiceId, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
