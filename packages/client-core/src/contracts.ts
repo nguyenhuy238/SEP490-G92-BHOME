@@ -1,5 +1,6 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
 import { ApiError, requestDiagnostic } from './api';
+import { groupVietnameseIntegerDigits } from './localization';
 export const contractStates = [
   'Draft',
   'PendingSigning',
@@ -10,6 +11,7 @@ export const contractStates = [
   'Cancelled',
 ] as const;
 export interface ContractSummary {
+  onboardingDraft?: boolean;
   id: string;
   roomId: string;
   locationId: string;
@@ -34,6 +36,7 @@ export interface Signature {
   signedAt: string | null;
 }
 export interface ContractView {
+  onboardingDraft?: boolean;
   id: string;
   roomId: string;
   kind: string;
@@ -49,7 +52,7 @@ export interface ContractView {
   activatedAt: string | null;
   actualEndDate?: string | null;
   ownerSignerId: string;
-  tenantUserId: string;
+  tenantUserId: string | null;
   representativeResidentId: string;
   holdingContractId: string | null;
   appliedHoldingDeposit: string;
@@ -78,7 +81,12 @@ export interface ContractConfiguration {
 export interface Preparation {
   locations: NamedOption[];
   rooms: (NamedOption & { locationId: string; status: string })[];
-  residents: (NamedOption & { roomId: string; tenantUserId: string | null; verified: boolean })[];
+  residents: (NamedOption & {
+    roomId: string;
+    tenantUserId: string | null;
+    verified: boolean;
+    residentType?: string;
+  })[];
   ownerSigners: NamedOption[];
 }
 export interface PreviewDocument {
@@ -657,11 +665,7 @@ export function contractError(error: unknown): string {
 }
 export function formatContractMoney(value: string) {
   if (!/^\d+$/.test(value)) return '—';
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(BigInt(value));
+  return groupVietnameseIntegerDigits(value) + '\u00a0₫';
 }
 export function dateOnly(value: string): string {
   const iso = /^\d{2}\/\d{2}\/\d{4}$/.test(value) ? value.split('/').reverse().join('-') : value;
@@ -742,6 +746,7 @@ export function contractActions(
   role: string,
   actorId: string,
 ): ContractAction[] {
+  if (c.onboardingDraft) return [];
   const owner = role === 'Owner',
     staff = role === 'Staff',
     tenant = role === 'Tenant' && c.tenantUserId === actorId;

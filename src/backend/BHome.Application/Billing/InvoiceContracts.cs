@@ -50,7 +50,7 @@ public interface IInvoiceRepository
     Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t);
     Task RecordPolicyUsageAsync(Guid[] ids, DateTimeOffset at, CancellationToken t);
     Task<IReadOnlyList<InvoiceAdjustmentDecision>> DraftCorrectionsAsync(Guid invoiceId, CancellationToken t);
-    Task<bool> HasPendingAdjustmentsAsync(Guid invoiceId,CancellationToken t);
+    Task<bool> HasPendingAdjustmentsAsync(Guid invoiceId, CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid invoiceId, DateTimeOffset at);
     void RemoveLines(Invoice invoice);

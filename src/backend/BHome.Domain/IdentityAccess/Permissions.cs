@@ -82,14 +82,15 @@ public static class Permissions
 
     public static class Incidents
     {
-        public const string Report = "incidents.report";
         public const string View = "incidents.view";
-        public const string RespondEmergency = "incidents.respond-emergency";
-        public const string Review = "incidents.review";
+        public const string Report = "incidents.report";
+        public const string Manage = "incidents.manage";
+        public const string Respond = "incidents.respond";
     }
 
     public static class WorkOrders
     {
+        public const string View = "work-orders.view";
         public const string ApprovePlan = "work-orders.approve-plan";
         public const string Execute = "work-orders.execute";
         public const string Verify = "work-orders.verify";

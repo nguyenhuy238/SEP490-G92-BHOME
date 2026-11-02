@@ -153,12 +153,10 @@ it('refreshes invoice balance and history after successful allocation', async ()
     paymentStatus: 'Unpaid',
     overdueDays: 0,
   };
-  mocks.api.invoices
-    .mockResolvedValueOnce({ items: [invoice], totalCount: 1 })
-    .mockResolvedValue({
-      items: [{ ...invoice, outstandingAmount: '0', paymentStatus: 'Paid' }],
-      totalCount: 1,
-    });
+  mocks.api.invoices.mockResolvedValueOnce({ items: [invoice], totalCount: 1 }).mockResolvedValue({
+    items: [{ ...invoice, outstandingAmount: '0', paymentStatus: 'Paid' }],
+    totalCount: 1,
+  });
   mocks.api.transfers.mockResolvedValue({ items: [transfer], totalCount: 1 });
   mocks.api.allocate.mockResolvedValue({ status: 'Allocated', reason: 'verified_full_payment' });
   mount(<PaymentManagementPage />);

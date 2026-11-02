@@ -2,8 +2,6 @@ using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.DigitalSigning.Application;
-using BHome.Application.IncidentMaintenance;
-using BHome.Domain.IncidentMaintenance;
 using BHome.Application.Ocr;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +14,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
     {
         var status = exception switch
         {
-            BHome.Application.Notifications.NotificationException notification=>notification.Status,
-            BHome.Application.Billing.AdjustmentException adjustment => adjustment.Status,
-            BHome.Application.PaymentsDebt.PaymentException payment => payment.Status,
-            BHome.Application.Billing.InvoiceException invoice => invoice.Status,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Status,
             PropertyException property => property.Status,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
             ContractException contract => contract.Status,
@@ -34,9 +29,9 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
                 _ => 500
             },
             IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
-            OcrAccessException or MaintenanceNotFoundException => StatusCodes.Status404NotFound,
-            CaptureConflictException or OcrWorkflowStateException or MaintenanceStateException => StatusCodes.Status409Conflict,
-            CaptureValidationException or MaintenanceValidationException => StatusCodes.Status400BadRequest,
+            OcrAccessException => StatusCodes.Status404NotFound,
+            CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
+            CaptureValidationException => StatusCodes.Status400BadRequest,
             OcrInputException { Code: "image_too_large" } => StatusCodes.Status413PayloadTooLarge,
             OcrInputException => StatusCodes.Status400BadRequest,
             BadHttpRequestException { StatusCode: >= 400 and < 500 } request => request.StatusCode,
@@ -55,18 +50,13 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         context.Response.ContentType = "application/problem+json";
         var code = exception switch
         {
-            BHome.Application.Notifications.NotificationException notification=>notification.Code,
-            BHome.Application.Billing.AdjustmentException adjustment => adjustment.Code,
-            BHome.Application.PaymentsDebt.PaymentException payment => payment.Code,
-            BHome.Application.Billing.InvoiceException invoice => invoice.Code,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Code,
             PropertyException property => property.Code,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Code,
             ContractException contract => contract.Code,
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,
-            MaintenanceStateException state => state.Code,
-            MaintenanceValidationException invalid => invalid.Code,
             _ => null
         };
         var problem = new ProblemDetailsContext

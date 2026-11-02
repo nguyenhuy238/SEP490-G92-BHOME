@@ -49,7 +49,7 @@ async function main() {
   };
   async function mobilePage(name, cid) {
     const p = track(await context.newPage());
-    await p.setViewportSize({width:430,height:932});
+    await p.setViewportSize({ width: 430, height: 932 });
     await p.goto(mobile);
     await p
       .getByLabel('Email đăng nhập', { exact: true })
@@ -75,7 +75,7 @@ async function main() {
     if (useListing) {
       const token = await login(name);
       let page = 1,
-        index = -1;
+        index;
       do {
         const list = await read('/api/v1/contracts?page=' + page + '&pageSize=20', token);
         index = list.items.findIndex((c) => c.id === cid);
@@ -144,7 +144,7 @@ async function main() {
       inspections = await read(route + '/move-out/inspections');
     }
     await staff.getByText('Biên bản phiên bản 1', { exact: true }).waitFor();
-    await staff.getByText('Đối chiếu trả phòng',{exact:true}).scrollIntoViewIfNeeded();
+    await staff.getByText('Đối chiếu trả phòng', { exact: true }).scrollIntoViewIfNeeded();
     await staff.screenshot({
       path: path.join(output, 'lifecycle-staff-inspection.png'),
       fullPage: true,
@@ -204,7 +204,9 @@ async function main() {
       await owner.getByRole('button', { name: 'Lưu xem xét quyết toán', exact: true }).click();
       assert.equal((await settled).status(), 200);
     }
-    await owner.getByText('Kiểm tra & quyết toán trả phòng',{exact:true}).scrollIntoViewIfNeeded();
+    await owner
+      .getByText('Kiểm tra & quyết toán trả phòng', { exact: true })
+      .scrollIntoViewIfNeeded();
     await owner.screenshot({
       path: path.join(output, 'lifecycle-owner-reviewed.png'),
       fullPage: true,
@@ -223,16 +225,20 @@ async function main() {
       assert.equal((await completed).status(), 200);
     }
     const tenant = await mobilePage('tenant1', cid);
-    await tenant.getByText('Ngày kết thúc thực tế: '+fixture.businessDate.split('-').reverse().join('/'),{exact:true}).waitFor();
+    await tenant
+      .getByText('Ngày kết thúc thực tế: ' + fixture.businessDate.split('-').reverse().join('/'), {
+        exact: true,
+      })
+      .waitFor();
     await tenant.getByText('Quyết toán từ máy chủ', { exact: true }).waitFor();
     await tenant.getByText('Owner đã xác nhận', { exact: false }).first().waitFor();
-    await tenant.getByText('Quyết toán từ máy chủ',{exact:true}).scrollIntoViewIfNeeded();
+    await tenant.getByText('Quyết toán từ máy chủ', { exact: true }).scrollIntoViewIfNeeded();
     await tenant.screenshot({
       path: path.join(output, 'lifecycle-tenant-history.png'),
       fullPage: true,
     });
     assert.equal((await read(route)).status, 'Terminated');
-    assert.equal((await read(route)).actualEndDate,fixture.businessDate);
+    assert.equal((await read(route)).actualEndDate, fixture.businessDate);
     await openOwner(fixture.scenarios[3].contracts[0]);
     await owner.getByText(/Hóa đơn chung còn nợ/).waitFor();
     await owner.getByText(/Chờ chính sách khấu trừ/).waitFor();
@@ -267,7 +273,7 @@ async function main() {
       })
       .first()
       .waitFor();
-    await owner.getByText('Các phiên bản và điều khoản',{exact:true}).scrollIntoViewIfNeeded();
+    await owner.getByText('Các phiên bản và điều khoản', { exact: true }).scrollIntoViewIfNeeded();
     await owner.screenshot({
       path: path.join(output, 'lifecycle-owner-renewal.png'),
       fullPage: true,

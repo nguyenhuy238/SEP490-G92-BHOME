@@ -32,20 +32,43 @@ internal static class InvoiceDemoSeed
             }
             Add(db, roomNumber, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = label, Capacity = 2, Status = RoomStatus.Available });
             for (var person = 0; person < 2; person++)
-                Add(db, 80 + roomIndex * 2 + person, new Resident { RoomId = Id(roomNumber), TenantUserId = Id(3 + person), OwnerUserId = Id(1),
-                    DisplayLabel = $"Người ở hóa đơn tổng hợp {roomIndex + 1}-{person + 1}", VerificationStatus = IdentityVerificationStatus.Verified,
-                    ResidentType = person == 0 ? ResidentType.Representative : ResidentType.CoOccupant, ConfirmedByUserId = Id(2), ConfirmedAt = DateTimeOffset.UtcNow });
+                Add(db, 80 + roomIndex * 2 + person, new Resident
+                {
+                    RoomId = Id(roomNumber),
+                    TenantUserId = Id(3 + person),
+                    OwnerUserId = Id(1),
+                    DisplayLabel = $"Người ở hóa đơn tổng hợp {roomIndex + 1}-{person + 1}",
+                    VerificationStatus = IdentityVerificationStatus.Verified,
+                    ResidentType = person == 0 ? ResidentType.Representative : ResidentType.CoOccupant,
+                    ConfirmedByUserId = Id(2),
+                    ConfirmedAt = DateTimeOffset.UtcNow
+                });
             for (var utility = 0; utility < 2; utility++)
-                Add(db, 70 + roomIndex * 2 + utility, new Meter { RoomId = Id(roomNumber), Code = $"DEMO-BILL-{roomIndex}-{utility}",
-                    UtilityType = (UtilityType)utility, Display = MeterDisplay.Digital, DecimalPlaces = 2, InstalledOn = period.AddMonths(-2) });
+                Add(db, 70 + roomIndex * 2 + utility, new Meter
+                {
+                    RoomId = Id(roomNumber),
+                    Code = $"DEMO-BILL-{roomIndex}-{utility}",
+                    UtilityType = (UtilityType)utility,
+                    Display = MeterDisplay.Digital,
+                    DecimalPlaces = 2,
+                    InstalledOn = period.AddMonths(-2)
+                });
         }
         foreach (var (number, category, code, rate) in new[] { (90, ChargeCategory.Electricity, "ELECTRICITY", 3500m), (91, ChargeCategory.Water, "WATER", 15000m) })
         {
             if (await db.Set<BillingPolicy>().AnyAsync(p => p.Id == Id(number), t)) continue;
             if (await db.Set<BillingPolicy>().AnyAsync(p => p.LocationId == Id(10) && p.Category == category && p.RoomId == null && p.RoomTypeId == null, t))
                 throw new LocalTestAccountException("Đã có biểu giá utility ngoài fixture; không thay thế hoặc tạo trùng.");
-            Add(db, number, new BillingPolicy { LocationId = Id(10), Category = category, ChargeCode = code, Name = "Giá " + code + " tổng hợp demo",
-                Method = ChargingMethod.Metered, Rate = rate, EffectiveFrom = period.AddYears(-1) });
+            Add(db, number, new BillingPolicy
+            {
+                LocationId = Id(10),
+                Category = category,
+                ChargeCode = code,
+                Name = "Giá " + code + " tổng hợp demo",
+                Method = ChargingMethod.Metered,
+                Rate = rate,
+                EffectiveFrom = period.AddYears(-1)
+            });
         }
         await db.SaveChangesAsync(t); await transaction.CommitAsync(t);
     }

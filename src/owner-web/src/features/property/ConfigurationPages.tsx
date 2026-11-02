@@ -229,7 +229,8 @@ function LocationContent({ db }: { db: DemoDatabase }) {
               : []),
           ]}
           description={
-            editing.source || !db.records.locations.some((location) => location.id === editing.record.id)
+            editing.source ||
+            !db.records.locations.some((location) => location.id === editing.record.id)
               ? 'Chỉ sao chép mẫu loại phòng, yêu cầu trang bị và chính sách giá cấp cơ sở/loại phòng. Không sao chép phòng, cư dân, hợp đồng, giao dịch hoặc kho tài sản.'
               : undefined
           }
@@ -419,7 +420,9 @@ function TypeContent({ db }: { db: DemoDatabase }) {
             </Button>
           </Stack>
           {requirements.length === 0 && (
-            <Typography sx={{ p: 2, borderRadius: 1.5, bgcolor: '#f8fafc', color: 'text.secondary' }}>
+            <Typography
+              sx={{ p: 2, borderRadius: 1.5, bgcolor: '#f8fafc', color: 'text.secondary' }}
+            >
               Chưa có định mức tài sản.
             </Typography>
           )}

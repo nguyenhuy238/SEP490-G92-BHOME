@@ -45,17 +45,34 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     public async Task<TransferView> RegisterAsync(PaymentTransferInput input, Guid key, CancellationToken t)
     {
         Owner(); Validate(input);
-        var x = input with { ProviderIdentity = input.ProviderIdentity.Trim().ToUpperInvariant(), BankReference = input.BankReference.Trim(),
-            TransferDescription = input.TransferDescription?.Trim() ?? "", StatementReference = input.StatementReference.Trim(),
-            VerificationReason = input.VerificationReason.Trim(), OccurredAt = PaymentRules.Timestamp(input.OccurredAt) };
+        var x = input with
+        {
+            ProviderIdentity = input.ProviderIdentity.Trim().ToUpperInvariant(),
+            BankReference = input.BankReference.Trim(),
+            TransferDescription = input.TransferDescription?.Trim() ?? "",
+            StatementReference = input.StatementReference.Trim(),
+            VerificationReason = input.VerificationReason.Trim(),
+            OccurredAt = PaymentRules.Timestamp(input.OccurredAt)
+        };
         if (!x.HumanVerified || !PaymentRules.ValidMoney(x.Amount) || x.Currency != "VND" || x.OccurredAt == default || x.OccurredAt > Now ||
             !PaymentRules.ValidReference(x.BankReference) || !Regex.IsMatch(x.ProviderIdentity, "^[A-Z0-9][A-Z0-9:-]{0,79}$") ||
             x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw new PaymentException(400, "invalid_verified_bank_transfer");
         x = x with { Amount = decimal.Truncate(x.Amount) };
         var normalized = PaymentRules.NormalizeReference(x.BankReference);
-        var identity = new { x.ProviderIdentity, Reference = normalized, Amount = x.Amount.ToString("0", CultureInfo.InvariantCulture),
-            x.Currency, x.OccurredAt, Description = x.TransferDescription.ToUpperInvariant(), x.StatementReference, x.VerificationReason, x.ProposedInvoiceId, x.IsDevelopmentDemo };
+        var identity = new
+        {
+            x.ProviderIdentity,
+            Reference = normalized,
+            Amount = x.Amount.ToString("0", CultureInfo.InvariantCulture),
+            x.Currency,
+            x.OccurredAt,
+            Description = x.TransferDescription.ToUpperInvariant(),
+            x.StatementReference,
+            x.VerificationReason,
+            x.ProposedInvoiceId,
+            x.IsDevelopmentDemo
+        };
         // Serializes bank identities across commands without a fictitious financial effect.
         return await repository.TransactionAsync<TransferView>(null, x.ProposedInvoiceId, async () =>
         {
@@ -69,13 +86,32 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             }
             if (x.ProposedInvoiceId is { } invoiceId && (await Invoice(invoiceId, t)).Status != InvoiceStatus.Final)
                 throw new PaymentException(409, "final_invoice_required");
-            var transfer = new PaymentTransfer { ProviderIdentity = x.ProviderIdentity, BankReference = x.BankReference,
-                NormalizedReference = normalized, Amount = x.Amount, Currency = x.Currency, OccurredAt = x.OccurredAt,
-                TransferDescription = x.TransferDescription, StatementReference = x.StatementReference, VerificationReason = x.VerificationReason,
-                VerifiedByUserId = Actor, VerifiedAt = Now, ProposedInvoiceId = x.ProposedInvoiceId, IsDevelopmentDemo = x.IsDevelopmentDemo };
+            var transfer = new PaymentTransfer
+            {
+                ProviderIdentity = x.ProviderIdentity,
+                BankReference = x.BankReference,
+                NormalizedReference = normalized,
+                Amount = x.Amount,
+                Currency = x.Currency,
+                OccurredAt = x.OccurredAt,
+                TransferDescription = x.TransferDescription,
+                StatementReference = x.StatementReference,
+                VerificationReason = x.VerificationReason,
+                VerifiedByUserId = Actor,
+                VerifiedAt = Now,
+                ProposedInvoiceId = x.ProposedInvoiceId,
+                IsDevelopmentDemo = x.IsDevelopmentDemo
+            };
             repository.Add(transfer);
-            var review = new PaymentReconciliation { TransferId = transfer.Id, InvoiceId = x.ProposedInvoiceId, Decision = "PendingReview",
-                Reason = x.ProposedInvoiceId is null ? "unmatched_bank_transfer" : "owner_allocation_confirmation_required", ActorId = Actor, OccurredAt = Now };
+            var review = new PaymentReconciliation
+            {
+                TransferId = transfer.Id,
+                InvoiceId = x.ProposedInvoiceId,
+                Decision = "PendingReview",
+                Reason = x.ProposedInvoiceId is null ? "unmatched_bank_transfer" : "owner_allocation_confirmation_required",
+                ActorId = Actor,
+                OccurredAt = Now
+            };
             repository.Add(review); Remember(key, "register", identity, transfer.Id);
             repository.Audit(Actor, "BankTransferManuallyVerified", transfer.Id, Now);
             return View(transfer, null, review);
@@ -107,13 +143,27 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             var outstanding = (await repository.FinancialsAsync(invoice.Id, t)).OutstandingAmount;
             var reason = PaymentRules.ReviewReason(transfer.Amount, outstanding, transfer.TransferDescription,
                 PaymentRules.InvoiceReference(invoice.Id), await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t));
-            var review = new PaymentReconciliation { TransferId = transfer.Id, InvoiceId = invoice.Id, ActorId = Actor, OccurredAt = Now,
-                Decision = reason is null ? "Allocated" : "PendingReview", Reason = reason ?? "verified_full_payment" };
+            var review = new PaymentReconciliation
+            {
+                TransferId = transfer.Id,
+                InvoiceId = invoice.Id,
+                ActorId = Actor,
+                OccurredAt = Now,
+                Decision = reason is null ? "Allocated" : "PendingReview",
+                Reason = reason ?? "verified_full_payment"
+            };
             repository.Add(review);
             if (reason is null)
             {
-                var allocation = new PaymentAllocation { TransferId = transfer.Id, InvoiceId = invoice.Id, Amount = transfer.Amount,
-                    PaidByUserId = x.PaidByUserId, VerifiedByUserId = Actor, AllocatedAt = Now };
+                var allocation = new PaymentAllocation
+                {
+                    TransferId = transfer.Id,
+                    InvoiceId = invoice.Id,
+                    Amount = transfer.Amount,
+                    PaidByUserId = x.PaidByUserId,
+                    VerifiedByUserId = Actor,
+                    AllocatedAt = Now
+                };
                 repository.Add(allocation);
                 repository.Add(new PaymentConfirmedEvent { AllocationId = allocation.Id, InvoiceId = invoice.Id, OccurredAt = Now });
                 repository.Audit(Actor, "InvoicePaymentAllocated", allocation.Id, Now);
@@ -139,7 +189,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     {
         if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
             q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || q.PaymentStatus is not (null or "Paid" or "Unpaid") ||
-            q.InvoiceIds is {Length:>100} || q.InvoiceIds?.Contains(Guid.Empty)==true) throw new PaymentException(400, "invalid_payment_query");
+            q.InvoiceIds is { Length: > 100 } || q.InvoiceIds?.Contains(Guid.Empty) == true) throw new PaymentException(400, "invalid_payment_query");
     }
     public Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     { Owner(); Query(query); return repository.TransfersAsync(query, t); }
@@ -181,28 +231,28 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         var financial = await repository.FinancialsAsync(id, t);
         var paid = financial.AllocatedPayments;
         var outstanding = financial.OutstandingAmount;
-        var payers = scope.Owner ? await repository.PayersAsync(id,t) : [];
+        var payers = scope.Owner ? await repository.PayersAsync(id, t) : [];
         return new(id, invoice.Status != InvoiceStatus.Final ? "NotIssued" : outstanding <= 0 ? "Paid" : "Unpaid",
             financial.EffectivePayableAmount, paid, outstanding, invoice.DueDate, invoice.Status == InvoiceStatus.Final ? PaymentRules.OverdueDays(invoice.DueDate, Today, outstanding) : 0,
             PaymentRules.InvoiceReference(invoice.Id), financial.PotentialExcessAmount > 0 || await repository.PendingReviewAsync(id, t),
             history.Select(entry => new PaymentHistoryView(entry.Allocation.Id, entry.Allocation.Amount, entry.Transfer.OccurredAt,
                 entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
-                    scope.Owner ? payers.FirstOrDefault(p=>p.UserId==entry.Allocation.PaidByUserId)?.DisplayLabel??"Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
+                    scope.Owner ? payers.FirstOrDefault(p => p.UserId == entry.Allocation.PaidByUserId)?.DisplayLabel ?? "Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                 scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray(),
             financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus);
     }
-    public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id,CancellationToken t)
-    { Owner();_=await Invoice(id,t);return await repository.PayersAsync(id,t); }
-    public Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentQuery query,CancellationToken t)
+    public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id, CancellationToken t)
+    { Owner(); _ = await Invoice(id, t); return await repository.PayersAsync(id, t); }
+    public Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentQuery query, CancellationToken t)
     {
-        var scope=Scope;Query(query);
-        if(!scope.Owner&&!scope.Tenant&&!scope.Staff)throw new PaymentException(403,"payment_view_forbidden");
-        return repository.DebtAsync(scope,query,t);
+        var scope = Scope; Query(query);
+        if (!scope.Owner && !scope.Tenant && !scope.Staff) throw new PaymentException(403, "payment_view_forbidden");
+        return repository.DebtAsync(scope, query, t);
     }
-    public Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentQuery query,CancellationToken t)
+    public Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentQuery query, CancellationToken t)
     {
-        var scope=Scope;Query(query);
-        if(!scope.Owner&&!scope.Tenant)throw new PaymentException(403,"payment_history_forbidden");
-        return repository.PaymentHistoryAsync(scope,query,t);
+        var scope = Scope; Query(query);
+        if (!scope.Owner && !scope.Tenant) throw new PaymentException(403, "payment_history_forbidden");
+        return repository.PaymentHistoryAsync(scope, query, t);
     }
 }

@@ -12,7 +12,6 @@ using BHome.Infrastructure.Locations;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Storage;
 using BHome.Infrastructure.Ocr;
-using BHome.Infrastructure.Modules.IncidentMaintenance;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -109,6 +108,13 @@ public static class DependencyInjection
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository,
+            BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles,
+            BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
+        services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddOptions<BHome.Application.StaffOperations.TaskEvidenceLimits>().Bind(configuration.GetSection("OperationalTasks:Evidence"))
             .Validate(o => o.MaximumFilesPerTask is >= 1 and <= 50 && o.MaximumFileBytes is >= 1024 and <= 20 * 1024 * 1024,
                 "Task evidence limits must be 1-50 files and 1 KiB-20 MiB per file.").ValidateOnStart();
@@ -126,6 +132,9 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.MainDraftService>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
@@ -167,34 +176,34 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.AdjustmentService>();
         services.AddHostedService<BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup>();
         services.AddScoped<BHome.Application.Billing.InvoiceService>();
-        services.AddScoped<BHome.Application.Billing.IBillingAutomationSchedules,BHome.Infrastructure.Modules.Billing.Persistence.BillingAutomationSchedules>();
+        services.AddScoped<BHome.Application.Billing.IBillingAutomationSchedules, BHome.Infrastructure.Modules.Billing.Persistence.BillingAutomationSchedules>();
         services.AddScoped<BHome.Application.Billing.BillingAutomationService>();
-        services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine,BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
+        services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine, BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
         services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
-        services.AddSingleton(p=>new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing",configuration.GetValue<bool>("Jobs:Enabled")));
-        services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter","Meter",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
-        services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft","Draft",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
-        services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-final","Final",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
-        services.AddScoped<IJobScheduleContributor,BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
-        services.AddScoped<BHome.Application.Notifications.INotificationRepository,BHome.Infrastructure.Modules.Notifications.NotificationRepository>();
+        services.AddSingleton(p => new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing", configuration.GetValue<bool>("Jobs:Enabled")));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IJobScheduleContributor, BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Application.Notifications.INotificationRepository, BHome.Infrastructure.Modules.Notifications.NotificationRepository>();
         services.AddScoped<BHome.Application.Notifications.NotificationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>();
-        services.AddScoped<BHome.Application.Notifications.INotificationEventPublisher>(p=>p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
-        services.AddScoped<IBackgroundJobHandler>(p=>p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
-        services.AddScoped<IJobScheduleContributor>(p=>p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<BHome.Application.Notifications.INotificationEventPublisher>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
         services.AddScoped<BHome.Application.Notifications.NotificationAutomationService>();
-        services.AddOptions<BHome.Application.Notifications.NotificationDeliveryOptions>().Bind(configuration.GetSection("NotificationDelivery")).Validate(o=>o.Valid(),"Invalid notification delivery retry policy.").ValidateOnStart();
-        services.AddSingleton(p=>p.GetRequiredService<IOptions<BHome.Application.Notifications.NotificationDeliveryOptions>>().Value);
-        services.AddScoped<BHome.Application.Notifications.INotificationDeliveryStore,BHome.Infrastructure.Modules.Notifications.NotificationDeliveryStore>();
+        services.AddOptions<BHome.Application.Notifications.NotificationDeliveryOptions>().Bind(configuration.GetSection("NotificationDelivery")).Validate(o => o.Valid(), "Invalid notification delivery retry policy.").ValidateOnStart();
+        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.Notifications.NotificationDeliveryOptions>>().Value);
+        services.AddScoped<BHome.Application.Notifications.INotificationDeliveryStore, BHome.Infrastructure.Modules.Notifications.NotificationDeliveryStore>();
         services.AddScoped<BHome.Application.Notifications.NotificationDeliveryService>();
         services.AddScoped<BHome.Application.Notifications.NotificationDeliveryAdministration>();
-        services.AddScoped<IBackgroundJobHandler>(p=>p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
-        services.AddScoped<IJobScheduleContributor>(p=>p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
-        services.AddSingleton(provider=>new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
+        services.AddSingleton(provider => new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
             provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
-        services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator,BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
+        services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
@@ -205,12 +214,11 @@ public static class DependencyInjection
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<IBackgroundJobQueue, PostgresJobQueue>();
         services.AddScoped<BHome.Infrastructure.Contracts.ContractExpiryProcessor>();
-        services.AddScoped<IBackgroundJobHandler>(p=>p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
-        services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p=>p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
         services.AddScoped<BHome.Application.Contracts.ContractExpiryService>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractExpiryScheduler>();
         services.AddHostedService<PostgresJobWorker>();
-        services.AddIncidentMaintenance(configuration);
         return services;
     }
 }
