@@ -173,6 +173,7 @@ public static class DependencyInjection
         services.AddSingleton(p=>new BHome.Application.Billing.BillingAutomationRuntime(p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter","Meter",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft","Draft",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p=>new BHome.Application.Billing.BillingAutomationJobHandler("billing-final","Final",p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IJobScheduleContributor,BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();

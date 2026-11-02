@@ -33,7 +33,7 @@ public sealed class BillingAutomationOperations(IBillingAutomationEngine engine,
     public async Task<BillingAutomationExecution?> RunAsync(BillingRunInput x,CancellationToken t)
     {
         await Owner(x.LocationId,t);if(!runtime.DeveloperActionsEnabled)throw new InvoiceException(403,"developer_actions_disabled");BillingAutomationService.ValidatePeriod(x.BillingPeriod);
-        if(x.Phase is not("Meter" or "Draft"))throw new InvoiceException(400,"invalid_billing_job_phase");
+        if(x.Phase is not("Meter" or "Draft" or "Final"))throw new InvoiceException(400,"invalid_billing_job_phase");
         var plan=await schedules.ForPeriodAsync(x.LocationId,x.BillingPeriod,t)??throw new InvoiceException(409,"billing_automation_required");
         return await engine.ExecuteAsync(new(plan.Id,x.BillingPeriod),x.Phase,t);
     }

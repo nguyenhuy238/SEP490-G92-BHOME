@@ -9,7 +9,7 @@ internal sealed class BillingAutomationScheduling(BHomeDbContext db,IBillingAuto
 {
     public async Task EnqueueDueAsync(CancellationToken t)
     {
-        var now=clock.GetUtcNow();var local=TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now,"Asia/Ho_Chi_Minh");var today=DateOnly.FromDateTime(local.DateTime);var month=new DateOnly(today.Year,today.Month,1);Guid? after=null;
+        var now=clock.GetUtcNow();var today=BillingAutomationDates.BusinessDate(now);var month=new DateOnly(today.Year,today.Month,1);Guid? after=null;
         while(true)
         {
             var locations=await db.Set<BillingAutomationPlan>().Where(p=>after==null||p.LocationId.CompareTo(after.Value)>0).Select(p=>p.LocationId).Distinct().OrderBy(id=>id).Take(100).ToArrayAsync(t);
@@ -19,12 +19,13 @@ internal sealed class BillingAutomationScheduling(BHomeDbContext db,IBillingAuto
             {
                 var plan=await schedules.ForPeriodAsync(location,period,t);
                 if(plan?.Enabled!=true)continue;
-                foreach(var phase in new[]{"Meter","Draft"})
+                foreach(var phase in new[]{"Meter","Draft","Final"})
                 {
+                if(phase=="Final"&&!plan.AuthorizeAutomaticFinalization)continue;
                 if(today<BillingAutomationEngine.ScheduledDate(plan,period,phase))continue;
                 var execution=await db.Set<BillingAutomationExecution>().AsNoTracking().SingleOrDefaultAsync(e=>e.PlanId==plan.Id&&e.BillingPeriod==period&&e.Phase==phase,t);
                 if(execution?.Status=="Completed"||execution is{Status:"Failed",Attempts:>=4})continue;
-                await queue.EnqueueAsync(new(phase=="Meter"?"billing-meter":"billing-draft",$"{plan.Id:N}/{period:yyyyMM}/{phase}/{now:yyyyMMddHHmm}",JsonSerializer.Serialize(new BillingJobInput(plan.Id,period))),t);
+                await queue.EnqueueAsync(new(phase=="Meter"?"billing-meter":phase=="Draft"?"billing-draft":"billing-final",$"{plan.Id:N}/{period:yyyyMM}/{phase}/{now:yyyyMMddHHmm}",JsonSerializer.Serialize(new BillingJobInput(plan.Id,period))),t);
                 }
             }
             after=locations[^1];

@@ -45,3 +45,14 @@ GET query roomId/period. Owner chọn eligible Contract; snapshot selection appe
 Đã có Invoice không đổi selection. Nhiều Contracts nhưng thiếu selection giữ execution PendingInputs;
 không tự chọn GUID/tiền thuê. Draft đã có không refresh/overwrite, giữ approved corrections,
 Final và viewer snapshots. Thiếu giá/chỉ số lưu MissingInputs, không dùng OCR proposal.
+
+JOB-10 Final handler `billing-final`, phase `Final`. Chỉ Owner-enabled plan đã ủy quyền,
+đúng ngày và Owner còn active/role mới chạy. InvoiceService kiểm tra lại authority/calendar
+trong financial lock; pending adjustment chặn. Approved Draft corrections không bị job refresh;
+Finalize revalidates correction fingerprint như BH-41. Nguồn thay đổi cần Owner review.
+Draft không correction được refresh bằng confirmed sources; nguồn không đổi không tăng version
+hoặc thay line IDs khi retry. Missing/conflict giữ Draft và execution PendingInputs.
+Manual/auto Final dùng cùng lock/constraints. `InvoiceIssuedEvents` append-only một row/Invoice,
+lưu trong cùng transaction Final; replay không tạo event mới. External notification không nằm
+trong transaction này. Final ghi AutomationFinalizationPlanId để trace delegation.
+Timezone tests dùng BusinessDate chung với scheduler tại biên UTC17:00, năm mới và leap day.

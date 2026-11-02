@@ -38,4 +38,13 @@ internal sealed class BillingRepresentativeConfiguration:IEntityTypeConfiguratio
     }
 }
 internal sealed class InvoiceAutomationConfiguration:IEntityTypeConfiguration<Invoice>
-{public void Configure(EntityTypeBuilder<Invoice> e)=>e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r=>r.AutomationPlanId).OnDelete(DeleteBehavior.Restrict);}
+{public void Configure(EntityTypeBuilder<Invoice> e){e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r=>r.AutomationPlanId).OnDelete(DeleteBehavior.Restrict);e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r=>r.AutomationFinalizationPlanId).OnDelete(DeleteBehavior.Restrict);}}
+internal sealed class InvoiceIssuedEventConfiguration:IEntityTypeConfiguration<InvoiceIssuedEvent>
+{
+    public void Configure(EntityTypeBuilder<InvoiceIssuedEvent> e)
+    {
+        e.ToTable("InvoiceIssuedEvents");e.HasKey(r=>r.InvoiceId);e.HasIndex(r=>r.OccurredAt);e.HasOne<Invoice>().WithMany().HasForeignKey(r=>r.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<BHome.Infrastructure.Persistence.ApplicationUser>().WithMany().HasForeignKey(r=>r.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r=>r.AutomationPlanId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

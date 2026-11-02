@@ -43,4 +43,5 @@ public sealed class BillingAutomationService(IBillingAutomationSchedules schedul
     public static void ValidatePeriod(DateOnly period)
     {if(period.Day!=1||period.Year is <2000 or >9997)throw new InvoiceException(400,"invalid_invoice_period");}
     public static BillingSchedule Calendar(BillingAutomationPlan plan)=>JsonSerializer.Deserialize<BillingSchedule>(plan.BillingSnapshot)??throw new InvoiceException(409,"billing_automation_snapshot_invalid");
+    public static string CalendarKey(BillingSchedule s)=>JsonSerializer.Serialize(new{s.LocationId,s.Version,s.RateDate,s.RentSource,s.PartialMonth,s.Rounding,s.DraftDay,s.DraftMonthOffset,s.FinalDay,s.FinalMonthOffset,s.DueDay,s.DueMonthOffset});
 }

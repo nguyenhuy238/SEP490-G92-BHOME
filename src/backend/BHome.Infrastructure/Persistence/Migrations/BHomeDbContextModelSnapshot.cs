@@ -347,6 +347,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AutomationFinalizationPlanId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("AutomationPlanId")
                         .HasColumnType("uuid");
 
@@ -416,6 +419,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AutomationFinalizationPlanId");
 
                     b.HasIndex("AutomationPlanId");
 
@@ -706,6 +711,31 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_AdjustmentRequest_Values", "\"CurrentAmount\" >= 0 AND (\"ProposedAmount\" IS NULL OR \"ProposedAmount\" >= 0) AND length(btrim(\"Reason\")) > 0 AND \"InvoiceVersion\" > 0 AND \"InvoiceStatus\" IN (0,1)");
                         });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceIssuedEvent", b =>
+                {
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AutomationPlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("InvoiceId");
+
+                    b.HasIndex("AutomationPlanId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.ToTable("InvoiceIssuedEvents", (string)null);
                 });
 
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
@@ -3473,6 +3503,11 @@ namespace BHome.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
                         .WithMany()
+                        .HasForeignKey("AutomationFinalizationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
                         .HasForeignKey("AutomationPlanId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -3604,6 +3639,26 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Invoice");
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceIssuedEvent", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.BillingAutomationPlan", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
