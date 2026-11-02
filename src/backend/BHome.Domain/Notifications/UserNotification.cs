@@ -15,6 +15,23 @@ public sealed class UserNotification
     public DateTimeOffset CreatedAt{get;set;}
     public DateTimeOffset? ReadAt{get;set;}
     public string DeliveryState{get;set;}="Unconfigured";
+    public int DeliveryAttempts{get;set;}
+    public DateTimeOffset? NextDeliveryAt{get;set;}
+    public DateTimeOffset? DeliveryLockedUntil{get;set;}
+    public Guid? DeliveryLeaseToken{get;set;}
+    public DateTimeOffset? DeliveryLastAttemptAt{get;set;}
+    public string? DeliveryLastErrorCode{get;set;}
+    public string? DeliveryProviderReference{get;set;}
+}
+public sealed class NotificationDeliveryAttempt
+{
+    public Guid Id{get;set;}=Guid.NewGuid();
+    public Guid NotificationId{get;set;}
+    public int Sequence{get;set;}
+    public DateTimeOffset StartedAt{get;set;}
+    public DateTimeOffset FinishedAt{get;set;}
+    public string Outcome{get;set;}="";
+    public string? ErrorCode{get;set;}
 }
 public sealed class NotificationPublication
 {

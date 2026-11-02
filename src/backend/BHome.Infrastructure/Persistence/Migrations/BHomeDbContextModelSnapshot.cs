@@ -1237,6 +1237,41 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.ToTable("StaffLocationAssignments");
                 });
 
+            modelBuilder.Entity("BHome.Domain.Notifications.NotificationDeliveryAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("NotificationDeliveryAttempts", (string)null);
+                });
+
             modelBuilder.Entity("BHome.Domain.Notifications.NotificationPublication", b =>
                 {
                     b.Property<string>("EventKey")
@@ -1273,6 +1308,26 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DeliveryAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("DeliveryLastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryLastErrorCode")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid?>("DeliveryLeaseToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeliveryLockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryProviderReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("DeliveryState")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1285,6 +1340,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("NextDeliveryAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
@@ -1318,6 +1376,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("LocationId");
 
                     b.HasIndex("SourceTaskNotificationId");
+
+                    b.HasIndex("DeliveryState", "NextDeliveryAt");
 
                     b.HasIndex("RecipientUserId", "EventKey")
                         .IsUnique();
@@ -3914,6 +3974,15 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Notifications.NotificationDeliveryAttempt", b =>
+                {
+                    b.HasOne("BHome.Domain.Notifications.UserNotification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

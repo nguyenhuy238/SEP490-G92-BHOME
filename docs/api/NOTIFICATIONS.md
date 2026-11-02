@@ -43,3 +43,26 @@ Role/account được kiểm tra từ DB trước publish, nguồn không đủ 
 xử lý với recipient count phù hợp. Không broadcast đến mọi Owner/Staff. Private adjustment
 reason/evidence không đưa vào title/summary. Payment chưa allocation không phát payment-confirmed.
 POST `process-events` chỉ Owner + Development/Testing, gọi cùng publisher; production 403.
+
+## JOB-04 external delivery
+
+`notification-delivery` dùng queue/worker và contributor hiện có; một queue key notification/
+external/attempt, provider key ổn định notification/external. `INotificationProvider` khai báo
+IsConfigured/SupportsIdempotency, mặc định false để adapter cũ không tự nhận là đã cấu hình.
+Unconfigured adapter hiện hành không tạo success hoặc attempt giả; inbox vẫn hoạt động.
+
+Config `NotificationDelivery`: Enabled(false), MaxAttempts(4, giới hạn1–10),
+InitialRetrySeconds(30), MaximumRetrySeconds(3600), RequestTimeoutSeconds(15), LeaseSeconds(90).
+Validate khi start; backoff có trần, persisted Attempts/NextDeliveryAt/error/lease và append-only
+attempt history. Configured provider nằm ngoài transaction tài chính và ngoài delivery claim TX.
+Read state không đổi khi fail. Role/target/Staff scope được kiểm tra lại trước send.
+Timeout/error với provider hỗ trợ idempotency → Pending đến giới hạn rồi Failed. Không hỗ trợ
+idempotency hoặc lease hết hạn có khả năng đã gửi → PendingReview, không resend mù.
+Receipt chỉ được đánh dấu Delivered khi adapter trả kết quả; không có official provider trong
+repo nên production default vẫn Unconfigured. Các provider thành công/thất bại trong tests là
+test doubles riêng, không được đăng ký vào runtime production hoặc coi là push/email thật.
+
+GET `delivery-status?page=&pageSize=&state=&locationId=` chỉ Owner (`locations.manage`),
+trả capability và trạng thái vận hành đã loại recipient identity, title, banking/provider refs.
+Đây là màn quản trị riêng; inbox vẫn recipient-only. Failed/PendingReview cần operator review;
+không có endpoint tự reset giới hạn, không đổi Paid/Invoice hoặc hoàn tiền do lỗi thông báo.
