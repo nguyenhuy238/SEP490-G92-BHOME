@@ -103,10 +103,16 @@ docker build -t bhome/contract-converter:local -f deploy/docker/ContractConverte
 # Xóa/để trống LibreOfficeContainerImage nếu chọn executable.
 ```
 
-Converter container chạy không mạng, filesystem chỉ đọc, user không phải root, giới hạn CPU/RAM/PID;
-chỉ mount thư mục tạm của một request. Timeout/cancel dọn container và thư mục tạm.
+Converter container chạy không mạng, filesystem chỉ đọc, giới hạn CPU/RAM/PID;
+Windows dùng user 10001 của image; Linux dùng UID/GID của process API để ghi vào workspace riêng quyền 0700.
+Chỉ mount thư mục tạm của một request. Timeout/cancel dọn container và thư mục tạm.
 Chưa có converter hoặc chuyển đổi lỗi: trả PreviewError, giữ Draft và DOCX; không giả báo đã có PDF.
 Không public bucket hoặc tạo URL chứa token/CCCD. Mở/tải file qua API đã xác thực.
+
+CI phải build image `bhome/contract-converter:local` từ Dockerfile này trước `dotnet test`,
+tương tự image MinIO; runner mới không có image local từ máy phát triển. Test tích hợp vẫn yêu cầu
+PDF thật, không skip hoặc thay bằng PDF mock khi thiếu converter. Đã kiểm tra quyền ghi trên Linux:
+UID khác chủ workspace 0700 không ghi được; UID trùng tạo PDF thành công và file thuộc đúng user.
 
 ## Mobile và Owner Web
 

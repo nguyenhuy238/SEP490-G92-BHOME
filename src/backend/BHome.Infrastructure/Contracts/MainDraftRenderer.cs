@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +11,10 @@ namespace BHome.Infrastructure.Contracts;
 // Edit paragraph slots in the supplied OOXML package. All untouched clauses, styles and relationships survive.
 internal sealed class MainDraftRenderer(IConfiguration configuration,TimeProvider clock):IMainDraftRenderer
 {
+    [DllImport("libc")]
+    private static extern uint geteuid();
+    [DllImport("libc")]
+    private static extern uint getegid();
     public string TemplateHash {
         get { using var stream=typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503,"contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }
     }
@@ -85,10 +90,20 @@ internal sealed class MainDraftRenderer(IConfiguration configuration,TimeProvide
         var directory=Path.Combine(Path.GetTempPath(),"bhome-contract-"+Guid.NewGuid().ToString("N"));
         var containerName="bhome-contract-convert-"+Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(directory);
+        if(OperatingSystem.IsLinux()) File.SetUnixFileMode(directory,UnixFileMode.UserRead|UnixFileMode.UserWrite|UnixFileMode.UserExecute);
         try {
             var input=Path.Combine(directory,"draft.docx"); await File.WriteAllBytesAsync(input,docx,t);
             var start=new ProcessStartInfo(container?"docker":executable!) { UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true };
-            if(container)foreach(var arg in new[]{"run","--rm","--name",containerName,"--network=none","--read-only","--cap-drop=ALL","--security-opt=no-new-privileges","--memory=512m","--cpus=1","--pids-limit=128","--tmpfs","/tmp:rw,nosuid,size=256m","--mount",$"type=bind,source={directory},target=/work",image!})start.ArgumentList.Add(arg);
+            if(container) {
+                foreach(var arg in new[]{"run","--rm","--name",containerName,"--network=none","--read-only","--cap-drop=ALL","--security-opt=no-new-privileges","--memory=512m","--cpus=1","--pids-limit=128","--tmpfs","/tmp:rw,nosuid,size=256m","--mount",$"type=bind,source={directory},target=/work"})start.ArgumentList.Add(arg);
+                // Native Linux bind mounts preserve ownership: use the API user's IDs so the
+                // converter can write into its private 0700 workspace without opening permissions.
+                if(OperatingSystem.IsLinux()) {
+                    start.ArgumentList.Add("--user");
+                    start.ArgumentList.Add($"{geteuid()}:{getegid()}");
+                }
+                start.ArgumentList.Add(image!);
+            }
             foreach(var arg in new[]{"-env:UserInstallation="+(container?"file:///tmp/profile":new Uri(Path.Combine(directory,"profile")).AbsoluteUri),"--headless","--convert-to","pdf","--outdir",container?"/work":directory,container?"/work/draft.docx":input}) start.ArgumentList.Add(arg);
             Process process;
             try { process=Process.Start(start) ?? throw new ContractException(503,"contract_pdf_conversion_failed"); }
