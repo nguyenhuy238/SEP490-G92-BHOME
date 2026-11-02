@@ -29,6 +29,7 @@ const TemporaryResidencePage = lazy(
 );
 const MetersPage = lazy(() => import('../features/meters/pages/MetersPage'));
 const InvoicesPage = lazy(() => import('../features/invoices/pages/InvoicesPage'));
+const AutomationPage = lazy(() => import('../features/invoices/AutomationPage'));
 const AdjustmentsPage = lazy(() => import('../features/adjustments/AdjustmentsPage'));
 const PaymentsPage = lazy(() => import('../features/payments/pages/PaymentsPage'));
 const DebtsPage = lazy(() => import('../features/debts/pages/DebtsPage'));
@@ -85,6 +86,7 @@ export function AppRouter() {
             <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
             <Route path="/meters" element={<MetersPage />} />
             <Route path="/invoices" element={<InvoicesPage />} />
+            <Route path="/billing-automation" element={<AutomationPage />} />
             <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/debts" element={<DebtsPage />} />

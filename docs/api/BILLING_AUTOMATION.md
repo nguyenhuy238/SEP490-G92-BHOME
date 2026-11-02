@@ -56,3 +56,11 @@ Manual/auto Final dùng cùng lock/constraints. `InvoiceIssuedEvents` append-onl
 lưu trong cùng transaction Final; replay không tạo event mới. External notification không nằm
 trong transaction này. Final ghi AutomationFinalizationPlanId để trace delegation.
 Timezone tests dùng BusinessDate chung với scheduler tại biên UTC17:00, năm mới và leap day.
+
+Owner dashboard `/billing-automation` dùng GET `preview?locationId=&period=` trả
+`{developerActionsEnabled,timeZone,businessDate,phases:[{phase,scheduledDate,eligible}]}`.
+Eligible là điều kiện lịch/ủy quyền sơ bộ; handler luôn revalidate quyền và dữ liệu thực tế.
+GET `attempts?locationId=&period=` trả tối đa 100 attempts mới nhất của cơ sở/kỳ;
+không trả queue payload/provider credentials. Hai API dùng cùng Owner permission như settings.
+Web liên kết cấu hình lịch tài chính hiện có `/pricing`, hiển thị version history, execution
+counts, exception codes, delivery retry status và chọn hợp đồng đại diện theo phòng/kỳ.

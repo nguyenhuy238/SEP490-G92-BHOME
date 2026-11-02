@@ -19,6 +19,10 @@ public sealed class BillingAutomationController(BillingAutomationService service
     public Task<IReadOnlyList<BillingAutomationExecution>> Executions([FromQuery]Guid locationId,[FromQuery]DateOnly period,CancellationToken t)=>operations.ListAsync(locationId,period,t);
     [HttpPost("run-now")]
     public Task<BillingAutomationExecution?> Run(BillingRunInput x,CancellationToken t)=>operations.RunAsync(x,t);
+    [HttpGet("preview")]
+    public Task<BillingAutomationPreview> Preview([FromQuery]Guid locationId,[FromQuery]DateOnly period,CancellationToken t)=>operations.PreviewAsync(locationId,period,t);
+    [HttpGet("attempts")]
+    public Task<IReadOnlyList<BillingAutomationAttempt>> Attempts([FromQuery]Guid locationId,[FromQuery]DateOnly period,CancellationToken t)=>operations.AttemptsAsync(locationId,period,t);
     [HttpPost("meter-tasks/{taskId:guid}/assignment")]
     public async Task<IActionResult> Assign(Guid taskId,MeterAssignmentInput x,CancellationToken t){await operations.AssignAsync(taskId,x,t);return NoContent();}
     [HttpGet("representative")]

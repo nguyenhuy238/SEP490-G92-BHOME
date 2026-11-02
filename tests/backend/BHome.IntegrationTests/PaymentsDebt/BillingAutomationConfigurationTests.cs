@@ -13,6 +13,20 @@ public sealed partial class PaymentLedgerTests
     private static DateOnly CurrentPeriod(){var local=TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow,"Asia/Ho_Chi_Minh");return new(local.Year,local.Month,1);}
     private static BillingAutomationWrite Plan(Workspace w)=>new(w.Location,CurrentPeriod(),true,false,5,10,0,"Asia/Ho_Chi_Minh",0,1);
     [Fact]
+    public async Task AutomationPreviewAndHistoryRemainOwnerOnlyAndReflectSelectedPeriod()
+    {
+        var w=await Setup();using var owner=await Client(w.Owner);using var tenant=await Client(w.Tenants[0]);
+        var path=$"/api/v1/billing-automation/preview?locationId={w.Location}&period={CurrentPeriod():yyyy-MM-dd}";
+        Assert.Equal(HttpStatusCode.Forbidden,(await tenant.GetAsync(path)).StatusCode);
+        var missing=(await owner.GetFromJsonAsync<BillingAutomationPreview>(path))!;Assert.Empty(missing.Phases);
+        (await owner.PutAsJsonAsync("/api/v1/billing-schedules",Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/api/v1/billing-automation",Plan(w))).EnsureSuccessStatusCode();
+        var preview=(await owner.GetFromJsonAsync<BillingAutomationPreview>(path))!;
+        Assert.True(preview.DeveloperActionsEnabled);Assert.Equal("Asia/Ho_Chi_Minh",preview.TimeZone);
+        Assert.Equal(3,preview.Phases.Count);Assert.False(preview.Phases.Single(p=>p.Phase=="Final").Eligible);
+        Assert.Empty((await owner.GetFromJsonAsync<BillingAutomationAttempt[]>($"/api/v1/billing-automation/attempts?locationId={w.Location}&period={CurrentPeriod():yyyy-MM-dd}"))!);
+    }
+    [Fact]
     public async Task AutomationCalendarIsOwnerAuthorizedEffectiveDatedAndImmutable()
     {
         var w=await Setup();using var owner=await Client(w.Owner);using var tenant=await Client(w.Tenants[0]);using var staff=await Client(w.Staff);

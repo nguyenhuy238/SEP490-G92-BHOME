@@ -76,6 +76,7 @@ const iconMap: Record<string, typeof Building2> = {
   'temporary-residence': ShieldCheck,
   meters: Gauge,
   invoices: Receipt,
+  'billing-automation': CalendarDays,
   'invoice-adjustments': Receipt,
   payments: Wallet,
   debts: Wallet,
@@ -96,6 +97,7 @@ const navGroups = [
     [
       'meters',
       'invoices',
+      'billing-automation',
       'invoice-adjustments',
       'payments',
       'debts',
@@ -126,6 +128,7 @@ const navLabels: Record<string, string> = {
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
   invoices: 'Hóa đơn',
+  'billing-automation': 'Lịch tự động',
   'invoice-adjustments': 'Điều chỉnh hóa đơn',
   payments: 'Thanh toán / Đối soát',
   debts: 'Công nợ',
