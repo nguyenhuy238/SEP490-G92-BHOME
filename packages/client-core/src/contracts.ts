@@ -47,6 +47,7 @@ export interface ContractView {
   residentIds: string[];
   signatures: Signature[];
   activatedAt: string | null;
+  actualEndDate?: string | null;
   ownerSignerId: string;
   tenantUserId: string;
   representativeResidentId: string;

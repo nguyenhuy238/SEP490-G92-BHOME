@@ -116,6 +116,7 @@ export function ContractDetailPanel({
           <Typography>
             Kỳ thuê: {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
           </Typography>
+          {c.actualEndDate && <Typography>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Typography>}
           <Typography>
             Tiền thuê: <strong>{formatContractMoney(c.monthlyRent)}</strong> / tháng
           </Typography>

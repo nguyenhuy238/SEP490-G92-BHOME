@@ -62,6 +62,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(others?RoomStatus.Occupied:RoomStatus.Available,(await db.Set<Room>().SingleAsync(r=>r.Id==w.Room)).Status);
         Assert.Equal(others?2:0,await db.Set<Contract>().CountAsync(c=>c.RoomId==w.Room&&c.Status==ContractStatus.Active));
         Assert.Equal(HttpStatusCode.OK,(await tenant.GetAsync($"/api/v1/invoices/{w.Invoice}/payment")).StatusCode);
+        Assert.Equal(today,(await tenant.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{w.Contract}"))!.ActualEndDate);
     }
     [Fact]
     public async Task NewAdjustmentAfterSettlementReviewPreventsClosure()

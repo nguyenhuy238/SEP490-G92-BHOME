@@ -289,6 +289,7 @@ function LiveContractDetail({
           {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
         </Text>
         <Text>Tiền thuê: {formatContractMoney(c.monthlyRent)} / tháng</Text>
+        {c.actualEndDate && <Text>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Text>}
         <Text>Cọc yêu cầu: {formatContractMoney(c.requiredDeposit)}</Text>
         <Text>Cọc giữ chỗ áp dụng: {formatContractMoney(c.appliedHoldingDeposit)}</Text>
         <Text>
