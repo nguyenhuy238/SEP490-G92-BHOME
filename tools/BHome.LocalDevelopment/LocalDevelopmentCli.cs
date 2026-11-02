@@ -8,6 +8,26 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.SequenceEqual(new[] { "seed-main-draft-settings" }))
+        {
+            try
+            {
+                var settings = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var setup = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(settings);
+                setup.AddInfrastructure(settings);
+                setup.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
+                setup.AddSingleton<LifecycleSeedActor>();
+                setup.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
+                await using var seedProvider = setup.BuildServiceProvider();
+                await MainDraftSettingsSeed.RunAsync(seedProvider, settings);
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"Không thể seed cấu hình Draft ({error.GetType().Name}). Không hiển thị credential hoặc dữ liệu định danh.");
+                return 1;
+            }
+        }
         // Read only from the invoking process, never command-line args or checked-in files.
         var password = Environment.GetEnvironmentVariable("BHOME_DEV_TEST_PASSWORD");
         Environment.SetEnvironmentVariable("BHOME_DEV_TEST_PASSWORD", null);

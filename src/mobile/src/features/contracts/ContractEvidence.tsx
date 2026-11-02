@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { randomUUID } from 'expo-crypto';
+import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
   type ContractClient,

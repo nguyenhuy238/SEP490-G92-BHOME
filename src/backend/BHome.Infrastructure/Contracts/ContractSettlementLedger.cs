@@ -76,7 +76,7 @@ internal sealed class ContractSettlementLedger(BHomeDbContext db):IContractSettl
         else blockers.Add("final_meter_readings_required");
         var other=await db.Set<Contract>().AnyAsync(o=>o.RoomId==c.RoomId&&o.Id!=id&&o.Status==ContractStatus.Active,t);
         var resolved=blockers.Count==0;
-        var value=new ContractSettlementSummary(id,root.Id,c.RoomId,c.Room.RoomNumber,c.TenantUserId,deposit,root.AppliedHoldingDeposit,
+        var value=new ContractSettlementSummary(id,root.Id,c.RoomId,c.Room.RoomNumber,c.TenantUserId ?? throw ContractException.Conflict("active_tenant_account_required"),deposit,root.AppliedHoldingDeposit,
             resolved?0:null,inspection?.NoAdditionalCharges==true?0:null,deposit==0?0:null,deposit==0&&root.AppliedHoldingDeposit==0?0:null,
             invoices,blockers.Distinct().Order().ToArray(),other,resolved,"",deposit==0&&root.AppliedHoldingDeposit==0?"NotRequired":"PendingReview");
         // Snapshot identity includes sources and their revisions, no user supplied financial totals.

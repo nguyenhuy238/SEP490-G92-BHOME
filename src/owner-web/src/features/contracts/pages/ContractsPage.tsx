@@ -36,6 +36,8 @@ import { useContractsApi } from '../useContractsApi';
 import { ContractDraftDialog } from '../ContractDraftDialog';
 import { ContractDetailPanel } from '../ContractDetailPanel';
 import { ContractConfigurationPanel } from '../ContractWorkflowPanel';
+import { MainDraftSettingsPanel } from '../MainDraftSettingsPanel';
+import { MainDraftDetailPanel } from '../MainDraftDetailPanel';
 
 export default function ContractsPage() {
   return isMockMode ? (
@@ -59,6 +61,7 @@ function LiveContractsPage() {
     [location, setLocation] = useState('');
   const [selected, setSelected] = useState(deepParams.get('contractId') ?? ''),
     [selectedLocation, setSelectedLocation] = useState('');
+  const [mainDraft, setMainDraft] = useState(false);
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
     [lookupError, setLookupError] = useState('');
@@ -86,6 +89,7 @@ function LiveContractsPage() {
         }
       />
       <Stack spacing={2}>
+        <MainDraftSettingsPanel api={api} />
         <ContractConfigurationPanel api={api} />
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Typography variant="h6">Nhắc gia hạn / trả phòng</Typography>
@@ -194,6 +198,7 @@ function LiveContractsPage() {
                           disabled={list.isFetching}
                           onClick={() => {
                             setSelected(c.id);
+                            setMainDraft(!!c.onboardingDraft);
                             setSelectedLocation(c.locationId);
                           }}
                         >
@@ -253,7 +258,10 @@ function LiveContractsPage() {
       <Drawer
         anchor="right"
         open={!!selected}
-        onClose={() => setSelected('')}
+        onClose={() => {
+          setSelected('');
+          setMainDraft(false);
+        }}
         slotProps={{ paper: { sx: { width: { xs: '100%', md: 760 }, maxWidth: '100%' } } }}
       >
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -261,23 +269,38 @@ function LiveContractsPage() {
             <Typography component="h2" variant="h5">
               Chi tiết hợp đồng
             </Typography>
-            <Button onClick={() => setSelected('')}>Đóng</Button>
-          </Stack>
-          {selected && (
-            <ContractDetailPanel
-              key={selected}
-              api={api}
-              id={selected}
-              actorId={actorId}
-              locationId={selectedLocation}
-              onChanged={(next) => {
-                void list.refetch();
-                if (next) {
-                  setSelected(next);
-                  setSelectedLocation('');
-                }
+            <Button
+              onClick={() => {
+                setSelected('');
+                setMainDraft(false);
               }}
+            >
+              Đóng
+            </Button>
+          </Stack>
+          {selected && mainDraft ? (
+            <MainDraftDetailPanel
+              key={selected}
+              id={selected}
+              onChanged={() => void list.refetch()}
             />
+          ) : (
+            selected && (
+              <ContractDetailPanel
+                key={selected}
+                api={api}
+                id={selected}
+                actorId={actorId}
+                locationId={selectedLocation}
+                onChanged={(next) => {
+                  void list.refetch();
+                  if (next) {
+                    setSelected(next);
+                    setSelectedLocation('');
+                  }
+                }}
+              />
+            )
           )}
         </Box>
       </Drawer>

@@ -58,7 +58,7 @@ internal sealed class InvoiceRepository(BHomeDbContext db) : IInvoiceRepository
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();
         var links = await db.Set<Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null).ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t);
         return contracts.Select(c => new BillingOccupancy(c, c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from) && links.ContainsKey(r.ResidentId))
-            .Select(r => links[r.ResidentId]).Append(c.TenantUserId).Distinct().ToArray())).ToArray();
+            .Select(r => links[r.ResidentId]).Append(c.TenantUserId ?? throw new InvoiceException(409, "active_tenant_account_required")).Distinct().ToArray())).ToArray();
     }
     public async Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t)
     {

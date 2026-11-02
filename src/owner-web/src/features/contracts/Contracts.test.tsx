@@ -333,3 +333,17 @@ it('discards an aborted lookup when the user switches contract before its respon
   expect(result.current.data?.contract.id).toBe(tenant);
   expect((get.mock.calls[0]![1] as AbortSignal).aborted).toBe(true);
 });
+it('keeps onboarding drafts out of lifecycle reads and actions even for Owner deep links', async () => {
+  const c = {
+    ...draft,
+    status: 'Draft',
+    onboardingDraft: true,
+    tenantUserId: null,
+    signatures: [],
+  };
+  const { api, request } = setup(c);
+  const { result } = renderHook(() => useContractDetail(api, id, 'Owner'));
+  await waitFor(() => expect(result.current.data?.contract.id).toBe(id));
+  expect(request.mock.calls.map(([path]) => path)).toEqual([`/api/v1/contracts/${id}`]);
+  expect(contractActions(c, null, 'Owner', owner)).toEqual([]);
+});

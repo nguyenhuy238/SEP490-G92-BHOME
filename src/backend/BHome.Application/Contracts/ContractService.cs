@@ -67,7 +67,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var before = await Load(id, roles, t);
         return await repository.InTransactionAsync(before.RoomId, async () => await work(await Load(id, roles, t)), t);
     }
-    private static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId,
+    private static Guid RequireTenant(Contract c) => c.TenantUserId ?? throw ContractException.Conflict("tenant_account_required_for_lifecycle");
+    private static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, RequireTenant(c),
         c.RepresentativeResidentId, c.Residents.Select(x => x.ResidentId).Order().ToArray(), c.StartDate, c.EndDate,
         c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash);
     private static void Seal(Contract c) => c.SnapshotHash = ContractDocumentSnapshot.Hash(Document(c));
@@ -75,7 +76,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
         c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
         c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(s => new SignatureView(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt)).ToArray(), c.ActivatedAt,
-        c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "",ActualEndDate:c.ActualEndDate);
+        c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "",ActualEndDate:c.ActualEndDate,OnboardingDraft:c.DraftMetadata!="{}");
     private static MoveOutView View(ContractMoveOut m) => new(m.Id, m.Status.ToString(), m.ProposedDate, m.Reason, m.InspectionScheduledAt, m.PendingReason,
         m.InspectionNotes, m.InspectedAt, m.ElectricityReadingId, m.WaterReadingId, [],m.InspectionStaffId,m.Version);
     public async Task<ContractView> GetAsync(Guid id, CancellationToken t)
@@ -136,7 +137,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             };
             if (x.HoldingContractId is { } holdingId)
             {
-                var application = await holdings.ApplyAsync(holdingId, c.Id, c.RoomId, c.TenantUserId, c.RequiredDeposit, t);
+                var application = await holdings.ApplyAsync(holdingId, c.Id, c.RoomId, RequireTenant(c), c.RequiredDeposit, t);
                 if (application.HoldingContractId != holdingId || application.RoomId != c.RoomId || application.TenantUserId != c.TenantUserId ||
                     application.AppliedAmount < 0 || application.AppliedAmount > c.RequiredDeposit || decimal.Truncate(application.AppliedAmount) != application.AppliedAmount ||
                     string.IsNullOrWhiteSpace(application.AllocationReference) || application.AllocationReference.Length > 200)
@@ -241,7 +242,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var residents = await repository.ResidentsAsync(c.RoomId, c.Residents.Select(r => r.ResidentId).ToArray(), t);
         if (residents.Count != c.Residents.Count || residents.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified) ||
             !c.Residents.Any(r => r.ResidentId == c.RepresentativeResidentId && r.Role == ResidentType.Representative)) blockers.Add("verified_residents_required");
-        if (!await repository.ActiveUserInRoleAsync(c.OwnerSignerId, Roles.Owner, t) || !await repository.ActiveUserInRoleAsync(c.TenantUserId, Roles.Tenant, t)) blockers.Add("invalid_contract_signers");
+        if (!await repository.ActiveUserInRoleAsync(c.OwnerSignerId, Roles.Owner, t) || !await repository.ActiveUserInRoleAsync(RequireTenant(c), Roles.Tenant, t)) blockers.Add("invalid_contract_signers");
         var root = c;
         while (root.PreviousContractId is { } previous) root = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
         var deposit = root.AppliedHoldingDeposit + await repository.DepositTotalAsync(root.Id, t);

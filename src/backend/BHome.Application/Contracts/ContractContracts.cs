@@ -17,7 +17,7 @@ public sealed record ContractVersionView(Guid Id, Guid? PreviousContractId, stri
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? MonthlyRent, string Terms);
 public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
     string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
-    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent);
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent, bool OnboardingDraft = false);
 public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page, int PageSize, int TotalCount);
 public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
 public sealed record SigningInput(Guid CertificateId);
@@ -42,9 +42,9 @@ public sealed record ContractOccupantView(Guid Id, string Label, bool Representa
 public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, string Terms, Guid? PreviousContractId,
     IReadOnlyList<Guid> ResidentIds, IReadOnlyList<SignatureView> Signatures, DateTimeOffset? ActivatedAt,
-    Guid OwnerSignerId, Guid TenantUserId, Guid RepresentativeResidentId, Guid? HoldingContractId,
+    Guid OwnerSignerId, Guid? TenantUserId, Guid RepresentativeResidentId, Guid? HoldingContractId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AppliedHoldingDeposit,
-    Guid LocationId = default, bool IsDevelopmentDemo = false, string RoomNumber = "", string LocationName = "", IReadOnlyList<ContractOccupantView>? Occupants = null,DateOnly? ActualEndDate=null);
+    Guid LocationId = default, bool IsDevelopmentDemo = false, string RoomNumber = "", string LocationName = "", IReadOnlyList<ContractOccupantView>? Occupants = null,DateOnly? ActualEndDate=null,bool OnboardingDraft=false);
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
 public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, string Reason,

@@ -125,6 +125,9 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.MainDraftService>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();

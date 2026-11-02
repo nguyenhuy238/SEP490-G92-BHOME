@@ -4,7 +4,7 @@ import { errorMessage, type Named, type Resident } from '../../lib/api';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { captureService } from '../../services/captureService';
 
-export function useCaptureScope() {
+export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
   const { api } = useSession();
   const { preview } = useWorkspace();
   const [location, setLocation] = useState('');
@@ -12,24 +12,63 @@ export function useCaptureScope() {
   const [locations, setLocations] = useState<Named[]>([]);
   const [rooms, setRooms] = useState<Named[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [reload, setReload] = useState(0);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [roomError, setRoomError] = useState('');
+  const [revision, setRevision] = useState(0);
+
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    const task = async () => {
-      setLoading(true);
-      setError('');
+    async function loadLocations() {
+      setLocationsLoading(true);
+      setLocationError('');
+      try {
+        const next = preview
+          ? [{ id: 'sample-dd', label: 'BHOME Đống Đa - Tòa B' }]
+          : api
+            ? await captureService(api).locations(controller.signal)
+            : [];
+        if (!active) return;
+        setLocations(next);
+        setLocation((current) =>
+          next.some((item) => item.id === current)
+            ? current
+            : autoSelectAssignedLocation && next.length === 1
+              ? next[0].id
+              : '',
+        );
+      } catch (e) {
+        if (active) {
+          setLocations([]);
+          setLocation('');
+          setLocationError(errorMessage(e));
+        }
+      } finally {
+        if (active) setLocationsLoading(false);
+      }
+    }
+    void loadLocations();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [api, preview, revision, autoSelectAssignedLocation]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    async function loadRooms() {
+      setRoomsLoading(true);
+      setRoomError('');
+      setRooms([]);
+      setResidents([]);
       try {
         const service = api ? captureService(api) : null;
-        const nextLocations = preview
-          ? [{ id: 'sample-dd', label: 'BHOME Đống Đa - Tòa B' }]
-          : service
-            ? await service.locations(controller.signal)
-            : [];
-        const [nextRooms, nextResidents] = location
-          ? preview
+        const [nextRooms, nextResidents]: [Named[], Resident[]] = !location
+          ? [[], []]
+          : preview
             ? [
                 [
                   { id: 'sample-301', label: '301', parentId: location },
@@ -49,33 +88,35 @@ export function useCaptureScope() {
                   service.rooms(location, controller.signal),
                   service.residents(location, controller.signal),
                 ])
-              : [[], []]
-          : [[], []];
-        if (active) {
-          setLocations(nextLocations);
-          setRooms(nextRooms as Named[]);
-          setResidents(nextResidents as Resident[]);
-        }
+              : [[], []];
+        if (!active) return;
+        setRooms(nextRooms);
+        setResidents(nextResidents);
+        setRoom((current) => (nextRooms.some((item) => item.id === current) ? current : ''));
       } catch (e) {
-        if (active) setError(errorMessage(e));
+        if (active) {
+          setRoom('');
+          setRoomError(errorMessage(e));
+        }
       } finally {
-        if (active) setLoading(false);
+        if (active) setRoomsLoading(false);
       }
-    };
-    void task();
+    }
+    void loadRooms();
     return () => {
       active = false;
       controller.abort();
     };
-  }, [api, preview, location, reload]);
+  }, [api, preview, location, revision]);
+
   return {
     location,
     room,
     locations,
     rooms,
     residents,
-    loading,
-    error,
+    loading: locationsLoading || roomsLoading,
+    error: locationError || roomError,
     selectLocation: (id: string) => {
       setLocation(id);
       setRoom('');
@@ -83,6 +124,6 @@ export function useCaptureScope() {
       setResidents([]);
     },
     setRoom,
-    reload: () => setReload((value) => value + 1),
+    reload: () => setRevision((value) => value + 1),
   };
 }

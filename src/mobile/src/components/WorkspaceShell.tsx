@@ -1,9 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Badge, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors as c } from '../theme/theme';
-import { homeScreen, tabs, type WorkspaceScreen } from '../features/workspace/navigation';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { colors as c, staffColors as s } from '../theme/theme';
+import {
+  activeWorkspaceTab,
+  homeScreen,
+  tabs,
+  type WorkspaceScreen,
+} from '../features/workspace/navigation';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
@@ -16,35 +22,19 @@ export function WorkspaceShell({
   children: React.ReactNode;
 }) {
   const { role, preview, go, leavePreview, scrollRevision } = useWorkspace();
+  const insets = useSafeAreaInsets();
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
   }, [screen, scrollRevision]);
   if (!role) return null;
-  const active = ['contract', 'checklist', 'residence', 'contract-request'].includes(screen)
-    ? 'tenant-home'
-    : ['security', 'preferences'].includes(screen)
-      ? 'profile'
-      : [
-            'onboarding',
-            'prepare-contract',
-            'move-out',
-            'move-in',
-            'shifts',
-            'rooms',
-            'debt-follow-up',
-          ].includes(screen)
-        ? 'staff-home'
-        : screen === 'task-detail'
-          ? role === 'Owner'
-            ? 'operations'
-            : 'work-orders'
-          : ['adjustment', 'billing-history'].includes(screen)
-            ? 'invoice'
-            : screen;
+  const staff = role === 'Staff';
+  const visibleTabs = tabs[role];
+  const active = activeWorkspaceTab(role, screen);
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.root, staff && styles.staffRoot]} edges={['top', 'left', 'right']}>
+      <StatusBar style={staff ? 'light' : 'auto'} />
+      <View style={[styles.header, staff && styles.staffHeader]}>
         <TouchableRipple
           onPress={() =>
             go(
@@ -62,21 +52,28 @@ export function WorkspaceShell({
           style={ui.grow}
         >
           <View style={ui.row}>
-            {role === 'Owner' && (
-              <View style={styles.logo}>
-                <Text style={ui.white}>B</Text>
+            {(role === 'Owner' || staff) && (
+              <View style={[styles.logo, staff && styles.staffLogo]}>
+                {staff ? (
+                  <Icon source="home-roof" size={32} color={s.blue} />
+                ) : (
+                  <Text style={ui.white}>B</Text>
+                )}
               </View>
             )}
             <View style={ui.grow}>
-              <Text variant="labelMedium" style={{ color: c.navy }}>
-                BHOME {role === 'Tenant' ? 'RESIDENT' : role.toUpperCase()}
+              <Text
+                variant={staff ? 'titleLarge' : 'labelMedium'}
+                style={{ color: staff ? c.white : c.navy }}
+              >
+                BHOME {staff ? 'Staff' : role === 'Tenant' ? 'RESIDENT' : role.toUpperCase()}
               </Text>
-              <Text variant="labelSmall" style={ui.muted}>
+              <Text variant="labelSmall" style={staff ? styles.staffSubtitle : ui.muted}>
                 {!preview
                   ? 'Phạm vi theo tài khoản'
                   : role === 'Owner'
-                    ? 'Tất cả cơ sở (5/5) ⌄'
-                    : role === 'Staff'
+                    ? 'Tất cả cơ sở (5/5)'
+                    : staff
                       ? 'Cơ sở Đống Đa - Tòa B'
                       : 'BHOME Cầu Giấy • P.301'}
               </Text>
@@ -86,6 +83,7 @@ export function WorkspaceShell({
         <View>
           <IconButton
             icon="bell-outline"
+            iconColor={staff ? c.white : c.navy}
             size={22}
             onPress={() => go('notifications')}
             accessibilityLabel="Thông báo"
@@ -93,13 +91,15 @@ export function WorkspaceShell({
           {preview && <Badge size={8} style={styles.badge} />}
           {!preview && <NotificationBadge />}
         </View>
-        <IconButton
-          icon="account-circle"
-          size={30}
-          iconColor={c.navy}
-          onPress={() => go('profile')}
-          accessibilityLabel="Tài khoản"
-        />
+        {!staff && (
+          <IconButton
+            icon="account-circle"
+            size={30}
+            iconColor={c.navy}
+            onPress={() => go('profile')}
+            accessibilityLabel="Tài khoản"
+          />
+        )}
       </View>
       {preview && (
         <TouchableRipple
@@ -108,26 +108,27 @@ export function WorkspaceShell({
           accessibilityLabel="Thoát xem mẫu"
         >
           <View style={styles.preview}>
-            <Text variant="labelSmall" style={ui.blue}>
+            <Text variant="labelSmall" style={[ui.blue, staff && styles.staffPreviewText]}>
               DỮ LIỆU MẪU • {role} • Chạm để về đăng nhập
             </Text>
           </View>
         </TouchableRipple>
       )}
       <KeyboardAvoidingView
-        style={ui.grow}
+        style={[ui.grow, staff && styles.staffBody]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           ref={scroll}
           key={screen}
-          contentContainerStyle={ui.page}
+          contentContainerStyle={[ui.page, staff && styles.staffPage]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
-            screen,
-          ) && (
+          {((staff && !['staff-home', 'profile'].includes(screen)) ||
+            ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
+              screen,
+            )) && (
             <View style={ui.row}>
               <IconButton
                 icon="arrow-left"
@@ -150,8 +151,8 @@ export function WorkspaceShell({
           {children}
         </ScrollView>
       </KeyboardAvoidingView>
-      <View style={styles.tabs}>
-        {tabs[role].map((tab) => (
+      <View style={[styles.tabs, staff && styles.staffTabs, { paddingBottom: insets.bottom }]}>
+        {visibleTabs.map((tab) => (
           <TouchableRipple
             key={tab.screen}
             onPress={() => go(tab.screen)}
@@ -162,17 +163,24 @@ export function WorkspaceShell({
           >
             <View style={styles.tab}>
               <View
-                style={[styles.indicator, active === tab.screen && { backgroundColor: c.tint }]}
+                style={[
+                  styles.indicator,
+                  active === tab.screen && { backgroundColor: staff ? s.blueSoft : c.tint },
+                ]}
               >
                 <Icon
                   source={tab.icon}
                   size={22}
-                  color={active === tab.screen ? c.primary : c.muted}
+                  color={active === tab.screen ? (staff ? s.blue : c.primary) : c.muted}
                 />
               </View>
               <Text
-                variant="labelSmall"
-                style={{ color: active === tab.screen ? c.primary : c.muted }}
+                style={{
+                  fontSize: 11,
+                  lineHeight: 14,
+                  fontWeight: active === tab.screen ? '700' : '500',
+                  color: active === tab.screen ? (staff ? s.blue : c.primary) : c.muted,
+                }}
               >
                 {tab.title}
               </Text>
@@ -185,6 +193,24 @@ export function WorkspaceShell({
 }
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: c.background },
+  staffRoot: { backgroundColor: s.navy },
+  staffHeader: { minHeight: 72, borderBottomWidth: 0, paddingBottom: 6 },
+  staffLogo: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.white },
+  staffSubtitle: { color: '#d5e4ff', marginTop: 3 },
+  staffBody: {
+    backgroundColor: s.background,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    overflow: 'hidden',
+  },
+  staffPage: { padding: 16, paddingBottom: 24, gap: 24 },
+  staffPreviewText: { textAlign: 'center', paddingHorizontal: 12 },
+  staffTabs: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 0,
+    boxShadow: '0 -3px 16px rgba(25, 52, 82, 0.06)',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -214,8 +240,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    minHeight: 64,
-    paddingVertical: 6,
+    height: 60,
+    paddingVertical: 4,
   },
   indicator: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 4 },
 });

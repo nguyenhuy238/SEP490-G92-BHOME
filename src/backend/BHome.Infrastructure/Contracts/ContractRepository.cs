@@ -23,7 +23,7 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(c => new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
-                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent)).ToArrayAsync(t);
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,c.DraftMetadata!="{}")).ToArrayAsync(t);
         return new(items, page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
@@ -60,7 +60,7 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
     }
     public Task<Contract?> FindAsync(Guid id, CancellationToken t) => db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
         .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery().SingleOrDefaultAsync(c => c.Id == id, t);
-    public Task<Room?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == id, t);
+    public Task<Room?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().Include(r => r.Location).Include(r => r.RoomType).SingleOrDefaultAsync(r => r.Id == id, t);
     public async Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t)
         => await db.Set<Resident>().Where(r => r.RoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t);
     public Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t) =>

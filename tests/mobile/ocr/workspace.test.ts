@@ -5,6 +5,7 @@ import {
   isWorkspaceScreen,
   sessionRole,
   type MobileRole,
+  tabs,
 } from '../../../src/mobile/src/features/workspace/navigation';
 import {
   invoiceLines,
@@ -12,6 +13,16 @@ import {
 } from '../../../src/mobile/src/services/workspaceData';
 
 describe('mobile workspace access boundaries', () => {
+  it('keeps exactly Home and Profile tabs for Staff without changing other roles', () => {
+    expect(tabs.Staff.map((tab) => tab.screen)).toEqual(['staff-home', 'profile']);
+    expect(tabs.Owner).toHaveLength(4);
+    expect(tabs.Tenant).toHaveLength(4);
+  });
+  it('limits the unavailable send-notification destination to Staff', () => {
+    expect(canOpenScreen('Staff', 'send-notification')).toBe(true);
+    expect(canOpenScreen('Owner', 'send-notification')).toBe(false);
+    expect(canOpenScreen('Tenant', 'send-notification')).toBe(false);
+  });
   it('rejects unknown roles and invalid deep links', () => {
     expect(sessionRole(['Guest', 'Administrator'])).toBeNull();
     expect(isWorkspaceScreen('toString')).toBe(false);

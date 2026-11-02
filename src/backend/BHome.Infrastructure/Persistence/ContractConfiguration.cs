@@ -16,6 +16,7 @@ internal static class ContractConfiguration
                 t.HasCheckConstraint("CK_Contract_Terms", "\"EndDate\" > \"StartDate\" AND \"MonthlyRent\" > 0 AND \"RequiredDeposit\" >= 0");
                 t.HasCheckConstraint("CK_Contract_Activation", "\"Status\" <> 3 OR (\"ActivatedAt\" IS NOT NULL AND \"ActivatedByUserId\" IS NOT NULL)");
                 t.HasCheckConstraint("CK_Contract_Signers", "\"OwnerSignerId\" <> \"TenantUserId\"");
+                t.HasCheckConstraint("CK_Contract_TenantForLifecycle", "\"Status\" IN (0,6) OR \"TenantUserId\" IS NOT NULL");
                 t.HasCheckConstraint("CK_Contract_Holding", "\"AppliedHoldingDeposit\" >= 0 AND \"AppliedHoldingDeposit\" <= \"RequiredDeposit\" AND ((\"HoldingContractId\" IS NULL AND \"HoldingAllocationReference\" IS NULL AND \"AppliedHoldingDeposit\" = 0) OR (\"HoldingContractId\" IS NOT NULL AND \"HoldingAllocationReference\" IS NOT NULL))");
             });
             e.HasOne(c => c.Room).WithMany().HasForeignKey(c => c.RoomId).OnDelete(DeleteBehavior.Restrict);
@@ -28,11 +29,14 @@ internal static class ContractConfiguration
             e.HasIndex(c => c.HoldingContractId).IsUnique().HasFilter("\"HoldingContractId\" IS NOT NULL");
             e.HasIndex(c => c.HoldingAllocationReference).IsUnique().HasFilter("\"HoldingAllocationReference\" IS NOT NULL");
             e.Property(c => c.Terms).HasMaxLength(12000); e.Property(c => c.SnapshotHash).HasMaxLength(64);
+            e.Property(c => c.DraftMetadata).HasColumnType("jsonb").HasDefaultValue("{}");
+            e.Property(c => c.DraftVersion).HasDefaultValue(1).IsConcurrencyToken();
             e.HasIndex(c => c.RoomId).HasFilter("\"Status\" = 3").HasDatabaseName("IX_Contract_ActiveRoom");
             e.HasIndex(c => c.PreviousContractId).IsUnique().HasFilter("\"PreviousContractId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)");
             e.HasMany(c => c.Residents).WithOne().HasForeignKey(r => r.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(c => c.Signatures).WithOne().HasForeignKey(s => s.ContractId).OnDelete(DeleteBehavior.Restrict);
         });
+        b.Entity<BHome.Domain.Locations.Location>().Property(l => l.ContractSettings).HasColumnType("jsonb").HasDefaultValue("[]");
         b.Entity<ContractResident>(e =>
         {
             e.ToTable("ContractResidents"); e.HasKey(r => new { r.ContractId, r.ResidentId });

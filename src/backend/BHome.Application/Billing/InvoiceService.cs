@@ -175,7 +175,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         var occupants = await repository.OccupanciesAsync(invoice.RoomId, start, end, t);
         var representative = occupants.SingleOrDefault(o => o.Contract.Id == invoice.RepresentativeContractId)
             ?? throw new InvoiceException(409, "representative_contract_not_eligible");
-        invoice.RepresentativeTenantUserId = representative.Contract.TenantUserId;
+        invoice.RepresentativeTenantUserId = representative.Contract.TenantUserId ?? throw new InvalidOperationException("Active contract requires a Tenant account.");
         var audience = occupants.SelectMany(o => o.TenantIds).Distinct().ToArray();
         foreach (var tenantId in audience.Where(tenantId => invoice.Recipients.All(r => r.TenantUserId != tenantId)))
             invoice.Recipients.Add(new InvoiceRecipient { InvoiceId = invoice.Id, TenantUserId = tenantId });
