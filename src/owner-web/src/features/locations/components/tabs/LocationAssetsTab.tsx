@@ -4,6 +4,11 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   Grid,
   IconButton,
   MenuItem,
@@ -19,6 +24,7 @@ import {
   Tabs,
   TextField,
   Typography,
+  Switch,
 } from '@mui/material';
 import {
   Bath,
@@ -26,6 +32,7 @@ import {
   Flame,
   Layers3,
   Package,
+  Plus,
   Refrigerator,
   ShowerHead,
   Sparkles,
@@ -41,7 +48,11 @@ import {
   INITIAL_ROOM_TYPE_REQUIREMENTS,
   INITIAL_ROOM_TYPES,
 } from '../../mock/locationConfigMock';
-import type { AssetCatalogItem, RoomAssetAssignmentDraft } from '../../types/locationConfig';
+import type {
+  AssetCatalogItem,
+  RoomAssetAssignmentDraft,
+  RoomTypeAssetRequirement,
+} from '../../types/locationConfig';
 
 interface LocationAssetsTabProps {
   db: DemoDatabase;
@@ -54,14 +65,27 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
   );
 
   const [assetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
-  const [selectedRoomType, setSelectedRoomType] = useState<string>('type-studio');
-  const [roomTypeTemplates] = useState(INITIAL_ROOM_TYPE_REQUIREMENTS);
+  const roomTypes = db.records['room-types'].filter((item) => item.locationId === location.id);
+  const selectableRoomTypes = roomTypes.length ? roomTypes : INITIAL_ROOM_TYPES;
+  const [selectedRoomType, setSelectedRoomType] = useState<string>(
+    selectableRoomTypes[0]?.id || 'type-studio',
+  );
+  const [roomTypeTemplates, setRoomTypeTemplates] = useState<
+    Record<string, RoomTypeAssetRequirement[]>
+  >(() => {
+    const templates = structuredClone(INITIAL_ROOM_TYPE_REQUIREMENTS);
+    roomTypes.forEach((roomType, index) => {
+      if (templates[roomType.id]) return;
+      const sampleType = INITIAL_ROOM_TYPES[index % INITIAL_ROOM_TYPES.length];
+      templates[roomType.id] = structuredClone((sampleType && templates[sampleType.id]) || []);
+    });
+    return templates;
+  });
+  const [newRequirement, setNewRequirement] = useState<RoomTypeAssetRequirement | null>(null);
 
   // Mock initial room assignments
   const rooms = db.records.rooms.filter((r) => r.locationId === location.id);
-  const roomCodes = rooms.length
-    ? rooms.map((r) => r.code)
-    : ['P.101', 'P.102', 'P.201', 'P.202', 'P.301'];
+  const roomCodes = rooms.length ? rooms.map((r) => r.code) : ['P.101', 'P.102', 'P.201'];
 
   const [assignments, setAssignments] = useState<RoomAssetAssignmentDraft[]>([
     {
@@ -128,9 +152,12 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
   // Apply template to all rooms of selected room type
   const handleApplyTemplate = (typeId: string) => {
     const templateReqs = roomTypeTemplates[typeId] || [];
+    const targetRoomCodes = rooms
+      .filter((room) => room.category === typeId)
+      .map((room) => room.code);
     const newItems: RoomAssetAssignmentDraft[] = [];
 
-    roomCodes.forEach((code) => {
+    targetRoomCodes.forEach((code) => {
       templateReqs.forEach((req) => {
         newItems.push({
           roomCode: code,
@@ -142,10 +169,33 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
       });
     });
 
-    setAssignments(newItems);
+    setAssignments((current) => [
+      ...current.filter(
+        (item) => !targetRoomCodes.includes(item.roomCode) || item.source === 'OVERRIDE',
+      ),
+      ...newItems,
+    ]);
+    const roomTypeName = selectableRoomTypes.find((type) => type.id === typeId)?.name || typeId;
     setApplyNotification(
-      `Đã áp dụng định mức gồm ${templateReqs.length} hạng mục thiết bị cho toàn bộ ${roomCodes.length} phòng.`,
+      `Đã áp dụng ${templateReqs.length} hạng mục cho ${targetRoomCodes.length} phòng thuộc loại ${roomTypeName}.`,
     );
+  };
+
+  const handleAddRequirement = () => {
+    if (!newRequirement) return;
+    setRoomTypeTemplates((current) => {
+      const requirements = current[selectedRoomType] || [];
+      const exists = requirements.some((item) => item.catalogId === newRequirement.catalogId);
+      return {
+        ...current,
+        [selectedRoomType]: exists
+          ? requirements.map((item) =>
+              item.catalogId === newRequirement.catalogId ? newRequirement : item,
+            )
+          : [...requirements, newRequirement],
+      };
+    });
+    setNewRequirement(null);
   };
 
   const getAssetIcon = (id: string) => {
@@ -208,13 +258,29 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
         </Tabs>
 
         {activeSubTab === 'assignment' && (
-          <Button
-            variant="contained"
-            startIcon={<Sparkles size={16} />}
-            onClick={() => handleApplyTemplate(selectedRoomType)}
-          >
-            Áp dụng định mức cho tất cả phòng
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              select
+              size="small"
+              label="Loại phòng áp dụng"
+              value={selectedRoomType}
+              onChange={(event) => setSelectedRoomType(event.target.value)}
+              sx={{ minWidth: 230, bgcolor: '#fff' }}
+            >
+              {selectableRoomTypes.map((roomType) => (
+                <MenuItem key={roomType.id} value={roomType.id}>
+                  {roomType.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button
+              variant="contained"
+              startIcon={<Sparkles size={16} />}
+              onClick={() => handleApplyTemplate(selectedRoomType)}
+            >
+              Áp dụng cho phòng cùng loại
+            </Button>
+          </Stack>
         )}
       </Stack>
 
@@ -343,12 +409,25 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
               onChange={(e) => setSelectedRoomType(e.target.value)}
               sx={{ minWidth: 240 }}
             >
-              {INITIAL_ROOM_TYPES.map((rt) => (
+              {selectableRoomTypes.map((rt) => (
                 <MenuItem key={rt.id} value={rt.id}>
                   {rt.name}
                 </MenuItem>
               ))}
             </TextField>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} />}
+              onClick={() =>
+                setNewRequirement({
+                  catalogId: assetCatalog[0]?.id || '',
+                  quantity: 1,
+                  isMandatory: true,
+                })
+              }
+            >
+              Thêm thiết bị vào định mức
+            </Button>
           </Stack>
 
           <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
@@ -359,6 +438,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                   <TableCell sx={{ fontWeight: 800 }}>Nhóm tài sản</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Số lượng định mức</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Yêu cầu bắt buộc</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -375,7 +455,27 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                       <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
                         {catItem?.category}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 750 }}>{req.quantity} cái</TableCell>
+                      <TableCell sx={{ width: 160 }}>
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={req.quantity}
+                          onChange={(event) =>
+                            setRoomTypeTemplates((current) => ({
+                              ...current,
+                              [selectedRoomType]: (current[selectedRoomType] || []).map((item) =>
+                                item.catalogId === req.catalogId
+                                  ? {
+                                      ...item,
+                                      quantity: Math.max(1, Number(event.target.value) || 1),
+                                    }
+                                  : item,
+                              ),
+                            }))
+                          }
+                          slotProps={{ htmlInput: { min: 1 } }}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Chip
                           size="small"
@@ -383,6 +483,23 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                           color={req.isMandatory ? 'primary' : 'default'}
                           sx={{ fontSize: 11 }}
                         />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          aria-label={`Xóa ${catItem?.name || req.catalogId} khỏi định mức`}
+                          onClick={() =>
+                            setRoomTypeTemplates((current) => ({
+                              ...current,
+                              [selectedRoomType]: (current[selectedRoomType] || []).filter(
+                                (item) => item.catalogId !== req.catalogId,
+                              ),
+                            }))
+                          }
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   );
@@ -440,6 +557,67 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
           ))}
         </Grid>
       )}
+
+      <Dialog
+        open={!!newRequirement}
+        onClose={() => setNewRequirement(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Thêm thiết bị vào định mức loại phòng</DialogTitle>
+        {newRequirement && (
+          <>
+            <DialogContent sx={{ display: 'grid', gap: 2, pt: '12px !important' }}>
+              <TextField
+                select
+                label="Thiết bị"
+                value={newRequirement.catalogId}
+                onChange={(event) =>
+                  setNewRequirement({ ...newRequirement, catalogId: event.target.value })
+                }
+              >
+                {assetCatalog.map((asset) => (
+                  <MenuItem key={asset.id} value={asset.id}>
+                    {asset.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                type="number"
+                label="Số lượng định mức"
+                value={newRequirement.quantity}
+                onChange={(event) =>
+                  setNewRequirement({
+                    ...newRequirement,
+                    quantity: Math.max(1, Number(event.target.value) || 1),
+                  })
+                }
+                slotProps={{ htmlInput: { min: 1 } }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newRequirement.isMandatory}
+                    onChange={(event) =>
+                      setNewRequirement({
+                        ...newRequirement,
+                        isMandatory: event.target.checked,
+                      })
+                    }
+                  />
+                }
+                label="Bắt buộc khi bàn giao phòng"
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setNewRequirement(null)}>Hủy</Button>
+              <Button variant="contained" onClick={handleAddRequirement}>
+                Lưu vào định mức
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }

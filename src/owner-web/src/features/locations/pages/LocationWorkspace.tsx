@@ -69,11 +69,6 @@ export function LocationWorkspace() {
   const selected = db.records.locations.find((item) => item.id === locationId);
   if (!selected) return <Navigate to="/locations" replace />;
 
-  const manager =
-    db.records.staff.find((staff) => staff.id === selected.staffId)?.name ||
-    db.records.staff.find((staff) => staff.locationId === selected.id)?.name ||
-    'Chưa phân công';
-
   const handleCopySuccess = (result: {
     sourceId: string;
     destinationId: string;
@@ -93,9 +88,8 @@ export function LocationWorkspace() {
   return (
     <>
       <PageHeader
-        group="KHÔNG GIAN QUẢN LÝ CƠ SỞ"
+        group={null}
         title={selected.name}
-        subtitle={`${selected.attributes.address || 'Chưa cập nhật địa chỉ'} · Phụ trách: ${manager}`}
         actions={
           <Stack direction="row" spacing={1.5}>
             <Button

@@ -11,6 +11,8 @@ import { PolicyVersioningDialog } from './components/PolicyVersioningDialog';
 import { LocationOverviewTab } from './components/tabs/LocationOverviewTab';
 import { LocationPricingTab } from './components/tabs/LocationPricingTab';
 import { LocationHistoryTab } from './components/tabs/LocationHistoryTab';
+import { LocationAssetsTab } from './components/tabs/LocationAssetsTab';
+import { LocationRoomsTab } from './components/tabs/LocationRoomsTab';
 import type { HouseRuleItem } from './types/locationConfig';
 
 describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', () => {
@@ -37,6 +39,23 @@ describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', 
     expect(screen.getByText('TỶ LỆ LẤP ĐẦY')).toBeInTheDocument();
     expect(screen.getByText(/Biến động tỷ lệ lấp đầy/i)).toBeInTheDocument();
     expect(screen.getByText('Tình trạng sẵn sàng vận hành')).toBeInTheDocument();
+  });
+
+  it('renders room cards by floor and links each room to its full detail page', () => {
+    const room = db.records.rooms.find((item) => item.locationId === sampleLocation.id)!;
+
+    render(
+      <MemoryRouter>
+        <ThemeProvider theme={theme}>
+          <LocationRoomsTab db={db} location={sampleLocation} />
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: `Xem phòng ${room.code}` })).toHaveAttribute(
+      'href',
+      `/rooms/${room.id}`,
+    );
   });
 
   it('renders Policy Versioning Dialog in Case B (Applied Policy) with Vietnamese warning banner and version bump', () => {
@@ -132,7 +151,45 @@ describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', 
       screen.getByText(/Cảnh báo quy định biểu giá điện & nước sinh hoạt của Nhà nước/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/Mô phỏng chi phí hàng tháng của phòng/i)).toBeInTheDocument();
-  });
+    expect(screen.getByRole('button', { name: 'Thêm khoản phí' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm khoản phí' }));
+    fireEvent.change(screen.getByLabelText('Tên khoản phí'), {
+      target: { value: 'Phí thang máy' },
+    });
+    fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '50000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
+
+    expect(screen.getByText('Phí thang máy')).toBeInTheDocument();
+  }, 10000);
+
+  it('supports asset requirements by room type and applies only to rooms of that type', () => {
+    const selectedType = db.records['room-types'].find(
+      (item) => item.locationId === sampleLocation.id,
+    )!;
+    const matchingRoomCount = db.records.rooms.filter(
+      (room) => room.locationId === sampleLocation.id && room.category === selectedType.id,
+    ).length;
+
+    render(
+      <MemoryRouter>
+        <ThemeProvider theme={theme}>
+          <LocationAssetsTab db={db} location={sampleLocation} />
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByLabelText('Loại phòng áp dụng')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Áp dụng cho phòng cùng loại' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng cho phòng cùng loại' }));
+    expect(screen.getByText(/Đã áp dụng [1-9]\d* hạng mục/)).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`${matchingRoomCount} phòng thuộc loại ${selectedType.name}`)),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Định mức theo loại phòng/ }));
+    expect(screen.getByRole('button', { name: 'Thêm thiết bị vào định mức' })).toBeInTheDocument();
+  }, 10000);
 
   it('renders Operational History Tab in Vietnamese with timeline', () => {
     render(
