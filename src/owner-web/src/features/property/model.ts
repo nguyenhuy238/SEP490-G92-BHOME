@@ -61,6 +61,25 @@ export interface AssetEvent {
   assetId: string;
   date: string;
   description: string;
+  kind?:
+    | 'PURCHASE'
+    | 'ALLOCATION'
+    | 'RETURN'
+    | 'CONDITION'
+    | 'REPAIR'
+    | 'REPLACEMENT'
+    | 'DEPRECIATION'
+    | 'INSPECTION';
+  roomId?: string;
+  amount?: number;
+}
+export interface OperatingRule {
+  id: string;
+  locationId: string;
+  title: string;
+  content: string;
+  effectiveFrom: string;
+  effectiveTo: string;
 }
 export interface PropertyData {
   version: 1;
@@ -69,6 +88,7 @@ export interface PropertyData {
   purchases: Record<string, PurchaseInfo>;
   allocations: Allocation[];
   events: AssetEvent[];
+  operatingRules: OperatingRule[];
 }
 export type PropertyCommand =
   | { kind: 'location'; record: PortalRecord; copyFrom?: string }
@@ -85,7 +105,18 @@ export type PropertyCommand =
   | { kind: 'allocate'; allocations: Omit<Allocation, 'id' | 'date' | 'returnedAt'>[] }
   | { kind: 'return'; allocationId: string; reason: string }
   | { kind: 'condition'; assetId: string; condition: AssetCondition; reason: string }
+  | {
+      kind: 'assetEvent';
+      assetId: string;
+      eventKind: 'REPAIR' | 'REPLACEMENT' | 'DEPRECIATION' | 'INSPECTION';
+      date: string;
+      amount: number;
+      note: string;
+    }
   | { kind: 'price'; record: PortalRecord }
+  | { kind: 'priceVersion'; previousId: string; record: PortalRecord }
+  | { kind: 'operatingRule'; rule: OperatingRule }
+  | { kind: 'operatingRuleVersion'; previousId: string; rule: OperatingRule }
   | { kind: 'investment'; record: PortalRecord };
 
 export function assignedQuantity(db: DemoDatabase, assetId: string) {

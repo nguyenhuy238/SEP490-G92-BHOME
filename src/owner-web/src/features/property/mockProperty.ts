@@ -12,7 +12,10 @@ import {
 
 /** Additive upgrade of the existing browser demo. No source contracts or invoices are copied. */
 export function prepareProperty(db: DemoDatabase) {
-  if (db.property) return db;
+  if (db.property) {
+    db.property.operatingRules ??= [];
+    return db;
+  }
   db.property = {
     version: 1,
     catalog: [
@@ -42,6 +45,7 @@ export function prepareProperty(db: DemoDatabase) {
     purchases: {},
     allocations: [],
     events: [],
+    operatingRules: [],
   };
   const p = db.property;
   db.records.locations.forEach((l) => {
@@ -161,6 +165,11 @@ function validateRequirements(db: DemoDatabase, reqs: Requirement[]) {
 function dateValid(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(value).toISOString().slice(0, 10) === value;
 }
+function previousDate(value: string) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
 function put(rows: PortalRecord[], row: PortalRecord) {
   const index = rows.findIndex((r) => r.id === row.id);
   if (index < 0) rows.push(structuredClone(row));
@@ -174,12 +183,22 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
     assert(l, 'Cơ sở không tồn tại.');
     return l;
   };
-  const event = (assetId: string, description: string) =>
+  const event = (
+    assetId: string,
+    description: string,
+    kind: NonNullable<(typeof p.events)[number]['kind']> = 'CONDITION',
+    roomId = '',
+    amount = 0,
+    date = new Date().toISOString(),
+  ) =>
     p.events.unshift({
       id: crypto.randomUUID(),
       assetId,
-      date: new Date().toISOString(),
+      date,
       description,
+      kind,
+      roomId,
+      amount,
     });
   if (cmd.kind === 'location') {
     const r = cmd.record;
@@ -242,6 +261,15 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
               attributes: { ...price.attributes, targetId },
             });
         });
+      p.operatingRules
+        .filter((rule) => rule.locationId === cmd.copyFrom)
+        .forEach((rule) =>
+          p.operatingRules.push({
+            ...structuredClone(rule),
+            id: crypto.randomUUID(),
+            locationId: r.id,
+          }),
+        );
     }
     put(db.records.locations, r);
   } else if (cmd.kind === 'roomType') {
@@ -371,7 +399,7 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
       amount: info.quantity * info.unitCost,
       name: p.catalog.find((c) => c.id === info.catalogId)!.name,
     });
-    event(r.id, `Nhập kho ${info.quantity} đơn vị; phiếu ${r.code}`);
+    event(r.id, `Nhập kho ${info.quantity} đơn vị; phiếu ${r.code}`, 'PURCHASE');
   } else if (cmd.kind === 'allocate') {
     assert(cmd.allocations.length > 0, 'Chọn tài sản để cấp phát.');
     for (const a of cmd.allocations) {
@@ -393,6 +421,8 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
       event(
         a.assetId,
         `Cấp ${a.quantity} → ${db.records.rooms.find((r) => r.id === a.roomId)?.code || a.commonArea}`,
+        'ALLOCATION',
+        a.roomId,
       );
     }
   } else if (cmd.kind === 'return') {
@@ -400,7 +430,7 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
     assert(a && !a.returnedAt, 'Lượt cấp phát đã được thu hồi hoặc không tồn tại.');
     assert(cmd.reason.trim(), 'Nhập lý do thu hồi.');
     a.returnedAt = new Date().toISOString();
-    event(a.assetId, `Thu hồi ${a.quantity}: ${cmd.reason}`);
+    event(a.assetId, `Thu hồi ${a.quantity}: ${cmd.reason}`, 'RETURN', a.roomId);
   } else if (cmd.kind === 'condition') {
     const info = p.purchases[cmd.assetId];
     assert(
@@ -413,7 +443,125 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
     );
     info.condition = cmd.condition;
     info.retired = cmd.condition === 'Retired';
-    event(cmd.assetId, `${conditions[cmd.condition]}: ${cmd.reason}`);
+    event(cmd.assetId, `${conditions[cmd.condition]}: ${cmd.reason}`, 'CONDITION');
+  } else if (cmd.kind === 'assetEvent') {
+    const asset = db.records.assets.find((row) => row.id === cmd.assetId);
+    assert(asset && p.purchases[cmd.assetId], 'Tài sản không tồn tại.');
+    assert(
+      ['REPAIR', 'REPLACEMENT', 'DEPRECIATION', 'INSPECTION'].includes(cmd.eventKind) &&
+        dateValid(cmd.date) &&
+        money(cmd.amount) &&
+        cmd.note.trim(),
+      'Loại sự kiện, ngày, số tiền hoặc nội dung không hợp lệ.',
+    );
+    const labels = {
+      REPAIR: 'Sửa chữa',
+      REPLACEMENT: 'Đề xuất thay mới',
+      DEPRECIATION: 'Ghi nhận khấu hao',
+      INSPECTION: 'Kiểm tra tình trạng',
+    } as const;
+    const currentRoom = p.allocations.find(
+      (allocation) => allocation.assetId === cmd.assetId && !allocation.returnedAt,
+    )?.roomId;
+    event(
+      cmd.assetId,
+      `${labels[cmd.eventKind]}: ${cmd.note}`,
+      cmd.eventKind,
+      currentRoom,
+      cmd.amount,
+      cmd.date,
+    );
+  } else if (cmd.kind === 'priceVersion') {
+    const previous = db.records.pricing.find((row) => row.id === cmd.previousId);
+    const next = cmd.record;
+    assert(previous, 'Phiên bản chính sách gốc không tồn tại.');
+    location(next.locationId);
+    assert(
+      next.name.trim() &&
+        money(next.amount) &&
+        dateValid(next.date) &&
+        (!next.endDate || (dateValid(next.endDate) && next.endDate >= next.date)) &&
+        [
+          'electricityRate',
+          'waterRate',
+          'environmentRate',
+          'securityRate',
+          'otherServiceRate',
+        ].every((key) => money(Number(next.attributes[key] || 0))),
+      'Tên, giá, biểu phí hoặc ngày hiệu lực không hợp lệ.',
+    );
+    assert(
+      previous.locationId === next.locationId &&
+        previous.attributes.scope === next.attributes.scope &&
+        previous.attributes.targetId === next.attributes.targetId,
+      'Phiên bản mới phải giữ nguyên cơ sở và phạm vi áp dụng.',
+    );
+    assert(
+      dateValid(next.date) && next.date > previous.date,
+      'Ngày hiệu lực mới phải sau phiên bản hiện tại.',
+    );
+    assert(
+      !db.records.pricing.some(
+        (row) =>
+          row.id !== previous.id &&
+          row.attributes.scope === next.attributes.scope &&
+          row.attributes.targetId === next.attributes.targetId &&
+          row.date <= (next.endDate || '9999-12-31') &&
+          (row.endDate || '9999-12-31') >= next.date,
+      ),
+      'Phiên bản mới chồng lấn một chính sách khác.',
+    );
+    previous.endDate = previousDate(next.date);
+    db.records.pricing.push(structuredClone(next));
+  } else if (cmd.kind === 'operatingRuleVersion') {
+    const previous = p.operatingRules.find((rule) => rule.id === cmd.previousId);
+    const next = cmd.rule;
+    assert(previous, 'Phiên bản nội quy gốc không tồn tại.');
+    assert(
+      previous.locationId === next.locationId &&
+        previous.title.toLocaleLowerCase() === next.title.toLocaleLowerCase() &&
+        dateValid(next.effectiveFrom) &&
+        next.effectiveFrom > previous.effectiveFrom &&
+        (!next.effectiveTo ||
+          (dateValid(next.effectiveTo) && next.effectiveTo >= next.effectiveFrom)) &&
+        next.content.trim(),
+      'Phiên bản nội quy mới phải giữ tên, có nội dung và bắt đầu sau phiên bản cũ.',
+    );
+    assert(
+      !p.operatingRules.some(
+        (current) =>
+          current.id !== previous.id &&
+          current.locationId === next.locationId &&
+          current.title.toLocaleLowerCase() === next.title.toLocaleLowerCase() &&
+          current.effectiveFrom <= (next.effectiveTo || '9999-12-31') &&
+          (current.effectiveTo || '9999-12-31') >= next.effectiveFrom,
+      ),
+      'Phiên bản nội quy mới chồng lấn một phiên bản khác.',
+    );
+    previous.effectiveTo = previousDate(next.effectiveFrom);
+    p.operatingRules.push(structuredClone(next));
+  } else if (cmd.kind === 'operatingRule') {
+    const rule = cmd.rule;
+    location(rule.locationId);
+    assert(
+      rule.title.trim() &&
+        rule.content.trim() &&
+        dateValid(rule.effectiveFrom) &&
+        (!rule.effectiveTo ||
+          (dateValid(rule.effectiveTo) && rule.effectiveTo >= rule.effectiveFrom)),
+      'Tên, nội dung hoặc thời gian hiệu lực của nội quy không hợp lệ.',
+    );
+    assert(
+      !p.operatingRules.some(
+        (current) =>
+          current.locationId === rule.locationId &&
+          current.title.toLocaleLowerCase() === rule.title.toLocaleLowerCase() &&
+          current.effectiveFrom <= (rule.effectiveTo || '9999-12-31') &&
+          (current.effectiveTo || '9999-12-31') >= rule.effectiveFrom,
+      ),
+      'Phiên bản nội quy bị chồng lấn thời gian.',
+    );
+    p.operatingRules.push(structuredClone(rule));
   } else if (cmd.kind === 'price') {
     const r = cmd.record;
     location(r.locationId);
@@ -436,9 +584,14 @@ export function applyPropertyCommand(db: DemoDatabase, cmd: PropertyCommand) {
       'Phạm vi giá không hợp lệ.',
     );
     assert(
-      ['electricityRate', 'waterRate', 'serviceRate'].every((k) =>
-        money(Number(r.attributes[k] || 0)),
-      ),
+      [
+        'electricityRate',
+        'waterRate',
+        'serviceRate',
+        'environmentRate',
+        'securityRate',
+        'otherServiceRate',
+      ].every((k) => money(Number(r.attributes[k] || 0))),
       'Phí phải là số nguyên VND không âm.',
     );
     assert(

@@ -45,11 +45,6 @@ const LocationWorkspace = lazy(() =>
     default: module.LocationWorkspace,
   })),
 );
-const LocationOverview = lazy(() =>
-  import('../features/locations/pages/LocationWorkspace').then((module) => ({
-    default: module.LocationOverview,
-  })),
-);
 export function AppRouter() {
   return (
     <Suspense fallback={<LoadingState />}>
@@ -62,12 +57,15 @@ export function AppRouter() {
             <Route path="/locations" element={<LocationsPage />} />
             <Route path="/locations/:locationId" element={<LocationWorkspace />}>
               <Route index element={<Navigate to="overview" replace />} />
-              <Route path="overview" element={<LocationOverview />} />
+              <Route path="overview" element={<></>} />
               <Route path="rooms/new" element={<CreateRooms />} />
               <Route path="rooms" element={<RoomsPage />} />
               <Route path="room-types" element={<RoomTypesPage />} />
               <Route path="assets" element={<AssetsPage />} />
               <Route path="pricing" element={<PricingPage />} />
+              <Route path="rules" element={<></>} />
+              <Route path="history" element={<></>} />
+              <Route path="settings" element={<></>} />
               <Route path="investment" element={<ExpensesPage />} />
             </Route>
             <Route path="/rooms" element={<RoomsPage />} />
