@@ -11,22 +11,19 @@ import {
   DialogTitle,
   Divider,
   Grid,
-  IconButton,
   MenuItem,
   Paper,
   Stack,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tabs,
   TextField,
   Typography,
 } from '@mui/material';
-import { Copy, DoorOpen, Edit2, Filter, Layers3, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, DoorOpen, Edit2, Filter, Layers3, Plus, Sparkles, Users } from 'lucide-react';
+import { Link } from 'react-router';
+import { ListView, RoomBadge } from '../../../property/PropertyUI';
+import { roomStatus, roomStatuses, roomSummary } from '../../../property/model';
+import { currency } from '../../../property/propertyUtils';
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
 import { INITIAL_ROOM_TYPES } from '../../mock/locationConfigMock';
 import type { GeneratedRoomDraft, RoomTypeDraft } from '../../types/locationConfig';
@@ -78,10 +75,10 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
   const [bulkStart] = useState<number>(1);
   const [bulkQty, setBulkQty] = useState<number>(4);
 
-  // Filtered rooms
-  const filteredRooms = localRooms.filter((r) => {
-    if (selectedFloor !== 'ALL' && String(r.floor) !== selectedFloor) return false;
-    if (selectedTypeFilter !== 'ALL' && r.roomTypeId !== selectedTypeFilter) return false;
+  const locationRoomRecords = db.records.rooms.filter((room) => room.locationId === location.id);
+  const filteredRoomRecords = locationRoomRecords.filter((room) => {
+    if (selectedFloor !== 'ALL' && room.attributes.floor !== selectedFloor) return false;
+    if (selectedTypeFilter !== 'ALL' && room.category !== selectedTypeFilter) return false;
     return true;
   });
 
@@ -129,7 +126,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
         >
           <Tab
             value="inventory"
-            label={`Danh sách phòng (${localRooms.length})`}
+            label={`Danh sách phòng (${locationRoomRecords.length})`}
             icon={<DoorOpen size={16} />}
             iconPosition="start"
           />
@@ -227,86 +224,132 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
               </TextField>
 
               <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                Hiển thị {filteredRooms.length} trên {localRooms.length} phòng
+                Hiển thị {filteredRoomRecords.length} trên {locationRoomRecords.length} phòng
               </Typography>
             </Stack>
           </Paper>
 
-          {/* Rooms Table */}
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2.5 }}>
-            <Table size="small">
-              <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>Mã phòng</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Tầng</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Loại phòng</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Diện tích</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Giá thuê áp dụng</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Nguồn định giá</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Trạng thái</TableCell>
-                  <TableCell sx={{ fontWeight: 800, width: 80 }}>Thao tác</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredRooms.map((room) => {
-                  const rType = roomTypes.find((t) => t.id === room.roomTypeId);
-                  return (
-                    <TableRow key={room.code} hover>
-                      <TableCell sx={{ fontWeight: 800 }}>{room.code}</TableCell>
-                      <TableCell>Tầng {room.floor}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={rType?.name || 'Tiêu chuẩn'}
-                          sx={{ fontWeight: 700 }}
-                        />
-                      </TableCell>
-                      <TableCell>{rType?.area || 25} m²</TableCell>
-                      <TableCell sx={{ fontWeight: 800, color: 'primary.main' }}>
-                        {(rType?.defaultRate || 5500000).toLocaleString()} VND/tháng
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label="Thừa hưởng từ loại phòng"
-                          sx={{ fontSize: 11, bgcolor: '#f1f5f9', color: '#475569' }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={room.status === 'AVAILABLE' ? 'Trống khai thác' : 'Tạm ngừng'}
-                          color={room.status === 'AVAILABLE' ? 'success' : 'default'}
-                          sx={{ fontWeight: 750, fontSize: 11 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() =>
-                            setLocalRooms((prev) => prev.filter((r) => r.code !== room.code))
-                          }
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2.5 }}>
+            <ListView
+              rows={filteredRoomRecords}
+              noun="phòng"
+              searchText={(room) => `${room.code} ${room.name}`}
+            >
+              {(page) => (
+                <>
+                  {[...new Set(page.map((room) => room.attributes.floor || '1'))]
+                    .sort((a, b) => Number(a) - Number(b))
+                    .map((floor) => (
+                      <Box key={floor} sx={{ mb: 3 }}>
+                        <Typography color="text.secondary" sx={{ fontSize: 12, mb: 1 }}>
+                          TẦNG {floor}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                              xs: '1fr',
+                              sm: 'repeat(2,1fr)',
+                              xl: 'repeat(3,1fr)',
+                            },
+                            gap: 2,
+                          }}
                         >
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filteredRooms.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}
-                    >
-                      Không có phòng nào phù hợp với bộ lọc đã chọn.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                          {page
+                            .filter((room) => (room.attributes.floor || '1') === floor)
+                            .map((room) => {
+                              const summary = roomSummary(db, room);
+                              const badge = roomStatuses[roomStatus(room)];
+                              const roomType = db.records['room-types'].find(
+                                (type) => type.id === room.category,
+                              );
+
+                              return (
+                                <Box
+                                  key={room.id}
+                                  component={Link}
+                                  to={`/rooms/${room.id}`}
+                                  aria-label={`Xem phòng ${room.code}`}
+                                  sx={{
+                                    display: 'block',
+                                    color: 'inherit',
+                                    textDecoration: 'none',
+                                    textAlign: 'left',
+                                    bgcolor: 'white',
+                                    border: '1px solid #e2e8f0',
+                                    borderTop: `4px solid ${badge.color}`,
+                                    borderRadius: 2,
+                                    p: 2,
+                                    '&:hover': {
+                                      boxShadow: '0 6px 18px #0f172a12',
+                                      borderColor: badge.color,
+                                    },
+                                    '&:focus-visible': { outline: '3px solid #93c5fd' },
+                                  }}
+                                >
+                                  <Stack
+                                    direction="row"
+                                    sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+                                  >
+                                    <Typography
+                                      component="span"
+                                      sx={{ fontWeight: 750, fontSize: 20 }}
+                                    >
+                                      {room.code}
+                                    </Typography>
+                                    <RoomBadge status={roomStatus(room)} />
+                                  </Stack>
+                                  <Typography color="text.secondary" sx={{ fontSize: 12, mt: 1 }}>
+                                    {roomType?.name || room.name}
+                                  </Typography>
+                                  <Stack
+                                    direction="row"
+                                    sx={{ justifyContent: 'space-between', my: 2 }}
+                                  >
+                                    <Typography component="span" sx={{ fontWeight: 650 }}>
+                                      {currency(room.amount)}
+                                      <Typography
+                                        component="span"
+                                        color="text.secondary"
+                                        sx={{ fontSize: 11 }}
+                                      >
+                                        {' '}
+                                        / tháng
+                                      </Typography>
+                                    </Typography>
+                                    <Stack component="span" direction="row" sx={{ gap: 0.5 }}>
+                                      <Users size={15} />
+                                      {summary.occupants.length}/{summary.capacity}
+                                    </Stack>
+                                  </Stack>
+                                  <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+                                    {summary.alerts.map((alert) => (
+                                      <Typography
+                                        key={alert.label}
+                                        component="span"
+                                        sx={{ color: alert.color, fontSize: 11, fontWeight: 550 }}
+                                      >
+                                        ● {alert.label}
+                                      </Typography>
+                                    ))}
+                                  </Stack>
+                                  {summary.requirements.some(
+                                    (requirement) => requirement.missing,
+                                  ) && (
+                                    <Typography color="text.secondary" sx={{ fontSize: 11, mt: 1 }}>
+                                      Thiếu trang bị tiêu chuẩn
+                                    </Typography>
+                                  )}
+                                </Box>
+                              );
+                            })}
+                        </Box>
+                      </Box>
+                    ))}
+                </>
+              )}
+            </ListView>
+          </Paper>
         </Box>
       )}
 

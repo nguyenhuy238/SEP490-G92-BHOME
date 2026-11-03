@@ -9,8 +9,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   Grid,
   InputAdornment,
+  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -23,8 +25,9 @@ import {
   Tabs,
   TextField,
   Typography,
+  Switch,
 } from '@mui/material';
-import { AlertTriangle, BadgeDollarSign, Coins, Edit2, Scale } from 'lucide-react';
+import { AlertTriangle, BadgeDollarSign, Coins, Edit2, Plus, Scale } from 'lucide-react';
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
 import { INITIAL_FEE_POLICIES, INITIAL_ROOM_TYPES } from '../../mock/locationConfigMock';
 import type { FeePolicyItem } from '../../types/locationConfig';
@@ -41,6 +44,19 @@ const METHOD_LABELS: Record<string, string> = {
   PER_PERSON: 'Theo đầu người',
   PER_ROOM: 'Theo từng phòng',
   PER_BILLING_PERIOD: 'Theo kỳ hóa đơn',
+};
+
+const EMPTY_FEE: FeePolicyItem = {
+  id: '',
+  name: '',
+  type: 'OTHER',
+  calculationMethod: 'PER_ROOM',
+  unitPrice: 0,
+  unit: 'VND / phòng / tháng',
+  applicationScope: 'LOCATION_WIDE',
+  effectiveDate: '2026-11-03',
+  description: '',
+  isRegulatoryControlled: false,
 };
 
 export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
@@ -68,7 +84,8 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
   });
 
   // Fee Policies
-  const [feePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
+  const [feePolicies, setFeePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
+  const [editingFee, setEditingFee] = useState<FeePolicyItem | null>(null);
 
   // Estimator preview
   const [previewKwh, setPreviewKwh] = useState<number>(140);
@@ -84,6 +101,32 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
       setOverrideTargetRoom(null);
     }
   };
+
+  const handleSaveFee = () => {
+    if (!editingFee || !editingFee.name.trim() || editingFee.unitPrice < 0) return;
+    const savedFee = {
+      ...editingFee,
+      id: editingFee.id || `fee-${Date.now()}`,
+      name: editingFee.name.trim(),
+    };
+    setFeePolicies((current) => {
+      const exists = current.some((fee) => fee.id === savedFee.id);
+      return exists
+        ? current.map((fee) => (fee.id === savedFee.id ? savedFee : fee))
+        : [...current, savedFee];
+    });
+    setEditingFee(null);
+  };
+
+  const electricityFee = feePolicies.find((fee) => fee.type === 'ELECTRICITY');
+  const waterFee = feePolicies.find((fee) => fee.type === 'WATER');
+  const fixedServiceTotal = feePolicies
+    .filter(
+      (fee) =>
+        !['ELECTRICITY', 'WATER'].includes(fee.type) &&
+        ['FIXED_AMOUNT', 'PER_ROOM', 'PER_BILLING_PERIOD'].includes(fee.calculationMethod),
+    )
+    .reduce((sum, fee) => sum + fee.unitPrice, 0);
 
   return (
     <Box>
@@ -109,6 +152,15 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
             iconPosition="start"
           />
         </Tabs>
+        {activeSubTab === 'fees' && (
+          <Button
+            variant="contained"
+            startIcon={<Plus size={16} />}
+            onClick={() => setEditingFee({ ...EMPTY_FEE })}
+          >
+            Thêm khoản phí
+          </Button>
+        )}
       </Stack>
 
       {/* VIEW 1: Rental Rates Hierarchy */}
@@ -239,6 +291,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       <TableCell sx={{ fontWeight: 800 }}>Đơn giá</TableCell>
                       <TableCell sx={{ fontWeight: 800 }}>Phạm vi áp dụng</TableCell>
                       <TableCell sx={{ fontWeight: 800 }}>Ngày hiệu lực</TableCell>
+                      <TableCell sx={{ fontWeight: 800 }}>Thao tác</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -265,10 +318,24 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                           {fee.unitPrice.toLocaleString()} {fee.unit}
                         </TableCell>
                         <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
-                          {fee.applicationScope === 'LOCATION_WIDE' ? 'Toàn cơ sở' : 'Từng phòng'}
+                          {fee.applicationScope === 'LOCATION_WIDE'
+                            ? 'Toàn cơ sở'
+                            : fee.applicationScope === 'PER_ROOM_TYPE'
+                              ? 'Theo loại phòng'
+                              : 'Từng phòng'}
                         </TableCell>
                         <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
                           {fee.effectiveDate}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Edit2 size={13} />}
+                            onClick={() => setEditingFee({ ...fee })}
+                          >
+                            Cấu hình
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -329,26 +396,27 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                   </Stack>
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
-                      Tiền điện ({previewKwh} kWh × 3.800):
+                      Tiền điện ({previewKwh} kWh ×{' '}
+                      {(electricityFee?.unitPrice || 0).toLocaleString()}):
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {(previewKwh * 3800).toLocaleString()} VND
+                      {(previewKwh * (electricityFee?.unitPrice || 0)).toLocaleString()} VND
                     </Typography>
                   </Stack>
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
-                      Tiền nước ({previewM3} m³ × 22.000):
+                      Tiền nước ({previewM3} m³ × {(waterFee?.unitPrice || 0).toLocaleString()}):
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {(previewM3 * 22000).toLocaleString()} VND
+                      {(previewM3 * (waterFee?.unitPrice || 0)).toLocaleString()} VND
                     </Typography>
                   </Stack>
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">
-                      Phí rác, an ninh & Wi-Fi:
+                      Phí dịch vụ cố định:
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      300.000 VND
+                      {fixedServiceTotal.toLocaleString()} VND
                     </Typography>
                   </Stack>
 
@@ -359,7 +427,12 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       Tổng tiền dự kiến trên hóa đơn:
                     </Typography>
                     <Typography variant="subtitle1" sx={{ fontWeight: 850, color: 'primary.main' }}>
-                      {(5500000 + previewKwh * 3800 + previewM3 * 22000 + 300000).toLocaleString()}{' '}
+                      {(
+                        5500000 +
+                        previewKwh * (electricityFee?.unitPrice || 0) +
+                        previewM3 * (waterFee?.unitPrice || 0) +
+                        fixedServiceTotal
+                      ).toLocaleString()}{' '}
                       VND
                     </Typography>
                   </Stack>
@@ -410,6 +483,162 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           </DialogActions>
         </Dialog>
       )}
+
+      <Dialog open={!!editingFee} onClose={() => setEditingFee(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          {editingFee?.id ? 'Cấu hình khoản phí' : 'Thêm khoản phí'}
+        </DialogTitle>
+        {editingFee && (
+          <>
+            <DialogContent sx={{ py: 2 }}>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    label="Tên khoản phí"
+                    value={editingFee.name}
+                    onChange={(event) => setEditingFee({ ...editingFee, name: event.target.value })}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Nhóm phí"
+                    value={editingFee.type}
+                    onChange={(event) =>
+                      setEditingFee({
+                        ...editingFee,
+                        type: event.target.value as FeePolicyItem['type'],
+                      })
+                    }
+                  >
+                    <MenuItem value="ELECTRICITY">Tiền điện</MenuItem>
+                    <MenuItem value="WATER">Tiền nước</MenuItem>
+                    <MenuItem value="ENVIRONMENTAL_CLEANING">Vệ sinh & môi trường</MenuItem>
+                    <MenuItem value="SECURITY">An ninh</MenuItem>
+                    <MenuItem value="INTERNET">Internet</MenuItem>
+                    <MenuItem value="PARKING">Giữ xe</MenuItem>
+                    <MenuItem value="OTHER">Khác</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Phương thức tính"
+                    value={editingFee.calculationMethod}
+                    onChange={(event) =>
+                      setEditingFee({
+                        ...editingFee,
+                        calculationMethod: event.target.value as FeePolicyItem['calculationMethod'],
+                      })
+                    }
+                  >
+                    {Object.entries(METHOD_LABELS).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>
+                        {label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Đơn giá"
+                    value={editingFee.unitPrice}
+                    onChange={(event) =>
+                      setEditingFee({
+                        ...editingFee,
+                        unitPrice: Math.max(0, Number(event.target.value) || 0),
+                      })
+                    }
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    label="Đơn vị hiển thị"
+                    value={editingFee.unit}
+                    onChange={(event) => setEditingFee({ ...editingFee, unit: event.target.value })}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Phạm vi áp dụng"
+                    value={editingFee.applicationScope}
+                    onChange={(event) =>
+                      setEditingFee({
+                        ...editingFee,
+                        applicationScope: event.target.value as FeePolicyItem['applicationScope'],
+                      })
+                    }
+                  >
+                    <MenuItem value="LOCATION_WIDE">Toàn cơ sở</MenuItem>
+                    <MenuItem value="PER_ROOM_TYPE">Theo loại phòng</MenuItem>
+                    <MenuItem value="PER_ROOM">Từng phòng</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Ngày hiệu lực"
+                    value={editingFee.effectiveDate}
+                    onChange={(event) =>
+                      setEditingFee({ ...editingFee, effectiveDate: event.target.value })
+                    }
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    label="Mô tả / căn cứ áp dụng"
+                    value={editingFee.description}
+                    onChange={(event) =>
+                      setEditingFee({ ...editingFee, description: event.target.value })
+                    }
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={!!editingFee.isRegulatoryControlled}
+                        onChange={(event) =>
+                          setEditingFee({
+                            ...editingFee,
+                            isRegulatoryControlled: event.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="Khoản phí chịu kiểm soát theo khung giá Nhà nước"
+                  />
+                </Grid>
+              </Grid>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, py: 2 }}>
+              <Button variant="outlined" onClick={() => setEditingFee(null)}>
+                Hủy
+              </Button>
+              <Button
+                variant="contained"
+                disabled={!editingFee.name.trim() || !editingFee.effectiveDate}
+                onClick={handleSaveFee}
+              >
+                Lưu cấu hình
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }
