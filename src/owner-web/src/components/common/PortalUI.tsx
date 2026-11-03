@@ -44,7 +44,7 @@ export function PageHeader({
 }: {
   title: string;
   subtitle?: string;
-  group?: string;
+  group?: string | null;
   actions?: ReactNode;
 }) {
   return (
@@ -53,12 +53,14 @@ export function PageHeader({
       sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, gap: 2, mb: 3 }}
     >
       <Box sx={{ maxWidth: 740 }}>
-        <Typography
-          variant="overline"
-          sx={{ fontSize: 11, color: 'primary.main', fontWeight: 850, letterSpacing: 1.15 }}
-        >
-          {group || 'BHOME OWNER PORTAL'}
-        </Typography>
+        {group !== null && (
+          <Typography
+            variant="overline"
+            sx={{ fontSize: 11, color: 'primary.main', fontWeight: 850, letterSpacing: 1.15 }}
+          >
+            {group || 'BHOME OWNER PORTAL'}
+          </Typography>
+        )}
         <Typography
           component="h1"
           variant="h1"

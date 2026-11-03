@@ -1,1 +1,1 @@
-export { Locations as default } from '../../property/ConfigurationPages';
+export { LocationsListPage as default } from './LocationsListPage';

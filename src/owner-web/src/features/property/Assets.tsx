@@ -5,7 +5,7 @@ import { Package, Plus } from 'lucide-react';
 import { usePortal } from '../../app/PortalProvider';
 import { ConfirmDialog, KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import type { DemoDatabase, PortalRecord } from '../../types/portal';
-import { makeRecord } from '../../services/mock/seed';
+import { makeRecord, DEMO_DATE } from '../../services/mock/seed';
 import {
   availableQuantity,
   assignedQuantity,
@@ -29,6 +29,7 @@ function AssetContent({ db }: { db: DemoDatabase }) {
     [catalogEdit, setCatalogEdit] = useState<CatalogItem | null>(null),
     [purchase, setPurchase] = useState<PortalRecord | null>(null),
     [conditionAsset, setConditionAsset] = useState(''),
+    [eventAsset, setEventAsset] = useState(''),
     [condition, setCondition] = useState(''),
     [placement, setPlacement] = useState('');
   const assets = db.records.assets.filter(
@@ -263,12 +264,15 @@ function AssetContent({ db }: { db: DemoDatabase }) {
               {
                 label: 'Thao tác',
                 value: (a) => (
-                  <Button
-                    disabled={p.purchases[a.id].retired}
-                    onClick={() => setConditionAsset(a.id)}
-                  >
-                    Cập nhật tình trạng
-                  </Button>
+                  <Stack direction="row" sx={{ gap: 0.5 }}>
+                    <Button
+                      disabled={p.purchases[a.id].retired}
+                      onClick={() => setConditionAsset(a.id)}
+                    >
+                      Tình trạng
+                    </Button>
+                    <Button onClick={() => setEventAsset(a.id)}>Ghi vận hành</Button>
+                  </Stack>
                 ),
               },
             ]}
@@ -276,7 +280,7 @@ function AssetContent({ db }: { db: DemoDatabase }) {
         </Panel>
       )}
       {tab === 2 && (
-        <Panel title="Lịch sử mua, cấp phát, thu hồi & Bảo trì">
+        <Panel title="Dòng thời gian vận hành tài sản">
           <DataList
             rows={p.events.filter((e) => assets.some((a) => a.id === e.assetId))}
             noun="lịch sử tài sản"
@@ -287,7 +291,33 @@ function AssetContent({ db }: { db: DemoDatabase }) {
                 label: 'Tài sản',
                 value: (e) => db.records.assets.find((a) => a.id === e.assetId)?.code,
               },
+              {
+                label: 'Phân loại',
+                value: (e) => (
+                  <Chip
+                    size="small"
+                    label={
+                      {
+                        PURCHASE: 'Nhập kho',
+                        ALLOCATION: 'Cấp phát',
+                        RETURN: 'Thu hồi',
+                        CONDITION: 'Tình trạng',
+                        REPAIR: 'Sửa chữa',
+                        REPLACEMENT: 'Thay mới',
+                        DEPRECIATION: 'Khấu hao',
+                        INSPECTION: 'Kiểm tra',
+                      }[e.kind || 'CONDITION']
+                    }
+                  />
+                ),
+              },
+              {
+                label: 'Phòng tại thời điểm ghi nhận',
+                value: (e) =>
+                  db.records.rooms.find((room) => room.id === e.roomId)?.code || 'Kho / chung',
+              },
               { label: 'Hoạt động', value: (e) => e.description },
+              { label: 'Chi phí / khấu hao', value: (e) => (e.amount ? currency(e.amount) : '—') },
             ]}
           />
         </Panel>
@@ -391,6 +421,40 @@ function AssetContent({ db }: { db: DemoDatabase }) {
           }
         />
       )}
+      {eventAsset && (
+        <EditDrawer
+          title="Ghi nhận vận hành tài sản"
+          description="Thay mới chỉ ghi nhận quyết định/lịch sử. Tài sản thay thế phải được nhập kho, thu hồi tài sản cũ và cấp phát theo đúng luồng. Khấu hao là số liệu do Owner nhập, UI không tự tính chính thức."
+          initial={{ eventKind: 'INSPECTION', date: DEMO_DATE, amount: '0', note: '' }}
+          fields={[
+            {
+              key: 'eventKind',
+              label: 'Loại sự kiện',
+              options: [
+                { id: 'INSPECTION', name: 'Kiểm tra tình trạng' },
+                { id: 'REPAIR', name: 'Sửa chữa' },
+                { id: 'REPLACEMENT', name: 'Đề xuất / thực hiện thay mới' },
+                { id: 'DEPRECIATION', name: 'Ghi nhận khấu hao' },
+              ],
+            },
+            { key: 'date', label: 'Ngày ghi nhận', type: 'date', required: true },
+            { key: 'amount', label: 'Chi phí hoặc giá trị khấu hao (VND)', type: 'number' },
+            { key: 'note', label: 'Nội dung, lý do và chứng từ tham chiếu', required: true },
+          ]}
+          onClose={() => setEventAsset('')}
+          onSave={(values) =>
+            save({
+              kind: 'assetEvent',
+              assetId: eventAsset,
+              eventKind: values.eventKind as
+                'REPAIR' | 'REPLACEMENT' | 'DEPRECIATION' | 'INSPECTION',
+              date: values.date,
+              amount: Number(values.amount || 0),
+              note: values.note,
+            })
+          }
+        />
+      )}
     </>
   );
 }
@@ -407,6 +471,7 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
         (portal.locationId !== 'all' ? portal.locationId : db.records.locations[0]?.id || ''),
     ),
     [roomId, setRoomId] = useState(params.get('room') || ''),
+    [roomTypeId, setRoomTypeId] = useState(''),
     [target, setTarget] = useState(params.get('room') ? 'room' : 'room'),
     [commonArea, setCommonArea] = useState(''),
     [quantities, setQuantities] = useState<Record<string, number>>({}),
@@ -415,6 +480,14 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
     [error, setError] = useState(''),
     [returnId, setReturnId] = useState('');
   const room = db.records.rooms.find((r) => r.id === roomId && r.locationId === location);
+  const targetRooms =
+    target === 'roomType'
+      ? db.records.rooms.filter(
+          (candidate) => candidate.locationId === location && candidate.category === roomTypeId,
+        )
+      : room
+        ? [room]
+        : [];
   const inventory = db.records.assets.filter(
     (a) =>
       a.locationId === location &&
@@ -424,7 +497,11 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
   const allocations = p.allocations.filter(
     (a) =>
       a.locationId === location &&
-      (target === 'room' ? a.roomId === roomId : !a.roomId && a.commonArea === commonArea),
+      (target === 'room'
+        ? a.roomId === roomId
+        : target === 'roomType'
+          ? targetRooms.some((candidate) => candidate.id === a.roomId)
+          : !a.roomId && a.commonArea === commonArea),
   );
   const picked = Object.entries(quantities).filter(([, q]) => q > 0);
   return (
@@ -447,6 +524,7 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
             onChange={(v) => {
               setLocation(v);
               setRoomId('');
+              setRoomTypeId('');
               setCommonArea('');
               setQuantities({});
             }}
@@ -456,6 +534,7 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
             value={target}
             options={[
               { id: 'room', name: 'Phòng' },
+              { id: 'roomType', name: 'Tất cả phòng cùng loại' },
               { id: 'common', name: 'Khu vực chung' },
             ]}
             onChange={(v) => {
@@ -473,6 +552,17 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
                 .map((r) => ({ id: r.id, name: r.code }))}
               onChange={(v) => {
                 setRoomId(v);
+                setQuantities({});
+              }}
+            />
+          ) : target === 'roomType' ? (
+            <Select
+              label="Loại phòng"
+              value={roomTypeId}
+              all="Chọn loại phòng"
+              options={db.records['room-types'].filter((type) => type.locationId === location)}
+              onChange={(value) => {
+                setRoomTypeId(value);
                 setQuantities({});
               }}
             />
@@ -514,6 +604,13 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
           </Typography>
         </Panel>
       )}
+      {target === 'roomType' && roomTypeId && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Sẽ cấp cùng định mức cho {targetRooms.length} phòng thuộc loại{' '}
+          {db.records['room-types'].find((type) => type.id === roomTypeId)?.name}. Số lượng nhập bên
+          dưới là số lượng cho mỗi phòng; hệ thống kiểm tra tổng tồn kho trước khi lưu.
+        </Alert>
+      )}
       <Panel title="3. Chọn tài sản khả dụng">
         <DataList
           rows={inventory}
@@ -531,13 +628,17 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
                 </>
               ),
             },
-            { label: 'Khả dụng', value: (a) => availableQuantity(db, a.id) },
+            {
+              label: 'Khả dụng / Tổng cần',
+              value: (a) =>
+                `${availableQuantity(db, a.id)} / ${(quantities[a.id] || 0) * Math.max(1, targetRooms.length)}`,
+            },
             { label: 'Đơn giá vốn', value: (a) => currency(p.purchases[a.id].unitCost) },
             {
               label: 'Số lượng cấp',
               value: (a) => (
                 <TextField
-                  label={`Cấp ${a.code}`}
+                  label={target === 'roomType' ? `Mỗi phòng` : `Cấp ${a.code}`}
                   size="small"
                   type="number"
                   value={quantities[a.id] || 0}
@@ -555,7 +656,20 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
           <Typography>{picked.reduce((s, [, q]) => s + q, 0)} tài sản được chọn</Typography>
           <Button
             variant="contained"
-            disabled={!picked.length || busy || (target === 'room' ? !room : !commonArea.trim())}
+            disabled={
+              !picked.length ||
+              busy ||
+              (target === 'room'
+                ? !room
+                : target === 'roomType'
+                  ? !roomTypeId ||
+                    !targetRooms.length ||
+                    picked.some(
+                      ([assetId, quantity]) =>
+                        quantity * targetRooms.length > availableQuantity(db, assetId),
+                    )
+                  : !commonArea.trim())
+            }
             onClick={() => setConfirm(true)}
           >
             Xác nhận cấp phát
@@ -601,13 +715,24 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
           setError('');
           void save({
             kind: 'allocate',
-            allocations: picked.map(([assetId, quantity]) => ({
-              assetId,
-              quantity,
-              locationId: location,
-              roomId: target === 'room' ? roomId : '',
-              commonArea: target === 'common' ? commonArea.trim() : '',
-            })),
+            allocations:
+              target === 'roomType'
+                ? targetRooms.flatMap((targetRoom) =>
+                    picked.map(([assetId, quantity]) => ({
+                      assetId,
+                      quantity,
+                      locationId: location,
+                      roomId: targetRoom.id,
+                      commonArea: '',
+                    })),
+                  )
+                : picked.map(([assetId, quantity]) => ({
+                    assetId,
+                    quantity,
+                    locationId: location,
+                    roomId: target === 'room' ? roomId : '',
+                    commonArea: target === 'common' ? commonArea.trim() : '',
+                  })),
           })
             .then(() => {
               setQuantities({});
@@ -620,8 +745,10 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
             .finally(() => setBusy(false));
         }}
       >
-        Cấp tài sản vào {target === 'room' ? room?.code : commonArea}. Tổng giá trị mua sắm được giữ
-        nguyên.
+        {target === 'roomType'
+          ? `Cấp đồng loạt cho ${targetRooms.length} phòng cùng loại.`
+          : `Cấp tài sản vào ${target === 'room' ? room?.code : commonArea}.`}{' '}
+        Tổng giá trị mua sắm được giữ nguyên.
       </ConfirmDialog>
       {returnId && (
         <EditDrawer

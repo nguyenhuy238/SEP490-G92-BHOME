@@ -48,11 +48,6 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     private void StampEntities()
     {
         if (ChangeTracker.Entries().Any(x =>
-            (x.Entity is BHome.Domain.IncidentMaintenance.IncidentActivity or BHome.Domain.IncidentMaintenance.IncidentCommand
-                or BHome.Domain.IncidentMaintenance.MaintenanceHistory or BHome.Domain.IncidentMaintenance.MaintenanceExpense) &&
-            x.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("Incident history, commands and expenses are append-only.");
-        if (ChangeTracker.Entries().Any(x =>
             (x.Entity is BHome.Domain.StaffOperations.OperationalTaskHistory or BHome.Domain.StaffOperations.OperationalTaskCommand) &&
             x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Task history and commands are append-only.");

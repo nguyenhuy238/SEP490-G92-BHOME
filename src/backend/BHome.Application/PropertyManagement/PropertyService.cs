@@ -277,11 +277,6 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 if (x.Status == AssetStatus.UnderRepair && (x.Condition != Text(input.Condition) || x.Status != input.Status) ||
                     x.Status == AssetStatus.Retired && input.Status != AssetStatus.Retired)
                     throw Error(409, "asset_workflow_controlled");
-                if ((x.Condition != Text(input.Condition) || x.Status != input.Status) &&
-                    await repository.AnyAsync<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>(w =>
-                        w.AssetId == x.Id && w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
-                        w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t))
-                    throw Error(409, "asset_workflow_controlled");
                 x.Version++;
             }
             x.RoomId = input.RoomId; x.CommonArea = Optional(input.CommonArea); x.Code = Optional(input.Code);
