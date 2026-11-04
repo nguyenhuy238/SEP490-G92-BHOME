@@ -11,12 +11,23 @@ namespace BHome.Api.Controllers.Ocr;
 [Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class OcrDiagnosticsController(
-    IWebHostEnvironment environment, IConfiguration configuration, IOcrService ocr) : ControllerBase
+    IWebHostEnvironment environment, IConfiguration configuration, IOcrService ocr, IAutomaticOcrService automaticOcr) : ControllerBase
 {
     private bool Enabled => environment.IsDevelopment() && configuration.GetValue<bool>("MobileDevelopment:Enabled");
 
     [HttpGet]
     public IActionResult Availability() => Enabled ? Ok(new { available = true }) : NotFound();
+
+    [HttpPost("auto")]
+    [Consumes("image/jpeg", "image/png")]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IActionResult> Automatic(CancellationToken token)
+    {
+        if (!Enabled) return NotFound();
+        var elapsed = Stopwatch.StartNew();
+        var analysis = await automaticOcr.ExtractAutomaticAsync(Request.Body, token);
+        return Ok(new { analysis, elapsedMilliseconds = elapsed.ElapsedMilliseconds });
+    }
 
     [HttpPost("{profile}")]
     [Consumes("image/jpeg", "image/png")]

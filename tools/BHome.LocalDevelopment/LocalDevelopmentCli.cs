@@ -8,6 +8,35 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Length is 1 or 2 && args[0] == "seed-development-data" &&
+            (args.Length == 1 || args[1] == "--set-sample-passwords"))
+        {
+            var samplePassword = Environment.GetEnvironmentVariable("BHOME_DEV_TEST_PASSWORD");
+            Environment.SetEnvironmentVariable("BHOME_DEV_TEST_PASSWORD", null);
+            try
+            {
+                var configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var registration = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration);
+                registration.AddInfrastructure(configuration);
+                await using var sampleProvider = registration.BuildServiceProvider();
+                var added = await Compact24SampleSeed.RunAsync(sampleProvider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), samplePassword, args.Length == 2);
+                Console.WriteLine(added ? "SAMPLE_CREATED: 4 users, 2 Locations, 6 Rooms, 2 RoomTypes, 6 Assets, 12 Meters, 8 sample rates, 3 pending Residents, 4 Tasks."
+                    : "SAMPLE_ALREADY_PRESENT: existing business data preserved.");
+                Console.WriteLine(samplePassword is null ? "Sample accounts use random undisclosed passwords. Run Seed-LocalDevelopmentData.ps1 -SetSamplePasswords to choose a login password."
+                    : "Passwords are not printed; existing passwords change only with --set-sample-passwords.");
+                return 0;
+            }
+            catch (LocalTestAccountException error)
+            {
+                Console.Error.WriteLine(error.Message);
+                return 1;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"SAMPLE_FAILED ({error.GetType().Name}); no credentials or row data printed.");
+                return 1;
+            }
+        }
         if (args.SequenceEqual(new[] { "seed-main-draft-settings" }))
         {
             try

@@ -18,7 +18,10 @@ public static class OcrFieldParser
         var warnings = text.Warnings.ToList();
         if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
         {
-            var reading = warnings.Contains("conflicting_reading") ? null : MeterReadingParser.Parse(text.Lines, kind, warnings);
+            // A truncated page or conflicting orientation has not eliminated other
+            // plausible readings. Never recover a proposal from the surviving subset.
+            var reading = warnings.Any(w => w is "conflicting_reading" or "text_region_limit" or "orientation_uncertain")
+                ? null : MeterReadingParser.Parse(text.Lines, kind, warnings);
             if (reading is not null)
             {
                 fields["reading"] = reading.Value.Value;

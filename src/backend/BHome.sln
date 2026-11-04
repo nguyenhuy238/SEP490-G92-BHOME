@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.MySign
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.Infrastructure", "..\digital-signing\BHome.DigitalSigning.Infrastructure\BHome.DigitalSigning.Infrastructure.csproj", "{B98D5CFC-1C10-4653-ACEE-135DC978669F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.OcrSmoke", "..\..\tools\BHome.OcrSmoke\BHome.OcrSmoke.csproj", "{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,10 @@ Global
 		{B98D5CFC-1C10-4653-ACEE-135DC978669F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B98D5CFC-1C10-4653-ACEE-135DC978669F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B98D5CFC-1C10-4653-ACEE-135DC978669F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

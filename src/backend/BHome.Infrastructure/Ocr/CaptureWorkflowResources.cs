@@ -16,7 +16,7 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
         {
             return await db.Set<Resident>().Where(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId))
             .Select(r => new OcrWorkflowResource(new ResourceScope(r.Room.LocationId, null),
-                r.VerificationStatus == IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null)).SingleOrDefaultAsync(token);
+                r.VerificationStatus == IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);
         }
         catch (Npgsql.NpgsqlException) { throw new BHome.Application.Common.IntegrationUnavailableException("OCR resource lookup"); }
         // EF Core wraps transient connection failures when retry-on-failure is disabled.
@@ -32,7 +32,10 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
             t.Meter.IsActive && (t.Status == MeterTaskStatus.Assigned || t.Status == MeterTaskStatus.InProgress),
             t.Meter.UtilityType == UtilityType.Water ? (t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalWater : OcrDocumentKind.DigitalWater)
                 : (t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalElectricity : OcrDocumentKind.DigitalElectricity),
-            t.Meter.DecimalPlaces)).SingleOrDefaultAsync(token);
+            t.Meter.DecimalPlaces,
+            db.Set<MeterReading>().Where(reading => reading.MeterId == t.MeterId)
+                .OrderByDescending(reading => reading.ConfirmedAt).ThenBy(reading => reading.Id)
+                .Select(reading => (decimal?)reading.ConfirmedValue).FirstOrDefault())).SingleOrDefaultAsync(token);
         }
         catch (Npgsql.NpgsqlException) { throw new BHome.Application.Common.IntegrationUnavailableException("OCR resource lookup"); }
         catch (InvalidOperationException ex) when (ex.InnerException is Npgsql.NpgsqlException)

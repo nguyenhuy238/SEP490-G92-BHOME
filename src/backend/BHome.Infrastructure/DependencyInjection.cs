@@ -161,7 +161,9 @@ public static class DependencyInjection
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
-        services.AddSingleton<IOcrService, LocalOcrService>();
+        services.AddSingleton<LocalOcrService>();
+        services.AddSingleton<IOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
+        services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         services.AddHostedService<OcrWarmup>();
         services.AddScoped<IOcrWorkflowResources, CaptureWorkflowResources>();
         services.AddScoped<OcrWorkflowService>();

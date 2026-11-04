@@ -26,6 +26,10 @@ export default function Setup() {
   const [locationName, setLocationName] = useState('');
   const [address, setAddress] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
+  const [roomTypes, setRoomTypes] = useState<
+    { id: string; name: string; defaultCapacity: number }[]
+  >([]);
+  const [roomType, setRoomType] = useState('');
   const [staffName, setStaffName] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
@@ -78,11 +82,15 @@ export default function Setup() {
     void Promise.all([
       api.request<Named[]>(`/api/v1/capture/locations/${location}/rooms`),
       api.request<Named[]>(`/api/v1/capture/locations/${location}/meters`),
+      api.request<{ items: { id: string; name: string; defaultCapacity: number }[] }>(
+        `/api/v1/room-types?locationId=${encodeURIComponent(location)}&isActive=true&pageSize=100`,
+      ),
     ])
-      .then(([r, m]) => {
+      .then(([r, m, types]) => {
         if (current) {
           setRooms(r);
           setMeters(m);
+          setRoomTypes(types.items);
         }
       })
       .catch((e) => setError(errorMessage(e)));
@@ -119,6 +127,35 @@ export default function Setup() {
       setBusy(false);
     }
   };
+  const renameChain = async () => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const current = await api.request<{ id: string; name: string; version: number }>(
+        '/api/v1/chain',
+      );
+      await api.request('/api/v1/chain', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: chainName.trim(),
+          version: current.version,
+          reason: 'Cập nhật tên chuỗi từ Mobile',
+        }),
+      });
+      await load();
+      setChainName('');
+      setNotice('Máy chủ đã cập nhật tên chuỗi.');
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
   return (
     <Page>
       <Text variant="headlineSmall">Thiết lập thu thập dữ liệu</Text>
@@ -128,16 +165,10 @@ export default function Setup() {
       <Text variant="titleLarge">1. Chuỗi và cơ sở</Text>
       <Field label="Tên chuỗi" value={chainName} onChange={setChainName} />
       <Button
-        disabled={busy || !chainName.trim()}
-        onPress={() =>
-          void create(
-            'chains',
-            () => ({ name: chainName }),
-            () => setChainName(''),
-          )
-        }
+        disabled={busy || !chains.length || !chainName.trim()}
+        onPress={() => void renameChain()}
       >
-        Tạo chuỗi
+        Đổi tên chuỗi
       </Button>
       <Select label="Chuỗi sở hữu" items={chains} selected={chain} onSelect={setChain} />
       <Field label="Tên cơ sở" value={locationName} onChange={setLocationName} />
@@ -164,19 +195,35 @@ export default function Setup() {
         onSelect={(id) => {
           setLocation(id);
           setRoom('');
+          setRoomType('');
+          setRoomTypes([]);
           setMeter('');
           setRooms([]);
           setMeters([]);
         }}
       />
       <Text variant="titleLarge">2. Phòng</Text>
+      <Select
+        label="Loại phòng"
+        items={roomTypes.map((item) => ({ id: item.id, label: item.name }))}
+        selected={roomType}
+        onSelect={setRoomType}
+      />
+      {!roomTypes.length && (
+        <Text>Owner cần cấu hình loại phòng tại cơ sở trước khi tạo phòng.</Text>
+      )}
       <Field label="Số phòng" value={roomNumber} onChange={setRoomNumber} />
       <Button
-        disabled={busy || !location || !roomNumber.trim()}
+        disabled={busy || !location || !roomType || !roomNumber.trim()}
         onPress={() =>
           void create(
             'rooms',
-            () => ({ locationId: location, roomNumber }),
+            () => ({
+              locationId: location,
+              roomTypeId: roomType,
+              roomNumber,
+              capacity: roomTypes.find((item) => item.id === roomType)!.defaultCapacity,
+            }),
             () => setRoomNumber(''),
           )
         }
