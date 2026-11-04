@@ -18,6 +18,7 @@ function remove(uri: string) {
 }
 export function CameraCapture({
   label,
+  buttonMode = 'outlined',
   disabled,
   onCapture,
   retainPreview = false,
@@ -30,6 +31,7 @@ export function CameraCapture({
   onPhotoCaptured,
 }: {
   label: string;
+  buttonMode?: 'outlined' | 'contained';
   disabled: boolean;
   onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
   retainPreview?: boolean;
@@ -267,7 +269,7 @@ export function CameraCapture({
   return (
     <View style={styles.row}>
       <Button
-        mode="outlined"
+        mode={buttonMode}
         disabled={disabled || working}
         loading={working}
         onPress={() => void openCamera()}

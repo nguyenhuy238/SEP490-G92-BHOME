@@ -1,0 +1,74 @@
+﻿{
+  "date": "2026-11-04",
+  "scope": "One-button automatic OCR diagnostics; text-evidence routing and explicit review; no six-class visual weights",
+  "backend": {
+    "build": "PASS, 0 warnings, 0 errors",
+    "skipped": 0,
+    "applicationTests": 211,
+    "ocrIntegrationTests": 90,
+    "failures": 0,
+    "domainTests": 83,
+    "isolatedPostgresRegressionTests": 6
+  },
+  "mobile": {
+    "nativeDeviceE2E": "NOT RUN",
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "tests": 368,
+    "failures": 0
+  },
+  "trainingPreparation": {
+    "validationScenarios": 6,
+    "modelTraining": "NOT RUN",
+    "result": "PASS",
+    "onnxExport": "NOT RUN",
+    "checkpointFixture": "synthetic placeholder only; no inference"
+  },
+  "existingOcrProfileSmoke": {
+    "actualOcrModelsUsed": true,
+    "total": 18,
+    "passed": 18
+  },
+  "automaticRealOcrEvaluation": {
+    "summary": {
+      "dataset": "synthetic",
+      "sourceCount": 8,
+      "total": 14,
+      "passed": 9,
+      "statusMatches": 13,
+      "classified": 8,
+      "reviewed": 6,
+      "correctExpectedFields": 12,
+      "totalExpectedFields": 16,
+      "falseProposalsOnReviewCases": 0,
+      "explicitProfileCorrectExpectedFields": 12,
+      "classifiedCasesIdenticalToExplicitProfile": 8,
+      "fallbackRatePercent": 42.86,
+      "within10Seconds": 14,
+      "p95Milliseconds": 3282,
+      "maxMilliseconds": 3282,
+      "expectedToDetected": {
+        "cccd_front-\u003ecccd_front": 4,
+        "cccd_back-\u003ecccd_back": 4,
+        "unknown-\u003eunknown": 6
+      },
+      "classificationAccuracy": null,
+      "sixClassConfusionMatrix": null,
+      "limitation": "Synthetic text-evidence acceptance cases; no real six-class labeled dataset or visual classifier. NOT a classification accuracy benchmark."
+    },
+    "commandExitCode": 1,
+    "note": "Expected labels unchanged. Four exact-field failures from recognition whitespace also occur with explicit profiles; water unit below evidence threshold yields safe unknown rather than ambiguous."
+  },
+  "models": {
+    "visualClassifierWeights": "NOT AVAILABLE",
+    "recognizer": "767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12",
+    "detector": "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1",
+    "charset": "5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448"
+  },
+  "limitations": [
+    "No real six-class held-out accuracy/confusion matrix or calibrated classification confidence",
+    "No real MinIO/Docker or 100-session workload evaluation in this change",
+    "Timing is sequential local service analysis and excludes camera/upload/model initialization",
+    "Synthetic text evidence is not validated visual object classification; meter display technology still requires manual selection"
+  ]
+}

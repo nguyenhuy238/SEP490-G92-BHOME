@@ -14,6 +14,11 @@ export default tseslint.config(
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
+    // This generator serializes these functions into Postman scripts, where `pm` is provided.
+    files: ['scripts/postman/Generate-HuyImplementedCollection.cjs'],
+    languageOptions: { globals: { pm: 'readonly' } },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },

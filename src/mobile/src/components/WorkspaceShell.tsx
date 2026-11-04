@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
+import { router } from 'expo-router';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Badge, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { colors as c, staffColors as s } from '../theme/theme';
@@ -21,7 +22,7 @@ export function WorkspaceShell({
   screen: WorkspaceScreen;
   children: React.ReactNode;
 }) {
-  const { role, preview, go, leavePreview, scrollRevision } = useWorkspace();
+  const { role, preview, go, leavePreview, scrollRevision, requestNavigation } = useWorkspace();
   const insets = useSafeAreaInsets();
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => {
@@ -147,6 +148,15 @@ export function WorkspaceShell({
                 Quay lại
               </Text>
             </View>
+          )}
+          {__DEV__ && !preview && (role === 'Owner' || staff) && screen === homeScreen[role] && (
+            <Button
+              mode="contained-tonal"
+              icon="test-tube"
+              onPress={() => requestNavigation(() => router.push('/ocr-test'))}
+            >
+              Test OCR
+            </Button>
           )}
           {children}
         </ScrollView>

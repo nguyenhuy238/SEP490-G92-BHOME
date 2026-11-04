@@ -6,6 +6,43 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class OcrParserTests
 {
+    [Theory]
+    [InlineData("123.45 kWh")]
+    [InlineData("123.45")]
+    public void EqualReadingsOnTwoDisplaysStillRequireHumanSelection(string text)
+    {
+        OcrLine[] lines = [new(text, .99f) { Bounds = new(10, 20, 100, 30) },
+            new(text, .99f) { Bounds = new(500, 20, 100, 30) }];
+        var result = OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.DigitalElectricity);
+        Assert.True(result.IsFallback);
+        Assert.Empty(result.ProposedFields);
+        Assert.Contains("ambiguous_reading", result.Warnings);
+    }
+
+    [Theory]
+    [InlineData("text_region_limit")]
+    [InlineData("orientation_uncertain")]
+    [InlineData("conflicting_reading")]
+    public void IncompleteOrConflictingSceneCannotProduceAProposal(string warning)
+    {
+        var result = OcrFieldParser.Parse(new([new("123.45 kWh", .99f)], "synthetic", [warning]),
+            OcrDocumentKind.DigitalElectricity);
+        Assert.True(result.IsFallback);
+        Assert.Empty(result.ProposedFields);
+        Assert.Contains(warning, result.Warnings);
+    }
+
+    [Theory]
+    [InlineData(OcrDocumentKind.DigitalWater, "CHỈ SỐ ĐIỆN: 123.45")]
+    [InlineData(OcrDocumentKind.MechanicalElectricity, "Chỉ số nước: 123.45")]
+    [InlineData(OcrDocumentKind.DigitalElectricity, "123.45 m³")]
+    public void WrongUtilityLabelCannotSupplyAReadingWithoutAUnit(OcrDocumentKind kind, string text)
+    {
+        var result = Parse(kind, text);
+        Assert.Empty(result.ProposedFields);
+        Assert.Contains("meter_type_mismatch", result.Warnings);
+    }
+
     [Fact]
     public void FrontFieldsOnOneRowDoNotSwallowAnotherLabel()
     {

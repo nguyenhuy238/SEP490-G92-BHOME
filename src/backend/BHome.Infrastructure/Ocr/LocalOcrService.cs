@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace BHome.Infrastructure.Ocr;
 
 // Singleton: bounds the entire read/preprocess/inference pipeline, including queued requests.
-public sealed class LocalOcrService : IOcrService, IDisposable
+public sealed class LocalOcrService : IOcrService, IAutomaticOcrService, IDisposable
 {
     private readonly OcrOptions options;
     private readonly Lazy<IOcrEngine> engine;
@@ -27,11 +27,34 @@ public sealed class LocalOcrService : IOcrService, IDisposable
             _ => throw new OcrInputException("unsupported_profile")
         }, cancellationToken);
 
-    public async Task<OcrProposal> ExtractAsync(Stream temporaryInput, OcrDocumentKind kind, CancellationToken cancellationToken)
+    public Task<OcrProposal> ExtractAsync(Stream temporaryInput, OcrDocumentKind kind, CancellationToken cancellationToken)
+    {
+        if (!Enum.IsDefined(kind)) throw new OcrInputException("unsupported_profile");
+        return ExecuteAsync(temporaryInput, async (readyEngine, bytes, token) =>
+        {
+            var text = await readyEngine.RecognizeAsync(bytes, kind, token);
+            token.ThrowIfCancellationRequested();
+            var proposal = OcrFieldParser.Parse(text, kind);
+            return kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? proposal :
+                proposal with { SourceImageHash = Convert.ToHexString(SHA256.HashData(bytes.Span)) };
+        }, Fallback, cancellationToken);
+    }
+
+    public Task<AutomaticOcrResult> ExtractAutomaticAsync(Stream temporaryInput, CancellationToken token) =>
+        ExecuteAsync(temporaryInput, async (readyEngine, bytes, cancellation) =>
+        {
+            if (readyEngine is not IOcrAnalysisEngine analyzer) return AutomaticOcrRouter.Unavailable("classification_unavailable");
+            var analysis = await analyzer.AnalyzeAsync(bytes, cancellation);
+            cancellation.ThrowIfCancellationRequested();
+            return AutomaticOcrRouter.Route(analysis, options.AutomaticClassificationMinConfidence);
+        }, AutomaticOcrRouter.Unavailable, token);
+
+    private async Task<T> ExecuteAsync<T>(Stream temporaryInput,
+        Func<IOcrEngine, ReadOnlyMemory<byte>, CancellationToken, Task<T>> extract,
+        Func<string, T> fallback, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!options.Enabled) throw new IntegrationUnavailableException("internal OCR");
-        if (!Enum.IsDefined(kind)) throw new OcrInputException("unsupported_profile");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(options.TimeoutMilliseconds);
         var entered = false;
@@ -40,7 +63,7 @@ public sealed class LocalOcrService : IOcrService, IDisposable
         {
             // Do not build an unbounded queue of images in managed memory.
             entered = await slots.WaitAsync(0, timeout.Token);
-            if (!entered) return Fallback("ocr_busy");
+            if (!entered) return fallback("ocr_busy");
             // Session initialization occurs once. Deployment warmup must precede accepting uploads.
             var readyEngine = engine.Value;
             buffer = new byte[options.MaxImageBytes + 1];
@@ -52,14 +75,12 @@ public sealed class LocalOcrService : IOcrService, IDisposable
                 length += read;
             }
             ImagePreprocessor.ValidateHeader(buffer.AsSpan(0, length), options.MaxImageBytes, options.MaxPixels);
-            var text = await readyEngine.RecognizeAsync(buffer.AsMemory(0, length), kind, timeout.Token);
+            var result = await extract(readyEngine, buffer.AsMemory(0, length), timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
-            var proposal = OcrFieldParser.Parse(text, kind);
-            return kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? proposal :
-                proposal with { SourceImageHash = Convert.ToHexString(SHA256.HashData(buffer.AsSpan(0, length))) };
+            return result;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        { return Fallback("ocr_timeout"); }
+        { return fallback("ocr_timeout"); }
         catch (OcrInputException) { throw; }
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) when (exception is IOException or InvalidDataException or
@@ -68,7 +89,7 @@ public sealed class LocalOcrService : IOcrService, IDisposable
         {
             // Do not attach exception messages, model paths, text or images to telemetry.
             logger.LogWarning("Internal OCR unavailable ({ErrorType}); manual entry required", exception.GetType().Name);
-            return Fallback("ocr_unavailable");
+            return fallback("ocr_unavailable");
         }
         finally
         {
