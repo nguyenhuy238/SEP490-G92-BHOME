@@ -256,17 +256,29 @@ $global:prepared += $LanIp
         $global:LASTEXITCODE = if ($args -contains '--check') { 2 } else { 0 }
     }
     $savedConnection = $env:ConnectionStrings__Database
+    $savedDatabaseEnvironment = $env:DOTNET_ENVIRONMENT
     try {
         $env:ConnectionStrings__Database = 'synthetic-original'
+        $env:DOTNET_ENVIRONMENT = 'SyntheticOriginal'
         & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check
         Assert-Equal $global:databaseCalls.Count 2 'pending read-only inspection builds then executes exactly once'
         Assert-Equal ($global:databaseCalls[0] -contains '--artifacts-path') $true 'build isolated from running API DLLs'
         Assert-Equal $global:databaseCalls[1][0] (Join-Path $testRoot '.tools/database-upgrade/bin/BHome.DatabaseUpgrade/debug/BHome.DatabaseUpgrade.dll') 'execute the current isolated migration assembly'
         Assert-Equal ($global:databaseCalls[1] -contains '--check') $true 'forward read-only mode to runner'
         Assert-Equal $env:ConnectionStrings__Database 'synthetic-original' 'restore caller connection after inspection'
+        Assert-Equal $env:DOTNET_ENVIRONMENT 'SyntheticOriginal' 'restore caller environment after inspection'
         $global:databaseCalls = @()
         & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env')
         Assert-Equal ($global:databaseCalls[1] -contains '--check') $false 'explicit upgrade retains migration mode'
+        Assert-Equal ($global:databaseCalls[1] -contains '--archive-legacy') $false 'normal initialization never archives data'
+        $global:databaseCalls = @()
+        & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -RecreateDatabase
+        Assert-Equal ($global:databaseCalls[1] -contains '--archive-legacy') $true 'explicit recreate forwards archive mode'
+        Assert-Equal $env:DOTNET_ENVIRONMENT 'SyntheticOriginal' 'restore caller environment after recreate'
+        $global:databaseCalls = @()
+        try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -Check -RecreateDatabase; throw 'Conflicting modes were accepted.' }
+        catch { if ($_.Exception.Message -ne 'Use either -Check or -RecreateDatabase.') { throw } }
+        Assert-Equal $global:databaseCalls.Count 0 'conflicting modes cannot start a database operation'
         $global:databaseCalls = @(); $global:failDatabaseBuild = $true
         try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check; throw 'Failed database build was accepted.' }
         catch { if ($_.Exception.Message -ne 'Local database tool build failed.') { throw } }
@@ -277,7 +289,7 @@ $global:prepared += $LanIp
         try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check; throw 'Remote database was accepted.' }
         catch { if ($_.Exception.Message -notlike 'Refusing migration:*') { throw } }
         Assert-Equal $global:databaseCalls.Count 0 'remote database rejected before build or inspection'
-    } finally { $env:ConnectionStrings__Database = $savedConnection }
+    } finally { $env:ConnectionStrings__Database = $savedConnection; $env:DOTNET_ENVIRONMENT = $savedDatabaseEnvironment }
     Write-Output "PASS $checks mobile network/launcher assertions."
 } finally {
     $resolvedTestRoot = [IO.Path]::GetFullPath($testRoot)

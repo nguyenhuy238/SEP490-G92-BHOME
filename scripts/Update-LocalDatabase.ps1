@@ -1,5 +1,6 @@
-param([string]$EnvironmentFile = '.env', [switch]$Check)
+param([string]$EnvironmentFile = '.env', [switch]$Check, [switch]$RecreateDatabase)
 $ErrorActionPreference = 'Stop'
+if ($Check -and $RecreateDatabase) { throw 'Use either -Check or -RecreateDatabase.' }
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 $configurationPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $repo $EnvironmentFile }
@@ -13,10 +14,12 @@ if ([string]$connection['Host'] -notin @('localhost', '127.0.0.1', '::1') -or [s
     throw 'Refusing migration: only the documented loopback development database bhome is supported.'
 }
 $previousConnection = $env:ConnectionStrings__Database
+$previousEnvironment = $env:DOTNET_ENVIRONMENT
 Push-Location $repo
 try {
     $env:ConnectionStrings__Database = $connectionText
-    # The guarded runner applies all migrations in one transaction; no API/user-secrets startup.
+    $env:DOTNET_ENVIRONMENT = 'Development'
+    # Compact24 only. Normal runs initialize empty targets; legacy archive is explicit.
     # Isolate output from the API binaries that Visual Studio may currently be using.
     $artifacts = Join-Path $repo '.tools/database-upgrade'
     # .NET 8 `dotnet run` can select stale default output with --artifacts-path.
@@ -26,10 +29,12 @@ try {
     $runner = Join-Path $artifacts 'bin/BHome.DatabaseUpgrade/debug/BHome.DatabaseUpgrade.dll'
     $runnerArguments = @($runner)
     if ($Check) { $runnerArguments += '--check' }
+    if ($RecreateDatabase) { $runnerArguments += '--archive-legacy' }
     & dotnet @runnerArguments
     if ($Check -and $LASTEXITCODE -eq 2) { return }
-    if ($LASTEXITCODE -ne 0) { throw 'Local migration failed. Do not reset/drop the database; inspect the migration error.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Compact24 preparation failed. Use -Check to inspect; -RecreateDatabase explicitly archives a legacy database without dropping it.' }
 } finally {
     $env:ConnectionStrings__Database = $previousConnection
+    $env:DOTNET_ENVIRONMENT = $previousEnvironment
     Pop-Location
 }
