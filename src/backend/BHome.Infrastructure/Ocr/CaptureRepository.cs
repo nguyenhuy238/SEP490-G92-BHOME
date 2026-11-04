@@ -20,7 +20,7 @@ using OpenCvSharp;
 
 namespace BHome.Infrastructure.Ocr;
 
-internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, IIdentityProtection protection,
+internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope scope, IIdentityProtection protection,
     IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock,
     ILocationAssignments locationAssignments,
     BHome.Application.PropertyManagement.IPropertyRepository properties) : ICaptureRepository
@@ -57,8 +57,9 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         Validate(x);
         await using var tx = await db.Database.BeginTransactionAsync(t);
         var u = new ApplicationUser { UserName = x.UserName.Trim(), Email = x.Email.Trim(), LockoutEnabled = true };
+        db.PrepareUserRole(u, Roles.Staff);
         if (!(await users.CreateAsync(u, x.Password)).Succeeded) throw new CaptureValidationException("staff_account_not_created");
-        if (!(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
+        if (!await users.IsInRoleAsync(u, Roles.Staff) && !(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
         Audit("StaffCreated", "User", u.Id); await Save(t); await tx.CommitAsync(t); return new(u.Id);
     }
     public async Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t)
@@ -99,8 +100,8 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         await using var tx = await db.Database.BeginTransactionAsync(t);
         var identityOwner = await db.Set<Resident>().Where(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId)).Select(r => (Guid?)r.OwnerUserId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         // Serializes scoped duplicate checks, including the transition between HMAC key versions.
-        await db.Users.FromSqlInterpolated($"SELECT * FROM \"AspNetUsers\" WHERE \"Id\" = {identityOwner} FOR UPDATE").SingleAsync(t);
-        var resident = await db.Set<Resident>().FromSqlInterpolated($"SELECT * FROM \"Residents\" WHERE \"Id\" = {id} FOR UPDATE").SingleAsync(t);
+        await db.Locked<ApplicationUser>(identityOwner).SingleAsync(t);
+        var resident = await db.Locked<Resident>(id).SingleAsync(t);
         // Re-evaluate assignment after the lock, without trusting any incoming Location/Owner ID.
         if (!await scope.VisibleRooms.AnyAsync(r => r.Id == resident.RoomId, t)) throw new OcrAccessException();
         var normalized = x with { FullName = x.FullName.Trim().Normalize(), CitizenIdentityNumber = x.CitizenIdentityNumber.Trim(), ResidentialAddress = x.ResidentialAddress?.Trim().Normalize() };
@@ -217,7 +218,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
             };
             db.Add(evidence); await Save(t); // durable cleanup intent BEFORE the external write
             await using var transaction = await db.Database.BeginTransactionAsync(t);
-            await db.Set<MeterEvidence>().FromSqlInterpolated($"SELECT * FROM \"MeterEvidence\" WHERE \"Id\" = {evidence.Id} FOR UPDATE").SingleAsync(t);
+            await db.Locked<MeterEvidence>(evidence.Id).SingleAsync(t);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
             using var data = new MemoryStream(buffer, 0, length, false);
             await storage.PutAsync(evidence.ObjectKey, data, length, contentType, deadline.Token);
@@ -231,8 +232,8 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         if (!x.HumanConfirmed || x.ConfirmedValue < 0 || x.ConfirmedValue >= 100_000_000_000_000m) throw new CaptureValidationException("invalid_reading_value");
         await using var tx = await db.Database.BeginTransactionAsync(t);
         var meterId = await scope.VisibleTasks.Where(task => task.Id == taskId).Select(task => (Guid?)task.MeterId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
-        var meter = await db.Set<Meter>().FromSqlInterpolated($"SELECT * FROM \"Meters\" WHERE \"Id\" = {meterId} FOR UPDATE").SingleAsync(t);
-        var task = await db.Set<OperationalTask>().FromSqlInterpolated($"SELECT * FROM \"OperationalTasks\" WHERE \"Id\" = {taskId} FOR UPDATE").SingleAsync(t);
+        var meter = await db.Locked<Meter>(meterId).SingleAsync(t);
+        var task = await db.Locked<OperationalTask>(taskId).SingleAsync(t);
         if (!await scope.VisibleTasks.AnyAsync(a => a.Id == taskId, t)) throw new OcrAccessException();
         var existing = await db.Set<MeterReading>().SingleOrDefaultAsync(r => r.TaskId == taskId, t);
         if (existing is not null)
@@ -242,7 +243,7 @@ internal sealed class CaptureRepository(BHomeDbContext db, CaptureScope scope, I
         }
         if (!meter.IsActive || task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new CaptureConflictException("task_closed");
         if (task.ReadingDate > scope.Today || decimal.Round(x.ConfirmedValue, meter.DecimalPlaces) != x.ConfirmedValue) throw new CaptureValidationException("reading_date_or_precision");
-        var evidence = await db.Set<MeterEvidence>().FromSqlInterpolated($"SELECT * FROM \"MeterEvidence\" WHERE \"Id\" = {x.EvidenceId} FOR UPDATE").SingleOrDefaultAsync(t);
+        var evidence = await db.Locked<MeterEvidence>(x.EvidenceId).SingleOrDefaultAsync(t);
         if (evidence is null || evidence.TaskId != taskId || evidence.UploadedByUserId != Actor || !evidence.IsUploaded || evidence.IsLinked || evidence.CleanupAfter <= clock.GetUtcNow()) throw new CaptureConflictException("evidence_not_available");
         var previous = await db.Set<MeterReading>().Where(r => r.MeterId == meter.Id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
         if (task.Purpose == ReadingPurpose.Initial && previous != null) throw new CaptureConflictException("baseline_already_confirmed");

@@ -5,7 +5,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractExpiryProcessor(BHomeDbContext db, TimeProvider clock) : IBackgroundJobHandler, IContractExpiryRepository
+internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimeProvider clock) : IBackgroundJobHandler, IContractExpiryRepository
 {
     public const string JobName = "contract-expiry";
     public string Name => JobName;
@@ -21,17 +21,16 @@ internal sealed class ContractExpiryProcessor(BHomeDbContext db, TimeProvider cl
             foreach (var item in batch)
             {
                 await using var tx = await db.Database.BeginTransactionAsync(t);
-                await db.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\"={item.RoomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
+                await db.Locked<BHome.Domain.PropertyManagement.Room>(item.RoomId).AsNoTracking().SingleAsync(t);
                 var c = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == item.Id, t);
                 if (c.Status == ContractStatus.Active && c.EndDate <= through)
                 {
                     var stage = c.EndDate < today ? "Expired" : "Upcoming30";
                     foreach (var recipient in new[] { c.OwnerSignerId, c.TenantUserId }.Distinct())
-                        await db.Database.ExecuteSqlInterpolatedAsync($"""
-                            INSERT INTO "ContractExpiryNotices" ("Id","ContractId","RecipientId","EndDate","Stage","CreatedAt")
-                            VALUES ({Guid.NewGuid()},{c.Id},{recipient},{c.EndDate},{stage},{clock.GetUtcNow()})
-                            ON CONFLICT ("ContractId","EndDate","Stage","RecipientId") DO NOTHING
-                            """, t);
+                        if (recipient is { } user && !await db.Set<ContractExpiryNotice>().AnyAsync(n => n.ContractId == c.Id && n.EndDate == c.EndDate && n.Stage == stage && n.RecipientId == user, t))
+                            db.Add(new ContractExpiryNotice { Id = Guid.NewGuid(), ContractId = c.Id, RecipientId = user,
+                                EndDate = c.EndDate, Stage = stage, CreatedAt = clock.GetUtcNow() });
+                    await db.SaveChangesAsync(t);
                 }
                 await tx.CommitAsync(t);
             }

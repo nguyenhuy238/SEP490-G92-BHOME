@@ -5,7 +5,7 @@ using BHome.Domain.Billing;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing;
-internal sealed class BillingAutomationScheduling(BHomeDbContext db, IBillingAutomationSchedules schedules, IBackgroundJobQueue queue, TimeProvider clock) : IJobScheduleContributor
+internal sealed class BillingAutomationScheduling(BHomePersistenceContext db, IBillingAutomationSchedules schedules, IBackgroundJobQueue queue, TimeProvider clock) : IJobScheduleContributor
 {
     public async Task EnqueueDueAsync(CancellationToken t)
     {

@@ -33,8 +33,8 @@ public static class LocalTestAccounts
         var config = services.GetRequiredService<IConfiguration>();
         ValidateTarget(environment, config.GetConnectionString("Database") ?? "");
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        if ((await db.Database.GetPendingMigrationsAsync(cancellationToken)).Any())
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        if (!await db.IsSchemaReadyAsync(cancellationToken))
             throw new LocalTestAccountException("Database còn migration chưa áp dụng. Hãy cập nhật database trước.");
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
@@ -57,11 +57,13 @@ public static class LocalTestAccounts
                 IsActive = true,
                 LockoutEnabled = true
             };
+            db.PrepareUserRole(user, role);
             var created = await users.CreateAsync(user, password);
             if (!created.Succeeded) throw Failure(created);
-            var assigned = await users.AddToRoleAsync(user, role);
+            var assigned = await users.IsInRoleAsync(user, role) ? IdentityResult.Success : await users.AddToRoleAsync(user, role);
             if (!assigned.Succeeded) throw Failure(assigned);
         }
+        await LocalSchemaSeed.EnsureChainAsync(db, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

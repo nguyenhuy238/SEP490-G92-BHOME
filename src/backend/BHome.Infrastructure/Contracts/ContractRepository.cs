@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractRepository(BHomeDbContext db) : IContractRepository
+internal sealed class ContractRepository(BHomePersistenceContext db) : IContractRepository
 {
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
@@ -52,7 +52,8 @@ internal sealed class ContractRepository(BHomeDbContext db) : IContractRepositor
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         try
         {
-            if (!await db.Set<Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {roomId} FOR UPDATE").AnyAsync(t))
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
+            if (!await db.Locked<Room>(roomId).AnyAsync(t))
                 throw ContractException.Missing();
             var value = await work();
             await db.SaveChangesAsync(t); await transaction.CommitAsync(t); return value;

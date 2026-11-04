@@ -11,7 +11,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class NotificationEventPublisher(BHomeDbContext db, IBackgroundJobQueue queue, TimeProvider clock) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
+internal sealed class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
 {
     public string Name => "notification-publish";
     public Task EnqueueDueAsync(CancellationToken t) => queue.EnqueueAsync(new(Name, clock.GetUtcNow().ToString("yyyyMMddHHmm"), "{}"), t);
@@ -27,11 +27,12 @@ internal sealed class NotificationEventPublisher(BHomeDbContext db, IBackgroundJ
         foreach (var i in (await resolve()).DistinctBy(i => i.Recipient))
         {
             if (!await ActiveRole(i.Recipient, i.Role, t)) continue; recipients++;
-            count += await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO "UserNotifications" ("Id","RecipientUserId","AudienceRole","LocationId","Category","Title","Summary","RelatedObjectType","RelatedObjectId","EventKey","SourceTaskNotificationId","CreatedAt","ReadAt","DeliveryState")
-                VALUES ({Guid.NewGuid()},{i.Recipient},{i.Role},{i.Location},{i.Category},{i.Title},{i.Summary},{i.Type},{i.ObjectId},{key},{i.TaskSource},{clock.GetUtcNow()},{i.ReadAt},'Unconfigured')
-                ON CONFLICT ("RecipientUserId","EventKey") DO NOTHING
-                """, t);
+            if (await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == i.Recipient && n.EventKey == key, t)) continue;
+            db.Add(new UserNotification { Id = Guid.NewGuid(), RecipientUserId = i.Recipient, AudienceRole = i.Role,
+                LocationId = i.Location, Category = i.Category, Title = i.Title, Summary = i.Summary,
+                RelatedObjectType = i.Type, RelatedObjectId = i.ObjectId, EventKey = key,
+                SourceTaskNotificationId = i.TaskSource, CreatedAt = clock.GetUtcNow(), ReadAt = i.ReadAt, DeliveryState = "Unconfigured" });
+            count++;
         }
         db.Add(new NotificationPublication { EventKey = key, PublishedAt = clock.GetUtcNow(), RecipientCount = recipients }); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return count;
     }

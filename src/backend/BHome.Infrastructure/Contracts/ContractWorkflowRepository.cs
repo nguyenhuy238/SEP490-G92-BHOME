@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractWorkflowRepository(BHomeDbContext db) : IContractWorkflowRepository
+internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : IContractWorkflowRepository
 {
     public async Task<ContractPreparation> PreparationAsync(ContractListScope scope, Guid? locationId, CancellationToken t)
     {
@@ -43,8 +43,8 @@ internal sealed class ContractWorkflowRepository(BHomeDbContext db) : IContractW
     {
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         var roomId = await db.Set<Resident>().Where(r => r.Id == residentId).Select(r => (Guid?)r.RoomId).SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
-        await db.Set<Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {roomId} FOR UPDATE").SingleAsync(t);
-        var resident = await db.Set<Resident>().FromSqlInterpolated($"SELECT * FROM \"Residents\" WHERE \"Id\" = {residentId} FOR UPDATE").SingleOrDefaultAsync(t)
+        await db.Locked<Room>(roomId).SingleAsync(t);
+        var resident = await db.Locked<Resident>(residentId).SingleOrDefaultAsync(t)
             ?? throw ContractException.Missing();
         if (resident.RoomId != roomId) throw ContractException.Conflict("resident_room_changed");
         var validAccount = await (from account in db.Users

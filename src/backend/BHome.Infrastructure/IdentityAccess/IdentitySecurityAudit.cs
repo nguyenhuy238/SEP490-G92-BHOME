@@ -1,9 +1,8 @@
 using BHome.Application.IdentityAccess;
-using BHome.Infrastructure.Persistence;
 
 namespace BHome.Infrastructure.IdentityAccess;
 
-internal sealed class IdentitySecurityAudit(BHomeDbContext db, IdentitySecurityStore security) : ISecurityAudit
+internal sealed class IdentitySecurityAudit(IIdentityPersistence db, IdentitySecurityStore security) : ISecurityAudit
 {
     public async Task LoginFailedAsync(CancellationToken cancellationToken)
     {

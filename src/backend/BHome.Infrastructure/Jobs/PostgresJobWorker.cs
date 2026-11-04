@@ -1,6 +1,4 @@
 using BHome.Application.Jobs;
-using BHome.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -35,41 +33,20 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
         }
     }
 
-    private async Task<bool> ProcessOneAsync(CancellationToken stoppingToken)
+    internal async Task<bool> ProcessOneAsync(CancellationToken stoppingToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var persistence = scope.ServiceProvider.GetRequiredService<IJobPersistence>();
         var handlers = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().ToDictionary(h => h.Name, StringComparer.Ordinal);
         var names = handlers.Keys.ToArray();
-        BackgroundJobRecord? job;
         var now = DateTimeOffset.UtcNow;
         var lockToken = Guid.NewGuid();
-        await using (var transaction = await db.Database.BeginTransactionAsync(stoppingToken))
+        var job = await persistence.ClaimAsync(names, now, lockToken, MaxAttempts, stoppingToken);
+        if (job is null) return false;
+        if (job.State == "Failed")
         {
-            // Row locks and a lease allow multiple API instances without simultaneous normal claims.
-            job = await db.BackgroundJobs.FromSqlInterpolated($"""
-                SELECT * FROM "BackgroundJobs"
-                WHERE "Name" = ANY({names}) AND
-                  (("State" = 'Pending' AND "AvailableAt" <= {now})
-                   OR ("State" = 'Processing' AND "LockedUntil" < {now}))
-                ORDER BY "AvailableAt" LIMIT 1 FOR UPDATE SKIP LOCKED
-                """).FirstOrDefaultAsync(stoppingToken);
-            if (job is null) return false;
-            if (job.Attempts >= MaxAttempts)
-            {
-                job.State = "Failed";
-                job.LastErrorCode = "LeaseExpiredAfterFinalAttempt";
-                await db.SaveChangesAsync(stoppingToken);
-                await transaction.CommitAsync(stoppingToken);
-                logger.LogError("Job {JobId} exhausted attempts; manual review required", job.Id);
-                return true;
-            }
-            job.State = "Processing";
-            job.LockToken = lockToken;
-            job.LockedUntil = now.AddMinutes(2);
-            job.Attempts++;
-            await db.SaveChangesAsync(stoppingToken);
-            await transaction.CommitAsync(stoppingToken);
+            logger.LogError("Job {JobId} exhausted attempts; manual review required", job.Id);
+            return true;
         }
 
         using var logScope = logger.BeginScope(new Dictionary<string, object> { ["JobId"] = job.Id, ["JobName"] = job.Name });
@@ -80,9 +57,7 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
             var handler = handlers[job.Name];
             await handler.ExecuteAsync(new JobExecution(job.Id, job.IdempotencyKey, job.PayloadJson), timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
-            var updated = await db.BackgroundJobs.Where(j => j.Id == job.Id && j.LockToken == lockToken)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(j => j.State, "Completed")
-                    .SetProperty(j => j.LockedUntil, (DateTimeOffset?)null), stoppingToken);
+            var updated = await persistence.CompleteAsync(job.Id, lockToken, stoppingToken);
             if (updated == 1) logger.LogInformation("Job completed on attempt {Attempt}", job.Attempts);
             else logger.LogWarning("Job lease was lost; completion was not recorded");
         }
@@ -91,10 +66,7 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
         {
             var state = job.Attempts >= MaxAttempts ? "Failed" : "Pending";
             var next = DateTimeOffset.UtcNow.AddSeconds(Math.Pow(2, job.Attempts) * 5 + Random.Shared.Next(5));
-            var updated = await db.BackgroundJobs.Where(j => j.Id == job.Id && j.LockToken == lockToken)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(j => j.State, state)
-                    .SetProperty(j => j.AvailableAt, next).SetProperty(j => j.LockedUntil, (DateTimeOffset?)null)
-                    .SetProperty(j => j.LastErrorCode, exception.GetType().Name), stoppingToken);
+            var updated = await persistence.FailAsync(job.Id, lockToken, state, next, exception.GetType().Name, stoppingToken);
             logger.LogWarning("Job attempt {Attempt} failed with {ErrorCode}; state {State}; update recorded {Recorded}", job.Attempts,
                 exception.GetType().Name, state, updated == 1);
         }

@@ -10,9 +10,9 @@ namespace BHome.LocalDevelopment;
 internal static class InvoiceDemoSeed
 {
     private static Guid Id(int number) => ContractDemoSeed.Id(number);
-    private static void Add<T>(BHomeDbContext db, int number, T value) where T : class
+    private static void Add<T>(BHomePersistenceContext db, int number, T value) where T : class
     { db.Entry(value).Property("Id").CurrentValue = Id(number); db.Add(value); }
-    public static async Task PrepareAsync(BHomeDbContext db, CancellationToken t)
+    public static async Task PrepareAsync(BHomePersistenceContext db, CancellationToken t)
     {
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var period = new DateOnly(today.Year, today.Month, 1);
