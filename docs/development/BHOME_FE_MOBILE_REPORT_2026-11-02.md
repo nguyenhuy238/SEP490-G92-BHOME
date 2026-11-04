@@ -43,12 +43,12 @@ Các nhãn được sử dụng:
 
 ### 4.1 Bộ 16 màn hình Stitch
 
-| Nhóm | Màn hình |
-|---|---|
-| Đăng nhập | Đăng nhập hệ thống |
-| Owner | Owner Home, Approval Center, Operational Monitoring |
-| Staff | Staff Home, Work Orders, Meter Reading |
-| Tenant | Tenant Home, Invoice, Contract, Move-in Checklist, Incident Report |
+| Nhóm       | Màn hình                                                            |
+| ---------- | ------------------------------------------------------------------- |
+| Đăng nhập  | Đăng nhập hệ thống                                                  |
+| Owner      | Owner Home, Approval Center, Operational Monitoring                 |
+| Staff      | Staff Home, Work Orders, Meter Reading                              |
+| Tenant     | Tenant Home, Invoice, Contract, Move-in Checklist, Incident Report  |
 | Dùng chung | Profile, Notifications, Security Settings, Notification Preferences |
 
 ### 4.2 Các luồng bổ sung theo SRS
@@ -59,22 +59,22 @@ Các màn hình này giúp thể hiện quy trình dự kiến và thu thập d�
 
 ## 5. Mức độ tích hợp theo nghiệp vụ
 
-| Nghiệp vụ | Trạng thái Mobile theo tài liệu | Phần đã có | Phần còn thiếu / lưu ý |
-|---|---|---|---|
-| Đăng nhập, phiên | Đã kết nối | Đăng nhập qua session API HTTPS; điều hướng về trang chủ theo vai trò | Cần xác nhận URL/CA trên đúng thiết bị và môi trường demo |
-| Trang chủ Owner | Kết nối một phần | Hiển thị số liệu/phạm vi và điểm vào tác nghiệp từ dữ liệu server theo báo cáo workspace | Báo cáo tài chính và một số adapter dữ liệu còn thiếu |
-| Trang chủ Staff | Đã kết nối một phần | Cơ sở được phân công, số lượng công việc server và điểm vào tác nghiệp | Lịch ca riêng chưa có API |
-| Công việc vận hành | Đã nối API | Danh sách, tiến độ, vướng mắc, bằng chứng, gửi duyệt; Owner xử lý xác minh/rework theo phạm vi API được mô tả | Kiểm thử PostgreSQL integration trong lượt 02/11 bị chặn bởi Docker; cần replay trên môi trường tích hợp |
-| Đọc chỉ số/OCR | Đã nối luồng hiện hữu | Danh sách tác vụ theo phạm vi và liên kết vào capture/OCR/xác nhận | Chưa có bằng chứng mới về camera/OCR trên điện thoại thật trong lượt audit 02/11 |
-| Onboarding/CCCD | Đã nối một phần | Tạo hồ sơ, OCR và xác nhận danh tính theo API hiện có | API cho điện thoại, email, ngày cư trú và quan hệ hộ gia đình còn thiếu; dữ liệu tương ứng chỉ là nháp |
-| Hợp đồng/ký | Có adapter hiện hữu | Đọc hợp đồng và một số luồng lifecycle/signing được tài liệu coverage ghi nhận | Ký với nhà cung cấp thật chưa được xác minh; không tuyên bố ký điện tử thật đã nghiệm thu |
-| Thông báo | Kết nối một phần | Inbox công việc phân trang và trạng thái đã đọc cho Owner/Staff | Tenant và gửi push/email bên ngoài chưa được xác nhận |
-| Hóa đơn/thanh toán | UI có; trạng thái Mobile cần xác nhận | Có màn hóa đơn/lịch sử; báo cáo tổng thể 02/11 ghi nhận backend billing/payment đã được bổ sung | Coverage Mobile vẫn ghi API pending/incomplete; cần xác minh adapter FE Mobile trên HEAD hiện tại |
-| Điều chỉnh hóa đơn/công nợ | UI có; API Mobile chưa xác nhận | Có form yêu cầu/tra cứu trong các luồng bổ sung | Chưa xác nhận tích hợp và kiểm thử Mobile đầu-cuối |
-| Sự cố/bảo trì | UI có; API Mobile pending theo coverage | Có form báo sự cố, màn chi tiết/tiến độ và điểm vào Owner | Không áp dụng API công việc vận hành cho Work Order bảo trì nếu chưa có API đúng nghiệp vụ |
-| Bàn giao vào/ra, cư trú | UI có; API pending theo coverage | Checklist, ảnh/bằng chứng và trạng thái dự kiến | Chưa có adapter backend theo coverage; cư trú chính thức thực hiện ngoài BHOME qua VNeID |
-| Hồ sơ, cài đặt thông báo | Chưa hoàn chỉnh | Hiển thị thông tin phiên; tùy chọn thông báo dạng preview | API sửa hồ sơ và lưu cấu hình thông báo còn thiếu; đổi mật khẩu đã nối API nhưng yêu cầu đăng nhập lại |
-| Quản trị Location/Room/Asset, biểu phí, báo cáo sâu | Ngoài phạm vi Mobile chính | Có thể có overview/điểm vào phù hợp vai trò | Quản trị chính thuộc Owner Web; không tính phần Web là Mobile đã xong |
+| Nghiệp vụ                                           | Trạng thái Mobile theo tài liệu         | Phần đã có                                                                                                    | Phần còn thiếu / lưu ý                                                                                   |
+| --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Đăng nhập, phiên                                    | Đã kết nối                              | Đăng nhập qua session API HTTPS; điều hướng về trang chủ theo vai trò                                         | Cần xác nhận URL/CA trên đúng thiết bị và môi trường demo                                                |
+| Trang chủ Owner                                     | Kết nối một phần                        | Hiển thị số liệu/phạm vi và điểm vào tác nghiệp từ dữ liệu server theo báo cáo workspace                      | Báo cáo tài chính và một số adapter dữ liệu còn thiếu                                                    |
+| Trang chủ Staff                                     | Đã kết nối một phần                     | Cơ sở được phân công, số lượng công việc server và điểm vào tác nghiệp                                        | Lịch ca riêng chưa có API                                                                                |
+| Công việc vận hành                                  | Đã nối API                              | Danh sách, tiến độ, vướng mắc, bằng chứng, gửi duyệt; Owner xử lý xác minh/rework theo phạm vi API được mô tả | Kiểm thử PostgreSQL integration trong lượt 02/11 bị chặn bởi Docker; cần replay trên môi trường tích hợp |
+| Đọc chỉ số/OCR                                      | Đã nối luồng hiện hữu                   | Danh sách tác vụ theo phạm vi và liên kết vào capture/OCR/xác nhận                                            | Chưa có bằng chứng mới về camera/OCR trên điện thoại thật trong lượt audit 02/11                         |
+| Onboarding/CCCD                                     | Đã nối một phần                         | Tạo hồ sơ, OCR và xác nhận danh tính theo API hiện có                                                         | API cho điện thoại, email, ngày cư trú và quan hệ hộ gia đình còn thiếu; dữ liệu tương ứng chỉ là nháp   |
+| Hợp đồng/ký                                         | Có adapter hiện hữu                     | Đọc hợp đồng và một số luồng lifecycle/signing được tài liệu coverage ghi nhận                                | Ký với nhà cung cấp thật chưa được xác minh; không tuyên bố ký điện tử thật đã nghiệm thu                |
+| Thông báo                                           | Kết nối một phần                        | Inbox công việc phân trang và trạng thái đã đọc cho Owner/Staff                                               | Tenant và gửi push/email bên ngoài chưa được xác nhận                                                    |
+| Hóa đơn/thanh toán                                  | UI có; trạng thái Mobile cần xác nhận   | Có màn hóa đơn/lịch sử; báo cáo tổng thể 02/11 ghi nhận backend billing/payment đã được bổ sung               | Coverage Mobile vẫn ghi API pending/incomplete; cần xác minh adapter FE Mobile trên HEAD hiện tại        |
+| Điều chỉnh hóa đơn/công nợ                          | UI có; API Mobile chưa xác nhận         | Có form yêu cầu/tra cứu trong các luồng bổ sung                                                               | Chưa xác nhận tích hợp và kiểm thử Mobile đầu-cuối                                                       |
+| Sự cố/bảo trì                                       | UI có; API Mobile pending theo coverage | Có form báo sự cố, màn chi tiết/tiến độ và điểm vào Owner                                                     | Không áp dụng API công việc vận hành cho Work Order bảo trì nếu chưa có API đúng nghiệp vụ               |
+| Bàn giao vào/ra, cư trú                             | UI có; API pending theo coverage        | Checklist, ảnh/bằng chứng và trạng thái dự kiến                                                               | Chưa có adapter backend theo coverage; cư trú chính thức thực hiện ngoài BHOME qua VNeID                 |
+| Hồ sơ, cài đặt thông báo                            | Chưa hoàn chỉnh                         | Hiển thị thông tin phiên; tùy chọn thông báo dạng preview                                                     | API sửa hồ sơ và lưu cấu hình thông báo còn thiếu; đổi mật khẩu đã nối API nhưng yêu cầu đăng nhập lại   |
+| Quản trị Location/Room/Asset, biểu phí, báo cáo sâu | Ngoài phạm vi Mobile chính              | Có thể có overview/điểm vào phù hợp vai trò                                                                   | Quản trị chính thuộc Owner Web; không tính phần Web là Mobile đã xong                                    |
 
 ## 6. Kiểm thử và bằng chứng
 
