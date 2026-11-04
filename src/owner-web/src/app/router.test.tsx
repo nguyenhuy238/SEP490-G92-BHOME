@@ -92,6 +92,8 @@ it('keeps property functions inside the selected Location Workspace', async () =
 
   const navigation = await screen.findByRole('navigation', { name: 'Điều hướng chính' });
   expect(within(navigation).getByRole('link', { name: 'Cơ sở' })).toBeInTheDocument();
+  expect(within(navigation).getByRole('link', { name: 'Mẫu loại phòng' })).toBeInTheDocument();
+  expect(within(navigation).getByRole('link', { name: 'Danh mục tài sản' })).toBeInTheDocument();
   expect(within(navigation).queryByRole('link', { name: 'Phòng' })).not.toBeInTheDocument();
   expect(within(navigation).queryByRole('link', { name: 'Loại phòng' })).not.toBeInTheDocument();
   expect(within(navigation).queryByRole('link', { name: 'Tài sản' })).not.toBeInTheDocument();
