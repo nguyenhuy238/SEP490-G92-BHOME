@@ -1,7 +1,7 @@
 // Repository-derived Postman v2.1 artifacts. No network, credentials or database mutation here.
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
+const nodeCrypto = require('node:crypto');
 const zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const out = path.join(root, 'docs/testing/postman');
@@ -187,7 +187,7 @@ function verifyResponse() {
   if (spec.compareFinal) {
     const original = pm.variables.get('originalFinalSnapshot');
     pm.test('Final giữ nguyên tổng/version/lines sau payment/adjustment', () => {
-      pm.expect(original).to.be.a('string').and.not.empty;
+      pm.expect(original).to.be.a('string').and.not.eql('');
       pm.expect({
         id: data.id,
         total: data.total,
@@ -2172,7 +2172,7 @@ const summary = {
   requests: folders.reduce((count, f) => count + f.item.length, 0),
   folders: folders.map((f) => ({ name: f.name, requests: f.item.length })),
   variables: vars.size,
-  collectionSha256: crypto
+  collectionSha256: nodeCrypto
     .createHash('sha256')
     .update(fs.readFileSync(path.join(out, stem + '.postman_collection.json')))
     .digest('hex'),
