@@ -7,6 +7,7 @@ namespace BHome.Infrastructure.Ocr;
 public interface IImagePreprocessor
 {
     PreparedImage Prepare(ReadOnlyMemory<byte> bytes, OcrDocumentKind kind);
+    PreparedImage PrepareUnclassified(ReadOnlyMemory<byte> bytes) => throw new InvalidDataException("Neutral preprocessing unavailable.");
 }
 
 public sealed class PreparedImage(Mat image, IReadOnlyList<string> warnings) : IDisposable
@@ -21,11 +22,17 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
     public PreparedImage Prepare(ReadOnlyMemory<byte> bytes, OcrDocumentKind kind)
     {
         if (!Enum.IsDefined(kind)) throw new OcrInputException("unsupported_profile");
+        return Prepare(bytes, options.Profiles[kind]);
+    }
+
+    public PreparedImage PrepareUnclassified(ReadOnlyMemory<byte> bytes) => Prepare(bytes, options.AutomaticProfile);
+
+    private PreparedImage Prepare(ReadOnlyMemory<byte> bytes, ImageProfile profile)
+    {
         ValidateHeader(bytes.Span, options.MaxImageBytes, options.MaxPixels);
         using var source = Cv2.ImDecode(bytes.Span, ImreadModes.Color);
         if (source.Empty()) throw new OcrInputException("corrupted_image");
         if ((long)source.Width * source.Height > options.MaxPixels) throw new OcrInputException("image_dimensions");
-        var profile = options.Profiles[kind];
         var result = new Mat();
         try
         {

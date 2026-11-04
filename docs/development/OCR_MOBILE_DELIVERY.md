@@ -1,5 +1,17 @@
 # OCR dùng thử trên mobile — triển khai tiếp
 
+## Luồng một nút chụp tự động (04/11/2026)
+
+Màn **Thử OCR trực tiếp** hiện mở bằng nút **Test OCR**, sau đó chỉ có hành động
+chính **Chụp ảnh OCR**; không cần chọn sáu profile trước khi chụp. API tự xét loại
+và trả kết quả hoặc yêu cầu người dùng chọn sau khi chụp. Nhận diện hiện dựa trên
+dấu hiệu chữ cho CCCD; chưa có classifier thị giác để tự phân biệt cơ/điện tử của
+mọi công tơ. Kết quả cho sửa tạm, ảnh chỉ preview trong bộ nhớ và tự xóa khi kết
+thúc phiên xem. Xem [thiết kế, kiểm thử và giới hạn](AUTOMATIC_OCR_2026-11-04.md).
+
+Các phần phía dưới lưu lịch sử triển khai; hướng dẫn chọn profile trước chụp và
+hiển thị thông tin model thuộc giao diện cũ.
+
 ## Nút mở nhanh khi phát triển (04/11/2026)
 
 Trang chủ Owner/Staff có nút **Test OCR** ở đầu nội dung khi chạy bản Development

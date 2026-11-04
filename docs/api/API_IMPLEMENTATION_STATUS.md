@@ -31,6 +31,11 @@ crop Meter/Display đã có kiểm thử; **chưa có model detector/classifier 
 Không đổi endpoint/DTO/schema. Xem [audit và kiểm chứng OCR](../development/METER_OCR_AUDIT_2026-11-04.md).
 Các số liệu bên dưới thuộc lượt rà soát API trước đó, không phải kết quả chạy OCR mới.
 
+Màn thử OCR đã có `POST /api/v1/ocr/diagnostics/auto`: chụp trước, tự xét dấu hiệu
+CCCD bằng chữ/nhãn rồi định tuyến, chỉ hỏi loại sau khi chưa đủ căn cứ. Chưa có
+classifier thị giác sáu lớp; ảnh công tơ chưa rõ cơ/điện tử vẫn cần chọn loại.
+Chi tiết: [OCR tự động một nút](../development/AUTOMATIC_OCR_2026-11-04.md).
+
 ## Tổng quan các chức năng đã có và còn thiếu
 
 | Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                |
@@ -320,7 +325,8 @@ Policy được khai báo trong [RolePermissions](../../src/backend/BHome.Domain
 | Method / route                           | Backend / database                            | Input / action                                                                                                                                                        | Quyền       | Owner Web                       | Mobile                                                            |
 | ---------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------- | ----------------------------------------------------------------- |
 | `GET /api/v1/ocr/diagnostics`            | Development có điều kiện; không lưu nghiệp vụ | [OcrDiagnosticsController.cs](../../src/backend/BHome.Api/Controllers/Ocr/OcrDiagnosticsController.cs).Availability: Không có DTO                                     | Owner,Staff | Chưa tìm thấy lời gọi tương ứng | Có lời gọi: [ocr-test.tsx](../../src/mobile/src/app/ocr-test.tsx) |
-| `POST /api/v1/ocr/diagnostics/{profile}` | Development có điều kiện; không lưu nghiệp vụ | [OcrDiagnosticsController.cs](../../src/backend/BHome.Api/Controllers/Ocr/OcrDiagnosticsController.cs).Extract: profile: String (Path); decimalPlaces: String (Query) | Owner,Staff | Chưa tìm thấy lời gọi tương ứng | Chưa tìm thấy lời gọi tương ứng                                   |
+| `POST /api/v1/ocr/diagnostics/auto` | Development có điều kiện; không lưu nghiệp vụ | `OcrDiagnosticsController.Automatic`: body JPEG/PNG không yêu cầu profile; trả analysis + elapsedMilliseconds | Owner,Staff | Chưa có | `ocr-test.tsx`: luồng mặc định sau chụp |
+| `POST /api/v1/ocr/diagnostics/{profile}` | Development có điều kiện; không lưu nghiệp vụ | [OcrDiagnosticsController.cs](../../src/backend/BHome.Api/Controllers/Ocr/OcrDiagnosticsController.cs).Extract: profile: String (Path); decimalPlaces: String (Query) | Owner,Staff | Chưa tìm thấy lời gọi tương ứng | `ocr-test.tsx`: chọn loại sau khi auto cần kiểm tra |
 
 ### OperationalTasks
 

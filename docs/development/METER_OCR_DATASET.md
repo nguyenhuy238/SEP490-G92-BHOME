@@ -4,6 +4,11 @@ Trạng thái ngày 04/11/2026: chưa có dataset đồng hồ được gán bou
 detector/classifier hoặc pipeline training trong repository. Các fixture GDI+/OpenCV
 hiện có chỉ kiểm thử bố cục chữ. Không dùng chúng làm bằng chứng detector hoạt động.
 
+Luồng tự động một nút chụp nay có điểm tích hợp classifier sáu lớp và script kiểm
+tra dữ liệu/sinh kế hoạch training/export offline (chưa train hoặc thêm weights).
+Xem [AUTOMATIC_OCR_2026-11-04.md](AUTOMATIC_OCR_2026-11-04.md) cho mapping sáu lớp,
+quy tắc phân biệt CCCD bằng chữ, kiểm chứng thực tế và cách chuẩn bị dữ liệu.
+
 ## Chọn model và giấy phép
 
 - Giữ recognizer PP-OCR đang pin; đo riêng trên crop đúng trước khi quyết định fine-tune.
