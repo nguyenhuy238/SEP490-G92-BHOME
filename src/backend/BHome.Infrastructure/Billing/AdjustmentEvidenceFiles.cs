@@ -9,11 +9,11 @@ using Microsoft.Extensions.Logging;
 
 namespace BHome.Infrastructure.Billing;
 
-internal sealed class AdjustmentEvidenceFiles(DbContextOptions<BHomeDbContext> options, IObjectStorage storage, TimeProvider clock) : IAdjustmentEvidenceFiles
+internal sealed class AdjustmentEvidenceFiles(BHomePersistenceContext context, IObjectStorage storage, TimeProvider clock) : IAdjustmentEvidenceFiles
 {
     public async Task<AdjustmentEvidenceView> UploadAsync(Guid invoiceId, Guid actor, byte[] content, string contentType, CancellationToken t)
     {
-        await using var db = new BHomeDbContext(options);
+        await using var db = context.CreateIndependentContext();
         var file = new InvoiceAdjustmentEvidence
         {
             InvoiceId = invoiceId,
@@ -42,12 +42,12 @@ public sealed class AdjustmentEvidenceCleanup(IServiceScopeFactory scopes, TimeP
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomeDbContext>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(), clock.GetUtcNow(), stoppingToken);
+                await CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(), clock.GetUtcNow(), stoppingToken);
             }
             catch (Exception e) when (e is not OperationCanceledException) { logger.LogWarning("Adjustment evidence cleanup unavailable ({Code})", e.GetType().Name); }
         }
     }
-    public static async Task CleanupAsync(BHomeDbContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
+    public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
     {
         var ids = await db.Set<InvoiceAdjustmentEvidence>().AsNoTracking().Where(e => e.RequestId == null && e.CleanupAfter < now).Select(e => e.Id).Take(100).ToArrayAsync(t);
         foreach (var id in ids)

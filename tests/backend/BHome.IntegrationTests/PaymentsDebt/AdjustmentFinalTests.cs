@@ -59,7 +59,7 @@ public sealed partial class PaymentLedgerTests
         }
         else Assert.Equal(10000, result.Financials.PotentialExcessAmount);
         Assert.Empty((await owner.GetFromJsonAsync<PagedResult<DebtInvoiceView>>($"/api/v1/debts?roomId={w.Room}"))!.Items);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(100000, (await db.Set<Invoice>().SingleAsync(i => i.Id == w.Invoice)).Total);
         Assert.Equal(100000, (await db.Set<InvoiceLine>().SingleAsync(i => i.InvoiceId == w.Invoice)).Amount);
         Assert.Equal(1, await db.Set<InvoiceAdjustmentDecision>().CountAsync(d => d.InvoiceId == w.Invoice));

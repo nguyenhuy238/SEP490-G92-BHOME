@@ -4,12 +4,11 @@ using BHome.Application.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.IdentityAccess;
 
-internal sealed class IdentityPasswordService(BHomeDbContext db, IdentitySecurityStore security,
+internal sealed class IdentityPasswordService(IIdentityPersistence db, IdentitySecurityStore security,
     UserManager<ApplicationUser> users, IPasswordResetDelivery delivery, IOptions<SessionOptions> options,
     TimeProvider clock) : IPasswordService
 {
@@ -18,21 +17,19 @@ internal sealed class IdentityPasswordService(BHomeDbContext db, IdentitySecurit
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!ValidPasswordInput(currentPassword) || !ValidPasswordInput(newPassword)) return false;
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var user = await security.LockUserAsync(userId, cancellationToken);
         if (user is null || !security.IsEligible(user)) return false;
         // Recheck the authenticated session after acquiring the same lock used by logout/refresh.
         var now = clock.GetUtcNow();
-        if (!await db.AuthenticationSessions.AnyAsync(x => x.Id == sessionId && x.UserId == userId &&
-            x.RevokedAt == null && x.ExpiresAt > now && x.SecurityStamp == user.SecurityStamp, cancellationToken)) return false;
+        if (!await db.CurrentSessionAsync(userId, sessionId, user.SecurityStamp, now, cancellationToken)) return false;
         var changed = await users.ChangePasswordAsync(user, currentPassword, newPassword);
         cancellationToken.ThrowIfCancellationRequested();
         security.Audit("PasswordChange", changed.Succeeded, userId, sessionId);
         if (changed.Succeeded)
         {
             await security.RevokeAllAsync(userId, "PasswordChanged", cancellationToken);
-            await db.PasswordResetGrants.Where(x => x.UserId == userId && x.ConsumedAt == null)
-                .ExecuteUpdateAsync(update => update.SetProperty(x => x.ConsumedAt, now), cancellationToken);
+            await db.ConsumeResetGrantsAsync(userId, now, cancellationToken);
         }
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -49,14 +46,14 @@ internal sealed class IdentityPasswordService(BHomeDbContext db, IdentitySecurit
         if (candidate is null) return;
         string? token = null;
         string? destination = null;
-        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        await using (var transaction = await db.BeginTransactionAsync(cancellationToken))
         {
             var user = await security.LockUserAsync(candidate.Id, cancellationToken);
             if (user is null || !user.IsActive || !user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email)) return;
             token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GeneratePasswordResetTokenAsync(user)));
             destination = user.Email;
-            var grant = await db.PasswordResetGrants.SingleOrDefaultAsync(x => x.UserId == user.Id, cancellationToken);
-            if (grant is null) { grant = new PasswordResetGrant { UserId = user.Id }; db.PasswordResetGrants.Add(grant); }
+            var grant = await db.ResetGrantAsync(user.Id, cancellationToken);
+            if (grant is null) { grant = new PasswordResetGrant { UserId = user.Id }; db.AddResetGrant(grant); }
             grant.TokenHash = IdentitySecurityStore.Hash(token);
             grant.ExpiresAt = clock.GetUtcNow().AddMinutes(options.Value.PasswordResetMinutes);
             grant.ConsumedAt = null;
@@ -77,11 +74,11 @@ internal sealed class IdentityPasswordService(BHomeDbContext db, IdentitySecurit
         string decoded;
         try { decoded = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token)); }
         catch (FormatException) { return false; }
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var user = await security.LockUserAsync(candidate.Id, cancellationToken);
         var now = clock.GetUtcNow();
         var hash = IdentitySecurityStore.Hash(token);
-        var grant = await db.PasswordResetGrants.SingleOrDefaultAsync(x => x.UserId == candidate.Id, cancellationToken);
+        var grant = await db.ResetGrantAsync(candidate.Id, cancellationToken);
         if (user is null || !user.IsActive || grant is null || grant.ConsumedAt is not null || grant.ExpiresAt <= now || grant.TokenHash != hash)
             return false;
         var changed = await users.ResetPasswordAsync(user, decoded, newPassword);

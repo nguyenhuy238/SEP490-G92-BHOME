@@ -11,9 +11,9 @@ internal static class PaymentDemoSeed
 {
     public static Guid Id(int number) => Guid.Parse($"fa250000-0000-4000-8000-{number:000000000000}");
     private static Guid User(int number) => ContractDemoSeed.Id(number);
-    private static void Add<T>(BHomeDbContext db, int number, T entity) where T : class
+    private static void Add<T>(BHomePersistenceContext db, int number, T entity) where T : class
     { db.Entry(entity).Property("Id").CurrentValue = Id(number); db.Add(entity); }
-    public static async Task PrepareAsync(BHomeDbContext db, CancellationToken t)
+    public static async Task PrepareAsync(BHomePersistenceContext db, CancellationToken t)
     {
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var period = new DateOnly(today.Year, today.Month, 1);

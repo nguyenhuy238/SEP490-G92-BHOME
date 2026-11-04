@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Modules.StaffOperations.Persistence;
 
-internal sealed class PostgresOperationalTaskRepository(BHomeDbContext db) : IOperationalTaskRepository
+internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext db) : IOperationalTaskRepository
 {
     public async Task<T> TransactionAsync<T>(Guid locationId, Guid actorId, Guid commandKey, Func<Task<T>> operation, CancellationToken t)
     {

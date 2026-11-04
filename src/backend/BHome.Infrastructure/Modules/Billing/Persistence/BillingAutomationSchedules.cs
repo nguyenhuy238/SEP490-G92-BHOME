@@ -8,7 +8,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing.Persistence;
 
-internal sealed class BillingAutomationSchedules(BHomeDbContext db) : IBillingAutomationSchedules
+internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : IBillingAutomationSchedules
 {
     public async Task<bool> AuthorizedAsync(BillingAutomationPlan plan, Guid actor, DateOnly period, bool finalization, CancellationToken t) =>
         plan.Enabled && plan.AuthorizedByUserId == actor && (!finalization || plan.AuthorizeAutomaticFinalization) && (await ForPeriodAsync(plan.LocationId, period, t))?.Id == plan.Id &&
@@ -18,7 +18,7 @@ internal sealed class BillingAutomationSchedules(BHomeDbContext db) : IBillingAu
     {
         await using var tx = await db.Database.BeginTransactionAsync(t); var location = await db.Set<Room>().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t) ?? throw new InvoiceException(404, "room_not_found");
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
-        await db.Set<Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\"={x.RoomId} FOR UPDATE").SingleAsync(t);
+        await db.Locked<Room>(x.RoomId).SingleAsync(t);
         if (await db.Set<Invoice>().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
         var old = await RepresentativeAsync(x.RoomId, x.BillingPeriod, t); if ((old?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_representative_changed");
         var end = x.BillingPeriod.AddMonths(1).AddDays(-1);

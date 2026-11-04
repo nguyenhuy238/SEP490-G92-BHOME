@@ -1,18 +1,16 @@
 using System.Security.Cryptography;
 using BHome.Application.IdentityAccess;
-using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.IdentityAccess;
 
-internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurityStore security,
+internal sealed class IdentitySessionService(IIdentityPersistence db, IdentitySecurityStore security,
     IAccessTokenIssuer issuer, IOptions<SessionOptions> options, TimeProvider clock) : IAuthenticationSessions
 {
     public async Task<LoginResult?> CreateAsync(VerifiedIdentity identity, string? device, CancellationToken cancellationToken)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var user = await security.LockUserAsync(identity.UserId, cancellationToken);
         var roles = await security.RolesAsync(identity.UserId, cancellationToken);
         if (user is null || !security.IsEligible(user) || user.SecurityStamp != identity.SecurityStamp ||
@@ -36,7 +34,7 @@ internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurity
             LastActivityAt = now,
             ExpiresAt = now.AddDays(options.Value.AbsoluteLifetimeDays)
         };
-        db.AuthenticationSessions.Add(session);
+        db.AddSession(session);
         var result = Issue(session, roles);
         security.Audit("LoginSucceeded", true, user.Id, session.Id);
         await db.SaveChangesAsync(cancellationToken);
@@ -49,18 +47,13 @@ internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurity
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(token) || token.Length > 256) return null;
         var hash = IdentitySecurityStore.Hash(token);
-        var ownerId = await (from refresh in db.RefreshTokens
-                             join session in db.AuthenticationSessions on refresh.SessionId equals session.Id
-                             where refresh.TokenHash == hash
-                             select (Guid?)session.UserId).SingleOrDefaultAsync(cancellationToken);
+        var ownerId = await db.TokenOwnerAsync(hash, cancellationToken);
         if (ownerId is null) return null;
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var user = await security.LockUserAsync(ownerId.Value, cancellationToken);
-        var stored = await db.RefreshTokens.SingleAsync(x => x.TokenHash == hash, cancellationToken);
-        await db.Entry(stored).ReloadAsync(cancellationToken);
-        var family = await db.AuthenticationSessions.SingleAsync(x => x.Id == stored.SessionId, cancellationToken);
-        await db.Entry(family).ReloadAsync(cancellationToken);
+        var stored = await db.TokenAsync(hash, cancellationToken);
+        var family = await db.SessionAsync(stored.SessionId, null, cancellationToken) ?? throw new InvalidOperationException("Session missing.");
         var now = clock.GetUtcNow();
         var roles = await security.RolesAsync(ownerId.Value, cancellationToken);
         LoginResult? result = null;
@@ -77,7 +70,7 @@ internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurity
             stored.ConsumedAt = now;
             family.LastActivityAt = now;
             result = Issue(family, roles);
-            stored.ReplacedByTokenId = db.RefreshTokens.Local.Single(x => x.TokenHash == IdentitySecurityStore.Hash(result.RefreshToken!)).Id;
+            stored.ReplacedByTokenId = db.IssuedTokenId(IdentitySecurityStore.Hash(result.RefreshToken!));
             security.Audit("RefreshSucceeded", true, family.UserId, family.Id);
         }
         else security.Audit("RefreshDenied", false, family.UserId, family.Id);
@@ -88,13 +81,13 @@ internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurity
 
     public async Task RevokeAsync(Guid userId, Guid sessionId, bool allDevices, CancellationToken cancellationToken)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var user = await security.LockUserAsync(userId, cancellationToken);
         if (user is null) return;
         if (allDevices) await security.RevokeAllAsync(userId, "LogoutAll", cancellationToken);
         else
         {
-            var session = await db.AuthenticationSessions.SingleOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, cancellationToken);
+            var session = await db.SessionAsync(sessionId, userId, cancellationToken);
             if (session is null) return;
             session.RevokedAt ??= clock.GetUtcNow();
             session.RevocationReason ??= "Logout";
@@ -107,19 +100,11 @@ internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurity
     public async Task<bool> ValidateAsync(SessionIdentity identity, string securityStamp, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
-        var valid = await (from session in db.AuthenticationSessions.AsNoTracking()
-                           join user in db.Users.AsNoTracking() on session.UserId equals user.Id
-                           where session.Id == identity.SessionId && user.Id == identity.UserId && user.IsActive &&
-                               !user.TwoFactorEnabled && (!user.LockoutEnabled || user.LockoutEnd == null || user.LockoutEnd <= now) &&
-                               session.RevokedAt == null && session.ExpiresAt > now &&
-                               session.SecurityStamp == securityStamp && user.SecurityStamp == securityStamp
-                           select session.Id).AnyAsync(cancellationToken);
+        var valid = await db.ValidSessionAsync(identity, securityStamp, now, cancellationToken);
         if (!valid) return false;
         var roles = await security.RolesAsync(identity.UserId, cancellationToken);
         if (!IdentitySecurityStore.SupportedRoles(roles) || !roles.ToHashSet().SetEquals(identity.Roles)) return false;
-        var updated = await db.AuthenticationSessions.Where(x => x.Id == identity.SessionId && x.RevokedAt == null && x.ExpiresAt > now)
-            .ExecuteUpdateAsync(update => update.SetProperty(x => x.LastActivityAt,
-                x => x.LastActivityAt > now ? x.LastActivityAt : now), cancellationToken);
+        var updated = await db.TouchSessionAsync(identity.SessionId, now, cancellationToken);
         return updated == 1;
     }
 
@@ -128,7 +113,7 @@ internal sealed class IdentitySessionService(BHomeDbContext db, IdentitySecurity
         var now = clock.GetUtcNow();
         var raw = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
         var expires = now.AddDays(options.Value.RefreshTokenDays);
-        db.RefreshTokens.Add(new RefreshTokenRecord
+        db.AddToken(new RefreshTokenRecord
         {
             Id = Guid.NewGuid(),
             SessionId = session.Id,

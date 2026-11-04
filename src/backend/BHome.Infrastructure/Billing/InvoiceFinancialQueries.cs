@@ -28,7 +28,7 @@ internal sealed class InvoiceFinancialRow
 }
 internal static class InvoiceFinancialQueries
 {
-    public static IQueryable<InvoiceFinancialRow> Financials(this BHomeDbContext db, IQueryable<Invoice> invoices) => invoices.Select(i => new InvoiceFinancialRow
+    public static IQueryable<InvoiceFinancialRow> Financials(this BHomePersistenceContext db, IQueryable<Invoice> invoices) => invoices.Select(i => new InvoiceFinancialRow
     {
         Id = i.Id,
         LocationId = i.LocationId,
@@ -42,6 +42,6 @@ internal static class InvoiceFinancialQueries
         Paid = db.Set<PaymentAllocation>().Where(a => a.InvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m,
         Version = db.Set<InvoiceAdjustmentDecision>().Count(d => d.InvoiceId == i.Id && d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved")
     });
-    public static async Task<InvoiceFinancialView> FinancialsAsync(this BHomeDbContext db, Guid invoiceId, CancellationToken t) =>
+    public static async Task<InvoiceFinancialView> FinancialsAsync(this BHomePersistenceContext db, Guid invoiceId, CancellationToken t) =>
         (await db.Financials(db.Set<Invoice>().AsNoTracking().Where(i => i.Id == invoiceId)).SingleAsync(t)).View();
 }

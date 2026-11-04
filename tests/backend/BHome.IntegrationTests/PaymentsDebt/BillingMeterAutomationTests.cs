@@ -18,7 +18,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); using var owner = await Client(w.Owner);
         (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var response = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { MeterDay = 1, MeterDueDay = 10 }); response.EnsureSuccessStatusCode(); var plan = (await response.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         if (withStaff) db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1)));
         var meters = (water ? new[] { UtilityType.Electricity, UtilityType.Water } : new[] { UtilityType.Electricity }).Select(type => new Meter { RoomId = w.Room, Code = "SYN-JOB-" + type, UtilityType = type, InstalledOn = CurrentPeriod().AddMonths(-1) }).ToArray(); db.AddRange(meters); await db.SaveChangesAsync(); return (w, plan, meters.Select(m => m.Id).ToArray());
     }
@@ -60,13 +60,13 @@ public sealed partial class PaymentLedgerTests
             await ConfirmSyntheticTask(w, (await initial.Content.ReadFromJsonAsync<IdResult>())!.Id, 100);
             var reading = await ConfirmSyntheticTask(w, task.Id, 110); Assert.Equal(10, reading.Consumption);
         }
-        await RunMeter(w); await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); Assert.Equal(2, await db.Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id)); Assert.Equal(2, await db.Set<MeterReading>().CountAsync(r => tasks.Select(t => t.Id).Contains(r.TaskId)));
+        await RunMeter(w); await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(2, await db.Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id)); Assert.Equal(2, await db.Set<MeterReading>().CountAsync(r => tasks.Select(t => t.Id).Contains(r.TaskId)));
     }
     [Fact]
     public async Task MeterJobPreservesUnassignedWorkAndReportsMissingMetersUntilOwnerAssigns()
     {
         var (w, p, _) = await MeterWorkspace(false, false); var result = (await RunMeter(w))!; Assert.Equal("PendingInputs", result.Status); Assert.Contains("staff_assignment_required", result.ExceptionsJson); Assert.Contains("active_meter_configuration_required", result.ExceptionsJson);
-        Guid taskId; await using (var s = fixture.Factory.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<BHomeDbContext>(); var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id); Assert.Null(task.AssignedStaffUserId); taskId = task.Id; db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1))); await db.SaveChangesAsync(); }
+        Guid taskId; await using (var s = fixture.Factory.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id); Assert.Null(task.AssignedStaffUserId); taskId = task.Id; db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1))); await db.SaveChangesAsync(); }
         using var staff = await Client(w.Staff); using var owner = await Client(w.Owner); Assert.Equal(HttpStatusCode.NotFound, (await staff.GetAsync($"/api/v1/capture/meter-tasks/{taskId}")).StatusCode);
         (await owner.PostAsJsonAsync($"/api/v1/billing-automation/meter-tasks/{taskId}/assignment", new MeterAssignmentInput(w.Staff, 1))).EnsureSuccessStatusCode(); Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync($"/api/v1/capture/meter-tasks/{taskId}")).StatusCode);
         var repeated = (await RunMeter(w))!; Assert.Equal(1, repeated.CreatedCount); Assert.DoesNotContain("staff_assignment_required", repeated.ExceptionsJson);
@@ -76,7 +76,7 @@ public sealed partial class PaymentLedgerTests
     {
         var (w, p, meters) = await MeterWorkspace(); await RunMeter(w);
         Guid replacement; await using (var scope = fixture.Factory.Services.CreateAsyncScope())
-        { var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); await db.Set<Meter>().Where(m => m.Id == meters[0]).ExecuteUpdateAsync(s => s.SetProperty(m => m.IsActive, false)); var meter = new Meter { RoomId = w.Room, Code = "SYN-REPLACEMENT", UtilityType = UtilityType.Electricity, InstalledOn = CurrentPeriod() }; db.Add(meter); await db.SaveChangesAsync(); replacement = meter.Id; }
+        { var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); (await db.Set<Meter>().SingleAsync(m => m.Id == meters[0])).IsActive = false; await db.SaveChangesAsync(); var meter = new Meter { RoomId = w.Room, Code = "SYN-REPLACEMENT", UtilityType = UtilityType.Electricity, InstalledOn = CurrentPeriod() }; db.Add(meter); await db.SaveChangesAsync(); replacement = meter.Id; }
         var result = (await RunMeter(w))!; Assert.Contains("meter_replacement_review_required", result.ExceptionsJson); Assert.Equal(2, result.CreatedCount);
         using var owner = await Client(w.Owner); Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(replacement, ReadingPurpose.Periodic, CurrentPeriod(), CurrentPeriod()))).StatusCode);
         var next = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { ExpectedVersion = 1, EffectiveFrom = CurrentPeriod().AddMonths(1) }); next.EnsureSuccessStatusCode();

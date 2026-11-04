@@ -12,7 +12,7 @@ using OpenCvSharp;
 
 namespace BHome.Infrastructure.Modules.StaffOperations;
 
-internal sealed class TaskEvidenceFiles(DbContextOptions<BHomeDbContext> options, IObjectStorage storage, TimeProvider clock) : ITaskEvidenceFiles
+internal sealed class TaskEvidenceFiles(BHomePersistenceContext context, IObjectStorage storage, TimeProvider clock) : ITaskEvidenceFiles
 {
     public string Validate(byte[] content, int maximumBytes)
     {
@@ -28,7 +28,7 @@ internal sealed class TaskEvidenceFiles(DbContextOptions<BHomeDbContext> options
     }
     public async Task PutAsync(Guid taskId, string key, byte[] content, string contentType, CancellationToken t)
     {
-        await using var intent = new BHomeDbContext(options);
+        await using var intent = context.CreateIndependentContext();
         intent.Add(new OperationalTaskFileUpload { TaskId = taskId, ObjectKey = key, CleanupAfter = clock.GetUtcNow().AddHours(1) });
         await intent.SaveChangesAsync(t);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
@@ -54,7 +54,7 @@ public sealed class TaskEvidenceCleanup(IServiceScopeFactory scopes, TimeProvide
                 try
                 {
                     await using var scope = scopes.CreateAsyncScope();
-                    await CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomeDbContext>(),
+                    await CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(),
                         scope.ServiceProvider.GetRequiredService<IObjectStorage>(), clock.GetUtcNow(), stoppingToken);
                 }
                 catch (Exception e) when (e is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
@@ -63,7 +63,7 @@ public sealed class TaskEvidenceCleanup(IServiceScopeFactory scopes, TimeProvide
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
-    public static async Task CleanupAsync(BHomeDbContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
+    public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
     {
         var candidates = await db.Set<OperationalTaskFileUpload>().AsNoTracking().Where(x => x.CleanupAfter <= now)
             .OrderBy(x => x.CleanupAfter).Take(50).Select(x => new { x.Id, x.TaskId }).ToArrayAsync(t);

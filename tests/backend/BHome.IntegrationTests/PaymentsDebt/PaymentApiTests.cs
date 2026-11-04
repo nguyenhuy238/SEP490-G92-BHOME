@@ -15,7 +15,7 @@ public sealed partial class PaymentLedgerTests
 {
     private async Task<HttpClient> Client(Guid actor)
     {
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var email = await db.Users.Where(u => u.Id == actor).Select(u => u.Email).SingleAsync();
         var client = fixture.Factory.CreateClient(); var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = "Synthetic-Payment-Test!123" });
         login.EnsureSuccessStatusCode(); var session = (await login.Content.ReadFromJsonAsync<LoginResult>())!;
@@ -82,8 +82,9 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Forbidden, (await b.GetAsync(path + "/eligible-payers")).StatusCode);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"Status\" = 4 WHERE \"RoomId\" = {w.Room}");
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            foreach (var contract in await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) contract.Status = BHome.Domain.TenantContracts.ContractStatus.Terminated;
+            await db.SaveChangesAsync();
         }
         Assert.Equal(HttpStatusCode.OK, (await c.GetAsync(path)).StatusCode);
         var outside = await Setup(); using var outsider = await Client(outside.Tenants[0]);

@@ -31,9 +31,9 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         const string password = "Synthetic-Billing-Test!123";
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            Assert.True((await manager.CreateAsync(new ApplicationUser { Id = id, UserName = email, Email = email }, password)).Succeeded);
-            Assert.True((await manager.AddToRoleAsync((await manager.FindByIdAsync(id.ToString()))!, role)).Succeeded);
+            var account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
+                new ApplicationUser { Id = id, UserName = email, Email = email }, role, password);
+            id = account.Id; email = account.Email!;
         }
         var client = fixture.Factory.CreateClient();
         var login = await Success<LoginResult>(await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password }));
@@ -42,7 +42,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     }
     private static async Task<T> Success<T>(HttpResponseMessage response)
     {
-        Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
     private async Task<Workspace> Setup()
@@ -50,7 +50,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
         var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var location = new Location("Synthetic Billing") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
         var type = new RoomType { LocationId = location.Id, Name = "Synthetic Shared", DefaultCapacity = 2 };
         var room = new Room { LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
@@ -136,13 +136,23 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             var result = await Success<InvoiceView>(response); Assert.Equal("Final", result.Status); Assert.Equal(ready.Total, result.Total);
         }
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(ready.Version + 1))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == draft.Id && a.Event == "InvoiceFinalized"));
-        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Invoices\" SET \"Total\" = 1 WHERE \"Id\" = {draft.Id}"));
-        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"InvoiceLines\" SET \"Amount\" = 1 WHERE \"InvoiceId\" = {draft.Id}"));
-        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceRecipients\" WHERE \"InvoiceId\" = {draft.Id}"));
-        // Terminating tenancy does not revoke access to the bill for the period actually occupied.
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"Status\" = 4, \"ActualEndDate\" = {Today} WHERE \"RoomId\" = {w.Room}");
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+        {
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE invoices SET base_total_amount=1 WHERE id={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE invoice_items SET amount=1 WHERE invoice_id={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE invoices SET recipient_user_ids=ARRAY[]::uuid[] WHERE id={draft.Id}"));
+        }
+        else
+        {
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Invoices\" SET \"Total\"=1 WHERE \"Id\"={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"InvoiceLines\" SET \"Amount\"=1 WHERE \"InvoiceId\"={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceRecipients\" WHERE \"InvoiceId\"={draft.Id}"));
+        }
+        foreach (var contract in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync())
+        { contract.Status = ContractStatus.Terminated; contract.ActualEndDate = Today; }
+        await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.OK, (await w.OtherTenant.Client.GetAsync(path)).StatusCode);
         var newcomer = await User(Roles.Tenant);
         Assert.Equal(HttpStatusCode.NotFound, (await newcomer.Client.GetAsync(path)).StatusCode);
@@ -166,7 +176,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.Client.GetAsync($"/api/v1/invoices/{invoice.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync($"/api/v1/invoices/{invoice.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
         Assert.Equal(2, await db.Set<InvoiceRecipient>().CountAsync(i => i.InvoiceId == invoice.Id));
         Assert.NotNull((await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.Category == ChargeCategory.Rent)).FirstUsedAt);
@@ -189,7 +199,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     public async Task SharedTenancyDatabaseGuardRejectsOverCapacityAndDuplicateTenant()
     {
         var w = await Setup();
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var existing = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == w.Contract);
         var duplicate = new Contract
         {

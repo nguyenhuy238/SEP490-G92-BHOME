@@ -18,7 +18,7 @@ public sealed partial class PaymentLedgerTests
         var own = await Setup(); var outside = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
             var actor = (await users.FindByIdAsync(own.Tenants[0].ToString()))!; Assert.True((await users.AddToRoleAsync(actor, Roles.Staff)).Succeeded);
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
             db.Add(new StaffLocationAssignment(outside.Location, actor.Id, own.Owner, today.AddDays(-1), today.AddDays(1))); await db.SaveChangesAsync();
@@ -39,7 +39,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Empty((await staff.GetFromJsonAsync<PagedResult<DebtInvoiceView>>(route))!.Items);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
             db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, today.AddDays(-1), today.AddDays(1))); await db.SaveChangesAsync();
         }

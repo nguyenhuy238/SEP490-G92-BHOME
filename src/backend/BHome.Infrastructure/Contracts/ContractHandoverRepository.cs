@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractHandoverRepository(BHomeDbContext db) : IContractHandoverRepository
+internal sealed class ContractHandoverRepository(BHomePersistenceContext db) : IContractHandoverRepository
 {
     public Task<ContractHandover?> GetAsync(Guid id, CancellationToken t) => db.Set<ContractHandover>().SingleOrDefaultAsync(h => h.ContractId == id, t);
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t)
