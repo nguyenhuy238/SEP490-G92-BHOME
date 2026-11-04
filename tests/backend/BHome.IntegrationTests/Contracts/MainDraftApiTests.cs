@@ -34,8 +34,8 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var user = new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true };
-            Assert.True((await users.CreateAsync(user, password)).Succeeded);
-            Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
+            user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
+            id = user.Id; email = user.Email!;
         }
         var client = fixture.Factory.CreateClient(); var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
         response.EnsureSuccessStatusCode(); var login = (await response.Content.ReadFromJsonAsync<LoginResult>())!;
@@ -44,7 +44,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
     private async Task<Workspace> Setup(bool settings = true, bool verified = true, bool prices = true)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var outside = await User(Roles.Staff);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var location = new Location("SYNTHETIC DRAFT LOCATION") { Address = "Địa chỉ kiểm thử tổng hợp", ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
         var type = new RoomType { LocationId = location.Id, Name = "SYNTHETIC", DefaultCapacity = 3 };
         var room = new Room { LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = "TEST-DRAFT", Capacity = 3, Status = RoomStatus.Available };
@@ -74,7 +74,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
     public async Task VerifiedOnboardingCreatesDraftWithoutTenantAndPersistsDocxWhenPdfConverterMissing()
     {
         var w = await Setup();
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var beforeUsers = await db.Users.CountAsync();
         var key = Guid.NewGuid(); var draft = await Save(w, key: key); var replay = await Save(w, key: key);
         Assert.Equal(draft.Id, replay.Id); Assert.Equal("Draft", draft.Status);
@@ -150,7 +150,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         }
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var c = await db.Set<Contract>().FindAsync(draft.Id); c!.Status = ContractStatus.Cancelled; await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var c = await db.Set<Contract>().FindAsync(draft.Id); c!.Status = ContractStatus.Cancelled; await db.SaveChangesAsync();
         }
         using var update = new HttpRequestMessage(HttpMethod.Put, $"{Root}/{draft.Id}") { Content = JsonContent.Create(Input(w) with { ExpectedVersion = 1 }) }; update.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.SendAsync(update)).StatusCode);
@@ -165,7 +165,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings/{w.Location}", new MainContractSettingsInput(w.OwnerId, end.AddDays(1), null, 7000000, current.PaymentTerms, current.AdditionalTerms, current.Owner, 2)));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var rent = await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.ChargeCode == "RENT"); rent.EffectiveTo = end;
             db.Add(new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "FUTURE TEST RENT", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3400000, EffectiveFrom = end.AddDays(1) });
             await db.SaveChangesAsync();
@@ -181,7 +181,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         var outside = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var room = await db.Set<Room>().FindAsync(outside.Room); room!.Status = RoomStatus.Unavailable; await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var room = await db.Set<Room>().FindAsync(outside.Room); room!.Status = RoomStatus.Unavailable; await db.SaveChangesAsync();
         }
         using var request = new HttpRequestMessage(HttpMethod.Post, Root) { Content = JsonContent.Create(Input(outside)) }; request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var rejected = await outside.Staff.SendAsync(request); Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode); Assert.Contains("room_not_available", await rejected.Content.ReadAsStringAsync());
@@ -192,7 +192,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         var w = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var resident = await db.Set<Resident>().FindAsync(w.Resident); resident!.IdentityData = "{}"; await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var resident = await db.Set<Resident>().FindAsync(w.Resident); resident!.IdentityData = "{}"; await db.SaveChangesAsync();
         }
         var response = await w.Staff.GetAsync($"{Root}/preparation?roomId={w.Room}&representativeResidentId={w.Resident}&residentIds={w.Resident}&effectiveOn={Today:yyyy-MM-dd}");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); Assert.Contains("confirmed_identity_required", await response.Content.ReadAsStringAsync());
@@ -203,7 +203,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         var w = await Setup(); Guid memberId, friendId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var protection = scope.ServiceProvider.GetRequiredService<IIdentityProtection>();
             Resident Add(string number, ResidentType type)
             {
@@ -220,7 +220,7 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
             invalid.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); var response = await w.Staff.SendAsync(invalid); Assert.Equal(HttpStatusCode.Conflict, response.StatusCode); Assert.Contains("individual_representatives_require_separate_contracts", await response.Content.ReadAsStringAsync());
         }
         var independent = await Save(w, Input(w) with { RepresentativeResidentId = friendId, ResidentIds = [friendId] }); Assert.NotEqual(family.Id, independent.Id);
-        await using var check = fixture.Factory.Services.CreateAsyncScope(); var context = check.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var check = fixture.Factory.Services.CreateAsyncScope(); var context = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var members = await context.Set<ContractResident>().Where(r => r.ContractId == family.Id).ToArrayAsync(); Assert.Single(members, r => r.Role == ResidentType.Representative); Assert.Single(members, r => r.Role == ResidentType.CoOccupant);
         Assert.Equal(RoomStatus.Available, (await context.Set<Room>().FindAsync(w.Room))!.Status);
     }

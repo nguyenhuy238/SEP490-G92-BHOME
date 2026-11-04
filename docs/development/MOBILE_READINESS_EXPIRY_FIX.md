@@ -71,3 +71,39 @@ không có compiler error); chạy lại ngoài sandbox được cấp phép đ�
 Lượt đầu regression script thiếu reset đồng hồ/đếm IP của fixture đã được sửa và chạy lại.
 Chưa xác minh thao tác trên iPhone vật lý hoặc phiên Owner trong trình duyệt; không
 dùng tài khoản thật để chạy test. Chưa chạy toàn bộ backend/mobile suite.
+
+## Lần khắc phục sau khi thêm MainTenancyDraftPreparation — 02/11/2026
+
+Log `npm run mobile:dev -- -Clear` và `npm run mobile` tiếp tục có live 200,
+ready 503, TLS hợp lệ. Kiểm tra lại bằng `Update-LocalDatabase.ps1 -Check`
+xác nhận còn đúng migration `20261102101139_MainTenancyDraftPreparation`.
+`-Check` chỉ đọc, không áp dụng migration; chạy lại mobile không cập nhật schema.
+Đây là lỗi môi trường development chưa theo kịp migration hiện có, không cần sửa SQL
+tham chiếu hoặc bỏ kiểm tra readiness. Truy vết kỹ thuật: API conventions yêu cầu
+không còn pending migrations; migration thuộc phần chuẩn bị Main Tenancy Draft
+([tài liệu workflow](MAIN_TENANCY_DRAFT.md), BF-03/04, UC-15).
+
+Không có API đang lắng nghe trên 7240/5240 trước khi nâng cấp. Đã tạo backup
+`.tools/main-draft-repair-20261102-214201-before-upgrade.dump` bằng `pg_dump --format=custom`
+và kiểm tra archive bằng `pg_restore --list`, sau đó chạy `Update-LocalDatabase.ps1`.
+Migration commit thành công, không còn pending. Đối chiếu số bản ghi User, Role,
+Location, Room, Contract và Task trước/sau đều giữ nguyên. Backup và script hỗ trợ
+chỉ nằm trong `.tools` được Git ignore.
+
+Kết quả thực thi trong lần này:
+
+- `Update-LocalDatabase.ps1 -Check`: build thành công; 1 pending trước sửa.
+- `Update-LocalDatabase.ps1`: build thành công; áp dụng 1 migration, 0 pending.
+- `tests/scripts/MobileDevelopment.Tests.ps1`: PASS 75 assertions.
+- Khởi động `Start-OcrMobile.ps1 -SkipDatabase` ở background; log mới tại
+  `.tools/main-draft-repair-api.stdout.log` và `.tools/main-draft-repair-api.stderr.log`.
+- `Diagnose-MobileApi.cjs`: live/ready 200, anonymous Contracts 401;
+  CA không tin cậy và hostname sai đều bị từ chối.
+- `Test-MobileApi.cjs`: exit 0 qua LAN HTTPS với CA development.
+
+Lượt build đầu trong sandbox thất bại không có compiler error; chạy lại ngoài
+sandbox thành công. Lượt kiểm tra số bản ghi đầu gặp lỗi truyền dấu nháy SQL của
+PowerShell/native executable; sửa truyền SQL qua stdin và kiểm tra lại thành công,
+chưa có thao tác ghi database trong lượt lỗi. Probe dot-source đầu bị execution policy
+chặn; chạy trực tiếp Node 22 cho các probe sau thành công. Docker engine không chạy;
+không chạy lại backend integration suite, Metro hoặc kiểm tra iPhone trong lần này.

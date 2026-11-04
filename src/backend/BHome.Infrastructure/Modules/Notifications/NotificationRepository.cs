@@ -8,7 +8,7 @@ using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
-internal sealed class NotificationRepository(BHomeDbContext db) : INotificationRepository
+internal sealed class NotificationRepository(BHomePersistenceContext db) : INotificationRepository
 {
     private IQueryable<UserNotification> Visible(NotificationScope s) => db.Set<UserNotification>().Where(n => n.RecipientUserId == s.Actor &&
         (s.Owner && n.AudienceRole == Roles.Owner || s.Tenant && n.AudienceRole == Roles.Tenant || s.Staff && n.AudienceRole == Roles.Staff && n.Category == "Task" && n.LocationId != null &&

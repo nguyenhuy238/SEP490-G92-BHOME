@@ -24,7 +24,7 @@ public sealed partial class PaymentLedgerTests
         var paid = (await tenant.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.DoesNotContain("shared_liability_allocation_pending", paid.UnresolvedItems); Assert.False(paid.Resolved); Assert.Equal(90000, Assert.Single(paid.Invoices).Financials.AllocatedPayments);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); db.Add(new DepositVerification { ContractId = w.Contract, Amount = 20000, BankTransactionReference = "SYN-BH40-" + Guid.NewGuid(), VerificationReason = "Synthetic deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); db.Add(new DepositVerification { ContractId = w.Contract, Amount = 20000, BankTransactionReference = "SYN-BH40-" + Guid.NewGuid(), VerificationReason = "Synthetic deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();
         }
         var deposit = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.Equal(20000, deposit.VerifiedSecurityDeposit); Assert.Null(deposit.RefundAmount); Assert.Null(deposit.ApprovedDeductions); Assert.Contains("deposit_deduction_refund_policy_required", deposit.UnresolvedItems);
         Assert.NotEqual(paid.Reference, deposit.Reference);

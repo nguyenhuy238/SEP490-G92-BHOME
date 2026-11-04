@@ -20,7 +20,7 @@ namespace BHome.LocalDevelopment;
 public static class ContractDemoSeed
 {
     public static Guid Id(int value) => Guid.Parse($"de000000-0000-4000-8000-{value:000000000000}");
-    private static void Add<T>(BHomeDbContext db, int id, T entity) where T : class
+    private static void Add<T>(BHomePersistenceContext db, int id, T entity) where T : class
     { db.Entry(entity).Property("Id").CurrentValue = Id(id); db.Add(entity); }
     public static void ValidateTarget(string? environment, string connection)
     {
@@ -41,8 +41,8 @@ public static class ContractDemoSeed
         if (!Uri.TryCreate("http://" + endpoint, UriKind.Absolute, out var storageUri) || !storageUri.IsLoopback || config["ObjectStorage:Bucket"] != "contract-demo")
             throw new LocalTestAccountException("Seed yêu cầu MinIO loopback và bucket contract-demo riêng.");
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        await db.Database.MigrateAsync(t);
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Prepare the reviewed Compact24 schema before seeding; automatic schema migration is disabled.");
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var accounts = new[] { (1, "owner.contract.demo", Roles.Owner), (2, "staff.contract.demo", Roles.Staff), (3, "tenant1.contract.demo", Roles.Tenant), (4, "tenant2.contract.demo", Roles.Tenant), (5, "tenant3.contract.demo", Roles.Tenant) };
         await using var tx = await db.Database.BeginTransactionAsync(t);
@@ -57,10 +57,12 @@ public static class ContractDemoSeed
             }
             if (await db.Users.AnyAsync(u => u.Id == Id(number), t)) throw new LocalTestAccountException("Trùng ID ngoài fixture.");
             var user = new ApplicationUser { Id = Id(number), UserName = name, Email = name + "@example.invalid", IsActive = true, LockoutEnabled = true };
+            db.PrepareUserRole(user, role);
             var created = await users.CreateAsync(user, password);
-            if (!created.Succeeded || !(await users.AddToRoleAsync(user, role)).Succeeded)
+            if (!created.Succeeded || !await users.IsInRoleAsync(user, role) && !(await users.AddToRoleAsync(user, role)).Succeeded)
                 throw new LocalTestAccountException("Không thể tạo tài khoản demo; kiểm tra chính sách mật khẩu local.");
         }
+        await LocalSchemaSeed.EnsureChainAsync(db, t);
         if (!await db.Locations.AnyAsync(l => l.Id == Id(10), t))
         {
             if (await db.Locations.AnyAsync(l => l.Name == "BHOME CONTRACT DEMO", t)) throw new LocalTestAccountException("Trùng tên cơ sở ngoài fixture.");

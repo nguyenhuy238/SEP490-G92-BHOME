@@ -35,12 +35,15 @@ public sealed partial class PaymentLedgerTests
         Assert.Empty((await b.GetFromJsonAsync<PagedResult<AdjustmentView>>($"/api/v1/invoice-adjustments?invoiceId={w.Invoice}"))!.Items);
         var outside = await Setup(); using var stranger = await Client(outside.Tenants[0]);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, route, input)).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<InvoiceAdjustmentRequest>().CountAsync(r => r.InvoiceId == w.Invoice));
         Assert.Equal(1, await db.Set<InvoiceAdjustmentEvent>().CountAsync(r => r.InvoiceId == w.Invoice));
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"Status\"=4 WHERE \"RoomId\"={w.Room}");
+        foreach (var contract in await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) contract.Status = BHome.Domain.TenantContracts.ContractStatus.Terminated;
+        await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.OK, (await a.GetAsync($"/api/v1/invoice-adjustments/{request.Id}")).StatusCode);
-        await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceAdjustmentRequests\" WHERE \"Id\"={request.Id}"));
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM invoice_adjustments WHERE id={request.Id}"));
+        else await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceAdjustmentRequests\" WHERE \"Id\"={request.Id}"));
     }
     [Fact]
     public async Task AdjustmentEvidenceIsValidatedPrivateAndCannotBeReusedOrStolen()
@@ -70,9 +73,9 @@ public sealed partial class PaymentLedgerTests
     public async Task FailedEvidenceUploadLeavesOnlyRecoverableIntentAndCannotBeSubmitted()
     {
         var w = await Setup(); using var tenant = await Client(w.Tenants[0]);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var storage = new FailingAdjustmentStorage();
-        var files = new BHome.Infrastructure.Billing.AdjustmentEvidenceFiles(scope.ServiceProvider.GetRequiredService<DbContextOptions<BHomeDbContext>>(), storage, TimeProvider.System);
+        var files = new BHome.Infrastructure.Billing.AdjustmentEvidenceFiles(db, storage, TimeProvider.System);
         await Assert.ThrowsAsync<IOException>(() => files.UploadAsync(w.Invoice, w.Tenants[0], [137, 80, 78, 71], "image/png", default));
         var orphan = await db.Set<InvoiceAdjustmentEvidence>().AsNoTracking().SingleAsync(e => e.InvoiceId == w.Invoice); Assert.False(orphan.Uploaded);
         var input = new AdjustmentSubmit(null, 90000, "Synthetic failed upload", [orphan.Id], 1);

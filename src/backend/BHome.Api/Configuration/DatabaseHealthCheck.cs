@@ -11,11 +11,9 @@ internal sealed class DatabaseHealthCheck(IServiceScopeFactory scopeFactory) : I
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-            if (!await db.Database.CanConnectAsync(cancellationToken))
-                return HealthCheckResult.Unhealthy("Database unavailable.");
-            if ((await db.Database.GetPendingMigrationsAsync(cancellationToken)).Any())
-                return HealthCheckResult.Unhealthy("Database migrations pending.");
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            if (!await db.IsSchemaReadyAsync(cancellationToken))
+                return HealthCheckResult.Unhealthy("Database schema unavailable or incompatible.");
             return HealthCheckResult.Healthy();
         }
         catch (Exception) { return HealthCheckResult.Unhealthy("Database unavailable."); }

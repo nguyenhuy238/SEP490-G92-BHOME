@@ -15,7 +15,7 @@ namespace BHome.LocalDevelopment;
 internal static class BillingAutomationDemoSeed
 {
     public static Guid Id(int n) => Guid.Parse($"fa090000-0000-4000-8000-{n:000000000000}");
-    private static void Add<T>(BHomeDbContext db, int n, T value) where T : class { db.Entry(value).Property("Id").CurrentValue = Id(n); db.Add(value); }
+    private static void Add<T>(BHomePersistenceContext db, int n, T value) where T : class { db.Entry(value).Property("Id").CurrentValue = Id(n); db.Add(value); }
     private static void Guard(IServiceProvider sp)
     {
         var config = sp.GetRequiredService<IConfiguration>();
@@ -24,7 +24,7 @@ internal static class BillingAutomationDemoSeed
     }
     public static async Task PrepareAsync(IServiceProvider services, CancellationToken t = default)
     {
-        Guard(services); await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); await db.Database.MigrateAsync(t);
+        Guard(services); await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Prepare the reviewed Compact24 schema before seeding; automatic schema migration is disabled.");
         if (await db.Users.CountAsync(u => new[] { ContractDemoSeed.Id(1), ContractDemoSeed.Id(2), ContractDemoSeed.Id(3), ContractDemoSeed.Id(4), ContractDemoSeed.Id(5) }.Contains(u.Id), t) != 5) throw new LocalTestAccountException("Initialize the isolated contract demo accounts first.");
         var today = BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow); var period = new DateOnly(today.Year, today.Month, 1);
         await using var tx = await db.Database.BeginTransactionAsync(t); await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({Id(10).ToString()},0))", t);
@@ -55,7 +55,7 @@ internal static class BillingAutomationDemoSeed
     public static async Task RetryAsync(IServiceProvider services, CancellationToken t = default)
     {
         Guard(services); var config = services.GetRequiredService<IConfiguration>();
-        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); var period = BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow); period = new(period.Year, period.Month, 1);
+        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var period = BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow); period = new(period.Year, period.Month, 1);
         var plan = await scope.ServiceProvider.GetRequiredService<IBillingAutomationSchedules>().ForPeriodAsync(Id(10), period, t) ?? throw new LocalTestAccountException("Configure the automation plan through the demo API first.");
         if (await db.Set<Invoice>().AnyAsync(i => i.RoomId == Id(22) && i.BillingPeriod == period, t)) { Console.WriteLine("Retry fixture already completed; preserved its existing history."); return; }
         if (!await db.Set<Contract>().AnyAsync(c => c.RoomId == Id(22) && c.Status == ContractStatus.Active, t)) throw new LocalTestAccountException("Activate the synthetic retry contract before running the fault scenario.");

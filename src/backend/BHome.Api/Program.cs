@@ -1,6 +1,7 @@
 using BHome.Api.Configuration;
 using BHome.Api.Middleware;
 using BHome.Infrastructure;
+using BHome.Infrastructure.Persistence.Compact24;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -9,6 +10,14 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiFoundation(builder.Configuration);
 
 var app = builder.Build();
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Api:ReadDevelopmentEnvironmentFile", true))
+    DevelopmentEnvironmentFile.Load(builder.Configuration, app.Environment.ContentRootPath);
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("DevelopmentDatabase:InitializeOnStartup"))
+{
+    var prepared = await Compact24DevelopmentDatabase.PrepareAsync(app.Environment.EnvironmentName,
+        app.Configuration.GetConnectionString("Database") ?? "");
+    app.Logger.LogInformation("Compact24 Development database: {DatabaseState}; schema {SchemaVersion}", prepared.State, Compact24Schema.Version);
+}
 app.UseMiddleware<CorrelationMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();

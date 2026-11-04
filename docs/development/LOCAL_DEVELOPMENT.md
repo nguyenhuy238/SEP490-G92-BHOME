@@ -23,8 +23,9 @@ script policy for npm shims.
 
 Run `scripts/Initialize-Local.ps1` once to generate an ignored `.env` with random local PostgreSQL,
 MinIO and JWT values. It refuses to overwrite an existing file. Keep the file private. Alternatively
-copy the root example and replace placeholders yourself. Compose reads `.env`, while the API does
-not; `scripts/Start-Api.ps1` loads recognized backend names without evaluating shell expressions.
+copy the root example and replace placeholders yourself. Compose and the Development API read
+`.env`; API user-secrets, process environment and CLI arguments have higher priority. The launcher
+supports `-EnvironmentFile` and does not evaluate shell expressions.
 Environment names with `__` map to .NET configuration sections. Root integration categories are
 reserved examples, not wired providers; setting an API key alone never enables a provider.
 
@@ -54,121 +55,72 @@ are never reset or granted additional roles. See [manual Postman/UI steps](MANUA
 Tests create synthetic accounts only in disposable PostgreSQL containers and
 generate isolated signing keys in memory. See [the login contract](../api/API_CONVENTIONS.md#existing-account-login).
 
-## Data services and migrations
+## Data services and Compact24 initialization
 
-If the local database still records `20261028103339_CaptureWorkflows`, use the guarded
-[legacy upgrade procedure](IPHONE_CONNECTIVITY.md#nâng-cấp-legacy-có-bảo-toàn-dữ-liệu).
-The normal merged migration chain otherwise fails with `Locations already exists`.
-Do not reset the database or manually mark those migrations as applied.
+The supported development schema is **Compact24: 24 physical tables, 386 columns, 83 foreign keys**,
+with no EF migration history table. Keep the old migrations/snapshot for legacy source copies;
+do not run `dotnet ef database update` against Compact24.
+
+One-time prerequisites: generate your own ignored `.env`, configure its connection for your local
+PostgreSQL, and start PostgreSQL (native or Docker). Docker users can run:
 
 ```powershell
 docker compose config --quiet
 docker compose up -d --build
 docker compose ps
-dotnet tool restore
-# EF tooling deliberately uses an explicit environment connection, independent of API startup.
-$env:ConnectionStrings__Database = '<your local PostgreSQL connection string>'
-dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
 ```
 
-If a native PostgreSQL service already owns port 5432, keep using its configured database and start
-only storage with `docker compose up -d --build minio`. Alternatively choose a free `POSTGRES_PORT`
-and deliberately update the backend connection string to match. Do not replace/reset an existing
-database or volume to resolve a port conflict.
+For native PostgreSQL already on port 5432, keep it and start only MinIO if required:
+`docker compose up -d --build minio`. Do not start another PostgreSQL on the same port. The role in
+`ConnectionStrings__Database` needs database creation rights only if the database is missing,
+and permission to create `btree_gist` in its owned database. Each developer uses private credentials.
 
-### Native PostgreSQL on this workstation
-
-The native PostgreSQL 18 service on `localhost:5432` has a development database named `bhome`,
-owned by `postgres`. Its schema is managed by the repository's EF migrations. The ignored
-`.env` (default launcher) and `.env.local` both contain the verified native connection and retain
-existing local JWT/storage settings; credentials are not stored in tracked configuration.
-The supplied local credential was already present in `.env.local` and was reused without printing it.
-These files are workstation-specific. `POSTGRES_*` variables remain Docker Compose configuration;
-the API uses `ConnectionStrings__Database`. `.env.compose` remains a separate opt-in Docker database.
-
-On 28 October 2026, the native server reported PostgreSQL **18.6**. The user selected this existing
-native installation for Development; the Report 4 baseline remains PostgreSQL 16 and the disposable
-automated test suite ran on 16. Native 18.6 migration/readiness smoke checks passed; the entire suite
-was not rerun against 18.6. No framework/provider/server version was changed.
-
-Before applying auth migration, a custom-format native database backup was created at ignored
-`.tools/auth-audit/bhome-before-auth-migration.dump`. Only initial migration existed; user/job counts
-were zero. After `dotnet ef database update --no-build --project src/backend/BHome.Infrastructure
---startup-project src/backend/BHome.Api`, both migrations are applied, all 13 public tables exist,
-`AspNetUsers.IsActive` and account/role/audit triggers exist. No application accounts were seeded.
-
-Start the API from the repository root with:
+### Normal startup after pull
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1
-# Optional explicit selection of the same native database:
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env.local
+# Alternative: Development F5, or:
+dotnet run --project src/backend/BHome.Api
 ```
 
-The launcher selects the repository's portable .NET 8 SDK when present. The global .NET 10 SDK
-alone does not meet `global.json`. Plain `dotnet run` does not load `.env.local`.
+Development startup prepares the schema before hosted workers and HTTP requests. It creates a
+missing `bhome`, initializes an empty database, or verifies/reuses a ready Compact24. A session
+advisory lock serializes concurrent initializations. Startup never archives, drops or resets data.
+Only loopback PostgreSQL and the dedicated `bhome` development database are supported (tests use
+an isolated reserved name). Production/Testing startup never performs initialization or loads `.env`.
+Set `DevelopmentDatabase__InitializeOnStartup=false` to opt out explicitly.
 
-For later migration updates, load the same connection explicitly in PowerShell:
+Development loads repository `.env` as a fallback above appsettings, below user-secrets, process
+environment and CLI arguments. The launcher selects exactly its `-EnvironmentFile`. Missing local
+configuration still requires the one-time setup; the project does not install/start PostgreSQL for you.
+No users, contracts, invoices or shared passwords are automatically seeded. Use
+`scripts/New-LocalTestUsers.ps1` once and choose your own password at its hidden prompt.
+
+### Existing legacy database: one-time replacement
+
+Normal startup refuses an existing 70-table schema and explains the one-time command:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass
-. ./scripts/Use-LocalTools.ps1
-$connectionLine = Get-Content .env.local | Where-Object { $_ -like 'ConnectionStrings__Database=*' }
-$env:ConnectionStrings__Database = $connectionLine.Substring('ConnectionStrings__Database='.Length)
-dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -RecreateDatabase
 ```
 
-In pgAdmin, refresh **PostgreSQL 18 > Databases**, then open
-**bhome > Schemas > public > Tables**. Identity roles are seeded by the foundation migration;
-application users are not seeded. Storage operations still require MinIO separately.
+The explicit replacement recognizes all 70 legacy tables plus migration history. It prepares and
+verifies a separate Compact24 database first, disconnects sessions on the selected local `bhome`,
+renames the entire old database to `bhome_legacy_<UTC timestamp>_<suffix>`, then renames the new
+database to `bhome`. No old table/database is dropped. Old users/data remain in the archive;
+new development starts empty. The command is idempotent for an already valid Compact24 and
+rejects an unrecognized schema. If the final rename fails, it restores the original name/access;
+a prepared temporary database may remain for inspection. No other database is disconnected.
 
-Verified the real default launcher using Development HTTPS on port 7240: live/ready 200,
-anonymous session 401, invalid login input 400. The temporary host was stopped afterwards.
-The HTTPS probe bypassed certificate verification only for its loopback curl process; machine trust
-was not changed. Cookie/browser HTTPS end-to-end and real account login remain separate checks.
+In pgAdmin refresh **PostgreSQL > Databases**, then open **bhome > Schemas > public > Tables**.
+The archive is visible separately. Do not import legacy migration history into the new `bhome`.
+For data transfer rather than a clean development environment use the controlled offline importer
+and reconciliation described in [the database guide](../database/2026-11-03/README.md).
 
-### Previous isolated database on the audit workstation
-
-At the time of the audit, the native service accepted TCP connections on 5432 but rejected the
-password configured in the original `.env` (PostgreSQL SQLSTATE `28P01`). Its applied-migration
-state was unverified. The audit
-left that service, its credentials/data and `.env` untouched. A separate Compose project
-`bhome-local-db` now owns a PostgreSQL container on 5433 and its own persistent named volume.
-The existing foundation migration was applied there; no users were seeded.
-
-Ignored `.env.compose` is a local copy of `.env` with `POSTGRES_PORT=5433` and a matching backend
-connection using the existing Compose database/user/password settings. It contains secrets: never
-print or commit it. On another workstation, create this optional file only if absent and configure
-matching database/port values deliberately; the file is not distributed in Git.
-
-```powershell
-docker compose -p bhome-local-db --env-file .env.compose up -d postgres
-# Existing MinIO remains in the original project, with the same storage credentials.
-docker compose up -d minio
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env.compose
-```
-
-The launcher accepts an explicit environment-file path and defaults to `.env`. It does not rewrite
-either file. Use the same environment file when exporting `ConnectionStrings__Database` for EF tools;
-do not paste the value into shared output. To stop only this additional database while retaining its
-volume: `docker compose -p bhome-local-db --env-file .env.compose stop postgres`.
-
-`postgres:16-alpine` persists in a named volume. MinIO builds official pinned community source because
-its current distribution is source-only. Its first build downloads Go modules and can be slow.
-Use the console at `http://localhost:9001` with your local `.env` credentials to create private bucket
-`bhome-private`. The initial helper reuses local root storage credentials for convenience; deployed
-APIs require a scoped non-root service account. Changing a configured bucket name requires separately
-provisioning that bucket. Never upload real CCCD images as test fixtures.
-
-To add a migration after a coordinated model change:
-
-```powershell
-dotnet ef migrations add <DescriptiveName> --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api --output-dir Persistence/Migrations
-dotnet ef migrations script --idempotent --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
-```
-
-Review constraints/data changes and apply intentionally. Do not use `EnsureCreated`. Stop the local
-services with `docker compose stop`; named volumes persist. No setup script removes volumes or data.
+Running `Update-LocalDatabase.ps1` without a switch initializes/verifies without replacing a legacy
+database. `-Check` is read-only and reports MISSING/EMPTY/LEGACY_REQUIRES_RECREATE/READY. These
+commands accept `-EnvironmentFile` for local overrides and do not change `.env` or connection strings.
 
 ## Clients
 
@@ -228,12 +180,12 @@ Run `npm.cmd run lint` at the repository root for the shared lint configuration.
 - SDK not found: `dotnet --list-sdks` must include 8.x; .NET 10 alone does not satisfy `global.json`.
 - Docker unavailable: start Docker Desktop's Linux engine. `docker compose config --quiet` validates
   syntax without a daemon. PostgreSQL Testcontainers tests require the daemon.
-- API startup failure: provide a database connection and random JWT key. It does not need PostgreSQL
-  to start with jobs disabled; `/health/ready` reports 503 until the database is reachable and all
-  application EF migrations are applied. The readiness check never applies migrations itself.
+- API startup failure: provide a database connection and random JWT key. Development initialization
+  requires local PostgreSQL to be reachable. Production never initializes schema; readiness reports
+  503 until Compact24 is ready. Health checks never modify schema.
 - Storage failure: provision the private bucket and correct credentials; no fake success fallback exists.
 - Browser network failure: trust the local HTTPS certificate, check exact API URL and CORS origin.
-- Background jobs: disabled by default; migrate, register handlers, and follow the operational guide
+- Background jobs: disabled by default; prepare Compact24, register handlers, and follow the operational guide
   before enabling. Do not diagnose an unimplemented provider as successful delivery.
 
 Use the root README quality commands or `scripts/Validate.ps1`. Add `-IncludeDockerTests` only with

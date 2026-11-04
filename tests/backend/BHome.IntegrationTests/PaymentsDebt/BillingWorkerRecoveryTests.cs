@@ -17,7 +17,7 @@ public sealed partial class PaymentLedgerTests
         var (w, p, _) = await MeterWorkspace(); var key = Guid.NewGuid().ToString(); var unknown = Guid.NewGuid().ToString(); Guid executionId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var e = new BillingAutomationExecution { PlanId = p.Id, LocationId = w.Location, BillingPeriod = CurrentPeriod(), Phase = "Meter", Status = "Processing", Attempts = 1, LastStartedAt = DateTimeOffset.UtcNow.AddMinutes(-5), LockedUntil = DateTimeOffset.UtcNow.AddMinutes(-3), LockToken = Guid.NewGuid() }; db.Add(e); await db.SaveChangesAsync(); executionId = e.Id;
             await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new("billing-meter", key, JsonSerializer.Serialize(new BillingJobInput(p.Id, CurrentPeriod()))), default);
             await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new("future-module.synthetic", unknown, "{}"), default);
@@ -37,7 +37,7 @@ public sealed partial class PaymentLedgerTests
         }
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*)::int AS \"Value\" FROM \"BackgroundJobs\" WHERE \"Name\"='billing-meter' AND \"IdempotencyKey\"={key} AND \"State\"='Completed' AND \"Attempts\"=2").SingleAsync());
             Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT COUNT(*)::int AS \"Value\" FROM \"BackgroundJobs\" WHERE \"Name\"='future-module.synthetic' AND \"IdempotencyKey\"={unknown} AND \"State\"='Pending' AND \"Attempts\"=0").SingleAsync());
             Assert.Equal("Completed", (await db.Set<BillingAutomationExecution>().AsNoTracking().SingleAsync(e => e.Id == executionId)).Status);
@@ -45,6 +45,6 @@ public sealed partial class PaymentLedgerTests
             Assert.Equal(2, await db.Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id));
         }
         await Task.WhenAll(RunMeter(w), RunMeter(w));
-        await using var last = fixture.Factory.Services.CreateAsyncScope(); Assert.Equal(2, await last.ServiceProvider.GetRequiredService<BHomeDbContext>().Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id));
+        await using var last = fixture.Factory.Services.CreateAsyncScope(); Assert.Equal(2, await last.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id));
     }
 }

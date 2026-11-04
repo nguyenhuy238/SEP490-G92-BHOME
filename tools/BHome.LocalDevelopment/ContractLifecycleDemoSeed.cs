@@ -19,8 +19,8 @@ internal static class ContractLifecycleDemoSeed
 {
     public static Guid Id(int n) => Guid.Parse($"fa400000-0000-4000-8000-{n:000000000000}");
     private static Guid User(int n) => ContractDemoSeed.Id(n);
-    private static void Add<T>(BHomeDbContext db, int n, T entity) where T : class { db.Entry(entity).Property("Id").CurrentValue = Id(n); db.Add(entity); }
-    public static async Task PrepareAsync(BHomeDbContext db, CancellationToken t)
+    private static void Add<T>(BHomePersistenceContext db, int n, T entity) where T : class { db.Entry(entity).Property("Id").CurrentValue = Id(n); db.Add(entity); }
+    public static async Task PrepareAsync(BHomePersistenceContext db, CancellationToken t)
     {
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var period = new DateOnly(today.Year, today.Month, 1);
         await using var tx = await db.Database.BeginTransactionAsync(t);
@@ -52,7 +52,7 @@ internal static class ContractLifecycleDemoSeed
     // No process-wide clock override, status shortcut, or change to the running API.
     public static async Task HistoricalParentAsync(IServiceProvider services, CancellationToken t)
     {
-        await using var scope = services.CreateAsyncScope(); var sp = scope.ServiceProvider; var db = sp.GetRequiredService<BHomeDbContext>();
+        await using var scope = services.CreateAsyncScope(); var sp = scope.ServiceProvider; var db = sp.GetRequiredService<BHomePersistenceContext>();
         var actor = sp.GetRequiredService<LifecycleSeedActor>(); actor.UserId = User(1); actor.Role = "Owner";
         var existing = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.RoomId == Id(21) && c.Kind == ContractKind.Main, t);
         if (existing?.Status is ContractStatus.Active or ContractStatus.Superseded) return;

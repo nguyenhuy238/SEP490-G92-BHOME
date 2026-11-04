@@ -7,7 +7,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class NotificationDeliveryStore(BHomeDbContext db, INotificationRepository inbox) : INotificationDeliveryStore
+internal sealed class NotificationDeliveryStore(BHomePersistenceContext db, INotificationRepository inbox) : INotificationDeliveryStore
 {
     public async Task<IReadOnlyList<DeliveryWork>> DueAsync(DateTimeOffset now, CancellationToken t) => await db.Set<UserNotification>().AsNoTracking().Where(n => n.DeliveryState == "Unconfigured" && n.DeliveryAttempts == 0 || n.DeliveryState == "Pending" && n.NextDeliveryAt <= now || n.DeliveryState == "Processing" && n.DeliveryLockedUntil <= now).OrderBy(n => n.CreatedAt).Take(50).Select(n => new DeliveryWork(n.Id, n.DeliveryAttempts + 1)).ToArrayAsync(t);
     public async Task<PagedResult<DeliveryView>> ListAsync(DeliveryQuery q, CancellationToken t)
@@ -18,7 +18,7 @@ internal sealed class NotificationDeliveryStore(BHomeDbContext db, INotification
     public async Task<DeliveryClaim?> ClaimAsync(Guid id, DateTimeOffset now, NotificationDeliveryOptions options, bool idempotency, CancellationToken t)
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
-        var n = await db.Set<UserNotification>().FromSqlInterpolated($"SELECT * FROM \"UserNotifications\" WHERE \"Id\"={id} FOR UPDATE SKIP LOCKED").SingleOrDefaultAsync(t);
+        var n = await db.Locked<UserNotification>(id, skipLocked: true).SingleOrDefaultAsync(t);
         if (n is null || n.DeliveryState is "Delivered" or "Failed" or "PendingReview" or "Suppressed" || n.NextDeliveryAt > now || n.DeliveryLockedUntil > now) return null;
         var active = await (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join role in db.Roles on grant.RoleId equals role.Id where u.Id == n.RecipientUserId && u.IsActive && role.Name == n.AudienceRole select u.Id).AnyAsync(t);
         var scope = new NotificationScope(n.RecipientUserId, n.AudienceRole == Roles.Owner, n.AudienceRole == Roles.Staff, n.AudienceRole == Roles.Tenant, BillingAutomationDates.BusinessDate(now));
@@ -35,7 +35,7 @@ internal sealed class NotificationDeliveryStore(BHomeDbContext db, INotification
     public async Task CompleteAsync(DeliveryClaim claim, DeliveryCompletion result, DateTimeOffset now, CancellationToken t)
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
-        var n = await db.Set<UserNotification>().FromSqlInterpolated($"SELECT * FROM \"UserNotifications\" WHERE \"Id\"={claim.Id} FOR UPDATE").SingleAsync(t);
+        var n = await db.Locked<UserNotification>(claim.Id).SingleAsync(t);
         if (n.DeliveryLeaseToken != claim.Token) return;
         n.DeliveryState = result.State; n.DeliveryLastErrorCode = result.ErrorCode; n.NextDeliveryAt = result.NextAt; n.DeliveryProviderReference = result.ProviderReference; n.DeliveryLockedUntil = null; n.DeliveryLeaseToken = null;
         db.Add(new NotificationDeliveryAttempt { NotificationId = n.Id, Sequence = claim.Sequence, StartedAt = claim.StartedAt, FinishedAt = now, Outcome = result.State, ErrorCode = result.ErrorCode }); await db.SaveChangesAsync(t); await tx.CommitAsync(t);

@@ -1,0 +1,557 @@
+// BHOME compact target: exactly 24 tables. SQL is authoritative for triggers and partial indexes.
+// JSON companion: BHOME_Database_Design.json, synchronized to the same 386 columns and 83 FK relations.
+// Native Compact24 runtime adapters implemented; schema version compact24-2026-11-04.
+// Initialize an empty target offline; use the separate tool for 70-to-24 data conversion.
+Project BHOME_24 {
+  database_type: 'PostgreSQL'
+}
+
+Table assets {
+  id "uuid" [pk, not null]
+  location_id "uuid" [not null]
+  room_id "uuid"
+  common_area "character varying(200)"
+  asset_code "character varying(80)"
+  name "character varying(150)" [not null]
+  category "character varying(80)" [not null]
+  condition "text" [not null]
+  status "smallint" [not null]
+  purchase_info "jsonb" [not null]
+  version "integer" [not null]
+  history "jsonb" [not null]
+  indexes {
+    (id, location_id) [unique]
+  }
+}
+
+Table billing_policies {
+  id "uuid" [pk, not null]
+  location_id "uuid" [not null]
+  room_id "uuid"
+  room_type_id "uuid"
+  charge_code "character varying(80)" [not null]
+  category "smallint" [not null]
+  calculation_method "character varying(30)" [not null]
+  rate "numeric(18,4)" [not null]
+  parameters "jsonb" [not null]
+  effective_from "date" [not null]
+  effective_to "date"
+  first_used_at "timestamp with time zone"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table contract_residents {
+  contract_id "uuid" [not null]
+  resident_id "uuid" [not null]
+  resident_role "smallint" [not null]
+  residence_from "date" [not null]
+  residence_to "date"
+  actual_residence_from "date"
+  actual_move_out_date "date"
+  registration_status "character varying(25)"
+  registration_evidence_key "character varying(250)"
+  registration_result_at "timestamp with time zone"
+  owner_confirmed_by_user_id "uuid"
+  owner_confirmed_at "timestamp with time zone"
+  history "jsonb" [not null]
+  indexes {
+    (contract_id, resident_id) [pk]
+  }
+}
+
+Table contract_signings {
+  id "uuid" [pk, not null]
+  contract_id "uuid" [not null]
+  signer_user_id "uuid" [not null]
+  certificate_id "uuid" [not null]
+  certificate_snapshot "jsonb" [not null]
+  provider_code "character varying(50)" [not null]
+  provider_reference "character varying(200)"
+  signing_status "smallint" [not null]
+  snapshot_hash "character varying(64)" [not null]
+  source_hash "character varying(64)"
+  prepared_hash "character varying(64)"
+  prepared_object_key "character varying(250)"
+  signed_object_key "character varying(250)"
+  signed_hash "character varying(64)"
+  signing_data "jsonb" [not null]
+  requested_at "timestamp with time zone" [not null]
+  expires_at "timestamp with time zone" [not null]
+  signed_at "timestamp with time zone"
+  history "jsonb" [not null]
+}
+
+Table contracts {
+  id "uuid" [pk, not null]
+  room_id "uuid" [not null]
+  representative_resident_id "uuid" [not null]
+  tenant_user_id "uuid"
+  owner_signer_id "uuid" [not null]
+  contract_type "character varying(12)" [not null]
+  previous_contract_id "uuid"
+  parent_contract_id "uuid"
+  source_holding_contract_id "uuid"
+  start_date "date" [not null]
+  end_date "date" [not null]
+  holding_expiry_at "timestamp with time zone"
+  monthly_rent "numeric(18,0)"
+  deposit_required "numeric(18,0)" [not null]
+  applied_holding_deposit "numeric(18,0)" [not null]
+  reserved_capacity "smallint"
+  terms "text" [not null]
+  snapshot_hash "character varying(64)"
+  draft_metadata "jsonb" [not null]
+  documents "jsonb" [not null]
+  handover "jsonb" [not null]
+  move_out "jsonb" [not null]
+  settlement "jsonb" [not null]
+  status "smallint" [not null]
+  activated_at "timestamp with time zone"
+  activated_by_user_id "uuid"
+  actual_end_date "date"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table expenses {
+  id "uuid" [pk, not null]
+  location_id "uuid" [not null]
+  room_id "uuid"
+  asset_id "uuid"
+  incident_report_id "uuid"
+  task_id "uuid"
+  expense_type "character varying(20)" [not null]
+  category "character varying(60)" [not null]
+  amount "numeric(18,0)" [not null]
+  occurred_on "date" [not null]
+  note "text" [not null]
+  evidence "jsonb" [not null]
+  source_key "character varying(250)"
+  recorded_by_user_id "uuid" [not null]
+  history "jsonb" [not null]
+}
+
+Table financial_scenarios {
+  id "uuid" [pk, not null]
+  location_id "uuid"
+  name "character varying(150)" [not null]
+  baseline_from "date" [not null]
+  baseline_to "date" [not null]
+  forecast_months "smallint" [not null]
+  assumptions "jsonb" [not null]
+  baseline_snapshot "jsonb" [not null]
+  result_snapshot "jsonb" [not null]
+  calculation_version "character varying(40)" [not null]
+  created_by_user_id "uuid" [not null]
+  calculated_at "timestamp with time zone" [not null]
+}
+
+Table incident_reports {
+  id "uuid" [pk, not null]
+  location_id "uuid" [not null]
+  room_id "uuid"
+  asset_id "uuid"
+  reporter_user_id "uuid" [not null]
+  severity "character varying(12)" [not null]
+  summary "character varying(250)" [not null]
+  description "text" [not null]
+  status "character varying(30)" [not null]
+  evidence "jsonb" [not null]
+  emergency_actions "jsonb" [not null]
+  duplicate_of_report_id "uuid"
+  owner_decision "jsonb" [not null]
+  reported_at "timestamp with time zone" [not null]
+  resolved_at "timestamp with time zone"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table invoice_adjustments {
+  id "uuid" [pk, not null]
+  invoice_id "uuid" [not null]
+  requested_by_user_id "uuid" [not null]
+  requested_at "timestamp with time zone" [not null]
+  reason "text" [not null]
+  request_snapshot "jsonb" [not null]
+  proposed_changes "jsonb" [not null]
+  evidence "jsonb" [not null]
+  status "character varying(12)" [not null]
+  approved_delta_amount "numeric(18,0)"
+  decided_by_user_id "uuid"
+  decided_at "timestamp with time zone"
+  decision_reason "text"
+  decision_snapshot "jsonb"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table invoice_items {
+  id "uuid" [pk, not null]
+  invoice_id "uuid" [not null]
+  charge_code "character varying(80)" [not null]
+  description "character varying(255)" [not null]
+  billing_policy_id "uuid"
+  meter_reading_id "uuid"
+  quantity "numeric(18,4)" [not null]
+  unit_price "numeric(18,4)" [not null]
+  amount "numeric(18,0)" [not null]
+  calculation_snapshot "jsonb" [not null]
+}
+
+Table invoices {
+  id "uuid" [pk, not null]
+  location_id "uuid" [not null]
+  room_id "uuid" [not null]
+  contract_id "uuid" [not null]
+  representative_tenant_user_id "uuid" [not null]
+  invoice_type "character varying(12)" [not null]
+  billing_period "date" [not null]
+  recipient_user_ids "uuid[]" [not null]
+  base_total_amount "numeric(18,0)" [not null]
+  status "smallint" [not null]
+  missing_inputs "text[]" [not null]
+  billing_snapshot "jsonb" [not null]
+  payment_requests "jsonb" [not null]
+  scheduled_final_date "date" [not null]
+  due_date "date" [not null]
+  finalized_at "timestamp with time zone"
+  finalized_by_user_id "uuid"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table locations {
+  id "uuid" [pk, not null]
+  name "character varying(200)" [not null]
+  address "text" [not null]
+  is_active "boolean" [not null]
+  staff_assignments "jsonb" [not null]
+  room_types "jsonb" [not null]
+  operating_settings "jsonb" [not null]
+  public_profile "jsonb" [not null]
+  published_at "timestamp with time zone"
+  published_by_user_id "uuid"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table meter_readings {
+  id "uuid" [pk, not null]
+  meter_id "uuid" [not null]
+  operational_task_id "uuid" [not null]
+  reading_purpose "smallint" [not null]
+  billing_period "date"
+  reading_at "timestamp with time zone" [not null]
+  previous_value "numeric(18,4)"
+  ocr_proposed_value "numeric(18,4)"
+  confirmed_value "numeric(18,4)" [not null]
+  consumption "numeric(18,4)"
+  confirmed_by_user_id "uuid" [not null]
+  confirmed_at "timestamp with time zone" [not null]
+  evidence "jsonb" [not null]
+  status "smallint" [not null]
+  history "jsonb" [not null]
+}
+
+Table meters {
+  id "uuid" [pk, not null]
+  room_id "uuid" [not null]
+  utility_type "smallint" [not null]
+  meter_code "character varying(80)" [not null]
+  display_type "smallint" [not null]
+  decimal_places "smallint" [not null]
+  installed_on "date" [not null]
+  removed_on "date"
+  previous_meter_id "uuid"
+  is_active "boolean" [not null]
+  history "jsonb" [not null]
+}
+
+Table notifications {
+  id "uuid" [pk, not null]
+  record_kind "character varying(10)" [not null]
+  recipient_user_id "uuid"
+  actor_user_id "uuid"
+  location_id "uuid"
+  event_key "character varying(250)" [not null]
+  notification_type "character varying(80)" [not null]
+  related_entity_type "character varying(50)"
+  related_entity_id "uuid"
+  title "character varying(200)"
+  message "text"
+  event_data "jsonb" [not null]
+  event_at "timestamp with time zone" [not null]
+  read_at "timestamp with time zone"
+  delivery_status "character varying(25)"
+  next_delivery_at "timestamp with time zone"
+  locked_until "timestamp with time zone"
+  lease_token "uuid"
+  delivery_history "jsonb" [not null]
+}
+
+Table operational_tasks {
+  id "uuid" [pk, not null]
+  task_type "character varying(20)" [not null]
+  location_id "uuid"
+  room_id "uuid"
+  asset_id "uuid"
+  assigned_user_id "uuid"
+  contract_id "uuid"
+  incident_report_id "uuid"
+  meter_id "uuid"
+  billing_period "date"
+  source_key "character varying(250)"
+  title "character varying(200)"
+  description "text"
+  priority "character varying(12)"
+  status "character varying(30)" [not null]
+  assigned_at "timestamp with time zone"
+  starts_at "timestamp with time zone"
+  ends_at "timestamp with time zone"
+  due_at "timestamp with time zone"
+  next_run_at "timestamp with time zone"
+  locked_until "timestamp with time zone"
+  lease_token "uuid"
+  attempt_count "integer" [not null]
+  task_data "jsonb" [not null]
+  evidence "jsonb" [not null]
+  estimated_cost "numeric(18,0)"
+  approved_cost "numeric(18,0)"
+  cost_approved_by_user_id "uuid"
+  cost_approved_at "timestamp with time zone"
+  verified_by_user_id "uuid"
+  verified_at "timestamp with time zone"
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table payment_allocations {
+  id "uuid" [pk, not null]
+  source_payment_id "uuid"
+  source_deposit_contract_id "uuid"
+  target_invoice_id "uuid"
+  target_deposit_contract_id "uuid"
+  amount "numeric(18,0)" [not null]
+  reversal_of_allocation_id "uuid"
+  operation_key "uuid" [not null]
+  line_number "smallint" [not null]
+  paid_by_user_id "uuid"
+  created_by_user_id "uuid" [not null]
+  allocated_at "timestamp with time zone" [not null]
+  reason "text" [not null]
+}
+
+Table payments {
+  id "uuid" [pk, not null]
+  provider_code "character varying(80)" [not null]
+  receiving_account_key "character varying(200)" [not null]
+  transaction_reference "character varying(150)" [not null]
+  effect_key "character varying(250)"
+  received_at "timestamp with time zone" [not null]
+  amount "numeric(18,0)" [not null]
+  currency "character varying(3)" [not null]
+  remittance_info "text"
+  beneficiary_resident_id "uuid"
+  status "character varying(12)" [not null]
+  verification_method "character varying(10)"
+  verified_by_user_id "uuid"
+  verified_at "timestamp with time zone"
+  verification_data "jsonb" [not null]
+  history "jsonb" [not null]
+}
+
+Table refresh_tokens {
+  id "uuid" [pk, not null]
+  user_id "uuid" [not null]
+  record_kind "character varying(10)" [not null]
+  session_id "uuid"
+  token_hash "character varying(64)"
+  security_stamp "character varying(256)"
+  device_label "character varying(256)"
+  issued_at "timestamp with time zone" [not null]
+  last_activity_at "timestamp with time zone"
+  expires_at "timestamp with time zone" [not null]
+  consumed_at "timestamp with time zone"
+  revoked_at "timestamp with time zone"
+  revocation_reason "character varying(50)"
+  replaced_by_token_id "uuid"
+}
+
+Table refund_requests {
+  id "uuid" [pk, not null]
+  source_payment_id "uuid"
+  source_deposit_contract_id "uuid"
+  beneficiary_resident_id "uuid" [not null]
+  requested_by_user_id "uuid" [not null]
+  requested_at "timestamp with time zone" [not null]
+  requested_amount "numeric(18,0)" [not null]
+  reason "text" [not null]
+  status "character varying(12)" [not null]
+  decided_by_user_id "uuid"
+  decided_at "timestamp with time zone"
+  decision_reason "text"
+  executed_at "timestamp with time zone"
+  external_refund_reference "character varying(200)"
+  execution_evidence_key "character varying(250)"
+  operation_key "uuid" [not null]
+  version "integer" [not null]
+  history "jsonb" [not null]
+}
+
+Table residents {
+  id "uuid" [pk, not null]
+  user_id "uuid"
+  current_room_id "uuid"
+  identity_owner_scope_id "uuid" [not null]
+  display_label "character varying(150)" [not null]
+  identity_data "jsonb" [not null]
+  identity_hmac "character varying(64)"
+  hmac_key_version "character varying(32)"
+  verification_status "smallint" [not null]
+  verified_by_user_id "uuid"
+  verified_at "timestamp with time zone"
+  history "jsonb" [not null]
+}
+
+Table rooms {
+  id "uuid" [pk, not null]
+  location_id "uuid" [not null]
+  room_number "character varying(50)" [not null]
+  room_type_id "uuid"
+  floor "character varying(30)"
+  capacity "smallint" [not null]
+  status "smallint" [not null]
+  billing_representatives "jsonb" [not null]
+  public_profile "jsonb" [not null]
+  published_at "timestamp with time zone"
+  published_by_user_id "uuid"
+  version "integer" [not null]
+  history "jsonb" [not null]
+  indexes {
+    (id, location_id) [unique]
+  }
+}
+
+Table staff_employments {
+  id "uuid" [pk, not null]
+  staff_user_id "uuid" [not null]
+  contract_number "character varying(100)"
+  start_date "date" [not null]
+  end_date "date"
+  salary_type "character varying(20)"
+  base_rate "numeric(18,0)"
+  reward_penalty_policy "jsonb" [not null]
+  status "character varying(25)" [not null]
+  history "jsonb" [not null]
+}
+
+Table users {
+  id "uuid" [pk, not null]
+  username "character varying(256)" [not null]
+  normalized_username "character varying(256)" [not null]
+  password_hash "text" [not null]
+  email "character varying(256)"
+  normalized_email "character varying(256)"
+  email_confirmed "boolean" [not null]
+  phone "character varying(30)"
+  phone_confirmed "boolean" [not null]
+  full_name "character varying(150)"
+  roles "text[]" [not null]
+  is_active "boolean" [not null]
+  security_stamp "character varying(256)" [not null]
+  concurrency_stamp "character varying(256)" [not null]
+  access_failed_count "integer" [not null]
+  lockout_enabled "boolean" [not null]
+  lockout_end "timestamp with time zone"
+  two_factor_enabled "boolean" [not null]
+  reset_token_hash "character varying(64)"
+  reset_expires_at "timestamp with time zone"
+  reset_consumed_at "timestamp with time zone"
+  business_profile "jsonb" [not null]
+  signing_credentials "jsonb" [not null]
+  history "jsonb" [not null]
+}
+Ref: assets.location_id > locations.id
+Ref: assets.(room_id, location_id) > rooms.(id, location_id)
+Ref: billing_policies.location_id > locations.id
+Ref: billing_policies.(room_id, location_id) > rooms.(id, location_id)
+Ref: contract_residents.contract_id > contracts.id
+Ref: contract_residents.owner_confirmed_by_user_id > users.id
+Ref: contract_residents.resident_id > residents.id
+Ref: contract_signings.contract_id > contracts.id
+Ref: contract_signings.signer_user_id > users.id
+Ref: contracts.activated_by_user_id > users.id
+Ref: contracts.owner_signer_id > users.id
+Ref: contracts.parent_contract_id > contracts.id
+Ref: contracts.previous_contract_id > contracts.id
+Ref: contracts.representative_resident_id > residents.id
+Ref: contracts.room_id > rooms.id
+Ref: contracts.source_holding_contract_id > contracts.id
+Ref: contracts.tenant_user_id > users.id
+Ref: expenses.(asset_id, location_id) > assets.(id, location_id)
+Ref: expenses.incident_report_id > incident_reports.id
+Ref: expenses.location_id > locations.id
+Ref: expenses.recorded_by_user_id > users.id
+Ref: expenses.(room_id, location_id) > rooms.(id, location_id)
+Ref: expenses.task_id > operational_tasks.id
+Ref: financial_scenarios.created_by_user_id > users.id
+Ref: financial_scenarios.location_id > locations.id
+Ref: incident_reports.(asset_id, location_id) > assets.(id, location_id)
+Ref: incident_reports.duplicate_of_report_id > incident_reports.id
+Ref: incident_reports.location_id > locations.id
+Ref: incident_reports.reporter_user_id > users.id
+Ref: incident_reports.(room_id, location_id) > rooms.(id, location_id)
+Ref: invoice_adjustments.decided_by_user_id > users.id
+Ref: invoice_adjustments.invoice_id > invoices.id
+Ref: invoice_adjustments.requested_by_user_id > users.id
+Ref: invoice_items.billing_policy_id > billing_policies.id
+Ref: invoice_items.invoice_id > invoices.id
+Ref: invoice_items.meter_reading_id > meter_readings.id
+Ref: invoices.contract_id > contracts.id
+Ref: invoices.finalized_by_user_id > users.id
+Ref: invoices.location_id > locations.id
+Ref: invoices.representative_tenant_user_id > users.id
+Ref: invoices.(room_id, location_id) > rooms.(id, location_id)
+Ref: locations.published_by_user_id > users.id
+Ref: meter_readings.confirmed_by_user_id > users.id
+Ref: meter_readings.meter_id > meters.id
+Ref: meter_readings.operational_task_id > operational_tasks.id
+Ref: meters.previous_meter_id > meters.id
+Ref: meters.room_id > rooms.id
+Ref: notifications.actor_user_id > users.id
+Ref: notifications.location_id > locations.id
+Ref: notifications.recipient_user_id > users.id
+Ref: operational_tasks.meter_id > meters.id
+Ref: operational_tasks.(asset_id, location_id) > assets.(id, location_id)
+Ref: operational_tasks.assigned_user_id > users.id
+Ref: operational_tasks.contract_id > contracts.id
+Ref: operational_tasks.cost_approved_by_user_id > users.id
+Ref: operational_tasks.incident_report_id > incident_reports.id
+Ref: operational_tasks.location_id > locations.id
+Ref: operational_tasks.(room_id, location_id) > rooms.(id, location_id)
+Ref: operational_tasks.verified_by_user_id > users.id
+Ref: payment_allocations.created_by_user_id > users.id
+Ref: payment_allocations.paid_by_user_id > users.id
+Ref: payment_allocations.reversal_of_allocation_id > payment_allocations.id
+Ref: payment_allocations.source_deposit_contract_id > contracts.id
+Ref: payment_allocations.source_payment_id > payments.id
+Ref: payment_allocations.target_deposit_contract_id > contracts.id
+Ref: payment_allocations.target_invoice_id > invoices.id
+Ref: payments.beneficiary_resident_id > residents.id
+Ref: payments.verified_by_user_id > users.id
+Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id
+Ref: refresh_tokens.session_id > refresh_tokens.id
+Ref: refresh_tokens.user_id > users.id
+Ref: refund_requests.beneficiary_resident_id > residents.id
+Ref: refund_requests.decided_by_user_id > users.id
+Ref: refund_requests.requested_by_user_id > users.id
+Ref: refund_requests.source_deposit_contract_id > contracts.id
+Ref: refund_requests.source_payment_id > payments.id
+Ref: residents.current_room_id > rooms.id
+Ref: residents.identity_owner_scope_id > users.id
+Ref: residents.user_id > users.id
+Ref: residents.verified_by_user_id > users.id
+Ref: rooms.location_id > locations.id
+Ref: rooms.published_by_user_id > users.id
+Ref: staff_employments.staff_user_id > users.id

@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Ocr;
 
-internal sealed class CaptureWorkflowResources(BHomeDbContext db, CaptureScope scope) : IOcrWorkflowResources
+internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, CaptureScope scope) : IOcrWorkflowResources
 {
     public async Task<OcrWorkflowResource?> FindIdentityAsync(Guid id, CancellationToken token)
     {
@@ -41,8 +41,14 @@ internal sealed class CaptureWorkflowResources(BHomeDbContext db, CaptureScope s
     public async Task RecordMeterProposalAsync(Guid id, OcrProposal proposal, CancellationToken token)
     {
         decimal? value = proposal.ProposedFields.TryGetValue("reading", out var text) && decimal.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number) ? number : null;
-        await scope.VisibleTasks.Where(t => t.Id == id && t.Status != MeterTaskStatus.Completed && t.Status != MeterTaskStatus.Cancelled)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.OcrProposedValue, value).SetProperty(t => t.OcrImageHash, proposal.SourceImageHash)
-                .SetProperty(t => t.OcrEngineVersion, proposal.EngineVersion), token);
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        var task = await db.Locked<OperationalTask>(id).Where(task => scope.VisibleTasks.Any(visible => visible.Id == task.Id) &&
+            task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled).SingleOrDefaultAsync(token);
+        if (task is not null)
+        {
+            task.OcrProposedValue = value; task.OcrImageHash = proposal.SourceImageHash; task.OcrEngineVersion = proposal.EngineVersion;
+            await db.SaveChangesAsync(token);
+        }
+        await transaction.CommitAsync(token);
     }
 }

@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class MainDraftData(BHomeDbContext db, IIdentityProtection protection) : IMainDraftData
+internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtection protection) : IMainDraftData
 {
     private sealed record StoredSettings(Guid OwnerId, DateOnly From, DateOnly? To, int Version, EncryptedIdentity Envelope);
     private static IdentityProtectionScope SettingsScope(Guid owner, Guid location) => new(owner, new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-lessor:{location:N}"))[..16]));
@@ -45,7 +45,7 @@ internal sealed class MainDraftData(BHomeDbContext db, IIdentityProtection prote
     public async Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, Guid actor, CancellationToken t)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(t);
-        var location = await db.Locations.FromSqlInterpolated($"SELECT * FROM \"Locations\" WHERE \"Id\"={locationId} FOR UPDATE").SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
+        var location = await db.Locked<BHome.Domain.Locations.Location>(locationId).SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
         var all = JsonSerializer.Deserialize<StoredSettings[]>(location.ContractSettings) ?? [];
         var version = all.Select(s => s.Version).DefaultIfEmpty(0).Max();
         if (version != input.ExpectedVersion) throw ContractException.Conflict("draft_configuration_changed_save_again");
@@ -75,6 +75,6 @@ internal sealed class MainDraftData(BHomeDbContext db, IIdentityProtection prote
     public async Task<IReadOnlyList<ContractDocumentFile>> FilesAsync(Guid id, string hash, CancellationToken t) => await db.Set<ContractDocumentFile>().AsNoTracking().Where(f => f.ContractId == id && f.SnapshotHash == hash).OrderByDescending(f => f.RecordedAt).ToArrayAsync(t);
     public async Task LockConfigurationAsync(Guid id, CancellationToken t)
     {
-        await db.Locations.FromSqlInterpolated($"SELECT * FROM \"Locations\" WHERE \"Id\"={id} FOR SHARE").SingleAsync(t);
+        await db.Locked<BHome.Domain.Locations.Location>(id, shared: true).SingleAsync(t);
     }
 }

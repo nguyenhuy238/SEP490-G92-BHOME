@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Billing;
 
-internal sealed class InvoiceRepository(BHomeDbContext db) : IInvoiceRepository
+internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRepository
 {
     public Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t) => db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
     public Task<Room?> RoomAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == roomId, t);
@@ -20,7 +20,7 @@ internal sealed class InvoiceRepository(BHomeDbContext db) : IInvoiceRepository
             ?? throw new InvoiceException(404, "room_not_found");
         return await WithLocationLockAsync(locationId, async () =>
         {
-            await db.Set<Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {roomId} FOR UPDATE").SingleAsync(t);
+            await db.Locked<Room>(roomId).SingleAsync(t);
             return await action();
         }, t);
     }

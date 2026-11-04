@@ -1,0 +1,6133 @@
+{
+  "SchemaVersion": "compact24-2026-11-04",
+  "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+  "PostgreSqlVersion": "16.15",
+  "SyntheticDataOnly": true,
+  "LiveDatabaseReadOrWritten": false,
+  "RuntimeConnectionChanged": false,
+  "SourceTableCount": 70,
+  "PopulatedSourceTablesAcrossFixtures": 66,
+  "TargetBusinessTableCount": 24,
+  "TargetPhysicalTableCount": 24,
+  "TargetColumnCount": 386,
+  "TargetForeignKeyCount": 83,
+  "ReconciliationMethod": "Full mapped scalar values and keys re-read before target transaction commit; JSON objects canonicalized, original timestamps/envelopes preserved. Identity fields/roles/session/token/reset/audit independently reconciled. No business values exported.",
+  "CountsMeaning": "Sums across thirteen independent synthetic source/target pairs. Not production totals, not one combined import. Pending upload intent, job lease, reset grant and disabled synthetic receiving-account metadata were seeded explicitly in fixtures; no claim that private pending object bytes exist.",
+  "UnsupportedIdentityExtensions": "Nonempty AspNetRoleClaims/AspNetUserClaims/AspNetUserLogins/AspNetUserTokens block import; these four tables have zero rows in successful-copy fixtures. Negative test covers nonempty extension refusal.",
+  "ZeroRowSources": [
+    "AspNetRoleClaims",
+    "AspNetUserClaims",
+    "AspNetUserLogins",
+    "AspNetUserTokens"
+  ],
+  "Tables": [
+    {
+      "Source": "AspNetRoleClaims",
+      "SourceRowsAcrossIndependentFixtures": 0,
+      "TargetRecordsAcrossIndependentFixtures": 0,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "BLOCKED nếu có dữ liệu: external role claims chưa có trong runtime hiện tại; cần quyết định mapping hành vi, không bỏ dữ liệu"
+    },
+    {
+      "Source": "AspNetRoles",
+      "SourceRowsAcrossIndependentFixtures": 39,
+      "TargetRecordsAcrossIndependentFixtures": 39,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "users.business_profile.identityRoles của Owner: giữ UUID, tên, normalized name và concurrency stamp của catalog ba role"
+    },
+    {
+      "Source": "AspNetUserClaims",
+      "SourceRowsAcrossIndependentFixtures": 0,
+      "TargetRecordsAcrossIndependentFixtures": 0,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "BLOCKED nếu có dữ liệu: external user claims chưa có trong runtime hiện tại; cần quyết định mapping hành vi, không bỏ dữ liệu"
+    },
+    {
+      "Source": "AspNetUserLogins",
+      "SourceRowsAcrossIndependentFixtures": 0,
+      "TargetRecordsAcrossIndependentFixtures": 0,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "BLOCKED nếu có dữ liệu: external login chưa có trong runtime hiện tại; cần quyết định mapping hành vi, không bỏ dữ liệu"
+    },
+    {
+      "Source": "AspNetUserRoles",
+      "SourceRowsAcrossIndependentFixtures": 57,
+      "TargetRecordsAcrossIndependentFixtures": 57,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "users.roles: grants theo user; UUID role đọc từ catalog identityRoles đã bảo toàn"
+    },
+    {
+      "Source": "AspNetUsers",
+      "SourceRowsAcrossIndependentFixtures": 57,
+      "TargetRecordsAcrossIndependentFixtures": 57,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "users: giữ UUID, password hash, stamps, lockout và mọi trường Identity đã triển khai"
+    },
+    {
+      "Source": "AspNetUserTokens",
+      "SourceRowsAcrossIndependentFixtures": 0,
+      "TargetRecordsAcrossIndependentFixtures": 0,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "BLOCKED nếu có dữ liệu: external Identity token store chưa có trong runtime hiện tại; cần quyết định mapping hành vi, không bỏ dữ liệu"
+    },
+    {
+      "Source": "Assets",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "assets"
+    },
+    {
+      "Source": "AuthenticationSessions",
+      "SourceRowsAcrossIndependentFixtures": 67,
+      "TargetRecordsAcrossIndependentFixtures": 67,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "refresh_tokens: dòng SESSION/TOKEN, giữ ID và liên kết chuỗi rotation"
+    },
+    {
+      "Source": "BackgroundJobs",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại SYSTEM_JOB: lease bền vững, source key theo plan/kỳ/phase và lịch sử từng lần thử chỉ ghi thêm"
+    },
+    {
+      "Source": "BankReferenceClaims",
+      "SourceRowsAcrossIndependentFixtures": 6,
+      "TargetRecordsAcrossIndependentFixtures": 6,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "payments: giao dịch chuẩn, effect key và lịch sử đối soát; giữ chống trùng claim giữa cọc và hóa đơn"
+    },
+    {
+      "Source": "BillingAutomationAttempts",
+      "SourceRowsAcrossIndependentFixtures": 6,
+      "TargetRecordsAcrossIndependentFixtures": 6,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại SYSTEM_JOB: lease bền vững, source key theo plan/kỳ/phase và lịch sử từng lần thử chỉ ghi thêm"
+    },
+    {
+      "Source": "BillingAutomationExecutions",
+      "SourceRowsAcrossIndependentFixtures": 4,
+      "TargetRecordsAcrossIndependentFixtures": 4,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại SYSTEM_JOB: lease bền vững, source key theo plan/kỳ/phase và lịch sử từng lần thử chỉ ghi thêm"
+    },
+    {
+      "Source": "BillingAutomationPlans",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "locations.operating_settings: cấu hình phân loại và version; DTO riêng tư và mã hóa theo thiết kế được duyệt"
+    },
+    {
+      "Source": "BillingPolicies",
+      "SourceRowsAcrossIndependentFixtures": 12,
+      "TargetRecordsAcrossIndependentFixtures": 12,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "billing_policies"
+    },
+    {
+      "Source": "BillingRepresentativeSelections",
+      "SourceRowsAcrossIndependentFixtures": 2,
+      "TargetRecordsAcrossIndependentFixtures": 2,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "rooms.billing_representatives theo kỳ/version và invoices.billing_snapshot khi phát hành; giữ lựa chọn Owner trước phát hành"
+    },
+    {
+      "Source": "BillingSchedules",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "locations.operating_settings: cấu hình phân loại và version; DTO riêng tư và mã hóa theo thiết kế được duyệt"
+    },
+    {
+      "Source": "Chains",
+      "SourceRowsAcrossIndependentFixtures": 13,
+      "TargetRecordsAcrossIndependentFixtures": 13,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "users.business_profile.chain: một cấu hình chung, giữ ID/tên/version/lịch sử"
+    },
+    {
+      "Source": "ContractDepositVerifications",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "payments và payment_allocations: receipt chuẩn đã xác minh cấp cho cọc; giữ nguồn gốc và chống trùng tham chiếu ngân hàng"
+    },
+    {
+      "Source": "ContractDocumentFiles",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.documents: giữ ID tài liệu, object key, hash, template và version"
+    },
+    {
+      "Source": "ContractExpiryNotices",
+      "SourceRowsAcrossIndependentFixtures": 6,
+      "TargetRecordsAcrossIndependentFixtures": 6,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications OUTBOX/INBOX với event key; lịch chạy trong operational_tasks loại SYSTEM_JOB"
+    },
+    {
+      "Source": "ContractFileUploads",
+      "SourceRowsAcrossIndependentFixtures": 17,
+      "TargetRecordsAcrossIndependentFixtures": 17,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks SYSTEM_JOB: task_data.state giữ upload intent/object key/lease/scope; history giữ phiên bản và tombstone"
+    },
+    {
+      "Source": "ContractFinalInspections",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.move_out và contracts.history: giữ baseline, quan sát, ID kiểm tra/bằng chứng và actor"
+    },
+    {
+      "Source": "ContractHandoverHistory",
+      "SourceRowsAcrossIndependentFixtures": 5,
+      "TargetRecordsAcrossIndependentFixtures": 5,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.handover và contracts.history: giữ snapshot theo version và tham chiếu hai bên xác nhận"
+    },
+    {
+      "Source": "ContractHandovers",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.handover và contracts.history: giữ snapshot theo version và tham chiếu hai bên xác nhận"
+    },
+    {
+      "Source": "ContractInspectionEvidence",
+      "SourceRowsAcrossIndependentFixtures": 2,
+      "TargetRecordsAcrossIndependentFixtures": 2,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.move_out và contracts.history: giữ baseline, quan sát, ID kiểm tra/bằng chứng và actor"
+    },
+    {
+      "Source": "ContractMoveOutHistory",
+      "SourceRowsAcrossIndependentFixtures": 14,
+      "TargetRecordsAcrossIndependentFixtures": 14,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.move_out và contracts.history: giữ baseline, quan sát, ID kiểm tra/bằng chứng và actor"
+    },
+    {
+      "Source": "ContractMoveOuts",
+      "SourceRowsAcrossIndependentFixtures": 2,
+      "TargetRecordsAcrossIndependentFixtures": 2,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.move_out và contracts.history: giữ baseline, quan sát, ID kiểm tra/bằng chứng và actor"
+    },
+    {
+      "Source": "ContractOperations",
+      "SourceRowsAcrossIndependentFixtures": 36,
+      "TargetRecordsAcrossIndependentFixtures": 36,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại COMMAND: source_key có namespace, actor/operation/key/fingerprint/result và ID receipt cũ"
+    },
+    {
+      "Source": "ContractResidents",
+      "SourceRowsAcrossIndependentFixtures": 24,
+      "TargetRecordsAcrossIndependentFixtures": 24,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contract_residents"
+    },
+    {
+      "Source": "Contracts",
+      "SourceRowsAcrossIndependentFixtures": 24,
+      "TargetRecordsAcrossIndependentFixtures": 24,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts"
+    },
+    {
+      "Source": "ContractSettlementReviews",
+      "SourceRowsAcrossIndependentFixtures": 4,
+      "TargetRecordsAcrossIndependentFixtures": 4,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contracts.settlement và contracts.history: snapshot tài chính, ID review và tham chiếu ledger"
+    },
+    {
+      "Source": "ContractSignatures",
+      "SourceRowsAcrossIndependentFixtures": 6,
+      "TargetRecordsAcrossIndependentFixtures": 6,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "contract_signings: giữ ID request, tham chiếu provider và hash"
+    },
+    {
+      "Source": "InvoiceAdjustmentCommands",
+      "SourceRowsAcrossIndependentFixtures": 7,
+      "TargetRecordsAcrossIndependentFixtures": 7,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại COMMAND: source_key có namespace, actor/operation/key/fingerprint/result và ID receipt cũ"
+    },
+    {
+      "Source": "InvoiceAdjustmentDecisions",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "invoice_adjustments: giữ ID request/decision, snapshot/lịch sử/bằng chứng; kiểm đúng cặp request và decision"
+    },
+    {
+      "Source": "InvoiceAdjustmentEvents",
+      "SourceRowsAcrossIndependentFixtures": 7,
+      "TargetRecordsAcrossIndependentFixtures": 7,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại OUTBOX: intent/event key bền vững và lịch sử phát/giao; commit cùng tác động nghiệp vụ"
+    },
+    {
+      "Source": "InvoiceAdjustmentEvidence",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks SYSTEM_JOB: giữ upload intent, request link/object key, ID và cleanup state; không mất upload chưa gắn request"
+    },
+    {
+      "Source": "InvoiceAdjustmentRequests",
+      "SourceRowsAcrossIndependentFixtures": 4,
+      "TargetRecordsAcrossIndependentFixtures": 4,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "invoice_adjustments: giữ ID request/decision, snapshot/lịch sử/bằng chứng; kiểm đúng cặp request và decision"
+    },
+    {
+      "Source": "InvoiceIssuedEvents",
+      "SourceRowsAcrossIndependentFixtures": 2,
+      "TargetRecordsAcrossIndependentFixtures": 2,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại OUTBOX: intent/event key bền vững và lịch sử phát/giao; commit cùng tác động nghiệp vụ"
+    },
+    {
+      "Source": "InvoiceLines",
+      "SourceRowsAcrossIndependentFixtures": 13,
+      "TargetRecordsAcrossIndependentFixtures": 13,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "invoice_items và calculation_snapshot"
+    },
+    {
+      "Source": "InvoiceRecipients",
+      "SourceRowsAcrossIndependentFixtures": 26,
+      "TargetRecordsAcrossIndependentFixtures": 26,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "invoices.recipient_user_ids: snapshot lịch sử quyền xem, bất biến sau chốt"
+    },
+    {
+      "Source": "Invoices",
+      "SourceRowsAcrossIndependentFixtures": 9,
+      "TargetRecordsAcrossIndependentFixtures": 9,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "invoices"
+    },
+    {
+      "Source": "Locations",
+      "SourceRowsAcrossIndependentFixtures": 14,
+      "TargetRecordsAcrossIndependentFixtures": 14,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "locations"
+    },
+    {
+      "Source": "MeterEvidence",
+      "SourceRowsAcrossIndependentFixtures": 16,
+      "TargetRecordsAcrossIndependentFixtures": 16,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks.evidence: giữ ID, object key và OCR/upload state; reading tham chiếu snapshot bằng chứng đã xác nhận"
+    },
+    {
+      "Source": "MeterReadings",
+      "SourceRowsAcrossIndependentFixtures": 16,
+      "TargetRecordsAcrossIndependentFixtures": 16,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "meter_readings"
+    },
+    {
+      "Source": "Meters",
+      "SourceRowsAcrossIndependentFixtures": 10,
+      "TargetRecordsAcrossIndependentFixtures": 10,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "meters"
+    },
+    {
+      "Source": "NotificationDeliveryAttempts",
+      "SourceRowsAcrossIndependentFixtures": 2,
+      "TargetRecordsAcrossIndependentFixtures": 2,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại INBOX: chống trùng recipient/event, trạng thái đọc, delivery_history; ID nguồn cũ ở event_data"
+    },
+    {
+      "Source": "NotificationPublications",
+      "SourceRowsAcrossIndependentFixtures": 8,
+      "TargetRecordsAcrossIndependentFixtures": 8,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại OUTBOX: intent/event key bền vững và lịch sử phát/giao; commit cùng tác động nghiệp vụ"
+    },
+    {
+      "Source": "OperationalTaskCommands",
+      "SourceRowsAcrossIndependentFixtures": 10,
+      "TargetRecordsAcrossIndependentFixtures": 10,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại COMMAND: source_key có namespace, actor/operation/key/fingerprint/result và ID receipt cũ"
+    },
+    {
+      "Source": "OperationalTaskEvidence",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks: dòng task chính, task_data/evidence/history có cấu trúc, giữ ID entry/submission cũ"
+    },
+    {
+      "Source": "OperationalTaskFileUploads",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks SYSTEM_JOB: task_data.state giữ upload intent/object key/lease/scope; history giữ phiên bản và tombstone"
+    },
+    {
+      "Source": "OperationalTaskHistory",
+      "SourceRowsAcrossIndependentFixtures": 12,
+      "TargetRecordsAcrossIndependentFixtures": 12,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks: dòng task chính, task_data/evidence/history có cấu trúc, giữ ID entry/submission cũ"
+    },
+    {
+      "Source": "OperationalTaskNotifications",
+      "SourceRowsAcrossIndependentFixtures": 9,
+      "TargetRecordsAcrossIndependentFixtures": 9,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications OUTBOX: giữ sự kiện tác vụ và read state cũ; UserNotifications INBOX giữ hộp thư theo recipient"
+    },
+    {
+      "Source": "OperationalTasks",
+      "SourceRowsAcrossIndependentFixtures": 17,
+      "TargetRecordsAcrossIndependentFixtures": 17,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks: dòng task chính, task_data/evidence/history có cấu trúc, giữ ID entry/submission cũ"
+    },
+    {
+      "Source": "PasswordResetGrants",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "users.reset_token_hash/reset_expires_at/reset_consumed_at"
+    },
+    {
+      "Source": "PaymentAllocations",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "payment_allocations: giữ ID phân bổ cũ, số tiền, actor, thời điểm và tham chiếu nguồn"
+    },
+    {
+      "Source": "PaymentCommands",
+      "SourceRowsAcrossIndependentFixtures": 9,
+      "TargetRecordsAcrossIndependentFixtures": 9,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "operational_tasks loại COMMAND: source_key có namespace, actor/operation/key/fingerprint/result và ID receipt cũ"
+    },
+    {
+      "Source": "PaymentConfirmedEvents",
+      "SourceRowsAcrossIndependentFixtures": 3,
+      "TargetRecordsAcrossIndependentFixtures": 3,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại OUTBOX: intent/event key bền vững và lịch sử phát/giao; commit cùng tác động nghiệp vụ"
+    },
+    {
+      "Source": "PaymentReconciliations",
+      "SourceRowsAcrossIndependentFixtures": 9,
+      "TargetRecordsAcrossIndependentFixtures": 9,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "payments: giao dịch chuẩn, effect key và lịch sử đối soát; giữ chống trùng claim giữa cọc và hóa đơn"
+    },
+    {
+      "Source": "PaymentTransfers",
+      "SourceRowsAcrossIndependentFixtures": 4,
+      "TargetRecordsAcrossIndependentFixtures": 4,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "payments: giao dịch chuẩn, effect key và lịch sử đối soát; giữ chống trùng claim giữa cọc và hóa đơn"
+    },
+    {
+      "Source": "PropertyChanges",
+      "SourceRowsAcrossIndependentFixtures": 5,
+      "TargetRecordsAcrossIndependentFixtures": 5,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại AUDIT: giữ actor, thời gian, hành động, lý do, tham chiếu trước/sau, ID nguồn và namespace sự kiện"
+    },
+    {
+      "Source": "ReceivingBankAccounts",
+      "SourceRowsAcrossIndependentFixtures": 1,
+      "TargetRecordsAcrossIndependentFixtures": 1,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "locations.operating_settings: cấu hình phân loại và version; DTO riêng tư và mã hóa theo thiết kế được duyệt"
+    },
+    {
+      "Source": "RefreshTokens",
+      "SourceRowsAcrossIndependentFixtures": 67,
+      "TargetRecordsAcrossIndependentFixtures": 67,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "refresh_tokens: dòng SESSION/TOKEN, giữ ID và liên kết chuỗi rotation"
+    },
+    {
+      "Source": "Residents",
+      "SourceRowsAcrossIndependentFixtures": 25,
+      "TargetRecordsAcrossIndependentFixtures": 25,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "residents: giữ envelope mã hóa, ID Resident/Owner và phiên bản khóa HMAC"
+    },
+    {
+      "Source": "Rooms",
+      "SourceRowsAcrossIndependentFixtures": 13,
+      "TargetRecordsAcrossIndependentFixtures": 13,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "rooms"
+    },
+    {
+      "Source": "RoomTypes",
+      "SourceRowsAcrossIndependentFixtures": 9,
+      "TargetRecordsAcrossIndependentFixtures": 9,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "locations.room_types: giữ ID catalog, version, cấu hình mặc định và lịch sử"
+    },
+    {
+      "Source": "SecurityAudit",
+      "SourceRowsAcrossIndependentFixtures": 272,
+      "TargetRecordsAcrossIndependentFixtures": 272,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại AUDIT: giữ actor, thời gian, hành động, lý do, tham chiếu trước/sau, ID nguồn và namespace sự kiện"
+    },
+    {
+      "Source": "SigningCertificates",
+      "SourceRowsAcrossIndependentFixtures": 2,
+      "TargetRecordsAcrossIndependentFixtures": 2,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "users.signing_credentials; chụp chứng thư dùng lúc ký vào contract_signings"
+    },
+    {
+      "Source": "StaffLocationAssignments",
+      "SourceRowsAcrossIndependentFixtures": 9,
+      "TargetRecordsAcrossIndependentFixtures": 9,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "locations.staff_assignments: phân công có hiệu lực, giữ ID phân công cũ"
+    },
+    {
+      "Source": "UserNotifications",
+      "SourceRowsAcrossIndependentFixtures": 17,
+      "TargetRecordsAcrossIndependentFixtures": 17,
+      "KeysAndValuesMatch": true,
+      "TargetMapping": "notifications loại INBOX: chống trùng recipient/event, trạng thái đọc, delivery_history; ID nguồn cũ ở event_data"
+    }
+  ],
+  "Scenarios": [
+    {
+      "Scenario": "ActualPdfSigning",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 21,
+            "TargetRecords": 21,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "AdjustmentEvidence",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 11,
+            "TargetRecords": 11,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "AutomationAndAdjustments",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 6,
+            "TargetRecords": 6,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 18,
+            "TargetRecords": 18,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "ContractExpiry",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 6,
+            "TargetRecords": 6,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 9,
+            "TargetRecords": 9,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "ContractLifecycle",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 9,
+            "TargetRecords": 9,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 14,
+            "TargetRecords": 14,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 42,
+            "TargetRecords": 42,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "EncryptedMainDraft",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 11,
+            "TargetRecords": 11,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "HandoverAndInspection",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 8,
+            "TargetRecords": 8,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 15,
+            "TargetRecords": 15,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 8,
+            "TargetRecords": 8,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 50,
+            "TargetRecords": 50,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "InvoiceAndMeters",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 25,
+            "TargetRecords": 25,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "NotificationDelivery",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 9,
+            "TargetRecords": 9,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "NotificationEvents",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 20,
+            "TargetRecords": 20,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 6,
+            "TargetRecords": 6,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 8,
+            "TargetRecords": 8,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 4,
+            "TargetRecords": 4,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 20,
+            "TargetRecords": 20,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 45,
+            "TargetRecords": 45,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 16,
+            "TargetRecords": 16,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "PropertyAndBankConfiguration",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "StaffOperations",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 10,
+            "TargetRecords": 10,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 10,
+            "TargetRecords": 10,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 7,
+            "TargetRecords": 7,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 10,
+            "TargetRecords": 10,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    },
+    {
+      "Scenario": "VerifiedPayments",
+      "SchemaVersion": "compact24-2026-11-04",
+      "ScriptSha256": "A59A1912D6D3578E5345C5BD1AA52E1268BDD94BA810B3735C93F8B5B778E8DF",
+      "SyntheticDataOnly": true,
+      "Reconciliation": {
+        "Tables": [
+          {
+            "Source": "AspNetRoleClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetRoles",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserClaims",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserLogins",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserRoles",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUserTokens",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AspNetUsers",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Assets",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "AuthenticationSessions",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BackgroundJobs",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BankReferenceClaims",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationExecutions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingAutomationPlans",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingPolicies",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingRepresentativeSelections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "BillingSchedules",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Chains",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDepositVerifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractDocumentFiles",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractExpiryNotices",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractFinalInspections",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandoverHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractHandovers",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractInspectionEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOutHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractMoveOuts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractOperations",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractResidents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSettlementReviews",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ContractSignatures",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Contracts",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentDecisions",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceAdjustmentRequests",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceIssuedEvents",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceLines",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "InvoiceRecipients",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Invoices",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Locations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "MeterReadings",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Meters",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationDeliveryAttempts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "NotificationPublications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskCommands",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskEvidence",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskFileUploads",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskHistory",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTaskNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "OperationalTasks",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PasswordResetGrants",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentAllocations",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentCommands",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentConfirmedEvents",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentReconciliations",
+            "SourceRows": 5,
+            "TargetRecords": 5,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PaymentTransfers",
+            "SourceRows": 2,
+            "TargetRecords": 2,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "PropertyChanges",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "ReceivingBankAccounts",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RefreshTokens",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Residents",
+            "SourceRows": 3,
+            "TargetRecords": 3,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "RoomTypes",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "Rooms",
+            "SourceRows": 1,
+            "TargetRecords": 1,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SecurityAudit",
+            "SourceRows": 14,
+            "TargetRecords": 14,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "SigningCertificates",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "StaffLocationAssignments",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          },
+          {
+            "Source": "UserNotifications",
+            "SourceRows": 0,
+            "TargetRecords": 0,
+            "KeysAndValuesMatch": true
+          }
+        ],
+        "Committed": true,
+        "SourceReadOnly": true
+      }
+    }
+  ]
+}

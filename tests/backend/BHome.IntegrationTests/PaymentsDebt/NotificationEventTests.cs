@@ -42,7 +42,7 @@ public sealed partial class PaymentLedgerTests
         var (w, _, _) = await MeterWorkspace(); await RunMeter(w);
         await using (var s = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = s.ServiceProvider.GetRequiredService<BHomeDbContext>(); await db.Set<Contract>().Where(c => c.Id == w.Contract).ExecuteUpdateAsync(set => set.SetProperty(c => c.EndDate, CurrentPeriod().AddDays(20)));
+            var db = s.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).EndDate = CurrentPeriod().AddDays(20); await db.SaveChangesAsync();
             var handler = s.ServiceProvider.GetServices<IBackgroundJobHandler>().Single(h => h.Name == "contract-expiry"); await handler.ExecuteAsync(new(Guid.NewGuid(), "synthetic-expiry-notice", "{}"), default);
         }
         await PumpNotifications(); using var staff = await Client(w.Staff); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);

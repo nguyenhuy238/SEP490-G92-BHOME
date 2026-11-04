@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractSigningCertificateStore(BHomeDbContext db, ICurrentUser user, TimeProvider clock) : ISigningCertificateStore
+internal sealed class ContractSigningCertificateStore(BHomePersistenceContext db, ICurrentUser user, TimeProvider clock) : ISigningCertificateStore
 {
     public async Task<IReadOnlyList<SigningCertificate>> CertificatesOfAsync(Guid ownerUserId, CancellationToken t) =>
         await db.Set<SigningCertificate>().AsNoTracking().Where(c => c.OwnerUserId == ownerUserId && c.OwnerUserId == user.UserId)
