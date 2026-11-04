@@ -10,15 +10,23 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Persistence;
 
 public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
-    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
+    : BHomePersistenceContext(options)
 {
-    internal DbSet<BackgroundJobRecord> BackgroundJobs => Set<BackgroundJobRecord>();
-    public DbSet<AuthenticationSession> AuthenticationSessions => Set<AuthenticationSession>();
-    public DbSet<RefreshTokenRecord> RefreshTokens => Set<RefreshTokenRecord>();
-    public DbSet<PasswordResetGrant> PasswordResetGrants => Set<PasswordResetGrant>();
-    public DbSet<SecurityAuditRecord> SecurityAudit => Set<SecurityAuditRecord>();
-    public DbSet<Location> Locations => Set<Location>();
-    public DbSet<StaffLocationAssignment> StaffLocationAssignments => Set<StaffLocationAssignment>();
+    public override BHomePersistenceContext CreateIndependentContext() => new BHomeDbContext(options);
+    public override async Task<bool> IsSchemaReadyAsync(CancellationToken token = default) =>
+        await Database.CanConnectAsync(token) && !(await Database.GetPendingMigrationsAsync(token)).Any();
+
+    internal override async Task<IReadOnlyList<BHome.Application.Billing.BillingQueueView>> BillingQueueAsync(Guid location, DateOnly period, CancellationToken token)
+    {
+        var key = period.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        return await Database.SqlQuery<BHome.Application.Billing.BillingQueueView>($"""
+            SELECT j."Id",j."Name",j."State",j."Attempts",j."AvailableAt",j."LockedUntil",j."LastErrorCode"
+            FROM "BackgroundJobs" j JOIN "BillingAutomationPlans" p ON j."PayloadJson"->>'PlanId'=p."Id"::text
+            WHERE p."LocationId"={location} AND j."PayloadJson"->>'BillingPeriod'={key}
+              AND j."Name" IN ('billing-meter','billing-draft','billing-final')
+            ORDER BY j."AvailableAt" DESC LIMIT 30
+            """).ToArrayAsync(token);
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

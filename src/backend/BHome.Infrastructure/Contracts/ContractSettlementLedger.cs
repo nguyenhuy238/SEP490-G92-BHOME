@@ -9,7 +9,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractSettlementLedger(BHomeDbContext db) : IContractSettlementLedger, IContractSettlementDetails
+internal sealed class ContractSettlementLedger(BHomePersistenceContext db) : IContractSettlementLedger, IContractSettlementDetails
 {
     public async Task<SettlementLedgerState?> ReadAsync(Guid id, Guid electricity, Guid water, CancellationToken t)
     {

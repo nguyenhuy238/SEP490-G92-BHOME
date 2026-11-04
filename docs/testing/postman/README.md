@@ -1,5 +1,10 @@
 # Kiểm thử API với Postman
 
+Bộ workflow đã triển khai của **Nguyễn Quốc Huy** (Contract, Invoice, Payment, Adjustment,
+Renewal/move-out, Jobs và Inbox) có collection riêng 245 request:
+[hướng dẫn import và chạy](NGUYEN_QUOC_HUY_POSTMAN_GUIDE.md).
+Collection Simple bên dưới vẫn giữ nguyên cho các ca nền tảng đã có.
+
 Import hai file:
 
 - `BHome.Simple.postman_collection.json`

@@ -11,7 +11,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
-internal sealed class PostgresPropertyRepository(BHomeDbContext db) : IPropertyRepository
+internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
     public async Task<Chain?> GetSystemChainAsync(CancellationToken token)
     {

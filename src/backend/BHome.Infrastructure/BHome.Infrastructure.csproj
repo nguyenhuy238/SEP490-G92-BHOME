@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/BHOME_24_TABLES.sql" LogicalName="BHome.Compact24.Schema.sql" />
     <EmbeddedResource Include="../../../docs/mau-hop-dong-thue-nha-tro-ngan-gon.docx" LogicalName="BHome.Contracts.main-tenancy-original.docx" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.Infrastructure/BHome.DigitalSigning.Infrastructure.csproj" />

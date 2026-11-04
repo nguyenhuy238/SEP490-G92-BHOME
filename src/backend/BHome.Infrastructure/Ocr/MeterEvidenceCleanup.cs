@@ -20,7 +20,7 @@ public sealed class MeterEvidenceCleanup(IServiceScopeFactory scopes, ILogger<Me
             {
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
                 await using var scope = scopes.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
                 var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
                 await CleanupAsync(db, storage, stoppingToken);
             }
@@ -28,13 +28,16 @@ public sealed class MeterEvidenceCleanup(IServiceScopeFactory scopes, ILogger<Me
             catch (Exception ex) { logger.LogWarning("Meter upload cleanup pending ({ErrorType})", ex.GetType().Name); }
         }
     }
-    public static async Task CleanupAsync(BHomeDbContext db, IObjectStorage storage, CancellationToken token)
+    public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, CancellationToken token)
     {
         await using var tx = await db.Database.BeginTransactionAsync(token);
         var now = DateTimeOffset.UtcNow;
-        var abandoned = await db.Set<MeterEvidence>().FromSqlInterpolated($"SELECT * FROM \"MeterEvidence\" WHERE NOT \"IsLinked\" AND \"CleanupAfter\" < {now} ORDER BY \"CleanupAfter\" LIMIT 10 FOR UPDATE SKIP LOCKED").ToListAsync(token);
-        foreach (var row in abandoned)
+        var abandoned = await db.Set<MeterEvidence>().AsNoTracking().Where(e => !e.IsLinked && e.CleanupAfter < now)
+            .OrderBy(e => e.CleanupAfter).Take(10).Select(e => e.Id).ToArrayAsync(token);
+        foreach (var id in abandoned)
         {
+            var row = await db.Locked<MeterEvidence>(id, skipLocked: true).SingleOrDefaultAsync(token);
+            if (row is null || row.IsLinked || row.CleanupAfter >= now) continue;
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(30));
             await storage.DeleteAsync(row.ObjectKey, deadline.Token);
             db.Remove(row);

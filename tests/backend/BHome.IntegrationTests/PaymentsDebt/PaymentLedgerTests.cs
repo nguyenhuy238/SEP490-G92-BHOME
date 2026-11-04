@@ -28,14 +28,14 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
     }
     private async Task<Workspace> Setup()
     {
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         async Task<Guid> Account(string role)
         {
             var email = Guid.NewGuid() + "@example.invalid";
             var account = new ApplicationUser { UserName = email, Email = email };
-            Assert.True((await manager.CreateAsync(account, "Synthetic-Payment-Test!123")).Succeeded);
-            Assert.True((await manager.AddToRoleAsync(account, role)).Succeeded); return account.Id;
+            account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, account, role, "Synthetic-Payment-Test!123");
+            return account.Id;
         }
         var owner = await Account(Roles.Owner); var staff = await Account(Roles.Staff);
         var tenants = new[] { await Account(Roles.Tenant), await Account(Roles.Tenant), await Account(Roles.Tenant) };
@@ -122,7 +122,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
             Assert.Equal(tenant == w.Tenants[0] ? "Bạn" : "Khách thuê khác trong hóa đơn", Assert.Single(state.History).PaidBy);
             Assert.Null(state.History[0].PaidByUserId);
         }
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var invoice = await db.Set<Invoice>().SingleAsync(i => i.Id == w.Invoice);
         Assert.Equal(InvoiceStatus.Final, invoice.Status); Assert.Equal(100000, invoice.Total); Assert.Equal(1, invoice.Version);
         Assert.Equal(1, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == w.Invoice));
@@ -139,7 +139,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         var replies = await Task.WhenAll(new[] { (a, w.Tenants[0]), (b, w.Tenants[1]) }.Select(pair => As(w.Owner, Roles.Owner, s => s.AllocateAsync(pair.Item1.Id, new(w.Invoice, pair.Item2, true), Guid.NewGuid(), default))));
         Assert.Single(replies, r => r.Status == "Allocated"); Assert.Equal("invoice_already_settled", Assert.Single(replies, r => r.Status == "PendingReview").Reason);
         Assert.Equal("Paid", (await As(w.Tenants[2], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default))).PaymentStatus);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(2, await db.Set<PaymentTransfer>().CountAsync(p => p.ProposedInvoiceId == w.Invoice));
         Assert.Equal(1, await db.Set<PaymentAllocation>().CountAsync(p => p.InvoiceId == w.Invoice));
     }
@@ -159,7 +159,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         var w = await Setup(); var input = Input(w);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             db.Add(new DepositVerification { ContractId = w.Contract, Amount = 100000, BankTransactionReference = input.BankReference, VerificationReason = "SYNTHETIC", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
         }
@@ -167,7 +167,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         Assert.Equal("bank_reference_already_credited", (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(reused.Id, new(w.Invoice, w.Tenants[0], true), Guid.NewGuid(), default))).Reason);
         var freshInput = Input(w); var fresh = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(freshInput, Guid.NewGuid(), default));
         await As(w.Owner, Roles.Owner, s => s.AllocateAsync(fresh.Id, new(w.Invoice, w.Tenants[0], true), Guid.NewGuid(), default));
-        await using var verification = fixture.Factory.Services.CreateAsyncScope(); var verifyDb = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var verification = fixture.Factory.Services.CreateAsyncScope(); var verifyDb = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         verifyDb.Add(new DepositVerification { ContractId = w.Contract, Amount = 100000, BankTransactionReference = freshInput.BankReference.ToLowerInvariant(), VerificationReason = "SYNTHETIC", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow });
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => verifyDb.SaveChangesAsync());
         Assert.Equal("23505", Assert.IsType<PostgresException>(error.InnerException).SqlState);

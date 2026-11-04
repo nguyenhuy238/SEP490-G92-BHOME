@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Ocr;
 
-internal sealed class CaptureScope(BHomeDbContext db, ICurrentUser user, TimeProvider clock)
+internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user, TimeProvider clock)
 {
     public Guid UserId => user.UserId ?? Guid.Empty;
     public DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);

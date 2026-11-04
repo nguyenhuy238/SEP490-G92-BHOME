@@ -8,7 +8,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Billing;
 
-internal sealed class AdjustmentRepository(BHomeDbContext db) : IAdjustmentRepository
+internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjustmentRepository
 {
     public async Task<T> TransactionAsync<T>(Guid invoiceId, Func<Task<T>> work, CancellationToken t)
     {
@@ -17,7 +17,7 @@ internal sealed class AdjustmentRepository(BHomeDbContext db) : IAdjustmentRepos
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1', 0))", t);
         var room = await db.Set<Invoice>().Where(i => i.Id == invoiceId).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(t)
             ?? throw new AdjustmentException(404, "adjustment_invoice_not_found");
-        await db.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {room} FOR UPDATE").SingleAsync(t);
+        await db.Locked<BHome.Domain.PropertyManagement.Room>(room).SingleAsync(t);
         try { var result = await work(); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return result; }
         catch (DbUpdateConcurrencyException) { throw new AdjustmentException(409, "adjustment_concurrent_change"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23514" })

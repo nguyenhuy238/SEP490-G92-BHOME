@@ -40,7 +40,7 @@ public sealed partial class PaymentLedgerTests
         var current = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod():yyyy-MM-dd}"))!;
         var future = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod().AddMonths(1):yyyy-MM-dd}"))!;
         Assert.Equal(1, current.Version); Assert.Equal(2, future.Version); Assert.Equal(31, BillingAutomationService.Calendar(current).DueDay); Assert.Equal(25, BillingAutomationService.Calendar(future).DueDay);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BillingAutomationPlans\" SET \"Enabled\"=false WHERE \"Id\"={p.Id}"));
         var invoice = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, CurrentPeriod(), w.Contract)); invoice.EnsureSuccessStatusCode();
         Assert.Equal(InvoiceMath.CalendarDate(CurrentPeriod(), 31, 0), (await invoice.Content.ReadFromJsonAsync<InvoiceView>())!.DueDate);

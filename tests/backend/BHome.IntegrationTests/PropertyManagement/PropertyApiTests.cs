@@ -29,8 +29,8 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var id = Guid.NewGuid();
         var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
-        Assert.True((await users.CreateAsync(user, Password)).Succeeded);
-        Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
+        user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password);
+        id = user.Id;
         var client = fixture.Factory.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { user.Email, password = Password });
         login.EnsureSuccessStatusCode();
@@ -74,7 +74,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         Assert.Equal(AssetStatus.NeedsRepair, changed.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}", update)).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var history = await db.Set<PropertyChange>().Where(x => x.TargetId == asset.Id).OrderBy(x => x.OccurredAt).ToArrayAsync();
         Assert.Equal(2, history.Length);
         Assert.All(history, x => Assert.Equal(w.Actor, x.ActorId));
@@ -116,11 +116,13 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             new AssetWrite(visible.Location.Id, visible.Room.Id, null, "A", "Asset", "Equipment", "Changed", Version: 1))).StatusCode);
         // Assignment changes apply to an already-issued JWT on the very next request.
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "StaffLocationAssignments" SET "StartDate" = {Today.AddDays(-2)}, "EndDate" = {Today.AddDays(-1)}
-            WHERE "LocationId" = {visible.Location.Id}
-            """);
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        foreach (var entry in await db.StaffLocationAssignments.Where(a => a.LocationId == visible.Location.Id).ToArrayAsync())
+        {
+            db.Entry(entry).Property(a => a.StartDate).CurrentValue = Today.AddDays(-2);
+            db.Entry(entry).Property(a => a.EndDate).CurrentValue = Today.AddDays(-1);
+        }
+        await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/v1/rooms/{visible.Room.Id}")).StatusCode);
         Assert.Equal(0, (await client.GetFromJsonAsync<PagedResult<RoomDto>>("/api/v1/rooms"))!.TotalCount);
     }
@@ -180,7 +182,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         Assert.Single(writes, x => x.StatusCode == HttpStatusCode.Created);
         Assert.Single(writes, x => x.StatusCode == HttpStatusCode.Conflict);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<BillingPolicy>().CountAsync(x => x.LocationId == w.Location.Id));
         Assert.Equal(1, await db.Set<PropertyChange>().CountAsync(x => x.LocationId == w.Location.Id && x.TargetType == nameof(BillingPolicy)));
     }
@@ -226,9 +228,10 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             new PolicyReplacement(Rent(w.Location.Id, 300, Today.AddDays(2)), 2))).StatusCode);
         var preserved = (await owner.GetFromJsonAsync<PolicyDto>($"/api/v1/billing-policies/{second.Id}"))!;
         Assert.Equal(future.AddDays(-1), preserved.EffectiveTo); Assert.Equal(2, preserved.Version);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        var exception = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE \"BillingPolicies\" SET \"Rate\" = 1 WHERE \"Id\" = {first.Id}"));
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var exception = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+            ? await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE billing_policies SET rate=1 WHERE id={first.Id}"))
+            : await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BillingPolicies\" SET \"Rate\"=1 WHERE \"Id\"={first.Id}"));
         Assert.Equal("23514", exception.SqlState);
     }
 
@@ -296,7 +299,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var other = await Workspace(); using var otherOwner = other.Owner;
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/billing-policies",
             Rent(w.Location.Id, 10, room: other.Room.Id))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         db.Set<Asset>().Add(new Asset { LocationId = w.Location.Id, RoomId = other.Room.Id, Name = "Invalid", Category = "Equipment", Condition = "Good" });
         var exception = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Equal("23503", Assert.IsType<PostgresException>(exception.InnerException).SqlState);
@@ -318,7 +321,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         Assert.Equal(input.EffectiveFrom, updated.EffectiveFrom); Assert.Equal(input.EffectiveTo, updated.EffectiveTo);
         var price = (await owner.GetFromJsonAsync<ResolvedPrices>($"/api/v1/rooms/{w.Room.Id}/prices?effectiveOn={input.EffectiveFrom:yyyy-MM-dd}"))!;
         Assert.Equal(250, Assert.Single(price.Charges).Rate);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var audit = await db.Set<PropertyChange>().SingleAsync(x => x.TargetId == policy.Id && x.Action == "Updated");
         Assert.Equal(w.Actor, audit.ActorId); Assert.Contains("100", audit.Before!); Assert.Contains("250", audit.After);
         Assert.Equal(input.Reason, audit.Reason);
@@ -334,7 +337,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             new PolicyUpdate(Rent(w.Location.Id, 200, Today.AddDays(5)), active.Version))).StatusCode);
         var usedInput = Rent(w.Location.Id, 200, Today.AddDays(10), type: w.Type.Id);
         var used = await Created<PolicyDto>(owner, "billing-policies", usedInput);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var entity = await db.Set<BillingPolicy>().SingleAsync(x => x.Id == used.Id);
         entity.RecordUsage(DateTimeOffset.UtcNow); await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/billing-policies/{used.Id}",
@@ -386,7 +389,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             new PolicyUpdate(input with { EffectiveTo = null, Rate = 50 }, policy.Version))).StatusCode);
         Assert.Equal(policy, await owner.GetFromJsonAsync<PolicyDto>($"/api/v1/billing-policies/{policy.Id}"));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
-            Assert.False(await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Set<PropertyChange>()
+            Assert.False(await scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<PropertyChange>()
                 .AnyAsync(x => x.TargetId == policy.Id && x.Action == "Updated"));
         var writes = await Task.WhenAll(new[] { 200m, 300m }.Select(rate => owner.PutAsJsonAsync($"/api/v1/billing-policies/{policy.Id}",
             new PolicyUpdate(input with { Rate = rate }, policy.Version))));

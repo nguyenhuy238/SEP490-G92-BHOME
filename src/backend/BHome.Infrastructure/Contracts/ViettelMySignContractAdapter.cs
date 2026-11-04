@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ViettelMySignContractAdapter(BHomeDbContext db, ICurrentUser user, ISigningProvider remote,
+internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, ICurrentUser user, ISigningProvider remote,
     IPdfSigner pdf, IContractDocumentRenderer renderer, TimeProvider clock) : IContractSigningProvider
 {
     public async Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)

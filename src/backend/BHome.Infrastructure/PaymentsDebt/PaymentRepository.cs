@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
+internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRepository
 {
     public async Task<T> TransactionAsync<T>(Guid? transferId, Guid? invoiceId, Func<Task<T>> work, CancellationToken t)
     {
@@ -19,13 +19,13 @@ internal sealed class PaymentRepository(BHomeDbContext db) : IPaymentRepository
         // Short manual reconciliation transactions. One lock order also protects references across rooms.
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1', 0))", t);
         if (transferId is { } transfer)
-            if (!await db.Set<PaymentTransfer>().FromSqlInterpolated($"SELECT * FROM \"PaymentTransfers\" WHERE \"Id\" = {transfer} FOR UPDATE").AnyAsync(t))
+            if (!await db.Locked<PaymentTransfer>(transfer).AnyAsync(t))
                 throw new PaymentException(404, "bank_transfer_not_found");
         if (invoiceId is { } invoice)
         {
             var roomId = await db.Set<Invoice>().Where(i => i.Id == invoice).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(t)
                 ?? throw new PaymentException(404, "payment_invoice_not_found");
-            await db.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {roomId} FOR UPDATE").SingleAsync(t);
+            await db.Locked<BHome.Domain.PropertyManagement.Room>(roomId).SingleAsync(t);
         }
         try
         {

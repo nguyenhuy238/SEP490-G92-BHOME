@@ -7,10 +7,10 @@ Identity/JWT cho tài khoản đã tồn tại, phiên phía server, refresh xoa
 Owner Web/Mobile có màn hình đăng nhập. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản và tích hợp
 nhà cung cấp bên ngoài chưa hoàn thiện. Migration không tạo tài khoản demo.
 
-Máy Development hiện dùng PostgreSQL native qua pgAdmin 4: `localhost:5432`, database `bhome`,
-user `postgres`. `.env` mặc định và `.env.local` đã trỏ tới database này. Chỉ chạy dịch vụ MinIO
-bằng `docker compose up -d minio` nếu cần storage; PostgreSQL native đang sử dụng port 5432.
-Xem [cấu hình native local](docs/development/LOCAL_DEVELOPMENT.md#native-postgresql-on-this-workstation).
+Database phát triển hiện dùng **Compact24: 24 bảng, 386 cột, 83 FK**. Sau khi cấu hình `.env`
+và bật PostgreSQL local, chạy API ở Development sẽ tự tạo database `bhome` nếu thiếu và dựng schema
+nếu trống. Những lần chạy sau giữ nguyên dữ liệu. Có thể dùng PostgreSQL 16 qua Docker hoặc native
+PostgreSQL qua pgAdmin. Xem [hướng dẫn database](docs/database/2026-11-03/README.md).
 
 ## Hướng dẫn nhanh khi mới clone
 
@@ -27,7 +27,7 @@ Các port bên dưới là giá trị local mặc định.
 | 2    | Tạo `.env` riêng cho máy mới                     | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-Local.ps1`                            |
 | 3    | Cài dependency và tin cậy HTTPS local            | `dotnet restore src/backend/BHome.sln`, `dotnet tool restore`, `npm.cmd ci`, `dotnet dev-certs https --trust` |
 | 4    | Chạy PostgreSQL và MinIO                         | `docker compose up -d --build`; kiểm tra `docker compose ps`                                                  |
-| 5    | Tạo bảng database                                | Nạp connection string từ `.env`, rồi chạy migration theo mục 4 bên dưới                                       |
+| 5    | Chuẩn bị Compact24                               | API tự tạo schema; nếu máy còn 70 bảng cũ, chạy một lần `scripts/Update-LocalDatabase.ps1 -RecreateDatabase`  |
 | 6    | Tạo bucket lưu trữ                               | Vào `http://localhost:9001`, tạo bucket private `bhome-private`                                               |
 | 7    | Tạo cấu hình frontend                            | Copy `.env.example` thành `.env.local` trong từng ứng dụng; API mặc định `https://localhost:7240`             |
 | 8    | Chạy API và frontend ở các terminal riêng        | Dùng `Start-Api.ps1` và lệnh `npm.cmd run dev --workspace ...` bên dưới                                       |
@@ -111,22 +111,30 @@ Docker Compose chỉ chạy **PostgreSQL và MinIO**; API và frontend chạy ri
 Lần đầu build MinIO từ source có thể mất vài phút và cần kết nối mạng. Chờ cả hai service
 hiển thị `healthy` trong `docker compose ps` trước khi tiếp tục.
 
-## 4. Áp dụng migration và tạo bucket
+## 4. Database Compact24 và bucket
 
-Trong PowerShell tại thư mục gốc, đọc connection string từ `.env` vào biến môi trường rồi chạy EF:
+Không cần chạy `dotnet ef database update` khi pull code. Backend Development tự khởi tạo
+Compact24 trước khi nhận request hoặc chạy worker, chỉ cho PostgreSQL loopback và database `bhome`.
+Tài khoản PostgreSQL cần quyền tạo database khi database chưa tồn tại, cùng quyền tạo extension
+`btree_gist` trong database của mình. Nếu dùng Docker, role/database từ `.env` được tạo khi volume
+PostgreSQL khởi tạo lần đầu. Nếu dùng PostgreSQL native, sửa connection trong `.env` cho đúng máy.
+
+**Thành viên đang dùng database 70 bảng cũ:** chạy một lần:
 
 ```powershell
-$connectionLine = Get-Content .env |
-    Where-Object { $_ -like 'ConnectionStrings__Database=*' }
-
-$env:ConnectionStrings__Database = $connectionLine.Substring('ConnectionStrings__Database='.Length)
-
-dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -RecreateDatabase
 ```
 
-Migration tạo các bảng Identity, ba role cố định và bảng background jobs; không tạo user hoặc
-dữ liệu nghiệp vụ mẫu. API không tự chạy migration khi khởi động. Chạy lại lệnh này sau khi pull
-code có migration mới; nếu mở terminal mới, cần nạp lại connection string như trên.
+Lệnh giữ toàn bộ database cũ dưới tên `bhome_legacy_<UTC timestamp>_<suffix>`, kiểm schema mới
+trước khi đổi tên thành `bhome`, không DROP dữ liệu cũ. Tài khoản/hợp đồng/hóa đơn cũ vẫn nằm trong
+bản dự phòng; database mới bắt đầu trống. Không dùng lệnh này để reset database đã là Compact24:
+trường hợp đó công cụ giữ nguyên dữ liệu. Khởi động API bình thường sẽ từ chối schema cũ, không
+tự archive hoặc xóa dữ liệu.
+
+Kiểm tra không ghi dữ liệu: `scripts/Update-LocalDatabase.ps1 -Check`. Khởi tạo trước khi mở IDE
+nếu muốn: chạy cùng script không có switch. Runtime Production/Testing không tự tạo database.
+Tạo tài khoản test tổng hợp một lần bằng `scripts/New-LocalTestUsers.ps1` và nhập mật khẩu riêng
+ở prompt ẩn. Không có mật khẩu dùng chung được commit vào Git.
 
 Tiếp theo:
 
@@ -145,9 +153,11 @@ Mở một terminal tại thư mục gốc:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1
 ```
 
-Script nạp cấu hình backend từ `.env` vào process chạy API. **`dotnet run` không tự đọc `.env`.**
-Nếu tự chạy `dotnet run --project src/backend/BHome.Api`, phải cấu hình biến môi trường hoặc
-.NET user-secrets trước; xem [hướng dẫn local chi tiết](docs/development/LOCAL_DEVELOPMENT.md).
+Script nạp cấu hình backend từ `.env` vào process chạy API. Development cũng đọc `.env` ở repository
+khi chạy trực tiếp `dotnet run --project src/backend/BHome.Api` hoặc F5, với độ ưu tiên thấp hơn
+user-secrets, process environment và CLI arguments. Script hỗ trợ `-EnvironmentFile` để chọn file
+riêng. Không tự đọc `.env` hoặc khởi tạo database trong Production/Testing. Xem
+[hướng dẫn local chi tiết](docs/development/LOCAL_DEVELOPMENT.md).
 
 ## 6. Cấu hình và chạy frontend
 
@@ -205,15 +215,15 @@ thiết bị truy cập được và chứng chỉ được tin cậy; `localhos
 
 ## 7. Địa chỉ kiểm tra
 
-| Thành phần    | Địa chỉ mặc định                    | Kết quả cần kiểm tra                                              |
-| ------------- | ----------------------------------- | ----------------------------------------------------------------- |
-| Swagger API   | https://localhost:7240/swagger      | Mở được tài liệu API                                              |
-| API liveness  | https://localhost:7240/health/live  | API đang chạy                                                     |
-| API readiness | https://localhost:7240/health/ready | HTTP 200 khi kết nối database được và migration đã áp dụng đầy đủ |
-| Owner Web     | http://localhost:5173               | Mở được ứng dụng                                                  |
-| Mobile Expo   | Địa chỉ và mã QR trong terminal     | Expo Go tải được ứng dụng demo                                    |
-| Public Web    | http://localhost:5175               | Mở được ứng dụng                                                  |
-| MinIO Console | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`               |
+| Thành phần    | Địa chỉ mặc định                    | Kết quả cần kiểm tra                                                    |
+| ------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| Swagger API   | https://localhost:7240/swagger      | Mở được tài liệu API                                                    |
+| API liveness  | https://localhost:7240/health/live  | API đang chạy                                                           |
+| API readiness | https://localhost:7240/health/ready | HTTP 200 khi PostgreSQL kết nối được và schema Compact24 đúng phiên bản |
+| Owner Web     | http://localhost:5173               | Mở được ứng dụng                                                        |
+| Mobile Expo   | Địa chỉ và mã QR trong terminal     | Expo Go tải được ứng dụng demo                                          |
+| Public Web    | http://localhost:5175               | Mở được ứng dụng                                                        |
+| MinIO Console | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`                     |
 
 API hỗ trợ login/refresh/logout/logout-all/me/change-password và lõi reset mật khẩu.
 Chưa có tài khoản demo hay luồng tạo/kích hoạt tài khoản. Gửi email reset/MFA và lưu token native
@@ -227,22 +237,23 @@ an toàn còn cần tích hợp. Owner Web dùng cookie Secure nên cần HTTPS 
 - Bật Docker Desktop, chạy `docker compose up -d` tại thư mục gốc.
 - Chạy backend như mục 5 và frontend cần dùng như mục 6.
 - Sau khi pull code: chạy `npm.cmd ci` nếu lockfile thay đổi, restore .NET khi dependency thay đổi,
-  cập nhật các biến mới từ `.env.example` và chạy migration nếu có migration mới.
+  cập nhật các biến mới từ `.env.example` và chạy API. Development tự kiểm/khởi tạo Compact24;
+  schema legacy cần lệnh archive một lần theo mục 4, không áp dụng lại EF migrations cũ.
 - Dừng API/frontend bằng `Ctrl+C`; dừng dịch vụ dữ liệu bằng `docker compose stop` để giữ dữ liệu.
 
 ## Xử lý lỗi thường gặp
 
-| Lỗi                             | Cách kiểm tra                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Không tìm thấy .NET SDK phù hợp | `dotnet --list-sdks` phải có SDK 8 đáp ứng `global.json`                                                      |
-| Docker không kết nối được       | Bật Docker Desktop, chờ Linux engine sẵn sàng                                                                 |
-| Port PostgreSQL bị chiếm        | Đổi `POSTGRES_PORT` và port trong connection string cho khớp; không cần xóa database cũ                       |
-| PostgreSQL báo sai mật khẩu     | Kiểm tra connection string; thay mật khẩu trong `.env` không tự đổi mật khẩu database đã tồn tại trong volume |
-| EF yêu cầu connection string    | Nạp `ConnectionStrings__Database` trong cùng terminal chạy migration theo mục 4                               |
-| API báo thiếu cấu hình          | Dùng `Start-Api.ps1`; kiểm tra `.env` có connection string và JWT key hợp lệ                                  |
-| `/health/ready` trả HTTP 503    | Kiểm tra PostgreSQL đang chạy, thông tin kết nối và migration đã áp dụng                                      |
-| Frontend không gọi được API     | Kiểm tra API đang chạy, chứng chỉ HTTPS được tin cậy, `VITE_API_BASE_URL` và CORS đúng origin                 |
-| Upload/download lỗi             | Kiểm tra MinIO, endpoint, access key/secret key và bucket private đã tạo                                      |
+| Lỗi                              | Cách kiểm tra                                                                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Không tìm thấy .NET SDK phù hợp  | `dotnet --list-sdks` phải có SDK 8 đáp ứng `global.json`                                                      |
+| Docker không kết nối được        | Bật Docker Desktop, chờ Linux engine sẵn sàng                                                                 |
+| Port PostgreSQL bị chiếm         | Đổi `POSTGRES_PORT` và port trong connection string cho khớp; không cần xóa database cũ                       |
+| PostgreSQL báo sai mật khẩu      | Kiểm tra connection string; thay mật khẩu trong `.env` không tự đổi mật khẩu database đã tồn tại trong volume |
+| Schema cũ hoặc không tương thích | Chạy `Update-LocalDatabase.ps1 -Check`; chỉ dùng `-RecreateDatabase` để archive schema legacy đã nhận diện    |
+| API báo thiếu cấu hình           | Dùng `Start-Api.ps1`; kiểm tra `.env` có connection string và JWT key hợp lệ                                  |
+| `/health/ready` trả HTTP 503     | Kiểm tra PostgreSQL, connection string và schema Compact24 bằng lệnh `-Check`                                 |
+| Frontend không gọi được API      | Kiểm tra API đang chạy, chứng chỉ HTTPS được tin cậy, `VITE_API_BASE_URL` và CORS đúng origin                 |
+| Upload/download lỗi              | Kiểm tra MinIO, endpoint, access key/secret key và bucket private đã tạo                                      |
 
 ## Kiến trúc và cấu trúc thư mục
 

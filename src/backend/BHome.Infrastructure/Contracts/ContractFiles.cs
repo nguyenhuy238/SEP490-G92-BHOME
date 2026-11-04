@@ -13,12 +13,12 @@ using OpenCvSharp;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractFileStore(DbContextOptions<BHomeDbContext> options, IObjectStorage storage, TimeProvider clock) : IContractFileStore
+internal sealed class ContractFileStore(BHomePersistenceContext context, IObjectStorage storage, TimeProvider clock) : IContractFileStore
 {
     public async Task PutAsync(Guid roomId, string key, byte[] bytes, string contentType, CancellationToken t)
     {
         // Independent context: this intent survives a rolled-back contract transaction or a process crash.
-        await using var intent = new BHomeDbContext(options);
+        await using var intent = context.CreateIndependentContext();
         if (!await intent.Set<ContractFileUpload>().AnyAsync(f => f.ObjectKey == key, t))
         {
             intent.Add(new ContractFileUpload { ObjectKey = key, RoomId = roomId, CleanupAfter = clock.GetUtcNow().AddDays(1) });
@@ -50,20 +50,20 @@ public sealed class ContractFileCleanup(IServiceScopeFactory scopes, TimeProvide
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomeDbContext>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(), clock.GetUtcNow(), stoppingToken);
+                await CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(), clock.GetUtcNow(), stoppingToken);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             { logger.LogWarning("Contract file cleanup unavailable ({Code})", e.GetType().Name); }
         }
     }
-    public static async Task CleanupAsync(BHomeDbContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
+    public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
     {
         var candidates = await db.Set<ContractFileUpload>().AsNoTracking().Where(f => f.CleanupAfter <= now).OrderBy(f => f.CleanupAfter).Take(100).ToArrayAsync(t);
         foreach (var item in candidates)
         {
             db.ChangeTracker.Clear();
             await using var tx = await db.Database.BeginTransactionAsync(t);
-            await db.Set<Room>().FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {item.RoomId} FOR UPDATE").SingleOrDefaultAsync(t);
+            await db.Locked<Room>(item.RoomId).SingleOrDefaultAsync(t);
             var file = await db.Set<ContractFileUpload>().SingleOrDefaultAsync(f => f.ObjectKey == item.ObjectKey, t);
             if (file is null) continue;
             var linked = await db.Set<ContractSignature>().AnyAsync(s => s.PreparedObjectKey == file.ObjectKey || s.SignedObjectKey == file.ObjectKey, t) ||

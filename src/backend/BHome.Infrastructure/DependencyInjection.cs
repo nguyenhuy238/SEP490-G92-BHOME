@@ -10,6 +10,7 @@ using BHome.Infrastructure.Jobs;
 using BHome.Application.Locations;
 using BHome.Infrastructure.Locations;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Storage;
 using BHome.Infrastructure.Ocr;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -32,15 +33,17 @@ public static class DependencyInjection
             .Validate(options => !string.IsNullOrWhiteSpace(options.Database),
                 "Configure ConnectionStrings:Database using user-secrets or environment variables.")
             .ValidateOnStart();
-        services.AddDbContext<BHomeDbContext>((provider, options) =>
+        services.AddDbContext<Compact24DbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
+        services.AddScoped<BHomePersistenceContext>(p => p.GetRequiredService<Compact24DbContext>());
         services.AddIdentityCore<ApplicationUser>(options =>
         {
             options.Password.RequiredLength = 12;
             options.User.RequireUniqueEmail = true;
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        }).AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<BHomeDbContext>().AddSignInManager().AddDefaultTokenProviders();
+        }).AddRoles<IdentityRole<Guid>>().AddUserStore<CompactUserStore>().AddRoleStore<CompactRoleStore>().AddSignInManager().AddDefaultTokenProviders();
+        services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, CompactClaimsPrincipalFactory>();
         services.AddSingleton(TimeProvider.System);
         services.AddOptions<SessionOptions>().Bind(configuration.GetSection("Sessions"))
             .Validate(o => o.RefreshTokenDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
@@ -98,13 +101,14 @@ public static class DependencyInjection
         services.AddScoped<ICredentialVerifier, IdentityCredentialVerifier>();
         services.AddScoped<LoginService>();
         services.AddScoped<IdentitySecurityStore>();
+        services.AddScoped<IIdentityPersistence, CompactIdentityPersistence>();
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
         services.AddScoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>();
-        services.AddScoped<PostgresLocationAssignments>();
-        services.AddScoped<ILocationAssignments>(provider => provider.GetRequiredService<PostgresLocationAssignments>());
-        services.AddScoped<IStaffLocationAccess>(provider => provider.GetRequiredService<PostgresLocationAssignments>());
+        services.AddScoped<CompactLocationAssignments>();
+        services.AddScoped<ILocationAssignments>(provider => provider.GetRequiredService<CompactLocationAssignments>());
+        services.AddScoped<IStaffLocationAccess>(provider => provider.GetRequiredService<CompactLocationAssignments>());
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();
@@ -178,7 +182,7 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IJobScheduleContributor, BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
-        services.AddScoped<BHome.Application.Notifications.INotificationRepository, BHome.Infrastructure.Modules.Notifications.NotificationRepository>();
+        services.AddScoped<BHome.Application.Notifications.INotificationRepository, CompactNotificationRepository>();
         services.AddScoped<BHome.Application.Notifications.NotificationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>();
         services.AddScoped<BHome.Application.Notifications.INotificationEventPublisher>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>());
@@ -205,7 +209,9 @@ public static class DependencyInjection
         services.AddScoped<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
-        services.AddScoped<IBackgroundJobQueue, PostgresJobQueue>();
+        services.AddScoped<CompactJobPersistence>();
+        services.AddScoped<IBackgroundJobQueue>(p => p.GetRequiredService<CompactJobPersistence>());
+        services.AddScoped<IJobPersistence>(p => p.GetRequiredService<CompactJobPersistence>());
         services.AddScoped<BHome.Infrastructure.Contracts.ContractExpiryProcessor>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
         services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());

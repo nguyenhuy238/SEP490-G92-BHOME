@@ -259,7 +259,11 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
 
 public sealed class CaptureFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    private PostgreSqlContainer? postgres;
+    private readonly bool externallyManaged;
+    public CaptureFixture() { }
+    internal CaptureFixture(WebApplicationFactory<Program> supplied, string storageUrl)
+    { Factory = supplied; StorageUrl = storageUrl; externallyManaged = true; }
     private readonly string storagePassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private IContainer? minio;
     private ApiFactory? root;
@@ -267,6 +271,8 @@ public sealed class CaptureFixture : IAsyncLifetime
     public string StorageUrl { get; private set; } = "";
     public async Task InitializeAsync()
     {
+        if (externallyManaged) return;
+        postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
         minio = new ContainerBuilder("bhome/minio-local:2025-10-15").WithEnvironment("MINIO_ROOT_USER", "synthetic-test")
             .WithEnvironment("MINIO_ROOT_PASSWORD", storagePassword).WithCommand("server", "/data").WithPortBinding(9000, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/minio/health/live"))).Build();
@@ -291,6 +297,7 @@ public sealed class CaptureFixture : IAsyncLifetime
     }
     public async Task DisposeAsync()
     {
+        if (externallyManaged) return;
         try
         {
             if (Factory is not null) await Factory.DisposeAsync();
@@ -307,7 +314,7 @@ public sealed class CaptureFixture : IAsyncLifetime
                 {
                     if (minio is not null) await minio.DisposeAsync();
                 }
-                finally { await postgres.DisposeAsync(); }
+                finally { if (postgres is not null) await postgres.DisposeAsync(); }
             }
         }
     }
