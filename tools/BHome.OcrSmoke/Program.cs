@@ -5,11 +5,13 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 3 && args[0] == "--meter-scene-smoke")
+    return await MeterSceneSmoke.RunAsync(args[1], args[2]);
 var generation = args.Length == 3 && args[0] == "--generate-evaluation";
 var evaluation = args.Length is 3 or 4 && args[1] == "--evaluate";
 var smoke = args.Length == 2 && args[0] != "--generate-evaluation" && args[1] != "--evaluate";
 if (!generation && !evaluation && !smoke)
-{ Console.Error.WriteLine("Usage: BHome.OcrSmoke <model-directory> <synthetic-fixture-directory> | <model-directory> --evaluate <manifest.json> [report.json] | --generate-evaluation <synthetic-fixture-directory> <output-directory>"); return 2; }
+{ Console.Error.WriteLine("Usage: BHome.OcrSmoke <model-directory> <synthetic-fixture-directory> | <model-directory> --evaluate <manifest.json> [report.json] | --generate-evaluation <synthetic-fixture-directory> <output-directory> | --meter-scene-smoke <model-directory> <meter-safety-fixture-directory>"); return 2; }
 if (generation)
 {
     SyntheticEvaluation.Generate(args[1], args[2]);

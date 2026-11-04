@@ -24,6 +24,13 @@ Yêu cầu người dùng → BF-01/UC-04..07 (chuỗi/phòng/biểu phí), BF-0
 - Public Web chưa có API công khai của BHome.Api để nối nội dung; không thêm Guest form/booking/payment.
 - Holding ledger, bank adapter tự động, delivery email/push/reset chưa cấu hình. MySign/PDF/MinIO cần cấu hình thật; kiểm thử provider giả/synthetic CA không phải chứng nhận kết nối production.
 
+Ghi chú Meter OCR ngày 04/11/2026: đã bổ sung chặn nhiều vùng chỉ số (kể cả cùng
+giá trị), cảnh báo sai utility/baseline và hướng dẫn review trên Mobile. Điểm tích hợp
+crop Meter/Display đã có kiểm thử; **chưa có model detector/classifier đồng hồ hoạt
+động**. Mặc định vẫn dùng DBNet + recognition hiện có và Staff xác nhận riêng.
+Không đổi endpoint/DTO/schema. Xem [audit và kiểm chứng OCR](../development/METER_OCR_AUDIT_2026-11-04.md).
+Các số liệu bên dưới thuộc lượt rà soát API trước đó, không phải kết quả chạy OCR mới.
+
 ## Tổng quan các chức năng đã có và còn thiếu
 
 | Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                |

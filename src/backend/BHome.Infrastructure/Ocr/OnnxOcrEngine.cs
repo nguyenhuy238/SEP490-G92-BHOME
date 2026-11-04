@@ -11,17 +11,19 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-layout4";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-meter5";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
     private readonly InferenceSession recognizer;
     private readonly string[] dictionary;
+    private readonly IMeterSceneDetector? meterDetector;
 
-    public OnnxOcrEngine(OcrOptions options, IImagePreprocessor preprocessor)
+    public OnnxOcrEngine(OcrOptions options, IImagePreprocessor preprocessor, IMeterSceneDetector? meterDetector = null)
     {
         this.options = options;
         this.preprocessor = preprocessor;
+        this.meterDetector = meterDetector;
         VerifyFile("detection.onnx", "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1");
         VerifyFile("recognition.onnx", "767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12");
         VerifyFile("charset.txt", "5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448");
@@ -65,7 +67,24 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
         {
             using var upright = new Mat();
             using var reversed = new Mat();
+            using var localized = new Mat();
             var source = prepared.Image;
+            IReadOnlyList<string> localizationWarnings = [];
+            if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
+            {
+                var selection = MeterSceneSelection.Select(meterDetector?.Detect(source, token), source.Size(),
+                    kind, options.MeterDetectionMinConfidence);
+                localizationWarnings = selection.Warnings;
+                if (!selection.CanRecognize)
+                    return new OcrText([], Version, [.. prepared.Warnings, .. localizationWarnings]);
+                if (selection.Crop is { } rect)
+                {
+                    using var roi = new Mat(source, rect);
+                    roi.CopyTo(localized);
+                    source = localized;
+                }
+            }
+            token.ThrowIfCancellationRequested();
             var regions = Detect(source, run, token);
             var axisCorrected = OcrImageGeometry.IsVertical(regions);
             if (axisCorrected)
@@ -80,6 +99,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
             // budget for the request deadline. Detect again in the upright image: DBNet's
             // shrunken regions are not invariant under a 180-degree flip.
             if (!text.Warnings.Contains("conflicting_reading") &&
+                (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ||
+                    !proposal.Warnings.Any(warning => warning is "multiple_reading_regions" or "text_region_limit")) &&
                 (proposal.IsFallback || proposal.MissingFields.Count > 0) && regions.Count > 0 &&
                 clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 2)
             {
@@ -96,7 +117,9 @@ public sealed class OnnxOcrEngine : IOcrEngine, IDisposable
             token.ThrowIfCancellationRequested();
             return text with
             {
-                Warnings = [.. prepared.Warnings, .. text.Warnings,
+                Warnings = [.. prepared.Warnings, .. localizationWarnings, .. text.Warnings,
+                .. kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater
+                    ? new[] { "billing_register_unverified" } : Array.Empty<string>(),
                 .. axisCorrected ? new[] { "orientation_corrected" } : Array.Empty<string>()]
             };
         }
