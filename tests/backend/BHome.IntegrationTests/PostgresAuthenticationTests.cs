@@ -169,6 +169,9 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
 
 public sealed class AuthenticationDatabaseFixture : IAsyncLifetime
 {
+    private readonly bool externallyManaged;
+    public AuthenticationDatabaseFixture() { }
+    internal AuthenticationDatabaseFixture(ApiFactory factory) { Factory = factory; externallyManaged = true; }
     private PostgreSqlContainer? database;
     private string? nativeAdmin;
     private string? nativeDatabase;
@@ -176,6 +179,7 @@ public sealed class AuthenticationDatabaseFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        if (externallyManaged) return;
         // Opt in only for a dedicated temporary local cluster, never the developer's bhome database.
         var native = Environment.GetEnvironmentVariable("BHOME_AUTH_TEST_POSTGRES_ADMIN");
         if (string.IsNullOrWhiteSpace(native))

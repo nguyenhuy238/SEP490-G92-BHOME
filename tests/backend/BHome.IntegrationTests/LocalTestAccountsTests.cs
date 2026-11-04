@@ -37,6 +37,7 @@ public sealed class LocalTestAccountsTests : IAsyncLifetime
         }).Build();
         var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
         services.AddInfrastructure(config);
+        BHome.IntegrationTests.Fixtures.LegacyPersistenceRegistration.UseLegacyPersistenceForTesting(services);
         provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<BHomeDbContext>().Database.MigrateAsync();

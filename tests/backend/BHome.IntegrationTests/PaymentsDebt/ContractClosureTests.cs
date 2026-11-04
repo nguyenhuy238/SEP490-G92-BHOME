@@ -15,7 +15,7 @@ public sealed partial class PaymentLedgerTests
     private async Task ReadySettlementFixture(Workspace w, bool others)
     {
         // Synthetic persisted financial/inspection preconditions, no mocked settlement result.
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract); var prior = await db.Set<Invoice>().SingleAsync(i => i.Id == w.Invoice);
         contract.StartDate = prior.BillingPeriod;
         if (!others) await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, ContractStatus.Terminated));
@@ -58,7 +58,7 @@ public sealed partial class PaymentLedgerTests
         (await Post(owner, path + "/settlement", new SettlementInput("Synthetic zero-deposit fully verified", summary.Reference))).EnsureSuccessStatusCode();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var key = Guid.NewGuid();
         var results = await Task.WhenAll(Post(owner, path + "/complete", new CompletionInput(today), key), Post(owner, path + "/complete", new CompletionInput(today), key)); Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>(); Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
         Assert.Equal(others ? RoomStatus.Occupied : RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(others ? 2 : 0, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
         Assert.Equal(HttpStatusCode.OK, (await tenant.GetAsync($"/api/v1/invoices/{w.Invoice}/payment")).StatusCode);
