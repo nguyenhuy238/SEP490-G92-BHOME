@@ -136,6 +136,12 @@ nếu muốn: chạy cùng script không có switch. Runtime Production/Testing 
 Tạo tài khoản test tổng hợp một lần bằng `scripts/New-LocalTestUsers.ps1` và nhập mật khẩu riêng
 ở prompt ẩn. Không có mật khẩu dùng chung được commit vào Git.
 
+Muốn có dữ liệu mẫu để phát triển, chạy `scripts/Seed-LocalDevelopmentData.ps1` sau khi schema
+sẵn sàng. Công cụ tạo bốn account `*.sample@example.invalid`, cơ sở/phòng/đồng hồ/biểu phí và công việc;
+chạy lại giữ nguyên dữ liệu. Thêm `-SetSamplePasswords` để chọn lại mật khẩu các account mẫu.
+Xem [hướng dẫn seed](docs/database/2026-11-03/README.md) và
+[danh mục API, trạng thái nối frontend/backend](docs/api/API_IMPLEMENTATION_STATUS.md).
+
 Tiếp theo:
 
 1. Mở `http://localhost:9001` (hoặc console port đã cấu hình).
