@@ -32,4 +32,15 @@ public sealed class MainDraftsController(MainDraftService service) : ControllerB
         try { var type = await service.CopyFileAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, type, type == "application/pdf" ? "hop-dong-nhap.pdf" : "hop-dong-nhap.docx"); }
         catch { await buffer.DisposeAsync(); throw; }
     }
+    [HttpGet("{id:guid}/documents/{fileId:guid}/preview")]
+    public Task<DraftPreviewInfo> Preview(Guid id, Guid fileId, CancellationToken t) => service.PreviewInfoAsync(id, fileId, t);
+    [HttpGet("{id:guid}/documents/{fileId:guid}/pages/{page:int}")]
+    public async Task<IActionResult> Page(Guid id, Guid fileId, int page, CancellationToken t)
+    {
+        var bytes = await service.PreviewPageAsync(id, fileId, page, t);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.OnCompleted(() => { System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes); return Task.CompletedTask; });
+        return File(bytes, "image/png");
+    }
 }

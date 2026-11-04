@@ -17,6 +17,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using BHome.Application.Common;
+using BHome.Application.Storage;
 using iText.Kernel.Pdf;
 
 namespace BHome.IntegrationTests.Contracts;
@@ -127,12 +130,58 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var text = ContractPdfRendererTests.Text(pdf);
         Assert.Contains("NGƯỜI KIỂM THỬ", text); Assert.Contains("15/06/2021", text); Assert.Contains("18.000", text); Assert.Contains("TRÁCH NHIỆM CHUNG", text); Assert.DoesNotContain("…", text);
+        var previewRoute = $"{Root}/{draft.Id}/documents/{files.Pdf.Id}";
+        var info = (await client.GetFromJsonAsync<DraftPreviewInfo>(previewRoute + "/preview"))!;
+        Assert.Equal(files.Pdf.Id, info.FileId); Assert.Equal(pdf.GetNumberOfPages(), info.Pages.Count);
+        Assert.All(info.Pages, page => { Assert.True(page.Width > 0); Assert.True(page.Height > 0); });
+        var first = await client.GetByteArrayAsync(previewRoute + "/pages/1");
+        var last = await client.GetByteArrayAsync(previewRoute + $"/pages/{info.Pages.Count}");
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, first[..8]);
+        Assert.False(first.SequenceEqual(last));
+        Assert.InRange(System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(first.AsSpan(16, 4)), 1, 1800);
+        Assert.InRange(System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(first.AsSpan(20, 4)), 1, 1800);
+        using var pngResponse = await client.GetAsync(previewRoute + "/pages/1");
+        Assert.Equal("image/png", pngResponse.Content.Headers.ContentType?.MediaType);
+        Assert.True(pngResponse.Headers.CacheControl?.NoStore);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(previewRoute + "/pages/0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(previewRoute + $"/pages/{info.Pages.Count + 1}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Outside.GetAsync(previewRoute + "/preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Outside.GetAsync(previewRoute + "/pages/1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"{Root}/{draft.Id}/documents/{Guid.NewGuid()}/preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"{Root}/{draft.Id}/documents/{files.Docx.Id}/preview")).StatusCode);
+        using var anonymous = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(previewRoute + "/pages/1")).StatusCode);
+        using var tenant = (await User("Tenant")).Client;
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(previewRoute + "/pages/1")).StatusCode);
+        using var owner = host.CreateClient(); owner.DefaultRequestHeaders.Authorization = w.Owner.DefaultRequestHeaders.Authorization;
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(previewRoute + "/preview")).StatusCode);
+        await using (var unavailable = host.WithWebHostBuilder(builder => builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<IObjectStorage, UnavailablePreviewStorage>()))))
+        {
+            using var failedClient = unavailable.CreateClient(); failedClient.DefaultRequestHeaders.Authorization = w.Staff.DefaultRequestHeaders.Authorization;
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await failedClient.GetAsync(previewRoute + "/preview")).StatusCode);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await failedClient.GetAsync(previewRoute + "/pages/1")).StatusCode);
+        }
         var destination = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
         if (!string.IsNullOrWhiteSpace(destination))
         {
             Directory.CreateDirectory(destination); await File.WriteAllBytesAsync(System.IO.Path.Combine(destination, "synthetic-contract.pdf"), bytes);
             await File.WriteAllBytesAsync(System.IO.Path.Combine(destination, "synthetic-contract.docx"), await client.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{files.Docx.Id}"));
+            await File.WriteAllBytesAsync(System.IO.Path.Combine(destination, "preview-page-1.png"), first);
+            await File.WriteAllBytesAsync(System.IO.Path.Combine(destination, "preview-page-last.png"), last);
         }
+        var updated = await Save(w, Input(w) with { EndDate = Today.AddYears(2), ExpectedVersion = draft.Version }, id: draft.Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.GetAsync(previewRoute + "/preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.GetAsync(previewRoute + "/pages/1")).StatusCode);
+        var refreshed = await client.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(refreshed);
+        var updatedFiles = (await refreshed.Content.ReadFromJsonAsync<MainDraftFiles>())!;
+        Assert.NotNull(updatedFiles.Pdf); Assert.NotEqual(files.Pdf.Id, updatedFiles.Pdf.Id);
+        var updatedInfo = await client.GetFromJsonAsync<DraftPreviewInfo>($"{Root}/{draft.Id}/documents/{updatedFiles.Pdf.Id}/preview");
+        Assert.Equal(updatedFiles.Pdf.Id, updatedInfo!.FileId);
+        await using var verification = fixture.Factory.Services.CreateAsyncScope();
+        var context = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var stored = await context.Set<Contract>().Include(c => c.Signatures).SingleAsync(c => c.Id == updated.Id);
+        Assert.Equal(ContractStatus.Draft, stored.Status); Assert.Empty(stored.Signatures);
+        Assert.Equal(RoomStatus.Available, (await context.Set<Room>().FindAsync(w.Room))!.Status);
     }
     [Fact]
     public async Task RejectsDuplicateInvalidPeriodUnassignedStaffAndNonDraftEdits()
@@ -223,5 +272,11 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
         await using var check = fixture.Factory.Services.CreateAsyncScope(); var context = check.ServiceProvider.GetRequiredService<BHomeDbContext>();
         var members = await context.Set<ContractResident>().Where(r => r.ContractId == family.Id).ToArrayAsync(); Assert.Single(members, r => r.Role == ResidentType.Representative); Assert.Single(members, r => r.Role == ResidentType.CoOccupant);
         Assert.Equal(RoomStatus.Available, (await context.Set<Room>().FindAsync(w.Room))!.Status);
+    }
+    private sealed class UnavailablePreviewStorage : IObjectStorage
+    {
+        public Task PutAsync(string key, Stream content, long length, string contentType, CancellationToken cancellationToken) => throw new IntegrationUnavailableException("object storage");
+        public Task CopyToAsync(string key, Stream destination, CancellationToken cancellationToken) => throw new IntegrationUnavailableException("object storage");
+        public Task DeleteAsync(string key, CancellationToken cancellationToken) => throw new IntegrationUnavailableException("object storage");
     }
 }

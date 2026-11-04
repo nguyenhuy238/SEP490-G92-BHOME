@@ -1,23 +1,14 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 /* eslint-disable @typescript-eslint/no-require-imports -- Metro requires static asset paths. */
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import {
-  Button,
-  Dialog,
-  Icon,
-  Portal,
-  ProgressBar,
-  Text,
-  TextInput,
-  TouchableRipple,
-} from 'react-native-paper';
+import { Button, Dialog, Icon, Portal, ProgressBar, Text, TextInput } from 'react-native-paper';
 import {
   Action,
   Box,
   Filters,
   Heading,
   InfoRow,
-  Metric,
   Photo,
   Pill,
   Row,
@@ -61,195 +52,8 @@ function InvoiceBreakdown({ detailed = false }: { detailed?: boolean }) {
     </>
   );
 }
-export function TenantHome() {
-  const { go, unavailable } = useWorkspace();
-  return (
-    <>
-      <Box style={ui.dark}>
-        <Text variant="labelSmall" style={ui.white}>
-          CĂN HỘ CỦA BẠN
-        </Text>
-        <Text variant="headlineSmall" style={ui.white}>
-          Chào Hoàng Tuấn Anh
-        </Text>
-        <Text variant="bodySmall" style={ui.white}>
-          Phòng 301 • Tòa BHOME Cầu Giấy (Tầng 3)
-        </Text>
-        <Pill tone="green">Hợp đồng mẫu • Đang hiệu lực</Pill>
-        <Pill>Đã xác thực CCCD • Mẫu</Pill>
-        <View style={{ backgroundColor: '#172b4d', padding: 12, borderRadius: 8 }}>
-          <Row spread>
-            <Icon source="lock-outline" size={24} color="#94f5cf" />
-            <View style={ui.grow}>
-              <Text variant="labelMedium" style={ui.white}>
-                Khóa thông minh
-              </Text>
-              <Text variant="labelSmall" style={ui.white}>
-                Chưa kết nối thiết bị
-              </Text>
-            </View>
-            <Button
-              mode="contained-tonal"
-              compact
-              onPress={() => unavailable('Quản lý khóa thông minh chưa thuộc phạm vi MVP')}
-            >
-              Chi tiết
-            </Button>
-          </Row>
-        </View>
-      </Box>
-      <Box>
-        <Row spread>
-          <View style={ui.grow}>
-            <Text variant="labelSmall" style={ui.muted}>
-              Thanh toán định kỳ
-            </Text>
-            <Text variant="titleLarge">Hóa đơn kỳ Tháng 10/2024</Text>
-          </View>
-          <Pill tone="amber">Chờ thanh toán</Pill>
-        </Row>
-        <View style={ui.soft}>
-          <Text variant="labelSmall">Tổng số tiền cần thanh toán</Text>
-          <Text variant="headlineMedium" style={[ui.blue, ui.money]}>
-            5.420.000 <Text variant="bodyMedium">VNĐ</Text>
-          </Text>
-          <Text variant="labelSmall" style={ui.muted}>
-            Thông tin mẫu • Chưa phát sinh yêu cầu thanh toán
-          </Text>
-        </View>
-        <Text variant="labelSmall" style={ui.muted}>
-          CHI TIẾT KHOẢN THU
-        </Text>
-        <InvoiceBreakdown />
-        <Action icon="qrcode-scan" onPress={() => go('invoice')}>
-          Thanh toán ngay qua VietQR
-        </Action>
-        <Action secondary icon="receipt-text-outline" onPress={() => go('invoice')}>
-          Xem chi tiết & sao kê hóa đơn
-        </Action>
-      </Box>
-      <Heading title="Tiện ích cư dân" detail="BHOME Services" />
-      <View style={ui.wrap}>
-        {[
-          {
-            icon: 'wrench-outline',
-            title: 'Báo sự cố',
-            detail: 'Sửa điện, nước, nội thất…',
-            action: () => go('incidents'),
-          },
-          {
-            icon: 'qrcode-scan',
-            title: 'Thanh toán VietQR',
-            detail: 'Xem thông tin khoản thu',
-            action: () => go('invoice'),
-          },
-          {
-            icon: 'file-document-outline',
-            title: 'Gia hạn hợp đồng',
-            detail: 'Hợp đồng & phụ lục',
-            action: () => go('contract'),
-          },
-          {
-            icon: 'card-account-details-outline',
-            title: 'Tạm trú VNeID',
-            detail: 'Tự đăng ký ngoài BHOME',
-            action: () => go('residence'),
-          },
-        ].map((item) => (
-          <TouchableRipple
-            key={item.title}
-            onPress={item.action}
-            style={[ui.card, ui.half]}
-            accessibilityRole="button"
-          >
-            <View style={{ gap: 10 }}>
-              <Icon source={item.icon} size={24} color={c.blue} />
-              <Text variant="titleMedium">{item.title}</Text>
-              <Text variant="labelSmall" style={ui.muted}>
-                {item.detail}
-              </Text>
-            </View>
-          </TouchableRipple>
-        ))}
-      </View>
-      <Box>
-        <InfoRow
-          icon="history"
-          title="Lịch sử hóa đơn & Thanh toán"
-          onPress={() => go('billing-history')}
-        />
-        <InfoRow
-          icon="receipt-text-edit-outline"
-          title="Yêu cầu điều chỉnh hóa đơn"
-          onPress={() => go('adjustment')}
-        />
-        <InfoRow icon="file-sign" title="Trạng thái ký hợp đồng" onPress={() => go('signing')} />
-      </Box>
-      <Heading title="Theo dõi xử lý sự cố" action="1 đang mở" onPress={() => go('incidents')} />
-      <Box>
-        <Pill>Mã #SC-3012 • Phòng tắm</Pill>
-        <Text variant="titleMedium">Thay vòi xịt vệ sinh phòng tắm</Text>
-        <InfoRow
-          icon="account-hard-hat-outline"
-          title="KTV: Trần Văn Hùng"
-          detail="Lịch hẹn: 14:00 hôm nay (26/10)"
-          onPress={() => go('incidents')}
-        />
-        <ProgressBar progress={0.75} color={c.blue} />
-        <Row spread>
-          <Text variant="labelSmall">Tiếp nhận</Text>
-          <Text variant="labelSmall">Phân công</Text>
-          <Text variant="labelSmall" style={ui.blue}>
-            Đang sửa
-          </Text>
-          <Text variant="labelSmall">Nghiệm thu</Text>
-        </Row>
-      </Box>
-      <Heading
-        title="Minh bạch điện nước"
-        action="Xem ảnh công tơ"
-        onPress={() => unavailable('Xem ảnh công tơ')}
-      />
-      <View style={ui.wrap}>
-        <Metric
-          label="Điện tiêu thụ T10"
-          value="105 kWh"
-          detail="1.420 → 1.525 • Staff xác nhận"
-          icon="lightning-bolt-outline"
-        />
-        <Metric
-          label="Nước tiêu thụ T10"
-          value="7 m³"
-          detail="210 → 217 • Staff xác nhận"
-          icon="water-outline"
-        />
-      </View>
-      <Heading title="Bảng tin cư dân BHOME" />
-      <Box>
-        <InfoRow
-          icon="elevator-passenger-outline"
-          title="Thông báo kỹ thuật"
-          detail="Bảo dưỡng định kỳ thang máy & máy phát điện dự phòng"
-        />
-        <InfoRow
-          icon="fire-extinguisher"
-          title="An toàn PCCC"
-          detail="Kiểm tra hệ thống báo cháy & cửa thoát hiểm Tầng 3"
-        />
-      </Box>
-      <Box style={{ backgroundColor: c.tint }}>
-        <Heading title="Hỗ trợ khẩn cấp 24/7" />
-        <Text variant="bodySmall">
-          Khi có nguy hiểm trực tiếp, liên hệ dịch vụ khẩn cấp công cộng. Thông tin liên hệ BQL cần
-          được cung cấp từ cơ sở của bạn.
-        </Text>
-        <Action secondary icon="headset" onPress={() => unavailable('Liên hệ Ban quản lý')}>
-          Liên hệ Ban quản lý
-        </Action>
-      </Box>
-    </>
-  );
-}
+export { TenantDashboard as TenantHome } from './TenantDashboard';
+
 export function TenantInvoice() {
   const { unavailable, go } = useWorkspace();
   const [method, setMethod] = useState('VietQR');
@@ -626,7 +430,7 @@ export function TenantIncidents() {
   const [category, setCategory] = useState('Nước & Vệ sinh');
   const [severity, setSeverity] = useState('Bình thường');
   const [description, setDescription] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   return (
     <>
       <Heading title="Sự cố & Sửa chữa" detail="Căn hộ P.301 • BHOME Cầu Giấy" />

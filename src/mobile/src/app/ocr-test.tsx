@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, View } from 'react-native';
 import { Redirect } from 'expo-router';
@@ -30,7 +31,7 @@ export default function OcrTest() {
   const [checkAttempt, setCheckAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const generation = useRef(0);
   const lock = useRef(false);
   const mounted = useRef(true);
@@ -80,7 +81,7 @@ export default function OcrTest() {
       listener.remove();
       if (Platform.OS === 'ios') void disableAppSwitcherProtectionAsync().catch(() => {});
     };
-  }, [api, checkAttempt]);
+  }, [api, checkAttempt, setError]);
   if (!api || !session) return <Redirect href="/" />;
   if (!session.roles.some((role) => role === 'Owner' || role === 'Staff'))
     return <Redirect href="/" />;

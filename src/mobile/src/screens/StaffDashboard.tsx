@@ -1,3 +1,4 @@
+import { dashboardStyles } from '../components/DashboardKit';
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
@@ -239,13 +240,7 @@ export function StaffDashboard() {
 }
 
 const styles = StyleSheet.create({
-  summary: {
-    backgroundColor: c.white,
-    borderRadius: 22,
-    padding: 16,
-    gap: 16,
-    boxShadow: '0 3px 14px rgba(25, 52, 82, 0.05)',
-  },
+  summary: dashboardStyles.summary,
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   greeting: { flex: 1, minWidth: 165, gap: 4 },
   title: { color: s.navy },
@@ -262,9 +257,9 @@ const styles = StyleSheet.create({
   metricContent: { alignItems: 'center', paddingHorizontal: 4, gap: 5 },
   metricLabel: { fontSize: 11, lineHeight: 16, textAlign: 'center', color: c.muted },
   divider: { borderLeftWidth: 1, borderLeftColor: c.border },
-  section: { gap: 12 },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  accent: { width: 4, height: 18, borderRadius: 2, backgroundColor: s.accent },
+  section: dashboardStyles.section,
+  sectionHeading: dashboardStyles.sectionHeading,
+  accent: dashboardStyles.accent,
   grid: { flexDirection: 'row', gap: 12 },
   dialogActions: { flexDirection: 'column', alignItems: 'stretch' },
 });

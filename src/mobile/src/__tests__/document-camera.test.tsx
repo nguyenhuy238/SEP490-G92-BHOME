@@ -15,6 +15,9 @@ const native = vi.hoisted(() => ({
   bytes: new Uint8Array([1, 2, 3]),
   listeners: new Set<(state: string) => void>(),
 }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
+}));
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
   AppState: {
@@ -117,6 +120,97 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('uses only capture/close then use/retake controls for meters and keeps a compact preview during review', async () => {
+  const capture = vi.fn().mockResolvedValue(undefined);
+  const clear = vi.fn();
+  const props = {
+    label: 'Chụp đồng hồ nước',
+    disabled: false,
+    retainPreview: true,
+    reviewBeforeSubmit: true,
+    onCapture: capture,
+    onPhotoCleared: clear,
+    presentation: 'meter' as const,
+  };
+  const view = render(<CameraCapture {...props} meterStep={1} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp đồng hồ nước' }));
+  await screen.findByTestId('native-camera');
+  expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Chụp ảnh',
+    'Đóng camera',
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  const image = await screen.findByAltText('Ảnh công tơ đã chụp');
+  expect(image.getAttribute('data-resize')).toBe('contain');
+  expect(capture).not.toHaveBeenCalled();
+  expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Dùng ảnh này',
+    'Chụp lại',
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
+  await waitFor(() => expect(capture).toHaveBeenCalledOnce());
+  view.rerender(<CameraCapture {...props} meterStep={2} />);
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Thử lại OCR' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  expect(screen.getAllByRole('button')).toHaveLength(1);
+  view.rerender(<CameraCapture {...props} meterStep={3} />);
+  expect(screen.getByAltText('Ảnh công tơ đã chụp')).toBeTruthy();
+  expect(screen.queryAllByRole('button')).toHaveLength(0);
+  expect(native.files.size).toBe(1);
+  view.unmount();
+  expect(native.files.size).toBe(0);
+});
+it('retains a meter preview after OCR, clears it on retake and never submits on capture', async () => {
+  const capture = vi.fn().mockResolvedValue(undefined);
+  const clear = vi.fn();
+  render(
+    <CameraCapture
+      label="Chụp công tơ"
+      disabled={false}
+      retainPreview
+      reviewBeforeSubmit
+      reviewActionLabel="Nhận diện chỉ số"
+      onCapture={capture}
+      onPhotoCleared={clear}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp công tơ' }));
+  await screen.findByTestId('native-camera');
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  await screen.findByAltText('Ảnh vừa chụp');
+  expect(capture).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Nhận diện chỉ số' }));
+  await waitFor(() => expect(capture).toHaveBeenCalledOnce());
+  await waitFor(() => expect([...native.bytes]).toEqual([0, 0, 0]));
+  expect(native.files.size).toBe(1);
+  expect(screen.getByAltText('Ảnh vừa chụp')).toBeTruthy();
+  const calls = clear.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
+  expect(clear.mock.calls.length).toBeGreaterThan(calls);
+  expect(native.files.size).toBe(0);
+  expect(screen.queryByAltText('Ảnh vừa chụp')).toBeNull();
+});
+it('handles denied meter camera permission without capturing or uploading', async () => {
+  native.granted = false;
+  const capture = vi.fn();
+  render(
+    <CameraCapture
+      label="Chụp công tơ"
+      disabled={false}
+      retainPreview
+      reviewBeforeSubmit
+      onCapture={capture}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp công tơ' }));
+  await screen.findByText(/Cần cấp quyền camera/);
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(native.take).not.toHaveBeenCalled();
+  expect(capture).not.toHaveBeenCalled();
+});
 async function takePhoto() {
   await screen.findByTestId('native-camera');
   await waitFor(() =>

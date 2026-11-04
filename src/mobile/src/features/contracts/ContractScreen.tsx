@@ -1,3 +1,5 @@
+import { conciseMessage, showError } from '../../lib/toast';
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
 import { View } from 'react-native';
@@ -58,7 +60,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       status: string;
     }[]
   >([]);
-  const [assignmentError, setAssignmentError] = useState('');
+  const [assignmentError, setAssignmentError] = useFeedbackState();
   const [listing, setListing] = useState<{
     data: ContractPage | null;
     error: string;
@@ -84,7 +86,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     }
     void loadAssignments();
     return () => c.abort();
-  }, [client, role, revision]);
+  }, [client, role, revision, setAssignmentError]);
   useEffect(() => {
     if (!client) return;
     const controller = new AbortController();
@@ -94,8 +96,11 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         const data = await client!.list(page, filter, '', controller.signal);
         if (!controller.signal.aborted) setListing({ data, error: '', loading: false });
       } catch (e) {
-        if (!controller.signal.aborted)
-          setListing({ data: null, error: contractError(e), loading: false });
+        if (!controller.signal.aborted) {
+          const message = conciseMessage(contractError(e));
+          setListing({ data: null, error: message, loading: false });
+          showError(message);
+        }
       }
     }
     void load();
@@ -254,7 +259,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         )}
       </Row>
       {listing.loading && <ActivityIndicator accessibilityLabel="Đang tải hợp đồng" />}
-      {!!listing.error && <Text style={ui.red}>{listing.error}</Text>}
+      {!!listing.error && <Text style={ui.red}>{conciseMessage(listing.error)}</Text>}
       {!listing.loading && !listing.error && !listing.data?.items.length && (
         <Box>
           <Text>Chưa có hợp đồng phù hợp trong phạm vi tài khoản.</Text>
@@ -314,12 +319,12 @@ function LiveContractDetail({
     [uploading, setUploading] = useState(false),
     [uploadChecked, setUploadChecked] = useState(false);
   const uploadLock = useRef(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useFeedbackState('success');
   if (detail.loading) return <ActivityIndicator accessibilityLabel="Đang tải chi tiết hợp đồng" />;
   if (detail.error)
     return (
       <Box>
-        <Text style={ui.red}>{detail.error}</Text>
+        <Text style={ui.red}>{conciseMessage(detail.error)}</Text>
         <Action onPress={detail.reload}>Tải lại hợp đồng</Action>
       </Box>
     );

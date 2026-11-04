@@ -1,3 +1,5 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
+import { showSuccess } from '../lib/toast';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform } from 'react-native';
 import { Checkbox, Text, TextInput } from 'react-native-paper';
@@ -196,7 +198,7 @@ function RequestForm({
     [checked, setChecked] = useState(false),
     [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useFeedbackState();
   const key = useRef(randomUUID()),
     lock = useRef(false),
     uploadLock = useRef(false);
@@ -227,6 +229,7 @@ function RequestForm({
         },
         key.current,
       );
+      showSuccess('Đã gửi yêu cầu điều chỉnh. Chờ Owner xem xét.');
       submitted(result.id);
     } catch (e) {
       setError(adjustmentError(e));
@@ -355,7 +358,7 @@ function WebEvidencePicker({
 }) {
   const [file, setFile] = useState<File | null>(null),
     [url, setUrl] = useState(''),
-    [error, setError] = useState(''),
+    [error, setError] = useFeedbackState(),
     [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement | null>(null),
     lock = useRef(false);
@@ -447,7 +450,7 @@ function PrivateImage({
   number: number;
 }) {
   const [uri, setUri] = useState(''),
-    [error, setError] = useState(''),
+    [error, setError] = useFeedbackState(),
     [busy, setBusy] = useState(false);
   const lock = useRef(false),
     abort = useRef<AbortController | null>(null);

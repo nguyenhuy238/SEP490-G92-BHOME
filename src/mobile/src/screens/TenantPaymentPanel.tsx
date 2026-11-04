@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useState } from 'react';
 import { Image } from 'react-native';
 import { Text } from 'react-native-paper';
@@ -26,7 +27,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   const instructions = useWorkspaceQuery<TransferInstructions>(
     `/api/v1/invoices/${encodeURIComponent(invoiceId)}/transfer-instructions`,
   );
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useFeedbackState('info');
   async function copy(value: string) {
     try {
       await Clipboard.setStringAsync(value, { android: { isSensitive: true } });

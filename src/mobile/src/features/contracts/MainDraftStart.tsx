@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
 import {
@@ -26,7 +27,7 @@ export function MainDraftStart({
     [open, setOpen] = useState(false);
   const [draftId, setDraftId] = useState('');
   const [data, setData] = useState<Preparation | null>(null),
-    [error, setError] = useState(''),
+    [error, setError] = useFeedbackState(),
     [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
@@ -46,7 +47,7 @@ export function MainDraftStart({
     }
     void load();
     return () => controller.abort();
-  }, [api, location]);
+  }, [api, location, setError]);
   if (open)
     return (
       <MainDraftScreen

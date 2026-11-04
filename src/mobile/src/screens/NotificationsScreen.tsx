@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Text } from 'react-native-paper';
@@ -24,7 +25,7 @@ export function NotificationsScreen() {
     [category, setCategory] = useState(''),
     [unread, setUnread] = useState('');
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useFeedbackState();
   const lock = useRef(false);
   const query = useWorkspaceQuery<Page<NotificationItem>>(
     `/api/v1/notifications?page=${page}&pageSize=20${category ? '&category=' + category : ''}${unread ? '&unread=' + unread : ''}`,

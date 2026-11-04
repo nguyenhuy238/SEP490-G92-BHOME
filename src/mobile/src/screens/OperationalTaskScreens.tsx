@@ -1,3 +1,5 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
+import { showSuccess } from '../lib/toast';
 import React, { useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -160,8 +162,8 @@ function TaskDetail({ id }: { id: string }) {
   const [note, setNote] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useFeedbackState();
+  const [notice, setNotice] = useFeedbackState('success');
   const [edit, setEdit] = useState(false);
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -404,7 +406,7 @@ function PrivateTaskImage({
   const { api } = useSession();
   const [uri, setUri] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const abort = useRef<AbortController | null>(null);
   React.useEffect(() => () => abort.current?.abort(), []);
   return (
@@ -479,7 +481,7 @@ export function TaskWorkForm({
   const [required, setRequired] = useState(task?.evidenceRequired ?? true);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
   async function save() {
@@ -525,6 +527,7 @@ export function TaskWorkForm({
         : await client.create(location, work, keys.get(scope, body));
       keys.confirmed(scope, body);
       onSaved(next);
+      showSuccess('Máy chủ đã lưu thông tin công việc.');
     } catch (e) {
       setError(errorMessage(e));
     } finally {

@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
@@ -41,8 +42,8 @@ export function ContractLifecyclePanel({
   const [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false),
     [noCharges, setNoCharges] = useState(false);
-  const [error, setError] = useState(''),
-    [notice, setNotice] = useState('');
+  const [error, setError] = useFeedbackState(),
+    [notice, setNotice] = useFeedbackState('success');
   const [keys] = useState(() => mutationKeys(randomUUID));
   const lock = useRef(false);
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));

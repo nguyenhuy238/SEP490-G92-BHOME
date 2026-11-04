@@ -49,3 +49,10 @@ public interface IMainDraftRenderer
     Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t);
     Task<byte[]> PdfAsync(byte[] docx, CancellationToken t);
 }
+public sealed record DraftPreviewPage(int Number, float Width, float Height);
+public sealed record DraftPreviewInfo(Guid FileId, IReadOnlyList<DraftPreviewPage> Pages);
+public interface IMainDraftPreviewRenderer
+{
+    IReadOnlyList<DraftPreviewPage> Inspect(byte[] pdf);
+    Task<byte[]> PageAsync(byte[] pdf, int page, CancellationToken token);
+}

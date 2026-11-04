@@ -1,3 +1,5 @@
+import { conciseMessage } from '../../lib/toast';
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
@@ -31,7 +33,7 @@ export function ContractWorkflowPanel({
     deposits: DepositVerification[];
     audit: ContractAudit[];
   } | null>(null);
-  const [error, setError] = useState(''),
+  const [error, setError] = useFeedbackState(),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [revision, setRevision] = useState(0);
@@ -61,7 +63,7 @@ export function ContractWorkflowPanel({
     }
     void load();
     return () => c.abort();
-  }, [api, contract, privileged, revision]);
+  }, [api, contract, privileged, revision, setError]);
   async function preview() {
     if (lock.current) return;
     lock.current = true;
@@ -82,7 +84,7 @@ export function ContractWorkflowPanel({
     <>
       <Box>
         <Heading title="Các phiên bản hợp đồng" />
-        {!!versions.error && <Text style={ui.red}>{versions.error}</Text>}
+        {!!versions.error && <Text style={ui.red}>{conciseMessage(versions.error)}</Text>}
         {versions.data?.map((v) => (
           <Text key={v.id}>
             {text(v.kind)} · {text(v.status)} · {v.startDate} → {v.endDate}

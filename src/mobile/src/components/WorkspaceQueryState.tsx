@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { Action, Box, Row, ui } from './WorkspaceKit';
+import { conciseMessage } from '../lib/toast';
 
 export function QueryState({
   loading,
@@ -17,7 +18,7 @@ export function QueryState({
       {!!error && (
         <Box>
           <Text accessibilityRole="alert" style={ui.red}>
-            {error}
+            {conciseMessage(error)}
           </Text>
         </Box>
       )}

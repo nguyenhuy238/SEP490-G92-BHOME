@@ -1,13 +1,8 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from 'react-native-paper';
-import {
-  displayContractDate,
-  formatContractMoney,
-  text,
-  type ContractPage,
-} from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import {
   Action,
@@ -20,13 +15,13 @@ import {
   Row,
   ui,
 } from '../components/WorkspaceKit';
-import { ChoiceField, Input } from '../components/WorkflowControls';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
-import { errorMessage, type MeterTask, type Named } from '../lib/api';
+import { errorMessage, type Named } from '../lib/api';
 import { OperationalTasksScreen } from './OperationalTaskScreens';
+import { MeterTasksScreen } from './MeterTasksScreen';
 import {
   operationalTasks,
   taskActionLabels,
@@ -134,134 +129,7 @@ export function StaffHomeScreen() {
   );
 }
 
-export function MeterTasksScreen() {
-  const { role } = useWorkspace();
-  const [location, setLocation] = useState('');
-  const [room, setRoom] = useState(''),
-    [due, setDue] = useState(''),
-    [page, setPage] = useState(1);
-  const [filter, setFilter] = useState('');
-  const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations');
-  const rooms = useWorkspaceQuery<Named[]>(
-    location ? `/api/v1/capture/locations/${location}/rooms` : null,
-  );
-  const validDue = !due || /^\d{4}-\d{2}-\d{2}$/.test(due);
-  const query = useWorkspaceQuery<MeterTask[]>(
-    `/api/v1/capture/meter-tasks?page=${page}${location ? '&locationId=' + location : ''}${room ? '&roomId=' + room : ''}${filter ? '&status=' + filter : ''}${due && validDue ? '&dueDate=' + due : ''}`,
-  );
-  const items = query.data ?? [];
-  return (
-    <>
-      <Heading
-        title="Ghi chỉ số điện nước"
-        detail="Kiểm tra ảnh, sửa đề xuất OCR và xác nhận chỉ số trước khi lưu"
-      />
-      <ChoiceField
-        label="Cơ sở"
-        value={location}
-        options={[{ id: '', label: 'Tất cả cơ sở được phép' }, ...(locations.data ?? [])]}
-        onChange={(v) => {
-          setLocation(v);
-          setRoom('');
-          setPage(1);
-        }}
-      />
-      {!!locations.error && <QueryState {...locations} />}
-      <ChoiceField
-        label="Phòng lọc tác vụ"
-        value={room}
-        disabled={!location}
-        options={[{ id: '', label: 'Tất cả phòng' }, ...(rooms.data ?? [])]}
-        onChange={(v) => {
-          setRoom(v);
-          setPage(1);
-        }}
-      />
-      {!!rooms.error && <QueryState {...rooms} />}
-      <Input
-        label="Hạn ghi số (yyyy-MM-dd)"
-        value={due}
-        onChange={(v) => {
-          setDue(v);
-          setPage(1);
-        }}
-      />
-      {!validDue && <Text style={ui.red}>Nhập ngày theo yyyy-MM-dd.</Text>}
-      <ChoiceField
-        label="Trạng thái tác vụ"
-        value={filter}
-        options={[
-          { id: '', label: 'Tất cả' },
-          { id: '0', label: 'Được giao' },
-          { id: '1', label: 'Đang xử lý' },
-          { id: '2', label: 'Đã xác nhận' },
-          { id: '3', label: 'Đã hủy' },
-        ]}
-        onChange={(v) => {
-          setFilter(v);
-          setPage(1);
-        }}
-      />
-      <QueryState {...query} />
-      {items.map((task) => (
-        <Box key={task.id}>
-          <Heading
-            title={`Phòng ${task.room} · ${task.utilityType === 0 ? 'Điện' : 'Nước'}`}
-            detail={task.location}
-          />
-          <Pill tone={task.status === 2 ? 'green' : 'blue'}>
-            {task.status === 2 ? 'Đã xác nhận' : task.status === 3 ? 'Đã hủy' : 'Chờ ghi chỉ số'}
-          </Pill>
-          <Text>Đồng hồ: {task.meterCode}</Text>
-          <Text>
-            {task.purpose === 0
-              ? 'Chỉ số ban đầu'
-              : task.purpose === 2
-                ? 'Chốt trả phòng'
-                : `Kỳ: ${task.billingPeriod ? displayContractDate(task.billingPeriod) : 'Chưa xác định'}`}
-          </Text>
-          <Text>Ngày ghi: {displayContractDate(task.readingDate)}</Text>
-          <Text>Hạn ghi số: {task.dueAt ? formatInstant(task.dueAt) : 'Chưa cấu hình'}</Text>
-          {task.automationPlanId && <Pill>Tác vụ tự động</Pill>}
-          <Text>Chỉ số trước: {task.previousValue ?? 'Chưa có'}</Text>
-          {role === 'Staff' && task.status < 2 && (
-            <Action
-              icon="camera-outline"
-              onPress={() => router.push({ pathname: '/meter', params: { taskId: task.id } })}
-            >
-              Chụp ảnh / Nhập & xác nhận
-            </Action>
-          )}
-          {role === 'Staff' && task.status === 2 && (
-            <Action
-              onPress={() => router.push({ pathname: '/meter', params: { taskId: task.id } })}
-            >
-              Xem kết quả đã xác nhận
-            </Action>
-          )}
-        </Box>
-      ))}
-      {query.data && !items.length && (
-        <Box>
-          <Text>Không có tác vụ ghi chỉ số phù hợp.</Text>
-        </Box>
-      )}
-      <Row>
-        <Action secondary disabled={page === 1 || query.loading} onPress={() => setPage(page - 1)}>
-          Trang trước
-        </Action>
-        <Text>Trang {page}</Text>
-        <Action
-          secondary
-          disabled={items.length < 100 || query.loading}
-          onPress={() => setPage(page + 1)}
-        >
-          Trang sau
-        </Action>
-      </Row>
-    </>
-  );
-}
+export { MeterTasksScreen } from './MeterTasksScreen';
 
 export function OwnerOperationsScreen() {
   return (
@@ -278,77 +146,7 @@ export function OwnerOperationsScreen() {
   );
 }
 
-export function TenantHomeScreen() {
-  const { go } = useWorkspace();
-  const query = useWorkspaceQuery<ContractPage>('/api/v1/contracts?page=1&pageSize=5');
-  return (
-    <>
-      <Box style={ui.dark}>
-        <Text variant="labelSmall" style={ui.white}>
-          KHÔNG GIAN CƯ DÂN
-        </Text>
-        <Text variant="headlineSmall" style={ui.white}>
-          Chào mừng bạn đến BHOME
-        </Text>
-        <Text style={ui.white}>Hợp đồng và hồ sơ thuê của bạn</Text>
-      </Box>
-      <QuickActions
-        items={[
-          { label: 'Hợp đồng', icon: 'file-document-outline', onPress: () => go('contract') },
-          {
-            label: 'Gia hạn / Trả phòng',
-            icon: 'calendar-clock',
-            onPress: () => go('contract-request'),
-          },
-          { label: 'Tài khoản', icon: 'account-outline', onPress: () => go('profile') },
-        ]}
-      />
-      <Heading title="Hợp đồng của bạn" action="Xem tất cả" onPress={() => go('contract')} />
-      <QueryState {...query} />
-      {query.data?.items.map((contract) => (
-        <Box key={contract.id}>
-          <Heading title={`Phòng ${contract.roomNumber}`} detail={contract.locationName} />
-          <Pill tone={contract.status === 'Active' ? 'green' : 'blue'}>
-            {text(contract.status)}
-          </Pill>
-          <Text>
-            {displayContractDate(contract.startDate)} – {displayContractDate(contract.endDate)}
-          </Text>
-          <Text style={ui.money}>{formatContractMoney(contract.monthlyRent)} / tháng</Text>
-          <Action onPress={() => go('contract', { contractId: contract.id })}>
-            Xem hợp đồng & trạng thái ký
-          </Action>
-        </Box>
-      ))}
-      {query.data?.items.length === 0 && (
-        <Box>
-          <Text>Chưa có hợp đồng gắn với tài khoản của bạn.</Text>
-        </Box>
-      )}
-      <Heading title="Tiện ích cư dân" />
-      <Box>
-        <InfoRow
-          icon="receipt-text-outline"
-          title="Hóa đơn & Thanh toán"
-          detail="Theo dõi tình trạng triển khai"
-          onPress={() => go('invoice')}
-        />
-        <InfoRow
-          icon="wrench-outline"
-          title="Báo sự cố"
-          detail="Theo dõi tình trạng triển khai"
-          onPress={() => go('incidents')}
-        />
-        <InfoRow
-          icon="shield-home-outline"
-          title="Cư trú"
-          detail="Đăng ký chính thức bên ngoài qua VNeID"
-          onPress={() => go('residence')}
-        />
-      </Box>
-    </>
-  );
-}
+export { TenantDashboardScreen as TenantHomeScreen } from './TenantDashboardScreen';
 
 export function TaskNotificationsScreen() {
   const { api } = useSession();
@@ -358,7 +156,7 @@ export function TaskNotificationsScreen() {
     `/api/v1/operational-tasks/notifications?page=${page}&pageSize=20`,
   );
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const lock = useRef(false);
   async function read(item: TaskNotification, open: boolean) {
     if (!api || lock.current) return;
