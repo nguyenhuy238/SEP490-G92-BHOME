@@ -1,5 +1,9 @@
 # Dữ liệu và model cho Meter OCR
 
+Cập nhật05/11: stage2 digit model đã export/integrate thật;52 ảnh author test đã
+được pin hash và đo riêng crop/runtime. Chưa có holdout BHOME đủ4 loại hay
+accuracy90%. Xem [completion report](METER_OCR_COMPLETION_REPORT.md).
+
 Baseline trước đợt pretrained ngày 04/11/2026: chưa có dataset đồng hồ được gán bounding box, checkpoint
 detector/classifier hoặc pipeline training trong repository. Các fixture GDI+/OpenCV
 hiện có chỉ kiểm thử bố cục chữ. Không dùng chúng làm bằng chứng detector hoạt động.

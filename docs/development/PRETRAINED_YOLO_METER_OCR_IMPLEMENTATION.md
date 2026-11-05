@@ -1,5 +1,9 @@
 # Pretrained YOLO + PP-OCR — 04/11/2026
 
+Lượt tiếp theo05/11 đã bổ sung stage2 thật và đo52 ảnh: xem
+[completion report](METER_OCR_COMPLETION_REPORT.md). Số liệu trong tài liệu này
+được giữ làm baseline, không tự chuyển thành kết quả final của stage2.
+
 ## Kết quả và phạm vi
 
 Đã tích hợp **inference thật trong .NET**: pretrained YOLOv8n-OBB → chọn một vùng

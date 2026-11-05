@@ -40,6 +40,11 @@ CCCD bằng chữ/nhãn rồi định tuyến, chỉ hỏi loại sau khi chưa 
 classifier thị giác sáu lớp; ảnh công tơ chưa rõ cơ/điện tử vẫn cần chọn loại.
 Chi tiết: [OCR tự động một nút](../development/AUTOMATIC_OCR_2026-11-04.md).
 
+Cập nhật OCR05/11: đã tích hợp stage2 digit ONNX thật cho nước cơ và chặn mâu thuẫn
+với PP; thêm resolver từ nhãn thiết bị rõ ràng. Chưa đạt four-type/90% acceptance:
+final typed3/33 exact,0 false trên52 ảnh public (49fallback). Không suy số liệu này
+thành production readiness. Xem [completion report](../development/METER_OCR_COMPLETION_REPORT.md).
+
 ## Tổng quan các chức năng đã có và còn thiếu
 
 | Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                |

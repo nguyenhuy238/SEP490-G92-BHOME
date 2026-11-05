@@ -154,6 +154,15 @@ not confirm a business reading. The data URI is transient review content and mus
 not be logged/cached/persisted. Missing/uncertain detection uses manual fallback.
 See [verified pretrained capabilities and limits](../development/PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md).
 
+With opt-in `Ocr:MeterDetector:WaterDigitsEnabled`, typed mechanical-water crops
+also run the pinned stage2 digit model. Conflicting recognizers, unclear/overlapping/
+missing digits require manual entry; digits never determine billing precision or
+meter ownership. Automatic input without a supported profile retains its crop and
+asks for type after capture. Explicit high-confidence device labels can resolve
+technology as `text_rules` evidence (classification confidence remains null).
+Units alone do not resolve technology. No business endpoint/schema changes;
+see [actual stage2 accuracy and gaps](../development/METER_OCR_COMPLETION_REPORT.md).
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được
