@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo1";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -19,14 +19,16 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
     private readonly string[] dictionary;
     private readonly IMeterSceneDetector? meterDetector;
     private readonly IImageCategoryClassifier? categoryClassifier;
+    private readonly YoloWaterDigitRecognizer? waterDigits;
 
     public OnnxOcrEngine(OcrOptions options, IImagePreprocessor preprocessor, IMeterSceneDetector? meterDetector = null,
-        IImageCategoryClassifier? categoryClassifier = null)
+        IImageCategoryClassifier? categoryClassifier = null, YoloWaterDigitRecognizer? waterDigits = null)
     {
         this.options = options;
         this.preprocessor = preprocessor;
         this.meterDetector = meterDetector;
         this.categoryClassifier = categoryClassifier;
+        this.waterDigits = waterDigits;
         VerifyFile("detection.onnx", "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1");
         VerifyFile("recognition.onnx", "767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12");
         VerifyFile("charset.txt", "5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448");
@@ -117,15 +119,29 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                 clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 2)
             {
                 Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
-                var alternative = ReadPage(reversed, Detect(reversed, run, token), null, run, token);
+                var alternativeRegions = Detect(reversed, run, token);
+                var alternative = ReadPage(reversed, alternativeRegions, null, run, token);
                 if (OcrCategoryRules.Evaluate(alternative).Status != "unknown")
                 {
                     text = alternative;
+                    source = reversed;
+                    regions = alternativeRegions;
                     warnings.Add("orientation_corrected");
                 }
             }
             token.ThrowIfCancellationRequested();
             var fullText = text with { Warnings = [.. warnings, .. text.Warnings] };
+            var categoryEvidence = OcrCategoryRules.Evaluate(fullText);
+            // A water-domain model must not be applied to an explicitly identified
+            // electricity or digital-water device. Its typed PP path remains available.
+            if (visual is null && categoryEvidence.Kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalWater)
+            {
+                // Reuse the already detected boxes with the now-supported meter
+                // profile (numeric/unit refinement), rather than running six OCR
+                // profiles or feeding an electricity image to a water model.
+                var profiled = ReadPage(source, regions, categoryEvidence.Kind, run, token);
+                return new(profiled with { Warnings = [.. fullText.Warnings, .. profiled.Warnings] });
+            }
             if (visual is null && meterDetector is not null)
             {
                 var scene = meterDetector.Detect(prepared.Image, token);
@@ -147,6 +163,12 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                         var croppedText = ReadPage(reading, Detect(reading, run, token), null, run, token);
                         if (croppedText.Lines.Count == 0)
                             croppedText = new([ReadLine(reading, run, wideLine: true)], Version, []);
+                        var knownWater = rules.Kind == OcrDocumentKind.MechanicalWater ||
+                            rules.Candidates is { Count: > 0 } choices && choices.All(k => k is OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater);
+                        if (knownWater && options.MeterDetector.WaterDigitsEnabled && waterDigits is not null)
+                            croppedText = MeterRecognitionFusion.Combine(croppedText, waterDigits.Recognize(reading, token));
+                        else if (options.MeterDetector.WaterDigitsEnabled)
+                            croppedText = new([], Version, [.. croppedText.Warnings, "recognizer_profile_required"]);
                         croppedText = croppedText with { Warnings = [.. selection.Warnings, .. croppedText.Warnings] };
                         using var preview = new Mat();
                         var previewRatio = Math.Min(1d, 480d / reading.Width);
@@ -199,6 +221,12 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                     if (selection.OrientedCrop is { } oriented) { using var crop = Crop(source, oriented); crop.CopyTo(localized); }
                     else { using var roi = new Mat(source, rect); roi.CopyTo(localized); }
                     source = localized;
+                    if (kind == OcrDocumentKind.MechanicalWater && options.MeterDetector.WaterDigitsEnabled && waterDigits is not null)
+                    {
+                        var cropped = ReadPage(source, Detect(source, run, token), null, run, token);
+                        var fused = MeterRecognitionFusion.Combine(cropped, waterDigits.Recognize(source, token));
+                        return fused with { Warnings = [.. prepared.Warnings, .. localizationWarnings, .. fused.Warnings] };
+                    }
                 }
             }
             token.ThrowIfCancellationRequested();
@@ -346,7 +374,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
         return boxes.OrderBy(b => Math.Round(b.Center.Y / 12)).ThenBy(b => b.Center.X).ToList();
     }
 
-    private static Mat Crop(Mat source, RotatedRect region)
+    internal static Mat Crop(Mat source, RotatedRect region)
     {
         // Order corners TL/TR/BR/BL, correct local text-line perspective/rotation.
         var src = OcrImageGeometry.Corners(region);
@@ -358,6 +386,15 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
         Cv2.WarpPerspective(source, result, transform, new Size(width, height), InterpolationFlags.Linear,
             BorderTypes.Replicate);
         return result;
+    }
+
+    // Offline diagnostics consume only caller-supplied public/synthetic data. No
+    // API endpoint, logging or persistence is attached to this method.
+    internal OcrText InspectMeterCrop(Mat crop, bool direct, CancellationToken token)
+    {
+        using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+        using var registration = token.Register(() => run.Terminate = true);
+        return direct ? new([ReadLine(crop, run, true)], Version, []) : ReadPage(crop, Detect(crop, run, token), null, run, token);
     }
 
     private OcrLine ReadLine(Mat crop, RunOptions run, bool wideLine = false, int tileDepth = 0)

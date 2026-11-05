@@ -36,6 +36,7 @@ public sealed class OcrOptions
 public sealed class YoloMeterOptions
 {
     public bool Enabled { get; set; }
+    public bool WaterDigitsEnabled { get; set; }
     public string ModelDirectory { get; set; } = "";
     public float ConfidenceThreshold { get; set; } = .5f;
     public float NmsThreshold { get; set; } = .7f;

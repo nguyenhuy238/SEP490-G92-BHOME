@@ -160,6 +160,7 @@ public static class DependencyInjection
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
         services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
+        services.AddSingleton<YoloWaterDigitRecognizer>();
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
         services.AddSingleton<LocalOcrService>();

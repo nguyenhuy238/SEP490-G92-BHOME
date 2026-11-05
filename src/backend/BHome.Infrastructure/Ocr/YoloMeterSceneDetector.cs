@@ -90,22 +90,22 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
         { return new(false, []) { Warnings = ["meter_detector_unavailable"] }; }
     }
 
-    public static DenseTensor<float> Letterbox(Mat image, out double ratio, out int left, out int top, CancellationToken token = default)
+    public static DenseTensor<float> Letterbox(Mat image, out double ratio, out int left, out int top, CancellationToken token = default, int size = 640)
     {
         if (image.Empty() || image.Type() != MatType.CV_8UC3) throw new OcrInputException("corrupted_image");
-        ratio = Math.Min(640d / image.Width, 640d / image.Height);
+        ratio = Math.Min((double)size / image.Width, (double)size / image.Height);
         var width = (int)Math.Round(image.Width * ratio); var height = (int)Math.Round(image.Height * ratio);
-        left = (int)Math.Round((640 - width) / 2d - .1); top = (int)Math.Round((640 - height) / 2d - .1);
+        left = (int)Math.Round((size - width) / 2d - .1); top = (int)Math.Round((size - height) / 2d - .1);
         using var resized = new Mat(); Cv2.Resize(image, resized, new(width, height), 0, 0, InterpolationFlags.Linear);
-        using var padded = new Mat(640, 640, MatType.CV_8UC3, Scalar.All(114));
+        using var padded = new Mat(size, size, MatType.CV_8UC3, Scalar.All(114));
         using (var roi = new Mat(padded, new Rect(left, top, width, height))) resized.CopyTo(roi);
-        var tensor = new DenseTensor<float>(new[] { 1, 3, 640, 640 });
+        var tensor = new DenseTensor<float>(new[] { 1, 3, size, size });
         try
         {
-            for (var y = 0; y < 640; y++)
+            for (var y = 0; y < size; y++)
             {
                 token.ThrowIfCancellationRequested();
-                for (var x = 0; x < 640; x++)
+                for (var x = 0; x < size; x++)
                 {
                     var pixel = padded.At<Vec3b>(y, x);
                     for (var c = 0; c < 3; c++) tensor[0, c, y, x] = pixel[2 - c] / 255f;
@@ -118,19 +118,27 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
     }
 
     public sealed record YoloBox(int ClassId, float Confidence, RotatedRect Box);
-    public static IReadOnlyList<YoloBox> Decode(Tensor<float> output, Size imageSize, double scale, int left, int top, float threshold, float nms, CancellationToken token = default)
+    public static IReadOnlyList<YoloBox> Decode(Tensor<float> output, Size imageSize, double scale, int left, int top, float threshold, float nms, CancellationToken token = default, bool digits = false)
     {
-        if (output.Rank != 3 || output.Dimensions[0] != 1 || output.Dimensions[1] != 18 || output.Dimensions[2] != 8400)
+        var classes = digits ? 11 : 13;
+        var anchors = digits ? 3549 : 8400;
+        // Ultralytics scale_boxes reconstructs padding from the unrounded source
+        // dimensions, which can differ by one pixel from the letterbox ROI.
+        // Preserve this convention for native postprocessing parity.
+        var inputSize = digits ? 416 : 640;
+        left = (int)Math.Round((inputSize - imageSize.Width * scale) / 2 - .1);
+        top = (int)Math.Round((inputSize - imageSize.Height * scale) / 2 - .1);
+        if (output.Rank != 3 || output.Dimensions[0] != 1 || output.Dimensions[1] != classes + 5 || output.Dimensions[2] != anchors)
             throw new InvalidDataException("Unsupported YOLO output.");
         var candidates = new List<YoloBox>();
-        for (var i = 0; i < 8400; i++)
+        for (var i = 0; i < anchors; i++)
         {
             if (i % 128 == 0) token.ThrowIfCancellationRequested();
             var cls = 0; var score = output[0, 4, i];
-            for (var c = 1; c < 13; c++) if (output[0, 4 + c, i] > score) { cls = c; score = output[0, 4 + c, i]; }
-            if (cls is not (0 or 1 or 12) || !float.IsFinite(score) || score < threshold || score > 1) continue;
+            for (var c = 1; c < classes; c++) if (output[0, 4 + c, i] > score) { cls = c; score = output[0, 4 + c, i]; }
+            if ((!digits && cls is not (0 or 1 or 12)) || !float.IsFinite(score) || score < threshold || score > 1) continue;
             var x = (output[0, 0, i] - left) / scale; var y = (output[0, 1, i] - top) / scale;
-            var w = output[0, 2, i] / scale; var h = output[0, 3, i] / scale; var angle = output[0, 17, i];
+            var w = output[0, 2, i] / scale; var h = output[0, 3, i] / scale; var angle = output[0, classes + 4, i];
             if (!double.IsFinite(x + y + w + h + angle) || w <= 0 || h <= 0 || w > imageSize.Width * 2 || h > imageSize.Height * 2 ||
                 x < 0 || y < 0 || x >= imageSize.Width || y >= imageSize.Height) continue;
             candidates.Add(new(cls, score, new(new((float)x, (float)y), new((float)w, (float)h), angle * 180f / MathF.PI)));
