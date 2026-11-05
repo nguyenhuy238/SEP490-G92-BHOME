@@ -284,3 +284,47 @@ Test chính: `PropertyApiTests`, `PropertyRulesTests`, `PropertyServiceTests` v�
 fallback theo từng khoản, mức 0, thiếu cấu hình, audit, bảo vệ Resident, migration up/down dữ liệu cũ.
 Kết quả đợt ban đầu ở `docs/development/PROPERTY_MANAGEMENT_VALIDATION.md`.
 Traceability, kiểm thử và giới hạn Phase 1A: [PROPERTY_CONTRACT_PHASE1A.md](../development/PROPERTY_CONTRACT_PHASE1A.md).
+
+## Phase 1B — readiness, history và occupancy
+
+Ba API Phase 1B chỉ đọc, dùng `property.view`: Owner xem toàn hệ thống; Staff chỉ Location còn assignment;
+Tenant không truy cập. Resource ngoài scope trả 404. Không API nào lưu readiness, đổi Room/Contract,
+hay tạo audit mới.
+
+| Method | Route | Hành vi |
+| --- | --- | --- |
+| GET | `/rooms/{id}/readiness?purpose=Holding|MoveIn` | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
+| GET | `/rooms/{id}/history` | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
+| GET | `/locations/{id}/occupancy-summary` | Snapshot Room; room-day lịch sử chỉ khi đủ evidence |
+
+Readiness nhận `effectiveOn` tùy chọn (mặc định ngày Việt Nam). Response có `status` (`Ready`, `Blocked`,
+`Indeterminate`), `blockers`, `warnings`, `unverifiedConditions`. Holding luôn có
+`HOLDING_WORKFLOW_UNSUPPORTED`, vì hiện chưa xác minh được signing/payment/conversion của Holding Contract.
+MoveIn kiểm tra scope/status/kỳ Contract, resident đã verify, conflict/capacity, RENT hiệu lực, hai meter active,
+initial reading đã confirm, handover đã confirm và Asset cần sửa. Work Order/Incident chưa có projection đủ tin cậy
+nên trả `SAFETY_INCIDENT_DATA_UNAVAILABLE`, không tự suy ra an toàn.
+
+```json
+{
+  "roomId": "00000000-0000-0000-0000-000000000001",
+  "purpose": "MoveIn",
+  "status": "Blocked",
+  "isReady": false,
+  "effectiveOn": "2026-11-05",
+  "checkedAt": "2026-11-05T02:00:00Z",
+  "blockers": [{ "code": "ELECTRICITY_BASELINE_MISSING", "message": "The electricity baseline has not been confirmed." }],
+  "warnings": [],
+  "unverifiedConditions": [{ "code": "SAFETY_INCIDENT_DATA_UNAVAILABLE", "message": "The current data model cannot verify unresolved safety incidents for this Room." }]
+}
+```
+
+History nhận `page`, `pageSize`, `from`, `to`, `eventType`; thứ tự ổn định `occurredAt DESC, id ASC`.
+Nguồn giữ riêng `PropertyAudit`, `Contract`, `ContractResident`; không merge SecurityAudit trùng với
+PropertyChange, không trả identity/signature/payment. Date boundary là ngày Việt Nam, hai đầu inclusive.
+`completeness=Partial` nếu thiếu audit Created; API không suy timestamp từ Room.Status hiện tại.
+
+Occupancy summary luôn trả snapshot count Room distinct theo status, Room có resident verified đang ở và Room
+có Active Contract. Với period tối đa 367 ngày, `OccupiedRoomDays` đếm distinct Room/date có ContractResident;
+`RentableRoomDays` loại Location inactive và Room `Unavailable`; `OnHold` vẫn rentable nhưng không tự là occupied.
+Rate = occupied/rentable × 100, làm tròn hai chữ số; mẫu số 0 trả null. Thiếu chuỗi audit Created/status thì
+historical trả `InsufficientData` và số/rate null, không dùng current status để bịa lịch sử.

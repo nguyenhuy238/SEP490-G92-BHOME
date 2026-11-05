@@ -31,6 +31,10 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
     [HttpGet("{id:guid}"), Authorize(Policy = Permissions.Property.View)]
     public Task<LocationDto> Get(Guid id, CancellationToken t) => properties.GetLocationAsync(id, t);
 
+    [HttpGet("{id:guid}/occupancy-summary"), Authorize(Policy = Permissions.Property.View)]
+    public Task<OccupancySummaryDto> OccupancySummary(Guid id, [FromQuery] OccupancySummaryQuery query,
+        CancellationToken t) => properties.OccupancySummaryAsync(id, query, t);
+
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
     public Task<LocationDto> Update(Guid id, LocationWrite input, CancellationToken t) => properties.SaveLocationAsync(id, input, t);
 

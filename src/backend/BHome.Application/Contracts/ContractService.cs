@@ -16,7 +16,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IContractSigningProvider signing, IObjectStorage storage, IContractFileStore files, IContractImageValidator images,
     IContractSettlementLedger ledger, IContractHoldingLedger holdings, TimeProvider clock,
     IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null,
-    IContractHandoverRepository? handoverRepository = null)
+    IContractHandoverRepository? handoverRepository = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -274,6 +274,12 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
     }
     public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t) => await Readiness(await Load(id, [Roles.Owner, Roles.Tenant], t), t);
+    public async Task<IReadOnlyList<string>> BlockersAsync(Guid contractId, Guid roomId, CancellationToken token)
+    {
+        var contract = await Load(contractId, [Roles.Owner, Roles.Staff], token);
+        if (contract.RoomId != roomId) return ["contract_room_mismatch"];
+        return (await Readiness(contract, token)).Blockers;
+    }
     public Task<ContractView> ActivateAsync(Guid id, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
         if (await Replay(key, "activate", id, t) is not null) return View(c);

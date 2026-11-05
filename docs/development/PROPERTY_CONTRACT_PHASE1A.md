@@ -145,6 +145,7 @@ Các rule/unit/API regression hiện pass, nhưng yêu cầu Phase 1A cấm kh�
 
 ## H. Phase 1B Readiness
 
-Chưa an toàn để bắt đầu implementation Phase 1B. Có thể tiếp tục review/thiết kế traceability cho Room Readiness và
-Occupancy History, nhưng phải chạy pass 10 `PropertyContractDockerTests` trên PostgreSQL 16 trước khi mở rộng write paths.
-Sau đó cần chạy full Docker suite, xử lý mọi failure dựa trên root cause, và cập nhật quyết định acceptance.
+**Cập nhật quyết định 05/11/2026:** chủ dự án cho phép tiến hành Phase 1B chỉ-đọc mà không chờ Docker.
+Không cho phép mở rộng write path Room/Contract và không được coi quyết định này là Phase 1A ACCEPTED.
+10 `PropertyContractDockerTests` vẫn BLOCKED BY ENVIRONMENT và phải pass trước khi kết luận PostgreSQL
+concurrency safety. Phase 1B và giới hạn verification được ghi ở `ROOM_READINESS_PHASE1B.md`.
