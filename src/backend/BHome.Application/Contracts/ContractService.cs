@@ -16,7 +16,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IContractSigningProvider signing, IObjectStorage storage, IContractFileStore files, IContractImageValidator images,
     IContractSettlementLedger ledger, IContractHoldingLedger holdings, TimeProvider clock,
     IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null,
-    IContractHandoverRepository? handoverRepository = null)
+    IContractHandoverRepository? handoverRepository = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -62,6 +62,28 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private void Remember(Guid key, string operation, object input, Guid result)
         => repository.Add(new ContractOperation { ActorId = Actor, Key = key, Operation = operation, Fingerprint = Hash(input), ResultId = result, CreatedAt = clock.GetUtcNow() });
     private void Audit(string action, Guid id) => repository.Audit(Actor, action, id, clock.GetUtcNow());
+    private void ChangeRoomStatus(Contract contract, RoomStatus requested, RoomTransitionSource source, bool otherActive = false)
+    {
+        var room = contract.Room;
+        if (!PropertyRules.CanChangeRoomStatus(room.Status, requested, source, hasOtherActiveContracts: otherActive))
+            throw ContractException.Conflict("room_status_controlled");
+        if (room.Status == requested) return;
+        var before = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = contract.Id });
+        room.Status = requested;
+        room.Version++;
+        repository.Add(new PropertyChange
+        {
+            ActorId = Actor,
+            LocationId = room.LocationId,
+            TargetId = room.Id,
+            TargetType = nameof(Room),
+            Action = source.ToString(),
+            Reason = source.ToString(),
+            Before = before,
+            After = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = contract.Id }),
+            OccurredAt = clock.GetUtcNow()
+        });
+    }
     private async Task<T> Mutate<T>(Guid id, string[] roles, Func<Contract, Task<T>> work, CancellationToken t)
     {
         var before = await Load(id, roles, t);
@@ -226,7 +248,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.IsDevelopmentDemo && !DemoEnabled) blockers.Add("development_demo_disabled");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("contract_not_pending_activation");
         if (!c.Room.Location.IsActive) blockers.Add("location_not_active");
-        if (c.PreviousContractId is null && c.Room.Status is not (RoomStatus.Available or RoomStatus.Occupied)) blockers.Add("room_not_available");
+        if (!PropertyRules.CanChangeRoomStatus(c.Room.Status, RoomStatus.Occupied, RoomTransitionSource.ContractActivation) ||
+            c.Room.RoomType is { IsActive: false }) blockers.Add("room_not_available");
         if (!Intact(c)) blockers.Add("signed_terms_changed");
         if (c.StartDate > Today || c.EndDate < Today) blockers.Add("contract_not_in_effective_period");
         if (c.PreviousContractId is { } parentId)
@@ -251,6 +274,12 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
     }
     public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t) => await Readiness(await Load(id, [Roles.Owner, Roles.Tenant], t), t);
+    public async Task<IReadOnlyList<string>> BlockersAsync(Guid contractId, Guid roomId, CancellationToken token)
+    {
+        var contract = await Load(contractId, [Roles.Owner, Roles.Staff], token);
+        if (contract.RoomId != roomId) return ["contract_room_mismatch"];
+        return (await Readiness(contract, token)).Blockers;
+    }
     public Task<ContractView> ActivateAsync(Guid id, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
         if (await Replay(key, "activate", id, t) is not null) return View(c);
@@ -270,7 +299,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             // Release the filtered active-room index before updating the new version, within this same transaction.
             await repository.FlushAsync(t);
         }
-        c.Status = ContractStatus.Active; c.ActivatedByUserId = Actor; c.ActivatedAt = clock.GetUtcNow(); c.Room.Status = RoomStatus.Occupied;
+        ChangeRoomStatus(c, RoomStatus.Occupied, RoomTransitionSource.ContractActivation);
+        c.Status = ContractStatus.Active; c.ActivatedByUserId = Actor; c.ActivatedAt = clock.GetUtcNow();
         Audit("ContractActivated", id); Remember(key, "activate", id, id); return View(c);
     }, t);
 
@@ -521,7 +551,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (final is not { AllObligationsResolved: true, DepositResolved: true, TransfersVerified: true } || string.IsNullOrWhiteSpace(final.DecisionReference) || final.DecisionReference != m.SettlementLedgerReference)
             throw ContractException.Conflict("settlement_unresolved");
         c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate;
-        c.Room.Status = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t) ? RoomStatus.Occupied : c.Room.Status == RoomStatus.Occupied ? RoomStatus.Available : c.Room.Status;
+        var otherActive = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t);
+        ChangeRoomStatus(c, otherActive ? RoomStatus.Occupied : c.Room.Status == RoomStatus.Occupied ? RoomStatus.Available : c.Room.Status,
+            RoomTransitionSource.ContractTermination, otherActive);
         m.Status = MoveOutStatus.Completed; m.Version++; MoveOutEvent(m, "Completed");
         foreach (var r in c.Residents) r.ResidenceTo = x.ActualEndDate;
         Audit("ContractTerminationCompleted", id); Remember(key, "complete", new { id, x }, id); return View(c);
