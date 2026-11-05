@@ -77,6 +77,23 @@ it.each(portalRoutes)(
   15000,
 );
 
+it('renders the investment child route inside a Location Workspace', async () => {
+  render(
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        <PortalProvider>
+          <MemoryRouter initialEntries={['/locations/loc-1/investment']}>
+            <AppRouter />
+          </MemoryRouter>
+        </PortalProvider>
+      </AuthProvider>
+    </ThemeProvider>,
+  );
+  expect(
+    await screen.findByRole('heading', { name: 'Đầu tư ban đầu & Chi phí' }, { timeout: 10000 }),
+  ).toBeInTheDocument();
+}, 15000);
+
 it('keeps property functions inside the selected Location Workspace', async () => {
   render(
     <ThemeProvider theme={theme}>

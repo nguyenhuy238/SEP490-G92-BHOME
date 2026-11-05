@@ -35,7 +35,12 @@ import { compactMoney } from '../../../utils/format';
 import { financeSummary } from '../../../utils/finance';
 import type { Scenario } from '../../../types/portal';
 import { baselineScenario, projectScenario } from '../../../utils/scenario';
+import { isMockMode } from '../../../services/config';
+import { FinancialScenariosApiPage } from '../FinancialScenariosApiPage';
 export default function WhatIfPage() {
+  return isMockMode ? <DemoWhatIfPage /> : <FinancialScenariosApiPage />;
+}
+function DemoWhatIfPage() {
   const query = usePortalData(),
     portal = usePortal(),
     action = usePortalAction();
