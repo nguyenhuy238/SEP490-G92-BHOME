@@ -61,6 +61,7 @@ Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường 
 - `5e2c68f` — `fix(contract): [BE-15] guard configuration loading and verify saved settings`: 3 file (panel, component test, báo cáo này); 3/3 tests, build/lint đạt; BE-15 vẫn PARTIAL; handoff Vũ Xuân Trường.
 - `ff2f315` — `feat(finance): [BE-31] persist Owner expenses with real API interface`: 13 file liệt kê trong slice Expenses; 3/3 PostgreSQL + 3/3 UI, build/lint đạt; PARTIAL, handoff Vũ Xuân Trường.
 - `8196b89` — `feat(finance): [BE-32][BE-33] report actual revenue costs and capital recovery`: 13 file liệt kê trong slice report; 5 formula tests, report/ledger PostgreSQL và 2 UI tests đạt; build/lint đạt, PARTIAL.
+- `dd087f3` — `feat(finance): [BE-34] save and compare isolated financial scenarios`: 15 file trong slice What-if và compatibility DI; 25/25 Finance/ApiFoundation, 2 formula + 2 UI tests, build/lint đạt; PARTIAL.
 
 ## Slice BE-31 Expenses API và Owner Web
 
@@ -100,3 +101,13 @@ Router test từng timeout đã chạy riêng với Node22 và giữ nguyên tim
 ## Quyết định chính sách theo ủy quyền người dùng
 
 05/11/2026: người dùng yêu cầu “nếu chưa có hãy triển khai theo hướng của bạn và báo cáo cho tôi”. Đây là ủy quyền chọn hướng triển khai trong phiên, thay việc phải chờ nội dung OQ cũ. Hướng thực hiện: thiếu tiền được ghi nhận từng phần sau Owner đối soát; tiền thừa chỉ phân bổ tối đa dư nợ, phần còn lại giữ chờ Owner, không tự doanh thu/refund/credit. Khấu trừ/hoàn cọc cần quyết định và bằng chứng Owner, không tự phí phạt/hạn hoàn. Mỗi phần phải có validation, snapshot, concurrency/idempotency và test trước khi đánh dấu triển khai; ghi chú này chưa phải bằng chứng tất cả các nhánh đã được viết.
+
+## Slice BE-22/BE-X07 thanh toán thiếu và tiền thừa
+
+Đã triển khai chính sách min(receipt,dư nợ) trên service và Compact writer, giữ transaction/claim/dedupe/actor hiện hữu. Bổ sung số đã/chưa phân bổ, reason đúng khi replay/list/GET, PendingReview cho tiền thừa, giao diện giải thích trước Owner xác nhận và hiện số dư. Không tự refund, không ghi thừa vào invoice, không sửa chứng từ Final, không thay bảng. Backend tiếp tục trả Unpaid nếu còn nợ, Paid khi hết nợ; Mobile nhận paid/outstanding như hiện hữu, shared labels bổ sung tiếng Việt.
+
+8/8 domain PaymentRules tests đạt; 4/4 PostgreSQL tests đạt gồm 2 Compact24 under/over mới và 2 legacy exact-policy regression. Compact test kiểm partial debt, paid/history sau transfer tiếp theo, cap dư nợ, tiền thừa chưa phân bổ và replay đúng reason. 6/6 Owner payment UI tests đạt, build/lint đạt. Full regression đang được chạy lại; lượt trước phát hiện Compact writer còn exact guard và legacy test schema exact, đã sửa writer và tách capability rõ ràng, không sửa historical migration để che lỗi. Full run cũ đã dừng; chưa báo PASS tổng.
+
+Changed files: PaymentRecords/PaymentRulesTests, PaymentContracts/PaymentService, PaymentRepository, Compact24EventsAndLedger, Compact24WorkflowRegressionTests/PaymentLedgerTests, shared payments.ts, OwnerInvoicePaymentPanel/Payments.test.tsx, PAYMENTS.md và báo cáo. Handoff Vũ Xuân Trường `INITIAL_API_UI_READY`; Bùi Bảo Long kiểm tra màn hình số tiền đã trả/còn nợ trên thiết bị. BE-X07 vẫn PARTIAL vì giải ngân refund/credit và quyết toán cọc chưa có đầy đủ UI/ledger.
+
+Mobile typecheck và lint hiện tại đều đạt với Node22; không thay Mobile source trong các slice này.

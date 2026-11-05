@@ -153,6 +153,26 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         var view = await As(w.Tenants[0], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default));
         Assert.Equal("Unpaid", view.PaymentStatus); Assert.Equal(100000, view.OutstandingAmount); Assert.True(view.PendingReview);
     }
+    // Executed by Compact24PaymentRegressionTests; legacy fixtures keep the original policy.
+    internal async Task OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(decimal amount, string reason)
+    {
+        var w = await Setup(); var transfer = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, amount), Guid.NewGuid(), default));
+        Assert.Equal(reason, (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, null, true), Guid.NewGuid(), default))).Reason);
+        var view = await As(w.Tenants[0], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default));
+        Assert.Equal(amount<100000?"Unpaid":"Paid", view.PaymentStatus);
+        Assert.Equal(Math.Max(0,100000-amount),view.OutstandingAmount);
+        Assert.Equal(Math.Min(100000,amount),view.PaidAmount);Assert.Equal(amount>100000,view.PendingReview);
+        var receipt=await As(w.Owner,Roles.Owner,s=>s.TransferAsync(transfer.Id,default));
+        Assert.Equal(Math.Min(100000,amount),receipt.AllocatedAmount);Assert.Equal(Math.Max(0,amount-100000),receipt.UnallocatedAmount);
+        Assert.Equal(reason,(await As(w.Owner,Roles.Owner,s=>s.AllocateAsync(transfer.Id,new(w.Invoice,null,true),Guid.NewGuid(),default))).Reason);
+        if(amount<100000)
+        {
+            var rest=await As(w.Owner,Roles.Owner,s=>s.RegisterAsync(Input(w,100000-amount),Guid.NewGuid(),default));
+            Assert.Equal("Allocated",(await As(w.Owner,Roles.Owner,s=>s.AllocateAsync(rest.Id,new(w.Invoice,null,true),Guid.NewGuid(),default))).Status);
+            var paid=await As(w.Tenants[0],Roles.Tenant,s=>s.InvoicePaymentAsync(w.Invoice,default));
+            Assert.Equal("Paid",paid.PaymentStatus);Assert.Equal(100000,paid.PaidAmount);Assert.Equal(2,paid.History.Count);
+        }
+    }
     [Fact]
     public async Task DepositReferenceCannotCreditInvoiceAndPaidInvoiceReferenceCannotCreditDeposit()
     {

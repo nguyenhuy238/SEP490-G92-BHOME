@@ -132,7 +132,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (allocated is not null)
             {
                 if (allocated.InvoiceId != x.InvoiceId || allocated.PaidByUserId != x.PaidByUserId) throw new PaymentException(409, "bank_transaction_already_allocated");
-                Remember(key, "allocate", new { transferId, x }, allocated.Id); return new PaymentReviewResult("Allocated", "verified_full_payment", transferId, x.InvoiceId);
+                Remember(key, "allocate", new { transferId, x }, allocated.Id); return await Outcome(transferId, t);
             }
             var invoice = await Invoice(x.InvoiceId, t);
             if (invoice.Status != InvoiceStatus.Final) throw new PaymentException(409, "final_invoice_required");
@@ -142,7 +142,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 throw new PaymentException(400, "payer_not_invoice_viewer");
             var outstanding = (await repository.FinancialsAsync(invoice.Id, t)).OutstandingAmount;
             var reason = PaymentRules.ReviewReason(transfer.Amount, outstanding, transfer.TransferDescription,
-                PaymentRules.InvoiceReference(invoice.Id), await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t));
+                PaymentRules.InvoiceReference(invoice.Id), await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t), repository.AmountMismatchSupported);
             var review = new PaymentReconciliation
             {
                 TransferId = transfer.Id,
@@ -150,7 +150,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 ActorId = Actor,
                 OccurredAt = Now,
                 Decision = reason is null ? "Allocated" : "PendingReview",
-                Reason = reason ?? "verified_full_payment"
+                Reason = reason ?? (transfer.Amount < outstanding ? "verified_partial_payment" : transfer.Amount > outstanding ? "verified_excess_payment_pending_review" : "verified_full_payment")
             };
             repository.Add(review);
             if (reason is null)
@@ -159,7 +159,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 {
                     TransferId = transfer.Id,
                     InvoiceId = invoice.Id,
-                    Amount = transfer.Amount,
+                    Amount = Math.Min(transfer.Amount, outstanding),
                     PaidByUserId = x.PaidByUserId,
                     VerifiedByUserId = Actor,
                     AllocatedAt = Now
@@ -176,8 +176,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     private async Task<PaymentReviewResult> Outcome(Guid transferId, CancellationToken t)
     {
         var allocation = await repository.AllocationAsync(transferId, t);
-        if (allocation is not null) return new("Allocated", "verified_full_payment", transferId, allocation.InvoiceId);
         var review = await repository.LatestReviewAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+        if (allocation is not null) return new("Allocated", review.Reason, transferId, allocation.InvoiceId);
         return new(review.Decision, review.Reason, transferId, review.InvoiceId);
     }
     public async Task<TransferView> TransferAsync(Guid id, CancellationToken t)
@@ -222,7 +222,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         new(transfer.Id, transfer.ProviderIdentity, transfer.BankReference, transfer.Amount, transfer.Currency, transfer.OccurredAt,
             transfer.TransferDescription, transfer.StatementReference, transfer.VerificationReason, transfer.VerifiedByUserId, transfer.VerifiedAt,
             transfer.ProposedInvoiceId, allocation is not null ? "Allocated" : review?.Decision ?? "PendingReview",
-            allocation is not null ? "verified_full_payment" : review?.Reason ?? "owner_allocation_confirmation_required", allocation?.InvoiceId, transfer.IsDevelopmentDemo);
+            review?.Reason ?? "owner_allocation_confirmation_required", allocation?.InvoiceId, transfer.IsDevelopmentDemo,
+            allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0));
     public async Task<InvoicePaymentView> InvoicePaymentAsync(Guid id, CancellationToken t)
     {
         var invoice = await Invoice(id, t);

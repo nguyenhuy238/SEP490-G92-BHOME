@@ -12,6 +12,9 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRepository
 {
+    // Offline legacy import regression retains its historical exact-payment constraints.
+    // Production composition always supplies Compact24; no schema detection or fallback.
+    public bool AmountMismatchSupported => db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext;
     public async Task<T> TransactionAsync<T>(Guid? transferId, Guid? invoiceId, Func<Task<T>> work, CancellationToken t)
     {
         db.ChangeTracker.Clear();
@@ -54,9 +57,10 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
     public Task<BHome.Application.Billing.InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t) => db.FinancialsAsync(invoiceId, t);
     public Task<bool> ReferenceClaimedAsync(string reference, CancellationToken t) => db.Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == reference, t);
     public Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t) => db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == payerId, t);
-    public Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t) => db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId == invoiceId && r.Decision == "PendingReview" &&
+    public Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t) => db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId == invoiceId &&
         !db.Set<PaymentReconciliation>().Any(newer => newer.TransferId == r.TransferId && newer.Sequence > r.Sequence) &&
-        !db.Set<PaymentAllocation>().Any(a => a.TransferId == r.TransferId), t);
+        (r.Decision == "PendingReview" && !db.Set<PaymentAllocation>().Any(a => a.TransferId == r.TransferId) ||
+         r.Decision == "Allocated" && r.Reason == "verified_excess_payment_pending_review"), t);
     public Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t) => db.Set<PaymentCommand>().AsNoTracking().SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key && c.Operation == operation, t);
     public Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId, CancellationToken t) => db.Set<ReceivingBankAccount>().AsNoTracking().Where(a => a.LocationId == locationId).OrderByDescending(a => a.Version).FirstOrDefaultAsync(t);
     public Task<bool> ActiveLocationAsync(Guid locationId, CancellationToken t) => db.Locations.AnyAsync(l => l.Id == locationId && l.IsActive, t);
@@ -75,8 +79,10 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
             .Select(x => new TransferView(x.Id, x.ProviderIdentity, x.BankReference, x.Amount, x.Currency, x.OccurredAt, x.TransferDescription,
                 x.StatementReference, x.VerificationReason, x.VerifiedByUserId, x.VerifiedAt, x.ProposedInvoiceId,
                 db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) ? "Allocated" : db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Decision).FirstOrDefault() ?? "PendingReview",
-                db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) ? "verified_full_payment" : db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Reason).FirstOrDefault() ?? "owner_allocation_confirmation_required",
-                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo));
+                db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Reason).FirstOrDefault() ?? "owner_allocation_confirmation_required",
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0,
+                x.Amount - (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0)));
         return new(await views.ToArrayAsync(t),
             query.Page, query.PageSize, await source.CountAsync(t));
     }
