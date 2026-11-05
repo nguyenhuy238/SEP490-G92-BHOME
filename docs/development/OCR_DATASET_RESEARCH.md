@@ -62,3 +62,30 @@ RTX 3070 Laptop 8 GB, khoảng 6.7 GB VRAM trống lúc kiểm tra; RAM khoảng
 Đã cài riêng `.tools/yolo-cuda-packages`: torch 2.6.0+cu118 và torchvision
 0.21.0+cu118 từ index chính thức, không thay package runtime. CUDA tensor/matmul
 đã chạy thật trên GPU. Lựa chọn wheel theo [PyTorch official previous versions](https://docs.pytorch.org/get-started/previous-versions/).
+
+## Kết quả sau khi duyệt và huấn luyện
+
+Catalog ban đầu176 asset/tải152 được bổ sung3 ảnh có metadata license riêng:
+[Digital Water Meter](https://commons.wikimedia.org/wiki/File:Digital_Water_Meter.jpg),
+[Digitaler Wasserzaehler](https://commons.wikimedia.org/wiki/File:Digitaler_Wasserzaehler.jpg),
+[Itron Water Meter](https://commons.wikimedia.org/wiki/File:Itron_Water_Meter.jpg).
+Tổng cuối179 candidates,155 tải được,24 lỗi. Xem ảnh cho thấy ảnh đầu và ảnh
+Itron là mechanical, chỉ ảnh Kamstrup flowIQ là water digital; tên file không
+được dùng thay kiểm tra công nghệ hiển thị.
+
+58 ảnh body/negative được gán nhãn và xem lại overlay:21 electricity mechanical,
+13 electricity digital,15 water mechanical,1 water digital,8 negative. Các ảnh
+còn lại chưa đủ nhãn/phù hợp mục tiêu hoặc có nhiều meter nên không đưa vào
+supervised data. Không tự xếp các ảnh chưa duyệt là negative. Nhãn đầy đủ số
+đọc/window/precision của58 ảnh chưa được lập; detection-only mode ghi rõ thiếu.
+
+Mendeley169 ảnh có168 COCO entries;5 exact duplicates và1 ảnh thiếu nhãn được
+loại, còn163 train. Toàn bộ nguồn giữ cùng train; validation/test LCD đến từ
+Commons đã duyệt theo author group. Phát hiện pHash chỉ là candidate audit,
+không chứng minh không còn leakage. Nhãn/quality hiện là agent-reviewed,
+chưa đủ hai người để nghiệm thu theo quy tắc dataset của dự án.
+
+[Báo cáo huấn luyện](OCR_MODEL_TRAINING_REPORT.md) ghi các lượt fine-tune thật,
+model hashes và false proposals. [Báo cáo cuối](OCR_FINAL_COMPLETION_REPORT.md)
+ghi các gate đã qua/chưa đạt. Không chấp nhận model mới chỉ vì nguồn có license
+hoặc export/parity chạy được.

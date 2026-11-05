@@ -1,5 +1,12 @@
 # Gán nhãn và kiểm tra dataset công tơ
 
+Dataset công khai đã duyệt và workflow fine-tune offline mới:
+[TRAINING.md](TRAINING.md). `annotationLevel: "meter"` cho phép chỉ có
+`meterPolygon`, còn `windowPolygon` và `reading` phải là `null`; không được
+bịa nhãn chỉ số để dùng ảnh cho detection. Nhãn đầy đủ hiện có vẫn giữ cách
+kiểm tra cũ. Các nhóm tùy chọn `sourceGroup`, `captureGroup`,
+`nearDuplicateGroup` cũng bị chặn nếu xuất hiện ở nhiều split.
+
 Mẫu [manifest](manifest.example.json) chỉ minh họa cấu trúc; file ảnh, hash, reading,
 permission reference và polygon phải được thay bằng dữ liệu đã kiểm tra. Mẫu chưa
 phải dataset nghiệm thu hoặc bằng chứng có quyền sử dụng ảnh.

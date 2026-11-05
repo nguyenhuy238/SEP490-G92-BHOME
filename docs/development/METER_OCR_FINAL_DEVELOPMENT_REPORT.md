@@ -1,5 +1,9 @@
 # OCR incremental development — 05/11/2026
 
+> Báo cáo tiếp theo cho master task nghiên cứu dataset và fine-tune GPU:
+> [OCR_FINAL_COMPLETION_REPORT.md](OCR_FINAL_COMPLETION_REPORT.md).
+> Kết quả trong tài liệu này là baseline lịch sử, không phải kết quả model mới.
+
 ## A. Ban đầu và quy tắc làm việc
 
 Branch đã xác minh: `member/QHuy`; HEAD ban đầu `1ad6cea`. Có35 đường dẫn thay đổi
