@@ -1,0 +1,132 @@
+{
+  "validation": {
+    "images": 100,
+    "fullyLabeled": 69,
+    "outcomes": {
+      "missingOrUncertainStage2Rejected": 14,
+      "correctStage2Rejected": 45,
+      "incorrectStage2Rejected": 5,
+      "unreadableAnnotationRejected": 31,
+      "correctProposal": 5
+    },
+    "sceneRejections": {
+      "reading_region_uncertain": 3,
+      "unclear_digit": 19,
+      "meter_region_invalid": 2,
+      "meter_detection_uncertain": 1
+    },
+    "stage2Rejections": {
+      "digit_low_confidence": 5,
+      "unclear_digit": 34,
+      "digit_overlap_conflict": 2,
+      "digit_count_uncertain": 1
+    }
+  },
+  "testBefore": {
+    "images": 52,
+    "fullyLabeled": 33,
+    "outcomes": {
+      "correctStage2Rejected": 20,
+      "unreadableAnnotationRejected": 19,
+      "missingOrUncertainStage2Rejected": 7,
+      "correctProposal": 3,
+      "incorrectStage2Rejected": 3
+    },
+    "sceneRejections": {
+      "unclear_digit": 15,
+      "reading_region_not_detected": 1
+    },
+    "stage2Rejections": {
+      "unclear_digit": 22,
+      "no_unique_window": 1,
+      "digit_low_confidence": 1
+    }
+  },
+  "validationGrid": [
+    {
+      "threshold": 0.5,
+      "proposals": 8,
+      "knownExact": 8,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.6,
+      "proposals": 7,
+      "knownExact": 7,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.7,
+      "proposals": 7,
+      "knownExact": 7,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.8,
+      "proposals": 6,
+      "knownExact": 6,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.9,
+      "proposals": 6,
+      "knownExact": 6,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.95,
+      "proposals": 0,
+      "knownExact": 0,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.97,
+      "proposals": 0,
+      "knownExact": 0,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    },
+    {
+      "threshold": 0.99,
+      "proposals": 0,
+      "knownExact": 0,
+      "knownFalse": 0,
+      "unknownGroundTruth": 0
+    }
+  ],
+  "excludedValidationExactDuplicates": ["wm_clean_000386.jpg"],
+  "frozenCandidate": {
+    "threshold": 0.5,
+    "proposals": 8,
+    "knownExact": 8,
+    "knownFalse": 0,
+    "unknownGroundTruth": 0
+  },
+  "testCandidate": {
+    "proposals": 7,
+    "knownExact": 7,
+    "knownFalse": 0,
+    "unknownGroundTruth": 0
+  },
+  "policy": "For a single unparseable PP crop line, keep all stage1/stage2/blur/type guards and return a stage2-only review proposal. Valid numeric disagreements remain rejected.",
+  "independentAcceptance": false,
+  "trainingPerformed": false,
+  "limitations": [
+    "Author val/test split, physical-meter/site grouping unknown.",
+    "Original u annotations and labels kept unchanged.",
+    "Zero observed validation/test false proposals is not a production safety guarantee.",
+    "Typed-water study does not solve missing automatic classification metadata."
+  ],
+  "automaticClassificationBefore": {
+    "images": 52,
+    "unknownCategory": 52,
+    "profileRequiredWarning": 31,
+    "note": "Orthogonal to typed failure outcomes; missing automatic metadata is not a wrong digit recognition."
+  }
+}

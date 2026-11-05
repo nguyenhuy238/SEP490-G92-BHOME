@@ -15,6 +15,8 @@ if (args.Length == 4 && args[0] == "--stage2-parity")
     return Stage2Parity.Run(args[1], args[2], args[3]);
 if (args.Length == 5 && args[0] == "--digit-crop-probe")
     return DigitCropProbe.Run(args[1], args[2], args[3], args[4]);
+if (args.Length == 5 && args[0] == "--water-decision-audit")
+    return await WaterMeterDecisionAudit.RunAsync(args[1], args[2], args[3], args[4]);
 if (args.Length == 6 && args[0] == "--pretrained-yolo-challenges")
     return await PretrainedYoloChallenges.RunAsync(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 4 && args[0] == "--auto-evaluate")

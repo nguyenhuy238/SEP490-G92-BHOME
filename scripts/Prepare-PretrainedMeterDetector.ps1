@@ -3,6 +3,7 @@ param(
     [switch]$IncludeCandidateB,
     [switch]$IncludeStage2,
     [switch]$IncludeFullPublicTest,
+    [switch]$IncludeValidation,
     [switch]$EnableDevelopment
 )
 $ErrorActionPreference = 'Stop'
@@ -35,6 +36,15 @@ if ($IncludeFullPublicTest) {
     foreach ($entry in $testManifest.PSObject.Properties) {
         $folder = if ($entry.Name.EndsWith('.jpg')) { 'images' } else { 'labels' }
         Get-PinnedFile "$source/$folder/test/$($entry.Name)" (Join-Path $testImages $entry.Name) ([string]$entry.Value)
+    }
+}
+if ($IncludeValidation) {
+    $validationImages = Join-Path $repo '.tools/meter-detection-validation'
+    New-Item -ItemType Directory -Force -Path $validationImages | Out-Null
+    $validationManifest = Get-Content -LiteralPath (Join-Path $repo 'tools/BHome.OcrSmoke/model_tools/evaluation-validation-manifest.json') -Raw | ConvertFrom-Json
+    foreach ($entry in $validationManifest.PSObject.Properties) {
+        $folder = if ($entry.Name.EndsWith('.jpg')) { 'images' } else { 'labels' }
+        Get-PinnedFile "$source/$folder/val/$($entry.Name)" (Join-Path $validationImages $entry.Name) ([string]$entry.Value)
     }
 }
 $exporter = Join-Path $repo 'tools/BHome.OcrSmoke/model_tools/inspect_export_pretrained.py'

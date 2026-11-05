@@ -39,3 +39,15 @@ See the [05/11 completion report](../../../docs/development/METER_OCR_COMPLETION
 for stage2 A/B/C comparisons and final full-pipeline metrics. Stage2 improves raw
 crop reading but conservative conflict rejection leaves high fallback; acceptance
 is not met. It is not a universal electricity/LCD reader or four-type classifier.
+
+Incremental studies: `--water-decision-audit` records public scene/digit/PP outcomes
+and model-derived wheel-cell crops in an ignored output folder. Use
+`evaluate_water_decisions.py` on separate author validation/test audit JSON;
+exact-byte overlap fails unless explicitly reviewed/excluded. `-IncludeValidation`
+provisions the pinned101-image author validation split, not an independent BHOME set.
+
+`evaluate_wheel_reader.py` is an offline probe of
+`oleost/visionstate-wheel-reader@563f365a5b377c10c7248517ef2576ac5cee3cbf` v1 ONNX
+(Apache-2.0; included `VisionState-LICENSE.txt`). Its hash is verified before ORT
+inference; it is not enabled in API inference. Its cell geometry and confidence
+are diagnostic and are not author benchmark or calibrated BHOME probability.
