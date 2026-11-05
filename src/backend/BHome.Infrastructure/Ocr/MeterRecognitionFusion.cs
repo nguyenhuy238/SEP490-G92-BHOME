@@ -11,11 +11,16 @@ internal static class MeterRecognitionFusion
             return pp with { Warnings = [.. pp.Warnings, .. digits.Warnings] };
         if (digits.Digits is null || digits.Confidence is not { } score || !float.IsFinite(score) || score is < .5f or > 1)
             return new([], pp.EngineVersion, [.. pp.Warnings, .. digits.Warnings, "reading_not_recognized"]);
-        if (pp.Warnings.Any(w => w is "conflicting_reading" or "orientation_uncertain" or "text_region_limit"))
+        if (pp.Warnings.Any(w => w is "conflicting_reading" or "orientation_uncertain" or "text_region_limit" or "blur_or_low_detail"))
             return new([], pp.EngineVersion, [.. pp.Warnings, "recognizer_conflict"]);
         var proposal = OcrFieldParser.Parse(pp, OcrDocumentKind.MechanicalWater);
         var value = proposal.ProposedFields.GetValueOrDefault("reading");
-        if (proposal.Warnings.Any(w => w is "multiple_reading_regions" or "ambiguous_reading"))
+        // A single malformed CTC line is not a competing numeric reading. On the
+        // author validation set, the already-guarded digit model can supply a
+        // review-only proposal here. Multiple regions, type contradictions and
+        // valid numeric disagreements remain hard rejections.
+        if (proposal.Warnings.Any(w => w is "multiple_reading_regions" or "meter_type_mismatch") ||
+            (proposal.Warnings.Contains("ambiguous_reading") && pp.Lines.Count != 1))
             return new([], pp.EngineVersion, [.. proposal.Warnings, "recognizer_conflict"]);
         // Digit checkpoint has no decimal class. Compare characters without
         // discarding leading zeros; preserve an observed PP separator on agreement.

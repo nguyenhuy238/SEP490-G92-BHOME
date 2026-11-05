@@ -224,8 +224,9 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                     if (kind == OcrDocumentKind.MechanicalWater && options.MeterDetector.WaterDigitsEnabled && waterDigits is not null)
                     {
                         var cropped = ReadPage(source, Detect(source, run, token), null, run, token);
+                        cropped = cropped with { Warnings = [.. prepared.Warnings, .. localizationWarnings, .. cropped.Warnings] };
                         var fused = MeterRecognitionFusion.Combine(cropped, waterDigits.Recognize(source, token));
-                        return fused with { Warnings = [.. prepared.Warnings, .. localizationWarnings, .. fused.Warnings] };
+                        return fused;
                     }
                 }
             }

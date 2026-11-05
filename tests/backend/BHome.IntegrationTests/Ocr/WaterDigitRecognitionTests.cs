@@ -34,6 +34,18 @@ public sealed class WaterDigitRecognitionTests
     }
     private static OcrText Text(params string[] lines) => new(lines.Select(t => new OcrLine(t, .9f)).ToArray(), "synthetic", []);
     [Fact]
+    public void SingleUnparseablePpLineCanUseCompleteDigitsButMultipleRegionsAndWrongUnitsCannot()
+    {
+        var result = MeterRecognitionFusion.Combine(Text("00/768128"), new("00768328", .95f, []));
+        Assert.Equal("00768328", result.Lines.Single().Text);
+        Assert.Contains("stage2_only_review", result.Warnings);
+        Assert.Contains("decimal_separator_unverified", result.Warnings);
+        Assert.Empty(MeterRecognitionFusion.Combine(Text("00/768128", "123 Hz"), new("00768328", .95f, [])).Lines);
+        Assert.Empty(MeterRecognitionFusion.Combine(Text("00123 kWh"), new("00123", .95f, [])).Lines);
+        Assert.Empty(MeterRecognitionFusion.Combine(Text("00/768128") with { Warnings = ["blur_or_low_detail"] }, new("00768328", .95f, [])).Lines);
+        Assert.Empty(MeterRecognitionFusion.Combine(Text("00/768128"), new("00768328", .49f, [])).Lines);
+    }
+    [Fact]
     public void FusionRejectsDisagreementEvenWhenOneRecognizerHasHigherConfidence()
     {
         var result = MeterRecognitionFusion.Combine(Text("00123"), new("00128", .99f, []));
