@@ -17,6 +17,7 @@ public sealed class OcrOptions
     public float MeterDetectionMinConfidence { get; set; } = .8f;
     public float AutomaticClassificationMinConfidence { get; set; } = .9f;
     public ImageProfile AutomaticProfile { get; set; } = new();
+    public YoloMeterOptions MeterDetector { get; set; } = new();
     public Dictionary<OcrDocumentKind, ImageProfile> Profiles { get; set; } = Enum.GetValues<OcrDocumentKind>()
         .ToDictionary(x => x, _ => new ImageProfile());
 
@@ -26,9 +27,19 @@ public sealed class OcrOptions
         InferenceThreads is >= 1 and <= 4 && MaxTextRegions is >= 1 and <= 64 &&
         float.IsFinite(MeterDetectionMinConfidence) && MeterDetectionMinConfidence is > 0 and <= 1 &&
         float.IsFinite(AutomaticClassificationMinConfidence) && AutomaticClassificationMinConfidence is > 0 and <= 1 &&
+        MeterDetector.IsValid() &&
         AutomaticProfile.ClockwiseQuarterTurns is >= 0 and <= 3 && AutomaticProfile.MinLaplacianVariance >= 0 &&
         Enum.GetValues<OcrDocumentKind>().All(x => Profiles.TryGetValue(x, out var p) &&
             p.ClockwiseQuarterTurns is >= 0 and <= 3 && p.MinLaplacianVariance >= 0);
+}
+
+public sealed class YoloMeterOptions
+{
+    public bool Enabled { get; set; }
+    public string ModelDirectory { get; set; } = "";
+    public float ConfidenceThreshold { get; set; } = .5f;
+    public float NmsThreshold { get; set; } = .7f;
+    public bool IsValid() => ConfidenceThreshold is > 0 and <= 1 && NmsThreshold is > 0 and <= 1;
 }
 
 public sealed class ImageProfile

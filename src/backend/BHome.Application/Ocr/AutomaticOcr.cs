@@ -5,7 +5,11 @@ namespace BHome.Application.Ocr;
 public sealed record OcrCategoryDecision(string Status, OcrDocumentKind? Kind, string Source,
     float? Confidence = null, IReadOnlyList<OcrDocumentKind>? Candidates = null,
     IReadOnlyList<string>? Warnings = null);
-public sealed record OcrImageAnalysis(OcrText Text, OcrCategoryDecision? VisualDecision = null);
+public sealed record LocalizedMeterText(OcrText Text, float DetectionConfidence, string? CropPreviewDataUri = null)
+{
+    public override string ToString() => "Localized meter text (image and reading omitted)";
+}
+public sealed record OcrImageAnalysis(OcrText Text, OcrCategoryDecision? VisualDecision = null, LocalizedMeterText? MeterRegion = null);
 
 public interface IOcrAnalysisEngine
 {
@@ -20,7 +24,8 @@ public interface IAutomaticOcrService
 
 public sealed record AutomaticOcrResult(string ClassificationStatus, string DetectedCategory,
     float? ClassificationConfidence, string ClassificationSource, IReadOnlyList<string> CandidateCategories,
-    IReadOnlyList<string> Warnings, OcrProposal? IdentityProposal = null, OcrProposal? MeterProposal = null)
+    IReadOnlyList<string> Warnings, OcrProposal? IdentityProposal = null, OcrProposal? MeterProposal = null,
+    string? PartialCategory = null, float? DetectionConfidence = null, string? CropPreviewDataUri = null)
 {
     public bool RequiresReview => true;
     public override string ToString() => "Automatic OCR result (sensitive fields omitted)";
@@ -77,6 +82,26 @@ public static class AutomaticOcrRouter
     public static AutomaticOcrResult Route(OcrImageAnalysis analysis, float minimumVisualConfidence)
     {
         var rules = OcrCategoryRules.Evaluate(analysis.Text);
+        if (analysis.MeterRegion is { } region && float.IsFinite(region.DetectionConfidence) && region.DetectionConfidence is > 0 and <= 1 &&
+            analysis.VisualDecision is null && rules.Kind is null &&
+            !(rules.Candidates ?? []).Any(k => k is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
+        {
+            var regionWarnings = region.Text.Warnings.Concat(analysis.Text.Warnings.Where(w => w is "blur_or_low_detail" or "orientation_uncertain")).Distinct().ToList();
+            var value = regionWarnings.Any(w => w is "unclear_digit" or "text_region_limit" or "conflicting_reading" or "blur_or_low_detail" or "orientation_uncertain")
+                ? null : MeterReadingParser.Parse(region.Text.Lines, null, regionWarnings);
+            var fields = new Dictionary<string, string>(); var scores = new Dictionary<string, float>();
+            if (value is { } number) { fields["reading"] = number.Value; scores["reading"] = number.Confidence; }
+            if (scores.Values.Any(s => s < .8f)) regionWarnings.Add("low_confidence");
+            var localizedProposal = new OcrProposal(fields, region.Text.EngineVersion) { Confidence = scores,
+                IsFallback = fields.Count == 0, MissingFields = fields.Count == 0 ? ["reading"] : [],
+                Warnings = [.. regionWarnings, "meter_type_confirmation_required", "decimal_separator_unverified"] };
+            var candidates = (rules.Candidates ?? []).Where(k => k is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)).ToArray();
+            if (candidates.Length == 0) candidates = [OcrDocumentKind.MechanicalElectricity, OcrDocumentKind.DigitalElectricity, OcrDocumentKind.MechanicalWater, OcrDocumentKind.DigitalWater];
+            var partial = Utility(candidates) ?? "meter";
+            return new("ambiguous", "unknown", null, "yolo_reading_region", candidates.Select(OcrCategories.Name).ToArray(),
+                [.. analysis.Text.Warnings, "meter_type_confirmation_required"], MeterProposal: localizedProposal,
+                PartialCategory: partial, DetectionConfidence: region.DetectionConfidence, CropPreviewDataUri: region.CropPreviewDataUri);
+        }
         var decision = analysis.VisualDecision ?? rules;
         if (analysis.VisualDecision is { } visual)
         {
@@ -93,8 +118,11 @@ public static class AutomaticOcrRouter
         }
         var warnings = analysis.Text.Warnings.Concat(decision.Warnings ?? []).Distinct().ToArray();
         if (decision.Status != "classified" || decision.Kind is null)
+        {
+            var candidates = (decision.Candidates ?? rules.Candidates ?? []).Where(Enum.IsDefined).Distinct().ToArray();
             return new(decision.Status, "unknown", null, decision.Source,
-                (decision.Candidates ?? []).Where(Enum.IsDefined).Select(OcrCategories.Name).Distinct().ToArray(), warnings);
+                candidates.Select(OcrCategories.Name).ToArray(), warnings, PartialCategory: Utility(candidates));
+        }
         var kind = decision.Kind.Value;
         var proposal = OcrFieldParser.Parse(analysis.Text, kind);
         if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
@@ -109,4 +137,7 @@ public static class AutomaticOcrRouter
     }
 
     public static AutomaticOcrResult Unavailable(string warning) => new("unavailable", "unknown", null, "none", [], [warning]);
+    private static string? Utility(IReadOnlyList<OcrDocumentKind> candidates) => candidates.Count == 0 ? null :
+        candidates.All(k => k is OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater) ? "water" :
+        candidates.All(k => k is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity) ? "electricity" : null;
 }

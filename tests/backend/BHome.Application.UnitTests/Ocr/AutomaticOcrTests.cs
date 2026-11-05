@@ -4,6 +4,43 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class AutomaticOcrTests
 {
+    [Theory]
+    [InlineData("00123.45 m3", "water", 2)]
+    [InlineData("00123.45 kWh", "electricity", 2)]
+    [InlineData("unlabeled meter", "meter", 4)]
+    public void LocalizedReadingRemainsProvisionalWithoutInventingTechnology(string page, string partial, int candidates)
+    {
+        var result = AutomaticOcrRouter.Route(new(Text(page), MeterRegion: new(Text("00123.45"), .96f, "data:image/jpeg;base64,AA==")), .9f);
+        Assert.Equal("ambiguous", result.ClassificationStatus); Assert.Equal("unknown", result.DetectedCategory);
+        Assert.Null(result.ClassificationConfidence); Assert.Equal(.96f, result.DetectionConfidence);
+        Assert.Equal(partial, result.PartialCategory); Assert.Equal(candidates, result.CandidateCategories.Count);
+        Assert.Equal("00123.45", result.MeterProposal!.ProposedFields["reading"]);
+        Assert.Contains("decimal_separator_unverified", result.MeterProposal.Warnings);
+        Assert.True(result.RequiresReview); Assert.True(result.MeterProposal.RequiresConfirmation);
+        Assert.DoesNotContain("base64", result.ToString());
+    }
+
+    [Theory]
+    [InlineData("unclear_digit")]
+    [InlineData("text_region_limit")]
+    [InlineData("conflicting_reading")]
+    [InlineData("blur_or_low_detail")]
+    [InlineData("orientation_uncertain")]
+    public void UnsafeLocalizedEvidenceCannotProposeReading(string warning)
+    {
+        var region = Text("00123.45") with { Warnings = [warning] };
+        var result = AutomaticOcrRouter.Route(new(Text(), MeterRegion: new(region, .96f)), .9f);
+        Assert.Empty(result.MeterProposal!.ProposedFields); Assert.True(result.MeterProposal.IsFallback);
+    }
+
+    [Fact]
+    public void LocalizedMultipleNumbersCannotChooseOneAndIdentityEvidenceKeepsItsRoute()
+    {
+        var result = AutomaticOcrRouter.Route(new(Text(), MeterRegion: new(Text("00123", "00456"), .96f)), .9f);
+        Assert.Empty(result.MeterProposal!.ProposedFields);
+        result = AutomaticOcrRouter.Route(new(Front(), MeterRegion: new(Text("00123"), .96f)), .9f);
+        Assert.NotNull(result.IdentityProposal); Assert.Null(result.MeterProposal);
+    }
     internal static OcrText Text(params string[] lines) => new(lines.Select(t => new OcrLine(t, .98f)).ToArray(), "synthetic", []);
     private static OcrText Front() => Text("CĂN CƯỚC CÔNG DÂN", "Số: 000000000000", "Họ và tên: NGƯỜI KIỂM THỬ", "Ngày sinh: 01/02/2000");
     private static AutomaticOcrResult Route(OcrText text, OcrCategoryDecision? visual = null) => AutomaticOcrRouter.Route(new(text, visual), .9f);
@@ -39,6 +76,7 @@ public sealed class AutomaticOcrTests
         var result = Route(Text(text));
         Assert.Equal("ambiguous", result.ClassificationStatus);
         Assert.Equal(new[] { first, second }, result.CandidateCategories);
+        Assert.Equal(first.StartsWith("water", StringComparison.Ordinal) ? "water" : "electricity", result.PartialCategory);
         Assert.Null(result.MeterProposal);
         Assert.Null(result.IdentityProposal);
     }

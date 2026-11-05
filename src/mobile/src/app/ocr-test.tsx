@@ -288,6 +288,14 @@ export default function OcrTest() {
       )}
       {proposal && (
         <View style={styles.card}>
+          {analysis?.cropPreviewDataUri && (
+            <Image
+              accessibilityLabel="Vùng chỉ số đã tìm thấy"
+              source={{ uri: analysis.cropPreviewDataUri }}
+              resizeMode="contain"
+              style={{ width: '100%', height: 100 }}
+            />
+          )}
           <Text variant="titleLarge">
             {proposal.isFallback || proposal.missingFields.length
               ? 'Cần kiểm tra lại thông tin'
@@ -297,7 +305,14 @@ export default function OcrTest() {
             {analysis?.classificationStatus === 'manual'
               ? 'Loại ảnh đã chọn'
               : 'Loại ảnh nhận diện'}
-            : {categoryLabel(analysis?.detectedCategory ?? '')}
+            :{' '}
+            {analysis?.partialCategory
+              ? analysis.partialCategory === 'water'
+                ? 'Công tơ nước — cần xác nhận loại'
+                : analysis.partialCategory === 'electricity'
+                  ? 'Công tơ điện — cần xác nhận loại'
+                  : 'Công tơ — cần xác nhận loại'
+              : categoryLabel(analysis?.detectedCategory ?? '')}
           </Text>
           {Object.entries(fields).map(([key, value]) => (
             <Field

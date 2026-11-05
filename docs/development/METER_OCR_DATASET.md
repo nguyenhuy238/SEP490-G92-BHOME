@@ -1,8 +1,11 @@
 # Dữ liệu và model cho Meter OCR
 
-Trạng thái ngày 04/11/2026: chưa có dataset đồng hồ được gán bounding box, checkpoint
+Baseline trước đợt pretrained ngày 04/11/2026: chưa có dataset đồng hồ được gán bounding box, checkpoint
 detector/classifier hoặc pipeline training trong repository. Các fixture GDI+/OpenCV
 hiện có chỉ kiểm thử bố cục chữ. Không dùng chúng làm bằng chứng detector hoạt động.
+
+Cập nhật sau baseline: đã tích hợp detector pretrained thật; xem phần bổ sung cuối
+tài liệu và [báo cáo triển khai](PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md).
 
 Luồng tự động một nút chụp nay có điểm tích hợp classifier sáu lớp và script kiểm
 tra dữ liệu/sinh kế hoạch training/export offline (chưa train hoặc thêm weights).
@@ -101,3 +104,11 @@ dưới thư mục manifest. Có thể dùng baseline executable đã lưu riên
 **Chưa thực hiện:** thu/gán nhãn dataset thật, training/fine-tune, kiểm chứng model
 detector/classifier, so sánh native/ONNX hoặc đo recall/classification accuracy. Chưa
 có căn cứ nhận diện đúng phòng/serial từ ảnh hoặc xác định register tính tiền tự động.
+## Bổ sung đánh giá pretrained 04/11/2026
+
+Đã dùng10 ảnh test công khai của tác giả model analog-water, lưu riêng trong
+`.tools/meter-detection-evaluation`, không đưa vào dữ liệu BHOME/holdout độc lập.
+Ba ảnh chứa digit `u` nên chỉ7 ảnh có nhãn chuỗi đầy đủ. Localization body/window
+10/10 IoU≥.5, exact PP reading sau crop1/7; chưa đủ≥50 ảnh hoặc mục tiêu90%.
+Không train/fine-tune. Hash, nguồn, bias và kết quả trong
+[báo cáo pretrained](PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md).

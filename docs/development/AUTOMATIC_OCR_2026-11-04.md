@@ -311,6 +311,15 @@ không chứa raw identity text hoặc ảnh.
 6. Ảnh thật/ảnh thiếu chữ có thể yêu cầu chọn lại. Chưa có classifier thị giác nên
    việc yêu cầu chọn cơ/điện tử là giới hạn được hiển thị, không phải model đã nhận sai.
 
+## Bổ sung pretrained sau báo cáo này
+
+Đã có adapter YOLOv8n-OBB ONNX thật, crop hiển thị trên Mobile và provisional
+meter proposal khi tìm được một window. Các nhận xét chưa có detector ở phần
+audit phía trên mô tả baseline trước lượt bổ sung. Chưa có classifier bốn loại;
+định vị10/10 ảnh public không đồng nghĩa đọc đúng số (hiện1/7 nhãn đầy đủ).
+Chi tiết, provenance, lệnh bật Development và giới hạn:
+[Pretrained YOLO + PP-OCR](PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md).
+
 ## File thay đổi
 
 - Application: mới `Ocr/AutomaticOcr.cs` (contract, category rules, router).

@@ -10,6 +10,9 @@ export interface AutomaticAnalysis {
   warnings: string[];
   identityProposal: Proposal | null;
   meterProposal: Proposal | null;
+  partialCategory?: string | null;
+  detectionConfidence?: number | null;
+  cropPreviewDataUri?: string | null;
 }
 export interface AutomaticDiagnosticResult {
   analysis: AutomaticAnalysis;
@@ -41,6 +44,13 @@ export function reviewWarning(code: string) {
     billing_register_unverified: 'Hãy kiểm tra màn hình đang hiển thị tổng chỉ số dùng tính tiền.',
     reading_region_unverified: 'Hãy kiểm tra đúng ô chỉ số, đơn vị và dấu thập phân.',
     meter_localization_unavailable: 'Hãy đối chiếu đúng công tơ và ô chỉ số trong ảnh.',
+    meter_type_confirmation_required:
+      'Đã tìm thấy vùng chỉ số. Hãy xác nhận loại công tơ và kiểm tra phần thập phân.',
+    unclear_digit:
+      'Có chữ số chưa rõ hoặc đang chuyển tiếp. Hãy chụp lại hoặc nhập sau khi đối chiếu trực tiếp.',
+    meter_body_unverified: 'Chỉ tìm thấy cửa sổ số; hãy kiểm tra đây là đúng công tơ cần ghi.',
+    meter_detector_unavailable:
+      'Chưa dùng được bước tìm công tơ. Bạn vẫn có thể chọn loại và thử đọc lại.',
   };
   const message = messages[code] ?? diagnosticWarning(code);
   return message === code

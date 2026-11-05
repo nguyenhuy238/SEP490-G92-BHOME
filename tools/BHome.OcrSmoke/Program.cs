@@ -5,6 +5,10 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 5 && args[0] == "--pretrained-yolo-evaluate")
+    return await PretrainedYoloEvaluation.RunAsync(args[1], args[2], args[3], args[4]);
+if (args.Length == 6 && args[0] == "--pretrained-yolo-challenges")
+    return await PretrainedYoloChallenges.RunAsync(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 4 && args[0] == "--auto-evaluate")
 {
     var autoOptions = new OcrOptions { Enabled = true, ModelDirectory = args[1] };
@@ -18,7 +22,7 @@ var generation = args.Length == 3 && args[0] == "--generate-evaluation";
 var evaluation = args.Length is 3 or 4 && args[1] == "--evaluate";
 var smoke = args.Length == 2 && args[0] != "--generate-evaluation" && args[1] != "--evaluate";
 if (!generation && !evaluation && !smoke)
-{ Console.Error.WriteLine("Usage: BHome.OcrSmoke <model-directory> <synthetic-fixture-directory> | <model-directory> --evaluate <manifest.json> [report.json] | --generate-evaluation <synthetic-fixture-directory> <output-directory> | --meter-scene-smoke <model-directory> <meter-safety-fixture-directory> | --auto-evaluate <model-directory> <manifest.json> <report.json>"); return 2; }
+{ Console.Error.WriteLine("Usage: BHome.OcrSmoke <model-directory> <synthetic-fixture-directory> | <model-directory> --evaluate <manifest.json> [report.json] | --generate-evaluation <synthetic-fixture-directory> <output-directory> | --meter-scene-smoke <model-directory> <meter-safety-fixture-directory> | --auto-evaluate <model-directory> <manifest.json> <report.json> | --pretrained-yolo-evaluate <ocr-models> <yolo-models> <public-images> <report.json> | --pretrained-yolo-challenges <ocr-models> <yolo-models> <public-water.jpg> <synthetic-images> <report.json>"); return 2; }
 if (generation)
 {
     SyntheticEvaluation.Generate(args[1], args[2]);

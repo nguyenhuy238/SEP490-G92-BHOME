@@ -26,9 +26,13 @@ Yêu cầu người dùng → BF-01/UC-04..07 (chuỗi/phòng/biểu phí), BF-0
 
 Ghi chú Meter OCR ngày 04/11/2026: đã bổ sung chặn nhiều vùng chỉ số (kể cả cùng
 giá trị), cảnh báo sai utility/baseline và hướng dẫn review trên Mobile. Điểm tích hợp
-crop Meter/Display đã có kiểm thử; **chưa có model detector/classifier đồng hồ hoạt
-động**. Mặc định vẫn dùng DBNet + recognition hiện có và Staff xác nhận riêng.
-Không đổi endpoint/DTO/schema. Xem [audit và kiểm chứng OCR](../development/METER_OCR_AUDIT_2026-11-04.md).
+crop Meter/Display đã có kiểm thử. Lượt bổ sung pretrained đã tích hợp YOLOv8n-OBB
+ONNX thật để định vị analog-water body/window, opt-in qua `Ocr:MeterDetector:Enabled`.
+PP-OCR tiếp tục đọc crop, Staff xác nhận riêng; chưa có classifier bốn loại hoạt động.
+Không đổi endpoint/schema nghiệp vụ; diagnostic auto thêm partial category, window
+confidence và crop preview tạm. Định vị 10/10 ảnh public nhưng exact reading chỉ1/7
+ảnh có nhãn đầy đủ, nên chưa đạt acceptance OCR. Xem [triển khai pretrained và số liệu](../development/PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md)
+và [audit trước đó](../development/METER_OCR_AUDIT_2026-11-04.md).
 Các số liệu bên dưới thuộc lượt rà soát API trước đó, không phải kết quả chạy OCR mới.
 
 Màn thử OCR đã có `POST /api/v1/ocr/diagnostics/auto`: chụp trước, tự xét dấu hiệu

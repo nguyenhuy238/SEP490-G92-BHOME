@@ -12,7 +12,7 @@ internal static class MeterReadingParser
     private const string Label = @"(?:chi so(?:\s+(?:cong to|dien|nuoc))?|reading|index|total)\s*:?\s*";
 
     public static (string Value, float Confidence)? Parse(IReadOnlyList<OcrLine> lines,
-        OcrDocumentKind kind, List<string> warnings)
+        OcrDocumentKind? kind, List<string> warnings)
     {
         lines = JoinDigitBoxes(lines);
         var candidates = new List<(string Value, float Confidence, bool Context)>();
@@ -28,8 +28,8 @@ internal static class MeterReadingParser
             }
             var unit = match.Groups["unit"].Value;
             var prefix = match.Groups["prefix"].Value;
-            if ((unit.Length > 0 && !MeterOcrLayout.IsCorrectUnit(unit, kind)) ||
-                (prefix.Length > 0 && !MeterOcrLayout.IsCorrectUnit(prefix, kind)) ||
+            if ((kind is { } known && unit.Length > 0 && !MeterOcrLayout.IsCorrectUnit(unit, known)) ||
+                (kind is { } prefixKind && prefix.Length > 0 && !MeterOcrLayout.IsCorrectUnit(prefix, prefixKind)) ||
                 (match.Groups["label"].Value.Contains("dien", StringComparison.OrdinalIgnoreCase) && kind is OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater) ||
                 (match.Groups["label"].Value.Contains("nuoc", StringComparison.OrdinalIgnoreCase) && kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity))
             { unmatchedNumbers = true; warnings.Add("meter_type_mismatch"); continue; }
@@ -40,7 +40,7 @@ internal static class MeterReadingParser
             {
                 var units = lines.Where(other => other.Bounds is { } b && MeterOcrLayout.Nearby(bounds, b) &&
                     MeterOcrLayout.IsUnit(other.Text)).ToArray();
-                if (units.Any(other => !MeterOcrLayout.IsCorrectUnit(other.Text, kind)))
+                if (kind is { } unitKind && units.Any(other => !MeterOcrLayout.IsCorrectUnit(other.Text, unitKind)))
                 { unmatchedNumbers = true; warnings.Add("meter_type_mismatch"); continue; }
                 if (units.Length > 0)
                 {

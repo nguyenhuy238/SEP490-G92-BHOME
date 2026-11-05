@@ -141,6 +141,19 @@ Business meter OCR always uses the server-loaded `Meter.DecimalPlaces`; a caller
 override it. Values retain their full fractional part and still require human confirmation.
 See [accuracy evaluation and limitations](../development/OCR_ACCURACY_DELIVERY.md).
 
+`POST /api/v1/ocr/diagnostics/auto` accepts the same untyped image and diagnostic
+authorization/gates; returns `{ analysis, elapsedMilliseconds }` with no-store.
+`analysis` has `classificationStatus`, `detectedCategory`, nullable
+`classificationConfidence`, `classificationSource`, `candidateCategories`,
+`warnings`, nullable `identityProposal`/`meterProposal`, and `requiresReview=true`.
+Optional `partialCategory` (`meter`, `water`, `electricity`), `detectionConfidence`
+and `cropPreviewDataUri` describe a localized provisional meter reading. A window
+score is not a category score. With the opt-in pretrained window detector, category
+remains ambiguous until the user chooses it after capture; the crop/proposal does
+not confirm a business reading. The data URI is transient review content and must
+not be logged/cached/persisted. Missing/uncertain detection uses manual fallback.
+See [verified pretrained capabilities and limits](../development/PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md).
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được

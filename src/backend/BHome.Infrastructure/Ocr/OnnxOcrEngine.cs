@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-auto1";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo1";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -89,15 +89,16 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                 kind = visual.Kind;
                 if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
                 {
-                    var selection = MeterSceneSelection.Select(meterDetector?.Detect(source, token), source.Size(),
+                    var selection = MeterSceneSelection.Select(meterDetector is not null && meterDetector.Supports(kind.Value) ? meterDetector.Detect(source, token) : null, source.Size(),
                         kind.Value, options.MeterDetectionMinConfidence);
                     warnings.AddRange(selection.Warnings);
                     if (!selection.CanRecognize)
                         return new(new([], Version, warnings), visual with { Status = "ambiguous", Kind = null });
                     if (selection.Crop is { } rect)
                     {
-                        using var roi = new Mat(source, rect);
-                        roi.CopyTo(localized); source = localized;
+                        if (selection.OrientedCrop is { } oriented) { using var crop = Crop(source, oriented); crop.CopyTo(localized); }
+                        else { using var roi = new Mat(source, rect); roi.CopyTo(localized); }
+                        source = localized;
                     }
                 }
             }
@@ -124,7 +125,44 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                 }
             }
             token.ThrowIfCancellationRequested();
-            return new(text with { Warnings = [.. warnings, .. text.Warnings] }, visual);
+            var fullText = text with { Warnings = [.. warnings, .. text.Warnings] };
+            if (visual is null && meterDetector is not null)
+            {
+                var scene = meterDetector.Detect(prepared.Image, token);
+                if (!scene.IsAvailable && scene.Warnings.Count > 0)
+                    fullText = fullText with { Warnings = [.. fullText.Warnings, .. scene.Warnings] };
+                if (scene.IsAvailable && (scene.Meters.Count > 0 || scene.StandaloneReadingRegions.Count > 0))
+                {
+                    var rules = OcrCategoryRules.Evaluate(fullText);
+                    if (rules.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ||
+                        (rules.Candidates ?? []).Any(k => k is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
+                        return new(fullText, new("ambiguous", null, "yolo_reading_region", Warnings: ["classification_conflict"]));
+                    var selection = MeterSceneSelection.Select(scene, prepared.Image.Size(), null, options.MeterDetectionMinConfidence);
+                    if (!selection.CanRecognize || selection.Crop is null)
+                        return new(fullText, new("ambiguous", null, "yolo_reading_region", Warnings: selection.Warnings));
+                    using var roi = new Mat(prepared.Image, selection.Crop.Value);
+                    using var reading = selection.OrientedCrop is { } oriented ? Crop(prepared.Image, oriented) : roi.Clone();
+                    try
+                    {
+                        var croppedText = ReadPage(reading, Detect(reading, run, token), null, run, token);
+                        if (croppedText.Lines.Count == 0)
+                            croppedText = new([ReadLine(reading, run, wideLine: true)], Version, []);
+                        croppedText = croppedText with { Warnings = [.. selection.Warnings, .. croppedText.Warnings] };
+                        using var preview = new Mat();
+                        var previewRatio = Math.Min(1d, 480d / reading.Width);
+                        Cv2.Resize(reading, preview, new Size(Math.Max(1, (int)(reading.Width * previewRatio)), Math.Max(1, (int)(reading.Height * previewRatio))));
+                        var encoded = preview.ImEncode(".jpg");
+                        try
+                        {
+                            var score = scene.Meters.SelectMany(m => m.ReadingRegions ?? []).Concat(scene.StandaloneReadingRegions).Single().Confidence;
+                            return new(fullText, MeterRegion: new(croppedText, score, "data:image/jpeg;base64," + Convert.ToBase64String(encoded)));
+                        }
+                        finally { CryptographicOperations.ZeroMemory(encoded); preview.SetTo(Scalar.All(0)); }
+                    }
+                    finally { reading.SetTo(Scalar.All(0)); }
+                }
+            }
+            return new(fullText, visual);
         }
         catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
         finally
@@ -151,15 +189,15 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             IReadOnlyList<string> localizationWarnings = [];
             if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
             {
-                var selection = MeterSceneSelection.Select(meterDetector?.Detect(source, token), source.Size(),
+                var selection = MeterSceneSelection.Select(meterDetector is not null && meterDetector.Supports(kind) ? meterDetector.Detect(source, token) : null, source.Size(),
                     kind, options.MeterDetectionMinConfidence);
                 localizationWarnings = selection.Warnings;
                 if (!selection.CanRecognize)
                     return new OcrText([], Version, [.. prepared.Warnings, .. localizationWarnings]);
                 if (selection.Crop is { } rect)
                 {
-                    using var roi = new Mat(source, rect);
-                    roi.CopyTo(localized);
+                    if (selection.OrientedCrop is { } oriented) { using var crop = Crop(source, oriented); crop.CopyTo(localized); }
+                    else { using var roi = new Mat(source, rect); roi.CopyTo(localized); }
                     source = localized;
                 }
             }

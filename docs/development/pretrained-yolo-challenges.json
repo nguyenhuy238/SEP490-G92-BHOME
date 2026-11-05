@@ -1,0 +1,181 @@
+{
+  "safetyAssertionsPassed": true,
+  "rows": [
+    {
+      "name": "public-water-two-meters",
+      "classificationStatus": "unavailable",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["ocr_timeout"],
+      "elapsedMilliseconds": 8133
+    },
+    {
+      "name": "public-water-90-degrees",
+      "classificationStatus": "ambiguous",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["blur_or_low_detail", "orientation_corrected", "reading_region_not_detected"],
+      "elapsedMilliseconds": 5553
+    },
+    {
+      "name": "public-water-heavy-blur",
+      "classificationStatus": "ambiguous",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["blur_or_low_detail", "reading_region_not_detected"],
+      "elapsedMilliseconds": 2230
+    },
+    {
+      "name": "public-water-half-cropped",
+      "classificationStatus": "ambiguous",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["blur_or_low_detail", "orientation_corrected", "meter_region_invalid"],
+      "elapsedMilliseconds": 5057
+    },
+    {
+      "name": "synthetic-unrelated-object",
+      "classificationStatus": "unknown",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["classification_insufficient_evidence"],
+      "elapsedMilliseconds": 1532
+    },
+    {
+      "name": "synthetic-front-0",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_front",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "classification_text_evidence"],
+      "elapsedMilliseconds": 2285
+    },
+    {
+      "name": "synthetic-front-90",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_front",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "orientation_corrected", "classification_text_evidence"],
+      "elapsedMilliseconds": 2799
+    },
+    {
+      "name": "synthetic-front-180",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_front",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "orientation_corrected", "classification_text_evidence"],
+      "elapsedMilliseconds": 4371
+    },
+    {
+      "name": "synthetic-front-270",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_front",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "orientation_corrected", "classification_text_evidence"],
+      "elapsedMilliseconds": 5009
+    },
+    {
+      "name": "synthetic-back-0",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_back",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "classification_text_evidence"],
+      "elapsedMilliseconds": 1922
+    },
+    {
+      "name": "synthetic-back-90",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_back",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "orientation_corrected", "classification_text_evidence"],
+      "elapsedMilliseconds": 3122
+    },
+    {
+      "name": "synthetic-back-180",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_back",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "orientation_corrected", "classification_text_evidence"],
+      "elapsedMilliseconds": 3691
+    },
+    {
+      "name": "synthetic-back-270",
+      "classificationStatus": "classified",
+      "detectedCategory": "cccd_back",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "orientation_corrected", "classification_text_evidence"],
+      "elapsedMilliseconds": 4132
+    },
+    {
+      "name": "synthetic-electricity-0",
+      "classificationStatus": "ambiguous",
+      "detectedCategory": "unknown",
+      "partialCategory": "electricity",
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "classification_requires_review"],
+      "elapsedMilliseconds": 1571
+    },
+    {
+      "name": "synthetic-water-0",
+      "classificationStatus": "unknown",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "classification_insufficient_evidence"],
+      "elapsedMilliseconds": 2874
+    },
+    {
+      "name": "synthetic-blank-0",
+      "classificationStatus": "unknown",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": [
+        "blur_or_low_detail",
+        "possible_glare",
+        "no_text",
+        "classification_insufficient_evidence"
+      ],
+      "elapsedMilliseconds": 902
+    },
+    {
+      "name": "synthetic-mixed-sides-0",
+      "classificationStatus": "ambiguous",
+      "detectedCategory": "unknown",
+      "partialCategory": null,
+      "readingProposed": false,
+      "cropAvailable": false,
+      "warnings": ["possible_glare", "classification_requires_review"],
+      "elapsedMilliseconds": 3773
+    }
+  ],
+  "limitation": "Derived public water image and synthetic cards/unit labels; no real electricity/digital-water accuracy evidence. No training."
+}
