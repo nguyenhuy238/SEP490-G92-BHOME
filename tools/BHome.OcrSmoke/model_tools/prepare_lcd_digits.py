@@ -10,9 +10,13 @@ import io
 import json
 from pathlib import Path
 import re
+import sys
 import zipfile
 
+import numpy as np
 from PIL import Image, ImageOps
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from prepare_meter_training import audit_pairs, perceptual_hash
 
 FILES = {
     "RAW IMAGES.zip": "d4dadbd2e51a8e85809a035afa390e8312d6c9206ae6bcd98e094fa61f623529",
@@ -43,7 +47,7 @@ def prepare(source, catalog_path, commons, evaluation_path, output, crop_trainin
                 raise ValueError("Unsafe, duplicate or oversized ZIP image")
             images[name] = archive.read(member)
     output.mkdir(parents=True, exist_ok=True)
-    samples, seen, duplicate_exclusions = [], set(), []
+    samples, seen, duplicate_exclusions, source_hashes = [], set(), [], {}
     for image in coco["images"]:
         match = re.search(r"-([0-9]+)\.[Jj][Pp][Gg]$", image["file_name"])
         if match is None:
@@ -65,6 +69,7 @@ def prepare(source, catalog_path, commons, evaluation_path, output, crop_trainin
                 raise ValueError("Review orientation before transforming labels")
         ordered = sorted(annotations[image["id"]], key=lambda a: a["bbox"][0])
         offset_x, offset_y = 0, 0
+        source_hashes["mendeley_" + number] = perceptual_hash(np.asarray(rgb))
         if crop_training_rows:
             # Training-only crop from source annotations. Evaluation crops were
             # frozen independently and are never derived from model outputs.
@@ -105,6 +110,7 @@ def prepare(source, catalog_path, commons, evaluation_path, output, crop_trainin
             raise ValueError("Frozen Commons evaluation image changed")
         with Image.open(path) as original:
             rgb = ImageOps.exif_transpose(original).convert("RGB")
+        source_hashes[sample["id"]] = perceptual_hash(np.asarray(rgb))
         x1, y1, x2, y2 = sample["crop"]
         if not (0 <= x1 < x2 <= rgb.width and 0 <= y1 < y2 <= rgb.height):
             raise ValueError("Invalid reviewed display crop")
@@ -137,6 +143,8 @@ def prepare(source, catalog_path, commons, evaluation_path, output, crop_trainin
              "classes": [str(i) for i in range(10)], "unsupportedClasses": [],
              "partialDevelopment": False, "task": "lcd_digit_detection",
              "trainingOnlyRowCrops": crop_training_rows, "exactDuplicateExclusions": duplicate_exclusions,
+             "sourcePerceptualPairs": audit_pairs(samples, source_hashes),
+             "perceptualScope": "Full source images before any training/validation row crops; DCT63 Hamming<=6; not proof of physical identity",
              "sourceZipSha256": FILES["RAW IMAGES.zip"], "sourceCocoSha256": FILES[list(FILES)[1]],
              "unlabeledExcluded": sorted(set(images) - {re.search(r"-([0-9]+)\.[Jj][Pp][Gg]$", i["file_name"]).group(1) for i in coco["images"]}),
              "samples": samples, "note": "Only 1 readable validation crop + 1 blank; insufficient to establish generalization. No reading-window model or decimal inference."}
