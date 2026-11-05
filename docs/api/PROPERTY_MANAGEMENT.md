@@ -291,11 +291,11 @@ Ba API Phase 1B chỉ đọc, dùng `property.view`: Owner xem toàn hệ thốn
 Tenant không truy cập. Resource ngoài scope trả 404. Không API nào lưu readiness, đổi Room/Contract,
 hay tạo audit mới.
 
-| Method | Route | Hành vi |
-| --- | --- | --- |
-| GET | `/rooms/{id}/readiness?purpose=Holding|MoveIn` | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
-| GET | `/rooms/{id}/history` | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
-| GET | `/locations/{id}/occupancy-summary` | Snapshot Room; room-day lịch sử chỉ khi đủ evidence |
+| Method | Route                                  | Hành vi                                                                |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------- |
+| GET    | `/rooms/{id}/readiness?purpose=Holding | MoveIn`                                                                | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
+| GET    | `/rooms/{id}/history`                  | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
+| GET    | `/locations/{id}/occupancy-summary`    | Snapshot Room; room-day lịch sử chỉ khi đủ evidence                    |
 
 Readiness nhận `effectiveOn` tùy chọn (mặc định ngày Việt Nam). Response có `status` (`Ready`, `Blocked`,
 `Indeterminate`), `blockers`, `warnings`, `unverifiedConditions`. Holding luôn có
@@ -312,9 +312,19 @@ nên trả `SAFETY_INCIDENT_DATA_UNAVAILABLE`, không tự suy ra an toàn.
   "isReady": false,
   "effectiveOn": "2026-11-05",
   "checkedAt": "2026-11-05T02:00:00Z",
-  "blockers": [{ "code": "ELECTRICITY_BASELINE_MISSING", "message": "The electricity baseline has not been confirmed." }],
+  "blockers": [
+    {
+      "code": "ELECTRICITY_BASELINE_MISSING",
+      "message": "The electricity baseline has not been confirmed."
+    }
+  ],
   "warnings": [],
-  "unverifiedConditions": [{ "code": "SAFETY_INCIDENT_DATA_UNAVAILABLE", "message": "The current data model cannot verify unresolved safety incidents for this Room." }]
+  "unverifiedConditions": [
+    {
+      "code": "SAFETY_INCIDENT_DATA_UNAVAILABLE",
+      "message": "The current data model cannot verify unresolved safety incidents for this Room."
+    }
+  ]
 }
 ```
 

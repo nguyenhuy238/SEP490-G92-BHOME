@@ -17,20 +17,20 @@ Các lỗi audit ban đầu đã được xác nhận và được Phase 1A xử
 
 Kết quả review implementation hiện tại:
 
-| Hạng mục | Kết quả xác minh |
-| --- | --- |
-| Shared transition validation | `PropertyRules.CanChangeRoomStatus` được dùng bởi Property và Contract; giữ numeric RoomStatus 0..3 |
-| Manual state | API cấu hình không tạo OnHold/Occupied; update metadata có thể giữ nguyên trạng thái workflow-controlled |
-| Contract activation | Chỉ Available/Occupied hợp lệ; recheck Location/RoomType; đổi sang Occupied mới tăng Room.Version |
-| Contract termination | Còn Contract Active khác thì giữ Occupied và không tăng version; không còn thì Occupied → Available và tăng version |
-| Stale Property write | expected version được kiểm tra trước transition/dependency checks; Compact24 writer vẫn dùng optimistic concurrency |
-| Obligations | Phân biệt Resident record, current occupancy, Active Contract và pending có bằng chứng ký hoặc DepositVerification dương |
-| Pending semantics | Status pending đơn thuần không giữ phòng; bằng chứng chỉ bảo vệ cấu hình, không đánh dấu paid/active và không giả lập Holding |
-| Transaction/audit | Room status/version và PropertyChange được SaveChanges trong transaction Contract; Contract security audit vẫn là event riêng |
-| Lock order | Contract: payment ledger → Location advisory → Room row; Property: Location; Invoice: Location → Room; payment/adjustment: ledger → Room |
-| Authorization/API | Không đổi PermissionAccess, ResourceAccess, controller, HTTP DTO, ProblemDetails hoặc Location scope |
-| Compact24 | Runtime vẫn là Compact24DbContext; RoomType vẫn ở locations JSONB; audit record types không bị gộp/xóa |
-| Billing/Invoice | Không đổi pricing; InvoiceRepository vẫn snapshot policy/occupancy và gọi RecordUsage trong transaction |
+| Hạng mục                     | Kết quả xác minh                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared transition validation | `PropertyRules.CanChangeRoomStatus` được dùng bởi Property và Contract; giữ numeric RoomStatus 0..3                                      |
+| Manual state                 | API cấu hình không tạo OnHold/Occupied; update metadata có thể giữ nguyên trạng thái workflow-controlled                                 |
+| Contract activation          | Chỉ Available/Occupied hợp lệ; recheck Location/RoomType; đổi sang Occupied mới tăng Room.Version                                        |
+| Contract termination         | Còn Contract Active khác thì giữ Occupied và không tăng version; không còn thì Occupied → Available và tăng version                      |
+| Stale Property write         | expected version được kiểm tra trước transition/dependency checks; Compact24 writer vẫn dùng optimistic concurrency                      |
+| Obligations                  | Phân biệt Resident record, current occupancy, Active Contract và pending có bằng chứng ký hoặc DepositVerification dương                 |
+| Pending semantics            | Status pending đơn thuần không giữ phòng; bằng chứng chỉ bảo vệ cấu hình, không đánh dấu paid/active và không giả lập Holding            |
+| Transaction/audit            | Room status/version và PropertyChange được SaveChanges trong transaction Contract; Contract security audit vẫn là event riêng            |
+| Lock order                   | Contract: payment ledger → Location advisory → Room row; Property: Location; Invoice: Location → Room; payment/adjustment: ledger → Room |
+| Authorization/API            | Không đổi PermissionAccess, ResourceAccess, controller, HTTP DTO, ProblemDetails hoặc Location scope                                     |
+| Compact24                    | Runtime vẫn là Compact24DbContext; RoomType vẫn ở locations JSONB; audit record types không bị gộp/xóa                                   |
+| Billing/Invoice              | Không đổi pricing; InvoiceRepository vẫn snapshot policy/occupancy và gọi RecordUsage trong transaction                                  |
 
 Không phát hiện duplicate production validation mới ngoài việc `CanManuallyChange` ủy quyền cho shared validator để giữ compatibility.
 Không phát hiện breaking API/schema change. Thuật toán capacity/overlap hiện có và mô hình nhiều Contract/Room được giữ nguyên.
@@ -64,18 +64,18 @@ dotnet test tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj `
 Fixture thất bại ở constructor trước khi tạo container/schema. Runner ghi 10 FAIL do fixture, nhưng phân loại verification
 là **BLOCKED BY ENVIRONMENT**; không test nào đi tới code nghiệp vụ và không được tính là product FAIL/PASS.
 
-| # | Test PostgreSQL 16 / tiêu chí | Kết quả |
-| --- | --- | --- |
-| 1 | Property update concurrent Contract activation | BLOCKED BY ENVIRONMENT |
-| 2 | Property update concurrent Contract termination | BLOCKED BY ENVIRONMENT |
-| 3 | Pending obligation bằng signed evidence | BLOCKED BY ENVIRONMENT |
-| 4 | Pending obligation bằng verified payment evidence | BLOCKED BY ENVIRONMENT |
-| 5 | Nhiều Active Contract: termination không release Room/version | BLOCKED BY ENVIRONMENT |
-| 6 | Owner/Staff permission và assigned Location scope | BLOCKED BY ENVIRONMENT |
-| 7 | Manual OnHold/Occupied và invalid scope bị từ chối | BLOCKED BY ENVIRONMENT |
-| 8 | Resident protection và OCR capture creation regression | BLOCKED BY ENVIRONMENT |
-| 9 | Property audit success/rollback và duplicate race | BLOCKED BY ENVIRONMENT |
-| 10 | BillingPolicy/Invoice snapshot và FirstUsedAt | BLOCKED BY ENVIRONMENT |
+| #   | Test PostgreSQL 16 / tiêu chí                                 | Kết quả                |
+| --- | ------------------------------------------------------------- | ---------------------- |
+| 1   | Property update concurrent Contract activation                | BLOCKED BY ENVIRONMENT |
+| 2   | Property update concurrent Contract termination               | BLOCKED BY ENVIRONMENT |
+| 3   | Pending obligation bằng signed evidence                       | BLOCKED BY ENVIRONMENT |
+| 4   | Pending obligation bằng verified payment evidence             | BLOCKED BY ENVIRONMENT |
+| 5   | Nhiều Active Contract: termination không release Room/version | BLOCKED BY ENVIRONMENT |
+| 6   | Owner/Staff permission và assigned Location scope             | BLOCKED BY ENVIRONMENT |
+| 7   | Manual OnHold/Occupied và invalid scope bị từ chối            | BLOCKED BY ENVIRONMENT |
+| 8   | Resident protection và OCR capture creation regression        | BLOCKED BY ENVIRONMENT |
+| 9   | Property audit success/rollback và duplicate race             | BLOCKED BY ENVIRONMENT |
+| 10  | BillingPolicy/Invoice snapshot và FirstUsedAt                 | BLOCKED BY ENVIRONMENT |
 
 Static review xác nhận thứ tự khóa nhất quán nêu ở phần A và không thấy đường Location → payment ledger.
 Unit tests xác nhận version/no-op/stale/multiple contracts ở mức Application. Hai nguồn này không thay thế PostgreSQL test
@@ -93,11 +93,11 @@ Root cause của 23 lỗi cũ là test isolation:
 Model production được cố ý loại khỏi Git vì `.gitignore` bỏ toàn bộ `.tools/`. Setup được tài liệu hóa bằng
 `scripts/Get-OcrModels.ps1`; script provisioning pin revision/checksum. Engine yêu cầu:
 
-| File | SHA-256 được code kiểm tra |
-| --- | --- |
-| `detection.onnx` | `eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1` |
+| File               | SHA-256 được code kiểm tra                                         |
+| ------------------ | ------------------------------------------------------------------ |
+| `detection.onnx`   | `eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1` |
 | `recognition.onnx` | `767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12` |
-| `charset.txt` | `5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448` |
+| `charset.txt`      | `5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448` |
 
 Không tải model và không thay thuật toán production. Fixture API được sửa để warmup dùng test engine. Kết quả thực thi mới:
 `OcrApiTests`: **35 PASS, 0 FAIL, 0 SKIP**. Smoke/accuracy với engine production vẫn **NOT RUN** vì model local không có;
@@ -105,16 +105,16 @@ muốn chạy phải provisioning bằng script được repository duyệt rồ
 
 ## D. Regression Tests
 
-| Lệnh thực thi ngày 05/11/2026 | Kết quả |
-| --- | --- |
-| `dotnet build src/backend/BHome.sln` | PASS — 0 warning, 0 error |
-| `dotnet test src/backend/BHome.sln --no-build --filter "Category!=Docker"` | PASS — Domain 90; Application 219; Integration 215 PASS + 126 SKIP; tổng 524 PASS, 0 FAIL |
-| `dotnet test ... --filter "FullyQualifiedName~OcrApiTests"` | PASS — 35/35 |
-| 10 `PropertyContractDockerTests` | BLOCKED BY ENVIRONMENT — fixture DockerUnavailableException; 0 test nghiệp vụ được thực thi |
-| Full `dotnet test src/backend/BHome.sln` | NOT RUN — Docker engine đã được xác minh không khả dụng; filtered critical suite đã ghi nhận blocker |
-| `dotnet format src/backend/BHome.sln --verify-no-changes --no-restore` | FAIL — 43 whitespace diagnostics chỉ trong 2 file ngoài Phase 1A: `tools/BHome.Compact24Migration/Program.cs`, `tools/BHome.OcrSmoke/AutomaticOcrEvaluation.cs` |
-| Format verify với `--include` toàn bộ 14 file C# Phase 1A/verification thay đổi | PASS — exit 0 |
-| `git diff --check` | PASS |
+| Lệnh thực thi ngày 05/11/2026                                                   | Kết quả                                                                                                                                                         |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotnet build src/backend/BHome.sln`                                            | PASS — 0 warning, 0 error                                                                                                                                       |
+| `dotnet test src/backend/BHome.sln --no-build --filter "Category!=Docker"`      | PASS — Domain 90; Application 219; Integration 215 PASS + 126 SKIP; tổng 524 PASS, 0 FAIL                                                                       |
+| `dotnet test ... --filter "FullyQualifiedName~OcrApiTests"`                     | PASS — 35/35                                                                                                                                                    |
+| 10 `PropertyContractDockerTests`                                                | BLOCKED BY ENVIRONMENT — fixture DockerUnavailableException; 0 test nghiệp vụ được thực thi                                                                     |
+| Full `dotnet test src/backend/BHome.sln`                                        | NOT RUN — Docker engine đã được xác minh không khả dụng; filtered critical suite đã ghi nhận blocker                                                            |
+| `dotnet format src/backend/BHome.sln --verify-no-changes --no-restore`          | FAIL — 43 whitespace diagnostics chỉ trong 2 file ngoài Phase 1A: `tools/BHome.Compact24Migration/Program.cs`, `tools/BHome.OcrSmoke/AutomaticOcrEvaluation.cs` |
+| Format verify với `--include` toàn bộ 14 file C# Phase 1A/verification thay đổi | PASS — exit 0                                                                                                                                                   |
+| `git diff --check`                                                              | PASS                                                                                                                                                            |
 
 126 SKIP là các CompactPostgres tests cần `BHOME_COMPACT24_TEST_ADMIN`; không được tính là PASS.
 TRX/log hiện tại nằm trong `%TEMP%/bhome-phase1a-verification-nondocker` và
