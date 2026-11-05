@@ -4,7 +4,17 @@ import {
   ocrPreview,
   categoryLabel,
   reviewWarning,
+  meterUnit,
 } from '../../../src/mobile/src/lib/automaticOcr';
+
+it('shows units only for a resolved utility and never infers technology from units', () => {
+  expect(meterUnit('water_mechanical')).toBe('m³');
+  expect(meterUnit('water_digital')).toBe('m³');
+  expect(meterUnit('electricity_mechanical')).toBe('kWh');
+  expect(meterUnit('electricity_digital')).toBe('kWh');
+  expect(meterUnit('unknown')).toBeUndefined();
+  expect(meterUnit('cccd_front')).toBeUndefined();
+});
 
 it('explains recognizer conflict and profile confirmation without exposing internal codes', () => {
   expect(reviewWarning('recognizer_conflict')).toContain('không khớp');

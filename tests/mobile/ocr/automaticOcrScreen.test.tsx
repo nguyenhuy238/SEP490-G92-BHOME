@@ -256,6 +256,42 @@ it('reuses the same temporary image for explicit classification and server preci
   );
   expect(screen.getByText('Loại ảnh đã chọn: Điện · Điện tử')).toBeTruthy();
   expect(mocks.image.mock.calls[1][1]).toBe(mocks.image.mock.calls[0][1]);
+  expect([...mocks.image.mock.calls[0][1]]).toEqual([1, 2, 3]);
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa kết quả tạm' }));
+  expect([...mocks.image.mock.calls[0][1]]).toEqual([0, 0, 0]);
+});
+it('lets a classified meter use server precision without taking another image', async () => {
+  mocks.image
+    .mockResolvedValueOnce({
+      analysis: {
+        ...unknown('classified'),
+        detectedCategory: 'electricity_digital',
+        meterProposal: {
+          ...proposal({ reading: '032514' }),
+          warnings: ['decimal_separator_unverified'],
+        },
+        cropPreviewDataUri: 'data:image/jpeg;base64,BAUG',
+      },
+    })
+    .mockResolvedValueOnce({ proposal: proposal({ reading: '03251.4' }) });
+  render(<OcrTest />);
+  await capture();
+  expect(await screen.findByLabelText('Chỉ số đồng hồ')).toHaveValue('032514');
+  expect(screen.getByText('Đơn vị: kWh')).toBeTruthy();
+  expect(screen.queryByLabelText('Loại ảnh sau khi kiểm tra')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Đọc lại theo số thập phân' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Số chữ số thập phân thực tế'), {
+    target: { value: '1' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Đọc lại theo số thập phân' }));
+  await waitFor(() => expect(screen.getByLabelText('Chỉ số đồng hồ')).toHaveValue('03251.4'));
+  expect(mocks.image.mock.calls[1][0]).toBe(
+    '/api/v1/ocr/diagnostics/electricity-digital?decimalPlaces=1',
+  );
+  expect(mocks.image.mock.calls[1][1]).toBe(mocks.image.mock.calls[0][1]);
+  expect(screen.getByAltText('Vùng chỉ số đã tìm thấy')).toBeTruthy();
+  act(() => mocks.onState?.('background'));
+  expect(screen.queryByLabelText('Chỉ số đồng hồ')).toBeNull();
   expect([...mocks.image.mock.calls[0][1]]).toEqual([0, 0, 0]);
 });
 it('ignores a late response after backgrounding and zeroes the owned image', async () => {

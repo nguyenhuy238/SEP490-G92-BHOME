@@ -29,6 +29,11 @@ export function categoryProfile(category: string) {
 export function categoryLabel(category: string) {
   return ocrProfiles.find((p) => p.id === categoryProfile(category))?.label ?? 'Chưa xác định';
 }
+export function meterUnit(category: string) {
+  if (category === 'water_mechanical' || category === 'water_digital') return 'm³';
+  if (category === 'electricity_mechanical' || category === 'electricity_digital') return 'kWh';
+  return undefined;
+}
 export function reviewWarning(code: string) {
   const messages: Record<string, string> = {
     recognizer_conflict: 'Hai cách đọc không khớp. Hãy đối chiếu ảnh và nhập chỉ số bằng tay.',

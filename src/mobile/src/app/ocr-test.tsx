@@ -23,6 +23,8 @@ import {
   type AutomaticDiagnosticResult,
   automaticDiagnosticEndpoint,
   categoryLabel,
+  categoryProfile,
+  meterUnit,
   reviewWarning,
   TemporaryOcrImage,
   ocrPreview,
@@ -136,8 +138,13 @@ export default function OcrTest() {
           )
         : {},
     );
-    if (result.classificationStatus === 'classified' || result.classificationStatus === 'manual')
-      image.current.clear();
+    if (result.classificationStatus === 'classified' || result.classificationStatus === 'manual') {
+      if (result.meterProposal && meterUnit(result.detectedCategory)) {
+        // Retain meter bytes only within the existing 60s review window so a
+        // precision correction can be processed by the server without recapture.
+        setManualProfile(categoryProfile(result.detectedCategory));
+      } else image.current.clear();
+    }
   };
   const run = async (manual = false) => {
     if (!api || !image.current.bytes || lock.current) return;
@@ -172,6 +179,10 @@ export default function OcrTest() {
             warnings: [],
             identityProposal: manualProfile.startsWith('identity-') ? result.proposal : null,
             meterProposal: manualProfile.startsWith('identity-') ? null : result.proposal,
+            cropPreviewDataUri:
+              manualProfile === categoryProfile(analysis?.detectedCategory ?? '')
+                ? analysis?.cropPreviewDataUri
+                : null,
           });
       } else {
         const result = await api.image<AutomaticDiagnosticResult>(
@@ -209,6 +220,10 @@ export default function OcrTest() {
     !!preview && !!analysis && !['classified', 'manual'].includes(analysis.classificationStatus);
   const warnings = [
     ...new Set([...(analysis?.warnings ?? []), ...(proposal?.warnings ?? [])].map(reviewWarning)),
+  ];
+  const precisionItems = [
+    { id: 'auto', label: 'Chưa xác định' },
+    ...[0, 1, 2, 3, 4].map((v) => ({ id: String(v), label: `${v} chữ số thập phân` })),
   ];
   return (
     <Page>
@@ -271,10 +286,7 @@ export default function OcrTest() {
           {!!manualProfile && !manualProfile.startsWith('identity-') && (
             <Select
               label="Số chữ số thập phân thực tế"
-              items={[
-                { id: 'auto', label: 'Chưa xác định' },
-                ...[0, 1, 2, 3, 4].map((v) => ({ id: String(v), label: `${v} chữ số thập phân` })),
-              ]}
+              items={precisionItems}
               selected={decimalPlaces}
               onSelect={(value) => {
                 if (!busy) setDecimalPlaces(value);
@@ -301,6 +313,9 @@ export default function OcrTest() {
               ? 'Cần kiểm tra lại thông tin'
               : 'Đã đọc thông tin — cần đối chiếu'}
           </Text>
+          {analysis?.meterProposal && meterUnit(analysis.detectedCategory) && (
+            <Text>Đơn vị: {meterUnit(analysis.detectedCategory)}</Text>
+          )}
           <Text>
             {analysis?.classificationStatus === 'manual'
               ? 'Loại ảnh đã chọn'
@@ -322,6 +337,21 @@ export default function OcrTest() {
               onChange={(text) => setFields((before) => ({ ...before, [key]: text }))}
             />
           ))}
+          {!needsType && analysis?.meterProposal && !!manualProfile && (
+            <>
+              <Select
+                label="Số chữ số thập phân thực tế"
+                items={precisionItems}
+                selected={decimalPlaces}
+                onSelect={(value) => {
+                  if (!busy) setDecimalPlaces(value);
+                }}
+              />
+              <Button disabled={busy || decimalPlaces === 'auto'} onPress={() => void run(true)}>
+                Đọc lại theo số thập phân
+              </Button>
+            </>
+          )}
           <Text style={styles.note}>
             Các chỉnh sửa chỉ ở màn thử, không xác nhận hồ sơ hay chỉ số nghiệp vụ.
           </Text>
