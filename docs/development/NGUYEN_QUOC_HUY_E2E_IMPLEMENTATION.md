@@ -65,6 +65,7 @@ Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường 
 - `68761b4` — `feat(payment): [BE-22][BE-X07] retain partial debt and isolate excess receipts`: 13 file trong slice payment; 8 domain/4 PostgreSQL/6 UI tests đạt, build/lint đạt; refund execution còn thiếu.
 - `886acca` — `fix(finance): [BE-31] retain expense scope inside Location Workspace`: 3 file; 4 UI tests/build đạt.
 - `4865902` — `test(finance): [BE-15][BE-34] verify real browser workflows on disposable Compact24`: thêm harness/browser script, tài liệu và fallback reason cho allocation import; build 0 warning/error, browser đạt, full integration 588/589 (1 optional skip).
+- `72638db` — `fix(finance): [BE-31] render real expenses in Location investment route`: sửa Outlet/API boundary, thêm regression route/browser và cập nhật inventory; route test 1/1, browser 5/5, build/lint đạt.
 
 ## Slice BE-31 Expenses API và Owner Web
 
@@ -169,3 +170,56 @@ Không đóng toàn bộ 22 nhiệm vụ. Các phần được triển khai/ki�
 | DOC-03 | Bằng chứng/commands/commits/handoff và gaps trong báo cáo này                                                    | Report 7/checklist workbook không có trong repository; chưa thể hoàn tất hồ sơ final theo mẫu                              | PARTIAL                 |
 
 Không coi việc người dùng ủy quyền chính sách là đã triển khai refund/settlement. Chưa tìm thấy MySign configuration trong files/process đã kiểm; không suy đoán secret trong nguồn ngoài repository. Không push/merge hoặc thay production data.
+
+Đã kiểm tra thêm UserSecretsId thực tế `bhome-api-development`: file user-secrets có tồn tại nhưng không có key DigitalSigning/Viettel/MySign; chỉ xuất trạng thái có/không, không đọc/in giá trị bí mật ra log. Không sửa file cấu hình hoặc secrets. PostgreSQL test riêng port 55439 đã dừng sau khi các bài kiểm tra DB/browser kết thúc; không dừng instance PostgreSQL của dự án. Không còn API/browser helper của harness đang chạy sau cleanup.
+
+## Danh sách file thay đổi qua các commit triển khai
+
+- docs/api/API_IMPLEMENTATION_STATUS.md
+- docs/api/FINANCE.md
+- docs/api/PAYMENTS.md
+- docs/development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md
+- packages/client-core/src/finance.ts
+- packages/client-core/src/payments.ts
+- scripts/Verify-FinanceClients.cjs
+- src/backend/BHome.Api/Controllers/ExpensesController.cs
+- src/backend/BHome.Api/Controllers/FinancialReportsController.cs
+- src/backend/BHome.Api/Controllers/FinancialScenariosController.cs
+- src/backend/BHome.Api/Middleware/ApiExceptionHandler.cs
+- src/backend/BHome.Application/Finance/ExpenseService.cs
+- src/backend/BHome.Application/Finance/FinancialReportService.cs
+- src/backend/BHome.Application/Finance/FinancialScenarioService.cs
+- src/backend/BHome.Application/PaymentsDebt/PaymentContracts.cs
+- src/backend/BHome.Application/PaymentsDebt/PaymentService.cs
+- src/backend/BHome.Domain/PaymentsDebt/PaymentRecords.cs
+- src/backend/BHome.Infrastructure/DependencyInjection.cs
+- src/backend/BHome.Infrastructure/Finance/ExpenseRepository.cs
+- src/backend/BHome.Infrastructure/Finance/FinancialReportRepository.cs
+- src/backend/BHome.Infrastructure/Finance/FinancialScenarioRepository.cs
+- src/backend/BHome.Infrastructure/PaymentsDebt/PaymentRepository.cs
+- src/backend/BHome.Infrastructure/Persistence/Compact24/Compact24EventsAndLedger.cs
+- src/owner-web/src/app/router.test.tsx
+- src/owner-web/src/features/contracts/MainDraftSettingsPanel.test.tsx
+- src/owner-web/src/features/contracts/MainDraftSettingsPanel.tsx
+- src/owner-web/src/features/expenses/ExpensesApiPage.test.tsx
+- src/owner-web/src/features/expenses/ExpensesApiPage.tsx
+- src/owner-web/src/features/expenses/useFinanceApi.ts
+- src/owner-web/src/features/locations/pages/LocationWorkspace.tsx
+- src/owner-web/src/features/payments/OwnerInvoicePaymentPanel.tsx
+- src/owner-web/src/features/payments/Payments.test.tsx
+- src/owner-web/src/features/property/FinancePages.tsx
+- src/owner-web/src/features/reports/FinancialReportsApiPage.test.tsx
+- src/owner-web/src/features/reports/FinancialReportsApiPage.tsx
+- src/owner-web/src/features/reports/pages/ReportsPage.tsx
+- src/owner-web/src/features/what-if/FinancialScenariosApiPage.test.tsx
+- src/owner-web/src/features/what-if/FinancialScenariosApiPage.tsx
+- src/owner-web/src/features/what-if/pages/WhatIfPage.tsx
+- tests/backend/BHome.Application.UnitTests/Finance/FinancialReportTests.cs
+- tests/backend/BHome.Application.UnitTests/Finance/FinancialScenarioTests.cs
+- tests/backend/BHome.Domain.UnitTests/PaymentsDebt/PaymentRulesTests.cs
+- tests/backend/BHome.IntegrationTests/Compact24/Compact24ExpenseTests.cs
+- tests/backend/BHome.IntegrationTests/Compact24/Compact24FinanceLedgerTests.cs
+- tests/backend/BHome.IntegrationTests/Compact24/Compact24WorkflowRegressionTests.cs
+- tests/backend/BHome.IntegrationTests/PaymentsDebt/PaymentLedgerTests.cs
+- tools/BHome.ContractVerification/ContractVerificationCli.cs
+- tools/BHome.ContractVerification/FinanceVerificationCli.cs
