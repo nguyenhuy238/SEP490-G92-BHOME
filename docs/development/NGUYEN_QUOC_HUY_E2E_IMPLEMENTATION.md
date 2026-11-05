@@ -64,6 +64,7 @@ Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường 
 - `dd087f3` — `feat(finance): [BE-34] save and compare isolated financial scenarios`: 15 file trong slice What-if và compatibility DI; 25/25 Finance/ApiFoundation, 2 formula + 2 UI tests, build/lint đạt; PARTIAL.
 - `68761b4` — `feat(payment): [BE-22][BE-X07] retain partial debt and isolate excess receipts`: 13 file trong slice payment; 8 domain/4 PostgreSQL/6 UI tests đạt, build/lint đạt; refund execution còn thiếu.
 - `886acca` — `fix(finance): [BE-31] retain expense scope inside Location Workspace`: 3 file; 4 UI tests/build đạt.
+- `4865902` — `test(finance): [BE-15][BE-34] verify real browser workflows on disposable Compact24`: thêm harness/browser script, tài liệu và fallback reason cho allocation import; build 0 warning/error, browser đạt, full integration 588/589 (1 optional skip).
 
 ## Slice BE-31 Expenses API và Owner Web
 
@@ -129,3 +130,42 @@ Khi vào `/locations/:locationId/investment`, API page nay ưu tiên Location c�
 Domain full hiện tại: **83/83**; Application full: **232/232**; DigitalSigning riêng: **41/41**. Mobile: **372/372** với Node22, typecheck/lint đạt. Owner Web full cuối đang chờ kết quả; timeout /schedules từng xuất hiện khi chạy cùng integration, không sửa assertion hoặc tăng timeout.
 
 Các lần chạy lỗi trước được giữ trong nhật ký ở trên; không cộng double-count các nhóm test nằm trong full suite. Logs/TRX raw nằm trong `.tools`/TestResults bị ignore; báo cáo không chứa secrets, UUID Tenant thật hoặc bank credentials. Các database tổng hợp và artifacts TLS được cleanup bởi fixture/harness.
+
+## Sửa route Vốn và Chi phí và kết quả kiểm tra bổ sung
+
+Phát hiện `LocationWorkspace` liệt kê tab investment nhưng không render Outlet cho tab này; API mode còn bị chặn bởi prototype property provider. Đã cho child route Finance sử dụng nguồn API riêng và render Outlet đúng. Không thay các tab khác. Browser kiểm `/locations/<synthetic-id>/investment`, dữ liệu đúng cơ sở và selector khóa phạm vi: đạt. Browser toàn bộ cuối **5/5 nhóm đạt, exit 0** (4 nhóm trước cộng Location route). Test route mới đạt 1/1 (36 case khác không chọn); cold lazy import được chờ trong 10s ở test mới, không tăng timeout các test có sẵn. Build/lint Owner Web đạt.
+
+Full Owner Web Node22/maxWorkers=1 sau khi backend nghỉ: **122 đạt / 1 timeout / 123 tổng**, case `keeps property functions inside the selected Location Workspace` vượt 15s ở mock room view. Lượt chạy đồng thời trước timeout `/schedules`; các case đã đạt khi chạy riêng. Chưa sửa production prototype Room view hoặc nới timeout để che vấn đề; **không tuyên bố full Owner suite PASS**. Test mới của investment chạy sau full suite, không cộng nó để công bố một full suite khác.
+
+Audit routes được chạy lại với evidence output: **1/1 đạt**, 199 routes (194 protected/5 anonymous), 97 Owner GET probes, 0 HTTP5xx. Phân bố GET: 200=32, 204=2, 400=9, 403=3, 404=51. Đây là audit khả dụng/quyền và negative lookups; không chứng minh mọi happy path. `docs/api/API_IMPLEMENTATION_STATUS.md` được cập nhật số liệu và Finance.
+
+## Trạng thái bàn giao cuối của lượt triển khai
+
+Không đóng toàn bộ 22 nhiệm vụ. Các phần được triển khai/kiểm chứng và phần còn lại cụ thể:
+
+| Task   | Kết quả hiện tại                                                                                                 | Việc còn lại                                                                                                               | Trạng thái              |
+| ------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| BE-X04 | Fresh Compact24, DI/Identity/worker/readiness/SQL log independence và regression đạt                             | Không có legacy runtime dependency được phát hiện trong phạm vi đã test                                                    | DONE                    |
+| BE-14  | Boundary và transfer guard được test                                                                             | Implement Holding ledger/API/UI bằng cơ chế signing chung; chưa có Holding workflow thật                                   | PARTIAL                 |
+| BE-15  | Browser cấu hình Owner; Compact24 onboarding/draft/documents/signing/activation tests đạt                        | MySign test/staging và toàn tuyến Owner/Tenant từ onboarding tới activation                                                | PARTIAL                 |
+| BE-16  | Renewal/history/state/scope regression đạt                                                                       | Provider staging + Owner/Tenant UI E2E với renewal đã ký                                                                   | PARTIAL                 |
+| BE-17  | Handover scoped Staff/Tenant, baseline/evidence/version regression đạt                                           | Native device E2E sau contract activation trên môi trường được phép                                                        | PARTIAL                 |
+| BE-19  | Inspection/final readings/pending settlement/room release guards đạt                                             | Deposit deductions/refund/settlement journal thực và UI đầy đủ; không fake Resolved                                        | PARTIAL                 |
+| BE-20  | OCR/capture/confirmation regression hiện hữu đạt                                                                 | Một optional real-model HTTP test skip; detector accuracy/device acceptance theo báo cáo OCR còn giới hạn                  | PARTIAL                 |
+| BE-21  | Invoice Room/kỳ, source snapshot/finalization/immutability/scope/automation regression đạt                       | Browser/Tenant native xuyên chu kỳ hóa đơn và reviewer                                                                     | PARTIAL                 |
+| BE-22  | Verified manual allocation, partial/excess/debt/history/idempotency/race tests đạt; Owner UI cập nhật            | Browser payment workflow riêng, cấu hình bank provider nếu cần tự đối soát                                                 | PARTIAL                 |
+| BE-23  | Debt/overdue/notification/current assignment regression đạt                                                      | Full UI/device reminder acceptance và cấu hình delivery thật                                                               | PARTIAL                 |
+| BE-24  | Request/evidence/decision/immutable financial history regression đạt                                             | Browser/Tenant native full request-decision workflow và reviewer                                                           | PARTIAL                 |
+| BE-25  | Payer privacy/verified allocations/history regression đạt                                                        | Browser/device E2E history với nhiều lần thanh toán                                                                        | PARTIAL                 |
+| BE-31  | CRUD/filter/detail/versions/history/Owner permission, actual Compact24, browser tạo/sửa/reload và Location route | Upload/download chứng từ riêng và chọn Asset/Work Order khi ghi chi thủ công; UI reviewer                                  | PARTIAL                 |
+| BE-32  | Actual scoped invoice/adjustment/collection/OPEX/debt/profit/current occupancy API+UI và browser đạt             | Historical occupancy, Staff cost tự động, classified refund chưa nằm trong slice; không có dashboard accounting hoàn chỉnh | PARTIAL                 |
+| BE-33  | Recovery/payback formula, null/negative/zero/refund guard, API/UI/browser đạt                                    | Classified cash refunds và nguồn vốn ngoài expenses cần tích hợp để mở rộng phạm vi                                        | PARTIAL                 |
+| BE-34  | Analyze/save/list/get/compare, immutable snapshots/isolation/role/idempotency; browser save/reload đạt           | Vũ Xuân Trường review UX; không thay actual ledger                                                                         | DONE (functional slice) |
+| BE-X05 | Populated synthetic 70→24 mapping/reconciliation/rollback/privacy/evidence tests trong full suite đạt            | Không chạy migration trên working bhome; chưa có pilot với một dataset legacy ngoài fixtures được chủ dự án chỉ định       | PARTIAL                 |
+| BE-X06 | DOCX/PDF converter thật và MinIO/authorization regressions; PDF signing 41 tests đạt                             | Không thấy cấu hình MySign staging; cần account/provider/ownership verification, không có chữ ký thật trong lượt này       | PARTIAL                 |
+| BE-X07 | Đã chọn/ghi/triển khai under/over payment policy được ủy quyền                                                   | Refund/credit/deposit settlement execution và UI chưa triển khai đủ                                                        | PARTIAL                 |
+| BE-X08 | 7 formula tests + finance actual-ledger regression, full payment/invoice tests đạt                               | Regression settlement/refund khi các chức năng đó được triển khai                                                          | PARTIAL                 |
+| DOC-01 | API inventory/Finance/Payments/progress có source traceability và kết quả thật                                   | Bản gốc Reports 2/3/4 chưa sửa; supplement này ghi discrepancy, không thay approved baseline bằng claims                   | PARTIAL                 |
+| DOC-03 | Bằng chứng/commands/commits/handoff và gaps trong báo cáo này                                                    | Report 7/checklist workbook không có trong repository; chưa thể hoàn tất hồ sơ final theo mẫu                              | PARTIAL                 |
+
+Không coi việc người dùng ủy quyền chính sách là đã triển khai refund/settlement. Chưa tìm thấy MySign configuration trong files/process đã kiểm; không suy đoán secret trong nguồn ngoài repository. Không push/merge hoặc thay production data.

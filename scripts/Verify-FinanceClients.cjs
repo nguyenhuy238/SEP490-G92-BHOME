@@ -58,6 +58,16 @@ async function main(settings) {
     await page.getByRole('button', { name: 'Lưu khoản chi', exact: true }).click();
     await page.getByText('Đã lưu khoản chi.', { exact: true }).waitFor();
     console.log('PASS: browser creates, reloads and corrects an actual Compact24 expense.');
+    await page.goto(settings.origin + '/locations/' + settings.locationId + '/investment');
+    await page.getByRole('heading', { name: 'Đầu tư ban đầu & Chi phí', exact: true }).waitFor();
+    await page.getByText('Vệ sinh tổng hợp — 250.000 ₫', { exact: true }).waitFor();
+    assert.equal(
+      await page
+        .getByRole('combobox', { name: 'Cơ sở', exact: true })
+        .getAttribute('aria-disabled'),
+      'true',
+    );
+    console.log('PASS: Location investment child route uses real scoped expenses in API mode.');
     await page.goto(settings.origin + '/reports');
     await page.getByLabel('Từ ngày').fill('2026-11-01');
     await page.getByLabel('Đến ngày').fill('2026-11-30');
