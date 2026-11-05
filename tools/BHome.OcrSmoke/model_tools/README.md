@@ -14,6 +14,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Prepare-PretrainedMe
 ```
 
 Add `-IncludeCandidateB` to reproduce the second candidate's export/parity.
+Add `-IncludeStage2` for the pinned 416×416 analog-water digit model, and
+`-IncludeFullPublicTest` for all52 author-test photos/labels with hashes.
 Add `-EnableDevelopment` to set the three local detector settings (not production).
 Restart the existing API after configuration changes.
 
@@ -32,3 +34,8 @@ licensing. Review the source/license references in the report before deployment.
 The selected detector has no four-category classifier and does not prove OCR
 quality: measured exact reading is 1/7 fully labeled public images, with 70%
 manual fallback over the ten-image subset.
+
+See the [05/11 completion report](../../../docs/development/METER_OCR_COMPLETION_REPORT.md)
+for stage2 A/B/C comparisons and final full-pipeline metrics. Stage2 improves raw
+crop reading but conservative conflict rejection leaves high fallback; acceptance
+is not met. It is not a universal electricity/LCD reader or four-type classifier.

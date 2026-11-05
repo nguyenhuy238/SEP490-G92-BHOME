@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("models", type=Path)
 parser.add_argument("images", type=Path)
 parser.add_argument("--include-candidate-b", action="store_true")
+parser.add_argument("--stage2-only", action="store_true")
 args = parser.parse_args()
 config_directory = args.models.resolve() / "ultralytics-settings"
 config_directory.mkdir(parents=True, exist_ok=True)
@@ -30,6 +31,7 @@ torch.set_num_threads(2)
 PINNED = {
     "water-stage1.pt": "f2882a477bc12ecc5526cf73438d254945271c3e1b2b4214aa8e4deb637c3be9",
     "rwanda-best.pt": "7215bf64c237d7b376c4f0ac85141ace5b75acdbf5f8be805e2b8ac573269167",
+    "water-stage2.pt": "f5553aaba25b49b8cab4b74d5b87f0ad68779a889fe19dcbc3139439a0f3ef02",
 }
 
 def safe_checkpoint(path):
@@ -52,17 +54,18 @@ def safe_checkpoint(path):
     with torch.serialization.safe_globals(allowed):
         return torch.load(path, map_location="cpu", weights_only=True)
 
-def letterbox(image):
+def letterbox(image, size=640):
     h, w = image.shape[:2]
-    ratio = min(640 / w, 640 / h)
+    ratio = min(size / w, size / h)
     rw, rh = round(w * ratio), round(h * ratio)
-    left, top = round((640 - rw) / 2 - .1), round((640 - rh) / 2 - .1)
+    left, top = round((size - rw) / 2 - .1), round((size - rh) / 2 - .1)
     resized = cv2.resize(image, (rw, rh), interpolation=cv2.INTER_LINEAR)
-    padded = cv2.copyMakeBorder(resized, top, 640-rh-top, left, 640-rw-left, cv2.BORDER_CONSTANT, value=(114,114,114))
+    padded = cv2.copyMakeBorder(resized, top, size-rh-top, left, size-rw-left, cv2.BORDER_CONSTANT, value=(114,114,114))
     return np.ascontiguousarray(padded[:,:,::-1].transpose(2,0,1)[None], dtype=np.float32) / 255
 
 reports = []
-for filename in PINNED if args.include_candidate_b else ("water-stage1.pt",):
+for filename in (("water-stage2.pt",) if args.stage2_only else ("water-stage1.pt", "rwanda-best.pt") if args.include_candidate_b else ("water-stage1.pt",)):
+    size = 416 if filename == "water-stage2.pt" else 640
     path = args.models.resolve() / filename
     checkpoint = safe_checkpoint(path)
     task = "obb" if "OBB" in type(checkpoint["model"]).__name__ else "detect"
@@ -71,11 +74,11 @@ for filename in PINNED if args.include_candidate_b else ("water-stage1.pt",):
     wrapper.model.args = {**DEFAULT_CFG_DICT, **checkpoint.get("train_args", {})}
     wrapper.model.pt_path = str(path)
     wrapper.model.task = task
-    wrapper.overrides = {"model": str(path), "task": task, "imgsz": 640}
+    wrapper.overrides = {"model": str(path), "task": task, "imgsz": size}
     wrapper.task = task
     names = wrapper.model.names
     print(json.dumps({"model": filename, "task": task, "names": names, "checkpointVersion": checkpoint.get("version")}))
-    exported = Path(wrapper.export(format="onnx", imgsz=640, opset=17, simplify=False,
+    exported = Path(wrapper.export(format="onnx", imgsz=size, opset=17, simplify=False,
                                   dynamic=False, nms=False, batch=1, device="cpu", verbose=False))
     graph = onnx.load(str(exported))
     metadata = [(p.key, p.value) for p in graph.metadata_props if p.key != "date"]
@@ -89,19 +92,19 @@ for filename in PINNED if args.include_candidate_b else ("water-stage1.pt",):
     head.export = True
     head.format = "onnx"
     samples = []
-    for photo in sorted(args.images.glob("*.jpg")):
+    for photo in sorted(p for p in args.images.iterdir() if p.suffix.lower() in (".jpg", ".png")):
         image = cv2.imread(str(photo))
-        tensor = letterbox(image)
+        tensor = letterbox(image, size)
         with torch.inference_mode():
             native = wrapper.model(torch.from_numpy(tensor)).numpy()
         converted = session.run(None, {session.get_inputs()[0].name: tensor})[0]
         delta = np.abs(native - converted)
         np.testing.assert_allclose(native, converted, rtol=2e-3, atol=2e-3)
-        result = wrapper.predict(image, imgsz=640, conf=.25, iou=.7, rect=False, device="cpu", verbose=False)[0]
+        result = wrapper.predict(image, imgsz=size, conf=.35 if args.stage2_only else .25, iou=.45 if args.stage2_only else .7, rect=False, device="cpu", verbose=False)[0]
         boxes = result.obb if task == "obb" else result.boxes
         objects = []
         for i, cls in enumerate(boxes.cls.int().tolist()):
-            if names[cls] not in ("meter", "window", "water_meter", "reading_window"):
+            if not args.stage2_only and names[cls] not in ("meter", "window", "water_meter", "reading_window"):
                 continue
             coords = boxes.xywhr[i].tolist() if task == "obb" else boxes.xywh[i].tolist() + [0.0]
             objects.append({"classId": cls, "name": names[cls], "confidence": float(boxes.conf[i]), "xywhr": coords})
@@ -113,5 +116,5 @@ for filename in PINNED if args.include_candidate_b else ("water-stage1.pt",):
         "onnxSha256": hashlib.sha256(exported.read_bytes()).hexdigest(), "task": task,
         "names": names, "input": session.get_inputs()[0].shape, "output": session.get_outputs()[0].shape,
         "samples": samples})
-(args.models / "native-onnx-parity.json").write_text(json.dumps(reports, indent=2), encoding="utf-8")
+(args.models / ("native-stage2-parity.json" if args.stage2_only else "native-onnx-parity.json")).write_text(json.dumps(reports, indent=2), encoding="utf-8")
 print("Native/ONNX parity passed; no training performed.")
