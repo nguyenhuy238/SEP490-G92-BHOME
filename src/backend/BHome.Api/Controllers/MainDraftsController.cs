@@ -25,6 +25,10 @@ public sealed class MainDraftsController(MainDraftService service) : ControllerB
     public Task<MainDraftView> Update(Guid id, MainDraftInput input, CancellationToken t) => service.SaveAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/documents")]
     public Task<MainDraftFiles> Generate(Guid id, CancellationToken t) => service.GenerateAsync(id, t);
+    [HttpPost("{id:guid}/signing-review")]
+    public Task<ContractDocumentView> SigningReview(Guid id, CancellationToken t) => service.CreateSigningReviewAsync(id, t);
+    [HttpPost("{id:guid}/release"), Authorize(Roles = Roles.Owner)]
+    public Task<ContractId> Release(Guid id, MainDraftReleaseInput input, CancellationToken t) => service.ReleaseAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/documents/{fileId:guid}")]
     public async Task<IActionResult> Download(Guid id, Guid fileId, CancellationToken t)
     {

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Configuration;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, ICurrentUser user, ISigningProvider remote,
-    IPdfSigner pdf, IContractDocumentRenderer renderer, TimeProvider clock) : IContractSigningProvider
+    IPdfSigner pdf, IContractDocumentRenderer renderer, TimeProvider clock, ContractSigningDocumentSource documents) : IContractSigningProvider
 {
     public async Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)
     {
@@ -21,13 +21,14 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
         if (certificate is null || certificate.OwnerUserId != user.UserId || certificate.Provider != SigningProviders.ViettelMySign)
             throw ContractException.Missing();
         if (certificate.Locked || !certificate.IsValidAt(clock.GetUtcNow())) throw ContractException.Conflict("signing_certificate_not_valid");
-        await renderer.ValidateAsync(document, t);
+        var reviewed = await documents.ReadAsync(document, t);
+        if (reviewed is null) await renderer.ValidateAsync(document, t);
         try
         {
             var credentials = await remote.ListCredentialsAsync(certificate.ProviderUserId, certificate.SerialNumber, t);
             var credential = credentials.SingleOrDefault(c => c.CredentialId == certificate.CredentialId)
                 ?? throw ContractException.Conflict("signing_certificate_no_longer_available");
-            var source = previousPdf ?? await renderer.RenderAsync(document, t);
+            var source = previousPdf ?? reviewed ?? await renderer.RenderAsync(document, t);
             if (source.Length > 10 * 1024 * 1024 || source.Length < 5 || !source.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
                 throw ContractException.Invalid("contract_pdf_invalid");
             // Incremental signing: the second signer signs the first signer's complete PDF.

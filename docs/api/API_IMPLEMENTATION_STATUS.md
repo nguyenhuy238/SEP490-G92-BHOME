@@ -6,6 +6,8 @@ Audit chạy lại ngày 05/11 xác nhận **199 controller routes**: **194 rout
 
 ## Bổ sung Finance ngày 05/11/2026
 
+Bổ sung Main Draft ngày 05/11: thêm `POST main-drafts/{id}/signing-review` và `POST main-drafts/{id}/release`, Owner Web dùng shared client; released Draft nối lại signing/deposit/activation hiện hữu trên Web/Mobile. Canonical PDF được kiểm hash và dùng nguyên bytes khi ký. Chỉ mẫu Development/Testing có nhãn; Production bị chặn. Chi tiết quyền/body/lỗi: [CONTRACT_LIFECYCLE.md](CONTRACT_LIFECYCLE.md). Hai route mới chưa nằm trong số liệu audit 199 route ở trên; chưa chạy lại inventory toàn bộ.
+
 Đã thêm 9 routes Owner-only: Expenses GET collection/GET by ID/POST/PUT, GET financial-reports, Financial-scenarios POST analyze/POST save/GET collection/GET by ID. DTO, công thức, quyền, validation, fixture và handoff ở [FINANCE.md](FINANCE.md). Owner Web `/expenses`, `/reports`, `/what-if` và `/locations/:locationId/investment` dùng shared client thật trong API mode, không fallback demo. Browser E2E đã kiểm tạo/sửa/reload expense, route theo cơ sở, report, scenario save/reload và cấu hình hợp đồng. UI cần Owner Web reviewer; không suy rộng kết quả này sang toàn bộ client.
 
 Allocation route hiện hữu hỗ trợ thiếu/thừa tiền trên Compact24 theo ủy quyền người dùng: min(receipt,dư nợ), tiền thừa giữ riêng, không tự refund. Xem [PAYMENTS.md](PAYMENTS.md). Danh sách route chi tiết cũ bên dưới chưa được tái sinh để thêm 9 route Finance; inventory runtime hiện tại và nguồn kiểm chứng mới được ghi tại [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).

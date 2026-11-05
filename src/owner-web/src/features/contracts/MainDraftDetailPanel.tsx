@@ -8,8 +8,17 @@ import {
   type MainDraftFiles,
   type MainDraftView,
 } from '../../../../../packages/client-core/src/mainDrafts';
+import { MainDraftReleasePanel } from './MainDraftReleasePanel';
 
-export function MainDraftDetailPanel({ id, onChanged }: { id: string; onChanged: () => void }) {
+export function MainDraftDetailPanel({
+  id,
+  onChanged,
+  onReleased,
+}: {
+  id: string;
+  onChanged: () => void;
+  onReleased?: () => void;
+}) {
   const api = useMainDraftApi();
   const [draft, setDraft] = useState<MainDraftView | null>(null);
   const [files, setFiles] = useState<MainDraftFiles | null>(null),
@@ -17,12 +26,16 @@ export function MainDraftDetailPanel({ id, onChanged }: { id: string; onChanged:
     [busy, setBusy] = useState(false);
   const lock = useRef(false),
     [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
+  const [dirty, setDirty] = useState(false);
   useEffect(() => {
     const c = new AbortController();
     api
       .get(id, c.signal)
       .then((v) => {
-        if (!c.signal.aborted) setDraft(v);
+        if (!c.signal.aborted) {
+          setDraft(v);
+          setDirty(false);
+        }
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(contractError(e));
@@ -40,6 +53,7 @@ export function MainDraftDetailPanel({ id, onChanged }: { id: string; onChanged:
       const updated = await api.save(id, input, keys.get('main-draft', input));
       keys.confirmed('main-draft', input);
       setDraft(updated);
+      setDirty(false);
       onChanged();
       if (preview) setFiles(await api.generate(id));
     } catch (e) {
@@ -123,6 +137,7 @@ export function MainDraftDetailPanel({ id, onChanged }: { id: string; onChanged:
                 disabled={busy || draft.status !== 'Draft'}
                 onChange={(e) => {
                   setFiles(null);
+                  setDirty(true);
                   setDraft((v) => v && { ...v, input: { ...v.input, [key]: e.target.value } });
                 }}
               />
@@ -152,6 +167,14 @@ export function MainDraftDetailPanel({ id, onChanged }: { id: string; onChanged:
             <Button disabled={busy} onClick={() => void download(false)}>
               Tải DOCX
             </Button>
+          )}
+          {draft.status === 'Draft' && (
+            <MainDraftReleasePanel
+              key={`${draft.id}:${draft.version}`}
+              draft={draft}
+              disabled={dirty || busy}
+              onReleased={onReleased || onChanged}
+            />
           )}
         </>
       )}

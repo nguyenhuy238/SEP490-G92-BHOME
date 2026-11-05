@@ -1,5 +1,17 @@
 # Contract UI — bổ sung API D011/D012
 
+## Main Draft → tài liệu xem xét → ký (05/11/2026)
+
+UC-15 / GBR-04 / DBR-03. Bổ sung vào controller Main Draft hiện hữu:
+
+- `POST /api/v1/contracts/main-drafts/{id}/signing-review`: Owner hoặc Staff đang được phân công Location, trả `ContractDocumentView` với `kind=SigningReview`. Tái sử dụng file của snapshot hiện tại. PDF được chuyển đổi từ mẫu DOCX hiện hữu và lưu private, có hash/length. Mẫu hiện tại chỉ được phép Development/Testing và có nhãn tài liệu kiểm thử; Production trả 503 `main_draft_signing_template_not_approved`.
+- `GET .../{id}/documents/{fileId}`: dùng endpoint download hiện hữu, kiểm quyền/snapshot/hash trước khi trả bytes. Tài liệu phiên bản cũ trả 409.
+- `POST .../{id}/release`: chỉ Owner signer; bắt buộc `Idempotency-Key` UUID. Body `{ tenantUserId, expectedVersion, reviewedFileId, humanReviewed: true }`; trả `{ id }`. Kiểm tra bản nháp, cấu hình/giá hiện hành, tài khoản Tenant hoạt động, liên kết Resident, room conflict và đúng file đã xem xét. Không đổi signing mode đã ghi lúc tạo Draft. Lặp cùng key/payload trả cùng kết quả; khác payload trả 409.
+
+Release ghi `PendingSigning`, liên kết Tenant đại diện và seal snapshot; giữ encrypted draft metadata và evidence cũ. Tạo Preview bất biến bằng đúng bytes/hash PDF đã xem xét, với object key riêng. `onboardingDraft` trong list/detail chỉ true khi vẫn là Draft; Owner Web chuyển sang workflow ký hiện hữu. Tenant dùng preview/private-download/signing/sync hiện hữu; cả adapter simulation và MySign lấy canonical PDF này thay vì dựng lại mẫu khác. Chưa ký/chưa cọc thì không tự Active hoặc Occupied.
+
+Owner Web yêu cầu lưu hết thay đổi, chọn tài khoản, tải PDF và xác nhận xem xét trước release. Bản simulation luôn hiển thị nhãn thử nghiệm. Nghiệm thu nhà cung cấp thật vẫn BLOCKED vì chưa có MySign staging và mẫu production được duyệt. Các kiểm thử converter/MinIO cục bộ không thay thế nghiệm thu staging.
+
 Truy vết: BF-03B/BF-04A, FE-03, UC-15/16/19, GBR-01/02/04/18, DBR-02/03.
 Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 [bàn giao backend](../development/CONTRACT_LIFECYCLE_DELIVERY.md).

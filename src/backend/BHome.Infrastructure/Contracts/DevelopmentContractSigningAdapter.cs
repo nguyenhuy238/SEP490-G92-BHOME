@@ -29,7 +29,7 @@ internal sealed class ContractWorkflowMode(IOptions<ContractWorkflowOptions> opt
 
 // No CA, certificate or private signing key is created. This is an explicitly labelled simulation.
 internal sealed class DevelopmentContractSigningAdapter(IContractDocumentRenderer renderer, IContractWorkflowMode mode,
-    ICurrentUser user) : IContractSigningProvider
+    ICurrentUser user, ContractSigningDocumentSource documents) : IContractSigningProvider
 {
     private void RequireDemo()
     {
@@ -40,8 +40,9 @@ internal sealed class DevelopmentContractSigningAdapter(IContractDocumentRendere
     public async Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)
     {
         RequireDemo();
-        await renderer.ValidateAsync(document, t);
-        var source = previousPdf ?? await renderer.RenderAsync(document, t);
+        var reviewed = await documents.ReadAsync(document, t);
+        if (reviewed is null) await renderer.ValidateAsync(document, t);
+        var source = previousPdf ?? reviewed ?? await renderer.RenderAsync(document, t);
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfReader(new MemoryStream(source)), new PdfWriter(output)))
         {
