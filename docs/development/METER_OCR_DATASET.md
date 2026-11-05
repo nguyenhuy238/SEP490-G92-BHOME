@@ -1,5 +1,9 @@
 # Dữ liệu và model cho Meter OCR
 
+Tool incremental: [manifest và quy trình annotation](../datasets/meter/README.md)
+và `scripts/Validate-MeterDataset.cjs` kiểm split theo meter/site, hash, vùng số,
+precision/register, unreadable, provenance và path safety. Chỉ validator, chưa train.
+
 Cập nhật05/11: stage2 digit model đã export/integrate thật;52 ảnh author test đã
 được pin hash và đo riêng crop/runtime. Chưa có holdout BHOME đủ4 loại hay
 accuracy90%. Xem [completion report](METER_OCR_COMPLETION_REPORT.md).

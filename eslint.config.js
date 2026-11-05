@@ -9,7 +9,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['scripts/**/*.cjs'],
+    files: ['scripts/**/*.cjs', 'tests/scripts/**/*.cjs'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },

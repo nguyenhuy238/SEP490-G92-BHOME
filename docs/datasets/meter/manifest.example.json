@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "samples": [
+    {
+      "id": "sample_0001",
+      "image": "site_01/meter_01/frame_01.jpg",
+      "sha256": "REPLACE_WITH_ACTUAL_SHA256",
+      "siteGroup": "site_01",
+      "meterGroup": "meter_01",
+      "split": "validation",
+      "category": "water_mechanical",
+      "meterPolygon": [
+        [0.05, 0.05],
+        [0.95, 0.05],
+        [0.95, 0.95],
+        [0.05, 0.95]
+      ],
+      "windowPolygon": [
+        [0.2, 0.2],
+        [0.8, 0.2],
+        [0.8, 0.4],
+        [0.2, 0.4]
+      ],
+      "reading": {
+        "digits": "000123",
+        "digitCount": 6,
+        "decimalPlaces": 2,
+        "billingRegister": "total_volume",
+        "displayState": "single",
+        "unreadablePositions": []
+      },
+      "quality": { "blur": false, "glare": false },
+      "provenance": {
+        "kind": "authorized-private",
+        "license": "LicenseRef-ProjectPermission",
+        "permissionRef": "approval_reference_01"
+      }
+    }
+  ]
+}
