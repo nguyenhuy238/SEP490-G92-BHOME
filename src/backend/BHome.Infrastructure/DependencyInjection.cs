@@ -123,12 +123,16 @@ public static class DependencyInjection
         services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
         services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
+        services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.IAdministrativeContractReadiness>(provider =>
+            provider.GetRequiredService<BHome.Application.Contracts.ContractService>());
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();

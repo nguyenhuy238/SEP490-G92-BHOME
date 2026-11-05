@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -338,6 +339,12 @@ public sealed class OcrApiTests
             AddTestAuthentication(services);
             services.AddSingleton<IOcrWorkflowResources>(resources);
             services.AddSingleton<IStaffLocationAccess>(assignments);
+            // OcrWarmup resolves the engine registered by production. Keep these API tests
+            // independent from the separately provisioned, git-ignored ONNX model files.
+            services.RemoveAll<IOcrEngine>();
+            services.AddSingleton<IOcrEngine>(_ => engine ?? new TestEngine());
+            services.RemoveAll<Lazy<IOcrEngine>>();
+            services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
             services.AddSingleton<LocalOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
                 new Lazy<IOcrEngine>(() => engine ?? new TestEngine()), NullLogger<LocalOcrService>.Instance));
             services.AddSingleton<IOcrService>(provider => provider.GetRequiredService<LocalOcrService>());

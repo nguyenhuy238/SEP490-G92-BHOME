@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
+using BHome.Application.Contracts;
 using BHome.Domain.Common;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.Locations;
@@ -12,7 +13,8 @@ using BHome.Domain.TenantContracts;
 namespace BHome.Application.PropertyManagement;
 
 public sealed class PropertyService(IPropertyRepository repository, ICurrentUser user,
-    PermissionAccess access, TimeProvider clock)
+    PermissionAccess access, TimeProvider clock, IRoomInsightsRepository? insights = null,
+    IAdministrativeContractReadiness? contractReadiness = null)
 {
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
         clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -185,7 +187,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             {
                 CheckVersion(x.Version, input.Version);
                 if (x.IsActive && !input.IsActive && (await repository.AnyAsync<Room>(r => r.LocationId == x.Id && r.Status != RoomStatus.Unavailable, t) ||
-                    await repository.AnyAsync<Resident>(r => r.Room.LocationId == x.Id, t)))
+                    await repository.AnyAsync<Resident>(r => r.Room.LocationId == x.Id, t) ||
+                    (await repository.ObligationsAsync(x.Id, null, null, Today, t)).PreventsConfigurationChange))
                     throw Error(409, "location_has_operational_rooms");
                 x.Version++;
             }
@@ -214,7 +217,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             {
                 CheckVersion(x.Version, input.Version);
                 if (x.IsActive && !input.IsActive && (await repository.AnyAsync<Room>(r => r.RoomTypeId == x.Id && r.Status != RoomStatus.Unavailable, t) ||
-                    await repository.AnyAsync<Resident>(r => r.Room.RoomTypeId == x.Id, t)))
+                    await repository.AnyAsync<Resident>(r => r.Room.RoomTypeId == x.Id, t) ||
+                    (await repository.ObligationsAsync(l.Id, x.Id, null, Today, t)).PreventsConfigurationChange))
                     throw Error(409, "room_type_has_operational_rooms");
                 x.Version++;
             }
@@ -238,16 +242,18 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             var x = id.HasValue ? await repository.FindAsync<Room>(id.Value, t) ?? throw Error(404, "resource_not_found") : new Room { LocationId = l.Id, Status = RoomStatus.Available };
             if (x.LocationId != l.Id) throw Error(409, "location_immutable");
             var residents = await repository.HasResidentsAsync(x.Id, t);
-            // Holding/tenancy states are reserved to future contract workflows. Resident records are
-            // a conservative dependency until the repository has a real occupancy/contract model.
-            if (!(id.HasValue && x.Status == input.Status) && !PropertyRules.CanManuallyChange(x.Status, input.Status, residents))
+            if (id.HasValue) CheckVersion(x.Version, input.Version);
+            var obligations = await repository.ObligationsAsync(l.Id, null, x.Id, Today, t);
+            var protectedRoom = residents || obligations.PreventsConfigurationChange;
+            if ((!id.HasValue && input.Status is RoomStatus.OnHold or RoomStatus.Occupied) ||
+                !PropertyRules.CanChangeRoomStatus(x.Status, input.Status, RoomTransitionSource.Configuration, protectedRoom))
                 throw Error(409, "room_status_controlled");
             if (input.Status != RoomStatus.Unavailable && (!l.IsActive || !type.IsActive)) throw Error(409, "configuration_inactive");
-            if ((residents || x.Status is RoomStatus.Occupied or RoomStatus.OnHold) &&
+            if ((protectedRoom || x.Status is RoomStatus.Occupied or RoomStatus.OnHold) &&
                 (x.Capacity != input.Capacity || x.RoomTypeId.HasValue && x.RoomTypeId != input.RoomTypeId))
                 throw Error(409, "room_has_obligations");
             var before = id.HasValue ? Snapshot(x) : null;
-            if (id.HasValue) { CheckVersion(x.Version, input.Version); x.Version++; }
+            if (id.HasValue) x.Version++;
             x.RoomNumber = Text(input.RoomNumber); x.Floor = Optional(input.Floor); x.RoomTypeId = type.Id;
             x.Capacity = input.Capacity; x.Status = input.Status;
             if (!id.HasValue) repository.Add(x);
@@ -396,6 +402,138 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             g.OrderByDescending(x => x.RoomId.HasValue ? 2 : x.RoomTypeId.HasValue ? 1 : 0).First())
             .OrderBy(x => x.ChargeCode, StringComparer.Ordinal).Select(Map).ToArray();
         return new(roomId, date, charges, new[] { "RENT", "ELECTRICITY", "WATER" }.Except(charges.Select(x => x.ChargeCode)).ToArray());
+    }
+
+    public async Task<RoomReadinessDto> RoomReadinessAsync(Guid roomId, RoomReadinessPurpose purpose,
+        Guid? contractId, DateOnly? effectiveOn, CancellationToken t)
+    {
+        if (!Enum.IsDefined(purpose) || roomId == Guid.Empty || contractId == Guid.Empty)
+            throw Error(400, "invalid_readiness_request");
+        var room = await repository.FindAsync<Room>(roomId, t) ?? throw Error(404, "resource_not_found");
+        await LocationAsync(room.LocationId, false, t);
+        if (purpose == RoomReadinessPurpose.MoveIn && !contractId.HasValue)
+            throw Error(400, "contract_id_required");
+        var date = effectiveOn ?? Today;
+        if (date == default) throw Error(400, "effective_date_required");
+        var data = await (insights ?? throw new InvalidOperationException("Room insights are unavailable."))
+            .ReadinessAsync(roomId, contractId, date, t);
+        List<ReadinessFinding> blockers = [], warnings = [], unverified = [];
+        void Block(string code, string message) => blockers.Add(new(code, message));
+        if (!data.LocationActive) Block("LOCATION_INACTIVE", "The Location is not active.");
+        if (!data.RoomTypeValid) Block("ROOMTYPE_INVALID", "The Room Type configuration is missing or inactive.");
+        if (data.RoomStatus == RoomStatus.Unavailable) Block("ROOM_UNAVAILABLE", "The Room is unavailable.");
+        if (!data.HasRentPolicy) Block("RENT_POLICY_MISSING", "No applicable rental policy exists for the effective date.");
+        if (data.HasBlockingAsset) Block("ASSET_MAINTENANCE_REQUIRED", "A Room asset requires repair or is under repair.");
+
+        if (purpose == RoomReadinessPurpose.Holding)
+        {
+            if (data.RoomStatus is RoomStatus.OnHold or RoomStatus.Occupied || data.Obligations.HasActiveContracts)
+                Block("ACTIVE_TENANCY_CONFLICT", "The Room already has an active tenancy obligation.");
+            if (data.Obligations.HasBindingPendingContracts)
+                Block("PROTECTED_PENDING_CONTRACT", "The Room has a protected pending contract obligation.");
+            if (data.Obligations.HasCurrentOccupancy || data.Obligations.HasResidentRecords)
+                Block("RESIDENT_OBLIGATION", "Resident records require workflow validation before a new commitment.");
+            unverified.Add(new("HOLDING_WORKFLOW_UNSUPPORTED",
+                "Holding Contract payment, signing and conversion validation is not implemented."));
+        }
+        else
+        {
+            var c = data.Contract!;
+            if (!c.Exists) Block("CONTRACT_NOT_FOUND", "The Contract does not exist.");
+            else if (!c.BelongsToRoom) Block("CONTRACT_ROOM_MISMATCH", "The Contract does not belong to this Room.");
+            else
+            {
+                if (!c.PendingActivation) Block("CONTRACT_NOT_PENDING_ACTIVATION", "The Contract is not eligible for activation.");
+                if (!c.InEffectivePeriod) Block("CONTRACT_NOT_EFFECTIVE", "The effective date is outside the Contract period.");
+                if (c.VerifiedResidentCount != c.ResidentCount || !c.RepresentativeVerified)
+                    Block("VERIFIED_RESIDENTS_REQUIRED", "All Contract residents and the representative must be verified.");
+                if (c.HasContractConflict)
+                    Block("ACTIVE_TENANCY_CONFLICT", "The Contract conflicts with another active tenancy or resident interval.");
+                if (data.CurrentOccupantCount + c.ResidentCount > data.Capacity)
+                    Block("ROOM_CAPACITY_EXCEEDED", "The Contract would exceed Room capacity.");
+                if (!c.HasConfirmedHandover) warnings.Add(new("HANDOVER_NOT_CONFIRMED",
+                    "The supported move-in handover is not confirmed."));
+                if (contractReadiness is not null)
+                    foreach (var code in await contractReadiness.BlockersAsync(contractId!.Value, roomId, t))
+                        Block(code.ToUpperInvariant(), "The Contract activation validator reported an unmet requirement.");
+                else
+                    unverified.Add(new("CONTRACT_ACTIVATION_VALIDATOR_UNAVAILABLE",
+                        "Full Contract activation readiness could not be evaluated."));
+            }
+            if (!data.HasElectricityMeter) Block("ELECTRICITY_METER_MISSING", "An active electricity meter is required.");
+            else if (!data.HasElectricityBaseline) Block("ELECTRICITY_BASELINE_MISSING", "The electricity baseline has not been confirmed.");
+            if (!data.HasWaterMeter) Block("WATER_METER_MISSING", "An active water meter is required.");
+            else if (!data.HasWaterBaseline) Block("WATER_BASELINE_MISSING", "The water baseline has not been confirmed.");
+            unverified.Add(new("SAFETY_INCIDENT_DATA_UNAVAILABLE",
+                "The current data model cannot verify unresolved safety incidents for this Room."));
+        }
+        var status = blockers.Count > 0 ? "Blocked" : unverified.Count > 0 ? "Indeterminate" : "Ready";
+        return new(roomId, purpose.ToString(), status, status == "Ready", date, clock.GetUtcNow(),
+            blockers.DistinctBy(x => x.Code).ToArray(), warnings.DistinctBy(x => x.Code).ToArray(),
+            unverified.DistinctBy(x => x.Code).ToArray());
+    }
+
+    public async Task<RoomHistoryPage> RoomHistoryAsync(Guid roomId, RoomHistoryQuery query, CancellationToken t)
+    {
+        Validate(query);
+        if (roomId == Guid.Empty || query.From == default(DateOnly) || query.To == default(DateOnly) ||
+            query.From > query.To || (long)(query.Page - 1) * query.PageSize > int.MaxValue)
+            throw Error(400, "invalid_history_filter");
+        var room = await repository.FindAsync<Room>(roomId, t) ?? throw Error(404, "resource_not_found");
+        await LocationAsync(room.LocationId, false, t);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+        DateTimeOffset? Boundary(DateOnly? value) => value is null ? null :
+            new DateTimeOffset(value.Value.ToDateTime(TimeOnly.MinValue), zone.GetUtcOffset(value.Value.ToDateTime(TimeOnly.MinValue))).ToUniversalTime();
+        var result = await (insights ?? throw new InvalidOperationException("Room insights are unavailable."))
+            .HistoryAsync(roomId, query, Boundary(query.From), Boundary(query.To?.AddDays(1)), t);
+        var limitations = result.HasCompletePropertyAudit ? Array.Empty<string>() :
+            new[] { "Property audit predating the current append-only capture may be incomplete." };
+        return new(result.Items, query.Page, query.PageSize, result.TotalCount,
+            limitations.Length == 0 ? "CompleteForPersistedSources" : "Partial", limitations);
+    }
+
+    public async Task<OccupancySummaryDto> OccupancySummaryAsync(Guid locationId, OccupancySummaryQuery query,
+        CancellationToken t)
+    {
+        await LocationAsync(locationId, false, t);
+        if (query.From.HasValue != query.To.HasValue || query.From > query.To ||
+            query.From.HasValue && query.To!.Value.DayNumber - query.From.Value.DayNumber > 366)
+            throw Error(400, "invalid_occupancy_period");
+        var model = await (insights ?? throw new InvalidOperationException("Room insights are unavailable."))
+            .OccupancyAsync(locationId, Today, query.From, query.To, t);
+        HistoricalOccupancy historical;
+        if (!query.From.HasValue)
+            historical = new("NotRequested", null, null, null, null, null, []);
+        else if (!model.CompleteAvailabilityEvidence)
+            historical = new("InsufficientData", query.From, query.To, null, null, null,
+                ["Complete Location/Room availability audit is not available for the requested period."]);
+        else
+            historical = CalculateHistorical(query.From.Value, query.To!.Value, locationId, model);
+        return new(locationId, Today, model.Snapshot, historical);
+    }
+
+    public static HistoricalOccupancy CalculateHistorical(DateOnly from, DateOnly to, Guid locationId,
+        OccupancyReadModel model)
+    {
+        var occupied = 0; var rentable = 0;
+        for (var date = from; date <= to; date = date.AddDays(1))
+        {
+            var locationActive = model.LocationStatuses.Where(x => x.TargetId == locationId && x.EffectiveOn <= date)
+                .OrderByDescending(x => x.EffectiveOn).ThenByDescending(x => x.RecordedAt)
+                .Select(x => x.Status != 0).FirstOrDefault();
+            if (!locationActive) continue;
+            foreach (var roomId in model.RoomIds)
+            {
+                var state = model.RoomStatuses.Where(x => x.TargetId == roomId && x.EffectiveOn <= date)
+                    .OrderByDescending(x => x.EffectiveOn).ThenByDescending(x => x.RecordedAt)
+                    .Select(x => (RoomStatus?)x.Status).FirstOrDefault();
+                if (state is null || state == RoomStatus.Unavailable) continue;
+                rentable++;
+                if (model.OccupancyIntervals.Any(x => x.RoomId == roomId && x.From <= date && x.To >= date)) occupied++;
+            }
+        }
+        decimal? rate = rentable == 0 ? null : decimal.Round(occupied * 100m / rentable, 2);
+        return new("Complete", from, to, occupied, rentable, rate, []);
     }
 
     public static LocationDto Map(Location x) => new(x.Id, x.ChainId, x.Name, x.Address, x.IsActive, x.Version);

@@ -28,6 +28,13 @@ public sealed class RoomsController(PropertyService service) : ControllerBase
     [HttpGet("{id:guid}")] public Task<RoomDto> Get(Guid id, CancellationToken t) => service.GetRoomAsync(id, t);
     [HttpGet("{id:guid}/prices")]
     public Task<ResolvedPrices> Prices(Guid id, [FromQuery] DateOnly effectiveOn, CancellationToken t) => service.ResolvePricesAsync(id, effectiveOn, t);
+    [HttpGet("{id:guid}/readiness")]
+    public Task<RoomReadinessDto> Readiness(Guid id, [FromQuery] RoomReadinessPurpose purpose,
+        [FromQuery] Guid? contractId, [FromQuery] DateOnly? effectiveOn, CancellationToken t) =>
+        service.RoomReadinessAsync(id, purpose, contractId, effectiveOn, t);
+    [HttpGet("{id:guid}/history")]
+    public Task<RoomHistoryPage> History(Guid id, [FromQuery] RoomHistoryQuery query, CancellationToken t) =>
+        service.RoomHistoryAsync(id, query, t);
     [HttpPost, Authorize(Policy = Permissions.Property.Manage)]
     public async Task<ActionResult<RoomDto>> Create(RoomWrite input, CancellationToken t)
     {

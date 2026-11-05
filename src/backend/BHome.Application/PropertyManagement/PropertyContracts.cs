@@ -7,6 +7,14 @@ namespace BHome.Application.PropertyManagement;
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
 
+// Historical Resident records remain a conservative guard, distinct from actual current occupancy.
+public readonly record struct RoomObligations(bool HasResidentRecords, bool HasCurrentOccupancy,
+    bool HasActiveContracts, bool HasBindingPendingContracts)
+{
+    public bool PreventsConfigurationChange => HasResidentRecords || HasCurrentOccupancy ||
+        HasActiveContracts || HasBindingPendingContracts;
+}
+
 public sealed class LocationQuery
 {
     [Range(1, int.MaxValue)] public int Page { get; set; } = 1;
@@ -92,6 +100,8 @@ public interface IPropertyRepository
     Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token);
     Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token);
     Task<bool> HasResidentsAsync(Guid roomId, CancellationToken token);
+    Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomTypeId, Guid? roomId,
+        DateOnly today, CancellationToken token);
     void Add<T>(T entity) where T : class;
     void Audit(PropertyChange change);
 }

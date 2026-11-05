@@ -47,6 +47,10 @@ public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Stat
     Guid LocationId = default, bool IsDevelopmentDemo = false, string RoomNumber = "", string LocationName = "", IReadOnlyList<ContractOccupantView>? Occupants = null, DateOnly? ActualEndDate = null, bool OnboardingDraft = false);
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
+public interface IAdministrativeContractReadiness
+{
+    Task<IReadOnlyList<string>> BlockersAsync(Guid contractId, Guid roomId, CancellationToken token);
+}
 public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, string Reason,
     DateTimeOffset? InspectionScheduledAt, string PendingReason, string? InspectionNotes = null,
     DateTimeOffset? InspectedAt = null, Guid? ElectricityReadingId = null, Guid? WaterReadingId = null,
