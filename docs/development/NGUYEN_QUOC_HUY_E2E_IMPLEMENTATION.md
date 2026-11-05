@@ -62,6 +62,8 @@ Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường 
 - `ff2f315` — `feat(finance): [BE-31] persist Owner expenses with real API interface`: 13 file liệt kê trong slice Expenses; 3/3 PostgreSQL + 3/3 UI, build/lint đạt; PARTIAL, handoff Vũ Xuân Trường.
 - `8196b89` — `feat(finance): [BE-32][BE-33] report actual revenue costs and capital recovery`: 13 file liệt kê trong slice report; 5 formula tests, report/ledger PostgreSQL và 2 UI tests đạt; build/lint đạt, PARTIAL.
 - `dd087f3` — `feat(finance): [BE-34] save and compare isolated financial scenarios`: 15 file trong slice What-if và compatibility DI; 25/25 Finance/ApiFoundation, 2 formula + 2 UI tests, build/lint đạt; PARTIAL.
+- `68761b4` — `feat(payment): [BE-22][BE-X07] retain partial debt and isolate excess receipts`: 13 file trong slice payment; 8 domain/4 PostgreSQL/6 UI tests đạt, build/lint đạt; refund execution còn thiếu.
+- `886acca` — `fix(finance): [BE-31] retain expense scope inside Location Workspace`: 3 file; 4 UI tests/build đạt.
 
 ## Slice BE-31 Expenses API và Owner Web
 
@@ -115,3 +117,15 @@ Mobile typecheck và lint hiện tại đều đạt với Node22; không thay M
 ## Sửa phạm vi Expenses trong Location Workspace
 
 Khi vào `/locations/:locationId/investment`, API page nay ưu tiên Location của route cho list/create và khóa selector phạm vi; không mở mặc định toàn chuỗi trong một workspace đã chọn. `/expenses` độc lập vẫn lọc mọi cơ sở Owner được phép. Regression UI 4/4 đạt (bao gồm scope mới); TypeScript/Vite build đạt. Không đổi API/backend/schema. Changed files: ExpensesApiPage.tsx và test; handoff Vũ Xuân Trường `INITIAL_API_UI_READY`.
+
+## Browser E2E thật và hồi quy cuối
+
+`dotnet build tools/BHome.ContractVerification --no-restore --verbosity quiet`: đạt 0 warning/error. `dotnet run --no-build --project tools/BHome.ContractVerification -- --finance` với server riêng: **exit 0, 4/4 nhóm browser acceptance đạt**. Source harness: `FinanceVerificationCli.cs`, `Verify-FinanceClients.cjs`, cờ `--finance` trong tool hiện hữu. Chi tiết môi trường/TLS/cleanup ở FINANCE.md. Không thêm dependency hoặc OS trust. Không dùng kết quả ký mô phỏng làm chữ ký thật.
+
+Đã kiểm chứng trên trình duyệt Owner: nhập/lưu/reload/sửa khoản chi; báo cáo đọc đúng khoản vừa sửa; không tự có ước tính payback khi chưa có vốn; What-if tính từ input rồi lưu/reload snapshot; cấu hình hợp đồng Owner lưu/reload đúng tiền cọc và hồ sơ mã hóa. Các slice này được nâng lên `E2E_PASSED` cho đường đi đã test; final UI ownership/review vẫn Vũ Xuân Trường.
+
+`dotnet test tests/backend/BHome.IntegrationTests --no-build --logger 'trx;LogFileName=huy-verified-integration.trx' --verbosity minimal` với BHOME_COMPACT24_TEST_ADMIN và BHOME_COMPACT24_QUERY_LOG: **588 đạt / 0 lỗi / 1 skip / 589 tổng**, 6m19s. Bao gồm native Compact24 contracts/invoice/payment/jobs/authorization/independence và populated synthetic migration/reconciliation/rollback. Skip duy nhất optional `RealModelsReadWaterThroughDiagnosticHttpAndResolveElectricLabelWithoutPersistence`; không tuyên bố đã chạy model HTTP acceptance đó.
+
+Domain full hiện tại: **83/83**; Application full: **232/232**; DigitalSigning riêng: **41/41**. Mobile: **372/372** với Node22, typecheck/lint đạt. Owner Web full cuối đang chờ kết quả; timeout /schedules từng xuất hiện khi chạy cùng integration, không sửa assertion hoặc tăng timeout.
+
+Các lần chạy lỗi trước được giữ trong nhật ký ở trên; không cộng double-count các nhóm test nằm trong full suite. Logs/TRX raw nằm trong `.tools`/TestResults bị ignore; báo cáo không chứa secrets, UUID Tenant thật hoặc bank credentials. Các database tổng hợp và artifacts TLS được cleanup bởi fixture/harness.

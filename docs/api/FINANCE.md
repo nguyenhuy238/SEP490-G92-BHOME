@@ -4,12 +4,12 @@ Nguồn: SRS FE-08, UC-31..34, GBR-01/02/15/16/18; yêu cầu triển khai 05/11
 
 ## Expenses UC-31
 
-| Method | Route | Input / kết quả |
-| --- | --- | --- |
-| GET | `/api/v1/expenses` | Query `locationId,from,to,expenseType,category,page,pageSize`; `{items,total,page,pageSize}` |
-| GET | `/api/v1/expenses/{id}` | `ExpenseView`, 404 nếu thiếu |
-| POST | `/api/v1/expenses` | `ExpenseInput`, header UUID `Idempotency-Key`; trả bản ghi đã lưu |
-| PUT | `/api/v1/expenses/{id}` | `{expense: ExpenseInput,expectedVersion,reason}`; trả bản đã cập nhật |
+| Method | Route                   | Input / kết quả                                                                              |
+| ------ | ----------------------- | -------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/expenses`      | Query `locationId,from,to,expenseType,category,page,pageSize`; `{items,total,page,pageSize}` |
+| GET    | `/api/v1/expenses/{id}` | `ExpenseView`, 404 nếu thiếu                                                                 |
+| POST   | `/api/v1/expenses`      | `ExpenseInput`, header UUID `Idempotency-Key`; trả bản ghi đã lưu                            |
+| PUT    | `/api/v1/expenses/{id}` | `{expense: ExpenseInput,expectedVersion,reason}`; trả bản đã cập nhật                        |
 
 `ExpenseInput`: `{locationId,roomId?,expenseType,category,amount,occurredOn,note}`. `expenseType` là `INITIAL_INVESTMENT` hoặc `OPERATING`, category 1–60 ký tự, amount nguyên VND >0 và <10^18, ngày bắt buộc ISO, note 1–4000 ký tự. Location phải tồn tại; Room nếu có phải thuộc Location. List có page>=1, pageSize 1–100, ngày đầu không vượt ngày cuối; category lọc chính xác.
 
@@ -20,7 +20,15 @@ Persistence: repository dùng truy vấn có tham số trên bảng `expenses`, 
 Ví dụ tổng hợp (thay UUID bằng cơ sở fixture):
 
 ```json
-{"locationId":"00000000-0000-0000-0000-000000000001","roomId":null,"expenseType":"OPERATING","category":"Vệ sinh","amount":"200000","occurredOn":"2026-11-01","note":"Tham chiếu chứng từ tổng hợp"}
+{
+  "locationId": "00000000-0000-0000-0000-000000000001",
+  "roomId": null,
+  "expenseType": "OPERATING",
+  "category": "Vệ sinh",
+  "amount": "200000",
+  "occurredOn": "2026-11-01",
+  "note": "Tham chiếu chứng từ tổng hợp"
+}
 ```
 
 Owner Web `/expenses` và mục đầu tư trong Location dùng `ExpensesApiPage` khi `VITE_API_MODE=api`. Load/list/filter/detail/create/update gọi shared client `packages/client-core/src/finance.ts`, JWT/refresh/error từ client hiện hữu. API lỗi được hiển thị; không dùng demo fallback. Có loading/error/empty/success, khóa submit, giữ key khi retry lỗi không rõ kết quả. Khởi tạo danh sách cơ sở qua GET `/api/v1/capture/locations`. Mobile không có màn hình quản lý tài chính Owner mở rộng trong slice này.
@@ -56,3 +64,11 @@ Input `{name,baseline:{from,to,locationId?},forecastMonths,assumptions}`. Baseli
 Mô hình `management-constant-v1`: monthlyRevenue = round(Rooms * occupancyPercent /100 * monthlyRent); monthlyCollections = round(revenue * collectionPercent /100); monthlyOPEX = tổng bốn nhóm chi phí; profit = revenue - OPEX; netCash = collections - OPEX; forecastCash = netCash * forecastMonths; remainingCapitalAtEnd = max(0, baselineRemainingCapital - forecastCash). Làm tròn VND AwayFromZero chỉ trong dự báo, không sửa billing policy thật. Không lãi, tăng giá, khấu hao hoặc tự giả định thu đủ tiền: Owner nhập collectionPercent rõ ràng. EstimatedRemainingMonths dùng baselineRemainingCapital/netCash dương; thiếu vốn/phân loại refund/dòng tiền không dương trả null. monthlyProfitDifference so với bình quân lợi nhuận tháng của baseline. Giữ dấu âm khi dự báo lỗ.
 
 View chứa `id,input,baseline,result,calculationVersion`. Snapshot và result đã lưu được đọc nguyên trạng, không tính lại khi xem. Owner Web `/what-if` trong API mode cho nhập/phân tích/lưu/list/xem/so sánh hai snapshot và so với baseline. Loading/error/success, submit lock và stable retry key; chỉnh giả định phải phân tích lại. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường; chưa có browser E2E/review cuối.
+
+## Chạy browser E2E với Compact24 riêng
+
+`dotnet run --project tools/BHome.ContractVerification -- --finance` từ repository root, với `BHOME_COMPACT24_TEST_ADMIN` trỏ loopback admin database `postgres`. Harness dùng Compact24Fixture tạo/xóa database mới, khởi tạo tài khoản và Room tổng hợp, chạy API thật (Testing) + Vite API mode + Edge headless bằng Playwright đã có trong `.tools/contract-browser`. Không route mock, không seed kết quả tài chính, không đọc `.env` của database làm việc, không lưu credentials vào repo.
+
+Đã đạt bốn nhóm browser acceptance: tạo/reload/sửa Expense có reason; báo cáo từ khoản chi vừa lưu và null payback; analyze/save/reload snapshot What-if; lưu/reload cấu hình Owner hợp đồng với thông tin tổng hợp được mã hóa. Trạng thái **E2E_PASSED cho các đường đi này**, UI vẫn cần Vũ Xuân Trường review. Không suy rộng sang ký MySign, handover native hoặc toàn bộ contract E2E.
+
+TLS test dùng certificate localhost sinh tạm, API readiness pin certificate đó; browser context dùng ignoreHTTPSErrors chỉ cho traffic tổng hợp trong test. Không sửa OS trust store hoặc production TLS settings; test này không chứng minh browser certificate-trust deployment. API/process/database/PFX được dọn sau run. Không chạy song song build ghi lại DLL API đang được browser harness dùng; build trước, rồi `--no-build` nếu cần chạy song song các bộ test chỉ đọc artifact.

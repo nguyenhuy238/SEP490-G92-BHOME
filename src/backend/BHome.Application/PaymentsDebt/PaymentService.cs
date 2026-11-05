@@ -176,8 +176,9 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     private async Task<PaymentReviewResult> Outcome(Guid transferId, CancellationToken t)
     {
         var allocation = await repository.AllocationAsync(transferId, t);
-        var review = await repository.LatestReviewAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
-        if (allocation is not null) return new("Allocated", review.Reason, transferId, allocation.InvoiceId);
+        var review = await repository.LatestReviewAsync(transferId, t);
+        if (allocation is not null) return new("Allocated", review?.Reason ?? "verified_full_payment", transferId, allocation.InvoiceId);
+        if (review is null) throw new PaymentException(404, "bank_transfer_not_found");
         return new(review.Decision, review.Reason, transferId, review.InvoiceId);
     }
     public async Task<TransferView> TransferAsync(Guid id, CancellationToken t)
@@ -222,7 +223,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         new(transfer.Id, transfer.ProviderIdentity, transfer.BankReference, transfer.Amount, transfer.Currency, transfer.OccurredAt,
             transfer.TransferDescription, transfer.StatementReference, transfer.VerificationReason, transfer.VerifiedByUserId, transfer.VerifiedAt,
             transfer.ProposedInvoiceId, allocation is not null ? "Allocated" : review?.Decision ?? "PendingReview",
-            review?.Reason ?? "owner_allocation_confirmation_required", allocation?.InvoiceId, transfer.IsDevelopmentDemo,
+            review?.Reason ?? (allocation is not null ? "verified_full_payment" : "owner_allocation_confirmation_required"), allocation?.InvoiceId, transfer.IsDevelopmentDemo,
             allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0));
     public async Task<InvoicePaymentView> InvoicePaymentAsync(Guid id, CancellationToken t)
     {
