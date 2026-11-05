@@ -11,6 +11,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public string ConnectionString { get; set; } = "Host=127.0.0.1;Database=bhome_tests;Username=unconfigured;Timeout=1";
     public bool UseCompact24 { get; init; }
+    public Action<IWebHostBuilder>? ConfigureTestHost { get; init; }
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -31,5 +32,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddControllers().AddApplicationPart(typeof(TestProbeController).Assembly);
             if (!UseCompact24) services.UseLegacyPersistenceForTesting();
         });
+        ConfigureTestHost?.Invoke(builder);
     }
 }

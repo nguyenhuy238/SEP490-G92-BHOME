@@ -185,7 +185,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             {
                 CheckVersion(x.Version, input.Version);
                 if (x.IsActive && !input.IsActive && (await repository.AnyAsync<Room>(r => r.LocationId == x.Id && r.Status != RoomStatus.Unavailable, t) ||
-                    await repository.AnyAsync<Resident>(r => r.Room.LocationId == x.Id, t)))
+                    await repository.AnyAsync<Resident>(r => r.Room.LocationId == x.Id, t) ||
+                    (await repository.ObligationsAsync(x.Id, null, null, Today, t)).PreventsConfigurationChange))
                     throw Error(409, "location_has_operational_rooms");
                 x.Version++;
             }
@@ -214,7 +215,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             {
                 CheckVersion(x.Version, input.Version);
                 if (x.IsActive && !input.IsActive && (await repository.AnyAsync<Room>(r => r.RoomTypeId == x.Id && r.Status != RoomStatus.Unavailable, t) ||
-                    await repository.AnyAsync<Resident>(r => r.Room.RoomTypeId == x.Id, t)))
+                    await repository.AnyAsync<Resident>(r => r.Room.RoomTypeId == x.Id, t) ||
+                    (await repository.ObligationsAsync(l.Id, x.Id, null, Today, t)).PreventsConfigurationChange))
                     throw Error(409, "room_type_has_operational_rooms");
                 x.Version++;
             }
@@ -238,16 +240,18 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             var x = id.HasValue ? await repository.FindAsync<Room>(id.Value, t) ?? throw Error(404, "resource_not_found") : new Room { LocationId = l.Id, Status = RoomStatus.Available };
             if (x.LocationId != l.Id) throw Error(409, "location_immutable");
             var residents = await repository.HasResidentsAsync(x.Id, t);
-            // Holding/tenancy states are reserved to future contract workflows. Resident records are
-            // a conservative dependency until the repository has a real occupancy/contract model.
-            if (!(id.HasValue && x.Status == input.Status) && !PropertyRules.CanManuallyChange(x.Status, input.Status, residents))
+            if (id.HasValue) CheckVersion(x.Version, input.Version);
+            var obligations = await repository.ObligationsAsync(l.Id, null, x.Id, Today, t);
+            var protectedRoom = residents || obligations.PreventsConfigurationChange;
+            if ((!id.HasValue && input.Status is RoomStatus.OnHold or RoomStatus.Occupied) ||
+                !PropertyRules.CanChangeRoomStatus(x.Status, input.Status, RoomTransitionSource.Configuration, protectedRoom))
                 throw Error(409, "room_status_controlled");
             if (input.Status != RoomStatus.Unavailable && (!l.IsActive || !type.IsActive)) throw Error(409, "configuration_inactive");
-            if ((residents || x.Status is RoomStatus.Occupied or RoomStatus.OnHold) &&
+            if ((protectedRoom || x.Status is RoomStatus.Occupied or RoomStatus.OnHold) &&
                 (x.Capacity != input.Capacity || x.RoomTypeId.HasValue && x.RoomTypeId != input.RoomTypeId))
                 throw Error(409, "room_has_obligations");
             var before = id.HasValue ? Snapshot(x) : null;
-            if (id.HasValue) { CheckVersion(x.Version, input.Version); x.Version++; }
+            if (id.HasValue) x.Version++;
             x.RoomNumber = Text(input.RoomNumber); x.Floor = Optional(input.Floor); x.RoomTypeId = type.Id;
             x.Capacity = input.Capacity; x.Status = input.Status;
             if (!id.HasValue) repository.Add(x);

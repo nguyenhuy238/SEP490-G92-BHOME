@@ -21,9 +21,10 @@ không khẳng định đã triển khai toàn bộ BF-01 hoặc billing.
 | Trạng thái phòng không được thay nghĩa vụ hợp đồng          | UC-04 A2; DBR-02                                  | Chỉ Available ↔ Unavailable khi được phép                                                     | Cấm nhập tay OnHold/Occupied; cấm đóng phòng có Resident                                  |
 | Lưu lịch sử cấu hình                                        | UC-04..06; GBR-13; DBR-13                         | PropertyChanges chứa actor/UTC/reason/before/after; SecurityAudit tham chiếu cùng transaction | Snapshot, actor, stale version; DB chặn UPDATE/DELETE/TRUNCATE lịch sử                    |
 
-Hoãn: copy Location, ảnh, nội dung public, UC-07 lịch sử cư trú, bộ tài sản mặc định theo Room Type,
-chuyển tài sản, billing, hợp đồng, thuế, bậc thang, theo người và chia tiền theo ngày.
-Các JOB-09/10 và OQ về tiền cọc/điều chỉnh không được triển khai trong đợt này.
+Phạm vi đợt Property ban đầu không bao gồm copy Location, ảnh, nội dung public, UC-07 lịch sử cư trú,
+bộ tài sản mặc định, chuyển tài sản, thuế và giá bậc thang. Backend hiện đã có Contract, Invoice và
+các luồng billing riêng; không dùng giới hạn của đợt ban đầu để suy ra chúng chưa tồn tại.
+Phase 1A chỉ củng cố tính nhất quán Property–Contract, không mở rộng chính sách tiền cọc/điều chỉnh.
 
 ## Quyền và giao thức
 
@@ -116,13 +117,29 @@ hai chữ số thập phân. Tiện ích tối đa 50 mục, mỗi mục 1..100 
 Enum JSON theo thiết lập số hiện có: Room `Available=0, OnHold=1, Occupied=2, Unavailable=3`;
 Asset `Active=0, NeedsRepair=1, UnderRepair=2, Retired=3`.
 Tạo phòng chỉ chấp nhận Available hoặc Unavailable. Cấu hình không tạo OnHold/Occupied;
-chỉ workflow hợp đồng tương lai mới được quyết định chúng. Có Resident hoặc trạng thái do
-hợp đồng kiểm soát thì không được đổi trái trạng thái, đổi Room Type đã gán hay sức chứa.
+Contract activation/termination hiện quyết định Occupied/Available qua quy tắc chuyển trạng thái chung.
+Holding chưa hoàn chỉnh: không tạo OnHold qua API cấu hình, không giả lập Holding bằng trạng thái Main Contract.
+Có Resident, nghĩa vụ hợp đồng hoặc trạng thái do workflow kiểm soát thì không được đổi trái trạng thái,
+đổi Room Type đã gán hay sức chứa. Giữ nguyên trạng thái khi sửa metadata vẫn được phép với version hợp lệ.
 
-Schema hiện chưa có Contract/occupancy có vòng đời đầy đủ: mọi Resident tham chiếu phòng được coi
-là phụ thuộc cần bảo vệ, không suy ra đó là một hợp đồng Active hoặc tự sửa Room thành Occupied.
-Đây là giới hạn tích hợp cần thay bằng kiểm tra nghĩa vụ thật khi triển khai hợp đồng/move-out.
-Ngừng Location/Room Type bị chặn nếu còn phòng khác Unavailable hoặc có Resident liên quan.
+`ObligationsAsync` phân biệt Resident còn tham chiếu (kể cả lịch sử), cư trú hiện tại theo ContractResident
+của hợp đồng Active, hợp đồng Active, và hợp đồng Draft/PendingSigning/PendingActivation có bằng chứng ký
+Signed (thời điểm, object key, hash) hoặc DepositVerification dương. Trạng thái pending đơn thuần không
+được coi là giữ phòng. Kiểm tra này bảo vệ cấu hình; không thay điều kiện activation hay xác nhận thanh toán.
+Ngừng Location/Room Type kiểm tra nghĩa vụ của mọi phòng trong phạm vi, kể cả khi Room.Status không phản ánh đúng hợp đồng.
+
+Contract chỉ tăng `Room.Version` khi trạng thái phòng thực sự đổi và ghi `PropertyChange` chứa actor,
+UTC, status/version trước–sau, ContractId trong cùng transaction. Không tăng version khi thêm hợp đồng
+vào phòng đã Occupied hoặc kết thúc một hợp đồng nhưng còn hợp đồng Active khác. Kiểm tra capacity và
+overlap hiện có vẫn giữ nguyên; không áp quy tắc một hợp đồng/phòng. Request Property dùng version cũ trả
+409 `stale_version`. Property update hợp lệ vẫn tăng version theo quy ước hiện có.
+
+Thứ tự khóa Contract: payment-ledger advisory → Location advisory → Room row; Property khóa Location
+trước khi đọc/ghi, Invoice khóa Location → Room. Không lấy khóa ledger sau Location. Contract đọc lại
+trạng thái sau khóa, kiểm tra Location/Room Type đang hoạt động trước activation. Version vẫn được
+kiểm tra ở persistence. Audit bảo mật của Contract và lịch sử thay đổi Room là các bản ghi khác nhau;
+Compact24 lưu chúng trong notifications/AUDIT, không gộp hoặc xóa lịch sử.
+Đây là bảo vệ ở application/persistence; schema chưa có invariant xuyên entity thay thế toàn bộ kiểm tra này.
 
 ```json
 {
@@ -225,27 +242,22 @@ không cho đổi identity/scope/category/code, xóa policy hoặc xóa/ghi lạ
 
 PUT policy tương lai dùng `{ "policy": { ...PolicyWrite }, "expectedVersion": 1 }`, giống cấu trúc
 replacement. `firstUsedAt` là field response chỉ đọc, không phải field nhận trong PolicyWrite.
-Đây là mốc dành cho luồng billing ghi lần dùng đầu cùng transaction/snapshot; hiện repository chưa
-có Invoice nên chưa chứng minh tích hợp Invoice thực. Không có API tự mở khóa policy đã dùng.
+InvoiceRepository hiện ghi lần dùng đầu của BillingPolicy cùng transaction với snapshot hóa đơn.
+Invoice dùng giá/occupancy/reading qua module billing hiện có. Không có API tự mở khóa policy đã dùng;
+việc xác nhận regression cần chạy test PostgreSQL, không suy ra PASS chỉ từ mã nguồn.
 
 Kết thúc một policy dùng `{ "effectiveTo": "YYYY-MM-DD", "version": 1, "reason": "..." }`.
 Chỉ kết thúc từ hôm nay trở đi và không trước ngày bắt đầu; không kéo dài lại một bản đã kết thúc.
 Không tự cập nhật hợp đồng, hóa đơn, thanh toán hoặc giá đã chốt. Các trường hợp thiếu giá
-và quyết định áp dụng giá mới cho hợp đồng hiện hữu thuộc tích hợp billing sau này.
+và quyết định áp dụng giá mới cho hợp đồng hiện hữu phải theo quy tắc của module billing, không tự suy ra từ API cấu hình.
 
 ## Migration và tương thích
 
-Migrations: `20261029154537_PropertyConfiguration`, `20261030023603_SingleSystemChain` và
-`20261030032653_FlexibleFutureBillingPolicies`. Dùng cấu hình kết nối được bảo vệ sẵn có:
-
-```powershell
-dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Infrastructure
-```
-
-Các migration trên đã áp dụng lên database `bhome` local ngày 30/10/2026 sau khi người dùng
-cho phép; 8 migration đã áp dụng, 0 pending. Chưa triển khai production. Cần quyền tạo extension `btree_gist` (migration phân công trước
-đã dùng extension này). Đối chiếu dữ liệu trùng chuẩn hóa trước khi áp dụng; unique index sẽ
-từ chối nếu có xung đột, không âm thầm đổi mã hoặc gộp dữ liệu.
+Runtime hiện dùng `Compact24DbContext`, 24 bảng vật lý; RoomType nằm trong `locations.room_types` JSONB.
+Phase 1A không sửa schema, không thêm bảng/migration, không chạy cập nhật database dùng chung.
+Các migration `20261029154537_PropertyConfiguration`, `20261030023603_SingleSystemChain` và
+`20261030032653_FlexibleFutureBillingPolicies` là lịch sử của persistence cũ, không phải hướng dẫn
+triển khai runtime Compact24. Không chạy `dotnet ef database update` cho runtime dựa vào tài liệu lịch sử này.
 
 Giữ nguyên GUID/quan hệ cũ. Migration SingleSystemChain gắn Location cũ vào Chain chung. Location có địa chỉ trống vẫn đọc được; Owner phải
 bổ sung địa chỉ trước khi tạo Room Type/phòng hoặc cấu hình giá. Room cũ giữ RoomTypeId null, được đặt
@@ -262,12 +274,13 @@ Thay đổi API có chủ đích theo quyết định đã duyệt:
 
 Client OCR cũ cần cập nhật bước chọn Room Type trước khi dùng chức năng tạo phòng;
 không có thay đổi UI trong đợt backend này. Các luồng OCR đọc/xác nhận hiện có vẫn dùng cùng Room ID.
-Rollback migration giữ dữ liệu Room/Location nền nhưng xóa bảng cấu hình mới; chỉ dùng trên môi
-trường thử nghiệm hoặc sau kế hoạch sao lưu/rollback được duyệt.
+Rollback của các migration lịch sử chỉ áp dụng cho persistence cũ; không dùng để rollback Compact24.
+Phase 1A không thay schema và không thực hiện thao tác rollback database.
 
 ## Kiểm tra
 
 Test chính: `PropertyApiTests`, `PropertyRulesTests`, `PropertyServiceTests` và regression
 `LocationAssignmentApiTests`. Có kiểm tra quyền, scope, validation, stale version, race, overlap,
 fallback theo từng khoản, mức 0, thiếu cấu hình, audit, bảo vệ Resident, migration up/down dữ liệu cũ.
-Kết quả thực thi và giới hạn môi trường được ghi trong `docs/development/PROPERTY_MANAGEMENT_VALIDATION.md`.
+Kết quả đợt ban đầu ở `docs/development/PROPERTY_MANAGEMENT_VALIDATION.md`.
+Traceability, kiểm thử và giới hạn Phase 1A: [PROPERTY_CONTRACT_PHASE1A.md](../development/PROPERTY_CONTRACT_PHASE1A.md).
