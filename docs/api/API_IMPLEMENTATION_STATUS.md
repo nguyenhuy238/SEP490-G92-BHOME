@@ -26,9 +26,13 @@ Yêu cầu người dùng → BF-01/UC-04..07 (chuỗi/phòng/biểu phí), BF-0
 
 Ghi chú Meter OCR ngày 04/11/2026: đã bổ sung chặn nhiều vùng chỉ số (kể cả cùng
 giá trị), cảnh báo sai utility/baseline và hướng dẫn review trên Mobile. Điểm tích hợp
-crop Meter/Display đã có kiểm thử; **chưa có model detector/classifier đồng hồ hoạt
-động**. Mặc định vẫn dùng DBNet + recognition hiện có và Staff xác nhận riêng.
-Không đổi endpoint/DTO/schema. Xem [audit và kiểm chứng OCR](../development/METER_OCR_AUDIT_2026-11-04.md).
+crop Meter/Display đã có kiểm thử. Lượt bổ sung pretrained đã tích hợp YOLOv8n-OBB
+ONNX thật để định vị analog-water body/window, opt-in qua `Ocr:MeterDetector:Enabled`.
+PP-OCR tiếp tục đọc crop, Staff xác nhận riêng; chưa có classifier bốn loại hoạt động.
+Không đổi endpoint/schema nghiệp vụ; diagnostic auto thêm partial category, window
+confidence và crop preview tạm. Định vị 10/10 ảnh public nhưng exact reading chỉ1/7
+ảnh có nhãn đầy đủ, nên chưa đạt acceptance OCR. Xem [triển khai pretrained và số liệu](../development/PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md)
+và [audit trước đó](../development/METER_OCR_AUDIT_2026-11-04.md).
 Các số liệu bên dưới thuộc lượt rà soát API trước đó, không phải kết quả chạy OCR mới.
 
 Màn thử OCR đã có `POST /api/v1/ocr/diagnostics/auto`: chụp trước, tự xét dấu hiệu
@@ -36,7 +40,16 @@ CCCD bằng chữ/nhãn rồi định tuyến, chỉ hỏi loại sau khi chưa 
 classifier thị giác sáu lớp; ảnh công tơ chưa rõ cơ/điện tử vẫn cần chọn loại.
 Chi tiết: [OCR tự động một nút](../development/AUTOMATIC_OCR_2026-11-04.md).
 
+Cập nhật OCR05/11: đã tích hợp stage2 digit ONNX thật cho nước cơ và chặn mâu thuẫn
+với PP; thêm resolver từ nhãn thiết bị rõ ràng. Chưa đạt four-type/90% acceptance:
+final typed3/33 exact,0 false trên52 ảnh public (49fallback). Không suy số liệu này
+thành production readiness. Xem [completion report](../development/METER_OCR_COMPLETION_REPORT.md).
+
 ## Tổng quan các chức năng đã có và còn thiếu
+
+Incremental OCR05/11: typed nước cơ hiện10/33 exact,0false,42/52 fallback trên
+cùng tập public cũ; automatic vẫn thiếu classifier4 loại. Màn Test OCR cho chọn
+precision sau capture. Xem [báo cáo cuối](../development/METER_OCR_FINAL_DEVELOPMENT_REPORT.md).
 
 | Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

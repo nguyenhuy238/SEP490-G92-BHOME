@@ -1,0 +1,27 @@
+{
+  "source": "NirKli/WattBot@74e31a1d691df0d3865e144775825723e6de68e2",
+  "ptSha256": "acc5ef353194cead5fa9b2f5f981c45083e24434aec88a419513249730162833",
+  "onnxSha256": "fa8ec02ff170e276aaea853fbe63ccfeedd994b0aa2c696cd4d1e2209212e07e",
+  "classes": {
+    "0": ".",
+    "1": "0",
+    "2": "1",
+    "3": "2",
+    "4": "3",
+    "5": "4",
+    "6": "5",
+    "7": "6",
+    "8": "7",
+    "9": "8",
+    "10": "9"
+  },
+  "input": [1, 3, 640, 640],
+  "output": [1, 300, 7],
+  "nativeOnnxRawParity": false,
+  "nativeOnnxDetectionsAbove05Parity": true,
+  "maxRawDelta": 284.3763427734375,
+  "manualCropExactDigits": false,
+  "detections": 4,
+  "images": 1,
+  "limitation": "Manually selected GELEX LCD crop only, no automatic display detection or four-type classification. No runtime adoption or training."
+}

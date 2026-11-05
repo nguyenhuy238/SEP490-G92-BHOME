@@ -200,6 +200,32 @@ it('allows manual result correction when a known category has no extracted field
   expect(reading).toHaveValue('00123.45');
   expect(mocks.image).toHaveBeenCalledTimes(1);
 });
+it('shows a localized reading and crop while asking for type only after capture, then clears both', async () => {
+  mocks.image.mockResolvedValue({
+    analysis: {
+      ...unknown(),
+      partialCategory: 'meter',
+      detectionConfidence: 0.95,
+      cropPreviewDataUri: 'data:image/jpeg;base64,BAUG',
+      meterProposal: proposal({ reading: '00123.45' }),
+    },
+  });
+  render(<OcrTest />);
+  expect(screen.queryByRole('combobox')).toBeNull();
+  await capture();
+  expect(await screen.findByLabelText('Chỉ số đồng hồ')).toHaveValue('00123.45');
+  expect(screen.getByAltText('Vùng chỉ số đã tìm thấy')).toHaveAttribute(
+    'src',
+    'data:image/jpeg;base64,BAUG',
+  );
+  expect(screen.getByLabelText('Loại ảnh sau khi kiểm tra')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Chỉ số đồng hồ'), { target: { value: '00123.46' } });
+  expect(screen.getByLabelText('Chỉ số đồng hồ')).toHaveValue('00123.46');
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa kết quả tạm' }));
+  expect(screen.queryByAltText('Vùng chỉ số đã tìm thấy')).toBeNull();
+  expect(screen.queryByLabelText('Chỉ số đồng hồ')).toBeNull();
+  expect(screen.queryByRole('combobox')).toBeNull();
+});
 it.each(['unknown', 'ambiguous', 'unavailable'] as const)(
   'shows manual category selection only after %s',
   async (status) => {
@@ -230,6 +256,42 @@ it('reuses the same temporary image for explicit classification and server preci
   );
   expect(screen.getByText('Loại ảnh đã chọn: Điện · Điện tử')).toBeTruthy();
   expect(mocks.image.mock.calls[1][1]).toBe(mocks.image.mock.calls[0][1]);
+  expect([...mocks.image.mock.calls[0][1]]).toEqual([1, 2, 3]);
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa kết quả tạm' }));
+  expect([...mocks.image.mock.calls[0][1]]).toEqual([0, 0, 0]);
+});
+it('lets a classified meter use server precision without taking another image', async () => {
+  mocks.image
+    .mockResolvedValueOnce({
+      analysis: {
+        ...unknown('classified'),
+        detectedCategory: 'electricity_digital',
+        meterProposal: {
+          ...proposal({ reading: '032514' }),
+          warnings: ['decimal_separator_unverified'],
+        },
+        cropPreviewDataUri: 'data:image/jpeg;base64,BAUG',
+      },
+    })
+    .mockResolvedValueOnce({ proposal: proposal({ reading: '03251.4' }) });
+  render(<OcrTest />);
+  await capture();
+  expect(await screen.findByLabelText('Chỉ số đồng hồ')).toHaveValue('032514');
+  expect(screen.getByText('Đơn vị: kWh')).toBeTruthy();
+  expect(screen.queryByLabelText('Loại ảnh sau khi kiểm tra')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Đọc lại theo số thập phân' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Số chữ số thập phân thực tế'), {
+    target: { value: '1' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Đọc lại theo số thập phân' }));
+  await waitFor(() => expect(screen.getByLabelText('Chỉ số đồng hồ')).toHaveValue('03251.4'));
+  expect(mocks.image.mock.calls[1][0]).toBe(
+    '/api/v1/ocr/diagnostics/electricity-digital?decimalPlaces=1',
+  );
+  expect(mocks.image.mock.calls[1][1]).toBe(mocks.image.mock.calls[0][1]);
+  expect(screen.getByAltText('Vùng chỉ số đã tìm thấy')).toBeTruthy();
+  act(() => mocks.onState?.('background'));
+  expect(screen.queryByLabelText('Chỉ số đồng hồ')).toBeNull();
   expect([...mocks.image.mock.calls[0][1]]).toEqual([0, 0, 0]);
 });
 it('ignores a late response after backgrounding and zeroes the owned image', async () => {

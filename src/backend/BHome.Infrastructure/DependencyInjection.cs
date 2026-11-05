@@ -159,6 +159,8 @@ public static class DependencyInjection
             .Validate(o => o.IsValid(), "OCR limits or profiles are outside supported bounds.").ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
+        services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
+        services.AddSingleton<YoloWaterDigitRecognizer>();
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
         services.AddSingleton<LocalOcrService>();

@@ -1,0 +1,3531 @@
+{
+  "date": "2026-11-05",
+  "status": "partial_not_production_ready",
+  "modelRuntimeChanges": false,
+  "logicalCandidates": 3,
+  "trainingRuns": [
+    {
+      "run": "body",
+      "epochsExecuted": 43,
+      "provenance": {
+        "status": "trained_not_activated",
+        "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+        "auditSha256": "8e0b868cd497cdd1267ccfc4a096ad2a70e3f7ec1dcba607946e444fe0d21d31",
+        "manifestSha256": "699c154037292ea0c0294a11fbb383ab7b9fef3be6aed0dcaca0fd9393a58658",
+        "classes": ["electricity_mechanical", "electricity_digital", "water_mechanical"],
+        "unsupportedClasses": ["water_digital"],
+        "config": {
+          "data": ".\\.tools\\master-body-dataset\\dataset.yaml",
+          "epochs": 100,
+          "imgsz": 416,
+          "batch": 8,
+          "device": "0",
+          "workers": 0,
+          "seed": 42,
+          "deterministic": true,
+          "amp": false,
+          "optimizer": "AdamW",
+          "lr0": 0.001,
+          "patience": 20,
+          "degrees": 15.0,
+          "translate": 0.1,
+          "scale": 0.25,
+          "perspective": 0.0003,
+          "fliplr": 0.0,
+          "flipud": 0.0,
+          "hsv_h": 0.01,
+          "hsv_s": 0.25,
+          "hsv_v": 0.3,
+          "mosaic": 0.3,
+          "mixup": 0.0,
+          "close_mosaic": 10,
+          "plots": false,
+          "save": true,
+          "project": ".\\.tools\\master-body-training",
+          "name": "body",
+          "exist_ok": false
+        },
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "torch": "2.6.0+cu118",
+        "ultralytics": "8.3.224",
+        "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+        "elapsedSeconds": 45.29699999999866,
+        "bestSha256": "6f4799a804157aca3559e96a993a8f97cb7d22e42330a555a9ab2525f87b444c",
+        "lastSha256": "a1835977f64da24efb66c4a8bb0623205b447876a4d6700db3214f94f48580c2"
+      },
+      "metricsCsvSha256": "08242749a0c159eaa6c520c06efbee49c5f233c810c1380364a4dbe841177872",
+      "rawLog": ".tools/master-body-training.log",
+      "rawLogSha256": "500928aea230d8df80a3130cd51a28e83f01ddd10580b7cacd0232f89c1b7ee3"
+    },
+    {
+      "run": "body-verified",
+      "epochsExecuted": 43,
+      "provenance": {
+        "status": "trained_not_activated",
+        "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+        "auditSha256": "fca83cdc4bf41ad1efad0b8c147a921d76524d5c2da330975e81cc8bc75b227f",
+        "manifestSha256": "2aa9f29f1ca78ff2dd509f6323bdd8afbb83dc8aaf19ffd5c3776b5ebf3f90eb",
+        "classes": ["electricity_mechanical", "electricity_digital", "water_mechanical"],
+        "unsupportedClasses": ["water_digital"],
+        "config": {
+          "data": ".\\.tools\\master-body-verified-dataset\\dataset.yaml",
+          "epochs": 100,
+          "imgsz": 416,
+          "batch": 8,
+          "device": "0",
+          "workers": 0,
+          "seed": 42,
+          "deterministic": true,
+          "amp": false,
+          "optimizer": "AdamW",
+          "lr0": 0.001,
+          "patience": 20,
+          "degrees": 15.0,
+          "translate": 0.1,
+          "scale": 0.25,
+          "perspective": 0.0003,
+          "fliplr": 0.0,
+          "flipud": 0.0,
+          "hsv_h": 0.01,
+          "hsv_s": 0.25,
+          "hsv_v": 0.3,
+          "mosaic": 0.3,
+          "mixup": 0.0,
+          "close_mosaic": 10,
+          "plots": false,
+          "save": true,
+          "project": ".\\.tools\\master-body-verified-training",
+          "name": "body",
+          "exist_ok": false
+        },
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "torch": "2.6.0+cu118",
+        "ultralytics": "8.3.224",
+        "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+        "elapsedSeconds": 48.875,
+        "bestSha256": "7b42fbb82a461d224c6978065cc0d86f6853dfe723ef5a2be3d5220ad06a73e4",
+        "lastSha256": "f8a5c5c72cba038ef99c1ab9f7fe8d808e1006fe951fe9747718460f36233949"
+      },
+      "metricsCsvSha256": "f912313a46061287e89d4328e2a769d4900cf098d28ee63a2fdbc838c7422c86",
+      "rawLog": ".tools/master-body-verified-training.log",
+      "rawLogSha256": "5db7eab9b89a2722cc9e5964859e7758c1e7a283b4739568d0788a3243be1188"
+    },
+    {
+      "run": "lcd",
+      "epochsExecuted": 31,
+      "provenance": {
+        "status": "trained_not_activated",
+        "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+        "auditSha256": "a0c02f6f60e0c3a301f881a0bb1b3e49fdf9002f35451ee4dc53e3f070880fec",
+        "manifestSha256": "5178e9dc9d0ac49d1cf2702c17884f30504ff6785cf62e5c9ca3497b8d2bb7ec",
+        "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "unsupportedClasses": [],
+        "config": {
+          "data": ".\\.tools\\master-lcd-dataset\\dataset.yaml",
+          "epochs": 100,
+          "imgsz": 416,
+          "batch": 8,
+          "device": "0",
+          "workers": 0,
+          "seed": 42,
+          "deterministic": true,
+          "amp": false,
+          "optimizer": "AdamW",
+          "lr0": 0.001,
+          "patience": 20,
+          "degrees": 15.0,
+          "translate": 0.1,
+          "scale": 0.25,
+          "perspective": 0.0003,
+          "fliplr": 0.0,
+          "flipud": 0.0,
+          "hsv_h": 0.01,
+          "hsv_s": 0.25,
+          "hsv_v": 0.3,
+          "mosaic": 0.3,
+          "mixup": 0.0,
+          "close_mosaic": 10,
+          "plots": false,
+          "save": true,
+          "project": ".\\.tools\\master-lcd-training",
+          "name": "lcd-digits",
+          "exist_ok": false
+        },
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "torch": "2.6.0+cu118",
+        "ultralytics": "8.3.224",
+        "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+        "elapsedSeconds": 160.6880000000001,
+        "bestSha256": "583d12735c743b61f101eb1134f7199cba159cf3a5cf042dc6127d8423315263",
+        "lastSha256": "28fea81b12280ebfbf38699715afd09a41f8f1adec3c17775aac1c08a8e15343"
+      },
+      "metricsCsvSha256": "7343497e0d9325cb7604a2ecf53431811e98ff170b1da0c39c08f35f2a236c93",
+      "rawLog": ".tools/master-lcd-training.log",
+      "rawLogSha256": "8b27f82d19ec7261d9ff1cc1ce83c19bcbca2a7e3dc7b2ca1c5061b6f56d4d91"
+    },
+    {
+      "run": "lcd-rows",
+      "epochsExecuted": 47,
+      "provenance": {
+        "status": "trained_not_activated",
+        "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+        "auditSha256": "73ef4741ab0548a21077860d55bf6e8313c6cf5f1d598bdb30fc0dc76355cb62",
+        "manifestSha256": "5178e9dc9d0ac49d1cf2702c17884f30504ff6785cf62e5c9ca3497b8d2bb7ec",
+        "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "unsupportedClasses": [],
+        "config": {
+          "data": ".\\.tools\\master-lcd-rows-dataset\\dataset.yaml",
+          "epochs": 100,
+          "imgsz": 416,
+          "batch": 8,
+          "device": "0",
+          "workers": 0,
+          "seed": 42,
+          "deterministic": true,
+          "amp": false,
+          "optimizer": "AdamW",
+          "lr0": 0.001,
+          "patience": 20,
+          "degrees": 15.0,
+          "translate": 0.1,
+          "scale": 0.25,
+          "perspective": 0.0003,
+          "fliplr": 0.0,
+          "flipud": 0.0,
+          "hsv_h": 0.01,
+          "hsv_s": 0.25,
+          "hsv_v": 0.3,
+          "mosaic": 0.3,
+          "mixup": 0.0,
+          "close_mosaic": 10,
+          "plots": false,
+          "save": true,
+          "project": ".\\.tools\\master-lcd-rows-training",
+          "name": "lcd-digits",
+          "exist_ok": false
+        },
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "torch": "2.6.0+cu118",
+        "ultralytics": "8.3.224",
+        "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+        "elapsedSeconds": 150.25,
+        "bestSha256": "09641a2885d61d5ba5ea4434b694bdf5aecf4ea71c4caaffdddb533c94986be9",
+        "lastSha256": "b70269c67ae42a014d8387eac64f00f3f2103b34ba9c47a89852b14a1537dd55"
+      },
+      "metricsCsvSha256": "7b097e916d3d54c733389b1dbeabca88701dec3cc2f33f038e163ce12a2acf3c",
+      "rawLog": ".tools/master-lcd-rows-training.log",
+      "rawLogSha256": "42611a21f67ccb3071be4674294aee55884cae4831413de61d8ebfa21fc2b5e3"
+    },
+    {
+      "run": "lcd-verified",
+      "epochsExecuted": 47,
+      "provenance": {
+        "status": "trained_not_activated",
+        "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+        "auditSha256": "53a3da6d8007089311115e8d55c4871f4b4aba9138cd7e636af76c05a9100ee5",
+        "manifestSha256": "5178e9dc9d0ac49d1cf2702c17884f30504ff6785cf62e5c9ca3497b8d2bb7ec",
+        "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "unsupportedClasses": [],
+        "config": {
+          "data": ".\\.tools\\master-lcd-verified-dataset\\dataset.yaml",
+          "epochs": 100,
+          "imgsz": 416,
+          "batch": 8,
+          "device": "0",
+          "workers": 0,
+          "seed": 42,
+          "deterministic": true,
+          "amp": false,
+          "optimizer": "AdamW",
+          "lr0": 0.001,
+          "patience": 20,
+          "degrees": 15.0,
+          "translate": 0.1,
+          "scale": 0.25,
+          "perspective": 0.0003,
+          "fliplr": 0.0,
+          "flipud": 0.0,
+          "hsv_h": 0.01,
+          "hsv_s": 0.25,
+          "hsv_v": 0.3,
+          "mosaic": 0.3,
+          "mixup": 0.0,
+          "close_mosaic": 10,
+          "plots": false,
+          "save": true,
+          "project": ".\\.tools\\master-lcd-verified-training",
+          "name": "lcd-digits",
+          "exist_ok": false
+        },
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "torch": "2.6.0+cu118",
+        "ultralytics": "8.3.224",
+        "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+        "elapsedSeconds": 182.09399999999914,
+        "bestSha256": "86b7bb53d47c4d4b784069a9e938bdcadcb32ee5810661cec405f922eb5cf071",
+        "lastSha256": "b1f54a1f477ef27d10980feed62fbffc9b9ab17488cc4114d96457be4fcabda5"
+      },
+      "metricsCsvSha256": "9d1887b66b7d5a7204606d6e40365d5468f092dcf1e9604771ab79a9d6e02360",
+      "rawLog": ".tools/master-lcd-verified-training.log",
+      "rawLogSha256": "d8b6e6a64541ec80041c75a71be62407e4e2bc4eba7942f96e732d94a4a3512e"
+    },
+    {
+      "run": "lcd-final",
+      "epochsExecuted": 47,
+      "provenance": {
+        "status": "trained_not_activated",
+        "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+        "auditSha256": "0db5eaf880b02385862657e0a436cc63c828c20208e4c65e9c77d96bf3993728",
+        "manifestSha256": "5178e9dc9d0ac49d1cf2702c17884f30504ff6785cf62e5c9ca3497b8d2bb7ec",
+        "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "unsupportedClasses": [],
+        "config": {
+          "data": ".\\.tools\\master-lcd-final-dataset\\dataset.yaml",
+          "epochs": 100,
+          "imgsz": 416,
+          "batch": 8,
+          "device": "0",
+          "workers": 0,
+          "seed": 42,
+          "deterministic": true,
+          "amp": false,
+          "optimizer": "AdamW",
+          "lr0": 0.001,
+          "patience": 20,
+          "degrees": 15.0,
+          "translate": 0.1,
+          "scale": 0.25,
+          "perspective": 0.0003,
+          "fliplr": 0.0,
+          "flipud": 0.0,
+          "hsv_h": 0.01,
+          "hsv_s": 0.25,
+          "hsv_v": 0.3,
+          "mosaic": 0.3,
+          "mixup": 0.0,
+          "close_mosaic": 10,
+          "plots": false,
+          "save": true,
+          "project": ".\\.tools\\master-lcd-final-training",
+          "name": "lcd-digits",
+          "exist_ok": false
+        },
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "torch": "2.6.0+cu118",
+        "ultralytics": "8.3.224",
+        "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+        "elapsedSeconds": 174.5,
+        "bestSha256": "a234a35bfdf3dba4bd115dbf71531c3b37a444c99c197a8a77b84e1d324bdc46",
+        "lastSha256": "0148d78b5419b66f021e2c1f4f781deab6516be67df76558317ba6236d921c14"
+      },
+      "metricsCsvSha256": "5416d8136dcd43a6f2d886aaea4ca2b86372d81cc40dfd286981a802a22aad4e",
+      "rawLog": ".tools/master-lcd-final-training.log",
+      "rawLogSha256": "58b58783c7ba9ab94a13d7e7ed6515bf6cc3d2fd41f9f3a7262e51db535a3eb7"
+    }
+  ],
+  "models": {
+    "body": {
+      "model": "body",
+      "status": "evaluated_not_activated",
+      "classes": ["electricity_mechanical", "electricity_digital", "water_mechanical"],
+      "validationSelectionPassed": false,
+      "unsupportedClasses": ["water_digital"],
+      "weightsSha256": "7b42fbb82a461d224c6978065cc0d86f6853dfe723ef5a2be3d5220ad06a73e4",
+      "onnxSha256": "b7fc13aa09262c46ced335f31d5726c8f8369b5f8e2c4ce7ed5994f4166278af",
+      "input": [1, 3, 416, 416],
+      "output": [1, 7, 3549],
+      "preprocessing": "BGR->RGB/255, centered letterbox114, bilinear, actual rounded left/top",
+      "decode": "cxcywh pixels + per-class scores; no objectness; class-aware greedy NMS IoU .45",
+      "nativeOnnxParity": [
+        {
+          "id": "commons_45290164",
+          "maxAbsoluteDifference": 0.001312255859375,
+          "passed": true
+        },
+        {
+          "id": "commons_113793907",
+          "maxAbsoluteDifference": 0.001373291015625,
+          "passed": true
+        },
+        {
+          "id": "commons_31937475",
+          "maxAbsoluteDifference": 0.00083160400390625,
+          "passed": true
+        },
+        {
+          "id": "commons_33769214",
+          "maxAbsoluteDifference": 0.0009765625,
+          "passed": true
+        },
+        {
+          "id": "commons_40388945",
+          "maxAbsoluteDifference": 0.000701904296875,
+          "passed": true
+        },
+        {
+          "id": "commons_6979762",
+          "maxAbsoluteDifference": 0.000732421875,
+          "passed": true
+        },
+        {
+          "id": "commons_141575682",
+          "maxAbsoluteDifference": 0.0009002685546875,
+          "passed": true
+        },
+        {
+          "id": "commons_136480278",
+          "maxAbsoluteDifference": 0.001007080078125,
+          "passed": true
+        },
+        {
+          "id": "commons_136480279",
+          "maxAbsoluteDifference": 0.00115966796875,
+          "passed": true
+        },
+        {
+          "id": "commons_26507235",
+          "maxAbsoluteDifference": 0.001861572265625,
+          "passed": true
+        }
+      ],
+      "calibrationSource": "validation only, zero observed false proposals preferred",
+      "validationGrid": [
+        {
+          "threshold": 0.25,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 18,
+              "fn": 0,
+              "precision": 0.14285714285714285,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "precision": 1.0,
+              "recall": 0.3333333333333333
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 3
+            },
+            "electricity_digital": {
+              "ambiguous": 3
+            },
+            "water_mechanical": {
+              "electricity_mechanical": 2,
+              "water_mechanical": 1
+            },
+            "not_meter": {
+              "electricity_mechanical": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 4
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 4
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 3
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "water_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 3
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            }
+          ],
+          "wrongCategory": 3,
+          "correctSingleCategory": 1
+        },
+        {
+          "threshold": 0.5,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 15,
+              "fn": 0,
+              "precision": 0.16666666666666666,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "precision": 1.0,
+              "recall": 0.3333333333333333
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 3
+            },
+            "electricity_digital": {
+              "ambiguous": 3
+            },
+            "water_mechanical": {
+              "electricity_mechanical": 2,
+              "water_mechanical": 1
+            },
+            "not_meter": {
+              "electricity_mechanical": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 3
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 3
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 3
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "water_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            }
+          ],
+          "wrongCategory": 3,
+          "correctSingleCategory": 1
+        },
+        {
+          "threshold": 0.7,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 11,
+              "fn": 0,
+              "precision": 0.21428571428571427,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 2,
+              "electricity_mechanical": 1
+            },
+            "electricity_digital": {
+              "ambiguous": 3
+            },
+            "water_mechanical": {
+              "unknown": 2,
+              "electricity_mechanical": 1
+            },
+            "not_meter": {
+              "electricity_mechanical": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 3
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 2
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            }
+          ],
+          "wrongCategory": 2,
+          "correctSingleCategory": 1
+        },
+        {
+          "threshold": 0.8,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 10,
+              "fn": 0,
+              "precision": 0.23076923076923078,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 1,
+              "electricity_mechanical": 2
+            },
+            "electricity_digital": {
+              "ambiguous": 3
+            },
+            "water_mechanical": {
+              "unknown": 2,
+              "electricity_mechanical": 1
+            },
+            "not_meter": {
+              "electricity_mechanical": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 3
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            }
+          ],
+          "wrongCategory": 2,
+          "correctSingleCategory": 2
+        },
+        {
+          "threshold": 0.9,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 9,
+              "fn": 0,
+              "precision": 0.25,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 1,
+              "electricity_mechanical": 2
+            },
+            "electricity_digital": {
+              "ambiguous": 2,
+              "electricity_mechanical": 1
+            },
+            "water_mechanical": {
+              "unknown": 2,
+              "electricity_mechanical": 1
+            },
+            "not_meter": {
+              "electricity_mechanical": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 3
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            }
+          ],
+          "wrongCategory": 3,
+          "correctSingleCategory": 2
+        },
+        {
+          "threshold": 0.95,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 9,
+              "fn": 0,
+              "precision": 0.25,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 1,
+              "electricity_mechanical": 2
+            },
+            "electricity_digital": {
+              "ambiguous": 2,
+              "electricity_mechanical": 1
+            },
+            "water_mechanical": {
+              "unknown": 2,
+              "electricity_mechanical": 1
+            },
+            "not_meter": {
+              "electricity_mechanical": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 3
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            }
+          ],
+          "wrongCategory": 3,
+          "correctSingleCategory": 2
+        },
+        {
+          "threshold": 0.99,
+          "classes": {
+            "electricity_mechanical": {
+              "tp": 3,
+              "fp": 6,
+              "fn": 0,
+              "precision": 0.3333333333333333,
+              "recall": 1.0
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "precision": null,
+              "recall": 0.0
+            }
+          },
+          "confusion": {
+            "electricity_mechanical": {
+              "ambiguous": 1,
+              "electricity_mechanical": 2
+            },
+            "electricity_digital": {
+              "ambiguous": 2,
+              "electricity_mechanical": 1
+            },
+            "water_mechanical": {
+              "unknown": 3
+            },
+            "not_meter": {
+              "unknown": 1
+            }
+          },
+          "samples": [
+            {
+              "id": "commons_45290164",
+              "actual": "electricity_mechanical",
+              "predicted": "ambiguous",
+              "localizedCorrectly": true,
+              "detections": 2
+            },
+            {
+              "id": "commons_113793907",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_33769214",
+              "actual": "electricity_mechanical",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": true,
+              "detections": 1
+            },
+            {
+              "id": "commons_136480278",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_136480279",
+              "actual": "electricity_digital",
+              "predicted": "electricity_mechanical",
+              "localizedCorrectly": false,
+              "detections": 1
+            },
+            {
+              "id": "commons_109241182",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_109241190",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_109241180",
+              "actual": "water_mechanical",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            },
+            {
+              "id": "commons_98999103",
+              "actual": "electricity_digital",
+              "predicted": "ambiguous",
+              "localizedCorrectly": false,
+              "detections": 2
+            },
+            {
+              "id": "commons_85653618",
+              "actual": "not_meter",
+              "predicted": "unknown",
+              "localizedCorrectly": false,
+              "detections": 0
+            }
+          ],
+          "wrongCategory": 1,
+          "correctSingleCategory": 2
+        }
+      ],
+      "selectedValidation": {
+        "threshold": 0.99,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 3,
+            "fp": 6,
+            "fn": 0,
+            "precision": 0.3333333333333333,
+            "recall": 1.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "ambiguous": 1,
+            "electricity_mechanical": 2
+          },
+          "electricity_digital": {
+            "ambiguous": 2,
+            "electricity_mechanical": 1
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "ambiguous",
+            "localizedCorrectly": true,
+            "detections": 2
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": true,
+            "detections": 1
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": true,
+            "detections": 1
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "ambiguous",
+            "localizedCorrectly": false,
+            "detections": 2
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "ambiguous",
+            "localizedCorrectly": false,
+            "detections": 2
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 1,
+        "correctSingleCategory": 2
+      },
+      "test": {
+        "threshold": 0.99,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 3,
+            "fp": 6,
+            "fn": 0,
+            "precision": 0.3333333333333333,
+            "recall": 1.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "electricity_mechanical": 3
+          },
+          "electricity_digital": {
+            "electricity_mechanical": 3
+          },
+          "water_mechanical": {
+            "electricity_mechanical": 1,
+            "unknown": 1
+          },
+          "water_digital": {
+            "electricity_mechanical": 1
+          },
+          "not_meter": {
+            "unknown": 5,
+            "electricity_mechanical": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_31937475",
+            "actual": "electricity_mechanical",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": true,
+            "detections": 1
+          },
+          {
+            "id": "commons_40388945",
+            "actual": "electricity_mechanical",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": true,
+            "detections": 1
+          },
+          {
+            "id": "commons_6979762",
+            "actual": "electricity_mechanical",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": true,
+            "detections": 1
+          },
+          {
+            "id": "commons_141575682",
+            "actual": "electricity_digital",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_26507235",
+            "actual": "electricity_digital",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_167896665",
+            "actual": "water_mechanical",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_117569252",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_111639614",
+            "actual": "electricity_digital",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_161109743",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_157635897",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_161110829",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_161108186",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_138131787",
+            "actual": "not_meter",
+            "predicted": "electricity_mechanical",
+            "localizedCorrectly": false,
+            "detections": 1
+          },
+          {
+            "id": "commons_157780137",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 6,
+        "correctSingleCategory": 3
+      },
+      "detectionMetrics": {
+        "val": {
+          "mAP50": 0.8850000000000001,
+          "mAP50_95": 0.4995437337339318,
+          "perClass": [
+            {
+              "class": "electricity_mechanical",
+              "precision": 0.07066257314559905,
+              "recall": 1.0,
+              "mAP50": 0.8300000000000001,
+              "mAP50_95": 0.5986615178571429
+            },
+            {
+              "class": "electricity_digital",
+              "precision": 0.9759729202126838,
+              "recall": 0.6666666666666666,
+              "mAP50": 0.8300000000000001,
+              "mAP50_95": 0.4180676603286286
+            },
+            {
+              "class": "water_mechanical",
+              "precision": 1.0,
+              "recall": 0.8575808659906244,
+              "mAP50": 0.995,
+              "mAP50_95": 0.4819020230160242
+            }
+          ]
+        },
+        "test": {
+          "mAP50": 0.3887428991907192,
+          "mAP50_95": 0.25018874496966836,
+          "perClass": [
+            {
+              "class": "electricity_mechanical",
+              "precision": 0.30381791873030184,
+              "recall": 1.0,
+              "mAP50": 0.995,
+              "mAP50_95": 0.6857520981387479
+            },
+            {
+              "class": "electricity_digital",
+              "precision": 1.0,
+              "recall": 0.0,
+              "mAP50": 0.11911773151471645,
+              "mAP50_95": 0.04442811377153489
+            },
+            {
+              "class": "water_mechanical",
+              "precision": 1.0,
+              "recall": 0.0,
+              "mAP50": 0.052110966057441255,
+              "mAP50_95": 0.020386022998722293
+            }
+          ]
+        }
+      },
+      "cpuSessionMs": {
+        "p50": 29.636999999638647,
+        "p95": 41.62194000055023,
+        "max": 42.356799998742645
+      },
+      "limitations": "Small agent-reviewed development set; no independent human annotation review; no 90% or four-class accuracy claim; crop digit results are not billing readings.",
+      "activationDecision": "rejected",
+      "localExportDirectory": ".tools/master-body-verified-export",
+      "rejectionReason": "Missing fourth class and validation classification errors",
+      "dotnetParity": {
+        "passed": true,
+        "inputShape": [1, 3, 416, 416],
+        "outputShape": [1, 7, 3549],
+        "classes": ["electricity_mechanical", "electricity_digital", "water_mechanical"],
+        "rows": [
+          {
+            "id": "commons_45290164",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_113793907",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_31937475",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_33769214",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_40388945",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_6979762",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_141575682",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_136480278",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_136480279",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_26507235",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          }
+        ],
+        "limitation": "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim."
+      }
+    },
+    "lcd_full": {
+      "model": "lcd-digits",
+      "status": "evaluated_not_activated",
+      "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+      "validationSelectionPassed": false,
+      "unsupportedClasses": [],
+      "weightsSha256": "583d12735c743b61f101eb1134f7199cba159cf3a5cf042dc6127d8423315263",
+      "onnxSha256": "0634dde757a873d26900873784d3cd7651498cb962a1589006aad481a4c06963",
+      "input": [1, 3, 416, 416],
+      "output": [1, 14, 3549],
+      "preprocessing": "BGR->RGB/255, centered letterbox114, bilinear, actual rounded left/top",
+      "decode": "cxcywh pixels + per-class scores; no objectness; class-aware greedy NMS IoU .45",
+      "nativeOnnxParity": [
+        {
+          "id": "commons_136480278",
+          "maxAbsoluteDifference": 0.00103759765625,
+          "passed": true
+        },
+        {
+          "id": "commons_136480279",
+          "maxAbsoluteDifference": 0.001007080078125,
+          "passed": true
+        },
+        {
+          "id": "commons_141575682",
+          "maxAbsoluteDifference": 0.0014801025390625,
+          "passed": true
+        },
+        {
+          "id": "commons_26507235",
+          "maxAbsoluteDifference": 0.00103759765625,
+          "passed": true
+        },
+        {
+          "id": "commons_111639614",
+          "maxAbsoluteDifference": 0.0010986328125,
+          "passed": true
+        },
+        {
+          "id": "commons_141189268",
+          "maxAbsoluteDifference": 0.0017242431640625,
+          "passed": true
+        }
+      ],
+      "calibrationSource": "validation only, zero observed false proposals preferred",
+      "validationGrid": [
+        {
+          "threshold": 0.25,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.5,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.7,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.8,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.9,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.95,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.99,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        }
+      ],
+      "selectedValidation": {
+        "threshold": 0.25,
+        "readable": 1,
+        "exact": 0,
+        "falseProposals": 0,
+        "fallback": 2,
+        "samples": [
+          {
+            "id": "commons_136480278",
+            "expectedDigits": "74590",
+            "proposal": null,
+            "exact": false,
+            "falseProposal": false,
+            "fallback": true,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": []
+          },
+          {
+            "id": "commons_136480279",
+            "expectedDigits": null,
+            "proposal": null,
+            "exact": false,
+            "falseProposal": false,
+            "fallback": true,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": []
+          }
+        ]
+      },
+      "test": {
+        "threshold": 0.25,
+        "readable": 3,
+        "exact": 0,
+        "falseProposals": 1,
+        "fallback": 3,
+        "samples": [
+          {
+            "id": "commons_141575682",
+            "expectedDigits": "004046",
+            "proposal": null,
+            "exact": false,
+            "falseProposal": false,
+            "fallback": true,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": []
+          },
+          {
+            "id": "commons_26507235",
+            "expectedDigits": "21594",
+            "proposal": null,
+            "exact": false,
+            "falseProposal": false,
+            "fallback": true,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": []
+          },
+          {
+            "id": "commons_111639614",
+            "expectedDigits": null,
+            "proposal": null,
+            "exact": false,
+            "falseProposal": false,
+            "fallback": true,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": []
+          },
+          {
+            "id": "commons_141189268",
+            "expectedDigits": "000880578",
+            "proposal": "000880518",
+            "exact": false,
+            "falseProposal": true,
+            "fallback": false,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": [
+              {
+                "class": 0,
+                "score": 0.7585980892181396,
+                "box": [
+                  10.566041928071241, 1.5680903654832106, 79.52257174711961, 110.96578194544865
+                ],
+                "normalizedBox": [
+                  0.017908545640798714, 0.012959424508125707, 0.13478401991037223,
+                  0.9170725780615592
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.8349364399909973,
+                "box": [73.33427502558781, 4.385887659513034, 143.9611005783081, 112.644912646367],
+                "normalizedBox": [
+                  0.12429538139930138, 0.03624700545052094, 0.2440018653869629, 0.9309496912922893
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.9484105110168457,
+                "box": [
+                  135.5796868984516, 3.892546983865591, 205.19704305208646, 113.4398865699768
+                ],
+                "normalizedBox": [
+                  0.22979607948890102, 0.03216980978401315, 0.3477915983933669, 0.9375197237188165
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.6474146842956543,
+                "box": [200.0302265240596, 5.942291846642128, 267.6428404221168, 112.7336626786452],
+                "normalizedBox": [
+                  0.3390342822441688, 0.049109849972248994, 0.4536319329188421, 0.9316831626334314
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.5277931094169617,
+                "box": [
+                  264.1136362002446, 4.206537283383883, 328.98415327072144, 112.83590591870822
+                ],
+                "normalizedBox": [
+                  0.44765023084787225, 0.03476477093705689, 0.5576002597808838, 0.9325281480884977
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.9611365795135498,
+                "box": [
+                  325.3970159017123, 7.414036163916955, 395.3946056732765, 114.87138931567853
+                ],
+                "normalizedBox": [
+                  0.5515203659351056, 0.061273026148074006, 0.6701603485987737, 0.949350324922963
+                ]
+              },
+              {
+                "class": 5,
+                "score": 0.5365303754806519,
+                "box": [390.1713275909424, 6.388801244588999, 460.4744243621826, 118.5476121535668],
+                "normalizedBox": [
+                  0.6613073348999023, 0.0528000102858595, 0.7804651260375977, 0.9797323318476595
+                ]
+              },
+              {
+                "class": 1,
+                "score": 0.6962665915489197,
+                "box": [
+                  474.957667864286, 15.095956325531006, 519.1902857560378, 116.13091046993549
+                ],
+                "normalizedBox": [
+                  0.8050129963801458, 0.12475996963248766, 0.8799835351797252, 0.9597595906606239
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.6744796633720398,
+                "box": [
+                  513.5693421730629, 4.7931401546184835, 583.8919591903687, 118.11074385276208
+                ],
+                "normalizedBox": [
+                  0.8704565121577337, 0.03961272855056598, 0.989647388458252, 0.9761218500228271
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "detectionMetrics": null,
+      "cpuSessionMs": {
+        "p50": 25.226249999832362,
+        "p95": 31.420724999861704,
+        "max": 32.8879999997298
+      },
+      "limitations": "Small agent-reviewed development set; no independent human annotation review; no 90% or four-class accuracy claim; crop digit results are not billing readings.",
+      "activationDecision": "rejected",
+      "localExportDirectory": ".tools/master-lcd-full-final-export",
+      "rejectionReason": "No validation exact reading",
+      "dotnetParity": {
+        "passed": true,
+        "inputShape": [1, 3, 416, 416],
+        "outputShape": [1, 14, 3549],
+        "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "rows": [
+          {
+            "id": "commons_136480278",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_136480279",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_141575682",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_26507235",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_111639614",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_141189268",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          }
+        ],
+        "limitation": "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim."
+      }
+    },
+    "lcd_rows": {
+      "model": "lcd-digits",
+      "status": "evaluated_not_activated",
+      "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+      "validationSelectionPassed": true,
+      "unsupportedClasses": [],
+      "weightsSha256": "a234a35bfdf3dba4bd115dbf71531c3b37a444c99c197a8a77b84e1d324bdc46",
+      "onnxSha256": "89ee6d85878974aacd8ceb3b981671acf2993b4f80893483d2eb4e18eac2138b",
+      "input": [1, 3, 416, 416],
+      "output": [1, 14, 3549],
+      "preprocessing": "BGR->RGB/255, centered letterbox114, bilinear, actual rounded left/top",
+      "decode": "cxcywh pixels + per-class scores; no objectness; class-aware greedy NMS IoU .45",
+      "nativeOnnxParity": [
+        {
+          "id": "commons_136480278",
+          "maxAbsoluteDifference": 0.0005340576171875,
+          "passed": true
+        },
+        {
+          "id": "commons_136480279",
+          "maxAbsoluteDifference": 0.000518798828125,
+          "passed": true
+        },
+        {
+          "id": "commons_141575682",
+          "maxAbsoluteDifference": 0.0003204345703125,
+          "passed": true
+        },
+        {
+          "id": "commons_26507235",
+          "maxAbsoluteDifference": 0.00042724609375,
+          "passed": true
+        },
+        {
+          "id": "commons_111639614",
+          "maxAbsoluteDifference": 0.000396728515625,
+          "passed": true
+        },
+        {
+          "id": "commons_141189268",
+          "maxAbsoluteDifference": 0.00042724609375,
+          "passed": true
+        }
+      ],
+      "calibrationSource": "validation only, zero observed false proposals preferred",
+      "validationGrid": [
+        {
+          "threshold": 0.25,
+          "readable": 1,
+          "exact": 1,
+          "falseProposals": 0,
+          "fallback": 1,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": "74590",
+              "exact": true,
+              "falseProposal": false,
+              "fallback": false,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": [
+                {
+                  "class": 7,
+                  "score": 0.586762547492981,
+                  "box": [
+                    22.57823690084311, 18.035454291563767, 56.711489209761986, 77.3484864785121
+                  ],
+                  "normalizedBox": [
+                    0.10700586208930384, 0.18035454291563766, 0.2687748303780189, 0.773484864785121
+                  ]
+                },
+                {
+                  "class": 4,
+                  "score": 0.9640414118766785,
+                  "box": [
+                    59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041
+                  ],
+                  "normalizedBox": [
+                    0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                  ]
+                },
+                {
+                  "class": 5,
+                  "score": 0.9726153612136841,
+                  "box": [
+                    93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                  ],
+                  "normalizedBox": [
+                    0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                  ]
+                },
+                {
+                  "class": 9,
+                  "score": 0.8421918153762817,
+                  "box": [
+                    126.76914842312154, 20.59196730760428, 158.07898172965417, 77.29846651737508
+                  ],
+                  "normalizedBox": [
+                    0.6008016512944149, 0.20591967307604278, 0.7491894868703989, 0.7729846651737508
+                  ]
+                },
+                {
+                  "class": 0,
+                  "score": 0.9195772409439087,
+                  "box": [
+                    159.65979979588437, 20.044731286855846, 191.2590105350201, 76.83199148911696
+                  ],
+                  "normalizedBox": [
+                    0.7566815156203051, 0.20044731286855846, 0.9064408082228441, 0.7683199148911696
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.5,
+          "readable": 1,
+          "exact": 1,
+          "falseProposals": 0,
+          "fallback": 1,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": "74590",
+              "exact": true,
+              "falseProposal": false,
+              "fallback": false,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": [
+                {
+                  "class": 7,
+                  "score": 0.586762547492981,
+                  "box": [
+                    22.57823690084311, 18.035454291563767, 56.711489209761986, 77.3484864785121
+                  ],
+                  "normalizedBox": [
+                    0.10700586208930384, 0.18035454291563766, 0.2687748303780189, 0.773484864785121
+                  ]
+                },
+                {
+                  "class": 4,
+                  "score": 0.9640414118766785,
+                  "box": [
+                    59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041
+                  ],
+                  "normalizedBox": [
+                    0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                  ]
+                },
+                {
+                  "class": 5,
+                  "score": 0.9726153612136841,
+                  "box": [
+                    93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                  ],
+                  "normalizedBox": [
+                    0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                  ]
+                },
+                {
+                  "class": 9,
+                  "score": 0.8421918153762817,
+                  "box": [
+                    126.76914842312154, 20.59196730760428, 158.07898172965417, 77.29846651737508
+                  ],
+                  "normalizedBox": [
+                    0.6008016512944149, 0.20591967307604278, 0.7491894868703989, 0.7729846651737508
+                  ]
+                },
+                {
+                  "class": 0,
+                  "score": 0.9195772409439087,
+                  "box": [
+                    159.65979979588437, 20.044731286855846, 191.2590105350201, 76.83199148911696
+                  ],
+                  "normalizedBox": [
+                    0.7566815156203051, 0.20044731286855846, 0.9064408082228441, 0.7683199148911696
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.7,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 1,
+          "fallback": 1,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": "4590",
+              "exact": false,
+              "falseProposal": true,
+              "fallback": false,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": [
+                {
+                  "class": 4,
+                  "score": 0.9640414118766785,
+                  "box": [
+                    59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041
+                  ],
+                  "normalizedBox": [
+                    0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                  ]
+                },
+                {
+                  "class": 5,
+                  "score": 0.9726153612136841,
+                  "box": [
+                    93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                  ],
+                  "normalizedBox": [
+                    0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                  ]
+                },
+                {
+                  "class": 9,
+                  "score": 0.8421918153762817,
+                  "box": [
+                    126.76914842312154, 20.59196730760428, 158.07898172965417, 77.29846651737508
+                  ],
+                  "normalizedBox": [
+                    0.6008016512944149, 0.20591967307604278, 0.7491894868703989, 0.7729846651737508
+                  ]
+                },
+                {
+                  "class": 0,
+                  "score": 0.9195772409439087,
+                  "box": [
+                    159.65979979588437, 20.044731286855846, 191.2590105350201, 76.83199148911696
+                  ],
+                  "normalizedBox": [
+                    0.7566815156203051, 0.20044731286855846, 0.9064408082228441, 0.7683199148911696
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.8,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 1,
+          "fallback": 1,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": "4590",
+              "exact": false,
+              "falseProposal": true,
+              "fallback": false,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": [
+                {
+                  "class": 4,
+                  "score": 0.9640414118766785,
+                  "box": [
+                    59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041
+                  ],
+                  "normalizedBox": [
+                    0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                  ]
+                },
+                {
+                  "class": 5,
+                  "score": 0.9726153612136841,
+                  "box": [
+                    93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                  ],
+                  "normalizedBox": [
+                    0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                  ]
+                },
+                {
+                  "class": 9,
+                  "score": 0.8421918153762817,
+                  "box": [
+                    126.76914842312154, 20.59196730760428, 158.07898172965417, 77.29846651737508
+                  ],
+                  "normalizedBox": [
+                    0.6008016512944149, 0.20591967307604278, 0.7491894868703989, 0.7729846651737508
+                  ]
+                },
+                {
+                  "class": 0,
+                  "score": 0.9195772409439087,
+                  "box": [
+                    159.65979979588437, 20.044731286855846, 191.2590105350201, 76.83199148911696
+                  ],
+                  "normalizedBox": [
+                    0.7566815156203051, 0.20044731286855846, 0.9064408082228441, 0.7683199148911696
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.9,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 1,
+          "fallback": 1,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": "450",
+              "exact": false,
+              "falseProposal": true,
+              "fallback": false,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": [
+                {
+                  "class": 4,
+                  "score": 0.9640414118766785,
+                  "box": [
+                    59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041
+                  ],
+                  "normalizedBox": [
+                    0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                  ]
+                },
+                {
+                  "class": 5,
+                  "score": 0.9726153612136841,
+                  "box": [
+                    93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                  ],
+                  "normalizedBox": [
+                    0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                  ]
+                },
+                {
+                  "class": 0,
+                  "score": 0.9195772409439087,
+                  "box": [
+                    159.65979979588437, 20.044731286855846, 191.2590105350201, 76.83199148911696
+                  ],
+                  "normalizedBox": [
+                    0.7566815156203051, 0.20044731286855846, 0.9064408082228441, 0.7683199148911696
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.95,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": [
+                {
+                  "class": 4,
+                  "score": 0.9640414118766785,
+                  "box": [
+                    59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041
+                  ],
+                  "normalizedBox": [
+                    0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                  ]
+                },
+                {
+                  "class": 5,
+                  "score": 0.9726153612136841,
+                  "box": [
+                    93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                  ],
+                  "normalizedBox": [
+                    0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        },
+        {
+          "threshold": 0.99,
+          "readable": 1,
+          "exact": 0,
+          "falseProposals": 0,
+          "fallback": 2,
+          "samples": [
+            {
+              "id": "commons_136480278",
+              "expectedDigits": "74590",
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            },
+            {
+              "id": "commons_136480279",
+              "expectedDigits": null,
+              "proposal": null,
+              "exact": false,
+              "falseProposal": false,
+              "fallback": true,
+              "overlap": false,
+              "multipleRows": false,
+              "detections": []
+            }
+          ]
+        }
+      ],
+      "selectedValidation": {
+        "threshold": 0.25,
+        "readable": 1,
+        "exact": 1,
+        "falseProposals": 0,
+        "fallback": 1,
+        "samples": [
+          {
+            "id": "commons_136480278",
+            "expectedDigits": "74590",
+            "proposal": "74590",
+            "exact": true,
+            "falseProposal": false,
+            "fallback": false,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": [
+              {
+                "class": 7,
+                "score": 0.586762547492981,
+                "box": [
+                  22.57823690084311, 18.035454291563767, 56.711489209761986, 77.3484864785121
+                ],
+                "normalizedBox": [
+                  0.10700586208930384, 0.18035454291563766, 0.2687748303780189, 0.773484864785121
+                ]
+              },
+              {
+                "class": 4,
+                "score": 0.9640414118766785,
+                "box": [59.595844644766586, 18.9804082100208, 90.51553695935469, 77.93755026964041],
+                "normalizedBox": [
+                  0.28244476134960467, 0.18980408210020802, 0.4289835874850933, 0.7793755026964041
+                ]
+              },
+              {
+                "class": 5,
+                "score": 0.9726153612136841,
+                "box": [
+                  93.59538468947778, 19.914317956337563, 122.93951788315407, 76.60682426966154
+                ],
+                "normalizedBox": [
+                  0.4435800222250132, 0.19914317956337563, 0.5826517435220572, 0.7660682426966154
+                ]
+              },
+              {
+                "class": 9,
+                "score": 0.8421918153762817,
+                "box": [
+                  126.76914842312154, 20.59196730760428, 158.07898172965417, 77.29846651737508
+                ],
+                "normalizedBox": [
+                  0.6008016512944149, 0.20591967307604278, 0.7491894868703989, 0.7729846651737508
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.9195772409439087,
+                "box": [
+                  159.65979979588437, 20.044731286855846, 191.2590105350201, 76.83199148911696
+                ],
+                "normalizedBox": [
+                  0.7566815156203051, 0.20044731286855846, 0.9064408082228441, 0.7683199148911696
+                ]
+              }
+            ]
+          },
+          {
+            "id": "commons_136480279",
+            "expectedDigits": null,
+            "proposal": null,
+            "exact": false,
+            "falseProposal": false,
+            "fallback": true,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": []
+          }
+        ]
+      },
+      "test": {
+        "threshold": 0.25,
+        "readable": 3,
+        "exact": 2,
+        "falseProposals": 2,
+        "fallback": 0,
+        "samples": [
+          {
+            "id": "commons_141575682",
+            "expectedDigits": "004046",
+            "proposal": "004046",
+            "exact": true,
+            "falseProposal": false,
+            "fallback": false,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": [
+              {
+                "class": 0,
+                "score": 0.8411928415298462,
+                "box": [7.077372074127196, 4.685448866624098, 40.33240868495061, 53.36000295785757],
+                "normalizedBox": [
+                  0.03724932670593261, 0.0822008573091947, 0.21227583518395057, 0.936140402769431
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.7800971269607544,
+                "box": [40.98861070779653, 5.710528447077824, 70.24146520174466, 52.93050765991211],
+                "normalizedBox": [
+                  0.21572953004103437, 0.10018470959785655, 0.36969192211444557, 0.9286053975423177
+                ]
+              },
+              {
+                "class": 4,
+                "score": 0.8601234555244446,
+                "box": [72.25548927600566, 5.321496083186223, 99.9080228805542, 51.13132183368389],
+                "normalizedBox": [
+                  0.3802920488210824, 0.09335958040677585, 0.5258316993713379, 0.8970407339242787
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.8635995984077454,
+                "box": [
+                  100.78819274902344, 6.058564736292912, 129.89392133859488, 53.26447321818425
+                ],
+                "normalizedBox": [
+                  0.5304641723632812, 0.10629060940864757, 0.683652217571552, 0.9344644424242851
+                ]
+              },
+              {
+                "class": 4,
+                "score": 0.7649278044700623,
+                "box": [
+                  132.56506736461932, 5.856974858504075, 159.69735328967752, 50.340757920191834
+                ],
+                "normalizedBox": [
+                  0.6977108808664175, 0.10275394488603641, 0.8405123857351449, 0.8831711915823128
+                ]
+              },
+              {
+                "class": 6,
+                "score": 0.8280234336853027,
+                "box": [
+                  160.8463305693406, 3.465623121995192, 189.82215404510498, 54.32648585392878
+                ],
+                "normalizedBox": [
+                  0.8465596345754769, 0.06080040564903846, 0.9990639686584473, 0.9530962430513821
+                ]
+              }
+            ]
+          },
+          {
+            "id": "commons_26507235",
+            "expectedDigits": "21594",
+            "proposal": "21594",
+            "exact": true,
+            "falseProposal": false,
+            "fallback": false,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": [
+              {
+                "class": 2,
+                "score": 0.8492758274078369,
+                "box": [
+                  13.784554995023289, 7.011105830852802, 39.17881573163546, 48.03708795400767
+                ],
+                "normalizedBox": [
+                  0.10364327063927285, 0.12519831840808576, 0.29457756189199596, 0.8578051420358512
+                ]
+              },
+              {
+                "class": 1,
+                "score": 0.8681607246398926,
+                "box": [48.007873590175926, 9.66050250713642, 59.97633767127991, 44.25830012101394],
+                "normalizedBox": [
+                  0.3609614555652325, 0.17250897334172177, 0.45094990730285645, 0.7903267878752489
+                ]
+              },
+              {
+                "class": 5,
+                "score": 0.8277096152305603,
+                "box": [
+                  59.417618146309486, 6.879798522362343, 80.42187494498033, 47.265703861530014
+                ],
+                "normalizedBox": [
+                  0.4467490086188683, 0.1228535450421847, 0.6046757514660175, 0.8440304260987502
+                ]
+              },
+              {
+                "class": 9,
+                "score": 0.8373281955718994,
+                "box": [
+                  79.68660328938411, 6.2493297686943645, 102.15823243214534, 46.15407255979685
+                ],
+                "normalizedBox": [
+                  0.5991473931532639, 0.11159517444097079, 0.76810701076801, 0.8241798671392295
+                ]
+              },
+              {
+                "class": 4,
+                "score": 0.9791840314865112,
+                "box": [
+                  101.44955543371348, 7.534137340692374, 123.58268139912532, 44.07544996188237
+                ],
+                "normalizedBox": [
+                  0.76277861228356, 0.13453816679807812, 0.9291930932265061, 0.7870616064621851
+                ]
+              }
+            ]
+          },
+          {
+            "id": "commons_111639614",
+            "expectedDigits": null,
+            "proposal": "88888",
+            "exact": false,
+            "falseProposal": true,
+            "fallback": false,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": [
+              {
+                "class": 8,
+                "score": 0.5912997126579285,
+                "box": [
+                  27.026017647523148, 21.409035169161285, 67.64846733900217, 99.47000973041241
+                ],
+                "normalizedBox": [
+                  0.09583694201249343, 0.1685750800721361, 0.23988818205319917, 0.7832284230741134
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.3501344621181488,
+                "box": [
+                  75.66222178019011, 20.809059289785534, 114.83578826830939, 99.77266634427585
+                ],
+                "normalizedBox": [
+                  0.26830575099358195, 0.16385086054949238, 0.40721910733443045, 0.78561154601792
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.47848623991012573,
+                "box": [
+                  123.43125937535213, 21.50959660456731, 163.87545094123254, 100.03293448228104
+                ],
+                "normalizedBox": [
+                  0.4376995013310359, 0.1693669023981678, 0.5811186203589807, 0.7876609014352838
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.7767301201820374,
+                "box": [
+                  168.98579648824838, 21.229654752291168, 211.41264746739316, 98.51824466998761
+                ],
+                "normalizedBox": [
+                  0.599240413078895, 0.16716263584481234, 0.749690239246075, 0.7757342099999024
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.36858612298965454,
+                "box": [
+                  220.01042263324445, 21.403165120344898, 258.67098822960486, 100.08725441419162
+                ],
+                "normalizedBox": [
+                  0.7801788036639874, 0.16852885921531416, 0.9172730079064002, 0.7880886174345797
+                ]
+              }
+            ]
+          },
+          {
+            "id": "commons_141189268",
+            "expectedDigits": "000880578",
+            "proposal": "00088058",
+            "exact": false,
+            "falseProposal": true,
+            "fallback": false,
+            "overlap": false,
+            "multipleRows": false,
+            "detections": [
+              {
+                "class": 0,
+                "score": 0.8081251382827759,
+                "box": [
+                  13.671532915188717, 1.0119040195758526, 77.96005125229175, 107.98014732507559
+                ],
+                "normalizedBox": [
+                  0.023172089686760537, 0.008362843136990518, 0.13213568008863008,
+                  0.8923979117774842
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.8488661050796509,
+                "box": [
+                  79.19127941131592, 3.286607815669133, 138.62830785604623, 107.49702123495248
+                ],
+                "normalizedBox": [
+                  0.13422250747680664, 0.027162048063381267, 0.23496323365431565, 0.888405134173161
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.8348746299743652,
+                "box": [140.445205615117, 4.948068582094633, 200.1668141438411, 108.99286288481493],
+                "normalizedBox": [
+                  0.23804272138155425, 0.0408931287776416, 0.33926578668447643, 0.9007674618579746
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.7340238094329834,
+                "box": [
+                  206.45904210897592, 9.17875730074369, 264.9379770572369, 111.75842945392316
+                ],
+                "normalizedBox": [
+                  0.3499305798457219, 0.07585749835325364, 0.44904741874107945, 0.9236233839167203
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.7906719446182251,
+                "box": [
+                  266.77158172313983, 10.610216764303354, 328.19854993086597, 111.4121831380404
+                ],
+                "normalizedBox": [
+                  0.45215522325955904, 0.08768774185374673, 0.556268728696383, 0.9207618441160365
+                ]
+              },
+              {
+                "class": 0,
+                "score": 0.9261053800582886,
+                "box": [
+                  329.5683215214656, 10.553095157329853, 393.87021945073053, 115.48484875605656
+                ],
+                "normalizedBox": [
+                  0.5585903754601111, 0.08721566245727151, 0.6675766431368314, 0.95442023765336
+                ]
+              },
+              {
+                "class": 5,
+                "score": 0.5585031509399414,
+                "box": [
+                  392.5790049479558, 3.826682384197529, 462.14963802924524, 118.87407853053166
+                ],
+                "normalizedBox": [
+                  0.6653881439795861, 0.031625474249566354, 0.7833044712360089, 0.9824304010787741
+                ]
+              },
+              {
+                "class": 8,
+                "score": 0.8773058652877808,
+                "box": [
+                  516.2735022031344, 10.718909043532152, 583.9327526092529, 113.1050234574538
+                ],
+                "normalizedBox": [
+                  0.8750398342426007, 0.08858602515315828, 0.9897165298461914, 0.934752259978957
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "detectionMetrics": null,
+      "cpuSessionMs": {
+        "p50": 24.0796500002034,
+        "p95": 35.13379999913013,
+        "max": 38.652199998978176
+      },
+      "limitations": "Small agent-reviewed development set; no independent human annotation review; no 90% or four-class accuracy claim; crop digit results are not billing readings.",
+      "activationDecision": "rejected",
+      "localExportDirectory": ".tools/master-lcd-final-export",
+      "rejectionReason": "False proposals on unreadable/unsupported displays; too little independent data",
+      "dotnetParity": {
+        "passed": true,
+        "inputShape": [1, 3, 416, 416],
+        "outputShape": [1, 14, 3549],
+        "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "rows": [
+          {
+            "id": "commons_136480278",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_136480279",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_141575682",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_26507235",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_111639614",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          },
+          {
+            "id": "commons_141189268",
+            "inputMaxDelta": 0,
+            "outputMaxDelta": 0,
+            "passed": true
+          }
+        ],
+        "limitation": "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim."
+      }
+    }
+  },
+  "automaticBaseline": {
+    "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2",
+    "rows": [
+      {
+        "id": "commons_31937475",
+        "expected": "electricity_mechanical",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["unclear_digit"],
+        "elapsedMs": 6858
+      },
+      {
+        "id": "commons_40388945",
+        "expected": "electricity_mechanical",
+        "classificationStatus": "unavailable",
+        "detectedCategory": "unknown",
+        "classificationSource": "none",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["ocr_timeout"],
+        "elapsedMs": 8015
+      },
+      {
+        "id": "commons_6979762",
+        "expected": "electricity_mechanical",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["meter_type_confirmation_required"],
+        "elapsedMs": 7204
+      },
+      {
+        "id": "commons_141575682",
+        "expected": "electricity_digital",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["text_region_limit", "classification_insufficient_evidence"],
+        "elapsedMs": 6003
+      },
+      {
+        "id": "commons_26507235",
+        "expected": "electricity_digital",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["classification_insufficient_evidence"],
+        "elapsedMs": 6544
+      },
+      {
+        "id": "commons_167896665",
+        "expected": "water_mechanical",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["reading_region_not_detected"],
+        "elapsedMs": 4472
+      },
+      {
+        "id": "commons_117569252",
+        "expected": "water_mechanical",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["meter_detection_uncertain"],
+        "elapsedMs": 2449
+      },
+      {
+        "id": "commons_111639614",
+        "expected": "electricity_digital",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["unclear_digit"],
+        "elapsedMs": 6277
+      },
+      {
+        "id": "commons_141189268",
+        "expected": "water_digital",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["reading_region_not_detected"],
+        "elapsedMs": 6659
+      },
+      {
+        "id": "commons_161109743",
+        "expected": "not_meter",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["classification_insufficient_evidence"],
+        "elapsedMs": 4126
+      },
+      {
+        "id": "commons_157635897",
+        "expected": "not_meter",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["classification_insufficient_evidence"],
+        "elapsedMs": 2027
+      },
+      {
+        "id": "commons_161110829",
+        "expected": "not_meter",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["classification_insufficient_evidence"],
+        "elapsedMs": 3779
+      },
+      {
+        "id": "commons_161108186",
+        "expected": "not_meter",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["classification_insufficient_evidence"],
+        "elapsedMs": 1984
+      },
+      {
+        "id": "commons_138131787",
+        "expected": "not_meter",
+        "classificationStatus": "unknown",
+        "detectedCategory": "unknown",
+        "classificationSource": "text_rules",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["classification_insufficient_evidence"],
+        "elapsedMs": 5035
+      },
+      {
+        "id": "commons_157780137",
+        "expected": "not_meter",
+        "classificationStatus": "ambiguous",
+        "detectedCategory": "unknown",
+        "classificationSource": "yolo_reading_region",
+        "classificationConfidence": null,
+        "correctCategory": false,
+        "wrongCategory": false,
+        "fallback": true,
+        "warnings": ["meter_detection_uncertain"],
+        "elapsedMs": 4906
+      }
+    ],
+    "limitation": "Small public agent-reviewed body-category development holdout; no exact-reading labels. Do not score numeric reading accuracy here.",
+    "summary": {
+      "images": 15,
+      "correctCategory": 0,
+      "wrongCategory": 0,
+      "unclassified": 15,
+      "p50Ms": 5035.0,
+      "p95Ms": 7447.299999999999,
+      "maxMs": 8015,
+      "within10Seconds": 15
+    }
+  },
+  "ppLcdBaseline": {
+    "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2",
+    "rows": [
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "variant": "pp_direct",
+        "expectedDigits": "74590",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 93,
+        "warnings": ["ambiguous_reading"]
+      },
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "variant": "pp_page",
+        "expectedDigits": "74590",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 190,
+        "warnings": ["ambiguous_reading"]
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "variant": "pp_direct",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 60,
+        "warnings": ["reading_not_recognized"]
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "variant": "pp_page",
+        "expectedDigits": null,
+        "actualDigits": "8",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 152,
+        "warnings": ["low_confidence"]
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "004046",
+        "actualDigits": "004045",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 60,
+        "warnings": []
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "004046",
+        "actualDigits": "004045",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 75,
+        "warnings": []
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "21594",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 60,
+        "warnings": ["ambiguous_reading"]
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "21594",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 72,
+        "warnings": ["ambiguous_reading"]
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 62,
+        "warnings": ["ambiguous_reading"]
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 40,
+        "warnings": ["no_text", "reading_not_recognized"]
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "000880578",
+        "actualDigits": "000990518",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 58,
+        "warnings": ["low_confidence"]
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "000880578",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 74,
+        "warnings": ["no_text", "reading_not_recognized"]
+      }
+    ],
+    "limitation": "Reviewed display crops; digit sequence only, decimal/register eligibility excluded. No full-frame or billing accuracy claim."
+  },
+  "mechanicalElectricityProbe": {
+    "source": {
+      "id": "commons_45290164",
+      "sourceSha256": "fc0ec9c57fd385acb274e82122ed350b7ab0cb2852325f29811b3419fdcf1be6",
+      "cropPixels": [330, 275, 685, 360],
+      "expectedDigits": "131313",
+      "decimalPlaces": 1,
+      "precisionEvidence": "printed weights 10000,1000,100,10,1,1/10 under the actual wheels; not red color",
+      "review": "agent visual reading, single example only, no generalization evidence"
+    },
+    "waterStage2": [
+      {
+        "file": "commons_45290164-legacy.png",
+        "stage2": null,
+        "ppDigits": "",
+        "scores": []
+      }
+    ],
+    "ppEvaluation": {
+      "dataset": "meter-evaluation",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2"],
+      "sourceCount": 1,
+      "total": 1,
+      "exactMatches": 0,
+      "expectedRejections": 0,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 1,
+      "fallbacks": 1,
+      "meterProposalMetrics": {
+        "positiveCases": 1,
+        "exactReadings": 0,
+        "emittedReadings": 0,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": 0,
+        "falseReadingRatePercent": null
+      },
+      "proposalOrFallbackWithin10Seconds": 1,
+      "maxMilliseconds": 409,
+      "profiles": {
+        "MechanicalElectricity": {
+          "total": 1,
+          "exactMatches": 0,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 409
+        }
+      },
+      "fieldAccuracy": {
+        "reading": {
+          "correct": 0,
+          "total": 1,
+          "percent": 0
+        }
+      },
+      "p50Milliseconds": 409,
+      "p95Milliseconds": 409,
+      "results": [
+        {
+          "index": 0,
+          "profile": "MechanicalElectricity",
+          "passed": false,
+          "fields": {
+            "reading": false
+          },
+          "elapsedMilliseconds": 409,
+          "isFallback": true,
+          "warnings": [
+            "meter_localization_unavailable",
+            "reading_region_unverified",
+            "multiple_reading_regions",
+            "ambiguous_reading"
+          ],
+          "expectedRejection": false
+        }
+      ]
+    },
+    "limitation": "One reviewed crop only; both fallback; no transfer to electricity runtime authorized by this result."
+  },
+  "datasets": {
+    "commonsCandidates": 179,
+    "commonsDownloaded": 155,
+    "commonsFailures": 24,
+    "mendeleyImages": 169,
+    "mendeleyCocoImages": 168,
+    "mendeleyUniqueTrain": 163,
+    "unlabeledExcluded": ["97"],
+    "exactDuplicateExclusions": ["150", "51", "65", "15", "7"],
+    "lcdSourcePerceptualPairs": [],
+    "bodyCounts": {
+      "train:electricity_mechanical": 15,
+      "val:electricity_mechanical": 3,
+      "test:electricity_mechanical": 3,
+      "train:electricity_digital": 7,
+      "test:electricity_digital": 3,
+      "val:electricity_digital": 3,
+      "train:water_mechanical": 10,
+      "val:water_mechanical": 3,
+      "test:water_mechanical": 2,
+      "test:water_digital": 1,
+      "test:not_meter": 6,
+      "val:not_meter": 1,
+      "train:not_meter": 1
+    },
+    "bodyPerceptualPairs": [],
+    "bodyManifestSha256": "2aa9f29f1ca78ff2dd509f6323bdd8afbb83dc8aaf19ffd5c3776b5ebf3f90eb",
+    "lcdEvaluationSha256": "5178e9dc9d0ac49d1cf2702c17884f30504ff6785cf62e5c9ca3497b8d2bb7ec"
+  },
+  "checks": {
+    "backendBuild": "passed; 0 warnings/errors",
+    "ocrToolBuild": "passed; 0 warnings/errors",
+    "applicationUnit": 225,
+    "domainUnit": 83,
+    "ocrIntegration": {
+      "passed": 115,
+      "skipped": 5,
+      "realMinioCaptureCases": 8
+    },
+    "disposableLocalPostgres": 6,
+    "mobileUnit": 372,
+    "mobileTypecheck": "passed",
+    "mobileLint": "passed",
+    "datasetNodeTests": 28,
+    "modelToolsPythonTests": 10,
+    "ppOcrSmoke": 18,
+    "dotnetParityImages": 22,
+    "checksumMismatch": "controlled exit 2 verified",
+    "phoneE2E": "NOT RUN: no adb/attached phone",
+    "coverage": "NOT MEASURED",
+    "fourClassAccuracyTarget": "NOT MET"
+  },
+  "note": "Models are local research artifacts. Repeated candidate/reproducibility evaluations on a small frozen development holdout are not independent BHOME acceptance evidence. No paid service, push, merge or deployment."
+}
