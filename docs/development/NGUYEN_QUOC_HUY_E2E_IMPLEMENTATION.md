@@ -57,3 +57,20 @@ Acceptance tự động: lưu đúng expectedVersion và đọc lại dữ liệ
 ## Nhật ký commit
 
 Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường dẫn cụ thể; không push.
+
+- `5e2c68f` — `fix(contract): [BE-15] guard configuration loading and verify saved settings`: 3 file (panel, component test, báo cáo này); 3/3 tests, build/lint đạt; BE-15 vẫn PARTIAL; handoff Vũ Xuân Trường.
+
+## Slice BE-31 Expenses API và Owner Web
+
+Đã thêm Controller → ExpenseService → IExpenseRepository → ExpenseRepository → Compact24 expenses, shared finance client và màn hình thật vào `Investments` khi API mode. Truy vết UC-31/FE-08: Owner nhập/sửa đúng dữ liệu, Location/Room hợp lệ, audit correction, chặn destructive delete và Staff/Tenant. Dùng source_key hiện hữu cho idempotency, history cho version/before/after/reason; không đổi 24 bảng/386 cột/83 FK. Không ghi database `bhome`.
+
+3/3 PostgreSQL integration tests đạt: persist/reload/filter/correction/history/schema; parallel create/replay/key conflict/update race; 401/403/invalid amount/invalid Room/filter, không ghi tiền sai. 3/3 UI tests đạt: API list/create/one submit/readback; detail/version/reason; API failure/retry stable key/no fake data. Owner Web build/lint đạt. Backend test build đạt không warning/error. Chi tiết API/DTO/ví dụ và fixture: `docs/api/FINANCE.md`.
+
+Changed files: `Application/Finance/ExpenseService.cs`, `Infrastructure/Finance/ExpenseRepository.cs`, `Api/Controllers/ExpensesController.cs`, DI, exception handler, `packages/client-core/src/finance.ts`, `ExpensesApiPage`/test/useFinanceApi, `property/FinancePages.tsx`, `Compact24ExpenseTests.cs`, tài liệu Finance và báo cáo này. Dữ liệu: expenses; đọc users/locations/rooms. Handoff Owner Web: Vũ Xuân Trường, `INITIAL_API_UI_READY`. Mobile không thay. Trạng thái task **PARTIAL**: chưa upload/download chứng từ riêng, chọn Asset/Work Order trong UI, browser E2E và reviewer.
+
+## Cập nhật baseline sau sửa môi trường
+
+- Chạy lại Mobile bằng Node 22 `.tools/node-v22.23.4-win-x64`, `--maxWorkers=2`: **372/372 đạt**. Không sửa test hoặc startup code để che lỗi Node ngoài engines.
+- Owner Web Node 22 `--maxWorkers=2`: 112 đạt, 2 router timeout; đang kiểm tra serial.
+- Dựng thành công image hiện hữu bằng `docker build -f deploy/docker/ContractConverter.Dockerfile -t bhome/contract-converter:local .`. Chạy lại `ActualLibreOfficeConversion...`: **1/1 đạt** (trong lượt 4 test: PDF đạt, 1 expense đạt, 2 expense lỗi serialization đã sửa rồi chạy lại expenses 3/3 đạt). Đây là PDF thật, không phải chữ ký MySign thật.
+- Tìm cấu hình MySign trong các file cấu hình hiện hữu không thấy section được cấu hình; Development chỉ có MainDraft converter. Không xuất giá trị secret vào báo cáo/chat. Tài liệu `DIGITAL_SIGNING_COMPLETION.md` vẫn yêu cầu môi trường/tài khoản provider và quy trình liên kết chủ chứng thư. Chưa tìm thấy tài liệu quyết định OQ-01/02/05 cụ thể thay các ghi chú cũ.
