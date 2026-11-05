@@ -6,6 +6,12 @@ import {
   reviewWarning,
 } from '../../../src/mobile/src/lib/automaticOcr';
 
+it('explains recognizer conflict and profile confirmation without exposing internal codes', () => {
+  expect(reviewWarning('recognizer_conflict')).toContain('không khớp');
+  expect(reviewWarning('recognizer_profile_required')).toContain('xác nhận loại');
+  expect(reviewWarning('digit_model_unavailable')).toContain('chưa khả dụng');
+});
+
 it('keeps an owned image copy and zeroes it on replacement and disposal', () => {
   const image = new TemporaryOcrImage();
   const input = new Uint8Array([1, 2, 3]);

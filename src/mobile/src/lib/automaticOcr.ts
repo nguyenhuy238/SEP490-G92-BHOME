@@ -31,6 +31,18 @@ export function categoryLabel(category: string) {
 }
 export function reviewWarning(code: string) {
   const messages: Record<string, string> = {
+    recognizer_conflict: 'Hai cách đọc không khớp. Hãy đối chiếu ảnh và nhập chỉ số bằng tay.',
+    recognizer_profile_required:
+      'Đã tìm thấy vùng số. Hãy xác nhận loại công tơ để dùng bộ đọc phù hợp.',
+    stage2_only_review:
+      'Chỉ có một cách đọc được chuỗi số. Hãy kiểm tra từng chữ số và dấu thập phân.',
+    recognizers_agree: 'Hai cách đọc cùng kết quả; vẫn cần đối chiếu với công tơ.',
+    digit_model_unavailable:
+      'Bộ đọc bánh số chưa khả dụng. Kết quả đang dùng OCR và cần kiểm tra lại.',
+    digit_geometry_uncertain: 'Các chữ số không cùng một hàng rõ ràng. Hãy chụp lại hoặc nhập tay.',
+    digit_gap_uncertain: 'Chuỗi số có thể bị thiếu chữ số. Hãy chụp gần và rõ hơn.',
+    digit_overlap_conflict: 'Một vị trí có nhiều chữ số chồng nhau. Hãy kiểm tra và nhập tay.',
+    digit_low_confidence: 'Có chữ số chưa đọc chắc chắn. Hãy chụp lại hoặc nhập tay.',
     classification_requires_review:
       'Chưa đủ dấu hiệu để phân biệt loại ảnh. Hãy chọn loại phù hợp.',
     classification_insufficient_evidence:
