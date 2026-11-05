@@ -61,6 +61,41 @@ test('keeps leading zeros and permits known or unverified decimal precision', ()
     assert.equal(validateMeterDataset(m, root).valid, true);
     assert.equal(s.reading.digits, '00123');
   }));
+test('accepts explicit detection-only annotations without fabricated reading labels', () =>
+  fixture((root, m, s) => {
+    s.annotationLevel = 'meter';
+    s.windowPolygon = null;
+    s.reading = null;
+    assert.equal(validateMeterDataset(m, root).valid, true);
+    s.reading = { digits: '123' };
+    assert.ok(
+      validateMeterDataset(m, root).errors.some(
+        (e) => e.code === 'detection_only_has_reading_labels',
+      ),
+    );
+  }));
+test('detection-only mode still rejects a missing meter polygon', () =>
+  fixture((root, m, s) => {
+    s.annotationLevel = 'meter';
+    s.meterPolygon = null;
+    s.windowPolygon = null;
+    s.reading = null;
+    assert.ok(validateMeterDataset(m, root).errors.some((e) => e.code === 'invalid_polygons'));
+  }));
+test('rejects cross-split source, capture and near-duplicate groups', () =>
+  fixture((root, m, s) => {
+    for (const field of ['sourceGroup', 'captureGroup', 'nearDuplicateGroup']) {
+      s[field] = 'shared';
+      m.samples = [
+        s,
+        { ...s, id: 'second', meterGroup: 'second', siteGroup: 'second', split: 'train' },
+      ];
+      assert.ok(
+        validateMeterDataset(m, root).errors.some((e) => e.code === 'training_group_split_leakage'),
+      );
+      delete s[field];
+    }
+  }));
 const invalid = [
   ['identity category', (s) => (s.category = 'cccd_front'), 'invalid_category'],
   ['missing category', (s) => delete s.category, 'invalid_category'],

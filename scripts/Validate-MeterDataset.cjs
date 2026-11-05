@@ -57,7 +57,8 @@ function validateMeterDataset(manifest, imageRoot) {
     files = new Set(),
     hashes = new Map(),
     meters = new Map(),
-    sites = new Map();
+    sites = new Map(),
+    extraGroups = new Map();
   manifest.samples.forEach((s, index) => {
     if (!s || typeof s !== 'object') {
       issue(index, 'invalid_sample');
@@ -75,6 +76,18 @@ function validateMeterDataset(manifest, imageRoot) {
       if (map.has(key) && map.get(key) !== s.split) issue(index, code);
       map.set(key, s.split);
     }
+    // Optional for existing complete-reading manifests; required by the training
+    // exporter. Group IDs are declarations to audit, not discovered identities.
+    for (const field of ['sourceGroup', 'captureGroup', 'nearDuplicateGroup']) {
+      if (s[field] === undefined) continue;
+      if (!opaque(s[field])) issue(index, 'invalid_training_group');
+      const key = `${field}:${s[field]}`;
+      if (extraGroups.has(key) && extraGroups.get(key) !== s.split)
+        issue(index, 'training_group_split_leakage');
+      extraGroups.set(key, s.split);
+    }
+    if (s.annotationLevel !== undefined && !['meter', 'complete'].includes(s.annotationLevel))
+      issue(index, 'invalid_annotation_level');
     if (
       !s.provenance ||
       !['public', 'synthetic', 'authorized-private'].includes(s.provenance.kind) ||
@@ -126,6 +139,11 @@ function validateMeterDataset(manifest, imageRoot) {
     if (s.category === 'not_meter') {
       if (s.meterPolygon !== null || s.windowPolygon !== null || s.reading !== null)
         issue(index, 'negative_has_meter_labels');
+    } else if (s.annotationLevel === 'meter') {
+      // Detection-only data must not invent a window, reading or precision.
+      if (!polygon(s.meterPolygon)) issue(index, 'invalid_polygons');
+      if (s.windowPolygon !== null || s.reading !== null)
+        issue(index, 'detection_only_has_reading_labels');
     } else {
       if (!polygon(s.meterPolygon) || !polygon(s.windowPolygon)) issue(index, 'invalid_polygons');
       else if (!s.windowPolygon.every((p) => inside(p, s.meterPolygon)))
