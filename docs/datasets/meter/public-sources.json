@@ -3378,6 +3378,66 @@
         764
       ],
       "bytes": 240369
+    },
+    {
+      "id": "commons_179987587",
+      "title": "File:Digital Water Meter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digital_Water_Meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Digital_Water_Meter.jpg/1280px-Digital_Water_Meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/62/Digital_Water_Meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "originalSha1": "7e4f8f06efaf184cf6a5fa6ed3f0b3ab4dc42d28",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Aliva_Sahoo\" title=\"User:Aliva Sahoo\">Aliva Sahoo</a>",
+      "credit": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+      "collection": "direct digital-water candidate search",
+      "changes": "Wikimedia 1000px derivative; BHOME annotations and training resize",
+      "sha256": "fea61703e2a2c7d1e81b9891cd30c316a281300db75885f43446e81a15ed244b",
+      "dimensions": [
+        1280,
+        736
+      ],
+      "bytes": 176386
+    },
+    {
+      "id": "commons_141189268",
+      "title": "File:Digitaler Wasserzaehler.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digitaler_Wasserzaehler.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Digitaler_Wasserzaehler.jpg/1280px-Digitaler_Wasserzaehler.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/31/Digitaler_Wasserzaehler.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "originalSha1": "b1be37eab90b4c489c7a40847eb182c35bd4105f",
+      "license": "CC0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:HelgeRieder\" title=\"User:HelgeRieder\">HelgeRieder</a>",
+      "credit": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+      "collection": "direct digital-water candidate search",
+      "changes": "Wikimedia 1000px derivative; BHOME annotations and training resize",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "dimensions": [
+        1280,
+        1280
+      ],
+      "bytes": 210465
+    },
+    {
+      "id": "commons_141372353",
+      "title": "File:Itron Water Meter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Itron_Water_Meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/Itron_Water_Meter.jpg/1280px-Itron_Water_Meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Itron_Water_Meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "originalSha1": "43c72a293084a60b185002684faead67fd6e8091",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Shivashree\" title=\"User:Shivashree\">Ganesh Dhamodkar</a>",
+      "credit": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+      "collection": "direct digital-water candidate search",
+      "changes": "Wikimedia 1000px derivative; BHOME annotations and training resize",
+      "sha256": "29d568268219f562ccbeccdf49d664096758bc6609b43d7d99706e6d335d38c0",
+      "dimensions": [
+        1280,
+        1703
+      ],
+      "bytes": 437833
     }
   ]
 }
