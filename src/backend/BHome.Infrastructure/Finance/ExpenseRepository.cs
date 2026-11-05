@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using BHome.Application.Finance;
-using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
 
-public sealed class ExpenseRepository(Compact24DbContext db) : IExpenseRepository
+public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepository
 {
     private const string Columns = """
         SELECT id AS "Id", location_id AS "LocationId", room_id AS "RoomId", expense_type AS "ExpenseType",

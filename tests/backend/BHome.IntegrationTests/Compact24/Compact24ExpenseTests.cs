@@ -82,7 +82,11 @@ public sealed class Compact24ExpenseTests(Compact24Fixture fixture) : IClassFixt
         var (owner,input)=await Setup(); using var staff=await User("Staff"); using var tenant=await User("Tenant"); using var anonymous=fixture.Factory!.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized,(await anonymous.GetAsync(Root)).StatusCode);
         foreach(var client in new[]{staff,tenant})
-        { Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync(Root)).StatusCode); Assert.Equal(HttpStatusCode.Forbidden,(await Create(client,input,Guid.NewGuid())).StatusCode); }
+        {
+            Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync(Root)).StatusCode); Assert.Equal(HttpStatusCode.Forbidden,(await Create(client,input,Guid.NewGuid())).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync("/api/v1/financial-scenarios")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync("/api/v1/financial-scenarios/analyze",new ScenarioInput("Test",new(new(2026,11,1),new(2026,11,30)),12,new(1,100,100,0,0,0,0)))).StatusCode);
+        }
         foreach(var value in new[]{input with {Amount=0},input with {Amount=-1},input with {Amount=1.1m},input with {ExpenseType="REFUND"},input with {Category=""},input with {Note=""}})
             Assert.Equal(HttpStatusCode.BadRequest,(await Create(owner,value,Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await owner.PostAsJsonAsync(Root,input)).StatusCode);

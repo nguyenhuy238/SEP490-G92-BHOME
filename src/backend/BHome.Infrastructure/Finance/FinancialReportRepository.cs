@@ -4,12 +4,12 @@ using BHome.Domain.Billing;
 using BHome.Domain.Locations;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Billing;
-using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
 
-public sealed class FinancialReportRepository(Compact24DbContext db) : IFinancialReportRepository
+public sealed class FinancialReportRepository(BHomePersistenceContext db) : IFinancialReportRepository
 {
     public async Task<ReportBasis> ReadAsync(ReportFilter filter, CancellationToken token)
     {

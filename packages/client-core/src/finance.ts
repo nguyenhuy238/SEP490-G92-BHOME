@@ -61,8 +61,66 @@ export interface FinancialReport {
   };
   hasUnclassifiedRefunds: boolean;
 }
+export interface ScenarioInput {
+  name: string;
+  baseline: ReportFilter;
+  forecastMonths: number;
+  assumptions: {
+    monthlyRent: string;
+    occupancyPercent: string;
+    collectionPercent: string;
+    monthlyUtilityServiceCost: string;
+    monthlyStaffCost: string;
+    monthlyMaintenanceCost: string;
+    monthlyOtherCost: string;
+  };
+}
+export interface ScenarioView {
+  id: string | null;
+  input: ScenarioInput;
+  baseline: FinancialReport;
+  calculationVersion: string;
+  result: {
+    monthlyRevenue: string;
+    monthlyCollections: string;
+    monthlyOperatingExpenses: string;
+    monthlyProfit: string;
+    monthlyNetCashFlow: string;
+    forecastNetCashFlow: string;
+    remainingCapitalAtEnd: string | null;
+    estimatedRemainingMonths: string | null;
+    monthlyProfitDifference: string;
+    unavailableReason: string | null;
+  };
+}
+export interface ScenarioSummary {
+  id: string;
+  name: string;
+  locationId: string | null;
+  baselineFrom: string;
+  baselineTo: string;
+  forecastMonths: number;
+  calculatedAt: string;
+}
 export function financeClient(request: ContractRequest) {
   return {
+    analyzeScenario: (input: ScenarioInput) =>
+      request<ScenarioView>('/api/v1/financial-scenarios/analyze', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    saveScenario: (input: ScenarioInput, key: string) =>
+      request<ScenarioView>('/api/v1/financial-scenarios', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(input),
+      }),
+    scenarios: (page: number, signal?: AbortSignal) =>
+      request<ScenarioSummary[]>(`/api/v1/financial-scenarios?page=${page}&pageSize=25`, {
+        signal,
+      }),
+    scenario: (id: string, signal?: AbortSignal) =>
+      request<ScenarioView>(`/api/v1/financial-scenarios/${id}`, { signal }),
     report: (filter: ReportFilter, signal?: AbortSignal) => {
       const query = new URLSearchParams();
       Object.entries(filter).forEach(([key, value]) => {

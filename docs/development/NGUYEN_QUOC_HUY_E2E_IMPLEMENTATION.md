@@ -60,6 +60,7 @@ Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường 
 
 - `5e2c68f` — `fix(contract): [BE-15] guard configuration loading and verify saved settings`: 3 file (panel, component test, báo cáo này); 3/3 tests, build/lint đạt; BE-15 vẫn PARTIAL; handoff Vũ Xuân Trường.
 - `ff2f315` — `feat(finance): [BE-31] persist Owner expenses with real API interface`: 13 file liệt kê trong slice Expenses; 3/3 PostgreSQL + 3/3 UI, build/lint đạt; PARTIAL, handoff Vũ Xuân Trường.
+- `8196b89` — `feat(finance): [BE-32][BE-33] report actual revenue costs and capital recovery`: 13 file liệt kê trong slice report; 5 formula tests, report/ledger PostgreSQL và 2 UI tests đạt; build/lint đạt, PARTIAL.
 
 ## Slice BE-31 Expenses API và Owner Web
 
@@ -85,3 +86,17 @@ Thêm FinancialReportsController → FinancialReportService → IFinancialReport
 Changed files: `Application/Finance/FinancialReportService.cs`, `Infrastructure/Finance/FinancialReportRepository.cs`, `Api/Controllers/FinancialReportsController.cs`, DI, shared `finance.ts`, `FinancialReportsApiPage`/test và `ReportsPage`, `FinancialReportTests`, `Compact24ExpenseTests`, `Compact24FinanceLedgerTests`, docs. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường. Task **PARTIAL**: browser E2E/reviewer, historical occupancy, classified refunds/Staff cost integration và optional Room UI selector chưa đủ; không gọi đây là BE-32/33 hoàn tất toàn bộ.
 
 Owner Web full serial với Node 22: 116 đạt, 1 router Location Workspace timeout; không thay timeout hoặc sửa assertion để lấy PASS. Slice tests riêng đạt như trên. Tiếp tục điều tra regression toàn bộ.
+
+## Slice BE-34 What-if
+
+Controller → FinancialScenarioService → repository → financial_scenarios; shared API client; Owner Web API mode `/what-if`. UC-34/GBR-15/16: analyze không ghi, save chỉ ghi scenario; giữ nguyên input/baseline/result/version; xem/compare không tính lại. Khai báo đầy đủ giả định thuê/lấp đầy/thu tiền/OPEX, số tháng, baseline và công thức quản trị trong FINANCE.md. Dedupe đồng thời bằng UUID/advisory lock, key đổi input bị 409, list/get Owner-scoped. Không thêm bảng, không sửa Mobile.
+
+2/2 formula tests và 2/2 component tests đạt. PostgreSQL ledger/scenario regression đạt: phân tích/lưu đồng thời/replay/get/list/changed-key/validation/không thay report hoặc expenses, schema vẫn hợp lệ. Chạy nhóm Finance + ApiFoundation sau sửa DI **25/25 đạt**. Owner build/lint đạt. Trạng thái **PARTIAL**, handoff Vũ Xuân Trường `INITIAL_API_UI_READY`; browser E2E/review cuối chưa chạy.
+
+Full regression ban đầu phát hiện legacy test fixture gỡ Compact24DbContext khiến DI validation của Finance thất bại. Đã sửa constructor repository dùng `BHomePersistenceContext` hiện hữu; production vẫn resolve Compact24, SQL vẫn bảng Compact24 và không có fallback legacy. ApiFoundation + Finance đã kiểm tra lại. Full run cũ đã dừng sau phát hiện lỗi; không coi là PASS.
+
+Router test từng timeout đã chạy riêng với Node22 và giữ nguyên timeout: **1/1 đạt** (35 test khác không được chọn), xác nhận vấn đề tải máy; chưa coi full Owner suite PASS.
+
+## Quyết định chính sách theo ủy quyền người dùng
+
+05/11/2026: người dùng yêu cầu “nếu chưa có hãy triển khai theo hướng của bạn và báo cáo cho tôi”. Đây là ủy quyền chọn hướng triển khai trong phiên, thay việc phải chờ nội dung OQ cũ. Hướng thực hiện: thiếu tiền được ghi nhận từng phần sau Owner đối soát; tiền thừa chỉ phân bổ tối đa dư nợ, phần còn lại giữ chờ Owner, không tự doanh thu/refund/credit. Khấu trừ/hoàn cọc cần quyết định và bằng chứng Owner, không tự phí phạt/hạn hoàn. Mỗi phần phải có validation, snapshot, concurrency/idempotency và test trước khi đánh dấu triển khai; ghi chú này chưa phải bằng chứng tất cả các nhánh đã được viết.
