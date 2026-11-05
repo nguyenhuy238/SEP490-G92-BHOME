@@ -28,8 +28,48 @@ export interface ExpensePage {
   page: number;
   pageSize: number;
 }
+export interface ReportFilter {
+  from: string;
+  to: string;
+  locationId?: string;
+  roomId?: string;
+}
+export interface FinanceTotals {
+  issued: string;
+  approvedAdjustments: string;
+  verifiedCollections: string;
+  operatingExpenses: string;
+  operatingProfit: string;
+  outstandingNow: string;
+  initialInvestment: string;
+  netOperatingCashFlow: string | null;
+  totalRooms: number;
+  occupiedRooms: number;
+}
+export interface FinancialReport {
+  filter: ReportFilter;
+  snapshotAt: string;
+  total: FinanceTotals;
+  locations: { locationId: string; locationName: string; totals: FinanceTotals }[];
+  capital: {
+    initialInvestment: string;
+    netRecovery: string | null;
+    remainingCapital: string | null;
+    recoveryPercent: string | null;
+    estimatedRemainingMonths: string | null;
+    unavailableReason: string | null;
+  };
+  hasUnclassifiedRefunds: boolean;
+}
 export function financeClient(request: ContractRequest) {
   return {
+    report: (filter: ReportFilter, signal?: AbortSignal) => {
+      const query = new URLSearchParams();
+      Object.entries(filter).forEach(([key, value]) => {
+        if (value) query.set(key, value);
+      });
+      return request<FinancialReport>(`/api/v1/financial-reports?${query}`, { signal });
+    },
     locations: (signal?: AbortSignal) =>
       request<{ id: string; label: string }[]>('/api/v1/capture/locations', { signal }),
     expenses: (filter: ExpenseFilter, signal?: AbortSignal) => {

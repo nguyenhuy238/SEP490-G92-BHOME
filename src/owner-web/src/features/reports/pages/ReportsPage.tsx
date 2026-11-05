@@ -27,7 +27,12 @@ import {
 import { CollectionChart, FinanceChart } from '../../../components/charts/FinanceCharts';
 import { financeSummary } from '../../../utils/finance';
 import { compactMoney, exportCsv, money } from '../../../utils/format';
+import { isMockMode } from '../../../services/config';
+import { FinancialReportsApiPage } from '../FinancialReportsApiPage';
 export default function ReportsPage() {
+  return isMockMode ? <DemoReportsPage /> : <FinancialReportsApiPage />;
+}
+function DemoReportsPage() {
   const query = usePortalData(),
     portal = usePortal();
   const [month, setMonth] = useState('2024-10'),

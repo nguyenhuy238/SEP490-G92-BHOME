@@ -59,6 +59,7 @@ Acceptance tự động: lưu đúng expectedVersion và đọc lại dữ liệ
 Commit được ghi ngay sau mỗi slice đã kiểm tra. Chỉ stage đường dẫn cụ thể; không push.
 
 - `5e2c68f` — `fix(contract): [BE-15] guard configuration loading and verify saved settings`: 3 file (panel, component test, báo cáo này); 3/3 tests, build/lint đạt; BE-15 vẫn PARTIAL; handoff Vũ Xuân Trường.
+- `ff2f315` — `feat(finance): [BE-31] persist Owner expenses with real API interface`: 13 file liệt kê trong slice Expenses; 3/3 PostgreSQL + 3/3 UI, build/lint đạt; PARTIAL, handoff Vũ Xuân Trường.
 
 ## Slice BE-31 Expenses API và Owner Web
 
@@ -74,3 +75,13 @@ Changed files: `Application/Finance/ExpenseService.cs`, `Infrastructure/Finance/
 - Owner Web Node 22 `--maxWorkers=2`: 112 đạt, 2 router timeout; đang kiểm tra serial.
 - Dựng thành công image hiện hữu bằng `docker build -f deploy/docker/ContractConverter.Dockerfile -t bhome/contract-converter:local .`. Chạy lại `ActualLibreOfficeConversion...`: **1/1 đạt** (trong lượt 4 test: PDF đạt, 1 expense đạt, 2 expense lỗi serialization đã sửa rồi chạy lại expenses 3/3 đạt). Đây là PDF thật, không phải chữ ký MySign thật.
 - Tìm cấu hình MySign trong các file cấu hình hiện hữu không thấy section được cấu hình; Development chỉ có MainDraft converter. Không xuất giá trị secret vào báo cáo/chat. Tài liệu `DIGITAL_SIGNING_COMPLETION.md` vẫn yêu cầu môi trường/tài khoản provider và quy trình liên kết chủ chứng thư. Chưa tìm thấy tài liệu quyết định OQ-01/02/05 cụ thể thay các ghi chú cũ.
+
+## Slice BE-32/BE-33/BE-X08 báo cáo và hoàn vốn
+
+Thêm FinancialReportsController → FinancialReportService → IFinancialReportRepository → FinancialReportRepository và shared client/Owner Web `/reports` API mode. Nguồn UC-32/33, FE-08, GBR-15/16; DTO/formula/giới hạn được ghi trong `docs/api/FINANCE.md`. Không ghi financial ledger; đọc invoices/adjustments/allocations/payments/expenses/locations/rooms/refunds dưới snapshot RepeatableRead. Không thêm schema/table. Không sửa Mobile.
+
+5/5 application formula tests đạt: phát hành khác thực thu, điều chỉnh/OPEX/nợ/hoàn vốn, không vốn/không dòng tiền/lỗ/no-data/đã hoàn vốn, refund uncertainty. PostgreSQL `Compact24ExpenseTests` 4/4 đạt (bao gồm 3 expense tests trước); report thực đọc chi phí/vốn, scope/role/invalid. `Compact24FinanceLedgerTests` 1/1 đạt: chạy payment workflow thật trên Compact24 rồi kiểm report issued/verified collections/debt/occupancy; giao dịch chưa phân bổ không bị tính doanh thu. UI report 2/2 tests đạt (figures/null payback/API failure), build/lint đạt.
+
+Changed files: `Application/Finance/FinancialReportService.cs`, `Infrastructure/Finance/FinancialReportRepository.cs`, `Api/Controllers/FinancialReportsController.cs`, DI, shared `finance.ts`, `FinancialReportsApiPage`/test và `ReportsPage`, `FinancialReportTests`, `Compact24ExpenseTests`, `Compact24FinanceLedgerTests`, docs. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường. Task **PARTIAL**: browser E2E/reviewer, historical occupancy, classified refunds/Staff cost integration và optional Room UI selector chưa đủ; không gọi đây là BE-32/33 hoàn tất toàn bộ.
+
+Owner Web full serial với Node 22: 116 đạt, 1 router Location Workspace timeout; không thay timeout hoặc sửa assertion để lấy PASS. Slice tests riêng đạt như trên. Tiếp tục điều tra regression toàn bộ.

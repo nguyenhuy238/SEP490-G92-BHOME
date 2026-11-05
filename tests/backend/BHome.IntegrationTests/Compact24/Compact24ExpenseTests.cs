@@ -91,4 +91,22 @@ public sealed class Compact24ExpenseTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.BadRequest,(await owner.GetAsync(Root+"?from=2026-12-01&to=2026-11-01")).StatusCode);
         var page=await owner.GetFromJsonAsync<ExpensePage>($"{Root}?locationId={input.LocationId}"); Assert.Equal(0,page!.Total);
     }
+    [CompactPostgresFact]
+    public async Task ReportReadsActualExpensesRejectsOtherRolesAndHandlesEmptyCapital()
+    {
+        var (owner,input)=await Setup();
+        await Value(await Create(owner,input with {ExpenseType="INITIAL_INVESTMENT",Amount=1000000},Guid.NewGuid()));
+        await Value(await Create(owner,input,Guid.NewGuid()));
+        const string reportRoot="/api/v1/financial-reports?from=2026-11-01&to=2026-11-30";
+        var response=await owner.GetAsync(reportRoot+$"&locationId={input.LocationId}");
+        Assert.True(response.IsSuccessStatusCode,await response.Content.ReadAsStringAsync());
+        var report=(await response.Content.ReadFromJsonAsync<FinancialReport>())!;
+        Assert.Equal("1000000",report.Total.InitialInvestment); Assert.Equal("123456",report.Total.OperatingExpenses);
+        Assert.Equal("-123456",report.Total.OperatingProfit); Assert.Equal("0",report.Total.VerifiedCollections);
+        Assert.Null(report.Capital.EstimatedRemainingMonths); Assert.Equal("positive_cash_flow_required",report.Capital.UnavailableReason);
+        Assert.Single(report.Locations);
+        using var staff=await User("Staff"); Assert.Equal(HttpStatusCode.Forbidden,(await staff.GetAsync(reportRoot)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await owner.GetAsync("/api/v1/financial-reports")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await owner.GetAsync(reportRoot+$"&locationId={Guid.NewGuid()}")).StatusCode);
+    }
 }
