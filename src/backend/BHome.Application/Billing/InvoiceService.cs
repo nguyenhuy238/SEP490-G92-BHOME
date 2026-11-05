@@ -203,7 +203,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             if (!(category == ChargeCategory.Rent && schedule.RentSource == BillingRentSource.RepresentativeContract) && !prices.Charges.Any(p => p.Category == category)) missing.Add("rate_" + category);
         var charges = prices.Charges.Where(p => p.Category != ChargeCategory.Rent || schedule.RentSource == BillingRentSource.RoomPolicy).ToList();
         if (schedule.RentSource == BillingRentSource.RepresentativeContract)
-            charges.Add(new PolicyDto(Guid.Empty, invoice.LocationId, null, invoice.RoomId, ChargeCategory.Rent, "RENT", "Tiền thuê theo hợp đồng đại diện", ChargingMethod.FixedPerRoomPerMonth,
+            charges.Add(new PolicyDto(Guid.Empty, invoice.LocationId, invoice.RoomId, ChargeCategory.Rent, "RENT", "Tiền thuê theo hợp đồng đại diện", ChargingMethod.FixedPerRoomPerMonth,
                 representative.Contract.MonthlyRent, start, end, 0));
         foreach (var policy in charges)
         {

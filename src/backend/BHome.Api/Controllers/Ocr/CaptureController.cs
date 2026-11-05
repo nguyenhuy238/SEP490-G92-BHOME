@@ -9,7 +9,6 @@ namespace BHome.Api.Controllers.Ocr;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class CaptureController(CaptureService service) : ControllerBase
 {
-    [HttpGet("chains")] public Task<IReadOnlyList<NamedResource>> Chains(CancellationToken t) => service.ChainsAsync(t);
     [HttpGet("locations")] public Task<IReadOnlyList<NamedResource>> Locations(CancellationToken t) => service.LocationsAsync(t);
     [HttpGet("locations/{id:guid}/rooms")] public Task<IReadOnlyList<NamedResource>> Rooms(Guid id, CancellationToken t) => service.RoomsAsync(id, t);
     [HttpGet("staff")] public Task<IReadOnlyList<NamedResource>> Staff(CancellationToken t) => service.StaffAsync(t);

@@ -53,7 +53,7 @@ public sealed class PropertyServiceTests
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
         var exception = await Assert.ThrowsAsync<PropertyException>(() => service.CreatePolicyAsync(
-            new(Guid.NewGuid(), null, null, ChargeCategory.Rent, "RENT", "Rent", ChargingMethod.FixedPerRoomPerMonth,
+            new(Guid.NewGuid(), null, ChargeCategory.Rent, "RENT", "Rent", ChargingMethod.FixedPerRoomPerMonth,
                 rate, new(2026, 10, 29), null), default));
         Assert.Equal(400, exception.Status);
         repository.DidNotReceive().Add(Arg.Any<BillingPolicy>());
@@ -80,7 +80,7 @@ public sealed class PropertyServiceTests
         repository.FindAsync<BillingPolicy>(policy.Id, Arg.Any<CancellationToken>()).Returns(policy);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
-        var input = new PolicyWrite(location.Id, null, null, ChargeCategory.Rent, "RENT", "Rent",
+        var input = new PolicyWrite(location.Id, null, ChargeCategory.Rent, "RENT", "Rent",
             ChargingMethod.FixedPerRoomPerMonth, 200, new(2026, 10, 30), null);
         if (accepted)
             Assert.Equal(200, (await service.UpdateFuturePolicyAsync(policy.Id, new(input, 1), default)).Rate);
@@ -101,7 +101,7 @@ public sealed class PropertyServiceTests
         repository.FindAsync<Location>(location.Id, Arg.Any<CancellationToken>()).Returns(location);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
-        var input = new PolicyWrite(location.Id, null, null, ChargeCategory.Rent, "RENT", "Rent",
+        var input = new PolicyWrite(location.Id, null, ChargeCategory.Rent, "RENT", "Rent",
             ChargingMethod.FixedPerRoomPerMonth, 100, new(2026, 10, 29), null);
         if (accepted)
             Assert.Equal(input.EffectiveFrom, (await service.CreatePolicyAsync(input, default)).EffectiveFrom);

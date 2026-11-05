@@ -18,7 +18,7 @@ try
     {
         await Compact24Schema.InitializeAsync(to); committed = true;
         await WriteReport(new { Status = "EMPTY_TARGET_INITIALIZED", SchemaVersion = Compact24Schema.Version,
-            Compact24Schema.ScriptSha256, BusinessTables = 24, Columns = 386, ForeignKeys = 83,
+            Compact24Schema.ScriptSha256, BusinessTables = 24, Columns = 383, ForeignKeys = 83,
             TechnicalMigrationHistoryTables = 0, SourceRead = false, RuntimeConnectionChanged = false });
         Console.WriteLine("EMPTY_TARGET_INITIALIZED: 24 business tables; no accounts/data imported or runtime connection changed."); return 0;
     }

@@ -30,8 +30,6 @@ internal static class WorkflowTestUsers
         var created = await manager.CreateAsync(user, password);
         Assert.True(created.Succeeded, string.Join(',', created.Errors.Select(e => e.Code)));
         if (!await manager.IsInRoleAsync(user, role)) Assert.True((await manager.AddToRoleAsync(user, role)).Succeeded);
-        if (db is Compact24DbContext && role == "Owner" && !await db.Set<Chain>().AnyAsync())
-        { db.Add(new Chain { Name = "Synthetic Compact24 chain" }); await db.SaveChangesAsync(); }
         return user;
     }
 }

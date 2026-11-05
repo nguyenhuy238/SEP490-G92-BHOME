@@ -5,21 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BHome.Api.Controllers.PropertyManagement;
 
-[ApiController, Route("api/v1/room-types"), Authorize(Policy = Permissions.Property.View)]
-[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(32768)]
-public sealed class RoomTypesController(PropertyService service) : ControllerBase
-{
-    [HttpGet] public Task<PagedResult<RoomTypeDto>> List([FromQuery] PropertyQuery q, CancellationToken t) => service.RoomTypesAsync(q, t);
-    [HttpGet("{id:guid}")] public Task<RoomTypeDto> Get(Guid id, CancellationToken t) => service.GetRoomTypeAsync(id, t);
-    [HttpPost, Authorize(Policy = Permissions.Property.Manage)]
-    public async Task<ActionResult<RoomTypeDto>> Create(RoomTypeWrite input, CancellationToken t)
-    {
-        var x = await service.SaveRoomTypeAsync(null, input, t); return CreatedAtAction(nameof(Get), new { id = x.Id }, x);
-    }
-    [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
-    public Task<RoomTypeDto> Update(Guid id, RoomTypeWrite input, CancellationToken t) => service.SaveRoomTypeAsync(id, input, t);
-}
-
 [ApiController, Route("api/v1/rooms"), Authorize(Policy = Permissions.Property.View)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(32768)]
 public sealed class RoomsController(PropertyService service) : ControllerBase

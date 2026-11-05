@@ -1,4 +1,6 @@
-﻿# BHOME – Báo cáo chuyển backend sang Compact24
+> C?p nh?t sau reset 04/11/2026: schema hi?n h?nh c? 24 b?ng / 383 c?t / 83 FK, b? Chain/RoomType ? API v? ph?c h?i incident-core. C?c k?t qu? 386 c?t b?n d??i thu?c m?c tr??c thay ??i. Xem [bi?n b?n m?i](../../../development/API_RESET_REVIEW_2026-11-04.md).
+
+# BHOME – Báo cáo chuyển backend sang Compact24
 
 Cập nhật 04/11/2026, nhánh `member/QHuy`, baseline `3b5dd018f87ce6dcc8396cb779609733fffd42bb`. Báo cáo này thay trạng thái triển khai bốn slice ban đầu.
 

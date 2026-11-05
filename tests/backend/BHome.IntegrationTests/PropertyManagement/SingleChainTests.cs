@@ -36,64 +36,11 @@ public sealed class SingleChainTests(AuthenticationDatabaseFixture fixture) : IC
     }
 
     [Fact]
-    public async Task OwnerRenamesExistingChainAndLocationsIgnoreCallerSelectedChain()
+    public async Task RetiredChainEndpointsAreUnavailable()
     {
         using var owner = await Client(Roles.Owner);
-        var chain = (await owner.GetFromJsonAsync<ChainDto>("/api/v1/chain"))!;
-        var reason = "Owner configuration " + Guid.NewGuid().ToString("N");
-        var renamed = await owner.PutAsJsonAsync("/api/v1/chain", new ChainWrite(" Synthetic renamed Chain ", chain.Version, reason));
-        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
-        var changed = (await renamed.Content.ReadFromJsonAsync<ChainDto>())!;
-        Assert.Equal(chain.Id, changed.Id); Assert.Equal("Synthetic renamed Chain", changed.Name);
-        Assert.Equal(chain.Version + 1, changed.Version);
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync("/api/v1/chain", new ChainWrite("Stale", chain.Version))).StatusCode);
-        foreach (var name in new[] { "", "   ", new string('x', 151) })
-            Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync("/api/v1/chain", new ChainWrite(name, changed.Version))).StatusCode);
-        var created = await owner.PostAsJsonAsync("/api/v1/locations", new { name = "Automatic chain", address = "Synthetic address", chainId = Guid.NewGuid() });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        Assert.Equal(chain.Id, (await created.Content.ReadFromJsonAsync<LocationDto>())!.ChainId);
-        var capture = await owner.PostAsJsonAsync("/api/v1/capture/locations", new { name = "Capture automatic chain", address = "Synthetic address" });
-        Assert.Equal(HttpStatusCode.OK, capture.StatusCode);
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await owner.PostAsJsonAsync("/api/v1/capture/chains", new { name = "Forbidden extra Chain" })).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        Assert.Equal(1, await db.Set<Chain>().CountAsync());
-        var audit = await db.Set<PropertyChange>().SingleAsync(x => x.TargetId == chain.Id && x.Action == "Renamed" && x.Reason == reason);
-        Assert.Null(audit.LocationId); Assert.Contains("Synthetic renamed Chain", audit.After);
-    }
-
-    [Theory]
-    [InlineData(Roles.Staff)]
-    [InlineData(Roles.Tenant)]
-    public async Task OnlyOwnerCanReadOrRenameChainSettings(string role)
-    {
-        using var client = await Client(role);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/chain")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/v1/chain", new ChainWrite("Denied", 1))).StatusCode);
-        using var anonymous = fixture.Factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/v1/chain")).StatusCode);
-    }
-
-    [Fact]
-    public async Task ParallelRenamesHaveOneWinnerAndDatabaseRejectsExtraOrDeletedChain()
-    {
-        using var owner = await Client(Roles.Owner);
-        var chain = (await owner.GetFromJsonAsync<ChainDto>("/api/v1/chain"))!;
-        var edits = await Task.WhenAll(new[] { "Name A", "Name B" }.Select(name => owner.PutAsJsonAsync("/api/v1/chain", new ChainWrite(name, chain.Version))));
-        Assert.Single(edits, x => x.StatusCode == HttpStatusCode.OK);
-        Assert.Single(edits, x => x.StatusCode == HttpStatusCode.Conflict);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomeDbContext>();
-        db.Set<Chain>().Add(new Chain { Name = "Second Chain" });
-        var duplicate = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        Assert.Equal("23505", Assert.IsType<PostgresException>(duplicate.InnerException).SqlState);
-        db.ChangeTracker.Clear();
-        foreach (var sql in new[] { "DELETE FROM \"Chains\"", "TRUNCATE \"Chains\" CASCADE" })
-        {
-            var denied = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(sql));
-            Assert.Equal("23514", denied.SqlState);
-        }
-        Assert.Equal(chain.Id, (await db.Set<Chain>().SingleAsync()).Id);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/api/v1/chain")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.PutAsJsonAsync("/api/v1/chain", new { name = "Retired", version = 1 })).StatusCode);
     }
 
     [Theory]

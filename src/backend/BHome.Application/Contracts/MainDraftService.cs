@@ -76,7 +76,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         var pricing = await prices.ResolvePricesAsync(roomId, on, t);
         var blockers = new List<string>();
         if (residents.Single(r => r.Id == representative).ResidentType != ResidentType.Representative || residents.Any(r => r.Id != representative && r.ResidentType == ResidentType.Representative)) blockers.Add("individual_representatives_require_separate_contracts");
-        if (room.Status is not (RoomStatus.Available or RoomStatus.Occupied) || room.RoomTypeId is null || room.RoomType?.IsActive != true) blockers.Add("room_not_available");
+        if (room.Status is not (RoomStatus.Available or RoomStatus.Occupied)) blockers.Add("room_not_available");
         if (string.IsNullOrWhiteSpace(room.Location.Address)) blockers.Add("location_address_required");
         if (settings is null) blockers.Add("owner_contract_settings_required");
         blockers.AddRange(pricing.MissingRequiredCharges.Select(code => "missing_policy_" + code.ToLowerInvariant()));

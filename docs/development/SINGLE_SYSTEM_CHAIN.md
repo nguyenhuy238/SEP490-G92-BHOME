@@ -1,3 +1,5 @@
+> Quy?t ??nh m?i 04/11/2026 ?? b? Chain. T?i li?u n?y ch? gi? ?? truy v?t l?ch s?; xem [API hi?n h?nh](../api/LOCATION_ROOM_API.md).
+
 # Chain duy nhất của hệ thống
 
 Quyết định chủ dự án ngày 30/10/2026: BHOME có **đúng một Chain**; chỉ cấu hình đổi tên,

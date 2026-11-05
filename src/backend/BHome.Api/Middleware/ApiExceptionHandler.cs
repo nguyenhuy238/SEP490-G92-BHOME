@@ -19,6 +19,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             BHome.Application.PaymentsDebt.PaymentException payment => payment.Status,
             BHome.Application.Billing.InvoiceException invoice => invoice.Status,
             PropertyException property => property.Status,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Status,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
             ContractException contract => contract.Status,
             DigitalSigningException signing => signing.Error switch
@@ -58,6 +59,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             BHome.Application.PaymentsDebt.PaymentException payment => payment.Code,
             BHome.Application.Billing.InvoiceException invoice => invoice.Code,
             PropertyException property => property.Code,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Code,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Code,
             ContractException contract => contract.Code,
             CaptureConflictException conflict => conflict.Code,

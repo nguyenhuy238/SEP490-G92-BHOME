@@ -62,29 +62,26 @@ public static class ContractDemoSeed
             if (!created.Succeeded || !await users.IsInRoleAsync(user, role) && !(await users.AddToRoleAsync(user, role)).Succeeded)
                 throw new LocalTestAccountException("Không thể tạo tài khoản demo; kiểm tra chính sách mật khẩu local.");
         }
-        await LocalSchemaSeed.EnsureChainAsync(db, t);
         if (!await db.Locations.AnyAsync(l => l.Id == Id(10), t))
         {
             if (await db.Locations.AnyAsync(l => l.Name == "BHOME CONTRACT DEMO", t)) throw new LocalTestAccountException("Trùng tên cơ sở ngoài fixture.");
-            var chain = await db.Set<Chain>().SingleAsync(t);
-            Add(db, 10, new Location("BHOME CONTRACT DEMO") { ChainId = chain.Id, Address = "ĐỊA CHỈ TỔNG HỢP - CHỈ THỬ NGHIỆM" });
-            Add(db, 11, new RoomType { LocationId = Id(10), Name = "Phòng demo", DefaultCapacity = 3, AreaM2 = 25 });
+            Add(db, 10, new Location("BHOME CONTRACT DEMO") { Address = "ĐỊA CHỈ TỔNG HỢP - CHỈ THỬ NGHIỆM" });
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
             db.Add(new StaffLocationAssignment(Id(10), Id(2), Id(1), today.AddYears(-1), today.AddYears(1)));
             for (var n = 0; n < 3; n++)
             {
-                Add(db, 20 + n, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = $"P10{n + 1}", Capacity = 3, Status = n == 2 ? RoomStatus.Unavailable : RoomStatus.Available });
+                Add(db, 20 + n, new Room { LocationId = Id(10), RoomNumber = $"P10{n + 1}", Capacity = 3, Status = n == 2 ? RoomStatus.Unavailable : RoomStatus.Available });
                 Add(db, 30 + n, new Asset { LocationId = Id(10), RoomId = Id(20 + n), Name = "Quạt tổng hợp", Category = "Thiết bị", Condition = "Mới - dữ liệu demo", Status = AssetStatus.Active });
                 for (var utility = 0; utility < 2; utility++) Add(db, 40 + n * 2 + utility, new Meter { RoomId = Id(20 + n), Code = $"DEMO-P10{n + 1}-{(utility == 0 ? "E" : "W")}", UtilityType = (UtilityType)utility, Display = MeterDisplay.Digital, InstalledOn = today.AddDays(-1) });
             }
             for (var n = 0; n < 3; n++) Add(db, 50 + n, new Resident { RoomId = Id(n == 2 ? 21 : 20), DisplayLabel = $"Người ở tổng hợp {n + 1}", ResidentType = n == 1 ? ResidentType.CoOccupant : ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Verified, OwnerUserId = Id(2), TenantUserId = Id(3 + n), ConfirmedByUserId = Id(2), ConfirmedAt = DateTimeOffset.UtcNow });
-            Add(db, 60, new BillingPolicy { LocationId = Id(10), RoomTypeId = Id(11), Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Giá thuê demo", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3000000, EffectiveFrom = today.AddYears(-1) });
+            Add(db, 60, new BillingPolicy { LocationId = Id(10), Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Giá thuê demo", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3000000, EffectiveFrom = today.AddYears(-1) });
             await db.SaveChangesAsync(t);
         }
         // Separate UI smoke workspace leaves P101 available for a tester's first run.
         if (!await db.Set<Room>().AnyAsync(r => r.Id == Id(23), t))
         {
-            Add(db, 23, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = "P104-UI", Capacity = 1, Status = RoomStatus.Available });
+            Add(db, 23, new Room { LocationId = Id(10), RoomNumber = "P104-UI", Capacity = 1, Status = RoomStatus.Available });
             Add(db, 53, new Resident { RoomId = Id(23), DisplayLabel = "Người ở UI tổng hợp", ResidentType = ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Verified, OwnerUserId = Id(2), TenantUserId = Id(4), ConfirmedByUserId = Id(2), ConfirmedAt = DateTimeOffset.UtcNow });
             Add(db, 33, new Asset { LocationId = Id(10), RoomId = Id(23), Name = "Quạt UI tổng hợp", Category = "Thiết bị", Condition = "Mới - dữ liệu demo", Status = AssetStatus.Active });
             for (var utility = 0; utility < 2; utility++) Add(db, 46 + utility, new Meter { RoomId = Id(23), Code = $"DEMO-P104-{(utility == 0 ? "E" : "W")}", UtilityType = (UtilityType)utility, InstalledOn = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1) });

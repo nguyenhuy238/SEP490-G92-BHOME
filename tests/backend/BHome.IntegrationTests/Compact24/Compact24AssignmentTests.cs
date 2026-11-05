@@ -69,6 +69,39 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Single(entries!);
     }
     [CompactPostgresFact]
+    public async Task LocationUpdateRequiresLatestVersionAfterStaffAssignment()
+    {
+        var owner = await User("Owner"); var staff = await User("Staff");
+        using var client = fixture.Factory!.CreateClient();
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = owner.Email, password = Password });
+        login.EnsureSuccessStatusCode();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
+        var createdResponse = await client.PostAsJsonAsync("/api/v1/locations", new { name = "Synthetic version test", address = "Synthetic address", isActive = true });
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = (await createdResponse.Content.ReadFromJsonAsync<BHome.Application.PropertyManagement.LocationDto>())!;
+        Assert.Equal(1, created.Version);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        var assignment = await client.PostAsJsonAsync("/api/v1/staff-location-assignments", new
+            { locationId = created.Id, staffUserId = staff.Id, startDate = today, endDate = today.AddDays(1) });
+        Assert.Equal(HttpStatusCode.Created, assignment.StatusCode);
+        var route = $"/api/v1/locations/{created.Id}";
+        var stale = await client.PutAsJsonAsync(route, new
+            { name = "Synthetic updated", address = "Synthetic updated address", isActive = true, version = created.Version, reason = "Synthetic version test" });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        var problem = await stale.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("stale_version", problem.GetProperty("code").GetString());
+        var current = (await client.GetFromJsonAsync<BHome.Application.PropertyManagement.LocationDto>(route))!;
+        Assert.Equal(created.Version + 1, current.Version);
+        Assert.Equal(created.Name, current.Name);
+        var updated = await client.PutAsJsonAsync(route, new
+            { name = "Synthetic updated", address = "Synthetic updated address", isActive = true, version = current.Version, reason = "Synthetic version test" });
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        var result = (await updated.Content.ReadFromJsonAsync<BHome.Application.PropertyManagement.LocationDto>())!;
+        Assert.Equal(current.Version + 1, result.Version);
+        Assert.Equal("Synthetic updated", result.Name);
+    }
+
+    [CompactPostgresFact]
     public async Task JsonAssignmentsRetainInclusiveDatesAndNegativeLocationScope()
     {
         var owner = await User("Owner"); var staff = await User("Staff"); var other = await User("Staff"); var location = await Location(); var second = await Location();

@@ -46,8 +46,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var chainId = await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(x => x.Id).SingleAsync();
-        var location = new Location("Synthetic Task Location") { ChainId = chainId }; db.Add(location);
+        var location = new Location("Synthetic Task Location") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" }; db.Add(location);
         if (assigned) db.Add(new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-10), Today.AddDays(10)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id);
     }

@@ -30,7 +30,7 @@ internal static class InvoiceDemoSeed
                     throw new LocalTestAccountException("Trùng ID phòng ngoài fixture hóa đơn; không thay đổi dữ liệu.");
                 continue;
             }
-            Add(db, roomNumber, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = label, Capacity = 2, Status = RoomStatus.Available });
+            Add(db, roomNumber, new Room { LocationId = Id(10), RoomNumber = label, Capacity = 2, Status = RoomStatus.Available });
             for (var person = 0; person < 2; person++)
                 Add(db, 80 + roomIndex * 2 + person, new Resident
                 {

@@ -1,3 +1,5 @@
+> C?p nh?t 04/11/2026: Chain/RoomType ?? b?; contract hi?n h?nh ? [LOCATION_ROOM_API.md](LOCATION_ROOM_API.md). C?c ph?n m? t? hai c?p c? b?n d??i l? l?ch s?.
+
 # API quản lý Location, Room Type, Room, Asset và giá phí
 
 ## Phạm vi và quyết định đã duyệt

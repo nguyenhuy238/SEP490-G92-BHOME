@@ -1,113 +1,84 @@
-# Kiểm thử API với Postman
+# Test API với Postman — DB mới 24 bảng
 
-Bộ workflow đã triển khai của **Nguyễn Quốc Huy** (Contract, Invoice, Payment, Adjustment,
-Renewal/move-out, Jobs và Inbox) có collection riêng 245 request:
-[hướng dẫn import và chạy](NGUYEN_QUOC_HUY_POSTMAN_GUIDE.md).
-Collection Simple bên dưới vẫn giữ nguyên cho các ca nền tảng đã có.
+Cập nhật 04/11/2026. Backend dùng Compact24: **24 bảng, 383 cột, 83 khoá ngoại**. Location → Room; đã bỏ Chain và RoomType. Không gửi `chainId` hoặc `roomTypeId`.
 
-Import hai file:
+## 1. Chạy API và chọn đúng environment
 
-- `BHome.Simple.postman_collection.json`
-- `BHome.Local.postman_environment.json`
+Tại thư mục gốc repository:
 
-Chọn Environment **BHOME Local** ở góc trên bên phải Postman. `baseUrl` mặc định là
-`https://localhost:7240`, không có dấu `/` cuối; sửa nếu API chạy địa chỉ khác.
+```powershell
+./scripts/Update-LocalDatabase.ps1 -Check
+./scripts/Start-Api.ps1
+```
 
-| Biến                                    | Cách lấy                                                          |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| `ownerAccessToken`                      | Request **24** đăng nhập thành công bằng Owner tự lưu accessToken |
-| `staffAccessToken`                      | Request **25** đăng nhập thành công bằng Staff tự lưu accessToken |
-| `staffUserId`                           | Request **25** tự lưu userId của Staff                            |
-| `locationId`                            | Request **26** tạo Location thành công tự lưu id                  |
-| `chainVersion`                          | Request **25a/25b** tự lưu version cấu hình tên Chain             |
-| `futurePolicyId`, `futurePolicyVersion` | Request **60a/60b/60c** tự lưu để test sửa phí tương lai          |
+`-Check` phải báo `READY`. Postman mặc định dùng `https://localhost:7240`; `GET /health/ready` phải trả **200 Healthy**. Không chạy legacy EF migration lên DB này.
 
-Điền email/mật khẩu test trong Body của 24 và 25, rồi Send từng request. Tiếp theo chạy
-**25a** để xem Chain chung, tùy chọn **25b** để đổi tên, rồi gửi **26** để tạo Location.
-Không tạo/chọn Chain và không điền `chainId`; server tự gắn Location vào Chain duy nhất. Các request phía sau tự dùng
-`{{ownerAccessToken}}`, `{{staffAccessToken}}`, `{{staffUserId}}` và `{{locationId}}`
-trong Authorization/URL/Body. Có thể nhập các giá trị này trực tiếp trong Environment,
-ví dụ chọn Location đã có bằng cách thay `locationId`.
+Nếu cần tạo tài khoản tổng hợp, dùng `./scripts/New-LocalTestUsers.ps1` và nhập mật khẩu test. Script giữ nguyên tài khoản đã tồn tại. Điền đúng email/mật khẩu của tài khoản test đang có; collection không tạo tài khoản hoặc tự đặt mật khẩu.
 
-Các script chỉ cập nhật biến khi response thành công và có role/token/ID đúng định dạng;
-response lỗi không ghi đè các giá trị đã lưu. Script không tự gửi thêm request.
-Token hết hạn thì gửi lại request đăng nhập đúng role. Các file trong repository để trống
-token và ID; chỉ điền giá trị runtime trong Postman, không lưu token thật vào file để commit.
+## 2. Import để test JWT, scope, tài sản, giá/phí, task và incident
 
-Nếu chỉ import collection và không chọn Environment, các biến cùng tên đã có sẵn ở tab
-**Variables** của collection; script tự lưu vào đó. Khi chọn Environment, script lưu vào
-Environment đang chọn. Dùng cùng một Environment cho cả quá trình test vì Environment
-có ưu tiên cao hơn Collection Variables khi resolve `{{...}}`.
+Chỉ import hai file cho API của bạn:
 
-Phần **01–23** kiểm tra JWT/refresh/logout giữ token riêng để kiểm tra reuse/thu hồi;
-không tự thay chúng bằng token Owner đang dùng cho nghiệp vụ. Các ID Room Type/Room/Asset/
-Policy, version và ngày D0/D1/D2 vẫn điền theo hướng dẫn từng request. Áp dụng migration
-và chuẩn bị tài khoản test trước khi gọi API; không Run toàn bộ collection khi còn thiếu dữ liệu.
+- [BHome.Simple.postman_collection.json](BHome.Simple.postman_collection.json) — **180 request**: JWT/refresh/logout, RBAC, Staff Location scope, Location, Room, Asset, giá/phí, task và Incident/Work Order. Tất cả request nằm cùng cấp, không chia folder. Incident được đánh số tiếp **119–181**.
+- [BHome.Local.postman_environment.json](BHome.Local.postman_environment.json) — environment dùng chung **BHOME Local**.
 
-Nguồn nghiệp vụ: FE-02 / UC-01 và BF-01 / UC-04..06, GBR-01/02/08. Đây là cấu hình tiện ích
-kiểm thử, không thay đổi quyền hoặc hành vi server. API chi tiết: `docs/api/PROPERTY_MANAGEMENT.md`.
+Chọn **BHOME Local** trong Postman. Điền `ownerEmail`/`ownerPassword`, `staffEmail`/`staffPassword`; nếu test Tenant thì điền thêm `tenantEmail`/`tenantPassword`. Mật khẩu và token trong file luôn để trống. Không export credential thật vào Git.
 
-**Test giá linh hoạt:** sau request 60 và trước các bước ngừng sử dụng Location, chạy
-60a → 60b → 60c → 60d → 60e. Chọn D1 sau hôm nay, D2 từ D1 trở đi. 60a tạo khoản phí giả lập
-riêng, 60c sửa giá tương lai chưa dùng và giữ ID, 60d kiểm tra kết quả, 60e kiểm tra từ chối
-version cũ. Áp dụng migration FlexibleFutureBillingPolicies trước khi chạy API PUT mới.
+## 3. Thứ tự test phần core
 
-## Task vận hành — request 81–118
+Gửi từng request; số request cũ được giữ để dễ tìm, nên có khoảng trống sau khi bỏ API cũ.
 
-Nguồn: BF-02 / FE-01 / UC-10–12 / DBR-01. Contract đầy đủ: [Operational Tasks](../../api/OPERATIONAL_TASKS.md).
-Collection hiện có 125 request; 87 request cũ được giữ nguyên và thêm 38 request Task.
+1. **24** đăng nhập Owner, **25** đăng nhập Staff; **25T** đăng nhập Tenant nếu cần. Script lưu token và Staff/Tenant user ID khi đăng nhập thành công.
+2. **26** tạo Location; **28** phân công Staff tại Location đó. Ngày bắt đầu/kết thúc phải bao gồm hôm nay theo Việt Nam. Gán Staff làm tăng version của Location: muốn sửa Location, chạy **36 GET → 37 PUT**. GET tự lưu `locationVersion`; PUT dùng `{{locationVersion}}` và lưu version mới sau khi thành công. Không giữ cứng `version: 1`.
+3. **42** tạo Room trực tiếp trong Location; **46** tạo Asset trong Room. Script lưu `locationId`, `roomId`, `roomVersion`, `assetId` và các alias `incidentLocationId`, `incidentRoomId`, `incidentAssetId` cho collection Incident.
+4. **52**, **54–57** cấu hình giá Location/Room và đơn giá điện/nước/phí. **51**, **58–59** đọc lại. `dateD0` mặc định là hôm nay, `dateD1` ngày mai, `dateD2` sau 30 ngày; có thể điền trước trong environment để chọn kỳ khác.
+5. **60a–60e**, **61** kiểm tra giá tương lai, thay phiên bản và stale version. Đọc mô tả từng request; các nhánh này có điều kiện dữ liệu khác nhau.
+6. **81–118** test task: Owner tạo → Staff start/progress/blocker → upload evidence → submit → Owner verify hoặc rework. Dùng ảnh tổng hợp trong `fixtures/`; chọn file ở Body trước khi upload.
 
-Chuẩn bị: chạy **24, 25, 26, 28** để có Owner/Staff token, Location active và Staff assignment
-hiệu lực hôm nay theo Asia/Ho_Chi_Minh. Thực hiện phần Task **trước request 79 ngừng Location**.
-Nếu Location đã ngừng, dùng Location test active khác và tạo assignment tương ứng; không Run toàn
-bộ collection theo thứ tự khi chưa chuẩn bị dữ liệu của các phần khác.
+Request **77/79** thay đổi trạng thái Room/Location: chỉ chạy khi đã xong các luồng cần Location active. Các bài JWT reuse/logout cũng làm mất hiệu lực token thử nghiệm; đăng nhập lại nếu cần.
+
+## 4. Test Incident và Work Order
+
+Gửi request **119 — Staff gửi báo cáo sự cố Normal** trong collection Simple sau khi đã phân công Staff. Dùng cùng environment và ID vừa tạo, không cần dựng hợp đồng Tenant cho nhánh Staff.
+
+- **119–140:** báo sự cố Normal → giao việc → đề xuất/duyệt → thực hiện → xác minh.
+- **141–145:** yêu cầu làm lại và nộp lại kết quả.
+- **146–158:** Emergency và chi phí xử lý khẩn cấp.
+- **159–165:** Owner xử lý trực tiếp.
+- **166–173:** danh sách, lịch sử và thông báo.
+- **174–181:** các trường hợp từ chối quyền hoặc dữ liệu không hợp lệ.
 
 Luồng chính:
 
-1. **81–87:** tạo, thử replay idempotency, xem/cập nhật, thử stale version và đồng bộ người phụ trách.
-2. **88–93:** Staff xem/bắt đầu/cập nhật/blocker, Owner điều phối; submit thiếu evidence bị chặn.
-3. **94:** Body → binary → chọn ảnh PNG giả lập trên máy. Nếu chọn JPEG, đổi Content-Type sang
-   `image/jpeg`. Không gửi multipart, ảnh CCCD hoặc PII thật. Mặc định 5 MiB/ảnh, 10 ảnh/Task.
-4. **95–98:** lấy version mới sau upload, xem metadata/tải ảnh và submit chờ Owner duyệt.
-5. **99–103:** kiểm tra Staff không thể verify, Owner yêu cầu rework, Staff nộp lại và Owner xác nhận;
-   xem history. Có thể dùng lại ảnh còn phù hợp hoặc upload ảnh mới rồi chạy lại 95 trước submit.
-6. **104–106:** đọc thông báo, đánh dấu đã đọc và kiểm tra không hủy Task đã Completed.
-7. **107–108:** Task riêng cho nhánh hủy, không ghi đè ID/version của luồng chính.
-8. **109–118:** ca lỗi/quyền. **111–113 là tùy chọn**, cần Location/token bổ sung như bảng dưới.
+1. Staff submit Normal → GET Incident để lấy version mới.
+2. Owner classify → GET lại version → Owner assign Work Order cho Staff hiện được phân công.
+3. Staff inspection/proposal → Owner plan decision → Staff start/progress.
+4. Upload ảnh completion → Staff submit → Owner verify; dùng nhánh rework nếu cần.
+5. Đọc report, history, maintenance history, expenses và tải evidence bằng đúng role.
 
-| Biến mới                            | Cách dùng                                                                                     |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| `taskId`, `taskVersion`             | 81 tự lưu; GET/action thành công cập nhật version. Khi stale, chạy lại 84; sau upload chạy 95 |
-| `taskPreviousVersion`               | 85 lưu version cũ cho ca 86                                                                   |
-| `taskTitle`                         | Nội dung Task test; có thể sửa trước khi chạy 81                                              |
-| `taskDueAt`                         | Deadline có Z/offset; 81 tự đặt sau hiện tại 24 giờ nếu trống/hết hạn, chỉ là dữ liệu test    |
-| `taskCreateDueAt`, `taskCreateKey`  | 81 lưu payload/key tạo ban đầu, 82 dùng nguyên trạng để replay                                |
-| `taskEvidenceId`                    | 94 tự lưu khi upload thành công                                                               |
-| `taskNotificationId`                | 104 tự lưu một thông báo thuộc Task hiện tại                                                  |
-| `taskCancelId`, `taskCancelVersion` | Nhánh 107–108 dùng riêng                                                                      |
-| `taskUnassignedLocationId`          | Ca 111: tự điền ID Location test active thật, chưa có Staff hiện hành                         |
-| `otherStaffAccessToken`             | Ca 112: token Staff test khác không phụ trách Location của Task                               |
-| `tenantAccessToken`                 | Ca 113: token Tenant test, nhập runtime, không lưu vào file git                               |
+Các request GET cập nhật version. Gửi GET lại sau mutation trước khi gửi lệnh tiếp theo. `Idempotency-Key` mặc định mới cho mỗi lần gửi; điền `incidentIdempotencyKey` khi chủ động kiểm tra replay, rồi xoá giá trị để trở lại thao tác mới.
 
-Các biến có trong cả Environment và Collection Variables; token bổ sung để trống và đánh dấu secret
-trong Environment. Script có kiểm tra biến bắt buộc; response lỗi không ghi đè Task/evidence/version
-đã lưu. Mỗi lần Send **81** tạo lượt Task mới. **82** trả snapshot gốc và không ghi đè version mới
-hơn; **115** kiểm tra cùng key nhưng khác payload bị 409. Các lệnh khác dùng UUID mới mỗi Send;
-để thử retry thủ công, giữ nguyên header và payload ban đầu. Task priority dùng chuỗi `Normal`/`High`,
-khác cách biểu diễn enum số của Property API.
+Ảnh PNG/JPEG tối đa 5.000.000 bytes mỗi ảnh, tối đa 5 ảnh cho mỗi nhóm bằng chứng được phép. Chọn ảnh tổng hợp ở Body; không dùng CCCD hoặc dữ liệu thật. Tenant submit cần Active Contract của tài khoản đó; tự đăng nhập Tenant không tạo tenancy. Emergency/direct-completion/cancel/reject là các nhánh riêng, không chạy tất cả trên cùng một Incident.
 
-### Migration local ngày 30/10/2026
+Giới hạn hiện hành theo D3-A/D6-A: chưa bật nhắc Emergency 15/30 phút, routing theo ca hoặc mở rộng quyền co-occupant. Push/email/provider và MinIO thật cần cấu hình riêng; collection không giả định gửi thông báo bên ngoài thành công.
 
-Đã áp `20261029170352_ContractActivationLifecycle` và `20261030074118_UnifiedOperationalTasks`
-vào DB phát triển `bhome` tại `localhost:5432` (PostgreSQL 18.3), sau khi tạo và kiểm tra backup
-custom-format trong thư mục ignored `.tmp/task-rollout/`. Số lượng User/Room/Task trước và sau giữ
-nguyên; các bảng phụ và ba check constraint Task mới được xác nhận. Không lưu connection string,
-mật khẩu, backup hoặc token vào các file Postman. Trên máy khác vẫn cần áp migration của máy đó.
+## 5. Các luồng hợp đồng, hoá đơn và thanh toán
 
-Smoke check chỉ đọc trên API local đang chạy: `/health/live` và `/health/ready` trả 200,
-Swagger trả 200 và có endpoint Task; GET Task không token trả 401. Không khởi động lại host
-đang chạy và không tạo dữ liệu nghiệp vụ để kiểm tra Postman.
+Các collection, environment, coverage, hướng dẫn và generator của **NguyenQuocHuy được giữ nguyên bản gốc**, không thuộc lần cập nhật API của bạn. Không cần import chúng để test 180 request ở Simple. Xem [hướng dẫn riêng](NGUYEN_QUOC_HUY_POSTMAN_GUIDE.md) nếu làm việc với phần đó; bản gốc có thể còn contract Chain/RoomType cũ và không được tính vào kết quả kiểm tra dưới đây.
 
-Kiểm tra file: JSON hợp lệ; toàn bộ script biên dịch được; script mới được kiểm tra với response
-giả lập cho cả Environment và Collection Variables, cả thành công và lỗi. Đây không phải bằng
-chứng đã chạy toàn bộ collection trên server thật; các request login vẫn cần mật khẩu test do bạn nhập.
+## Kết quả kiểm tra bản cập nhật này
+
+- Đã khởi động backend hiện tại với connection `.env` và gọi thật `GET /health/ready`: **200 Healthy**.
+- `Update-LocalDatabase.ps1 -Check`: **READY**, schema `compact24-2026-11-04-location-room`, **24 bảng / 383 cột / 83 FK**. Production DI dùng `Compact24DbContext`; không chọn DB legacy.
+- **180 request definitions** của bạn trong Simple đã qua kiểm tra JSON body, cú pháp script, loại bỏ route/field cũ và đối chiếu route/method với Swagger hiện tại. Script tạo key Incident được giữ riêng trên từng request; đã kiểm tra cả key mới và key replay cố định sau khi bỏ folder.
+- Không chạy mutation từ collection lên DB của bạn trong lần cập nhật Postman này. Kết quả trên xác nhận collection khớp API và DB readiness; không phải tuyên bố cả 180 kịch bản nghiệp vụ đã chạy HTTP.
+
+Kiểm tra offline bằng Node, không cần thêm dependency:
+
+```powershell
+node scripts/postman/Validate-CurrentCollections.cjs
+# Nếu đã tải swagger.json từ API đang chạy:
+node scripts/postman/Validate-CurrentCollections.cjs path/to/swagger.json
+```
+
+API chi tiết: [Location/Room/Asset/giá phí](../../api/LOCATION_ROOM_API.md), [Incident/Work Order](../../api/INCIDENT_MAINTENANCE.md), [Task](../../api/OPERATIONAL_TASKS.md).

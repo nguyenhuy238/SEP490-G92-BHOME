@@ -13,11 +13,6 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
-    public async Task<Chain?> GetSystemChainAsync(CancellationToken token)
-    {
-        var id = await db.Set<Chain>().Select(x => (Guid?)x.Id).SingleOrDefaultAsync(token);
-        return id.HasValue ? await FindAsync<Chain>(id.Value, token) : null;
-    }
     public async Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity
     {
         var tracked = db.ChangeTracker.Entries<T>().SingleOrDefault(x => x.Entity.Id == id);
@@ -50,7 +45,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     }
     public async Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token) =>
         await db.Set<BillingPolicy>().AsNoTracking().Where(x => x.LocationId == room.LocationId &&
-            (x.RoomId == room.Id || x.RoomTypeId == room.RoomTypeId && x.RoomTypeId != null || x.RoomId == null && x.RoomTypeId == null) &&
+            (x.RoomId == room.Id || x.RoomId == null) && x.RoomTypeId == null &&
             x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date)).ToArrayAsync(token);
 
     public async Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token)

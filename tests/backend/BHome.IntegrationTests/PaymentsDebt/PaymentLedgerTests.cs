@@ -41,10 +41,9 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         var tenants = new[] { await Account(Roles.Tenant), await Account(Roles.Tenant), await Account(Roles.Tenant) };
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var period = new DateOnly(today.Year, today.Month, 1).AddMonths(-1);
-        var location = new Location("SYNTHETIC PAYMENT") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
-        var type = new RoomType { LocationId = location.Id, Name = "Shared", DefaultCapacity = 3 };
-        var room = new Room { LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = "PAY-TEST", Capacity = 3, Status = RoomStatus.Occupied };
-        db.AddRange(location, type, room);
+        var location = new Location("SYNTHETIC PAYMENT") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
+        var room = new Room { LocationId = location.Id, RoomNumber = "PAY-TEST", Capacity = 3, Status = RoomStatus.Occupied };
+        db.AddRange(location, room);
         var contracts = new List<Contract>();
         foreach (var tenant in tenants)
         {

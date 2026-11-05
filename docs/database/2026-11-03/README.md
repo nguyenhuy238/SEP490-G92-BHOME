@@ -1,4 +1,6 @@
-﻿# Database BHOME Compact24
+> C?p nh?t 04/11/2026: b? Chain/RoomType theo y?u c?u m?i. Schema/version/upgrade hi?n h?nh: [Location/Room API](../../api/LOCATION_ROOM_API.md). B?o c?o migration tr??c ?? gi? s? li?u l?ch s? t?i m?c th?c ch?y.
+
+# Database BHOME Compact24
 
 Backend hiện dùng persistence **Compact24 mặc định**, với đúng **24 bảng vật lý, 386 cột, 83 FK**. Đã chạy API regression và Legacy Independence trên database PostgreSQL 16 mới chỉ có schema này. Không có bảng kỹ thuật `__EFMigrationsHistory` ở target.
 

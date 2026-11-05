@@ -29,8 +29,7 @@ internal static class ContractLifecycleDemoSeed
         if (location is null)
         {
             if (await db.Locations.AnyAsync(l => l.Name == "BHOME LIFECYCLE DEMO", t)) throw new LocalTestAccountException("Trùng tên fixture lifecycle.");
-            Add(db, 10, new Location("BHOME LIFECYCLE DEMO") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync(t), Address = "ĐỊA CHỈ TỔNG HỢP - BH40 TEST ONLY" });
-            Add(db, 11, new RoomType { LocationId = Id(10), Name = "Phòng lifecycle tổng hợp", DefaultCapacity = 3 });
+            Add(db, 10, new Location("BHOME LIFECYCLE DEMO") { Address = "ĐỊA CHỈ TỔNG HỢP - BH40 TEST ONLY" });
             db.Add(new StaffLocationAssignment(Id(10), User(2), User(1), today.AddYears(-1), today.AddYears(1)));
         }
         else if (location.Name != "BHOME LIFECYCLE DEMO") throw new LocalTestAccountException("Trùng ID fixture lifecycle.");
@@ -39,7 +38,7 @@ internal static class ContractLifecycleDemoSeed
         {
             var existing = await db.Set<Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == Id(20 + room), t);
             if (existing is not null) { if (existing.LocationId != Id(10) || existing.RoomNumber != names[room]) throw new LocalTestAccountException("Trùng ID phòng lifecycle."); continue; }
-            Add(db, 20 + room, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = names[room], Capacity = 3, Status = RoomStatus.Available });
+            Add(db, 20 + room, new Room { LocationId = Id(10), RoomNumber = names[room], Capacity = 3, Status = RoomStatus.Available });
             for (var person = 0; person < 3; person++) Add(db, 40 + room * 3 + person, new Resident { RoomId = Id(20 + room), TenantUserId = User(3 + person), OwnerUserId = User(1), DisplayLabel = $"Khách tổng hợp {(char)('A' + person)} ({names[room]})", ResidentType = ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Verified, ConfirmedByUserId = User(2), ConfirmedAt = DateTimeOffset.UtcNow });
             Add(db, 100 + room, new Asset { LocationId = Id(10), RoomId = Id(20 + room), Name = "Quạt lifecycle tổng hợp", Category = "Thiết bị", Condition = "Tốt - tổng hợp", Status = AssetStatus.Active });
             for (var utility = 0; utility < 2; utility++) Add(db, 60 + room * 2 + utility, new Meter { RoomId = Id(20 + room), Code = $"SYN-LC-{room}-{utility}", UtilityType = (UtilityType)utility, Display = MeterDisplay.Digital, DecimalPlaces = 2, InstalledOn = period.AddMonths(-2) });
