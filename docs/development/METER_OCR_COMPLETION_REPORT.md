@@ -1,5 +1,10 @@
 # Hoàn thiện OCR — 05/11/2026
 
+Lượt incremental tiếp theo đã commit và kiểm chứng cải thiện typed water từ3/33
+lên10/33, giữ0false trên33full labels của tập52 ảnh cũ. Xem
+[final development report](METER_OCR_FINAL_DEVELOPMENT_REPORT.md) cho lịch sử commit,
+validation dedup và giới hạn. Số liệu bên dưới giữ làm baseline của lượt này.
+
 ## Phạm vi và truy vết
 
 Tiếp tục baseline pretrained ngày04/11; không train/fine-tune, không đổi provider

@@ -633,7 +633,7 @@ Kiểm chứng thực tế trong lần sửa này:
 Chưa xác minh: Safari/Expo Go trên iPhone thật với mạng mới, cấu hình cách ly thiết bị của Wi-Fi,
 quyền mạng nội bộ/chứng chỉ trên iPhone, E2E OCR. Không build/test lại backend vì không sửa C#;
 không tuyên bố lần kiểm tra này thay thế toàn bộ backend suite hay E2E thiết bị.
-# Cập nhật incremental 05/11/2026
+## Cập nhật incremental 05/11/2026
 
 Màn Test OCR cho phép chọn số chữ số thập phân **sau khi** đã nhận diện công tơ,
 rồi gửi lại cùng ảnh tới diagnostic typed để backend áp precision. Hiển thị đơn
@@ -641,4 +641,3 @@ vị kWh/m³ theo category đã xác định; không tự đặt dấu thập ph
 buffer chỉ giữ trong review window60s hiện có và xóa khi background/clear/retake/
 unmount; identity buffer vẫn xóa ngay khi đọc xong. Bước này không gọi xác nhận
 nghiệp vụ. Đã chạy33 tests OCR Mobile + TypeScript/ESLint; chưa có phone E2E.
-

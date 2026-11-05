@@ -163,6 +163,12 @@ technology as `text_rules` evidence (classification confidence remains null).
 Units alone do not resolve technology. No business endpoint/schema changes;
 see [actual stage2 accuracy and gaps](../development/METER_OCR_COMPLETION_REPORT.md).
 
+The incremental water policy may return a stage2-only review proposal when one
+PP line cannot be parsed as a numeric reading. It never overrides a valid numeric
+disagreement, multiple regions, wrong utility or unclear digits. The diagnostic
+Mobile screen can re-read the same bounded meter image with user-confirmed
+precision after capture; production task precision remains server-authoritative.
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được

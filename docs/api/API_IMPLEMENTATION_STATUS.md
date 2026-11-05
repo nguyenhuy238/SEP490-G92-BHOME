@@ -47,6 +47,10 @@ thành production readiness. Xem [completion report](../development/METER_OCR_CO
 
 ## Tổng quan các chức năng đã có và còn thiếu
 
+Incremental OCR05/11: typed nước cơ hiện10/33 exact,0false,42/52 fallback trên
+cùng tập public cũ; automatic vẫn thiếu classifier4 loại. Màn Test OCR cho chọn
+precision sau capture. Xem [báo cáo cuối](../development/METER_OCR_FINAL_DEVELOPMENT_REPORT.md).
+
 | Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth / phiên / mật khẩu                          | Compact24 users + refresh_tokens; native Identity stores                                 | Owner Web login/refresh/logout/forgot; Mobile login/refresh/logout/change-password. Logout-all/reset có backend, chưa tìm thấy màn riêng.                |
