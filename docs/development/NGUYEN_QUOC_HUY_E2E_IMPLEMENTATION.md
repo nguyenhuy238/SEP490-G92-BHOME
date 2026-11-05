@@ -1,5 +1,11 @@
 # Triển khai và kiểm chứng các nhiệm vụ Nguyễn Quốc Huy
 
+## Tiếp tục sau merge af97676 ngày 05/11/2026
+
+Working tree đầu lượt tiếp tục sạch trên member/QHuy. Đã xác minh các commit triển khai trước; merge mới chứa thay đổi Location của nhóm, không khôi phục phiên bản trước merge. Truy vết slice đầu: UC-15 / GBR-04 / DBR-03 yêu cầu tài liệu ký và evidence đúng phiên bản, private download có quyền và kiểm tra integrity → ContractService.CopyDocumentAsync + storage → kiểm thử Owner/Tenant đọc đúng, Staff/cross-Tenant bị chặn, bytes bị sửa trả 409 và không sửa trạng thái ký. Không đổi route/DTO/schema.
+
+TASK BE-15 / BE-X06 — SLICE integrity tài liệu đã ký: đã kiểm tra snapshot/hash và đọc vào buffer trước khi trả nội dung; chỉ chấp nhận Signed/Simulated đúng chế độ hợp đồng. Backend thay ContractService.CopyDocumentAsync; không sửa UI/Mobile vì giữ nguyên endpoint/error contract. `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~SignedDocumentDownloadRejects|FullyQualifiedName~SignedDocumentIntegrity' --verbosity minimal`: **2/2 đạt**, legacy+MinIO và Compact24. Fixture signing là test boundary được gắn nhãn, không phải MySign staging. STATUS DONE cho slice; BE-15/P-X06 vẫn PARTIAL. Handoff Vũ Xuân Trường/Bùi Bảo Long, lỗi 409 được client hiện hữu xử lý. Commit SHA ghi sau commit.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết

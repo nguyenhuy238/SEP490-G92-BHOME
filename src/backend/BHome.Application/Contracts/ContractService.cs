@@ -426,8 +426,13 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public async Task CopyDocumentAsync(Guid id, Stream output, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Tenant], t);
-        var s = c.Signatures.Where(s => s.Status is SignatureStatus.Signed or SignatureStatus.Simulated).OrderBy(s => s.SignedAt).LastOrDefault() ?? throw ContractException.Conflict("signed_document_not_available");
-        await storage.CopyToAsync(s.SignedObjectKey!, output, t);
+        var s = c.Signatures.Where(s => CompleteSignature(s, c)).OrderBy(s => s.SignedAt).LastOrDefault() ?? throw ContractException.Conflict("signed_document_not_available");
+        if (!Intact(c) || s.SnapshotHash != c.SnapshotHash || string.IsNullOrWhiteSpace(s.SignedObjectKey) || string.IsNullOrWhiteSpace(s.SignedHash))
+            throw ContractException.Conflict("signing_evidence_integrity_failed");
+        using var buffer = new MemoryStream();
+        await storage.CopyToAsync(s.SignedObjectKey, buffer, t);
+        if (FileHash(buffer.ToArray()) != s.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
+        buffer.Position = 0; await buffer.CopyToAsync(output, t);
     }
 
     public Task<MoveOutView> RequestTerminationAsync(Guid id, TerminationInput x, Guid key, bool expiry, CancellationToken t)

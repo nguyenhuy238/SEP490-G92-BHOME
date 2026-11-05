@@ -187,6 +187,7 @@ public sealed class Compact24ContractRegressionTests(Compact24WorkflowFixture fi
     [CompactPostgresFact] public Task FailedSigningRetry() => Run(t => t.FailedSignatureCanBeRetriedWhileRetainingTheFailedAttempt());
     [CompactPostgresFact] public Task FailedUpload() => Run(t => t.UploadFailureLeavesDurableCleanupIntentAndNoDanglingSignatureReference());
     [CompactPostgresFact] public Task RemoteSigningAdapter() => Run(t => t.ProductionAdapterAndPdfSignerCompleteTwoPartyContractThroughApiWithSyntheticRemoteCa());
+    [CompactPostgresFact] public Task SignedDocumentIntegrity() => Run(t => t.SignedDocumentDownloadRejectsTamperedBytesAndPreservesSignerScope());
 }
 
 [Trait("Category", "CompactPostgres")]
