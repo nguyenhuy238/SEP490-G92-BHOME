@@ -62,12 +62,30 @@ public static class OcrCategoryRules
             Has(@"(?:noi cap|place of issue|cuc truong|director|dac diem nhan dang|personal identification|idvnm[0-9<])");
         var electricity = Has(@"(?<![a-z/])k\s*w\s*h(?![a-z/])");
         var water = Has(@"(?<![a-z/])(?:m\s*(?:\^\s*)?[3³]|㎥)(?![a-z/])");
+        // Explicit device labels are text evidence, not a visual classifier. Units
+        // alone still cannot identify the display technology.
+        var digital = Has(@"(?:cong to|dong ho)\s+(?:dien\s+tu|nuoc\s+dien\s+tu)|(?:digital|electronic)\s+(?:electricity|electric|water)\s+meter");
+        var mechanical = Has(@"(?:cong to|dong ho)\s+(?:dien|nuoc)\s+co\b|mechanical\s+(?:electricity|electric|water)\s+meter");
+        var waterLabel = Has(@"(?:digital|electronic|mechanical)\s+water\s+meter|(?:cong to|dong ho)\s+nuoc");
+        var electricityLabel = Has(@"(?:digital|electronic|mechanical)\s+(?:electricity|electric)\s+meter|(?:cong to|dong ho)\s+dien");
+        if ((water && electricityLabel) || (electricity && waterLabel))
+            return new("ambiguous", null, "text_rules", Candidates: [OcrDocumentKind.MechanicalElectricity, OcrDocumentKind.DigitalElectricity, OcrDocumentKind.MechanicalWater, OcrDocumentKind.DigitalWater], Warnings: ["classification_conflict"]);
         var candidates = new List<OcrDocumentKind>();
         if (front) candidates.Add(OcrDocumentKind.IdentityFront);
         if (back) candidates.Add(OcrDocumentKind.IdentityBack);
         // A unit can narrow utility; it cannot establish mechanical vs digital.
-        if (electricity) candidates.AddRange([OcrDocumentKind.MechanicalElectricity, OcrDocumentKind.DigitalElectricity]);
-        if (water) candidates.AddRange([OcrDocumentKind.MechanicalWater, OcrDocumentKind.DigitalWater]);
+        if (electricity)
+        {
+            if (digital && !mechanical) candidates.Add(OcrDocumentKind.DigitalElectricity);
+            else if (mechanical && !digital) candidates.Add(OcrDocumentKind.MechanicalElectricity);
+            else candidates.AddRange([OcrDocumentKind.MechanicalElectricity, OcrDocumentKind.DigitalElectricity]);
+        }
+        if (water)
+        {
+            if (digital && !mechanical) candidates.Add(OcrDocumentKind.DigitalWater);
+            else if (mechanical && !digital) candidates.Add(OcrDocumentKind.MechanicalWater);
+            else candidates.AddRange([OcrDocumentKind.MechanicalWater, OcrDocumentKind.DigitalWater]);
+        }
         return candidates.Count switch
         {
             1 => new("classified", candidates[0], "text_rules", Warnings: ["classification_text_evidence"]),
@@ -83,11 +101,11 @@ public static class AutomaticOcrRouter
     {
         var rules = OcrCategoryRules.Evaluate(analysis.Text);
         if (analysis.MeterRegion is { } region && float.IsFinite(region.DetectionConfidence) && region.DetectionConfidence is > 0 and <= 1 &&
-            analysis.VisualDecision is null && rules.Kind is null &&
+            analysis.VisualDecision is null && rules.Kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack) &&
             !(rules.Candidates ?? []).Any(k => k is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
         {
             var regionWarnings = region.Text.Warnings.Concat(analysis.Text.Warnings.Where(w => w is "blur_or_low_detail" or "orientation_uncertain")).Distinct().ToList();
-            var value = regionWarnings.Any(w => w is "unclear_digit" or "text_region_limit" or "conflicting_reading" or "blur_or_low_detail" or "orientation_uncertain")
+            var value = regionWarnings.Any(w => w is "unclear_digit" or "text_region_limit" or "conflicting_reading" or "recognizer_conflict" or "blur_or_low_detail" or "orientation_uncertain")
                 ? null : MeterReadingParser.Parse(region.Text.Lines, null, regionWarnings);
             var fields = new Dictionary<string, string>(); var scores = new Dictionary<string, float>();
             if (value is { } number) { fields["reading"] = number.Value; scores["reading"] = number.Confidence; }
@@ -98,6 +116,9 @@ public static class AutomaticOcrRouter
             var candidates = (rules.Candidates ?? []).Where(k => k is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)).ToArray();
             if (candidates.Length == 0) candidates = [OcrDocumentKind.MechanicalElectricity, OcrDocumentKind.DigitalElectricity, OcrDocumentKind.MechanicalWater, OcrDocumentKind.DigitalWater];
             var partial = Utility(candidates) ?? "meter";
+            if (rules.Kind is { } knownKind)
+                return new("classified", OcrCategories.Name(knownKind), null, "text_rules+yolo_reading_region", [], analysis.Text.Warnings,
+                    MeterProposal: MeterReadingPrecision.Apply(localizedProposal with { Warnings = localizedProposal.Warnings.Where(w => w != "meter_type_confirmation_required").ToArray() }, null), DetectionConfidence: region.DetectionConfidence, CropPreviewDataUri: region.CropPreviewDataUri);
             return new("ambiguous", "unknown", null, "yolo_reading_region", candidates.Select(OcrCategories.Name).ToArray(),
                 [.. analysis.Text.Warnings, "meter_type_confirmation_required"], MeterProposal: localizedProposal,
                 PartialCategory: partial, DetectionConfidence: region.DetectionConfidence, CropPreviewDataUri: region.CropPreviewDataUri);

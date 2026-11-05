@@ -5,6 +5,25 @@ namespace BHome.Application.UnitTests.Ocr;
 public sealed class AutomaticOcrTests
 {
     [Theory]
+    [InlineData("CÔNG TƠ ĐIỆN TỬ 1 PHA 2 DÂY", "00123 kWh", "electricity_digital")]
+    [InlineData("DIGITAL WATER METER", "00123 m3", "water_digital")]
+    [InlineData("MECHANICAL WATER METER", "00123 m3", "water_mechanical")]
+    [InlineData("MECHANICAL ELECTRICITY METER", "00123 kWh", "electricity_mechanical")]
+    public void ExplicitDeviceLabelsResolveTechnologyAsTextEvidenceWithoutFakeConfidence(string label, string reading, string category)
+    {
+        var result = Route(Text(label, reading));
+        Assert.Equal(category, result.DetectedCategory); Assert.Null(result.ClassificationConfidence);
+        Assert.Equal("text_rules", result.ClassificationSource); Assert.True(result.MeterProposal!.RequiresConfirmation);
+    }
+    [Fact]
+    public void ConflictingTechnologyLabelsAndUnitsRemainAmbiguous()
+    {
+        Assert.Equal("ambiguous", Route(Text("DIGITAL WATER METER", "MECHANICAL WATER METER", "00123 m3")).ClassificationStatus);
+        Assert.Equal("ambiguous", Route(Text("DIGITAL WATER METER", "00123 m3", "00123 kWh")).ClassificationStatus);
+        Assert.Equal("unknown", Route(Text("DIGITAL WATER METER")).ClassificationStatus);
+        Assert.Equal("ambiguous", Route(Text("DIGITAL WATER METER", "00123 kWh")).ClassificationStatus);
+    }
+    [Theory]
     [InlineData("00123.45 m3", "water", 2)]
     [InlineData("00123.45 kWh", "electricity", 2)]
     [InlineData("unlabeled meter", "meter", 4)]
