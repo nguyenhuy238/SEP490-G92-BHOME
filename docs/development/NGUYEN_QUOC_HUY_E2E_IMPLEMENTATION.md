@@ -10,30 +10,30 @@ Người dùng xác nhận OQ-01/02/05 đã đóng trong phiên này. Chưa nh�
 
 ## Ma trận 22 nhiệm vụ sau kiểm tra nguồn ban đầu
 
-| ID | Đã có / dữ liệu / UI | Khoảng trống và nghiệm thu còn lại | Trạng thái |
-| --- | --- | --- | --- |
-| BE-X04 | DI mặc định Compact24, worker/Identity/readiness; 24/386/83 | Regression server riêng, SQL log không legacy đã đạt 1 test; cần toàn bộ regression | PARTIAL |
-| BE-14 | Contract Holding boundary và test transfer | `UnconfiguredContractHoldingLedger` vẫn đăng ký; chưa có Holding E2E thật | BLOCKED |
-| BE-15 | Owner settings/Main Draft/documents/signing/deposit/activation; Web/Mobile; contracts JSON | Sửa trạng thái UI cấu hình; provider staging, tenant document review và browser E2E chưa nghiệm thu | PARTIAL |
-| BE-16 | Renewal API/client, giữ phiên bản và chữ ký | Test Compact24 đạt; provider thật và UI E2E chưa chạy | PARTIAL |
-| BE-17 | Handover API/client, baseline, evidence, hai xác nhận | Test Compact24 đạt; native Staff/Tenant E2E chưa chạy | PARTIAL |
-| BE-19 | Move-out/inspection/settlement state machine | Positive test dùng ledger test; policy cụ thể/refund và E2E thật chưa đủ | PARTIAL |
-| BE-20 | Capture/OCR/confirmation, Web monitor/Mobile; meters/readings | Regression nguồn hiện có; chưa chạy lại detector/device acceptance trong lượt này | NOT RUN |
-| BE-21 | Room/kỳ invoices/items/recipients, billing schedule/automation, Web/Mobile | Cần chạy regression Compact24 và E2E | NOT RUN |
-| BE-22 | Verified transactions/allocation, receiving account; Web/Mobile | Cần regression thực và bank integration; không tự nới under/overpayment | NOT RUN |
-| BE-23 | Debt/due date/reminders/inbox | Cần regression Compact24, UI | NOT RUN |
-| BE-24 | Request/evidence/Owner decision và lịch sử, Web/Mobile | Cần regression Compact24, quyết định OQ cụ thể, UI | NOT RUN |
-| BE-25 | Payment history và scope | Cần regression và UI | NOT RUN |
-| BE-31 | Bảng `expenses`; UI Investments hiện demo | Chưa có service/repository/controller Finance trong DI; cần API và UI thật | PARTIAL |
-| BE-32 | UI reports/demo | Chưa có backend reports thực được đăng ký | PARTIAL |
-| BE-33 | UI demo tính recovery | Chưa có backend recovery từ ledger thực | PARTIAL |
-| BE-34 | `financial_scenarios`; UI demo | Chưa có backend analyze/save/list/get và isolation tests | PARTIAL |
-| BE-X05 | CLI/preflight/mapping/reconciliation tests và artifacts | Cần chạy lại populated synthetic migration, không dùng dữ liệu thật | NOT RUN |
-| BE-X06 | MinIO adapter, PDF signer, MySign adapter native | Không thấy bằng chứng provider staging; PDF conversion baseline lỗi; storage test substitute không phải MinIO thật | PARTIAL |
-| BE-X07 | Bank claim/exact reconciliation/deposit guards | Chưa có nội dung chính sách đã đóng; Holding/refund chưa nghiệm thu | PARTIAL |
-| BE-X08 | Invoice/payment unit và integration tests | Chưa có finance/report regression thực | PARTIAL |
-| DOC-01 | Reports 2/3/4 originals, docs kỹ thuật | Báo cáo này bổ sung discrepancy; không sửa bản gốc để biến giới hạn thành yêu cầu | PARTIAL |
-| DOC-03 | Báo cáo bằng chứng này | Report 7 không có tại repository; chưa thể đóng final evidence | PARTIAL |
+| ID     | Đã có / dữ liệu / UI                                                                       | Khoảng trống và nghiệm thu còn lại                                                                                 | Trạng thái |
+| ------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ---------- |
+| BE-X04 | DI mặc định Compact24, worker/Identity/readiness; 24/386/83                                | Regression server riêng, SQL log không legacy đã đạt 1 test; cần toàn bộ regression                                | PARTIAL    |
+| BE-14  | Contract Holding boundary và test transfer                                                 | `UnconfiguredContractHoldingLedger` vẫn đăng ký; chưa có Holding E2E thật                                          | BLOCKED    |
+| BE-15  | Owner settings/Main Draft/documents/signing/deposit/activation; Web/Mobile; contracts JSON | Sửa trạng thái UI cấu hình; provider staging, tenant document review và browser E2E chưa nghiệm thu                | PARTIAL    |
+| BE-16  | Renewal API/client, giữ phiên bản và chữ ký                                                | Test Compact24 đạt; provider thật và UI E2E chưa chạy                                                              | PARTIAL    |
+| BE-17  | Handover API/client, baseline, evidence, hai xác nhận                                      | Test Compact24 đạt; native Staff/Tenant E2E chưa chạy                                                              | PARTIAL    |
+| BE-19  | Move-out/inspection/settlement state machine                                               | Positive test dùng ledger test; policy cụ thể/refund và E2E thật chưa đủ                                           | PARTIAL    |
+| BE-20  | Capture/OCR/confirmation, Web monitor/Mobile; meters/readings                              | Regression nguồn hiện có; chưa chạy lại detector/device acceptance trong lượt này                                  | NOT RUN    |
+| BE-21  | Room/kỳ invoices/items/recipients, billing schedule/automation, Web/Mobile                 | Cần chạy regression Compact24 và E2E                                                                               | NOT RUN    |
+| BE-22  | Verified transactions/allocation, receiving account; Web/Mobile                            | Cần regression thực và bank integration; không tự nới under/overpayment                                            | NOT RUN    |
+| BE-23  | Debt/due date/reminders/inbox                                                              | Cần regression Compact24, UI                                                                                       | NOT RUN    |
+| BE-24  | Request/evidence/Owner decision và lịch sử, Web/Mobile                                     | Cần regression Compact24, quyết định OQ cụ thể, UI                                                                 | NOT RUN    |
+| BE-25  | Payment history và scope                                                                   | Cần regression và UI                                                                                               | NOT RUN    |
+| BE-31  | Bảng `expenses`; UI Investments hiện demo                                                  | Chưa có service/repository/controller Finance trong DI; cần API và UI thật                                         | PARTIAL    |
+| BE-32  | UI reports/demo                                                                            | Chưa có backend reports thực được đăng ký                                                                          | PARTIAL    |
+| BE-33  | UI demo tính recovery                                                                      | Chưa có backend recovery từ ledger thực                                                                            | PARTIAL    |
+| BE-34  | `financial_scenarios`; UI demo                                                             | Chưa có backend analyze/save/list/get và isolation tests                                                           | PARTIAL    |
+| BE-X05 | CLI/preflight/mapping/reconciliation tests và artifacts                                    | Cần chạy lại populated synthetic migration, không dùng dữ liệu thật                                                | NOT RUN    |
+| BE-X06 | MinIO adapter, PDF signer, MySign adapter native                                           | Không thấy bằng chứng provider staging; PDF conversion baseline lỗi; storage test substitute không phải MinIO thật | PARTIAL    |
+| BE-X07 | Bank claim/exact reconciliation/deposit guards                                             | Chưa có nội dung chính sách đã đóng; Holding/refund chưa nghiệm thu                                                | PARTIAL    |
+| BE-X08 | Invoice/payment unit và integration tests                                                  | Chưa có finance/report regression thực                                                                             | PARTIAL    |
+| DOC-01 | Reports 2/3/4 originals, docs kỹ thuật                                                     | Báo cáo này bổ sung discrepancy; không sửa bản gốc để biến giới hạn thành yêu cầu                                  | PARTIAL    |
+| DOC-03 | Báo cáo bằng chứng này                                                                     | Report 7 không có tại repository; chưa thể đóng final evidence                                                     | PARTIAL    |
 
 ## Slice BE-15 cấu hình hợp đồng trên Owner Web
 
@@ -111,3 +111,7 @@ Router test từng timeout đã chạy riêng với Node22 và giữ nguyên tim
 Changed files: PaymentRecords/PaymentRulesTests, PaymentContracts/PaymentService, PaymentRepository, Compact24EventsAndLedger, Compact24WorkflowRegressionTests/PaymentLedgerTests, shared payments.ts, OwnerInvoicePaymentPanel/Payments.test.tsx, PAYMENTS.md và báo cáo. Handoff Vũ Xuân Trường `INITIAL_API_UI_READY`; Bùi Bảo Long kiểm tra màn hình số tiền đã trả/còn nợ trên thiết bị. BE-X07 vẫn PARTIAL vì giải ngân refund/credit và quyết toán cọc chưa có đầy đủ UI/ledger.
 
 Mobile typecheck và lint hiện tại đều đạt với Node22; không thay Mobile source trong các slice này.
+
+## Sửa phạm vi Expenses trong Location Workspace
+
+Khi vào `/locations/:locationId/investment`, API page nay ưu tiên Location của route cho list/create và khóa selector phạm vi; không mở mặc định toàn chuỗi trong một workspace đã chọn. `/expenses` độc lập vẫn lọc mọi cơ sở Owner được phép. Regression UI 4/4 đạt (bao gồm scope mới); TypeScript/Vite build đạt. Không đổi API/backend/schema. Changed files: ExpensesApiPage.tsx và test; handoff Vũ Xuân Trường `INITIAL_API_UI_READY`.

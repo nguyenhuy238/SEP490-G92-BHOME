@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ExpensesApiPage } from './ExpensesApiPage';
+import { MemoryRouter, Route, Routes } from 'react-router';
 
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
@@ -41,6 +42,25 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+it('keeps the Location Workspace scope when loading and creating expenses', async () => {
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/locations/location/investment']}>
+        <Routes>
+          <Route path="/locations/:locationId/investment" element={<ExpensesApiPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findByText('Bảo trì — 500.000 ₫');
+  expect(mock.expenses).toHaveBeenCalledWith(
+    expect.objectContaining({ locationId: 'location' }),
+    expect.any(AbortSignal),
+  );
+  expect(screen.getByRole('combobox', { name: 'Cơ sở' })).toHaveAttribute('aria-disabled', 'true');
+});
 it('loads real API rows, submits one mutation while busy and reloads the list', async () => {
   let finish!: (v: typeof expense) => void;
   mock.createExpense.mockImplementation(

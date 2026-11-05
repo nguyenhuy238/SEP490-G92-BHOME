@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   financeError,
@@ -31,6 +32,7 @@ export function ExpensesApiPage() {
     queryClient = useQueryClient();
   const { session } = useAuth();
   const actor = session?.userId;
+  const { locationId: routeLocation } = useParams();
   const [filter, setFilter] = useState<ExpenseFilter>({ page: 1 });
   const [editor, setEditor] = useState<Editor | null>(null);
   const [busy, setBusy] = useState(false),
@@ -41,9 +43,10 @@ export function ExpensesApiPage() {
     queryKey: ['finance-locations', actor],
     queryFn: ({ signal }) => api.locations(signal),
   });
+  const scopedFilter = { ...filter, locationId: routeLocation || filter.locationId };
   const rows = useQuery({
-    queryKey: ['expenses', actor, filter],
-    queryFn: ({ signal }) => api.expenses(filter, signal),
+    queryKey: ['expenses', actor, scopedFilter],
+    queryFn: ({ signal }) => api.expenses(scopedFilter, signal),
   });
   function editField<K extends keyof ExpenseInput>(key: K, value: ExpenseInput[K]) {
     setEditor((e) => e && { ...e, value: { ...e.value, [key]: value } });
@@ -112,7 +115,7 @@ export function ExpensesApiPage() {
                 key: crypto.randomUUID(),
                 reason: '',
                 value: {
-                  locationId: filter.locationId || locations.data![0].id,
+                  locationId: routeLocation || filter.locationId || locations.data![0].id,
                   roomId: null,
                   expenseType: 'OPERATING',
                   category: '',
@@ -151,7 +154,8 @@ export function ExpensesApiPage() {
         <TextField
           select
           label="Cơ sở"
-          value={filter.locationId || ''}
+          value={routeLocation || filter.locationId || ''}
+          disabled={!!routeLocation}
           onChange={(e) => changeFilter('locationId', e.target.value)}
         >
           <MenuItem value="">Tất cả cơ sở</MenuItem>
