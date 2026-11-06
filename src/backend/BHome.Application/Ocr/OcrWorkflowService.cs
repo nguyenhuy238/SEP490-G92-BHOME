@@ -3,7 +3,7 @@ using BHome.Domain.IdentityAccess;
 
 namespace BHome.Application.Ocr;
 
-public sealed record OcrWorkflowResource(ResourceScope Scope, bool CanCapture, OcrDocumentKind Kind,
+public sealed record OcrWorkflowResource(ResourceScope Scope, bool CanCapture, OcrDocumentKind? Kind,
     int? DecimalPlaces = null, decimal? PreviousConfirmedValue = null);
 
 // Implement against real Resident/Task/Meter/Location records when those modules exist.
@@ -33,9 +33,22 @@ public sealed class OcrWorkflowService(IOcrWorkflowResources resources, Resource
     {
         var resource = await resources.FindMeterTaskAsync(taskId, token);
         await AuthorizeAsync(resource, [Roles.Staff], token);
-        if (resource!.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack || !Enum.IsDefined(resource.Kind))
+        if (resource!.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)
             throw new OcrWorkflowStateException();
-        var proposal = await ocr.ExtractAsync(input, resource.Kind, token);
+        // Missing/invalid server metadata must not silently choose a digital or
+        // electricity reader. Do not consume the image for an unsupported task.
+        var metadataWarning = resource.Kind is null || !Enum.IsDefined(resource.Kind.Value) ? "meter_profile_unavailable" :
+            resource.DecimalPlaces is < 0 or > 4 ? "invalid_meter_precision" :
+            resource.PreviousConfirmedValue is < 0 ? "invalid_previous_reading" : null;
+        if (metadataWarning is not null)
+        {
+            var fallback = new OcrProposal(new Dictionary<string, string>(), "metadata-validation-v1")
+            { IsFallback = true, MissingFields = ["reading"], Warnings = [metadataWarning] };
+            // Clear an earlier proposal as well; it must not survive a failed retake.
+            await resources.RecordMeterProposalAsync(taskId, fallback, token);
+            return fallback;
+        }
+        var proposal = await ocr.ExtractAsync(input, resource.Kind!.Value, token);
         proposal = MeterReadingPrecision.Apply(proposal, resource.DecimalPlaces);
         if (proposal.ProposedFields.TryGetValue("reading", out var reading) &&
             decimal.TryParse(reading, System.Globalization.NumberStyles.AllowDecimalPoint,

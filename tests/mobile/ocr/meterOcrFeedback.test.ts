@@ -32,6 +32,9 @@ describe('meter OCR review guidance', () => {
     ['meter_precision_mismatch', 'dấu thập phân'],
     ['decimal_places_applied', 'dấu thập phân'],
     ['billing_register_unverified', 'tổng chỉ số dùng tính tiền'],
+    ['meter_profile_unavailable', 'báo Owner kiểm tra'],
+    ['invalid_meter_precision', 'báo Owner kiểm tra'],
+    ['invalid_previous_reading', 'báo Owner kiểm tra'],
     ['future_warning', 'đúng phòng, mã đồng hồ'],
   ])('explains %s without leaking technical codes', (warning, text) => {
     const message = meterOcrFeedback(proposal([warning]));
