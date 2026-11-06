@@ -79,6 +79,8 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
                 Status = status,
                 Title = title,
                 Type = $"https://httpstatuses.com/{status}",
+                // Digital-signing refusals are written for the person on screen ("Ảnh phải có nền trong suốt.").
+                Detail = exception is DigitalSigningException readable ? readable.Message : null,
                 Extensions = code is null ? new Dictionary<string, object?>() : new Dictionary<string, object?> { ["code"] = code }
             }
         };

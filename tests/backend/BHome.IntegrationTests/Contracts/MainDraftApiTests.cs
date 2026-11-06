@@ -22,7 +22,7 @@ using iText.Kernel.Pdf;
 namespace BHome.IntegrationTests.Contracts;
 
 [Trait("Category", "Docker")]
-public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
+public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
 {
     private const string Root = "/api/v1/contracts/main-drafts";
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));

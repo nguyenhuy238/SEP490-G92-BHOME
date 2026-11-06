@@ -28,7 +28,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     private async Task<Actor> User(string role)
     {
         var id = Guid.NewGuid(); var email = id + "@example.invalid";
-        const string password = "Synthetic-Billing-Test!123";
+        const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,

@@ -110,9 +110,11 @@ internal sealed class ITextPdfSigner(PdfAppearanceOptions options) : IPdfSigner
 
         var width = (float)(visible.Width * size.GetWidth());
         var picture = visible.Image is null ? null : ImageDataFactory.Create(visible.Image);
-        var height = picture is not null
-            ? width * picture.GetHeight() / picture.GetWidth()
-            : visible.Text.Split('\n').Length * options.FontSize * 1.35f + 2 * Padding;
+        var caption = picture is not null && visible.CaptionUnderImage && !string.IsNullOrWhiteSpace(visible.Text);
+        var captionSize = options.FontSize * 0.7f;
+        var textHeight = visible.Text.Split('\n').Length * (caption ? captionSize : options.FontSize) * 1.35f + 2 * Padding;
+        var pictureHeight = picture is null ? 0f : width * picture.GetHeight() / picture.GetWidth();
+        var height = picture is null ? textHeight : caption ? pictureHeight + textHeight : pictureHeight;
         var left = (float)(visible.X * size.GetWidth());
         var top = (float)(visible.Y * size.GetHeight());
         if (visible.Width <= 0 || visible.X < 0 || visible.Y < 0 ||
@@ -120,7 +122,19 @@ internal sealed class ITextPdfSigner(PdfAppearanceOptions options) : IPdfSigner
             throw new ArgumentException("Ô chữ ký nằm ngoài trang.");
 
         var appearance = new SignatureFieldAppearance(SignerProperties.IGNORED_ID);
-        if (picture is not null)
+        if (caption)
+        {
+            // Picture scaled to the box width (proportions kept), then the red "Ký bởi / Ngày ký" lines under it.
+            var font = PdfFontFactory.CreateFont(FontBytes.Value, PdfEncodings.IDENTITY_H,
+                PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
+            var inner = width - 2 * Padding;
+            var block = new iText.Layout.Element.Div().SetMargin(0).SetPadding(0);
+            block.Add(new iText.Layout.Element.Image(picture!).SetWidth(inner).SetHeight(inner * picture!.GetHeight() / picture.GetWidth()));
+            block.Add(new iText.Layout.Element.Paragraph(visible.Text).SetFont(font).SetFontSize(captionSize)
+                .SetFontColor(ColorConstants.RED).SetMultipliedLeading(1.15f).SetMargin(0));
+            appearance.SetContent(block);
+        }
+        else if (picture is not null)
         {
             appearance.SetContent(picture);
         }

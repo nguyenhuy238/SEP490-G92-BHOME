@@ -10,6 +10,8 @@ const mock = vi.hoisted(() => ({
   expense: vi.fn(),
   createExpense: vi.fn(),
   updateExpense: vi.fn(),
+  expenseEvidence: vi.fn(),
+  expenseReferences: vi.fn(),
 }));
 vi.mock('./useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -32,6 +34,13 @@ beforeEach(() => {
   mock.locations.mockResolvedValue([{ id: 'location', label: 'Cơ sở tổng hợp' }]);
   mock.expenses.mockResolvedValue({ items: [expense], total: 1, page: 1, pageSize: 25 });
   mock.expense.mockResolvedValue(expense);
+  mock.expenseEvidence.mockResolvedValue([]);
+  mock.expenseReferences.mockResolvedValue({
+    rooms: [],
+    assets: [],
+    workOrders: [],
+    truncated: false,
+  });
 });
 function mount() {
   render(
@@ -103,6 +112,62 @@ it('loads detail and submits the server revision and correction reason', async (
   await screen.findByText('Đã lưu khoản chi.');
   expect(mock.expense).toHaveBeenCalledWith('expense');
   expect(mock.updateExpense).toHaveBeenCalledWith('expense', expense, 1, 'Đối chiếu lại');
+});
+
+it('selects real Room/Asset/Work Order references and submits the exact source IDs', async () => {
+  mock.expenseReferences.mockImplementation(async (_location, roomId) => ({
+    rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
+    assets: roomId
+      ? [{ id: 'asset', label: 'Bàn tổng hợp', roomId: 'room', assetId: 'asset' }]
+      : [],
+    workOrders: roomId
+      ? [{ id: 'work-order', label: 'Sửa bàn tổng hợp', roomId: 'room', assetId: 'asset' }]
+      : [],
+    truncated: false,
+  }));
+  mock.createExpense.mockResolvedValue(expense);
+  mount();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Ghi khoản chi' })).not.toBeDisabled(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng ghi nhận' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'R-01' }));
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Work Order liên quan' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Work Order liên quan' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Sửa bàn tổng hợp' }));
+  expect(screen.getByRole('combobox', { name: 'Tài sản liên quan' })).toHaveTextContent(
+    'Bàn tổng hợp',
+  );
+  fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), { target: { value: 'Bảo trì' } });
+  fireEvent.change(screen.getByLabelText(/Số tiền/), { target: { value: '200000' } });
+  fireEvent.change(screen.getByLabelText(/Ngày phát sinh/), { target: { value: '2026-11-06' } });
+  fireEvent.change(screen.getByLabelText(/Nội dung/), {
+    target: { value: 'Chi thực tế theo chứng từ' },
+  });
+  fireEvent.submit(document.getElementById('expense-editor')!);
+  await waitFor(() =>
+    expect(mock.createExpense).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locationId: 'location',
+        roomId: 'room',
+        assetId: 'asset',
+        taskId: 'work-order',
+      }),
+      expect.any(String),
+    ),
+  );
 });
 it('shows API failure without demo rows or false success and preserves the retry key', async () => {
   mock.expenses.mockRejectedValue({ status: 503 });

@@ -285,6 +285,8 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    /** The authenticated transport, so related clients (digital signing) share auth and refresh. */
+    transport: request,
     expiryReminders: (signal?: AbortSignal) =>
       request<ContractExpiryNotice[]>(`${root}/expiry-reminders`, { signal }),
     inspections: (id: string, signal?: AbortSignal) =>

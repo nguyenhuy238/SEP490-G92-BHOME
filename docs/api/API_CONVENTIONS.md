@@ -2,6 +2,10 @@
 
 # API conventions
 
+Cập nhật trạng thái **06/11/2026**. Runtime chính là `BHome.Api` + Compact24; xem
+[mục lục](README.md), [bàn giao](API_IMPLEMENTATION_STATUS.md) và [213 routes thực tế](API_RUNTIME_ROUTES.md).
+Các quy ước chung dưới đây không thay schema/DTO riêng của từng endpoint.
+
 Operational Task create/assign/update, Staff execution, Owner verification, private evidence and in-app
 notifications are documented in [Operational Tasks](OPERATIONAL_TASKS.md). The unified Task schema
 preserves legacy capture/meter routes and their UC-20 completion behavior.
@@ -9,8 +13,9 @@ preserves legacy capture/meter routes and their UC-20 completion behavior.
 Use HTTPS, REST, JSON and `/api/v1/<resource>` routes. `GET /api/v1/session` is an authenticated
 foundation probe returning a minimal `userId` DTO. `POST /api/v1/auth/login` verifies existing Identity
 accounts. `/health/live`, `/health/ready` and development Swagger are operational exceptions to the
-prefix. Readiness requires connectivity and no pending EF migrations. Business endpoints are added
-from finalized requirements.
+prefix. Readiness calls `BHomePersistenceContext.IsSchemaReadyAsync`: in the current Compact24
+runtime it checks the actual schema, not the pending legacy EF migration list. Legacy EF migrations
+are offline/history artifacts; do not run them as a Compact24 deployment procedure.
 
 ## Existing-account login
 
@@ -28,7 +33,7 @@ On success, HTTP 200 returns `userId`, `roles`, `accessToken`, ISO-8601 `expires
 never used as an authorization signal. Roles come
 only from Identity persistence; extra request properties cannot select roles. Responses use
 `Cache-Control: no-store` and `Pragma: no-cache`. Send the token as Bearer authorization for the
-session probe and future protected operations.
+session probe and protected operations.
 
 Invalid input returns validation ProblemDetails (400). Invalid credentials, unknown accounts,
 lockout, inactive accounts, unsupported/no roles, and accounts requiring an unsupported second factor all return
@@ -36,9 +41,11 @@ generic ProblemDetails (401, title `Sign-in failed.`). Identity's existing five-
 lockout applies. Database/provider failures remain sanitized server errors; they are not reported as
 successful logins. Generic error bodies do not guarantee identical response timing.
 
-No users are seeded or created by login. Provisioning/activation workflows and second-factor challenges
-remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing is preserved. Login clients must now send `email`; legacy `userName`-only login
-payloads return 400. Forgot/reset-password retain their existing `userName` contract for a later step.
+No users are seeded or created by login. Capture/onboarding and Tenant account linkage are separate
+implemented workflows; this does not provide public self-registration. Second-factor challenges
+remain unimplemented. Existing `Owner`/`Staff`/`Tenant` role casing is preserved. Login clients send
+`email`; legacy `userName`-only login payloads return 400. Forgot/reset-password still accept
+`userName` as documented below; reset delivery is currently unconfigured.
 
 ## Sessions, refresh and credentials
 
@@ -206,6 +213,7 @@ merely because a frontend hides them.
 | 403         | Authenticated but not permitted                                              |
 | 404         | Resource absent (or intentionally concealed according to the access policy)  |
 | 409         | Version/concurrency or idempotency/business-state conflict                   |
+| 413         | Request body or evidence exceeds the endpoint's limit                        |
 | 429         | Rate limit if introduced by the authentication/API feature                   |
 | 500         | Unexpected failure with generic detail                                       |
 | 503         | Capability/provider temporarily unavailable or unconfigured                  |
@@ -247,9 +255,11 @@ consistently to prevent resource enumeration. CORS is an origin policy, not auth
 
 ## Pagination, time and money
 
-Future list endpoints use `page` (1-based, default 1), `pageSize` (default 20, maximum 100), and
-stable documented ordering with an ID tie-breaker. A page DTO contains `items`, `page`, `pageSize`
-and `totalCount`. Validate bounds rather than loading an entire table then paging in memory.
+List endpoints must follow their actual module DTO: Property uses `totalCount`, Expenses uses
+`total`, and some bounded capture/history endpoints return arrays rather than a page envelope.
+The general convention for new paged endpoints is `page` (1-based), `pageSize` bounded to 100,
+and stable ordering with an ID tie-breaker; defaults remain module-specific. Validate bounds
+rather than loading an entire table then paging in memory. Do not make clients assume one envelope.
 Provider cursor pagination stays inside its adapter contract and is not automatically an API cursor.
 
 Transmit instants as ISO 8601 UTC with `Z`/explicit offset. Persist UTC `timestamptz`. Transmit pure
@@ -258,13 +268,14 @@ Convert business schedules using the explicit `Asia/Ho_Chi_Minh` zone, never ser
 Clients centralize Vietnamese formatting in client-core.
 
 Store/calculate VND with decimal and defined precision/rounding; do not use floating point for
-financial arithmetic. Future DTOs document whether VND amounts are decimal strings or bounded integer
-dong; prefer decimal strings for arbitrary precision and avoid JS integer overflow. Display currency
-formatting is not a business rounding rule. No financial endpoint/schema is invented here.
+financial arithmetic. Billing, Payment, Refund and Finance money responses use decimal strings;
+keep them exact in clients, with Vietnamese VND formatting only for display. Request acceptance
+of strings/numbers and quantity precision follow each DTO. Display currency formatting is not a
+business rounding rule. Financial calculation and verified success remain server-authoritative.
 
 ## Financial and callback idempotency
 
-When a future endpoint creates a financial/contract effect, define `Idempotency-Key` support and
+When an endpoint creates a financial/contract effect, define `Idempotency-Key` support and
 persist a unique key scoped by principal/operation plus a normalized request fingerprint and result
 inside the effect transaction. The same key/input returns the same result; a different input with
 the same key is a conflict. Define retention and pending/failed response behavior per use case.
@@ -274,3 +285,23 @@ and commit reference, transition, audit and outbox/job intents together. Ignore/
 without duplicating effects. The foundation queue's unique enqueue key is not a universal HTTP
 idempotency implementation. Never retry ambiguous money/signing mutations automatically without a
 provider status check or audited pending-review/manual-verification path.
+
+## Upload và financial workflows hiện tại
+
+| Module | Request body / kiểm tra phía client |
+| --- | --- |
+| OCR proposal | Raw PNG/JPEG theo endpoint; không multipart và không tự confirm/persist |
+| Adjustment evidence | PUT raw PNG/JPEG, tối đa 5 MiB; nhận ID rồi link vào request |
+| Expense evidence | POST raw PNG/JPEG, tối đa 5 MiB, UUID `Idempotency-Key`; PendingUpload chưa tải được |
+| Refund execution | POST `multipart/form-data`, ảnh PNG/JPEG tối đa 5 MiB và execution metadata; UUID key + expectedVersion + humanConfirmed |
+
+Khi gửi `FormData`, để fetch/browser sinh `Content-Type` cùng boundary; không ép
+`application/json` hoặc tự đặt multipart header thiếu boundary. Private download vẫn dùng Bearer,
+không token trong URL. Lỗi file vẫn là ProblemDetails dù request Accept là ảnh/PDF/octet-stream.
+
+Owner xác minh receipt và phân bổ thiếu/thừa qua [Payment API](PAYMENTS.md); phần dư còn được hoàn
+phải đọc [RefundSource](REFUNDS.md), không suy từ `TransferView.unallocatedAmount`. Refund là ghi
+nhận giao dịch Owner đã thực hiện bên ngoài, không có API tự chuyển tiền. Version stale hoặc key
+khác payload trả 409; tải lại, review và chỉ retry cùng key khi giữ đúng payload/bytes. Upload intent
+được lưu bền vững trước storage; Pending/Approved chưa phải Completed. Không tự retry tài chính
+chỉ vì browser timeout. Tham chiếu [Finance](FINANCE.md) cho report/What-if và các chỉ tiêu unavailable.

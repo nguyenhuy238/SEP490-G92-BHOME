@@ -1,6 +1,7 @@
 export interface ApiProblem {
   code?: string;
   title?: string;
+  detail?: string;
   status?: number;
   correlationId?: string;
   errors?: Record<string, string[]>;
@@ -45,7 +46,9 @@ export function createApiClient(
     }
     const headers = new Headers(init.headers);
     if (!headers.has('Accept')) headers.set('Accept', 'application/json');
-    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    const multipart = typeof FormData !== 'undefined' && init.body instanceof FormData;
+    if (init.body && !multipart && !headers.has('Content-Type'))
+      headers.set('Content-Type', 'application/json');
     const token = getToken();
     if (token) headers.set('Authorization', 'Bearer ' + token);
     let response: Response;

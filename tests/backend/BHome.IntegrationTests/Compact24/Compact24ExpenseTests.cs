@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BHome.IntegrationTests.Compact24;
 
 [Trait("Category", "CompactPostgres")]
-public sealed class Compact24ExpenseTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
+public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Root = "/api/v1/expenses";
     private async Task<HttpClient> User(string role)

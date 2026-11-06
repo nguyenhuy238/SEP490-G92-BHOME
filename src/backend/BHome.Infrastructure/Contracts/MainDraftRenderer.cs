@@ -5,12 +5,14 @@ using System.Runtime.InteropServices;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace BHome.Infrastructure.Contracts;
 
 // Edit paragraph slots in the supplied OOXML package. All untouched clauses, styles and relationships survive.
-internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock) : IMainDraftRenderer
+internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock, IHostEnvironment? environment = null) : IMainDraftRenderer
 {
+    public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
     [DllImport("libc")]
     private static extern uint geteuid();
     [DllImport("libc")]
@@ -82,7 +84,12 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                         p.AddBeforeSelf(extraParagraph);
                     }
                 }
-                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ") { var draft = new XElement(p); Text(draft, $"BẢN NHÁP – {data.Contract.Id}"); p.AddAfterSelf(draft); }
+                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ")
+                {
+                    var notice = new XElement(p);
+                    Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
+                    p.AddAfterSelf(notice);
+                }
             }
             if (mapped != 16) throw new ContractException(503, "contract_template_slots_changed");
             using var stream = entry.Open(); stream.SetLength(0); xml.Save(stream, SaveOptions.DisableFormatting);

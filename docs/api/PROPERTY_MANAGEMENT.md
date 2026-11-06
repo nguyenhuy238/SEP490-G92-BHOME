@@ -4,6 +4,10 @@
 
 > Baseline hiện hành 06/11/2026: Chain và RoomType đã bị loại khỏi API và Compact24 runtime. Location là cấp cao nhất; Room thuộc trực tiếp Location; giá/phí áp dụng theo Location hoặc Room. Các mô tả Chain/RoomType bên dưới chỉ là lịch sử thiết kế cũ và không được dùng để triển khai endpoint mới.
 
+Cập nhật trạng thái **06/11/2026**: API chạy trên Compact24; [danh mục runtime](API_RUNTIME_ROUTES.md)
+và [bàn giao client/phần còn thiếu](API_IMPLEMENTATION_STATUS.md). Backend có route không đồng nghĩa
+các màn Property Owner Web đã nối; nhiều màn vẫn dùng mock hoặc báo chưa hỗ trợ ở API mode.
+
 ## Phạm vi và quyết định đã duyệt
 
 **Cập nhật 30/10/2026:** chỉ có một Chain chung; Owner chỉ đổi tên qua GET/PUT `/chain`.
@@ -297,7 +301,7 @@ hay tạo audit mới.
 
 | Method | Route                                  | Hành vi                                                                |
 | ------ | -------------------------------------- | ---------------------------------------------------------------------- |
-| GET    | `/rooms/{id}/readiness?purpose=Holding | MoveIn`                                                                | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
+| GET    | `/rooms/{id}/readiness?purpose=Holding` hoặc `purpose=MoveIn`                                                      | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
 | GET    | `/rooms/{id}/history`                  | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
 | GET    | `/locations/{id}/occupancy-summary`    | Snapshot Room; room-day lịch sử chỉ khi đủ evidence                    |
 

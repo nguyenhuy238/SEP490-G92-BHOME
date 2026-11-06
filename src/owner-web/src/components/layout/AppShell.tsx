@@ -26,6 +26,7 @@ import {
   ClipboardList,
   DoorOpen,
   FileText,
+  FilePenLine,
   FlaskConical,
   Gauge,
   Globe,
@@ -75,6 +76,7 @@ const iconMap: Record<string, typeof Building2> = {
   tasks: ClipboardList,
   tenants: Contact,
   contracts: FileText,
+  'digital-signing': FilePenLine,
   handovers: KeyRound,
   'temporary-residence': ShieldCheck,
   meters: Gauge,
@@ -107,7 +109,10 @@ const navGroups = [
     ],
   ],
   ['Nhân sự & Vận hành', ['staff', 'schedules', 'tasks']],
-  ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'handovers', 'temporary-residence']],
+  [
+    'Khách thuê & Hợp đồng',
+    ['tenants', 'contracts', 'digital-signing', 'handovers', 'temporary-residence'],
+  ],
   [
     'Tài chính & Hóa đơn',
     [
@@ -144,6 +149,7 @@ const navLabels: Record<string, string> = {
   tasks: 'Công việc vận hành',
   tenants: 'Khách thuê',
   contracts: 'Hợp đồng',
+  'digital-signing': 'Ký số (MySign)',
   handovers: 'Bàn giao phòng',
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',

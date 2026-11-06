@@ -100,3 +100,30 @@ chưa kiểm chứng lại trên Node 22. Không có tuyên bố coverage, perfo
 
 Rollback phần DI: bỏ reference DigitalSigning.Infrastructure và phục hồi registration chặn PDF
 từ revision trước; không cần rollback database. Không bật sandbox/fake CA trong backend thật.
+
+## Cập nhật 06/11/2026: chữ ký hiển thị, ảnh chữ ký, tài khoản Viettel trên giao diện
+
+Đưa phần ký từ xa còn nằm trong Sandbox (`src/digital-signing`) vào backend chính, Owner Portal và mobile.
+Bỏ qua VNPT SmartCA và ký bằng USB Token theo yêu cầu. Không thêm bảng, không thêm migration.
+
+| Chức năng                                      | Backend chính                                                                                                                                                                                     | Owner Portal              | Mobile (Owner/Tenant) |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------- |
+| Ô ký Bên A / Bên B ở cuối hợp đồng             | `ContractPdfRenderer` vẽ khối "Đại diện bên A/B", ghi vị trí ô vào document info (`BHomeSignatureSlotOwner/Tenant`)                                                                               | —                         | —                     |
+| Chữ ký hiển thị (ảnh + "Ký bởi / Ngày ký")     | `ViettelMySignContractAdapter` → `VisibleSignature(CaptionUnderImage)`                                                                                                                            | ✅                        | ✅                    |
+| Chọn trang, kéo vị trí, đổi cỡ ô ký            | `GET contracts/{id}/signing/layout`, `GET contracts/{id}/signing/pages/{n}` (PNG, PDFium qua `PDFtoImage`) ; `SigningInput.Placement`, `UsePicture`                                               | ✅ kéo thả                | ✅ kéo thả            |
+| Ảnh chữ ký (PNG trong suốt hoặc tạo từ họ tên) | `GET/PUT/DELETE digital-signing/signature-image`, `POST .../generate`; ảnh ở MinIO, mô tả ở `users.business_profile.signatureImage`                                                               | ✅ tải PNG, tạo từ họ tên | ✅ tạo từ họ tên      |
+| Tài khoản Viettel MySign (Owner)               | `GET/PUT/DELETE digital-signing/settings/viettel`, `POST .../test`; secret mã hóa AES-256-GCM ở `users.business_profile.digitalSigning.viettel`, ghi đè `DigitalSigning:Viettel` theo từng trường | ✅                        | —                     |
+| Gỡ chứng thư chưa từng dùng ký                 | `DELETE digital-signing/certificates/{id}` (409 nếu đã có lịch sử ký)                                                                                                                             | ✅                        | ✅                    |
+
+Cấu hình: `DigitalSigning__SecretKey` (≥ 32 ký tự) để lưu client secret; không có thì màn hình báo 503 rõ ràng.
+Lỗi ký số trả câu tiếng Việt trong `ProblemDetails.detail`.
+
+Cách dùng (Owner Portal): **Hợp đồng → chọn hợp đồng → Chữ ký và tài liệu → Ảnh chữ ký và tài khoản Viettel MySign**
+để lưu Client ID/Secret, kiểm tra kết nối và tạo ảnh chữ ký; **Khai báo chứng thư MySign của bạn**; rồi **Yêu cầu ký MySign**:
+chọn chứng thư, kéo ô ký trên trang hợp đồng, Xác nhận, duyệt trên app MySign, bấm **Kiểm tra kết quả ký**.
+
+Xác minh 06/11/2026: `ContractVisibleSignatureTests` (2 bên ký hiển thị, chữ ký hợp lệ, render trang),
+`ContractLifecycleApiTests.ProductionAdapterAndPdfSignerCompleteTwoPartyContractThroughApiWithSyntheticRemoteCa`
+(layout, trang PNG, vị trí sai → 400, Owner ô mặc định, Tenant ô tự chọn không ảnh), `Compact24DigitalSigningTests`
+(API thật trên DB 24 bảng tạm: ảnh chữ ký, tài khoản Viettel mã hóa, Tenant bị 403). Provider CA vẫn là bản tổng hợp
+trong test; **chưa gọi Viettel MySign thật** vì chưa có Client ID/Secret.

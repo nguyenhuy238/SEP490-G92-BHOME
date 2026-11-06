@@ -149,7 +149,11 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.IExpenseEvidenceRepository, BHome.Infrastructure.Finance.ExpenseEvidenceRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpenseEvidenceService>();
         services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();
+        services.AddScoped<BHome.Application.Finance.IRefundRepository, BHome.Infrastructure.Finance.RefundRepository>();
+        services.AddScoped<BHome.Application.Finance.RefundService>();
         services.AddScoped<BHome.Application.Finance.FinancialReportService>();
         services.AddScoped<BHome.Application.Finance.IFinancialScenarioRepository, BHome.Infrastructure.Finance.FinancialScenarioRepository>();
         services.AddScoped<BHome.Application.Finance.FinancialScenarioService>();
@@ -159,6 +163,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningProvider>(p => p.GetRequiredService<BHome.Application.Contracts.IContractWorkflowMode>().SimulatedSigningEnabled
             ? p.GetRequiredService<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>()
@@ -174,7 +179,12 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractPdfSigning(services);
-        services.AddScoped<BHome.DigitalSigning.Application.IViettelAccountSource, BHome.Infrastructure.Contracts.ContractMySignAccount>();
+        // Viettel account: configuration (DigitalSigning:Viettel), overridden by what the Owner saved on the settings screen.
+        services.AddScoped<BHome.DigitalSigning.Application.ISigningSettingsStore, BHome.Infrastructure.Contracts.CompactSigningSettingsStore>();
+        services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
+        BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
+        services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
+        services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
         services.AddScoped<BHome.DigitalSigning.Application.Services.SigningCertificateService>();
