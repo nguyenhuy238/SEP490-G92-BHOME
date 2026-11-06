@@ -108,17 +108,35 @@ it('keeps property functions inside the selected Location Workspace', async () =
   );
 
   const navigation = await screen.findByRole('navigation', { name: 'Điều hướng chính' });
-  expect(within(navigation).getByRole('link', { name: 'Cơ sở' })).toBeInTheDocument();
-  expect(within(navigation).getByRole('link', { name: 'Mẫu loại phòng' })).toBeInTheDocument();
-  expect(within(navigation).getByRole('link', { name: 'Danh mục tài sản' })).toBeInTheDocument();
-  expect(within(navigation).queryByRole('link', { name: 'Phòng' })).not.toBeInTheDocument();
-  expect(within(navigation).queryByRole('link', { name: 'Loại phòng' })).not.toBeInTheDocument();
-  expect(within(navigation).queryByRole('link', { name: 'Tài sản' })).not.toBeInTheDocument();
+  // One accessibility-tree scan per group avoids repeating expensive jsdom visibility/name
+  // calculations. Keep exact accessible names, uniqueness and absent-link assertions.
+  const expectedLinks: Record<string, string> = {
+    '/locations': 'Cơ sở',
+    '/configuration/room-types': 'Mẫu loại phòng',
+    '/configuration/assets': 'Danh mục tài sản',
+  };
+  const propertyLinks = within(navigation).getAllByRole('link', {
+    name: /^(Cơ sở|Mẫu loại phòng|Danh mục tài sản)$/,
+  });
+  expect(propertyLinks.map((link) => link.getAttribute('href')).sort()).toEqual(
+    Object.keys(expectedLinks).sort(),
+  );
+  propertyLinks.forEach((link) =>
+    expect(link).toHaveAccessibleName(expectedLinks[link.getAttribute('href')!]),
+  );
   expect(
-    within(navigation).queryByRole('link', { name: 'Giá thuê & Biểu phí' }),
+    within(navigation).queryByRole('link', {
+      name: /^(Phòng|Loại phòng|Tài sản|Giá thuê & Biểu phí)$/,
+    }),
   ).not.toBeInTheDocument();
-
-  const locationLinks = await screen.findAllByRole('link', { name: 'Xem cơ sở' });
+  // Select the exact anchor text before checking semantics/visibility, rather than
+  // computing accessible names for every unrelated link in the page.
+  const locationLinks = await screen.findAllByText('Xem cơ sở', { selector: 'a', exact: true });
+  locationLinks.forEach((link) => {
+    expect(link).toHaveRole('link');
+    expect(link).toHaveAccessibleName('Xem cơ sở');
+    expect(link).toBeVisible();
+  });
   expect(locationLinks[0]).toHaveAttribute('href', '/locations/loc-1/overview');
   fireEvent.click(locationLinks[0]);
   expect(
