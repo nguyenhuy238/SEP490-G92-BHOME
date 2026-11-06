@@ -13,8 +13,11 @@ namespace BHome.IntegrationTests.Compact24;
 
 // Reuse the existing regression scenarios and assertions against a different persistence composition.
 // Storage is an explicit test substitute. Real MinIO remains a separate integration gate.
-public sealed class Compact24WorkflowFixture(IObjectStorage? storageOverride = null) : IAsyncLifetime
+public sealed class Compact24WorkflowFixture : IAsyncLifetime
 {
+    private readonly IObjectStorage? storageOverride;
+    public Compact24WorkflowFixture() { }
+    internal Compact24WorkflowFixture(IObjectStorage storageOverride) { this.storageOverride = storageOverride; }
     internal static ConcurrentQueue<string> Diagnostics { get; } = new();
     private readonly Compact24Fixture database = new();
     private WebApplicationFactory<Program>? host;

@@ -710,9 +710,29 @@ TESTS:
 - Log huy-settlement-notifications-pg.log. Chưa browser pump trong slice backend này; không claim email/push/native.
 COMMIT:
 - Message: feat(notification): [BE-19] publish scoped move-out and deposit settlement events
-- SHA ghi sau commit settlement notifications.
+- SHA: `e3467b76fb2aa008bdc09fb8de9637b93af67667`.
 FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường, Mobile Bùi Bảo Long dùng inbox/Contract target hiện có; native acceptance còn thiếu.
 STATUS: DONE cho backend in-app consumer được kiểm chứng; external delivery BLOCKED bởi provider Unconfigured.
 REMAINING:
 - Browser E2E explicit event pump và report classification; full regression/evidence package. Receipt-excess consumer riêng chưa triển khai trong slice này.
+
+TASK: BE-X08 / BE-X05
+SLICE: Khôi phục xUnit activation cho Compact24 workflow fixtures
+IMPLEMENTED:
+- Full regression phát hiện 23 test IClassFixture không được chạy vì xUnit coi optional IObjectStorage constructor argument là dependency bắt buộc.
+- Fixture có một public constructor không tham số; overload storage dành riêng test recovery là internal. Giữ nguyên factory/storage/default Compact24 và toàn bộ assertions/schema.
+CHANGED FILES:
+- tests/backend/BHome.IntegrationTests/Compact24/Compact24WorkflowRegressionTests.cs và báo cáo này.
+TESTS:
+- Full integration lần đầu: 603 pass, 23 fail fixture activation, 1 optional real-OCR skip / 627 total. Không tính 23 lỗi là skip/pass.
+- Focused Compact24ContractRegressionTests/MeterCaptureRegressionTests/Compact24DepositRecoveryTests sau fix: 24/24 đạt, 0 skip; log huy-fixture-constructor-pg.log.
+- Domain90, Application276, DigitalSigning41 pass và Owner155/Mobile381 pass ở lượt regression vừa chạy; full integration cần chạy lại sau fix.
+COMMIT:
+- Message: fix(test): [BE-X08] initialize Compact24 workflow fixtures through xUnit
+- SHA ghi sau commit fixture constructor.
+FRONTEND HANDOFF:
+- Không thay frontend/business behavior; QA Nguyễn Quang Huy tiếp tục dùng cùng regression commands.
+STATUS: DONE cho fixture defect; final integration regression còn chờ chạy lại.
+REMAINING:
+- Full integration, browser report/inbox E2E, cập nhật evidence package và docs/audit links.
