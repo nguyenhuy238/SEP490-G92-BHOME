@@ -209,6 +209,21 @@ export interface InspectionPreparation {
   otherTenantsRemain: boolean;
 }
 export interface SettlementSummary {
+  financialReference?: string;
+  calculation?: {
+    issuedTotal: string;
+    approvedAdjustmentTotal: string;
+    payableTotal: string;
+    verifiedInvoicePayments: string;
+    roomOutstanding: string;
+    contractSpecificOutstanding: string | null;
+    potentialInvoiceExcess: string;
+    depositAllocated: string | null;
+    depositRefunded: string | null;
+    depositReserved: string | null;
+    availableSecurityDeposit: string | null;
+    depositPositionConsistent: boolean;
+  } | null;
   contractId: string;
   depositContractId: string;
   roomNumber: string;

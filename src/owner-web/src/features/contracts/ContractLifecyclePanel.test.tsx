@@ -10,6 +10,13 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { useContractLifecycle } from '../../../../../packages/client-core/src/useContractLifecycle';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+vi.mock('../payments/RefundPanel', () => ({
+  RefundPanel: ({ sourceId, sourceKind }: { sourceId: string; sourceKind: string }) => (
+    <div data-testid="deposit-refund-source">
+      {sourceKind}:{sourceId}
+    </div>
+  ),
+}));
 
 const id = '00000000-0000-0000-0000-000000000001';
 const contract = { id, locationId: id } as ContractView;
@@ -81,6 +88,7 @@ it('shows unallocated shared debt and unknown refund, submits the displayed fing
   expect(await screen.findByText(/Hóa đơn chung còn nợ/)).toBeVisible();
   expect(screen.getByText(/Hoàn tiền: Chờ xác minh/)).toBeVisible();
   expect(screen.getByText(/Điều chỉnh −10.000/)).toBeVisible();
+  expect(screen.getByTestId('deposit-refund-source')).toHaveTextContent(`SecurityDeposit:${id}`);
   expect(screen.queryByText(/đủ điều kiện xem xét hoàn tất/)).toBeNull();
   fireEvent.change(screen.getByLabelText('Lý do / căn cứ của Owner'), {
     target: { value: 'Còn nghĩa vụ cần đối chiếu' },
@@ -115,6 +123,27 @@ it('does not fetch financial settlement data for Staff or inspection preparation
     expect(request.mock.calls.some(([p]) => p.endsWith('/settlement-summary'))).toBe(true),
   );
   expect(request.mock.calls.some(([p]) => p.endsWith('/inspection-preparation'))).toBe(false);
+});
+it('requires a new settlement consent when a refreshed financial snapshot changes', async () => {
+  const { api } = setup();
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContractLifecyclePanel api={api} contract={contract} moveOut={moveOut} onChanged={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  const label = 'Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý';
+  await screen.findByLabelText(label);
+  fireEvent.change(screen.getByLabelText('Lý do / căn cứ của Owner'), {
+    target: { value: 'Reviewed old numbers' },
+  });
+  fireEvent.click(screen.getByLabelText(label));
+  expect(screen.getByRole('button', { name: 'Lưu xem xét quyết toán' })).toBeEnabled();
+  vi.spyOn(api, 'settlementSummary').mockResolvedValue({ ...summary, reference: 'BH40-CHANGED' });
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại dữ liệu quyết toán' }));
+  await waitFor(() => expect(screen.getByLabelText(label)).not.toBeChecked());
+  expect(screen.getByRole('button', { name: 'Lưu xem xét quyết toán' })).toBeDisabled();
 });
 
 it('clears stale data during reloads and contract changes, ignores aborted responses and handles errors', async () => {

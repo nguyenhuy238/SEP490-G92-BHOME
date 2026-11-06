@@ -36,7 +36,12 @@ settlement rồi complete; ngân hàng không được gọi tự động.
 
 Completed cũ/khác workflow hoặc thiếu marker/reference/evidence không bỏ blocker dù tiền bằng
 đúng cọc. Finance hiện giữ unclassified-refund guard cho deposit; không coi hoàn cọc là OPEX.
-UI Owner chưa nối hai route mới trong slice backend này; Tenant xem authorized summary,
+Owner Web đã nối từ ContractLifecyclePanel vào RefundPanel theo nguồn SecurityDeposit, dùng shared
+client thật. Hiển thị số cọc từ server, người nhận không tự chọn, bắt buộc ba xác nhận về nguồn/người
+nộp/không khấu trừ; snapshot hoặc số dư đổi phải xác nhận lại. Available null hiện Chờ đối chiếu,
+không đổi thành 0. Blockers chặn create/approve/execution; Reject vẫn mở để giải phóng reservation.
+Owner review settlement và NoAdditionalCharges gắn reference/inspection version đang hiển thị.
+Tenant xem authorized summary,
 không có quyền duyệt/execution/tải private proof. Native/provider acceptance chưa chạy.
 
 Slice mới: Unit **13/13**, PostgreSQL **18/18** (12 workflow/refund/source/closure + 6 API audit),
@@ -44,6 +49,10 @@ Slice mới: Unit **13/13**, PostgreSQL **18/18** (12 workflow/refund/source/clo
 đổi bytes bị chặn, Completed replay, unknown full refund không release, Tenant/Staff denial và
 Contract closure. Data/storage là fixtures tổng hợp; chưa phải browser/MinIO/native acceptance
 cho nguồn cọc mới.
+
+Owner UI slice: focused Refund/Payments/Lifecycle **20/20 đạt**, Owner build/lint đạt, Mobile
+typecheck shared DTO/client đạt. Chưa chạy full browser nguồn cọc tại thời điểm commit UI;
+handoff Vũ Xuân Trường, native/provider acceptance vẫn chưa chạy.
 
 ## Receipt-excess refund hiện hữu
 

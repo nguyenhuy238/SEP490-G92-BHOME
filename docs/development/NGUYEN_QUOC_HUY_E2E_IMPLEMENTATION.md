@@ -3,6 +3,40 @@
 ## Tiếp tục yêu cầu remaining E2E — 06/11/2026
 
 TASK: BE-19 / BE-X07
+SLICE: Owner Web hoàn cọc và xem số liệu quyết toán từ API
+
+IMPLEMENTED:
+- ContractLifecyclePanel mở RefundPanel nguồn SecurityDeposit theo Contract đang xem; tái sử dụng flow request/approve/reject/manual execution/private download, không tạo frontend mới hoặc tính lại tiền ở client.
+- Shared client bổ sung depositSource/createDeposit và nullable source union; server calculation hiển thị issued/payable/paid, cọc dùng/hoàn/giữ chỗ/khả dụng. Unknown giữ Chờ đối chiếu.
+- Không tự chọn người nhận; bắt buộc xác nhận nguồn, người nộp theo evidence và không khấu trừ. Consent/key gắn source fingerprint/balance/requests; source đổi reset consent và tạo key cho payload mới. Lỗi 503 giữ cùng key/payload, không báo Completed.
+- Blockers chặn create/approve/execution; vẫn cho Reject để giải phóng reservation. Owner settlement review gắn summary.reference; NoAdditionalCharges gắn inspection/version, không dùng consent cũ cho dữ liệu mới.
+
+CHANGED FILES:
+- packages/client-core/src/{contracts,refunds,useContractLifecycle}.ts
+- src/owner-web/src/features/payments/{RefundPanel,RefundPanel.test}.tsx
+- src/owner-web/src/features/contracts/{ContractLifecyclePanel,ContractLifecyclePanel.test}.tsx
+- API inventory/status/REFUNDS docs, generator và báo cáo này.
+
+TESTS:
+- `npm.cmd run test --workspace src/owner-web -- src/features/payments/RefundPanel.test.tsx src/features/payments/Payments.test.tsx src/features/contracts/ContractLifecyclePanel.test.tsx --maxWorkers=1`: **20/20 đạt**, 3 files.
+- `npm.cmd run build --workspace src/owner-web` và `npm.cmd run lint --workspace src/owner-web`: **đạt**.
+- `npm.cmd run typecheck --workspace src/mobile`: **đạt** trên shared DTO/client mới.
+- Có deposit route/body/attestations đúng, retry key, snapshot đổi reset consent/key, unknown balance, blocked approval nhưng được reject, receipt multipart/recovery regression và settlement consent stale. Logs .tools/huy-deposit-owner-{ui,build,lint}.log; .tools/huy-deposit-shared-mobile-typecheck.log.
+- Generator 215 routes/234 callsites, diff check đạt. Component network được mock; chưa gọi đây là browser/MinIO/native E2E.
+
+COMMIT:
+- Message: feat(moveout): [BE-19] integrate Owner deposit return and settlement review
+- SHA ghi sau commit.
+
+FRONTEND HANDOFF:
+- Owner Web: Vũ Xuân Trường review UI/UX. Mobile: Bùi Bảo Long; client/DTO tương thích, chưa bổ sung hiển thị Mobile trong slice này.
+
+STATUS: PARTIAL — Owner API UI đã nối và kiểm component/build/lint; BE-19/BE-X07 chưa DONE.
+
+REMAINING:
+- Browser Web/API/Compact24/MinIO thật cho move-out/cọc mới, Mobile visibility/native acceptance, khấu trừ có phí, notification và Finance classification. Không tự payout hoặc bỏ backend guards.
+
+TASK: BE-19 / BE-X07
 SLICE: Hoàn cọc không khấu trừ bằng xác minh thủ công, giữ source riêng và chặn closure sớm
 
 IMPLEMENTED:
@@ -28,7 +62,7 @@ TESTS:
 
 COMMIT:
 - Message: feat(deposit): [BE-X07] return undisputed security deposits with verified evidence
-- SHA ghi ngay sau commit.
+- SHA: `1d1eb1be94e6893dd02e8d551bc4e58f7cc36702` (ghi sau commit, đưa vào slice UI).
 
 FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long. Chưa nối hai deposit routes trong slice backend này; Tenant hiện xem settlement summary, không evidence/Owner actions.

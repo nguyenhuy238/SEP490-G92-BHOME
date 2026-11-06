@@ -40,12 +40,107 @@ beforeEach(() => {
   vi.resetAllMocks();
   request.mockResolvedValue(source);
 });
-function mount() {
-  render(
+it('uses the deposit source, requires depositor and zero-deduction consent, and resets consent/key when obligations change', async () => {
+  let current = {
+    ...source,
+    sourcePaymentId: null,
+    sourceDepositContractId: 'root',
+    verifiedDepositAmount: '20000',
+    excessAmount: '0',
+    financialReference: 'D1',
+    blockers: [],
+  };
+  request.mockImplementation(async (_url, init) => {
+    if (init?.method === 'POST') throw { status: 503 };
+    return current;
+  });
+  mount('SecurityDeposit');
+  await screen.findByText(/Cọc đã xác minh: 20.000/);
+  expect(request).toHaveBeenCalledWith(
+    '/api/v1/contracts/source/deposit-refunds',
+    expect.anything(),
+  );
+  fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn đã xác minh'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
+  fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
+    target: { value: '20000' },
+  });
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
+    target: { value: 'Original depositor checked' },
+  });
+  const create = screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' });
+  const general = 'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn';
+  const depositor = 'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp';
+  const deductions = 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý';
+  fireEvent.click(screen.getByLabelText(general));
+  expect(create).toBeDisabled();
+  fireEvent.click(screen.getByLabelText(depositor));
+  expect(create).toBeDisabled();
+  fireEvent.click(screen.getByLabelText(deductions));
+  expect(create).toBeEnabled();
+  fireEvent.click(create);
+  await screen.findByText('Chưa ghi nhận hoàn tất. Tải lại để kiểm tra trước khi thử lại.');
+  const first = request.mock.calls.find(([, init]) => init?.method === 'POST')!;
+  expect(first[0]).toBe('/api/v1/contracts/source/deposit-refunds');
+  expect(JSON.parse(first[1].body)).toEqual({
+    refund: {
+      beneficiaryResidentId: 'payer',
+      amount: '20000',
+      reason: 'Original depositor checked',
+      humanConfirmed: true,
+    },
+    expectedFinancialReference: 'D1',
+    beneficiaryVerified: true,
+    noDeductionsConfirmed: true,
+  });
+  current = { ...current, financialReference: 'D2' };
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại nguồn hoàn tiền' }));
+  await vi.waitFor(() => expect(screen.getByLabelText(general)).not.toBeChecked());
+  expect(screen.getByLabelText(depositor)).not.toBeChecked();
+  expect(screen.getByLabelText(deductions)).not.toBeChecked();
+  expect(create).toBeDisabled();
+  for (const label of [general, depositor, deductions])
+    fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(create);
+  await vi.waitFor(() =>
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
+  );
+  const last = request.mock.calls.filter(([, init]) => init?.method === 'POST')[1];
+  expect(JSON.parse(last[1].body).expectedFinancialReference).toBe('D2');
+  expect(last[1].headers['Idempotency-Key']).not.toBe(first[1].headers['Idempotency-Key']);
+});
+it('shows unknown deposit availability and blocks approval while still allowing rejection to release a reservation', async () => {
+  request.mockResolvedValue({
+    ...source,
+    sourcePaymentId: null,
+    sourceDepositContractId: 'root',
+    verifiedDepositAmount: '20000',
+    availableAmount: null,
+    financialReference: 'D1',
+    blockers: ['deposit_ledger_reconciliation_required'],
+    requests: [{ ...row, sourcePaymentId: null, sourceDepositContractId: 'root' }],
+  });
+  mount('SecurityDeposit');
+  await screen.findByText('Còn có thể lập yêu cầu: Chờ đối chiếu');
+  expect(
+    screen.getByText('Nguồn cọc và sổ phân bổ không khớp; cần Owner đối chiếu.'),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Lý do quyết định / xác minh hoàn'), {
+    target: { value: 'Release for review' },
+  });
+  fireEvent.click(
+    screen.getByLabelText('Tôi đã kiểm tra nguồn, số tiền và người nhận trước khi quyết định'),
+  );
+  expect(screen.getByRole('button', { name: 'Duyệt yêu cầu hoàn' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Từ chối hoàn' })).toBeEnabled();
+});
+function mount(kind: 'Receipt' | 'SecurityDeposit' = 'Receipt') {
+  return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <RefundPanel sourceId="source" />
+      <RefundPanel sourceId="source" sourceKind={kind} />
     </QueryClientProvider>,
   );
 }

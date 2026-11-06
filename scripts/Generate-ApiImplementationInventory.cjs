@@ -167,11 +167,7 @@ function matches(endpoint) {
   );
 }
 function frontend(endpoint, app) {
-  if (
-    endpoint.Controller === 'Refunds' &&
-    app === 'owner-web' &&
-    !endpoint.Route.endsWith('/deposit-refunds')
-  )
+  if (endpoint.Controller === 'Refunds' && app === 'owner-web')
     return `Có lời gọi: ${link(path.join(root, 'src/owner-web/src/features/payments/RefundPanel.tsx'))}`;
   if (endpoint.Controller === 'Auth') {
     const action = endpoint.Route.split('/').at(-1);

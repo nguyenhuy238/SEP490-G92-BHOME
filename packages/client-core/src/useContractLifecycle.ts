@@ -74,7 +74,16 @@ const blockers: Record<string, string> = {
     'Chờ xác minh phí cuối kỳ / thiệt hại và chính sách tính phí.',
   confirmed_handover_baseline_required: 'Thiếu biên bản nhận phòng đã xác nhận để đối chiếu.',
   deposit_deduction_refund_policy_required:
-    'Chờ chính sách khấu trừ / hoàn cọc được duyệt và giao dịch đối ứng.',
+    'Chờ xử lý khấu trừ hoặc hoàn cọc đã được xác minh; chưa thể hoàn tất trả phòng.',
+  deposit_ledger_reconciliation_required:
+    'Nguồn cọc và sổ phân bổ không khớp; cần Owner đối chiếu.',
+  deposit_refund_manual_review_required:
+    'Khoản hoàn cọc chưa đủ bằng chứng phân loại hoặc nghĩa vụ đã thay đổi.',
+  deposit_source_requires_review: 'Nguồn cọc có phân bổ hoặc số dư chưa được xác minh.',
+  deposit_deductions_require_review: 'Còn phí hoặc khấu trừ cần xử lý trước khi hoàn cọc.',
+  deposit_contract_not_active: 'Hợp đồng đã kết thúc hoặc chưa Active; không lập khoản hoàn mới.',
+  refund_source_requires_manual_review:
+    'Có khoản hoàn cũ chưa được phân loại; cần đối chiếu nguồn.',
   holding_allocation_settlement_required: 'Cọc giữ chỗ còn cần đối chiếu.',
   draft_invoice_pending: 'Còn hóa đơn nháp chưa phát hành.',
   shared_liability_allocation_pending:
