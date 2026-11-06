@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -111,7 +111,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                 source = upright; regions = Detect(source, run, token);
                 warnings.Add("orientation_corrected");
             }
-            var text = ReadPage(source, regions, kind, run, token);
+            var recognizedLines = new Dictionary<RotatedRect, OcrLine>();
+            var text = ReadPage(source, regions, kind, run, token, recognizedLines);
             // Only unresolved neutral text gets an opposite-direction attempt. We
             // never run all six OCR pipelines or let a flip erase ambiguous evidence.
             if (visual is null && OcrCategoryRules.Evaluate(text).Status == "unknown" &&
@@ -120,12 +121,15 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             {
                 Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
                 var alternativeRegions = Detect(reversed, run, token);
-                var alternative = ReadPage(reversed, alternativeRegions, null, run, token);
+                // A different image/orientation must have a separate recognition cache.
+                var alternativeLines = new Dictionary<RotatedRect, OcrLine>();
+                var alternative = ReadPage(reversed, alternativeRegions, null, run, token, alternativeLines);
                 if (OcrCategoryRules.Evaluate(alternative).Status != "unknown")
                 {
                     text = alternative;
                     source = reversed;
                     regions = alternativeRegions;
+                    recognizedLines = alternativeLines;
                     warnings.Add("orientation_corrected");
                 }
             }
@@ -139,7 +143,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
                 // Reuse the already detected boxes with the now-supported meter
                 // profile (numeric/unit refinement), rather than running six OCR
                 // profiles or feeding an electricity image to a water model.
-                var profiled = ReadPage(source, regions, categoryEvidence.Kind, run, token);
+                var profiled = ReadPage(source, regions, categoryEvidence.Kind, run, token, recognizedLines);
                 return new(profiled with { Warnings = [.. fullText.Warnings, .. profiled.Warnings] });
             }
             if (visual is null && meterDetector is not null)
@@ -272,7 +276,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
         catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
     }
 
-    private OcrText ReadPage(Mat source, List<RotatedRect> regions, OcrDocumentKind? kind, RunOptions run, CancellationToken token)
+    private OcrText ReadPage(Mat source, List<RotatedRect> regions, OcrDocumentKind? kind, RunOptions run, CancellationToken token,
+        Dictionary<RotatedRect, OcrLine>? recognizedLines = null)
     {
         var lines = new List<OcrLine>();
         var warnings = new List<string>();
@@ -287,7 +292,13 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
         {
             token.ThrowIfCancellationRequested();
             using var crop = Crop(source, region);
-            var line = ReadLine(crop, run, wideLine: !meter);
+            // Neutral and meter passes have identical recognizer input for the 320 bucket.
+            // Wider neutral text may use 640 or word splitting, so it must be reread.
+            // Meter-specific numeric splitting/refinement/conflict checks still run below.
+            var line = recognizedLines is not null && recognizedLines.TryGetValue(region, out var cached) &&
+                Math.Ceiling(48d * crop.Width / crop.Height) <= 320
+                ? cached : ReadLine(crop, run, wideLine: !meter);
+            recognizedLines?.TryAdd(region, line);
             // Read the number and its unit separately when a display's whitespace gives a
             // clear boundary. Identity-tuned CTC can otherwise swallow m³ into the digits.
             if (meter &&
