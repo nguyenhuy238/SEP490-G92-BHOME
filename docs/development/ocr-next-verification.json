@@ -1,0 +1,148 @@
+{
+  "date": "2026-11-06",
+  "startHead": "83317cb",
+  "branch": "member/QHuy",
+  "status": "partial_not_production_ready",
+  "scope": [
+    "BF-05",
+    "UC-20",
+    "GBR-07",
+    "GBR-01/02",
+    "UC-21/GBR-09"
+  ],
+  "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+  "bodyTraining": {
+    "images": 62,
+    "train": 36,
+    "validation": 11,
+    "test": 15,
+    "waterDigitalTrainValTest": [
+      3,
+      1,
+      1
+    ],
+    "activationDecision": "rejected",
+    "trainedClasses": 4,
+    "onnxSha256": "c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7",
+    "actualAdapterObservations": 26,
+    "classified": 0,
+    "fallback": 26
+  },
+  "negativeReadingControls": {
+    "images": 8,
+    "profileObservations": 17,
+    "correctRejections": 17,
+    "falseProposals": 0,
+    "positiveAccuracy": null,
+    "latencyMs": {
+      "p50": 273,
+      "p95": 5760,
+      "max": 5760
+    }
+  },
+  "waterBaseline": {
+    "typed": {
+      "inputs": 52,
+      "fullyLabeled": 33,
+      "exact": 10,
+      "falseOnFullyLabeled": 0,
+      "fallback": 42,
+      "correctOverAllInputs": 0.19230769230769232,
+      "conditionalCorrectAmongProposals": 1.0,
+      "latencyMs": {
+        "p50": 268.0,
+        "p95": 1005.9999999999998,
+        "max": 1251.0
+      }
+    },
+    "automatic": {
+      "inputs": 52,
+      "fullyLabeled": 33,
+      "exact": 1,
+      "falseOnFullyLabeled": 0,
+      "fallback": 51,
+      "correctOverAllInputs": 0.019230769230769232,
+      "conditionalCorrectAmongProposals": 1.0,
+      "latencyMs": {
+        "p50": 4174.5,
+        "p95": 6528.15,
+        "max": 7605.0
+      }
+    }
+  },
+  "checks": {
+    "releaseBuild": {
+      "passed": true,
+      "warnings": 0,
+      "errors": 0
+    },
+    "application": {
+      "passed": 311
+    },
+    "domain": {
+      "passed": 102
+    },
+    "ocrIntegrationExceptThreeRealModelCases": {
+      "passed": 130,
+      "skipped": 0,
+      "includesRealMinioCaptureCases": 8
+    },
+    "realModelCasesSeparate": {
+      "passed": 3,
+      "skipped": 0
+    },
+    "targetedRoutingAndFusion": {
+      "passed": 29,
+      "overlapsOtherSuites": true
+    },
+    "ocrApplication": {
+      "passed": 144,
+      "overlapsApplication": true
+    },
+    "confirmationAndInvoiceFinalization": {
+      "passed": 7,
+      "skipped": 0
+    },
+    "mobile": {
+      "passed": 386,
+      "typecheck": true,
+      "lint": true
+    },
+    "nodeDataset": {
+      "passed": 29
+    },
+    "pythonTools": {
+      "passed": 16
+    },
+    "changedScriptEslint": "PASS",
+    "nativeOnnxParity": {
+      "passed": 10
+    },
+    "dotnetTensorParity": {
+      "passed": 10
+    },
+    "actualFourClassConcurrentDecisionChecks": {
+      "passed": 4
+    },
+    "physicalPhone": "NOT RUN; no device/camera automation session or adb",
+    "representativePositiveFourClassAcceptance": "NOT RUN; insufficient independently verified data"
+  },
+  "publicAcquisition": {
+    "commonsNewImages": 70,
+    "linkedMeterOcrPreviews": 3,
+    "pressureGaugeArchiveImagesExcluded": 6160
+  },
+  "evidenceHashes": {
+    ".tools/ocr-next-meter-baseline.json": "95999f7b4ba3413485408ea52ef556238f725268ffede8f0d384f1a8f4747e0a",
+    ".tools/ocr-next-reading-controls-results.json": "c1d921bb03128629c2b47230241f5b7a297e5daa1082b5d2798e85d7cb8cf1a8",
+    ".tools/ocr-next-four-class-parity.json": "c7b58d5b7604cc1da097d51fca0b598a2b60e4bac781e8524b777615e264815a",
+    ".tools/ocr-next-four-class-runtime-checks.json": "20b4a4344014115463c675cf2837ca85ee882295606c14cd08b273f4a37794cc"
+  },
+  "limitations": [
+    "Water baseline repeats previous author corpus; not independent acceptance and no decimal billing GT.",
+    "Body detector has inadequate water LCD diversity and failed activation; appsettings unchanged.",
+    "Three-class historical test groups reused only as development evidence.",
+    "Negative controls do not measure correct proposals on readable positive images.",
+    "Meter OCR outputs still require Staff confirmation and trusted server metadata."
+  ]
+}

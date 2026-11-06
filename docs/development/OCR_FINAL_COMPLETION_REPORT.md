@@ -1,5 +1,9 @@
 # BHOME OCR — kết quả thực hiện master task 05–06/11/2026
 
+**Lượt tiếp nối từ `83317cb`: xem [kết quả mới nhất](#tiếp-nối-master-implementation-task-từ-83317cb).**
+Đã train YOLO bốn lớp thật nhưng model bị loại; baseline đọc số chưa cải thiện.
+Các kết quả cũ bên dưới được giữ làm lịch sử, không thay thế số đo mới nhất.
+
 **Chưa hoàn tất OCR tự động bốn loại; không đủ bằng chứng để bật model mới.**
 Đã nghiên cứu/tải dữ liệu, gán nhãn, fine-tune GPU thật, export ONNX, kiểm tra
 trong .NET và chạy regression với MinIO thật. Điểm thiếu chính là dữ liệu nước
@@ -292,3 +296,173 @@ File source chính: Infrastructure/Ocr `YoloMeterCategoryClassifier`,
 test `YoloMeterCategoryClassifierTests`; model tools `download_lcd_preview`,
 `lcd_preview_training`, `prepare_lcd_digits`; Python tests; dataset TRAINING/
 preparation metadata; API conventions và các report/results OCR được link ở đây.
+
+## Tiếp nối master implementation task từ `83317cb`
+
+**Trạng thái: PARTIAL — chưa đủ điều kiện đưa OCR tự động bốn loại vào sử dụng.**
+Lượt này bắt đầu trên `member/QHuy`, working tree sạch, sau merge của nhóm tại
+`83317cb`; không tạo lại các commit OCR cũ. Giữ baseline PP-OCRv6 + water Stage1/2,
+adapter bốn lớp mặc định tắt và toàn bộ xác nhận nghiệp vụ. Không sửa migration,
+schema, endpoint, phân quyền, appsettings, chính sách thanh toán hay Mobile.
+
+Traceability: BF-05 / UC-20 / GBR-07 → parser, fusion, engine và automatic router →
+kiểm tra đúng display/đơn vị, fallback và Staff confirmation. GBR-01/02 → capture
+workflow → regression phạm vi Location và quyền truy cập. UC-21 / GBR-09 → workflow
+confirmed reading và invoice finalization → PostgreSQL/MinIO regression. Đã đọc
+SRS thực tế trong `docs/reports/BHome_Report-3_Software Requirement Specification.docx`;
+OCR vẫn là đề xuất, không tự xác nhận hay quyết định số tiền.
+
+### Dữ liệu và ranh giới đánh giá
+
+Tải thêm 70 ảnh Commons có author/license/hash và ba ảnh preview được liên kết
+công khai từ MeterOCR (CC BY 4.0); chỉ dùng đúng URL preview đã công bố, không
+truy cập bản gốc bằng URL đoán. Catalog nằm trong
+[public-sources-expanded.json](../datasets/meter/public-sources-expanded.json) và
+[water-lcd-public-previews.json](../datasets/meter/water-lcd-public-previews.json).
+Nguồn Commons có CC0/CC BY/CC BY-SA theo từng ảnh, không gộp thành một license.
+Trang/export Roboflow trả 403/yêu cầu đăng nhập không bị vượt qua. Archive Seeed
+6.160 JPEG đã kiểm kê; 30 ảnh mẫu là đồng hồ áp suất MPa, loại khỏi tập meter billing.
+Không áp license MIT của project khác cho archive này. Chi tiết nguồn/loại trừ:
+[nghiên cứu dataset](OCR_DATASET_RESEARCH.md).
+
+[Manifest development v2](../datasets/meter/four-class-development-v2.json) gồm
+62 ảnh: 21 điện cơ, 13 điện tử, 15 nước cơ, 5 nước điện tử, 8 negatives. Train/val/test
+là 36/11/15; riêng nước điện tử 3/1/1. Ba ảnh LCD train cùng publisher group, chỉ
+200×150 và thân bị cắt. Ảnh LCD test mới là màn hình trắng, không có chỉ số đọc được.
+Ảnh LCD development test cũ chuyển sang validation, không train; các nhóm test cũ
+đã được quan sát nên không gọi đây là nghiệm thu độc lập. Kiểm tra SHA/pHash/group
+không thay thế physical-device IDs hoặc chứng minh không trùng pretraining.
+
+Thêm [8 ảnh kiểm tra từ chối](../datasets/meter/independent-reading-controls.json),
+17 lượt theo profile: LCD trắng, flow rate, TDS, biểu tượng, tháp nước, nắp không
+display, gallons không được hỗ trợ và nhiều thiết bị không đọc rõ. Author không
+trùng body train/val; kiểm SHA và pHash63 Hamming≤6 với train/val trước khi chuẩn bị.
+Không gán số giả cho ảnh trắng/không đọc được. Đây là negative-only, không phải tập
+positive độc lập đại diện bốn loại. Blank annotation dùng coarse review rectangle,
+không dùng làm ground truth display IoU. Xem [quy trình](../datasets/meter/TRAINING.md).
+
+### Huấn luyện thật và quyết định loại model
+
+Fine-tune YOLOv8n trên RTX 3070 Laptop bằng Torch 2.6.0+cu118/Ultralytics 8.3.224:
+416 px, batch8, AdamW lr0=.001, seed42, deterministic, AMP off, patience20,
+budget100 epoch. Dừng sau29 epoch, best fitness epoch9, 35,969 giây. Không tăng
+epoch hoặc giảm ngưỡng bằng kết quả test. Config/augmentation đầy đủ, CSV và metrics:
+[training report](OCR_MODEL_TRAINING_REPORT.md), [results](ocr-next-four-class-results.json),
+[29 epoch CSV](ocr-next-four-class-training.csv).
+
+- Best PT SHA256: `57366ec4d8f477c812635b9644ef1e58c805e8adb63adec454c3996d03904593`.
+- ONNX SHA256: `c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7`.
+- Bốn head thực, input `[1,3,416,416]`, output `[1,8,3549]`, FP32/opset17;
+  native/ORT parity10/10, .NET tensor parity10/10. Model/ảnh không commit vào Git.
+
+| Lớp | Val P/R | Val mAP50 / 50–95 | Test P/R | Test mAP50 / 50–95 |
+| --- | --- | --- | --- | --- |
+| Điện cơ | .046 / 1 | .4832 / .2688 | .0051 / 1 | .2296 / .0896 |
+| Điện tử | 0 / 0 | .0703 / .0206 | .0051 / 1 | .0523 / .0067 |
+| Nước cơ | 1 / 0 | .6657 / .3072 | .0017 / .5 | .4954 / .1002 |
+| Nước điện tử | .238 / 1 | .9950 / .7960 | .0017 / 1 | .0829 / .0580 |
+| Tổng mAP | — | .5536 / .3481 | — | .2151 / .0636 |
+
+Đây là detection metrics từ evaluator Ultralytics, không phải accuracy của API.
+Adapter .NET thật, giữ candidate .25/classification .90/NMS .45, trả unknown toàn
+bộ26 ảnh val+test. Confusion theo hàng expected, cột unknown: điện cơ6, điện tử6,
+nước cơ5, nước điện tử2, not-meter7; mọi cột accepted bằng0. Recall accepted trên
+19 ảnh meter là0; precision accepted không xác định. Không tuyên bố thành công vì
+không có false proposal. **Checkpoint bị loại, không bật configuration.**
+Cold-load ONNX 139,435 ms; bốn inference đồng thời trên cùng ảnh nhất quán,
+74,982 ms tổng. Chỉ kiểm session/thread stability; không đo HTTP load hoặc chứng
+minh phân loại đúng. [Runtime checks](ocr-next-four-class-runtime-checks.json).
+
+### Code nhận dạng và kết nối đã sửa
+
+Parser từ chối đơn vị tách riêng như m³/h, L/min, Hz, V, ppm hoặc gallons ở gần số;
+nếu thiếu geometry để tách nghĩa thì fallback. Fusion giữ veto
+`billing_register_unverified`, không cho Stage2 biến số flow-rate thành chỉ số m³.
+Không thêm quy tắc quy đổi hoặc lấp chữ số chưa biết.
+
+Engine/router nay dùng crop DISPLAY đã qua kiểm tra khi kết quả phân loại đáng
+tin cậy là nước cơ, rồi chạy PP-OCR + water Stage2 và đối chiếu độc lập như typed
+path. Body-only crop không đủ; confidence phân loại và detection giữ riêng.
+Crop conflict/blur/orientation/unclear/limit làm fallback. Review preview là dữ liệu
+tạm, không lưu thêm ảnh. Test với Stage1/PP/Stage2 thật đọc `00431469` trên fixture
+công khai; nhãn classifier trong test này là stub, không dùng làm bằng chứng accuracy
+classifier. Engine version: `ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2`.
+
+| Reader | Kết quả hiện tại |
+| --- | --- |
+| Điện cơ | Giữ PP/manual; chưa có reader chuyên biệt mới được xác thực |
+| Điện tử | Giữ PP/manual và kiểm register/đơn vị; chưa có reader chuyên biệt mới được xác thực |
+| Nước cơ | Có routing tới Stage1/PP/Stage2 hiện hữu, crop review và fusion veto; baseline accuracy chưa tăng |
+| Nước điện tử | Giữ PP/manual; ba preview không đủ train/đánh giá reader, không dùng water mechanical digits thay thế |
+
+Meter metadata server, Staff confirmation, authorization và invoice finalization
+được giữ nguyên. Capture tests dùng PostgreSQL/MinIO thật nhưng OCR stub/synthetic
+để cố định nhánh nghiệp vụ; các test HTTP/model thật chạy riêng. Chưa chứng minh
+toàn chuỗi camera thật → model thật → xác nhận → billing.
+
+### Benchmark cuối và checks đã chạy
+
+Chạy lại baseline52 ảnh,33 có digit GT đầy đủ, cùng corpus cũ, không phải independent
+acceptance và chưa có decimal/register GT đủ cho accuracy billing:
+
+| Chế độ | Exact / 33 full labels | False / 33 | Fallback / 52 | p50 / p95 / max ms |
+| --- | --- | --- | --- | --- |
+| Typed nước cơ | 10 (30,30%) | 0 | 42 (80,77%) | 268 / 1006 / 1251 |
+| Automatic | 1 (3,03%) | 0 | 51 (98,08%) | 4174,5 / 6528,15 / 7605 |
+
+Correct/all-input lần lượt10/52 và1/52. Không dùng conditional10/10 hoặc1/1 để quảng
+bá100% accuracy. Tất cả52 lượt mỗi chế độ ≤10s ở service; chưa gồm upload, cold start,
+storage, HTTP và tải đồng thời. **Không cải thiện accuracy/fallback của baseline.**
+Negative controls mới17/17 từ chối đúng,0 phát chỉ số,17 fallback; p50/p95/max
+273/5760/5760 ms. Positive accuracy là null, không phải100%.
+[Evidence negative](ocr-next-reading-controls-results.json),
+[tổng hợp và hash raw](ocr-next-verification.json); raw `.tools/ocr-next-*`.
+
+| Check thực thi | Kết quả |
+| --- | --- |
+| Release full solution + OcrSmoke build cuối | PASS,0 warnings/errors |
+| Application / Domain toàn project | 311 /102 PASS |
+| OCR integration, tách ba ca model thật, không CompactPostgres | 130 PASS,0 skip; gồm8 capture PostgreSQL/MinIO |
+| Ba ca HTTP/PP/Stage1/Stage2/model thật chạy riêng | 3 PASS,0 skip |
+| Targeted routing/fusion; OCR Application | 29;144 PASS, trùng các suite trên, không cộng lại |
+| Meter confirmation + hai invoice finalization regressions | 7 PASS,0 skip; PostgreSQL disposable, MinIO thật khi cần |
+| Mobile Vitest / typecheck / lint | 386 PASS / PASS / PASS |
+| Node dataset validator / Python model tools | 29 /16 PASS |
+| ESLint script thay đổi / git diff --check | PASS / PASS |
+| ONNX parity native / .NET | 10/10 mỗi phép |
+| Camera Android/iOS vật lý | NOT RUN: không có device/camera automation session hoặc adb |
+| Positive four-class acceptance đại diện | NOT RUN: thiếu licensed data/GT độc lập đủ chất lượng |
+
+TRX: `tests/backend/BHome.IntegrationTests/TestResults/ocr-next-{integration,real-models,business}.trx`.
+Log từng check: `.tools/ocr-next-{final-build,application,domain,integration,real-models,business,mobile-tests,mobile-typecheck,mobile-lint,script-lint}.log`.
+Trong quá trình làm có lỗi import sibling module của embedded Python và lỗi trùng
+tên biến local khi nối region; đã sửa và chạy lại checks qua. Commons403 xử lý bằng
+User-Agent mô tả đúng tác vụ theo policy; Roboflow403/export authentication giữ
+nguyên giới hạn truy cập. Không còn test/build failure chưa xử lý ở các checks kể trên.
+
+### Commit và các điều kiện còn thiếu
+
+| Commit Hash | Commit Message | Short Description | Verification |
+| --- | --- | --- | --- |
+| `edf2861` | `chore(ocr): expand verified meter datasets` | Catalog/license/split và downloads | Prepare62, Python15, Node28 |
+| `2f7e954` | `feat(ocr): train four-class meter detector` | GPU train, ONNX, benchmark adapter, rejected |29 epoch, parity10+10, adapter26 |
+| `76a326c` | `test(ocr): establish independent reading rejection controls` | Blank annotation và negative-only dataset | Python16, Node29, author/hash/pHash guards |
+| `84fd796` | `fix(ocr): reject separately detected non-billing units` | Kiểm đơn vị cạnh số | OCR Application139 |
+| `d00c692` | `fix(ocr): preserve non-billing veto during digit fusion` | Chặn fusion bỏ qua unit veto | WaterDigit15 |
+| `d30b39f` | `feat(ocr): route classified water to verified display reader` | Crop/routing/fusion thực | Build, targeted29, OCR Application144 |
+| `c31892e` | `test(ocr): verify reading rejection and classifier runtime` | Evidence âm và concurrent inference |17 rejects,4 consistent, build |
+| `HEAD` (commit báo cáo này) | `docs(ocr): record continuation results and model rejection` | Báo cáo, JSON tổng hợp | JSON/hash/links/diff/history |
+
+Danh sách file thay đổi và full hash sau commit cuối:
+`.tools/ocr-next-git-history.md`, tái tạo từ `git log --reverse 83317cb..HEAD`.
+Các source chính: Application/Ocr `AutomaticOcr`, `MeterOcrLayout`, `MeterReadingParser`;
+Infrastructure/Ocr `MeterRecognitionFusion`, `OnnxOcrEngine`; tests tương ứng;
+`VisualCategoryEvaluation`/OcrSmoke CLI; model download/challenge tools; dataset
+validator, manifests và evidence/docs liên kết trên. Không push/merge/rebase/deploy.
+
+Còn thiếu positive GT đủ đa dạng cho display/digits/precision/register của bốn loại,
+physical-device isolation, model vượt open-set/false-proposal/calibration gates,
+reader chuyên biệt điện cơ/điện tử/nước LCD và camera E2E. Ba preview cùng nguồn
+không giải quyết thiếu hụt này. Chưa đạt mục tiêu95% classification hoặc90% reading;
+không đăng ký model bị loại thành tính năng hoạt động. Tiếp tục cần dữ liệu được cấp
+phép với nhãn được kiểm chứng; các gate này không thể hoàn tất bằng cách giảm ngưỡng.
