@@ -58,6 +58,62 @@ public sealed class Compact24RefundTests
     private static byte[] Photo() { using var mat = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); return mat.ImEncode(".png"); }
 
     [CompactPostgresFact]
+    public async Task UnknownOrInconsistentCompletedRefundCannotClearTheInvoicePendingReview()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try {
+            var (owner, sourceId) = await Setup(fixture); using var client = owner;
+            var sourceRoute = $"/api/v1/payment-transactions/{sourceId}/refunds";
+            var source = await Value<RefundSource>(await owner.GetAsync(sourceRoute));
+            var row = await Value<RefundView>(await Post(owner, sourceRoute,
+                new RefundInput(source.Beneficiaries[0].Id, 20000, "Synthetic reconciled excess", true), Guid.NewGuid()));
+            row = await Value<RefundView>(await Post(owner, $"{Root}/{row.Id}/decision",
+                new RefundDecision(row.Version, true, "Synthetic verified payee", true), Guid.NewGuid()));
+            row = await Value<RefundView>(await Execute(owner, row, Guid.NewGuid(), DateTimeOffset.UtcNow, "SYN-GUARD", Photo()));
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var invoice = await db.Set<Invoice>().Select(i => i.Id).SingleAsync();
+            async Task<bool> Pending() => (await Value<InvoicePaymentView>(await owner.GetAsync($"/api/v1/invoices/{invoice}/payment"))).PendingReview;
+            Assert.False(await Pending());
+            var original = await db.Database.SqlQuery<string>($"SELECT history::text AS \"Value\" FROM refund_requests WHERE id={row.Id}").SingleAsync();
+            var record = System.Text.Json.JsonDocument.Parse(original).RootElement.EnumerateArray().Last().GetRawText();
+            // Later imported/corrupted proof metadata has identical amounts/status to a valid return.
+            // Neither may release settlement simply because COMPLETED sums match the excess.
+            foreach (var history in new[] { record.Replace("sha256", "missingHash", StringComparison.Ordinal),
+                record.Replace("SYN-GUARD", "SYN-MISMATCH", StringComparison.Ordinal) }) {
+                await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({history}::jsonb) WHERE id={row.Id}");
+                Assert.True(await Pending());
+                Assert.Equal(100000, (await Value<InvoicePaymentView>(await owner.GetAsync($"/api/v1/invoices/{invoice}/payment"))).PaidAmount);
+                await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({record}::jsonb) WHERE id={row.Id}");
+                Assert.False(await Pending());
+            }
+        } finally { await fixture.DisposeAsync(); }
+    }
+
+    [CompactPostgresFact]
+    public async Task UnclassifiedCompletedRefundEqualToExcessKeepsPendingReview()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try {
+            var (owner, sourceId) = await Setup(fixture); using var client = owner;
+            var source = await Value<RefundSource>(await owner.GetAsync($"/api/v1/payment-transactions/{sourceId}/refunds"));
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var actor = await db.Users.Where(u => EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).SingleAsync();
+            var beneficiary = source.Beneficiaries[0].Id; var at = DateTimeOffset.UtcNow;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO refund_requests(id,source_payment_id,beneficiary_resident_id,requested_by_user_id,requested_at,
+                  requested_amount,reason,status,decided_by_user_id,decided_at,executed_at,external_refund_reference,execution_evidence_key,operation_key)
+                VALUES({Guid.NewGuid()},{sourceId},{beneficiary},{actor},{at},20000,'Synthetic unclassified import','COMPLETED',
+                  {actor},{at},{at},'SYN-UNKNOWN-EXACT','synthetic-unverified',{Guid.NewGuid()})
+                """);
+            var invoice = await db.Set<Invoice>().Select(i => i.Id).SingleAsync();
+            var payment = await Value<InvoicePaymentView>(await owner.GetAsync($"/api/v1/invoices/{invoice}/payment"));
+            Assert.True(payment.PendingReview); Assert.Equal(100000, payment.PaidAmount);
+        } finally { await fixture.DisposeAsync(); }
+    }
+
+    [CompactPostgresFact]
     public async Task ExcessRefundReservesRejectsApprovesExecutesAndReplaysWithoutChangingInvoiceAllocations()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();

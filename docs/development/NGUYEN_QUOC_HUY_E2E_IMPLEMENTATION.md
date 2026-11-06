@@ -637,9 +637,31 @@ TESTS:
 - node --check, git diff --check đạt. API/browser fixture cleanup hoàn tất. Sao kê/bank/signing synthetic, không payout thật; Staff/Tenant là shipped MobileApi/shared transport, không native UI. Notification worker tắt.
 COMMIT:
 - Message: test(moveout): [BE-19] verify evidenced deductions and remainder return E2E
-- SHA ghi sau commit damage E2E.
+- SHA: `be28d6dd2fa6712967684dcd464bee6ca617b470`.
 FRONTEND HANDOFF:
 - Vũ Xuân Trường review Owner UX; Bùi Bảo Long thực hiện native acceptance khi có thiết bị.
 STATUS: DONE cho hai nhánh browser nêu trên; tổng BE-19/BE-X07 PARTIAL.
 REMAINING:
 - Finance classification/retained compensation và notification; unsupported debt offset/fees vượt cọc. Native/MySign/bank-provider acceptance chưa có; không suy rộng kết quả fixture.
+
+TASK: BE-19 / BE-25 / BE-X07
+SLICE: Không cho unclassified receipt refund tự xóa pending-review
+IMPLEMENTED:
+- Trace UC-19/22/25, GBR-10/18 → PaymentRepository.PendingReviewAsync → Compact24RefundTests và closure regression.
+- Tổng Completed khớp tiền thừa chưa đủ. Kiểm state ExcessReceiptRefundV1 cuối cùng, đúng payer/beneficiary, source riêng, execution time/key/reference/SHA256 và Completed event; giữ ledger amount/Final invoice nguyên vẹn.
+- Dùng tổng allocations của receipt, không chỉ một allocation. Unknown legacy hoặc metadata không khớp giữ pending để settlement không bỏ qua nghĩa vụ.
+CHANGED FILES:
+- Infrastructure/PaymentsDebt/PaymentRepository.cs; IntegrationTests/Compact24/Compact24RefundTests.cs
+- docs/api/REFUNDS.md và báo cáo này.
+TESTS:
+- dotnet test IntegrationTests --filter Compact24RefundTests|DepositReturn|RealLedgerRequiresReviewedSnapshot|NewAdjustmentAfterSettlement: 11/11 đạt, 0 skip; log huy-refund-review-guard-pg.log.
+- Có raw legacy Completed đúng bằng excess, appended last state thiếu hash/sai reference, recovery bằng append state hợp lệ, paid amount không đổi và valid workflow regression.
+- Fixture đầu cố thay history bị trigger append-only chặn; sửa fixture thành append đúng lịch sử, giữ trigger/production invariant. Không bỏ hoặc nới guard.
+COMMIT:
+- Message: fix(payment): [BE-25] retain review for unclassified completed excess returns
+- SHA ghi sau commit refund review guard.
+FRONTEND HANDOFF:
+- Owner/Mobile tiếp tục dùng pendingReview server, không thay UI hoặc tự suy payment success.
+STATUS: DONE cho defect đối soát này; các task nghiệp vụ còn giới hạn như đã ghi.
+REMAINING:
+- Finance phân loại deposit principal returns và làm rõ treatment retained damage. Bank/native/provider acceptance chưa có.

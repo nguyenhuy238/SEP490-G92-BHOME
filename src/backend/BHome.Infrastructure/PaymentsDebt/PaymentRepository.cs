@@ -62,8 +62,20 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
         if (AmountMismatchSupported)
             return await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS(SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
-                  WHERE a.target_invoice_id={invoiceId} AND p.amount-a.amount <>
-                    (SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'))
+                  WHERE a.target_invoice_id={invoiceId} AND (p.status<>'VERIFIED' OR
+                    p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id) <>
+                    (SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED')
+                    OR EXISTS(SELECT 1 FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'
+                      AND NOT EXISTS(SELECT 1 FROM residents person,
+                        LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
+                          WHERE h->>'recordType'='ExcessReceiptRefundV1' ORDER BY n DESC LIMIT 1) latest
+                        WHERE person.id=r.beneficiary_resident_id AND person.user_id=a.paid_by_user_id
+                          AND r.source_deposit_contract_id IS NULL AND r.executed_at IS NOT NULL
+                          AND latest.state->>'classification'='ExcessReceiptRefundV1'
+                          AND latest.state->'upload'->>'objectKey'=r.execution_evidence_key
+                          AND latest.state->'upload'->>'externalReference'=r.external_refund_reference
+                          AND latest.state->'upload'->>'sha256' ~ {"^[A-F0-9]{64}$"}
+                          AND EXISTS(SELECT 1 FROM jsonb_array_elements(latest.state->'events') e WHERE e->>'action'='Completed')))))
                   OR EXISTS(SELECT 1 FROM (
                     SELECT p.id,(SELECT h->'state' FROM jsonb_array_elements(p.history) WITH ORDINALITY e(h,n)
                       WHERE h->>'recordType'='PaymentReconciliation' ORDER BY n DESC LIMIT 1) state

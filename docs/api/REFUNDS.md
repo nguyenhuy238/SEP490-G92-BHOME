@@ -162,6 +162,12 @@ không có business code. Không hiển thị arbitrary detail hoặc tự phân
 
 ## Kiểm chứng và việc chưa có
 
+Guard invoice `pendingReview` chỉ tắt khi receipt VERIFIED, tổng các allocation + completed returns
+đối ứng đúng và mọi return có state `ExcessReceiptRefundV1` cuối cùng, payer/beneficiary khớp,
+upload key/reference/hash và Completed event hợp lệ. Một legacy row chỉ mang status `COMPLETED`
+hoặc metadata sai không đủ; số tiền khớp vẫn giữ pending và chặn settlement. Lượt guard bổ sung:
+**11 PostgreSQL tests đạt**, 0 skip; history test cũng tuân thủ append-only trigger.
+
 Lượt triển khai trước đã chạy: Finance unit 11/11 (gồm service role/Production demo rejection),
 PostgreSQL refund/payment/finance 32/32, Owner focused UI sau fix **13/13**, harness real
 Web/API/Compact24/MinIO **16/16 nhóm**. Có reservation race, reject/stale, unknown payer,
