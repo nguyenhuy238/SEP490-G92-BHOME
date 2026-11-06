@@ -1,0 +1,69 @@
+{
+  "repository": "S3CUR/badger-55-watermeter",
+  "revision": "b49bf7505cf1212de4e4e803bc39e8ce70c6d37e",
+  "sourceUrl": "https://huggingface.co/datasets/S3CUR/badger-55-watermeter/tree/b49bf7505cf1212de4e4e803bc39e8ce70c6d37e",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "badger model 55 water-meter drum digits dataset. Three, 2026.",
+  "parquetSha256": "cc66049ac19d35eba94ea16a119962a454d372a530932d676422e4ef64ec301a",
+  "parquetBytes": 29511245,
+  "readmeSha256": "bd510074e3cb2da0b9e7b2ccebe1e4f52c258aa73f11c25ad73c73499eabf438",
+  "rows": 4548,
+  "publisherCounts": {
+    "slot": {
+      "4": 1425,
+      "5": 618,
+      "6": 1035,
+      "7": 1470
+    },
+    "digit": {
+      "0": 397,
+      "1": 630,
+      "2": 522,
+      "3": 456,
+      "4": 318,
+      "5": 444,
+      "6": 530,
+      "7": 488,
+      "8": 235,
+      "9": 528
+    },
+    "tier": {
+      "gold": 3513,
+      "platinum": 1035
+    },
+    "mechanism": {
+      "geneva": 3078,
+      "continuous": 1470
+    },
+    "split": {
+      "train": 3612,
+      "test": 454,
+      "val": 482
+    }
+  },
+  "dimensions": {
+    "(86, 105)": 2967,
+    "(224, 224)": 546,
+    "(344, 420)": 1035
+  },
+  "physicalMeterGroups": 1,
+  "uniqueSha256Images": 4546,
+  "exactDuplicateGroups": 2,
+  "exactDuplicateRowsBeyondFirst": 2,
+  "exactDuplicateGroupsAcrossPublisherSplits": 0,
+  "equalDhashCandidateGroups": 670,
+  "publisherFramesSpanningSplits": 0,
+  "bhomeSupervisedImagesAdded": 0,
+  "bhomeIndependentEvaluationImagesAdded": 0,
+  "status": "quarantined_publisher_labels_pending_review",
+  "splitPolicy": "Keep the entire physical-meter/source group together before augmentation; publisher splits are diagnostic only.",
+  "limitations": [
+    "All rows show one physical meter; these are not 4548 diverse meter bodies.",
+    "Digit crops have no full-meter body boxes, display polygons or billing-register/decimal ground truth.",
+    "Publisher hand-review uses model-assisted evidence; BHOME independent annotation review is pending.",
+    "Transition angles/digits must not be silently converted into settled billing digits.",
+    "Equal dHash is a review candidate, not proof of the same image; no exhaustive perceptual-distance audit performed.",
+    "No classifier/recognizer training, model activation or independent accuracy measurement performed."
+  ]
+}
