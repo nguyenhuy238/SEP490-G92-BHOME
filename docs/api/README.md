@@ -12,8 +12,8 @@ Cập nhật **06/11/2026**, đối chiếu runtime `BHome.Api` trên Compact24 
 | [BILLING_AUTOMATION.md](BILLING_AUTOMATION.md) | JOB-09/10, Owner opt-in, meter tasks, draft/final và execution monitoring |
 | [INVOICE_ADJUSTMENTS.md](INVOICE_ADJUSTMENTS.md) | Tenant request/evidence, Owner approve/reject, hiệu lực trước/sau Final |
 | [PAYMENTS.md](PAYMENTS.md) | QR từ backend, sao kê thủ công, phân bổ thiếu/thừa, debt/history và privacy |
-| [REFUNDS.md](REFUNDS.md) | Receipt thừa và nguồn cọc không khấu trừ; Owner review/manual execution/private evidence |
-| [DEPOSIT_DEDUCTIONS.md](DEPOSIT_DEDUCTIONS.md) | Owner quyết định thiệt hại có evidence, giới hạn cọc và hoàn phần còn lại; backend đã có, UI tiếp tục |
+| [REFUNDS.md](REFUNDS.md) | Receipt thừa và nguồn cọc riêng; Owner review/manual execution/private evidence, có hoặc không khấu trừ |
+| [DEPOSIT_DEDUCTIONS.md](DEPOSIT_DEDUCTIONS.md) | Owner quyết định thiệt hại có evidence, giới hạn cọc, UI review và hoàn phần còn lại đã chạy browser |
 | [FINANCE.md](FINANCE.md) | Đầu tư/OPEX, chứng từ, báo cáo, historical occupancy, hoàn vốn và What-if |
 | [NOTIFICATIONS.md](NOTIFICATIONS.md) | Inbox, business-event publisher và JOB-04 delivery/retry |
 
@@ -22,3 +22,6 @@ Auth, capture/onboarding và OCR chưa có file API module riêng: đọc [quy �
 `OPERATIONAL_TASKS_PROPOSAL.md` là lịch sử đề xuất, không phải contract hiện hành. Các delivery report cũ lưu bằng chứng theo thời điểm; khi đọc tên bảng/migration cũ phải đối chiếu runtime Compact24. Không chạy migration legacy từ tài liệu lịch sử để cập nhật database Compact24.
 
 Khi thay đổi API, cập nhật file module và bản trạng thái, chạy audit rồi tái sinh danh mục theo [hướng dẫn](API_IMPLEMENTATION_STATUS.md#tái-tạo-và-kiểm-tra-tài-liệu). Ghi rõ kiểm thử đã chạy, dữ liệu tổng hợp và giới hạn; không đổi trạng thái “có endpoint” thành “E2E hoàn tất” chỉ vì build thành công.
+
+[Gói evidence 06/11](../development/NGUYEN_QUOC_HUY_2026-11-06_EVIDENCE.md) ánh xạ kết quả hiện tại
+sang Report 2/3/4/5/7, trách nhiệm review và những bước chưa nghiệm thu.

@@ -87,8 +87,9 @@ thiệt hại/căn cứ, xác nhận chưa tính trên invoice rồi duyệt. Th
 xác nhận lại; retry ambiguous failure giữ cùng key/payload, không báo duyệt trước response. Khi có
 reservation/nguồn chưa đủ điều kiện, editor chỉ đọc. RefundPanel hiển thị plan hiện tại và buộc
 review đúng plan trước khi yêu cầu phần còn lại. Focused Owner UI **26/26 đạt**, build/lint và
-Mobile typecheck đạt. Browser có khấu trừ, native và Finance classification chưa nghiệm thu trong
-slice UI này. Handoff Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long.
+Mobile typecheck đạt tại slice UI. Hồi quy cuối: Owner155, Mobile381, backend Domain90/Application276/
+Integration626 đạt; 1 optional real-OCR skip. Browser22 nhóm có phí/21 không phí có inbox/report đã
+chạy; native/provider acceptance còn thiếu. Handoff Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long.
 
 Harness có phí chạy bằng `dotnet run --project tools/BHome.ContractVerification --no-build --
 --finance --main-draft --damage-settlement`: browser Owner duyệt inspection có thiệt hại, quyết định

@@ -1,5 +1,28 @@
 # Triển khai và kiểm chứng các nhiệm vụ Nguyễn Quốc Huy
 
+## Trạng thái hiện tại chốt ngày 06/11/2026
+
+Đây là rollup mới nhất; các entry phía dưới giữ lịch sử theo thời điểm của từng slice.
+[API handoff](../api/API_IMPLEMENTATION_STATUS.md) và [gói evidence Report2/3/4/5/7](NGUYEN_QUOC_HUY_2026-11-06_EVIDENCE.md)
+là điểm bắt đầu cho team tiếp tục phát triển.
+
+- Đã nối và kiểm Web/API/Compact24/MinIO: inspection/Final readings, calculation, Owner decision
+  TenantDamage có proof/version/key/history, hoàn cọc đủ hoặc phần còn lại bằng manual reconciliation,
+  settlement review/closure/Room release, Finance principal classification và persistent inbox.
+- Backend Domain90, Application276, Integration626 pass +1 optional real-OCR skip /627 total;
+  DigitalSigning41 pass. Owner155/Mobile381 pass; Owner build/lint và Mobile typecheck/lint đạt.
+  Browser có phí22/22 nhóm, không phí21/21 nhóm đạt. Audit216 routes/211protected/106OwnerGET0HTTP5xx.
+- Nhánh `member/QHuy`, commits tách từng slice; không push/merge, không thêm business table/cột,
+  không thay working/production database. Các SHA đầy đủ ghi trong từng entry.
+- BE-19/BE-X07 vẫn PARTIAL cho toàn phạm vi: không bù debt trực tiếp bằng cọc/thu vượt cọc,
+  native chưa chạy, MySign/bank/email/push chưa nghiệm thu. In-app consumer đã có, external delivery
+  Unconfigured; browser worker tắt và explicit Testing event pump, không claim JOB scheduler acceptance.
+- Holding BE-14 BLOCKED bởi nội dung OQ-03/Q-H1 còn thiếu; không mở lại yêu cầu duyệt OQ-01/02/05
+  đã được người dùng ủy quyền. Finance chưa liability/realized-compensation model hoặc upstream payroll/
+  Work Order; retained damage không tự cộng vào Invoice/OPEX profit/capital recovery.
+- Không có device/adb hoặc dataset độc lập >=50 ảnh cho OCR benchmark; không báo native, coverage,
+  ST/AT/NFR hoặc chữ ký/tiền thật thành công từ các fixture tổng hợp.
+
 ## Tiếp tục yêu cầu remaining E2E — 06/11/2026
 
 TASK: BE-19 / BE-X07
@@ -753,9 +776,34 @@ TESTS:
 - Manual pump chỉ nghiệm thu persistent inbox/deep-link, không JOB scheduling/email/push. Signing/bank synthetic; Mobile transport, không native UI.
 COMMIT:
 - Message: test(moveout): [BE-19] verify settlement inbox and finance reporting in browser
-- SHA ghi sau commit final settlement browser.
+- SHA: `7cd6e1ac5f6706323d7b0eb7cd9c216e203a7587`.
 FRONTEND HANDOFF:
 - Owner Vũ Xuân Trường review UX; Mobile Bùi Bảo Long chạy native; QA Nguyễn Quang Huy chuyển evidence sang Report5.
 STATUS: DONE cho các browser paths nêu trên; external/native acceptance còn PARTIAL/BLOCKED.
 REMAINING:
 - Chốt current status/evidence package và cleanup test cluster. Không có Holding policy, staging MySign, bank/email/push hoặc device mới trong lượt này.
+
+TASK: DOC-01 / DOC-03 / BE-X04 / BE-X05 / BE-X08
+SLICE: Chốt regression, API handoff và gói bằng chứng Report2/3/4/5/7
+IMPLEMENTED:
+- Rollup mới ở đầu report để phân biệt current state với entry lịch sử. API status/module index/route inventory cập nhật theo code và manifest audit cuối.
+- Thêm NGUYEN_QUOC_HUY_2026-11-06_EVIDENCE.md: trace UC/GBR/OQ, implemented policy theo ủy quyền, thực tế thiết kế Compact24, gate/repro/limitations và việc cần chuyển sang báo cáo chính thức. Không sửa approved SRS/SDS DOCX.
+- Ghi rành mạch hai nhánh manual, simulation, browser vs Mobile transport/native, in-app pump vs worker/provider, principal vs Invoice/OPEX/retained damage, reviewer và dependency còn thiếu.
+TESTS:
+- Domain90/90; Application276/276; Integration626pass+1optional real-OCRskip/627total,0fail sau fixture fix; DigitalSigning41/41.
+- Owner155/155 +build/lint; Mobile381/381 +typecheck/lint. Full suites không bỏ hidden failures; lần integration đầu603pass/23fixturefail/1skip được lưu log và sửa bằng commit d7fec61.
+- Browser final có phí22/22 và không phí21/21, exit0; final harness build0warning/error. Node syntax và git diff --check đạt.
+- Runtime API audit6/6 trong full integration; 216 routes/211protected401/5anonymous/106OwnerGET0HTTP5xx. Generator235static calls/3dynamic candidates. 611 internal file links qua18Markdown files hợp lệ.
+- Logs .tools/huy-continue-*, huy-final-*, manifest .tools/continue-final-evidence/api-route-audit.json; ignored/local, không commit secrets/artifacts.
+CLEANUP:
+- Sau mọi gate, own PostgreSQL18 cluster temp port55440 có0 bhome_compact24_* DBs và pg_ctl stop exit0. Harness đã dispose API/browser/MinIO/fixture DB; không dừng dịch vụ PostgreSQL dự án hoặc sửa working bhome.
+COMMIT:
+- Message: docs(project): [DOC-01] publish current implementation and regression evidence
+- Các SHA implementation/test trước đó đã ghi đầy đủ; SHA commit tài liệu cuối xác định từ Git HEAD và được trả trong kết quả bàn giao.
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long; QA Nguyễn Quang Huy đưa evidence sang Report5/ST/AT. Report5/7 template chưa có trong docs/reports; Markdown package không được ghi là đã cập nhật báo cáo chính thức.
+STATUS: DONE cho current API/evidence handoff và executable local regression, không phải toàn dự án DONE.
+REMAINING:
+- BE-14 Holding: nội dung OQ-03/Q-H1 còn thiếu. MySign staging/approved templates/certificate ownership và bank/email/push provider chưa nghiệm thu.
+- Native/device và >=50-image OCR accuracy benchmark NOT RUN; coverage/NFR/ST/AT chưa đo. Debt offset/fees vượt cọc, realized compensation/liability và upstream payroll/Work Order chưa triển khai như đã nêu.
+- Không push/merge; team tiếp tục review/integration theo nhánh member/QHuy.

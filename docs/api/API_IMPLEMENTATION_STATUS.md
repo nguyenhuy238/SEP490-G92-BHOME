@@ -4,7 +4,7 @@ Rà soát **06/11/2026**, nhánh `member/QHuy`; SHA từng slice và lệnh ki�
 
 **216 controller routes đang được BHome.Api nạp**, gồm **211 protected** và **5 anonymous**, cộng 2 health endpoints. Danh sách đầy đủ, input/action, policy và source callsite: [API_RUNTIME_ROUTES.md](API_RUNTIME_ROUTES.md). [Mục lục module](README.md) và [quy ước tích hợp](API_CONVENTIONS.md) là điểm bắt đầu cho team.
 
-Đã chạy lại `Compact24ApiAuditTests` sau slice hoàn cọc không khấu trừ: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 211 protected routes trả 401 khi không có phiên. **106 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=59; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
+`Compact24ApiAuditTests` trong full regression cuối: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 211 protected routes trả 401 khi không có phiên. **106 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=59; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
 
 ## Cách đọc và dùng tài liệu
 
@@ -24,7 +24,7 @@ Rà soát **06/11/2026**, nhánh `member/QHuy`; SHA từng slice và lệnh ki�
 | Onboarding/OCR — BF-03/UC-13..15, GBR-07 | Capture và human confirmation, Main Draft mã hóa; OCR chỉ trả proposal, manual fallback | Chưa nghiệm thu classifier bốn loại công tơ, >=50 ảnh/90% hoặc camera thiết bị; xem báo cáo OCR được dẫn trong quy ước |
 | Main/Renewal/signing — BF-03/04/UC-15..19, GBR-04 | Main Draft review/release canonical PDF → signing/deposit/Owner activation; contracts/history/renewal có API và client | Chưa có bằng chứng cấu hình MySign staging thật và mẫu Production được duyệt; simulation không phải chữ ký pháp lý; signed renewal UI E2E còn thiếu |
 | Holding — BE-14, OQ-03/Q-H1 | Boundary/transfer guard, ledger runtime vẫn Unconfigured | Chưa có Holding ledger/API/UI đầy đủ; cần quyết định validity/payment deadline/transfer; không giả OnHold từ Main Contract |
-| Handover/move-out — UC-17/19 | Private evidence, confirmed Initial/Final readings, dispute/version guard, inspection/review/settlement summary, Owner manual refund/damage decision và closure/Room release đã chạy browser | Chưa có debt offset bằng cọc hoặc thu phí vượt cọc; nghĩa vụ thiếu/chưa phân loại tiếp tục chặn release. Native/notification và Holding còn thiếu |
+| Handover/move-out — UC-17/19 | Private evidence, confirmed Initial/Final readings, dispute/version guard, inspection/review/settlement summary, Owner manual refund/damage decision và closure/Room release đã chạy browser; in-app events đã có | Chưa có debt offset bằng cọc hoặc thu phí vượt cọc; nghĩa vụ thiếu/chưa phân loại tiếp tục chặn release. Native/external delivery và Holding còn thiếu |
 | Residence — UC-18/GBR-06 | Có metadata residence trong dữ liệu người ở | Chưa có residence workflow API riêng; Tenant đăng ký ngoài BHOME qua VNeID, Owner xác nhận; Staff không đăng ký/duyệt thay |
 | Meter/billing/adjustment — BF-05/UC-20..21/24, JOB-09/10 | Confirmed reading → Draft/Final; Owner opt-in automation; Tenant request/private evidence → Owner decision; Final giữ bất biến | Browser tổng hợp một Invoice/ba Tenant đã chạy; native xuyên chu kỳ, delivery thực tế và reviewer còn thiếu |
 | Payment/debt — BF-06/UC-22..25 | Owner sao kê thủ công, allocation=min(receipt,outstanding), partial/excess, payer privacy, QR/debt/history từ backend | Chưa nghiệm thu bank callback/provider tự động; ảnh hoặc frontend không chứng minh tiền đã đến |
@@ -40,16 +40,16 @@ Chính sách thiếu/thừa tiền và receipt-excess refund được triển kh
 
 | Bằng chứng | Kết quả thực tế | Thời điểm / giới hạn |
 | --- | --- | --- |
-| Audit API vừa chạy | 6/6, 216 routes, 211 protected trả 401, 106 Owner GET không 5xx | Chạy lại sau deposit-refund slice 06/11; synthetic Compact24 DB, không dùng working bhome |
-| Kiểm tra tài liệu vừa chạy | Lượt tài liệu trước: 213 route + 2 health, 213 controller links, 580 liên kết nội bộ hợp lệ | Generator tái sinh cùng nội dung, giữ nguyên bản bàn giao; 4 trường hợp manifest sai bị từ chối trước khi ghi; node syntax và git diff --check đạt |
-| Full backend regression | Domain 90 + Application 253 + Integration 615 đạt; 1 optional real-OCR integration skip, 0 fail | Lượt triển khai trước, cùng mã backend; không chạy lại full suite trong lượt tài liệu |
-| Full frontend regression | Owner Web 144/144, Mobile 376/376 | Lượt triển khai trước; component/transport không thay thế native acceptance |
-| Focused refund/payment/finance | PostgreSQL 32/32; Finance unit 11/11; Owner focused UI sau fix 13/13 | Lượt trước; payer, race, private file/hash, upload recovery và Production demo guard |
-| Browser Web/API/PG/MinIO | 19/19 nhóm; Main Draft → shared billing/excess refund → inspection/Final readings → hoàn cọc không khấu trừ → Owner settlement/closure/Room release | Lượt trước; dữ liệu tổng hợp, signing/bank simulation, notification worker tắt; Staff/Tenant dùng MobileApi transport, không native UI |
-| Digital-signing solution riêng | 41/41 | Lượt trước; không chứng minh sandbox controllers đã mount hoặc MySign thật hoạt động |
+| Audit API vừa chạy | 6/6, 216 routes, 211 protected trả 401, 106 Owner GET không 5xx | Trong full integration cuối 06/11; synthetic Compact24 DB, không dùng working bhome |
+| Danh mục tài liệu | 216 routes + 2 health; 235 static client callsites; 611 internal file links/18 Markdown files hợp lệ | Tái sinh manifest audit cuối; callsite là bằng chứng source, không phải UI acceptance. Node syntax và git diff --check đạt |
+| Full backend regression | Domain90 + Application276 + Integration626 đạt; 1 optional real-OCR skip / Integration627 total, 0 fail | Chạy lại sau fix xUnit constructor; lần đầu603pass/23fixturefail/1skip được ghi riêng, không che lỗi |
+| Full frontend regression | Owner155/155, Mobile381/381; Owner build/lint, Mobile typecheck/lint đạt | Chạy trên code mới; component/transport không thay thế native acceptance |
+| Focused mới | Deduction25unit+19PG/audit; Owner26; Finance9unit+13PG+9UI; notification11PG | Lệnh, phạm vi và commit riêng trong report; không cộng dồn các lượt thành một pass rate |
+| Browser Web/API/PG/MinIO | Có phí22/22, không phí21/21 nhóm; inspection → deduction/refund → settlement/closure/Room release + report/inbox | Synthetic signing/bank, real private MinIO/API/Web; Staff/Tenant MobileApi; worker tắt, explicit event pump; external delivery Unconfigured |
+| Digital-signing solution riêng | 41/41 | Chạy lại; không chứng minh sandbox controllers đã mount hoặc MySign thật hoạt động |
 | Real OCR riêng | HTTP model smoke 1/1; OCR unit 125/125, integration focused 119/119 | Lượt trước; không phải benchmark >=50 ảnh/90% và không tính integration skip thành pass |
 
-Commands, kết quả và commit triển khai: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Log audit mới ở `.tools/huy-deposit-refund-pg.log`, manifest ở `.tools/deposit-deduction-evidence/api-route-audit.json` (audit mới, local/ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
+Commands, kết quả và commit: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md), [gói Report2/3/4/5/7](../development/NGUYEN_QUOC_HUY_2026-11-06_EVIDENCE.md). Log full integration `.tools/huy-continue-integration-rerun.log`, manifest `.tools/continue-final-evidence/api-route-audit.json` (local/ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
 
 ## Điểm bắt đầu cho người phát triển tiếp
 
