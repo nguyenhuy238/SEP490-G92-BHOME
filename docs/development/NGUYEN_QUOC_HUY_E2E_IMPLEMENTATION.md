@@ -685,9 +685,34 @@ TESTS:
 - Logs huy-finance-deposit-{unit,pg,ui,build,lint}.log. Fixture assert ban đầu đặt ở reservation thay Completed và nhầm 1 invoice với 2 invoice đã trả; sửa theo actual fixture preconditions, không đổi formula/guard để làm xanh.
 COMMIT:
 - Message: feat(finance): [BE-X08] classify verified deposit principal returns separately
-- SHA ghi sau commit finance deposit classification.
+- SHA: `43a8318a14bfa5e5db2538b18ac8421525991ccd`.
 FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường review report note; Mobile không thêm quản trị Finance.
 STATUS: DONE cho principal-return classification được test; Finance/BE-19/BE-X07 PARTIAL theo giới hạn.
 REMAINING:
 - Browser report regression sau classification, full suites, report evidence package; realized compensation/liability report/upstream Work Order/native/MySign/bank/notification không được suy hoàn tất.
+
+TASK: BE-19 / BE-X07 / FE-07 / JOB-04
+SLICE: Inbox trả phòng, quyết định khấu trừ và hoàn cọc sau committed history
+IMPLEMENTED:
+- Trace UC-19/35/36, GBR-01/02/18, JOB-04 → existing NotificationEventPublisher → PG inbox/target/retry tests.
+- Reuse transaction/advisory publication lock và unique recipient/eventKey. Quét ContractMoveOutHistory và Compact24 DepositDeductionV1/SecurityDepositRefundV1, batch25/source; chỉ Owner signer/Tenant Contract có quyền xem settlement.
+- Generic status/link Contract, không amounts/private reason/bank reference/evidence; Staff/co-occupant khác không nhận dữ liệu tài chính. Approved báo chờ thực hiện; Completed cần actual execution/proof metadata. Không thêm contact rule/cadence/provider hoặc bảng.
+- Nguồn tài chính commit trước; asynchronous publish/retry không rollback contract/refund. Existing clients dùng inbox/target hiện hữu.
+CHANGED FILES:
+- Infrastructure/Modules/Notifications/{NotificationEventPublisher,SettlementNotificationPublisher}.cs
+- IntegrationTests/PaymentsDebt/{MoveOutNotificationTests,DepositDeductionTests,DepositRefundTests}.cs
+- docs/api/{NOTIFICATIONS,REFUNDS,API_IMPLEMENTATION_STATUS}.md và báo cáo này.
+TESTS:
+- Focused IntegrationTests 11/11 đạt, 0 skip: partial/full deduction/no-charge return, notifications/inbox/target và existing delivery failure/retry/lease regressions.
+- Có concurrent pump/replay/no duplicate, pending không báo completed, deep-link authorized/cross-Tenant404, Staff/otherTenant không thấy finance và no private payload. External delivery giữ Unconfigured, tài chính không đổi.
+- Lượt đầu consumer nhầm tên event decision Approved thay actual persisted APPROVED; test pending-stage phát hiện, sửa theo contract hiện hữu. Không sửa event đã phát hành hoặc nới assertion.
+- Log huy-settlement-notifications-pg.log. Chưa browser pump trong slice backend này; không claim email/push/native.
+COMMIT:
+- Message: feat(notification): [BE-19] publish scoped move-out and deposit settlement events
+- SHA ghi sau commit settlement notifications.
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường, Mobile Bùi Bảo Long dùng inbox/Contract target hiện có; native acceptance còn thiếu.
+STATUS: DONE cho backend in-app consumer được kiểm chứng; external delivery BLOCKED bởi provider Unconfigured.
+REMAINING:
+- Browser E2E explicit event pump và report classification; full regression/evidence package. Receipt-excess consumer riêng chưa triển khai trong slice này.

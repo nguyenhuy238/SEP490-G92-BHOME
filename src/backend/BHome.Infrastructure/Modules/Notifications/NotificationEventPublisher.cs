@@ -11,7 +11,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
+internal sealed partial class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
 {
     public string Name => "notification-publish";
     public Task EnqueueDueAsync(CancellationToken t) => queue.EnqueueAsync(new(Name, clock.GetUtcNow().ToString("yyyyMMddHHmm"), "{}"), t);
@@ -92,6 +92,6 @@ internal sealed class NotificationEventPublisher(BHomePersistenceContext db, IBa
             var plan = await db.Set<BillingAutomationPlan>().AsNoTracking().SingleAsync(p => p.Id == e.PlanId, t);
             return [new Intent(plan.AuthorizedByUserId, Roles.Owner, e.LocationId, "Task", "Tự động hóa cần xử lý", $"Kỳ {e.BillingPeriod:MM/yyyy} còn thông tin cần bổ sung. Vui lòng xem nhật ký.", "AutomationExecution", e.Id)];
         }, t);
-        return count;
+        return count + await PublishSettlementAsync(t);
     }
 }

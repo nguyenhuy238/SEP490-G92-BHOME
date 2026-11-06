@@ -94,6 +94,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("0", otherRoom.VerifiedDepositReturns);
         var scoped = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&locationId={w.Location}&roomId={w.Room}"));
         Assert.Equal(report.VerifiedDepositReturns, scoped.VerifiedDepositReturns);
+        await VerifySettlementNotifications(w, true, deduction < 400000);
     }
     internal async Task DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle()
     {

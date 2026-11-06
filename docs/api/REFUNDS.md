@@ -176,8 +176,10 @@ parallel replay và retained unclassified legacy guard. Lượt tài liệu này
 không chạy lại các suite trên; xem [trạng thái](API_IMPLEMENTATION_STATUS.md).
 
 Browser dùng dữ liệu/chứng từ tổng hợp, không gọi bank hoặc chứng minh tiền thật đã chuyển.
-Chưa có bank payout integration, Tenant refund self-service/history riêng, notification refund,
+Chưa có bank payout integration, Tenant refund self-service/history riêng hoặc notification receipt refund,
 credit hoặc refund dư phát sinh từ Adjustment sau Paid. Nhánh TenantDamage có evidence đã có
 backend và Owner Web; xem [quyết định khấu trừ](DEPOSIT_DEDUCTIONS.md) để phân biệt kết quả unit/PG/UI
 với browser, native và Finance classification còn cần kiểm chứng.
+Hoàn cọc có consumer in-app theo committed history và Contract entitlement; xem
+[Notifications](NOTIFICATIONS.md). Không suy event/inbox thành push/email hoặc tiền đã được bank-provider xác nhận.
 Các nguồn cũ không phân loại tiếp tục manual review; không migration/đổi schema trong slice này.

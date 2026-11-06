@@ -29,6 +29,14 @@ Mặc định external DeliveryState Unconfigured, không báo push/email thành
 
 ## Business consumers
 
+Consumers trả phòng/cọc đọc committed history, batch25/source và publication marker/recipient key
+bền vững. Chạy lặp hoặc đồng thời không nhân đôi inbox; lỗi publish/delivery không rollback ledger.
+Thông báo chỉ ghi event/status chung, không số tiền, reason, payer, bank reference hoặc file/hash.
+Completed refund cần state cuối, actual execution time và proof metadata hợp lệ; approved vẫn báo
+chờ thực hiện. Target kiểm lại quyền Contract ở server, không mở rộng quyền xem quyết toán.
+Deposit sources chỉ có trên Compact24; offline legacy regression không được coi là runtime fallback.
+External email/push tiếp tục Unconfigured; không có cadence/reminder hoặc contact policy mới.
+
 `notification-publish` dùng queue/worker và shared scheduler contributors. Mỗi source event được
 xử lý trong transaction riêng, advisory lock theo key và publication marker; inbox unique
 recipient/eventKey. Nguồn chỉ đọc sau commit; không chạy provider trong transaction tài chính.
@@ -43,6 +51,8 @@ Batch tối đa 25/source mỗi lượt, backlog tiếp tục các lượt sau, 
 | ContractExpiryNotices JOB-02                 | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                           |
 | OperationalTaskNotifications                 | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                |
 | Automation execution PendingInputs           | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                   |
+| ContractMoveOutHistory đã commit             | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract |
+| DepositDeductionV1 và SecurityDepositRefundV1 | Owner signer + Tenant Contract; plan đã duyệt, request/APPROVED/REJECTED/Completed. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng |
 
 Receipt-excess refund mới chưa có event consumer riêng; không suy notification hoàn tiền đã tồn tại
 từ payment-confirmed. Browser finance/refund harness tắt worker, nên kết quả browser đó không chứng minh
