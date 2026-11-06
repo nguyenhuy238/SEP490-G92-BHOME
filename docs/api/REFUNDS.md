@@ -1,5 +1,8 @@
 # Hoàn tiền thừa thủ công — UC-22/25, BE-X07
 
+Cập nhật **06/11/2026**, triển khai `12043f0`, UI recovery `17c4228`. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md),
+[Payment](PAYMENTS.md), [Finance](FINANCE.md). Đây là API đã triển khai trên Compact24, không phải đề xuất.
+
 Quyết định triển khai theo ủy quyền người dùng OQ-01/02/05: chỉ hoàn phần chưa phân bổ của receipt VERIFIED đã có allocation và người trả xác định. Không tự phân bổ tiền thừa sang nghĩa vụ khác, tự chuyển tiền, tạo credit hoặc khấu trừ cọc. Source vẫn giữ nguyên Payment/Allocation/Final Invoice. Dùng refund_requests hiện hữu; không thêm bảng/cột. Deposit refund và khoản dư phát sinh từ Adjustment sau khi đã trả đủ nằm ngoài slice này.
 
 Owner-only API/service, Staff/Tenant 403, anonymous 401; mô hình Owner toàn chuỗi hiện hữu. Beneficiary phải là Resident đã xác minh/liên kết với actual payer của allocation tại đúng Room, không lấy người đại diện mặc định. Chưa xác định payer thì chặn lập yêu cầu. Requested/Approved/Completed giữ chỗ; Rejected trả khả dụng. Các mutation dùng chung ledger advisory lock với allocation, revalidate nguồn/số dư trong transaction, version và UUID Idempotency-Key; replay giữ kết quả, payload thay đổi 409. Demo mutation chỉ Development/Testing, không dùng receipt demo trong Production. Giới hạn kỹ thuật 100 requests/receipt; chưa hỗ trợ đổi người nhận nếu Resident đã chuyển Room. Không có delete/direct-edit hoặc tự hoàn theo deadline.
@@ -14,10 +17,84 @@ Owner-only API/service, Staff/Tenant 403, anonymous 401; mô hình Owner toàn c
 
 RefundView: id/sourcePaymentId/beneficiaryResidentId/beneficiaryLabel/amount/reason/status/version/requestedAt/decisionReason/decidedAt/executedAt/externalReference/isDevelopmentDemo/history và executionIntent metadata nếu upload gián đoạn. Không trả object key/bank login/CCCD. History giữ actor/action/time/reason/version. Số tiền nguyên >0, <=phần nguồn còn khả dụng, <10^18. Reason 1–2000, externalReference 1–200 ký tự ASCII chữ/số `-_:./`, chuẩn hóa uppercase để chống trùng toàn chuỗi trong luồng này. Owner đưa mã ngân hàng vào tham chiếu nếu cần phân biệt nguồn. Không ghi số tài khoản nhận vào JSON; Owner tự kiểm bên nhận trên sao kê.
 
+## Contract tích hợp và trạng thái
+
+JSON dùng camelCase; cả GET và các POST thành công trả **200** (không 201/202).
+Các POST bắt buộc Bearer Owner và `Idempotency-Key` UUID khác rỗng. Header không phải request ID
+hoặc bank reference. GET không cần key. API đặt no-store; file private trả ảnh/filename do server tạo.
+
+| Field / trạng thái | Giá trị thực tế |
+| --- | --- |
+| RefundSource | `sourcePaymentId`, bốn số tiền dạng chuỗi, `isDevelopmentDemo`, `beneficiaries:[{id,label}]`, `requests:RefundView[]` |
+| `excessAmount` | receipt VERIFIED trừ allocation vào Invoice; chưa trừ refund |
+| `refundedAmount` | Tổng requests `COMPLETED` của nguồn |
+| `reservedAmount` | Tổng requests `REQUESTED` hoặc `APPROVED`, chưa gồm Completed |
+| `availableAmount` | max(0, excessAmount − refundedAmount − reservedAmount), do server tính dưới ledger lock |
+| `status` | Chuỗi uppercase: `REQUESTED`, `APPROVED`, `REJECTED`, `COMPLETED` |
+| `version` | 1 khi tạo, tăng theo decision/Completed; tạo upload intent có thể giữ nguyên version |
+| `history` | Event `{action,actor,at,reason,version,key,fingerprint}`; timestamp UTC. Key/fingerprint phục vụ trace/replay, không phải credential |
+| `executionIntent` | Null nếu chưa có intent hoặc đã Completed; khi pending: `{key,contentType,length,sha256,executedAt,externalReference,reason}` |
+| Metadata nullable | `decisionReason`, `decidedAt`, `executedAt`, `externalReference`; null không có nghĩa đã thành công |
+
+Transition: `REQUESTED → APPROVED → COMPLETED`, hoặc `REQUESTED → REJECTED`.
+Không có reject sau Approved, cancel/delete, sửa trực tiếp hay đổi beneficiary. Approval/rejection
+dùng `approve:true/false`; execution chỉ Approved và phải khớp `expectedVersion` hiện tại.
+Không tự lấy representative làm người nhận. Owner có thể vừa lập vừa duyệt theo mô hình một Owner hiện có;
+API chưa có cơ chế hai người duyệt độc lập.
+
+Ví dụ body tạo yêu cầu (UUID tổng hợp; phải thay bằng actual payer do GET source trả về):
+
+```json
+{
+  "beneficiaryResidentId": "00000000-0000-0000-0000-000000000001",
+  "amount": "10000",
+  "reason": "Hoàn phần receipt chưa phân bổ sau đối chiếu",
+  "humanConfirmed": true
+}
+```
+
+Execution gửi các field bảng route bằng `FormData`, `executedAt` ISO UTC, ảnh hợp lệ tối đa
+**5 MiB (5 × 1024 × 1024 bytes)**; để browser tạo multipart boundary. Request HTTP có thêm allowance
+32 KiB cho metadata. Server giải mã/kiểm ảnh; extension hoặc MIME client không đủ làm bằng chứng hợp lệ.
+
 Execution chỉ sau Approved: Owner xác nhận giao dịch hoàn thực sự đã xảy ra, executedAt không trước approval hoặc sau thời điểm server. Screenshot chỉ là evidence hỗ trợ, không tự chứng minh settlement. Durable upload intent giữ hash/key/metadata trước external storage; Interrupted vẫn Approved, không báo Completed. Retry đúng key/bytes/metadata phục hồi; thay nội dung 409. Chỉ Complete sau storage readback/hash đúng và recheck trạng thái/nguồn trong transaction. Completed immutable, replay không double-refund; không ghi thêm PaymentAllocation âm hoặc sửa tiền hóa đơn. Chứng từ/metadata demo giữ nhãn nguồn, không biến thành ngân hàng thật.
 
 Giới hạn báo cáo: refund tiền thừa không được tính vào doanh thu invoice ngay từ đầu. Hoàn lại tiền đó không phải OPEX và không đảo allocation doanh thu hợp lệ; report chỉ bỏ guard unclassified cho bản ghi excess-refund v1 có nguồn/marker/evidence hoàn chỉnh do workflow này tạo. Refund cũ/khác nguồn chưa phân loại vẫn làm net cash/recovery unavailable. Không dùng hoàn tiền thừa để giả quyết toán cọc hay đóng Move-out.
 
 History snapshot chỉ append, giữ nguyên JSON cũ và DB append-only trigger; đọc snapshot cuối thuộc marker v1. Không ghi đè phần tử cũ để cập nhật trạng thái. Intent cùng key phục hồi sau restart/reopen; UI lấy lại key/time/ref/reason/hash từ server, khóa thông tin đang chờ và buộc đúng ảnh. Rejected có thể giải phóng reservation khi nguồn thay đổi; approve/execute luôn kiểm lại.
 
-Đã chạy: Finance unit 11/11 (có direct service role/Production demo rejection), PostgreSQL refund/payment/finance 32/32, Owner UI 12/12, harness real Web/API/Compact24/MinIO 16/16 nhóm. Có reservation race, reject/stale, unknown payer, private/tampered/oversize image, duplicate external ref, loss after Put/recovery, two partial refunds, replay/parallel completed, retained unclassified legacy guard. Các vòng đầu phát hiện DTO decimal read flags, fixture thiếu actual payer, DB append-only history và locator text cần chuẩn hóa; đã sửa, không nới DB guard. Browser hoàn tiền/chứng từ là synthetic, không gọi bank. Xem [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md) cho commands và trạng thái tổng.
+UI phải reset metadata và human consent khi intent xuất hiện/thay key dù version không đổi.
+Sau timeout không báo Completed; GET lại source/request, dùng đúng key/metadata/bytes của intent để
+phục hồi. Sau Completed, GET evidence kiểm length/hash trước trả bytes; không dùng object URL công khai.
+`TransferView.reason` là lịch sử đối soát, không phải số dư refund hiện tại; UI đọc RefundSource.
+
+## Lỗi cần xử lý
+
+ProblemDetails có `status`, safe `code`, `correlationId`; validation/binding có thể trả lỗi framework
+không có business code. Không hiển thị arbitrary detail hoặc tự phân loại lỗi thành thành công.
+
+| HTTP / code | Hành động tích hợp |
+| --- | --- |
+| 400 `idempotency_key_required`, `invalid_refund_request`, `invalid_refund_reason`, `invalid_refund_decision`, `invalid_refund_execution`, `refund_evidence_required` | Sửa input/key/human confirmation, không retry mù |
+| 401 / 403 | Đăng nhập/refresh theo transport; Staff/Tenant không được dùng workflow Owner |
+| 404 `bank_transfer_not_found`, `refund_not_found`, `refund_evidence_not_found` | Nguồn/record/file không khả dụng; evidence chỉ sau Completed |
+| 409 `refund_amount_unavailable`, `refund_changed`, `refund_source_changed` | Tải lại nguồn/version, review trước khi tạo lệnh mới |
+| 409 `refund_verified_payer_required`, `refund_source_requires_manual_review` | Owner xác minh nguồn/người trả; không thay người nhận bằng representative để lách guard |
+| 409 `refund_idempotency_conflict`, `refund_execution_intent_conflict`, `refund_reference_used` | Giữ key/bytes của intent đúng; kiểm thao tác/tham chiếu trước khi gửi tiếp |
+| 409 `development_payment_unavailable` | Không mutation receipt demo trong Production |
+| 413 `refund_evidence_too_large` hoặc HTTP body limit | Chọn ảnh đúng giới hạn; body limit có thể không trả business code |
+| 409 `refund_evidence_integrity_failed` / lỗi storage 5xx | Không coi upload/download thành công; giữ intent, kiểm tra storage và retry có kiểm soát; storage chưa cấu hình trả 503, lỗi ngoài mapping có thể 500 |
+
+## Kiểm chứng và việc chưa có
+
+Lượt triển khai trước đã chạy: Finance unit 11/11 (gồm service role/Production demo rejection),
+PostgreSQL refund/payment/finance 32/32, Owner focused UI sau fix **13/13**, harness real
+Web/API/Compact24/MinIO **16/16 nhóm**. Có reservation race, reject/stale, unknown payer,
+private/tampered/oversize image, duplicate reference, loss after Put/recovery, two partial refunds,
+parallel replay và retained unclassified legacy guard. Lượt tài liệu này chỉ chạy lại API audit,
+không chạy lại các suite trên; xem [trạng thái](API_IMPLEMENTATION_STATUS.md).
+
+Browser dùng dữ liệu/chứng từ tổng hợp, không gọi bank hoặc chứng minh tiền thật đã chuyển.
+Chưa có bank payout integration, Tenant refund self-service/history riêng, notification refund,
+credit, deposit refund/deduction/settlement hoặc refund dư phát sinh từ Adjustment sau Paid.
+Các nguồn cũ không phân loại tiếp tục manual review; không migration/đổi schema trong slice này.

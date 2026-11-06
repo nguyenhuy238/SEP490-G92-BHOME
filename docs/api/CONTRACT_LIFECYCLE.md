@@ -1,5 +1,9 @@
 # Contract UI — bổ sung API D011/D012
 
+Cập nhật **06/11/2026**, runtime Compact24. [Trạng thái và giới hạn](API_IMPLEMENTATION_STATUS.md),
+[route/input/policy đầy đủ](API_RUNTIME_ROUTES.md). Main/Renewal có workflow; Holding ledger vẫn
+Unconfigured. Cọc đã xác minh để activation không đồng nghĩa đã có quyết toán/hoàn cọc khi move-out.
+
 ## Main Draft → tài liệu xem xét → ký (05/11/2026)
 
 UC-15 / GBR-04 / DBR-03. Bổ sung vào controller Main Draft hiện hữu:
@@ -117,4 +121,11 @@ handler re-read dưới Room lock, unique Contract/enddate/stage/recipient. Upco
 0..30 ngày trước hạn; Expired khi ngày hiện tại vượt EndDate. Không tự đóng hoặc đổi Room.
 GET `expiry-reminders`: Owner xem nhắc hợp đồng hiện hành (mỗi hợp đồng một nhắc), Tenant
 chỉ nhận nhắc của mình; Staff 403. Tối đa 100 nhắc mới nhất, loại hợp đồng đã kết thúc/gia hạn.
-Notices được lưu để xem trong Web/Mobile; external push/email consumer vẫn chưa triển khai.
+Notices được lưu để xem trong Web/Mobile và đã được `notification-publish` đưa vào inbox theo
+[NOTIFICATIONS.md](NOTIFICATIONS.md). JOB-04 retry có implementation; external email/push provider
+vẫn Unconfigured, chưa nghiệm thu gửi thật.
+
+[Receipt-excess refund](REFUNDS.md) chỉ hoàn phần receipt chưa phân bổ, không phải refund cọc.
+Hoàn xong khoản dư đó không tự bỏ blocker `deposit_deduction_refund_policy_required` hoặc giải phóng Room.
+Không có journal deposit deduction/refund/settlement đầy đủ; nullable deductions/refund trong summary
+không được thay bằng 0 ở client để giả resolved. Chưa có MySign staging thật hoặc mẫu Production được duyệt.

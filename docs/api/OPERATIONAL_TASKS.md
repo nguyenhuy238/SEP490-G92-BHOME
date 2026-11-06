@@ -2,6 +2,10 @@
 
 Backend — BF-02 / FE-01 / UC-10–12 / DBR-01 / GBR-01..03,18.
 
+Cập nhật runtime **06/11/2026**: [bàn giao](API_IMPLEMENTATION_STATUS.md),
+[danh mục route hiện tại](API_RUNTIME_ROUTES.md). Contract Task bên dưới vẫn được dùng;
+persistence đã chuyển sang Compact24. Tên entity CLR không phải tên bảng vật lý.
+
 ## Nguồn và quyết định ngày 30/10/2026
 
 - SRS `docs/reports/BHome_Report-3_Software Requirement Specification (2).docx`: BF-02, OperationalTask lifecycle, permission matrix §I.4.4, UC-10–12, FE-01 §1.3.2–1.3.3, yêu cầu audit và persistent notification.
@@ -13,23 +17,26 @@ Backend — BF-02 / FE-01 / UC-10–12 / DBR-01 / GBR-01..03,18.
 
 ## Model và migration
 
-Một entity/bảng `OperationalTasks` dùng chung. `Kind = MeterReading` (0, giữ tương thích) hoặc `AdHoc` (1).
+Một entity CLR `OperationalTask` dùng chung. `Kind = MeterReading` (0) hoặc `AdHoc` (1).
+Runtime Compact24 lưu trong `operational_tasks` với `task_type=METER_READ/GENERAL`;
+technical command/job cũng nằm trong bảng này bằng discriminator riêng, không xuất qua generic Task API.
 
-Chi tiết meter giữ trong các cột hiện tại, với MeterId nullable và discriminator/check constraints; không tạo thêm bảng Task vận hành trùng chức năng. Đây là hợp nhất theo D2-B với nhóm chi tiết meter cùng bảng, không phải tách model độc lập theo D2-A. Giữ namespace CLR `BHome.Domain.Billing.OperationalTask` để không phá tham chiếu hiện có. Các record/history/evidence và service mới nằm trong StaffOperations.
+Chi tiết meter được adapter Compact24 ánh xạ vào cột/JSON tương ứng; không tạo bảng Task trùng
+chức năng. Quyết định D2-B và namespace CLR `BHome.Domain.Billing.OperationalTask` được giữ.
+Các record/history/evidence và service vận hành nằm trong StaffOperations.
 
 - Meter Task: giữ ID, FK của MeterEvidence/MeterReading, purpose/period/final Contract và numeric status cũ. Staff xác nhận reading qua capture API vẫn hoàn thành theo UC-20; không qua Owner verify của generic Task.
 - AdHoc Task: Location bắt buộc, nội dung, priority, dueAt, evidence requirement, snapshot assignment, version và Owner verification. Không có MeterId/ContractId/BillingPeriod.
-- Các bảng phụ: OperationalTaskHistory, OperationalTaskCommands, OperationalTaskEvidence, OperationalTaskNotifications, OperationalTaskFileUploads.
-- Migration `20261030074118_UnifiedOperationalTasks` điền LocationId từ Meter → Room, đặt Version=1 cho meter task cũ, giữ nguyên status/reading/evidence; không tự tạo assignee lịch sử.
-- Down cho phép khi chỉ có meter task. Nếu có AdHoc Task, migration từ chối downgrade trước khi xóa dữ liệu; dùng kế hoạch backup/restore phù hợp thay vì tự xóa Task.
+- History/evidence nằm trong JSON của `operational_tasks`; command/file-upload intent là technical records;
+  Task notification và inbox được ánh xạ vào `notifications`. Source mapping ở
+  [Compact24Records.cs](../../src/backend/BHome.Infrastructure/Persistence/Compact24/Compact24Records.cs).
+- `20261030074118_UnifiedOperationalTasks` và các tên bảng phụ OperationalTaskHistory/Commands/
+  Evidence/Notifications/FileUploads là lịch sử EF persistence cũ, không phải bảng cần tạo thêm cho Compact24.
 
-Áp migration bằng công cụ hiện có của repository sau khi cấu hình connection hợp lệ:
-
-```powershell
-dotnet ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Infrastructure
-```
-
-Trong lượt triển khai source ban đầu chỉ kiểm tra trên database dùng một lần. Theo yêu cầu bổ sung của người dùng, ngày 30/10/2026 đã backup và áp ContractActivationLifecycle + UnifiedOperationalTasks vào DB local `bhome` tại `localhost:5432` (PostgreSQL 18.3), kiểm tra history/schema và readiness thành công. Production chưa áp migration. Chi tiết tại [delivery note](../development/OPERATIONAL_TASKS_DELIVERY.md).
+Không chạy `dotnet ef database update` từ hướng dẫn Task cũ để cập nhật Compact24.
+[Delivery note 30/10](../development/OPERATIONAL_TASKS_DELIVERY.md) giữ bằng chứng migration local
+ở thời điểm persistence cũ; không mô tả schema hiện tại hoặc chứng minh đã triển khai Production.
+Import/rollback Compact24 phải dùng quy trình riêng, có reconciliation và bảo toàn dữ liệu.
 
 ## HTTP và quyền
 
@@ -124,13 +131,17 @@ Lỗi validation/model binding của framework dùng ValidationProblemDetails, k
 - Object key do server sinh; không dùng filename/path/URL từ client. Staging intent tồn tại độc lập trước external write; nếu upload hoặc transaction lỗi, cleanup có thể xóa orphan. Lease một giờ là kỹ thuật upload, không phải retention cho evidence nghiệp vụ.
 - Cleanup chạy mỗi 5 phút, giữ object đã được liên kết vào TaskEvidence. Không xóa ảnh đã dùng chỉ vì Task Completed/Cancelled hoặc đổi Staff.
 - Task/history/audit/notification/dedup commit cùng transaction. Khóa actor+command trước, rồi advisory lock Location dùng chung với property configuration và create Staff assignment; version chống stale request khác key. Kiểm lại scope sau lock.
-- Staff assignment adapter được bổ sung cùng Location lock; PostgreSQL exclusion constraint vẫn bảo vệ overlap.
+- Compact24 Staff assignment adapter khóa hàng Location bằng `FOR UPDATE`, kiểm overlap inclusive
+  trên `locations.staff_assignments` rồi append trong cùng transaction. Không dùng tên bảng/exclusion
+  constraint StaffLocationAssignments của persistence legacy để mô tả runtime hiện tại.
 - History/command append-only tại DbContext; các quyết định quan trọng có thêm SecurityAudit không ghi nội dung nhạy cảm vào log.
-- In-app notification theo event cho responsible Staff hoặc active Owners, lưu DB trong transaction và dedup theo event+recipient. API đọc/chưa đọc riêng module Task; không nhận arbitrary recipient.
-- Push/email provider thật và delivery retry chưa nối trong slice này. Provider chưa cấu hình không làm rollback hoặc ngăn luồng Task; không báo đã gửi push/email.
+- In-app notification theo event cho responsible Staff hoặc active Owners, lưu DB trong transaction và dedup theo event+recipient. Task API đọc/chưa đọc vẫn tương thích; publisher đã đưa sang inbox chung và đồng bộ read-state của đúng recipient, không nhân đôi inbox live.
+- Delivery retry/lease/monitoring JOB-04 đã có trong [Notifications](NOTIFICATIONS.md); push/email provider thật mặc định Unconfigured. Không báo đã gửi hoặc rollback Task do provider chưa cấu hình.
 
 ## Phạm vi còn lại
 
-JOB-06/07, recurrence configuration/planner, reminder cadence/dedup window, JOB-09 và tích hợp Work Order là slice khác; không có endpoint giả nhận Recurring rồi bỏ qua. Không thay đổi Temporary Residence, chính sách tài chính, OCR completion hoặc contract signing.
+JOB-06/07 recurrence/deadline workflow và tích hợp Work Order chưa hoàn chỉnh; không có endpoint giả
+nhận Recurring rồi bỏ qua. JOB-09 meter-task generation đã có ở [Billing automation](BILLING_AUTOMATION.md),
+không qua AdHoc lifecycle. Task API không cấp quyền Temporary Residence hoặc Work Order plan/cost approval.
 
 Chưa đo performance/UAT/coverage; không suy ra tuân thủ toàn bộ SRS từ slice Task. Bằng chứng lệnh và kết quả kiểm tra sẽ ghi tại [delivery note](../development/OPERATIONAL_TASKS_DELIVERY.md).
