@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category1";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -80,7 +80,13 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             var visual = categoryClassifier?.Classify(source, token);
             OcrDocumentKind? kind = null;
             var warnings = prepared.Warnings.ToList();
-            if (visual is not null)
+            // An optional model outage must not suppress working CCCD/text OCR.
+            if (visual?.Status == "unavailable")
+            {
+                warnings.AddRange(visual.Warnings ?? []);
+                visual = null;
+            }
+            if (visual is not null && visual.Status != "unknown")
             {
                 if (visual.Status != "classified" || visual.Candidates is { Count: > 1 } ||
                     (visual.Warnings ?? []).Any(w => w is "multiple_meters" or "ambiguous_reading" or "multiple_reading_regions") ||
@@ -115,7 +121,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             var text = ReadPage(source, regions, kind, run, token, recognizedLines);
             // Only unresolved neutral text gets an opposite-direction attempt. We
             // never run all six OCR pipelines or let a flip erase ambiguous evidence.
-            if (visual is null && OcrCategoryRules.Evaluate(text).Status == "unknown" &&
+            if ((visual is null || visual.Status == "unknown") && OcrCategoryRules.Evaluate(text).Status == "unknown" &&
                 regions.Count > 0 && !text.Warnings.Contains("text_region_limit") &&
                 clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 2)
             {
@@ -136,6 +142,10 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             token.ThrowIfCancellationRequested();
             var fullText = text with { Warnings = [.. warnings, .. text.Warnings] };
             var categoryEvidence = OcrCategoryRules.Evaluate(fullText);
+            // A meter-only model has no identity classes. Strong identity text
+            // keeps the established route when the model found no meter.
+            if (visual?.Status == "unknown" && categoryEvidence.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)
+                return new(fullText);
             // A water-domain model must not be applied to an explicitly identified
             // electricity or digital-water device. Its typed PP path remains available.
             if (visual is null && categoryEvidence.Kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalWater)
@@ -215,9 +225,12 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             IReadOnlyList<string> localizationWarnings = [];
             if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
             {
+                var check = MeterCategoryValidation.Check(categoryClassifier?.Classify(source, token), kind,
+                    options.AutomaticClassificationMinConfidence);
+                if (!check.CanRecognize) return new([], Version, [.. prepared.Warnings, .. check.Warnings]);
                 var selection = MeterSceneSelection.Select(meterDetector is not null && meterDetector.Supports(kind) ? meterDetector.Detect(source, token) : null, source.Size(),
                     kind, options.MeterDetectionMinConfidence);
-                localizationWarnings = selection.Warnings;
+                localizationWarnings = [.. check.Warnings, .. selection.Warnings];
                 if (!selection.CanRecognize)
                     return new OcrText([], Version, [.. prepared.Warnings, .. localizationWarnings]);
                 if (selection.Crop is { } rect)

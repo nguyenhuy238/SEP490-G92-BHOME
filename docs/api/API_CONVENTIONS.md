@@ -176,6 +176,16 @@ disagreement, multiple regions, wrong utility or unclear digits. The diagnostic
 Mobile screen can re-read the same bounded meter image with user-confirmed
 precision after capture; production task precision remains server-authoritative.
 
+An experimental four-class YOLO category adapter is available through
+`Ocr:VisualClassifier` but remains disabled by default and refuses inference
+outside Development. No validated four-class weights are bundled. It requires
+an explicitly configured model path/SHA256, exact four-class metadata and tensor
+contract. Unknown/multiple/conflicting detections remain review cases; an adapter
+outage preserves existing OCR with `visual_classifier_unavailable`. In Staff
+tasks, confident visual mismatch suppresses the reading with `meter_type_mismatch`;
+visual evidence never changes server Meter kind, ownership or precision. No new
+endpoint or response fields. See [architecture and activation gates](../development/OCR_MODEL_ARCHITECTURE.md).
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được
