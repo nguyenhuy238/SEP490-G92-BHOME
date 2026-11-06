@@ -82,11 +82,11 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(1, created.Version);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var assignment = await client.PostAsJsonAsync("/api/v1/staff-location-assignments", new
-            { locationId = created.Id, staffUserId = staff.Id, startDate = today, endDate = today.AddDays(1) });
+        { locationId = created.Id, staffUserId = staff.Id, startDate = today, endDate = today.AddDays(1) });
         Assert.Equal(HttpStatusCode.Created, assignment.StatusCode);
         var route = $"/api/v1/locations/{created.Id}";
         var stale = await client.PutAsJsonAsync(route, new
-            { name = "Synthetic updated", address = "Synthetic updated address", isActive = true, version = created.Version, reason = "Synthetic version test" });
+        { name = "Synthetic updated", address = "Synthetic updated address", isActive = true, version = created.Version, reason = "Synthetic version test" });
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         var problem = await stale.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("stale_version", problem.GetProperty("code").GetString());
@@ -94,7 +94,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(created.Version + 1, current.Version);
         Assert.Equal(created.Name, current.Name);
         var updated = await client.PutAsJsonAsync(route, new
-            { name = "Synthetic updated", address = "Synthetic updated address", isActive = true, version = current.Version, reason = "Synthetic version test" });
+        { name = "Synthetic updated", address = "Synthetic updated address", isActive = true, version = current.Version, reason = "Synthetic version test" });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         var result = (await updated.Content.ReadFromJsonAsync<BHome.Application.PropertyManagement.LocationDto>())!;
         Assert.Equal(current.Version + 1, result.Version);
@@ -130,5 +130,33 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Single(results, x => x.Status == CreateAssignmentStatus.DateRangeOverlaps);
         await using var check = fixture.Factory!.Services.CreateAsyncScope();
         Assert.Single((await check.ServiceProvider.GetRequiredService<ILocationAssignments>().ListAssignmentsAsync(location, default))!);
+    }
+
+    [CompactPostgresFact]
+    public async Task ReplacingCurrentAssignmentMovesOpenGeneralTasksAtomically()
+    {
+        var owner = await User("Owner"); var previous = await User("Staff"); var replacement = await User("Staff");
+        var location = await Location(); var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var task = Guid.NewGuid();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+        Assert.Equal(CreateAssignmentStatus.Created, (await repository.CreateAssignmentAsync(owner.Id, location,
+            previous.Id, today, today.AddDays(30), default)).Status);
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO operational_tasks(id,task_type,location_id,assigned_user_id,status,title,task_data)
+            VALUES ({task},'GENERAL',{location},{previous.Id},'0','Synthetic open task',
+              jsonb_build_object('state',jsonb_build_object('assignedStaffUserId',{previous.Id})))
+            """);
+        var version = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+
+        var changed = await repository.ReplaceAssignmentAsync(owner.Id, location, replacement.Id, today, version,
+            "Synthetic replacement", default);
+
+        Assert.Equal(ChangeAssignmentStatus.Changed, changed.Status);
+        db.ChangeTracker.Clear();
+        Assert.Equal(replacement.Id, await db.Database.SqlQuery<Guid>($"SELECT assigned_user_id AS \"Value\" FROM operational_tasks WHERE id={task}").SingleAsync());
+        Assert.Single(await repository.ListAssignedLocationsAsync(replacement.Id, today, default));
+        Assert.Empty(await repository.ListAssignedLocationsAsync(previous.Id, today, default));
     }
 }

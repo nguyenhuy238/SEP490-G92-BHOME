@@ -224,6 +224,27 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         }, t);
     }
 
+    public async Task<AssetDto> UpdateAssetConditionAsync(Guid id, AssetConditionUpdate input, CancellationToken t)
+    {
+        Require(Permissions.Assets.UpdateCondition); Validate(input);
+        if (Text(input.Condition).Length == 0 || Text(input.Reason).Length == 0)
+            throw Error(400, "invalid_asset_condition");
+        var current = await repository.FindAsync<Asset>(id, t) ?? throw Error(404, "resource_not_found");
+        if (!await access.CanAccessAsync(Permissions.Assets.UpdateCondition, new(current.LocationId, current.RoomId), t))
+            throw Error(404, "resource_not_found");
+        return await repository.WithLocationLockAsync(current.LocationId, async () =>
+        {
+            var asset = await repository.FindAsync<Asset>(id, t) ?? throw Error(404, "resource_not_found");
+            CheckVersion(asset.Version, input.Version);
+            if (asset.Status == AssetStatus.Retired || await repository.AnyAsync<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>(w =>
+                    w.AssetId == asset.Id && w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
+                    w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t))
+                throw Error(409, "asset_workflow_controlled");
+            var before = Snapshot(asset); asset.Condition = Text(input.Condition); asset.Version++;
+            Audit(asset.LocationId, asset, "ConditionUpdated", input.Reason, before); return Map(asset);
+        }, t);
+    }
+
     private async Task ValidatePolicyAsync(PolicyWrite input, CancellationToken t)
     {
         Validate(input);

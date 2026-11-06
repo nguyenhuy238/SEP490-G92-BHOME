@@ -44,6 +44,9 @@ public sealed record AssetWrite(Guid LocationId, Guid? RoomId, [StringLength(200
     [Required, StringLength(80)] string Category, [Required, StringLength(1000)] string Condition,
     AssetStatus Status = AssetStatus.Active, int Version = 0, [StringLength(500)] string Reason = "");
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
+public sealed record AssetConditionUpdate([Required, StringLength(1000)] string Condition,
+    [Range(1, int.MaxValue)] int Version, [Required, StringLength(500)] string Reason);
+[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public sealed record PolicyWrite(Guid LocationId, Guid? RoomId,
     ChargeCategory Category, [Required, StringLength(80)] string ChargeCode,
     [Required, StringLength(150)] string Name, ChargingMethod Method,

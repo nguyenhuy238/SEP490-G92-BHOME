@@ -35,6 +35,8 @@ public sealed class AssetsController(PropertyService service) : ControllerBase
     }
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
     public Task<AssetDto> Update(Guid id, AssetWrite input, CancellationToken t) => service.SaveAssetAsync(id, input, t);
+    [HttpPatch("{id:guid}/condition"), Authorize(Policy = Permissions.Assets.UpdateCondition)]
+    public Task<AssetDto> UpdateCondition(Guid id, AssetConditionUpdate input, CancellationToken t) => service.UpdateAssetConditionAsync(id, input, t);
 }
 
 [ApiController, Route("api/v1/billing-policies"), Authorize(Policy = Permissions.Property.View)]

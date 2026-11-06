@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "95bb127b-ef91-4786-9ab4-9c9f18c41614",
-    "name": "BHOME — API đơn giản: Auth, Property và Operational Tasks",
+    "name": "BHOME — API đơn giản: Auth, Property, Staff, Contract, Incident và Public",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "180 requests: JWT/refresh/logout, RBAC, Staff Location scope, Location/Room/Asset/prices, operational tasks, Incident and Work Order (requests 119-181, no folders). Native Compact24: 24 tables / 383 columns / 83 FKs. Import only this collection and BHome.Local.postman_environment.json. Start with setup 24 -> 25 -> 26 -> 28 -> 42 -> 46. See README.md."
+    "description": "Bộ request đánh số phẳng để kiểm thử BHOME trên Compact24 (24 bảng). Không chứa token hoặc mật khẩu thật."
   },
   "variable": [
     {
@@ -9336,6 +9336,1642 @@
               "  let data; try { data = pm.response.json(); } catch {}",
               "  const target = pm.environment.name ? pm.environment : pm.collectionVariables;",
               "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "182 — Xem profile Owner → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/account/profile",
+        "description": "BE-03 / UC-03. Role và trạng thái chỉ đọc."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('profileVersion', d.version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "183 — Owner cập nhật profile → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/account/profile",
+        "description": "BE-03. Email đổi sẽ thu hồi session cũ.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"BHOME Owner Test\",\n  \"phone\": \"0900000000\",\n  \"email\": \"{{ownerEmail}}\",\n  \"version\": \"{{profileVersion}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('profileVersion', d.version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "184 — Owner xem danh sách Staff → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/staff?page=1&pageSize=20",
+        "description": "BE-08 / UC-08."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "185 — Owner tạo Staff và employment → 201",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/staff",
+        "description": "Mật khẩu test phải đủ 12 ký tự; không lưu mật khẩu thật vào collection.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{newStaffEmail}}\",\n  \"fullName\": \"Staff API Test\",\n  \"phone\": \"0911111111\",\n  \"initialPassword\": \"{{newStaffInitialPassword}}\",\n  \"employment\": {\n    \"contractNumber\": \"TEST-STAFF-001\",\n    \"employmentType\": \"FullTime\",\n    \"startDate\": \"{{dateD0}}\",\n    \"endDate\": null,\n    \"salaryType\": \"Monthly\",\n    \"baseRate\": 8000000,\n    \"status\": \"Active\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const d=pm.response.json(); pm.environment.set('managedStaffUserId', d.userId); pm.environment.set('staffAccountVersion', d.accountVersion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "186 — Owner xem chi tiết Staff → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/staff/{{managedStaffUserId}}",
+        "description": "BE-08."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('staffAccountVersion', d.accountVersion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "187 — Owner cập nhật Staff và employment → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/staff/{{managedStaffUserId}}",
+        "description": "BE-08.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"accountVersion\": \"{{staffAccountVersion}}\",\n  \"email\": \"{{newStaffEmail}}\",\n  \"fullName\": \"Staff API Test Updated\",\n  \"phone\": \"0911111112\",\n  \"isActive\": true,\n  \"employment\": {\n    \"contractNumber\": \"TEST-STAFF-001\",\n    \"employmentType\": \"FullTime\",\n    \"startDate\": \"{{dateD0}}\",\n    \"endDate\": null,\n    \"salaryType\": \"Monthly\",\n    \"baseRate\": 8500000,\n    \"status\": \"Active\"\n  },\n  \"reason\": \"Cập nhật hồ sơ kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('staffAccountVersion', d.accountVersion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "188 — Staff cập nhật tình trạng Asset → 200",
+      "request": {
+        "method": "PATCH",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/assets/{{assetId}}/condition",
+        "description": "BE-05. Staff chỉ được đổi condition trong Location được giao.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"condition\": \"Đã kiểm tra, hoạt động bình thường\",\n  \"version\": \"{{assetVersion}}\",\n  \"reason\": \"Kiểm tra định kỳ\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('assetVersion', d.version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "189 — Owner xem occupancy → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/occupancy?locationId={{locationId}}&page=1&pageSize=20",
+        "description": "BE-07 / UC-07."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "190 — Staff xem occupancy trong Location được giao → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/occupancy?locationId={{locationId}}&page=1&pageSize=20",
+        "description": "BE-07. Server áp Location scope."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "191 — Xem lịch sử cư trú của Room → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/rooms/{{roomId}}/occupancy-history",
+        "description": "BE-07."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "192 — Tenant xem danh sách residence task của mình → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{tenantAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/residence-tasks?page=1&pageSize=20",
+        "description": "BE-18 / UC-18. Tenant tự đăng ký bên ngoài BHOME."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); if(d.items&&d.items.length){pm.environment.set('residenceContractId',d.items[0].contractId);pm.environment.set('residenceResidentId',d.items[0].residentId);}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "193 — Tenant xem residence task → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{tenantAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/residence-tasks/{{residenceContractId}}/{{residenceResidentId}}",
+        "description": "BE-18."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "194 — Tenant upload bằng chứng residence (chọn file ảnh) → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{tenantAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/residence-tasks/{{residenceContractId}}/{{residenceResidentId}}/evidence",
+        "description": "BE-18. Ảnh private, tối đa 5 MB.",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "195 — Tenant cập nhật kết quả residence → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{tenantAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/residence-tasks/{{residenceContractId}}/{{residenceResidentId}}",
+        "description": "Chạy sau request upload bằng chứng.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"actualResidenceFrom\": \"{{dateD0}}\",\n  \"status\": \"Completed\",\n  \"resultAt\": \"{{$isoTimestamp}}\",\n  \"note\": \"Đã hoàn tất đăng ký ngoài BHOME\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "196 — Owner xem residence task → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/residence-tasks/{{residenceContractId}}/{{residenceResidentId}}",
+        "description": "BE-18."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "197 — Owner xác nhận thông tin residence → 200",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/residence-tasks/{{residenceContractId}}/{{residenceResidentId}}/owner-confirmation",
+        "description": "Owner xác nhận; Staff không được duyệt.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"note\": \"Đã đối chiếu thông tin lưu trú\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "198 — Staff bị từ chối residence task → 403",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{staffAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/residence-tasks?page=1&pageSize=20",
+        "description": "Negative access BE-18."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "199 — Owner xem nội dung công khai Location → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/locations/{{locationId}}",
+        "description": "BE-37 / UC-37."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "200 — Owner cập nhật nội dung công khai Location → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/public-content/locations/{{locationId}}",
+        "description": "Chỉ lưu public_profile hiện có.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"summary\": \"Cơ sở BHOME dành cho nội dung kiểm thử\",\n  \"amenities\": [\n    \"Wi-Fi\",\n    \"Camera\"\n  ],\n  \"contactPhone\": \"0900000000\",\n  \"contactEmail\": \"{{ownerEmail}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "201 — Owner thêm ảnh công khai Location (chọn file ảnh) → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/public-content/locations/{{locationId}}/photos",
+        "description": "BE-37. Ảnh tối đa 5 MB.",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "202 — Owner publish Location → 200",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/locations/{{locationId}}/publish",
+        "description": "BE-37."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "203 — Owner xem nội dung công khai Room → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/rooms/{{roomId}}",
+        "description": "BE-37."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "204 — Owner cập nhật nội dung công khai Room → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/public-content/rooms/{{roomId}}",
+        "description": "Không công khai dữ liệu Tenant.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"description\": \"Phòng mẫu cho kiểm thử public\",\n  \"amenities\": [\n    \"Điều hòa\",\n    \"Tủ quần áo\"\n  ],\n  \"indicativePrice\": 3500000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "205 — Owner thêm ảnh công khai Room (chọn file ảnh) → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/public-content/rooms/{{roomId}}/photos",
+        "description": "BE-37.",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "206 — Owner publish Room → 200",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/rooms/{{roomId}}/publish",
+        "description": "Location phải publish trước."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "207 — Guest xem Location công khai → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public/locations",
+        "description": "BE-38 / UC-38. Anonymous read-only."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "208 — Guest xem chi tiết Location công khai → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public/locations/{{locationId}}",
+        "description": "Allowlist, không PII Tenant/Staff."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "209 — Guest xem chi tiết Room công khai → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public/rooms/{{roomId}}",
+        "description": "Không có enquiry, booking hoặc payment."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "210 — Owner xem recurring task template → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/operational-task-templates?locationId={{locationId}}",
+        "description": "BE-10 / UC-10."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "211 — Owner tạo recurring task template → 201",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/operational-task-templates",
+        "description": "Cadence do Owner nhập, không hardcode chính sách.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"title\": \"Kiểm tra khu vực chung định kỳ\",\n  \"requirements\": \"Kiểm tra và ghi nhận tình trạng\",\n  \"priority\": \"Normal\",\n  \"evidenceRequired\": true,\n  \"intervalDays\": 7,\n  \"nextRunAt\": \"{{$isoTimestamp}}\",\n  \"dueAfterHours\": 24,\n  \"isActive\": true,\n  \"version\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "const d=pm.response.json(); pm.environment.set('taskTemplateId',d.id); pm.environment.set('taskTemplateVersion',d.version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "212 — Owner cập nhật recurring task template → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/operational-task-templates/{{taskTemplateId}}",
+        "description": "BE-10.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"title\": \"Kiểm tra khu vực chung định kỳ\",\n  \"requirements\": \"Kiểm tra, chụp ảnh và ghi nhận tình trạng\",\n  \"priority\": \"High\",\n  \"evidenceRequired\": true,\n  \"intervalDays\": 7,\n  \"nextRunAt\": \"{{$isoTimestamp}}\",\n  \"dueAfterHours\": 12,\n  \"isActive\": true,\n  \"version\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('taskTemplateVersion',d.version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "213 — Owner xóa recurring task template → 204",
+      "request": {
+        "method": "DELETE",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/operational-task-templates/{{taskTemplateId}}?locationId={{locationId}}&version={{taskTemplateVersion}}",
+        "description": "BE-10."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "214 — Owner lấy version Location trước khi đổi phân công → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/locations/{{locationId}}",
+        "description": "Chuẩn bị optimistic version cho BE-09."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.environment.set('locationVersion',d.version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "215 — Owner thay Staff phụ trách Location → 200",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments/{{locationId}}",
+        "description": "BE-09 theo SRS 31/10: Location assignment, không phải shift. Chỉ nhận ngày hiện tại.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"staffUserId\": \"{{managedStaffUserId}}\",\n  \"effectiveFrom\": \"{{dateD0}}\",\n  \"locationVersion\": \"{{locationVersion}}\",\n  \"reason\": \"Thay người phụ trách để kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); if(d.locationVersion)pm.environment.set('locationVersion',d.locationVersion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "216 — Owner gỡ Staff phụ trách Location → 200",
+      "request": {
+        "method": "DELETE",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/staff-location-assignments/{{locationId}}",
+        "description": "Task GENERAL chưa hoàn tất được chuyển về unassigned.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"effectiveFrom\": \"{{dateD0}}\",\n  \"locationVersion\": \"{{locationVersion}}\",\n  \"reason\": \"Gỡ phân công để kiểm thử\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "217 — Từ chối field thừa khi cập nhật profile → 400",
+      "request": {
+        "method": "PUT",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/account/profile",
+        "description": "Negative overposting BE-03.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"BHOME Owner Test\",\n  \"phone\": \"0900000000\",\n  \"email\": \"{{ownerEmail}}\",\n  \"version\": \"{{profileVersion}}\",\n  \"role\": \"Owner\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "218 — Owner tải bằng chứng residence → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/residence-tasks/{{residenceContractId}}/{{residenceResidentId}}/evidence",
+        "description": "BE-18 private evidence."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "219 — Guest tải ảnh Location công khai → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public/locations/{{locationId}}/photos/0",
+        "description": "BE-38. Chạy sau khi upload và publish."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "220 — Guest tải ảnh Room công khai → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public/rooms/{{roomId}}/photos/0",
+        "description": "BE-38."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "221 — Guest xem danh sách Room đã publish của Location → 200",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public/locations/{{locationId}}/rooms",
+        "description": "BE-38. Cung cấp Room ID để Guest điều hướng mà không cần biết ID trước."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "222 — Owner xóa ảnh công khai Room → 204",
+      "request": {
+        "method": "DELETE",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/rooms/{{roomId}}/photos/0",
+        "description": "BE-37 quản lý ảnh đã duyệt."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "223 — Owner xóa ảnh công khai Location → 204",
+      "request": {
+        "method": "DELETE",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/locations/{{locationId}}/photos/0",
+        "description": "BE-37 quản lý ảnh đã duyệt."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "224 — Owner unpublish Room → 200",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/rooms/{{roomId}}/unpublish",
+        "description": "BE-37 cleanup."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "225 — Owner unpublish Location → 200",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/public-content/locations/{{locationId}}/unpublish",
+        "description": "Room con cũng bị ẩn."
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
             ]
           }
         }
