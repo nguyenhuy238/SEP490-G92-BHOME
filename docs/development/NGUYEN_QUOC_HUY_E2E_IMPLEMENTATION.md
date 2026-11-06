@@ -84,6 +84,16 @@ Hai lỗi PDF simulation do adapter mới phụ thuộc concrete source reposito
 
 `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~ContractWorkflowGuardTests|FullyQualifiedName~PropertyContractDockerTests|FullyQualifiedName~ReviewReleaseAndActivation|FullyQualifiedName~ReviewedMainDraftReleasesOnce' --verbosity minimal`: sau sửa các nguyên nhân dưới đây **21/21 đạt**, gồm guard môi trường simulation, PDF không có chữ ký điện tử, Main Draft source thật và Compact24 Property/Contract. Task BE-X06 vẫn chờ MySign staging/production template.
 
+Commit dependency signing: `062034fe6f67ab70ba79dde095ec628183bd8d02`.
+
+### Regression BE-X04 — UTC occupancy và fixture hợp lệ
+
+BF-01 / NFR UTC / API occupancy-summary: BusinessInstant tạo mốc ngày Việt Nam với offset +07 rồi truyền vào query timestamptz; Npgsql yêu cầu offset UTC nên trả 500. Đã chuyển cùng instant sang UTC trước query, không thay ngày nghiệp vụ hoặc công thức. Bài read-only/scope/audit/occupancy cũ giữ nguyên và bổ sung wrapper chạy trên Compact24 Docker, không bỏ legacy regression.
+
+Fixture Property/Contract/Invoice dùng chung một Owner Compact24 nhưng ba helper đặt ba mật khẩu tổng hợp khác nhau, khiến kết quả phụ thuộc test nào chạy trước. Đã dùng một constant test-only; vẫn đăng nhập/xác thực HTTP thật, không reset account hoặc bypass authentication. Property race/remaining-contract fixture cũng tạo Final tasks trước approved move-out; nay Tenant yêu cầu và Owner duyệt qua API trước, sau đó mới thiết lập settlement test boundary được gắn nhãn. Không nới backend guard để hợp thức hóa test.
+
+Lệnh focused phía trên bổ sung `|FullyQualifiedName~RoomInsightsAreReadOnlyScoped`: **22/22 đạt**, 0 skip; có cả legacy PostgreSQL và Compact24 Room insights. Backend build đạt. Full suite đang chạy lại; không suy rộng kết quả focused sang toàn bộ hệ thống.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết
