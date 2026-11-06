@@ -17,13 +17,15 @@ no-store; thành công 200. Staff/Tenant 403, anonymous 401. Cùng key/payload r
   "expectedReference": "<summary.reference vừa đọc>",
   "reason": "Owner đã đối chiếu thiệt hại và khoản chưa tính trên hóa đơn",
   "humanConfirmed": true,
-  "items": [{
-    "assetId": null,
-    "reasonCode": "TenantDamage",
-    "amount": "100000",
-    "description": "Thiệt hại tại phòng theo biên bản",
-    "evidenceIds": ["00000000-0000-0000-0000-000000000001"]
-  }]
+  "items": [
+    {
+      "assetId": null,
+      "reasonCode": "TenantDamage",
+      "amount": "100000",
+      "description": "Thiệt hại tại phòng theo biên bản",
+      "evidenceIds": ["00000000-0000-0000-0000-000000000001"]
+    }
+  ]
 }
 ```
 

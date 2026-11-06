@@ -35,7 +35,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<IReadOnlyList<ContractVersionView>> Versions(Guid id, CancellationToken t) => service.VersionsAsync(id, t);
     [HttpGet("move-out-assignments"), Authorize(Roles = Roles.Staff)]
     public Task<IReadOnlyList<MoveOutAssignment>> Assignments(CancellationToken t) => service.AssignmentsAsync(t);
-    [HttpGet("{id:guid}/move-out/history")]
+    [HttpGet("{id:guid}/move-out/history")] // Dòng 38–40
     public Task<IReadOnlyList<MoveOutHistoryView>> MoveHistory(Guid id, CancellationToken t) => service.MoveOutHistoryAsync(id, t);
     [HttpGet("{id:guid}/move-out/inspection-preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<InspectionPreparation> InspectionPreparation(Guid id, CancellationToken t) => service.InspectionPreparationAsync(id, t);
@@ -55,7 +55,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public async Task<IActionResult> PreviewFile(Guid id, Guid fileId, CancellationToken t)
     { var buffer = new MemoryStream(); await service.CopyPreviewAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "ban-xem-truoc.pdf"); }
 
-    [HttpPost, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    [HttpPost, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]   // Dòng 58–62
     public async Task<IActionResult> Create(ContractDraftInput x, CancellationToken t)
     { var result = await service.CreateAsync(x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
     [HttpGet("{id:guid}")]
@@ -68,6 +68,12 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractId> Deposit(Guid id, DepositInput x, CancellationToken t) => service.VerifyDepositAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/signing"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<SignatureView> Sign(Guid id, SigningInput x, CancellationToken t) => service.RequestSigningAsync(id, x, Key(), t);
+    // The PDF the caller is about to sign, page by page, and where their signature box is suggested.
+    [HttpGet("{id:guid}/signing/layout"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant), ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public Task<SigningLayout> SigningLayout(Guid id, CancellationToken t) => service.SigningLayoutAsync(id, t);
+    [HttpGet("{id:guid}/signing/pages/{page:int}"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant), ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> SigningPage(Guid id, int page, [FromQuery] int width = 900, CancellationToken t = default)
+        => File(await service.SigningPageAsync(id, page, width, t), "image/png");
     [HttpPost("{id:guid}/signing/sync"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<ContractView> Sync(Guid id, CancellationToken t) => service.SyncSigningAsync(id, t);
     [HttpPost("{id:guid}/signing/recover"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

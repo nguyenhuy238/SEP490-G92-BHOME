@@ -46,17 +46,16 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         Assert.NotNull(response.Headers.Location);
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
-    private async Task<(HttpClient Owner, Guid Actor, LocationDto Location, RoomTypeDto Type, RoomDto Room)> Workspace()
+    private async Task<(HttpClient Owner, Guid Actor, LocationDto Location, RoomDto Room)> Workspace()
     {
         var owner = await Client(Roles.Owner);
         var location = await Created<LocationDto>(owner.Client, "locations", new LocationWrite("Synthetic Location", "Synthetic Address"));
-        var type = await Created<RoomTypeDto>(owner.Client, "room-types", new RoomTypeWrite(location.Id, "Studio", null, 2, 20m, ["Balcony"]));
-        var room = await Created<RoomDto>(owner.Client, "rooms", new RoomWrite(location.Id, type.Id, "A-01", "1", 2));
-        return (owner.Client, owner.UserId, location, type, room);
+        var room = await Created<RoomDto>(owner.Client, "rooms", new RoomWrite(location.Id, "A-01", "1", 2));
+        return (owner.Client, owner.UserId, location, room);
     }
     private static PolicyWrite Rent(Guid location, decimal rate, DateOnly? from = null,
-        DateOnly? to = null, Guid? type = null, Guid? room = null) =>
-        new(location, type, room, ChargeCategory.Rent, "RENT", "Tiền thuê", ChargingMethod.FixedPerRoomPerMonth,
+        DateOnly? to = null, Guid? room = null) =>
+        new(location, room, ChargeCategory.Rent, "RENT", "Tiền thuê", ChargingMethod.FixedPerRoomPerMonth,
             rate, from ?? Today, to);
 
     [Fact]
@@ -132,9 +131,10 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         Assert.All(history, x => Assert.Equal(w.Actor, x.ActorId));
         Assert.Contains("Good", history[1].Before!); Assert.Contains("Needs inspection", history[1].After);
         Assert.Equal("Owner inspection", history[1].Reason);
-        var exception = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync(
-            $"DELETE FROM \"PropertyChanges\" WHERE \"TargetId\" = {asset.Id}"));
-        Assert.Equal("23514", exception.SqlState);
+        var exception = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+            ? await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM notifications WHERE record_kind='AUDIT' AND related_entity_id={asset.Id}"))
+            : await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"PropertyChanges\" WHERE \"TargetId\" = {asset.Id}"));
+        Assert.Equal(db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? "P0001" : "23514", exception.SqlState);
     }
 
     [Fact]
@@ -154,16 +154,16 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         });
         Assert.Equal(HttpStatusCode.Created, assignment.StatusCode);
         foreach (var route in new[] { $"locations/{visible.Location.Id}", $"rooms/{visible.Room.Id}",
-                     $"room-types/{visible.Type.Id}", $"assets/{asset.Id}", $"billing-policies/{policy.Id}",
+                     $"assets/{asset.Id}", $"billing-policies/{policy.Id}",
                      $"rooms/{visible.Room.Id}/prices?effectiveOn={Today:yyyy-MM-dd}" })
             Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/" + route)).StatusCode);
-        foreach (var route in new[] { $"locations/{hidden.Location.Id}", $"rooms/{hidden.Room.Id}", $"room-types/{hidden.Type.Id}" })
+        foreach (var route in new[] { $"locations/{hidden.Location.Id}", $"rooms/{hidden.Room.Id}" })
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/" + route)).StatusCode);
         var page = (await client.GetFromJsonAsync<PagedResult<RoomDto>>("/api/v1/rooms?pageSize=1"))!;
         Assert.Equal(1, page.TotalCount); Assert.Equal(visible.Room.Id, Assert.Single(page.Items).Id);
         Assert.Empty((await client.GetFromJsonAsync<PagedResult<RoomDto>>($"/api/v1/rooms?locationId={hidden.Location.Id}"))!.Items);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/rooms",
-            new RoomWrite(visible.Location.Id, visible.Type.Id, "FORBIDDEN", null, 1))).StatusCode);
+            new RoomWrite(visible.Location.Id, "FORBIDDEN", null, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync($"/api/v1/assets/{asset.Id}",
             new AssetWrite(visible.Location.Id, visible.Room.Id, null, "A", "Asset", "Equipment", "Changed", Version: 1))).StatusCode);
         // Assignment changes apply to an already-issued JWT on the very next request.
@@ -181,7 +181,6 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
 
     [Theory]
     [InlineData("locations")]
-    [InlineData("room-types")]
     [InlineData("rooms")]
     [InlineData("assets")]
     [InlineData("billing-policies")]
@@ -198,28 +197,24 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     {
         var w = await Workspace(); using var owner = w.Owner;
         var other = await Workspace(); using var otherOwner = other.Owner;
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/rooms",
-            new RoomWrite(w.Location.Id, other.Type.Id, "BAD", null, 1))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/capture/rooms",
-            new RoomInput(w.Location.Id, "NO-TYPE"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsJsonAsync("/api/v1/rooms",
+            new RoomWrite(Guid.NewGuid(), "BAD", null, 1))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync("/api/v1/capture/rooms",
+            new RoomInput(other.Location.Id, "NO-TYPE"))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
-            new RoomWrite(w.Location.Id, w.Type.Id, "A-01", "1", 2, RoomStatus.Occupied, 1))).StatusCode);
+            new RoomWrite(w.Location.Id, "A-01", "1", 2, RoomStatus.Occupied, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location.Id}",
             new LocationWrite(w.Location.Name, w.Location.Address, false, 1))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/room-types/{w.Type.Id}",
-            new RoomTypeWrite(w.Location.Id, w.Type.Name, null, 2, 20, [], false, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/assets",
             new AssetWrite(w.Location.Id, other.Room.Id, null, null, "Invalid", "Equipment", "Good"))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/assets",
             new AssetWrite(w.Location.Id, null, null, null, "Missing scope", "Equipment", "Good"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
-            new RoomWrite(w.Location.Id, w.Type.Id, "A-01", "1", 2, RoomStatus.Unavailable, 1))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync($"/api/v1/room-types/{w.Type.Id}",
-            new RoomTypeWrite(w.Location.Id, w.Type.Name, null, 2, 20, [], false, 1))).StatusCode);
+            new RoomWrite(w.Location.Id, "A-01", "1", 2, RoomStatus.Unavailable, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location.Id}",
             new LocationWrite(w.Location.Name, w.Location.Address, false, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/rooms",
-            new RoomWrite(w.Location.Id, w.Type.Id, "NEW", null, 1))).StatusCode);
+            new RoomWrite(w.Location.Id, "NEW", null, 1))).StatusCode);
     }
 
     [Fact]
@@ -227,7 +222,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     {
         var w = await Workspace(); using var owner = w.Owner;
         var rooms = await Task.WhenAll(new[] { " race ", "RACE" }.Select(number => owner.PostAsJsonAsync("/api/v1/rooms",
-            new RoomWrite(w.Location.Id, w.Type.Id, number, null, 1))));
+            new RoomWrite(w.Location.Id, number, null, 1))));
         Assert.Single(rooms, x => x.StatusCode == HttpStatusCode.Created);
         Assert.Single(rooms, x => x.StatusCode == HttpStatusCode.Conflict);
         var writes = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => owner.PostAsJsonAsync("/api/v1/billing-policies", Rent(w.Location.Id, 100))));
@@ -244,11 +239,10 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     {
         var w = await Workspace(); using var owner = w.Owner;
         await Created<PolicyDto>(owner, "billing-policies", Rent(w.Location.Id, 100));
-        await Created<PolicyDto>(owner, "billing-policies", Rent(w.Location.Id, 200, type: w.Type.Id));
         var roomRent = await Created<PolicyDto>(owner, "billing-policies", Rent(w.Location.Id, 300, room: w.Room.Id));
-        await Created<PolicyDto>(owner, "billing-policies", new PolicyWrite(w.Location.Id, null, null, ChargeCategory.Electricity,
+        await Created<PolicyDto>(owner, "billing-policies", new PolicyWrite(w.Location.Id, null, ChargeCategory.Electricity,
             "ELECTRICITY", "Điện", ChargingMethod.Metered, 3500.125m, Today, null));
-        await Created<PolicyDto>(owner, "billing-policies", new PolicyWrite(w.Location.Id, null, null, ChargeCategory.ServiceFee,
+        await Created<PolicyDto>(owner, "billing-policies", new PolicyWrite(w.Location.Id, null, ChargeCategory.ServiceFee,
             "internet", "Internet", ChargingMethod.FixedPerRoomPerMonth, 0, Today, null));
         var prices = (await owner.GetFromJsonAsync<ResolvedPrices>($"/api/v1/rooms/{w.Room.Id}/prices?effectiveOn={Today:yyyy-MM-dd}"))!;
         Assert.Equal(roomRent.Id, prices.Charges.Single(x => x.ChargeCode == "RENT").Id);
@@ -294,7 +288,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         foreach (var input in new[] { Rent(w.Location.Id, -1), Rent(w.Location.Id, 1, Today.AddDays(-1)),
                      Rent(w.Location.Id, 1, Today.AddDays(2), Today), Rent(w.Location.Id, 0.00001m),
                      Rent(w.Location.Id, 1) with { Method = ChargingMethod.Metered },
-                     Rent(w.Location.Id, 1) with { RoomId = w.Room.Id, RoomTypeId = w.Type.Id } })
+                     Rent(w.Location.Id, 1) with { RoomId = Guid.NewGuid() } })
             Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/billing-policies", input)).StatusCode);
         foreach (var query in new[] { "page=0", "pageSize=101", "page=2147483647&pageSize=100", "roomStatus=99" })
             Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync("/api/v1/rooms?" + query)).StatusCode);
@@ -310,11 +304,9 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     }
 
     [Fact]
-    public async Task NormalizedTypeAndAssetCodesAreUniqueWithinLocationAndOwnerAccessIsGlobal()
+    public async Task NormalizedAssetCodesAreUniqueWithinLocationAndOwnerAccessIsGlobal()
     {
         var w = await Workspace(); using var owner = w.Owner;
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/room-types",
-            new RoomTypeWrite(w.Location.Id, " studio ", null, 1, null, []))).StatusCode);
         await Created<AssetDto>(owner, "assets", new AssetWrite(w.Location.Id, null, "Lobby", "AC", "Asset", "Equipment", "Good"));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/assets",
             new AssetWrite(w.Location.Id, null, "Lobby", " ac ", "Other", "Equipment", "Good"))).StatusCode);
@@ -324,7 +316,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var second = await Client(Roles.Owner); using var otherOwner = second.Client;
         Assert.Equal(HttpStatusCode.OK, (await otherOwner.GetAsync($"/api/v1/locations/{w.Location.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await otherOwner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
-            new RoomWrite(w.Location.Id, w.Type.Id, "A-02", "1", 2, Version: w.Room.Version))).StatusCode);
+            new RoomWrite(w.Location.Id, "A-02", "1", 2, Version: w.Room.Version))).StatusCode);
     }
 
     [Fact]
@@ -334,8 +326,8 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var created = await owner.PostAsJsonAsync("/api/v1/capture/residents", new ResidentInput(w.Room.Id, "Synthetic resident", ResidentType.CoOccupant));
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
-            new RoomWrite(w.Location.Id, w.Type.Id, "A-01", "1", 2, RoomStatus.Unavailable, 1))).StatusCode);
-        var unavailable = await Created<RoomDto>(owner, "rooms", new RoomWrite(w.Location.Id, w.Type.Id, "CLOSED", null, 1, RoomStatus.Unavailable));
+            new RoomWrite(w.Location.Id, "A-01", "1", 2, RoomStatus.Unavailable, 1))).StatusCode);
+        var unavailable = await Created<RoomDto>(owner, "rooms", new RoomWrite(w.Location.Id, "CLOSED", null, 1, RoomStatus.Unavailable));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/capture/residents",
             new ResidentInput(unavailable.Id, "Blocked", ResidentType.CoOccupant))).StatusCode);
     }
@@ -345,7 +337,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     {
         var w = await Workspace(); using var owner = w.Owner;
         var updates = await Task.WhenAll(new[] { "A-02", "A-03" }.Select(number => owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
-            new RoomWrite(w.Location.Id, w.Type.Id, number, "1", 2, Version: 1))));
+            new RoomWrite(w.Location.Id, number, "1", 2, Version: 1))));
         Assert.Single(updates, x => x.StatusCode == HttpStatusCode.OK);
         Assert.Single(updates, x => x.StatusCode == HttpStatusCode.Conflict);
         var other = await Workspace(); using var otherOwner = other.Owner;
@@ -387,7 +379,9 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var active = await Created<PolicyDto>(owner, "billing-policies", Rent(w.Location.Id, 100));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/billing-policies/{active.Id}",
             new PolicyUpdate(Rent(w.Location.Id, 200, Today.AddDays(5)), active.Version))).StatusCode);
-        var usedInput = Rent(w.Location.Id, 200, Today.AddDays(10), type: w.Type.Id);
+        // RoomType is no longer part of the Compact24 model. Use a room-scoped
+        // future rate so it is independent from the active location-wide rate.
+        var usedInput = Rent(w.Location.Id, 200, Today.AddDays(10), room: w.Room.Id);
         var used = await Created<PolicyDto>(owner, "billing-policies", usedInput);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var entity = await db.Set<BillingPolicy>().SingleAsync(x => x.Id == used.Id);

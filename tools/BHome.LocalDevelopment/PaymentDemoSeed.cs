@@ -23,8 +23,7 @@ internal static class PaymentDemoSeed
         if (location is null)
         {
             if (await db.Locations.AnyAsync(l => l.Name == "BHOME PAYMENT DEMO", t)) throw new LocalTestAccountException("Trùng tên cơ sở ngoài fixture payment; không thay đổi dữ liệu.");
-            Add(db, 10, new Location("BHOME PAYMENT DEMO") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync(t), Address = "ĐỊA CHỈ TỔNG HỢP - PAYMENT TEST ONLY" });
-            Add(db, 11, new RoomType { LocationId = Id(10), Name = "Phòng payment tổng hợp", DefaultCapacity = 3 });
+            Add(db, 10, new Location("BHOME PAYMENT DEMO") { Address = "ĐỊA CHỈ TỔNG HỢP - PAYMENT TEST ONLY" });
             db.Add(new StaffLocationAssignment(Id(10), User(2), User(1), today.AddYears(-1), today.AddYears(1)));
         }
         else if (location.Name != "BHOME PAYMENT DEMO") throw new LocalTestAccountException("Trùng ID fixture payment.");
@@ -33,7 +32,7 @@ internal static class PaymentDemoSeed
             var number = 20 + room; var label = room == 0 ? "PAY101-PAID" : room == 1 ? "PAY102-UNPAID" : room == 2 ? "PAY103-OVERDUE" : "PAY104-UI";
             var existing = await db.Set<Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == Id(number), t);
             if (existing is not null) { if (existing.LocationId != Id(10) || existing.RoomNumber != label) throw new LocalTestAccountException("Trùng ID phòng payment ngoài fixture."); continue; }
-            Add(db, number, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = label, Capacity = 3, Status = RoomStatus.Available });
+            Add(db, number, new Room { LocationId = Id(10), RoomNumber = label, Capacity = 3, Status = RoomStatus.Available });
             for (var person = 0; person < 3; person++) Add(db, 40 + room * 3 + person, new Resident
             {
                 RoomId = Id(number),

@@ -47,16 +47,16 @@ Staff/Tenant khác và Owner browser mở đúng Contract từ thông báo closu
 22 nhóm có phí/21 nhóm không phí; no duplicate publication. Worker vẫn tắt, DeliveryState giữ
 Unconfigured; không suy kết quả này thành kiểm chứng lịch worker, email/push hoặc native UI.
 
-| Source                                       | Recipients / safe links                                                                             |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| InvoiceIssuedEvents                          | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                              |
-| PaymentConfirmedEvents + verified allocation | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data             |
-| Adjustment requested                         | Owner phụ trách; Adjustment                                                                         |
-| Adjustment decided                           | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update |
-| ContractExpiryNotices JOB-02                 | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                           |
-| OperationalTaskNotifications                 | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                |
-| Automation execution PendingInputs           | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                   |
-| ContractMoveOutHistory đã commit             | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract |
+| Source                                        | Recipients / safe links                                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| InvoiceIssuedEvents                           | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                                                                           |
+| PaymentConfirmedEvents + verified allocation  | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data                                                          |
+| Adjustment requested                          | Owner phụ trách; Adjustment                                                                                                                      |
+| Adjustment decided                            | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update                                              |
+| ContractExpiryNotices JOB-02                  | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                                                                        |
+| OperationalTaskNotifications                  | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                                                             |
+| Automation execution PendingInputs            | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                                                                |
+| ContractMoveOutHistory đã commit              | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract                              |
 | DepositDeductionV1 và SecurityDepositRefundV1 | Owner signer + Tenant Contract; plan đã duyệt, request/APPROVED/REJECTED/Completed. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng |
 
 Receipt-excess refund mới chưa có event consumer riêng; không suy notification hoàn tiền đã tồn tại

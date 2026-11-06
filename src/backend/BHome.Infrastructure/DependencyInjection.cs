@@ -122,11 +122,24 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.StaffOperations.ITaskEvidenceFiles, BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceFiles>();
         services.AddScoped<BHome.Application.StaffOperations.OperationalTaskService>();
         services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
+        services.AddScoped<BHome.Application.Operations.IOperationsRepository,
+            BHome.Infrastructure.Modules.Operations.CompactOperationsRepository>();
+        services.AddScoped<BHome.Application.Operations.IOperationsFiles,
+            BHome.Infrastructure.Modules.Operations.OperationsFiles>();
+        services.AddScoped<BHome.Application.Operations.OperationsService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
         services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
+        services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
@@ -171,7 +184,12 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractPdfSigning(services);
-        services.AddScoped<BHome.DigitalSigning.Application.IViettelAccountSource, BHome.Infrastructure.Contracts.ContractMySignAccount>();
+        // Viettel account: configuration (DigitalSigning:Viettel), overridden by what the Owner saved on the settings screen.
+        services.AddScoped<BHome.DigitalSigning.Application.ISigningSettingsStore, BHome.Infrastructure.Contracts.CompactSigningSettingsStore>();
+        services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
+        BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
+        services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
+        services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
         services.AddScoped<BHome.DigitalSigning.Application.Services.SigningCertificateService>();

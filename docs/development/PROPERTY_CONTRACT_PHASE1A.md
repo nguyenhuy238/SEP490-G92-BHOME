@@ -1,5 +1,7 @@
 # Phase 1A — Property và Contract consistency
 
+> Addendum 06/11/2026: kết quả merge được điều chỉnh theo baseline mới đã chốt — không còn Chain/RoomType trong API và Compact24 runtime. Readiness kiểm tra Location, Room, nghĩa vụ Contract và chính sách giá theo Location/Room; mọi mô tả RoomType phía dưới là bằng chứng lịch sử trước quyết định này.
+
 Ngày verification: 05/11/2026. Phạm vi backend; không commit, push, đổi branch, migration hoặc truy cập database dùng chung.
 
 Nguồn đối chiếu: root `AGENTS.md`, Report 3 v1.3, `docs/api/PROPERTY_MANAGEMENT.md`, code Property/Contract,

@@ -1,5 +1,7 @@
 # Phase 1B — Room Readiness, Room History và Occupancy Analytics
 
+> Addendum 06/11/2026: RoomType đã bị loại khỏi baseline hiện hành. Readiness không chặn theo RoomType và repository chỉ xét Room trực thuộc Location cùng giá/phí cấp Location hoặc Room. Không thêm bảng hay migration.
+
 Ngày 05/11/2026. Quyết định hiện hành cho phép triển khai Phase 1B read-only trong khi Docker Linux Engine
 không khả dụng. Quyết định này không thể hiện Phase 1A đã accepted và không thay thế 10 PostgreSQL concurrency
 tests đang bị chặn.

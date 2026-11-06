@@ -18,6 +18,7 @@ export const portalRoutes = [
   '/tasks',
   '/tenants',
   '/contracts',
+  '/digital-signing',
   '/handovers',
   '/temporary-residence',
   '/meters',

@@ -24,6 +24,7 @@ const SchedulesPage = lazy(() => import('../features/schedules/pages/SchedulesPa
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
+const DigitalSigningPage = lazy(() => import('../features/contracts/pages/DigitalSigningPage'));
 const HandoversPage = lazy(() => import('../features/handovers/pages/HandoversPage'));
 const TemporaryResidencePage = lazy(
   () => import('../features/temporary-residence/pages/TemporaryResidencePage'),
@@ -106,6 +107,7 @@ export function AppRouter() {
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/tenants" element={<TenantsPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
+              <Route path="/digital-signing" element={<DigitalSigningPage />} />
               <Route path="/handovers" element={<HandoversPage />} />
               <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
               <Route path="/meters" element={<MetersPage />} />

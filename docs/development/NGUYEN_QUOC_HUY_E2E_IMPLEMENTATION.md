@@ -29,18 +29,21 @@ TASK: BE-19 / BE-X07
 SLICE: Owner Web hoàn cọc và xem số liệu quyết toán từ API
 
 IMPLEMENTED:
+
 - ContractLifecyclePanel mở RefundPanel nguồn SecurityDeposit theo Contract đang xem; tái sử dụng flow request/approve/reject/manual execution/private download, không tạo frontend mới hoặc tính lại tiền ở client.
 - Shared client bổ sung depositSource/createDeposit và nullable source union; server calculation hiển thị issued/payable/paid, cọc dùng/hoàn/giữ chỗ/khả dụng. Unknown giữ Chờ đối chiếu.
 - Không tự chọn người nhận; bắt buộc xác nhận nguồn, người nộp theo evidence và không khấu trừ. Consent/key gắn source fingerprint/balance/requests; source đổi reset consent và tạo key cho payload mới. Lỗi 503 giữ cùng key/payload, không báo Completed.
 - Blockers chặn create/approve/execution; vẫn cho Reject để giải phóng reservation. Owner settlement review gắn summary.reference; NoAdditionalCharges gắn inspection/version, không dùng consent cũ cho dữ liệu mới.
 
 CHANGED FILES:
+
 - packages/client-core/src/{contracts,refunds,useContractLifecycle}.ts
 - src/owner-web/src/features/payments/{RefundPanel,RefundPanel.test}.tsx
 - src/owner-web/src/features/contracts/{ContractLifecyclePanel,ContractLifecyclePanel.test}.tsx
 - API inventory/status/REFUNDS docs, generator và báo cáo này.
 
 TESTS:
+
 - `npm.cmd run test --workspace src/owner-web -- src/features/payments/RefundPanel.test.tsx src/features/payments/Payments.test.tsx src/features/contracts/ContractLifecyclePanel.test.tsx --maxWorkers=1`: **20/20 đạt**, 3 files.
 - `npm.cmd run build --workspace src/owner-web` và `npm.cmd run lint --workspace src/owner-web`: **đạt**.
 - `npm.cmd run typecheck --workspace src/mobile`: **đạt** trên shared DTO/client mới.
@@ -48,21 +51,25 @@ TESTS:
 - Generator 215 routes/234 callsites, diff check đạt. Component network được mock; chưa gọi đây là browser/MinIO/native E2E.
 
 COMMIT:
+
 - Message: feat(moveout): [BE-19] integrate Owner deposit return and settlement review
 - SHA: `15d8204b42577cf37cd665701d8ff77a6b013ff5` (ghi sau commit, đưa vào slice Mobile).
 
 FRONTEND HANDOFF:
+
 - Owner Web: Vũ Xuân Trường review UI/UX. Mobile: Bùi Bảo Long; client/DTO tương thích, chưa bổ sung hiển thị Mobile trong slice này.
 
 STATUS: PARTIAL — Owner API UI đã nối và kiểm component/build/lint; BE-19/BE-X07 chưa DONE.
 
 REMAINING:
+
 - Browser Web/API/Compact24/MinIO thật cho move-out/cọc mới, Mobile visibility/native acceptance, khấu trừ có phí, notification và Finance classification. Không tự payout hoặc bỏ backend guards.
 
 TASK: BE-19 / BE-X07
 SLICE: Hoàn cọc không khấu trừ bằng xác minh thủ công, giữ source riêng và chặn closure sớm
 
 IMPLEMENTED:
+
 - UC-19/GBR-01/02/18, OQ-01/05 và ủy quyền triển khai → GET/POST contracts/{id}/deposit-refunds; reuse decision/execution/evidence hiện hữu nhưng source_deposit_contract_id riêng, source_payment_id null.
 - Chỉ nhánh Owner xác nhận inspection không phát sinh phí, invoice Final/paid, Final readings billed/khớp, không Adjustment/bank/excess/holding/allocation chưa xử lý. Không tự đặt damage fee hoặc chia nợ phòng.
 - Owner phải xác nhận đã kiểm người nộp/người nhận và không khấu trừ; choices chỉ là occupant Verified/liên kết tài khoản, không suy representative là depositor. Ghi attestation và obligation fingerprint trong history SecurityDepositRefundV1.
@@ -71,12 +78,14 @@ IMPLEMENTED:
 - Chỉ toàn bộ cọc đã hoàn được phân loại, không reservation, không phí và mọi guard đạt mới xác nhận 0 deductions/VerifiedManual; Owner vẫn review settlement rồi complete. Unknown/legacy Completed không release dù bằng đủ cọc. Receipt excess PendingReview cũng được kiểm trước settlement.
 
 CHANGED FILES:
+
 - RefundsController.cs; Application/Finance/RefundService.cs; Application/Contracts/{ContractContracts,SettlementCalculation}.cs
 - Infrastructure/Finance/{RefundRepository,DepositRefundSource}.cs; Infrastructure/Contracts/{ContractDepositPosition,ContractSettlementLedger}.cs
 - RefundModeTests.cs; PaymentsDebt/{DepositRefundTests,ContractClosureTests}.cs; Compact24/{Compact24WorkflowRegressionTests,Compact24DepositRecoveryTests}.cs
 - API module/status/index/runtime docs, inventory generator và báo cáo này.
 
 TESTS:
+
 - `dotnet test tests/backend/BHome.Application.UnitTests --no-restore --filter 'FullyQualifiedName~SettlementCalculationTests|FullyQualifiedName~RefundModeTests' --verbosity minimal`: **13/13 đạt**.
 - `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24PaymentRegressionTests.DepositReturn|FullyQualifiedName~Compact24PaymentRegressionTests.DepositPositions|FullyQualifiedName~Compact24PaymentRegressionTests.SettlementCalculation|FullyQualifiedName~Compact24RefundTests|FullyQualifiedName~Compact24DepositRecoveryTests|FullyQualifiedName~RealLedgerRequiresReviewedSnapshot|FullyQualifiedName~NewAdjustmentAfterSettlement|FullyQualifiedName~Compact24ApiAuditTests' --verbosity minimal`: **18/18 đạt, 0 skip**; 12 workflow/refund/closure + 6 audit. PG disposable riêng 55440; storage test boundary.
 - Audit: **215 routes, 210 protected trả 401, 5 anonymous, 106 Owner GET probes, 0 HTTP5xx**: 200=32, 204=2, 400=10, 403=3, 404=59. Generator tái sinh từ manifest mới; không thêm schema.
@@ -84,21 +93,25 @@ TESTS:
 - Lỗi đã sửa: chạy build đồng thời gây CS2012 nên tách build tuần tự; fixture ExecuteUpdate không dùng được với Compact24 SQL projection nên dùng tracked fixture updates; regex hash trong interpolated SQL bị coi {64} là parameter, sửa thành parameter regex đầy đủ, không bỏ integrity guard. Logs .tools/huy-deposit-refund-{unit,pg,build}.log.
 
 COMMIT:
+
 - Message: feat(deposit): [BE-X07] return undisputed security deposits with verified evidence
 - SHA: `1d1eb1be94e6893dd02e8d551bc4e58f7cc36702` (ghi sau commit, đưa vào slice UI).
 
 FRONTEND HANDOFF:
+
 - Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long. Chưa nối hai deposit routes trong slice backend này; Tenant hiện xem settlement summary, không evidence/Owner actions.
 
 STATUS: PARTIAL — nhánh backend không khấu trừ đã kiểm chứng; chưa đánh dấu BE-19/BE-X07 DONE.
 
 REMAINING:
+
 - Khấu trừ có phí/damage/debt journal, Owner/Mobile UI, actual Web/API/MinIO E2E, refund notification và Finance classification. Bank/provider/native acceptance chưa chạy; không auto payout, không hợp thức hóa simulation/signature.
 
 TASK: BE-19 / BE-X07
 SLICE: Tổng hợp nghĩa vụ và vị thế nguồn cọc trước quyết định Owner
 
 IMPLEMENTED:
+
 - UC-19 (SRS p1812–1851), GBR-01/02/18, OQ-01/05 và ủy quyền người dùng → existing SettlementSummary/ledger → calculator + Compact24 source-position reader; không tự quyết định phí/deduction/deadline.
 - Tổng hợp issued/approved Final delta/payable/verified allocations/room outstanding/excess riêng; shared debt chưa chia không gán hết cho Tenant. Không cộng cọc vào doanh thu hoặc cộng rent theo số người.
 - Cọc khả dụng trừ net deposit allocations, Completed refunds và Requested/Approved reservations. Rejected không giữ chỗ; unknown/mismatch/âm không thay bằng 0. Root verifications không cộng lặp theo renewal; position đọc các ID trong chain.
@@ -106,6 +119,7 @@ IMPLEMENTED:
 - Giữ blocker cọc và mọi guard inspection/readings/invoices/settlement/closure. Số dư khả dụng chưa phải approved refund hoặc authorization chi tiền.
 
 CHANGED FILES:
+
 - src/backend/BHome.Application/Contracts/{ContractContracts.cs,SettlementCalculation.cs}
 - src/backend/BHome.Infrastructure/Contracts/{ContractSettlementLedger.cs,ContractDepositPosition.cs}; DependencyInjection.cs
 - tests/backend/BHome.Application.UnitTests/Contracts/SettlementCalculationTests.cs
@@ -113,21 +127,25 @@ CHANGED FILES:
 - docs/api/CONTRACT_LIFECYCLE.md và báo cáo này.
 
 TESTS:
+
 - `dotnet test tests/backend/BHome.Application.UnitTests --no-restore --filter FullyQualifiedName~SettlementCalculationTests --verbosity minimal`: **9/9 đạt**.
 - `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24PaymentRegressionTests.SettlementCalculation|FullyQualifiedName~Compact24PaymentRegressionTests.DepositPositions|FullyQualifiedName~RealLedgerRequiresReviewedSnapshot|FullyQualifiedName~NewAdjustmentAfterSettlement' --verbosity minimal`: **5/5 đạt, 0 skip**, Compact24 thật + legacy closure regression; PG riêng port 55440.
 - Có tiền chính xác 18 chữ số, shared/exclusive debt, approved Adjustment/paid totals, overdraw/mismatch/unknown, source transfer/refund/reservation, private scope và snapshot đổi. SQL refund/transfer trong fixture là synthetic preconditions để kiểm read model, không phải nghiệm thu workflow tạo/duyệt/chi cọc.
 - Lượt đầu compile fail CS8361 do conditional interpolation trong fixture; đã thêm parentheses, không nới guard/assertion. Logs .tools/huy-settlement-calculation-{unit,pg}.log.
 
 COMMIT:
+
 - Message: feat(moveout): [BE-19] calculate settlement obligations and available deposit
 - SHA: `f4e0f70ba433c159f504d32f696807e7db548f75` (ghi sau commit, được đưa vào slice tiếp theo).
 
 FRONTEND HANDOFF:
+
 - Owner Web: Vũ Xuân Trường; Mobile: Bùi Bảo Long. Optional calculation DTO chưa hiển thị ở client trong slice này; nối sau bằng số server, không tính lại bằng Number.
 
 STATUS: PARTIAL — calculation slice đã kiểm chứng; toàn bộ BE-19/BE-X07 chưa DONE.
 
 REMAINING:
+
 - Owner-supported deductions/final-charge decisions, source-specific deposit refund/beneficiary verification, Owner/Mobile UI, notification và full move-out browser/native E2E. Không coi existing receipt-excess refund là deposit refund; không fake Resolved/Completed hoặc bank payout.
 
 ## Tiếp tục sau merge af97676 ngày 05/11/2026
@@ -436,30 +454,30 @@ Audit routes được chạy lại với evidence output: **1/1 đạt**, 199 ro
 
 Không đóng toàn bộ 22 nhiệm vụ. Các phần được triển khai/kiểm chứng và phần còn lại cụ thể:
 
-| Task   | Kết quả hiện tại                                                                                                 | Việc còn lại                                                                                                               | Trạng thái              |
-| ------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| BE-X04 | Fresh Compact24, DI/Identity/worker/readiness/SQL log independence và regression đạt                             | Không có legacy runtime dependency được phát hiện trong phạm vi đã test                                                    | DONE                    |
-| BE-14  | Boundary và transfer guard được test                                                                             | OQ-03/Q-H1 về validity/payment deadline/transfer chưa có nội dung quyết định; Holding ledger/API/UI chưa triển khai          | BLOCKED (policy)        |
-| BE-15  | Owner review/release canonical PDF, Mobile onboarding/signing/deposit/activation transport + Owner browser đạt | Mẫu production được duyệt, MySign test/staging thật và native device acceptance                                            | PARTIAL                 |
-| BE-16  | Renewal/history/state/scope regression đạt                                                                       | Provider staging + Owner/Tenant UI E2E với renewal đã ký                                                                   | PARTIAL                 |
-| BE-17  | Staff/Tenant handover v2, dispute/stale guards, Initial readings/private evidence và Owner browser đạt           | Native camera/device E2E, reviewer                                                                                       | PARTIAL                 |
-| BE-19  | Inspection/final readings/pending settlement/room release guards đạt                                             | Deposit deductions/refund/settlement journal thực và UI đầy đủ; không fake Resolved                                        | PARTIAL                 |
-| BE-20  | Sửa timeout ảnh xoay; real-model HTTP 1/1, OCR unit 125/125, integration 119/119 đạt                            | Independent >=50-image/90% acceptance và native camera chưa đạt; không gọi smoke là accuracy benchmark                     | PARTIAL                 |
-| BE-21  | Owner browser Draft/Final từ readings, một Invoice/ba Tenant, không nhân rent; immutable/scope/jobs tests đạt    | Tenant native xuyên chu kỳ, reviewer, notification delivery acceptance                                                     | PARTIAL                 |
-| BE-22  | Owner browser partial/excess + manual excess refund approved/evidence/Completed; source/ledger/replay/race đạt | Bank provider/callback thật, deposit/Adjustment-created excess refund, credit và native/reviewer                          | PARTIAL                 |
-| BE-23  | Debt/overdue/notification/current assignment regression đạt                                                      | Full UI/device reminder acceptance và cấu hình delivery thật                                                               | PARTIAL                 |
-| BE-24  | Co-occupant gửi private evidence, Owner browser approve separate Adjustment; Final DTO giữ nguyên, ba balances đúng | Tenant native request-decision và reviewer; các nhánh khác đã có backend/component regression                          | PARTIAL                 |
-| BE-25  | Hai allocations/hai payer, ba Tenant history/ẩn payer ID; Owner browser và parallel retry đạt                    | Native device/history screen acceptance                                                                                  | PARTIAL                 |
-| BE-31  | CRUD/browser + private evidence hash/recovery + Asset/Work Order scoped refs/correction regression đạt          | UI reviewer; browser tạo Work Order phụ thuộc module BF-07 chưa triển khai                                                 | PARTIAL                 |
-| BE-32  | Actual finance/current counts + Location historical occupancy cùng snapshot; API/UI/browser đạt               | Chain/Room historical phạm vi chưa hỗ trợ; Staff cost tự động/OQ-06 và classified refund                                   | PARTIAL                 |
-| BE-33  | Recovery/payback/no-data guards, classified receipt-excess refund không ghi OPEX/revenue reversal; tests đạt   | Deposit/other cash refund classification và nguồn vốn ngoài expenses cần tích hợp                                        | PARTIAL                 |
-| BE-34  | Analyze/save/list/get/compare, immutable snapshots/isolation/role/idempotency; browser save/reload đạt           | Vũ Xuân Trường review UX; không thay actual ledger                                                                         | DONE (functional slice) |
-| BE-X05 | Populated synthetic 70→24 mapping/reconciliation/rollback/privacy/evidence tests trong full suite đạt            | Không chạy migration trên working bhome; chưa có pilot với một dataset legacy ngoài fixtures được chủ dự án chỉ định       | PARTIAL                 |
-| BE-X06 | DOCX/PDF converter thật và MinIO/authorization regressions; PDF signing 41 tests đạt                             | Không thấy cấu hình MySign staging; cần account/provider/ownership verification, không có chữ ký thật trong lượt này       | PARTIAL                 |
-| BE-X07 | Under/over policy + manual receipt-excess refund API/UI/private evidence/Completed được test và browser đạt   | Credit, deposit deductions/refund/settlement, Adjustment-created excess chưa triển khai                                   | PARTIAL                 |
-| BE-X08 | Finance unit 11/11, payment/refund/finance 32/32, excess-refund classification và shared billing/browser đạt      | Deposit settlement/refund regression khi triển khai; không suy rộng mẫu sang NFR coverage/performance                      | PARTIAL                 |
-| DOC-01 | API inventory/Finance/Payments/progress có source traceability và kết quả thật                                   | Bản gốc Reports 2/3/4 chưa sửa; supplement này ghi discrepancy, không thay approved baseline bằng claims                   | PARTIAL                 |
-| DOC-03 | Bằng chứng/commands/commits/handoff và gaps trong báo cáo này                                                    | Report 7/checklist workbook không có trong repository; chưa thể hoàn tất hồ sơ final theo mẫu                              | PARTIAL                 |
+| Task   | Kết quả hiện tại                                                                                                    | Việc còn lại                                                                                                         | Trạng thái              |
+| ------ | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| BE-X04 | Fresh Compact24, DI/Identity/worker/readiness/SQL log independence và regression đạt                                | Không có legacy runtime dependency được phát hiện trong phạm vi đã test                                              | DONE                    |
+| BE-14  | Boundary và transfer guard được test                                                                                | OQ-03/Q-H1 về validity/payment deadline/transfer chưa có nội dung quyết định; Holding ledger/API/UI chưa triển khai  | BLOCKED (policy)        |
+| BE-15  | Owner review/release canonical PDF, Mobile onboarding/signing/deposit/activation transport + Owner browser đạt      | Mẫu production được duyệt, MySign test/staging thật và native device acceptance                                      | PARTIAL                 |
+| BE-16  | Renewal/history/state/scope regression đạt                                                                          | Provider staging + Owner/Tenant UI E2E với renewal đã ký                                                             | PARTIAL                 |
+| BE-17  | Staff/Tenant handover v2, dispute/stale guards, Initial readings/private evidence và Owner browser đạt              | Native camera/device E2E, reviewer                                                                                   | PARTIAL                 |
+| BE-19  | Inspection/final readings/pending settlement/room release guards đạt                                                | Deposit deductions/refund/settlement journal thực và UI đầy đủ; không fake Resolved                                  | PARTIAL                 |
+| BE-20  | Sửa timeout ảnh xoay; real-model HTTP 1/1, OCR unit 125/125, integration 119/119 đạt                                | Independent >=50-image/90% acceptance và native camera chưa đạt; không gọi smoke là accuracy benchmark               | PARTIAL                 |
+| BE-21  | Owner browser Draft/Final từ readings, một Invoice/ba Tenant, không nhân rent; immutable/scope/jobs tests đạt       | Tenant native xuyên chu kỳ, reviewer, notification delivery acceptance                                               | PARTIAL                 |
+| BE-22  | Owner browser partial/excess + manual excess refund approved/evidence/Completed; source/ledger/replay/race đạt      | Bank provider/callback thật, deposit/Adjustment-created excess refund, credit và native/reviewer                     | PARTIAL                 |
+| BE-23  | Debt/overdue/notification/current assignment regression đạt                                                         | Full UI/device reminder acceptance và cấu hình delivery thật                                                         | PARTIAL                 |
+| BE-24  | Co-occupant gửi private evidence, Owner browser approve separate Adjustment; Final DTO giữ nguyên, ba balances đúng | Tenant native request-decision và reviewer; các nhánh khác đã có backend/component regression                        | PARTIAL                 |
+| BE-25  | Hai allocations/hai payer, ba Tenant history/ẩn payer ID; Owner browser và parallel retry đạt                       | Native device/history screen acceptance                                                                              | PARTIAL                 |
+| BE-31  | CRUD/browser + private evidence hash/recovery + Asset/Work Order scoped refs/correction regression đạt              | UI reviewer; browser tạo Work Order phụ thuộc module BF-07 chưa triển khai                                           | PARTIAL                 |
+| BE-32  | Actual finance/current counts + Location historical occupancy cùng snapshot; API/UI/browser đạt                     | Chain/Room historical phạm vi chưa hỗ trợ; Staff cost tự động/OQ-06 và classified refund                             | PARTIAL                 |
+| BE-33  | Recovery/payback/no-data guards, classified receipt-excess refund không ghi OPEX/revenue reversal; tests đạt        | Deposit/other cash refund classification và nguồn vốn ngoài expenses cần tích hợp                                    | PARTIAL                 |
+| BE-34  | Analyze/save/list/get/compare, immutable snapshots/isolation/role/idempotency; browser save/reload đạt              | Vũ Xuân Trường review UX; không thay actual ledger                                                                   | DONE (functional slice) |
+| BE-X05 | Populated synthetic 70→24 mapping/reconciliation/rollback/privacy/evidence tests trong full suite đạt               | Không chạy migration trên working bhome; chưa có pilot với một dataset legacy ngoài fixtures được chủ dự án chỉ định | PARTIAL                 |
+| BE-X06 | DOCX/PDF converter thật và MinIO/authorization regressions; PDF signing 41 tests đạt                                | Không thấy cấu hình MySign staging; cần account/provider/ownership verification, không có chữ ký thật trong lượt này | PARTIAL                 |
+| BE-X07 | Under/over policy + manual receipt-excess refund API/UI/private evidence/Completed được test và browser đạt         | Credit, deposit deductions/refund/settlement, Adjustment-created excess chưa triển khai                              | PARTIAL                 |
+| BE-X08 | Finance unit 11/11, payment/refund/finance 32/32, excess-refund classification và shared billing/browser đạt        | Deposit settlement/refund regression khi triển khai; không suy rộng mẫu sang NFR coverage/performance                | PARTIAL                 |
+| DOC-01 | API inventory/Finance/Payments/progress có source traceability và kết quả thật                                      | Bản gốc Reports 2/3/4 chưa sửa; supplement này ghi discrepancy, không thay approved baseline bằng claims             | PARTIAL                 |
+| DOC-03 | Bằng chứng/commands/commits/handoff và gaps trong báo cáo này                                                       | Report 7/checklist workbook không có trong repository; chưa thể hoàn tất hồ sơ final theo mẫu                        | PARTIAL                 |
 
 Manual receipt-excess refund đã có API/UI/evidence và kiểm thử như slice mới; không suy việc này thành hoàn tất deposit refund/settlement. Chưa tìm thấy MySign configuration trong files/process đã kiểm; không suy đoán secret trong nguồn ngoài repository. Không push/merge hoặc thay production data.
 
@@ -520,290 +538,307 @@ TASK: BE-19 / BE-17
 SLICE: Tenant Mobile xem cọc/hoàn tiền; giữ Staff inspection consent độc lập
 
 IMPLEMENTED:
+
 - Existing ContractLifecyclePanel hiển thị số liệu server: issued/payable/paid, deposit used/refunded/reserved/available và PendingReview/VerifiedManual/NotRequired. Null giữ Chờ xác minh, không tự tính hoặc suy ngân hàng đã chuyển.
 - Tenant chỉ đọc summary của Contract được backend cấp quyền; không có Owner request/approve/execution/private-proof actions. Staff không gọi hoặc hiển thị summary tài chính.
 - Owner consent hiện hữu gắn summary.reference/inspection version. Staff inspection consent riêng gắn Contract/move-out version/baseline/readings/observed fields/evidence; thay input phải xác nhận lại, không khóa nhầm Staff theo financial summary Owner.
 
 CHANGED FILES:
+
 - src/mobile/src/features/contracts/ContractLifecyclePanel.tsx
-- src/mobile/src/__tests__/moveout-settlement.test.tsx
+- src/mobile/src/**tests**/moveout-settlement.test.tsx
 - docs/api/REFUNDS.md và báo cáo này.
 
 TESTS:
-- npm.cmd run test --workspace src/mobile -- src/__tests__/moveout-settlement.test.tsx --maxWorkers=1: 5/5 đạt.
+
+- npm.cmd run test --workspace src/mobile -- src/**tests**/moveout-settlement.test.tsx --maxWorkers=1: 5/5 đạt.
 - npm.cmd run typecheck --workspace src/mobile: đạt; npm.cmd run lint --workspace src/mobile: đạt.
 - Typed generic Vitest mock ban đầu không khớp ContractRequest; bọc generic như convention test hiện hữu. Không sửa DTO runtime/permission để che lỗi.
 - Không có adb trên PATH hoặc LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe. Native Android/iOS E2E NOT RUN; mock renderer/component không phải camera/device acceptance. Logs .tools/huy-deposit-mobile-{ui,typecheck,lint}.log.
 
 COMMIT:
+
 - Message: feat(mobile): [BE-19] show authorized deposit settlement and return status
 - SHA: `9d6aaaccaa84ab00fac0530e3aef01b078997c00`.
 
 FRONTEND HANDOFF:
+
 - Bùi Bảo Long review Mobile UX/device. Vũ Xuân Trường tiếp tục Owner Web; không nhân bản quản trị hoàn cọc Owner lên Mobile.
 
 STATUS: PARTIAL — Mobile visibility component/typecheck/lint đạt; BE-19/BE-17 chưa DONE.
 
 REMAINING:
+
 - Browser real Web/API/Compact24/MinIO và native acceptance. Repro native: đăng nhập Staff đúng Location → mở inspection, chọn Final readings/ảnh, sửa field kiểm consent reset → Tenant đăng nhập đọc own summary → Owner Web hoàn theo sao kê → Tenant reload thấy VerifiedManual; Staff/cross-Tenant không thấy tài chính. Không có provider/bank thật trong lượt này.
 
 TASK: BE-19
 SLICE: Sửa cache eligibility cọc sau Owner lifecycle decision
 IMPLEMENTED:
+
 - Browser harness phát hiện nguồn deposit-refunds vẫn giữ blockers cũ trong staleTime=10000 của PortalProvider sau khi inspection-review đã commit.
 - ContractLifecyclePanel nay invalidate đúng source SecurityDeposit/Contract ID trước reload; manual reload cũng làm mới source. Receipt/Contract khác giữ cache riêng. Consent source hiện hữu tiếp tục reset khi snapshot thực sự đổi.
-CHANGED FILES:
+  CHANGED FILES:
 - src/owner-web/src/features/contracts/{ContractLifecyclePanel,ContractLifecyclePanel.test}.tsx; docs/api/REFUNDS.md; báo cáo này.
-TESTS:
+  TESTS:
 - Owner Lifecycle/Refund/Payments focused: 21/21 đạt, thêm QueryClient regression với staleTime=10000 và scope isolation.
 - Owner build/lint đạt; logs .tools/huy-deposit-cache-{ui,build,lint}.log.
 - Harness đầy đủ chưa pass tại lúc sửa; còn chạy lại sau commit. Các lỗi locator nhầm nhãn Mobile và datetime-local trailing-zero normalization là ở harness, không tăng timeout/giảm guard.
-COMMIT:
+  COMMIT:
 - Message: fix(moveout): [BE-19] refresh scoped deposit eligibility after decisions
 - SHA: `a7aa72eb987fa3090a6ac8890cd20d1a2d2d571a`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web: Vũ Xuân Trường; Mobile không đổi trong fix này.
-STATUS: DONE cho defect cache được tái hiện; BE-19 vẫn PARTIAL.
-REMAINING:
+  STATUS: DONE cho defect cache được tái hiện; BE-19 vẫn PARTIAL.
+  REMAINING:
 - Tiếp tục E2E real Web/API/MinIO của nhánh cọc mới; khấu trừ có phí/native/provider chưa hoàn tất.
 
 TASK: BE-19 / BE-X07
 SLICE: Real Web/API/Compact24/MinIO move-out và hoàn cọc không khấu trừ
 IMPLEMENTED:
+
 - Mở rộng harness hiện hữu sau shared billing/historical occupancy, không seed trạng thái move-out/Final reading/refund/closed Contract trực tiếp. Thêm otherStaff account không assignment để kiểm scope âm.
 - Tenant request → Owner browser approve → Owner schedule qua client → Staff MobileApi tạo/confirm Final120, inspection theo confirmed handover v2/assets/private evidence → Owner browser review NoAdditionalCharges.
 - Owner browser xác minh người nộp theo statement fixture, request/approve/manual execution cọc 3.000.000 kèm ảnh MinIO, private download đúng bytes → Tenant authorized summary VerifiedManual → Owner review đúng snapshot và complete → Room Available.
 - Approved/pending refund không cho complete; cross-Tenant/co-occupant không có Contract entitlement và Staff ngoài Location không đọc Final tasks/inspection. Tenant không tải Owner refund proof. Giữ một Final Invoice/ba recipients/hai allocations và hai refund source riêng (receipt10.000, deposit3.000.000).
-CHANGED FILES:
+  CHANGED FILES:
 - scripts/Verify-MoveOutClients.cjs (mới); scripts/Verify-MainDraftClients.cjs; scripts/Verify-ExcessRefundClients.cjs
 - tools/BHome.ContractVerification/FinanceVerificationCli.cs; docs/api/REFUNDS.md, API_IMPLEMENTATION_STATUS.md; báo cáo này.
-TESTS:
+  TESTS:
 - dotnet build tools/BHome.ContractVerification --no-restore: đạt, 0 warning/error.
 - dotnet run --project tools/BHome.ContractVerification --no-build -- --finance --main-draft: exit0, 19/19 nhóm PASS, DB/MinIO/API/browser fixture cleanup. Log .tools/huy-moveout-browser.log.
 - node --check các script mới/sửa và git diff --check đạt.
 - Lượt đầu dùng nhầm label Mobile thay label Owner; sau đó consent reset do cached eligibility dẫn tới fix a7aa72e (21/21 UI tests). Datetime-local trailing-zero .900 bị Chromium normalize nên dùng chuỗi canonical giữ nguyên instant, không tăng timeout/đổi clock/giảm approval guard.
-COMMIT:
+  COMMIT:
 - Message: test(moveout): [BE-19] verify manual deposit return and room release E2E
 - SHA: `2c1c3c5fb074cff2d1ddb8d124cb8cee69d0baee`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long. Actual Owner build/API mode được chạy; Staff/Tenant dùng shipped MobileApi/shared client, không native UI.
-STATUS: DONE cho nhánh E2E không khấu trừ; BE-19/BE-X07 vẫn PARTIAL.
-REMAINING:
+  STATUS: DONE cho nhánh E2E không khấu trừ; BE-19/BE-X07 vẫn PARTIAL.
+  REMAINING:
 - Khấu trừ có phí/damage/debt journal chưa triển khai, Finance deposit refund classification tiếp tục pending guard, notification worker tắt nên không claim notification E2E. MySign thật/native bank/device acceptance vẫn chưa đạt; không payout thật hoặc tuyên bố simulation có giá trị pháp lý.
 
 TASK: BE-19 / BE-X07
 SLICE: Backend Owner quyết định khấu trừ TenantDamage có evidence và hoàn phần còn lại
 IMPLEMENTED:
+
 - Truy vết UC-19/SRS p1833–1840, GBR-01/02/18, OQ-01/05 theo ủy quyền người dùng → DepositDeductionService/repository/ledger/refund source → unit/PG role/race/history/evidence/closure tests.
 - POST contracts/{id}/deposit-deductions Owner-only, expectedVersion/current summary reference, UUID key và human approval. Chỉ TenantDamage do Owner nhập, evidence linked đúng inspection/Room/Asset, một item/Room/Asset, tổng <=available deposit. Không auto phí/phạt/lãi hoặc bù debt trực tiếp.
 - Append DepositDeductionV1 vào contracts.history với version/actor/reason/source/proof hashes và audit; không thêm bảng/cột. Revision thay current plan, giữ tất cả bản cũ, không cộng lặp; sau reserve/refund không sửa plan.
 - Nguồn thiếu/đổi/không khớp giữ pending. Available trừ approved deduction một lần. Source refund giữ deposit principal riêng, chỉ request phần còn lại, bắt buộc review plan ID/fingerprint và xác minh depositor. Không dùng cờ no-deduction cho plan có phí.
 - Partial deduction + verified refund hoặc full retained deposit mới đủ đối ứng nguồn; full retention không tạo refund0/bank success. Actual proof bị thay chặn refund/settlement/closure. Invoice/allocations gốc không đổi, không tự tạo OPEX/Work Order.
-CHANGED FILES:
+  CHANGED FILES:
 - Application/Contracts/DepositDeductionService.cs; ContractContracts.cs; SettlementCalculation.cs; Finance/RefundService.cs
 - Infrastructure/Contracts/{DepositDeductionRepository,DepositDeductionEvidence,ContractDepositPosition,ContractSettlementLedger}.cs
 - Infrastructure/Finance/{RefundRepository,DepositRefundSource}.cs; DependencyInjection.cs; Api/Controllers/DepositDeductionsController.cs
 - Application.UnitTests/Contracts/DepositDeductionTests.cs; IntegrationTests/PaymentsDebt/DepositDeductionTests.cs; Compact24WorkflowRegressionTests.cs
 - docs/api/DEPOSIT_DEDUCTIONS.md, index/conventions/refund/status/runtime docs và báo cáo này.
-TESTS:
+  TESTS:
 - dotnet test Application.UnitTests --filter DepositDeductionTests|SettlementCalculationTests|RefundModeTests: 25/25 đạt (log huy-deduction-unit.log).
 - dotnet test IntegrationTests --filter damage/fullDamage/depositReturn/Recovery/Refund/legacyClosure/ApiAudit: 19/19 đạt, 0 skip (log huy-deduction-pg.log). 3 damage + 7 existing refund + 3 legacy closure + 6 audit.
 - Có canonical exact money/version serialization, unsupported reason/negative/fraction/excess/unknown evidence, unauthorized before lookup, Production simulation denial, concurrent same/different keys, stale/revision/history, proof tamper, remainder return/full retention/closure và invoice immutable.
 - API audit mới 216 routes, 211 protected, 5 anonymous, 106 Owner GET, 0 5xx; generated inventory khớp manifest riêng. Build 0 warning/error. Không chạy browser có phí/native/provider trong slice backend.
-COMMIT:
+  COMMIT:
 - Message: feat(deposit): [BE-X07] approve evidenced damage deductions and refund remainders
 - SHA: `83cda815f9659c896cd9c7d8b9297efffd5b75fe`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường: cần plan editor và approved-plan consent. Mobile Bùi Bảo Long: authorized fee breakdown/read-only; không cấp Staff quyền duyệt.
-STATUS: PARTIAL — backend supported TenantDamage branch đã test; BE-19/BE-X07 chưa DONE.
-REMAINING:
+  STATUS: PARTIAL — backend supported TenantDamage branch đã test; BE-19/BE-X07 chưa DONE.
+  REMAINING:
 - Owner UI/bank-evidence E2E có phí, Finance classification/retained compensation, notification. Debt offset/fees vượt cọc/semantic duplicate fee nhập tay không tự suy quyết định; xem DEPOSIT_DEDUCTIONS.md. Không tuyên bố native/bank/MySign acceptance.
 
 TASK: BE-19 / BE-X07
 SLICE: Owner Web quyết định thiệt hại và review hoàn phần cọc còn lại
 IMPLEMENTED:
+
 - Reuse Contract lifecycle và RefundPanel; shared client gọi POST deposit-deductions, không frontend mock fallback.
 - Owner chọn Room/Asset/ảnh inspection, nhập số tiền/căn cứ và xác nhận chưa tính invoice. Summary đổi remount editor; sửa input reset consent. Server quyết định tổng/eligibility, reservation hoặc unknown source giữ read-only.
 - Retry ambiguous response giữ UUID/payload; lỗi không báo đã duyệt. Empty items chỉ gửi khi Owner nhập căn cứ và xác nhận quyết định rõ ràng.
 - Refund source hiện plan/version/items; bắt buộc review đúng plan ID, deductionsConfirmed và không dùng no-deduction attestation cho plan có phí. Nguồn khác giữ flow cũ.
-CHANGED FILES:
+  CHANGED FILES:
 - packages/client-core/src/{contracts,refunds,useContractLifecycle}.ts
 - src/owner-web/src/features/contracts/{DepositDeductionsPanel,DepositDeductionsPanel.test,ContractLifecyclePanel}.tsx
 - src/owner-web/src/features/payments/{RefundPanel,RefundPanel.test}.tsx
 - docs/api/{DEPOSIT_DEDUCTIONS,REFUNDS}.md và báo cáo này.
-TESTS:
+  TESTS:
 - Owner focused DepositDeductionsPanel/ContractLifecyclePanel/RefundPanel/Payments: 26/26 đạt.
 - npm.cmd run build và lint --workspace src/owner-web: đạt; npm.cmd run typecheck --workspace src/mobile: đạt.
 - Logs .tools/huy-damage-owner-{ui,build,lint}.log, huy-damage-mobile-typecheck.log. Chưa chạy browser có khấu trừ/native/provider ở slice này.
-COMMIT:
+  COMMIT:
 - Message: feat(moveout): [BE-19] review evidenced deposit deductions in Owner Web
 - SHA: `03fc9be8ccad333bd0c7db553908c34ff7d8692f`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường review UX; Mobile Bùi Bảo Long giữ role-scoped read-only.
-STATUS: PARTIAL — UI được kiểm component/build/lint, toàn BE-19/BE-X07 chưa DONE.
-REMAINING:
+  STATUS: PARTIAL — UI được kiểm component/build/lint, toàn BE-19/BE-X07 chưa DONE.
+  REMAINING:
 - Real browser có khấu trừ/private proof/closure, Finance deposit source classification và notification. Debt offset/over-deposit fees chưa hỗ trợ; MySign/bank thật và native acceptance vẫn blocked/NOT RUN.
 
 TASK: BE-19 / BE-X07
 SLICE: Real browser khấu trừ có chứng từ, hoàn phần còn lại và regression không khấu trừ
 IMPLEMENTED:
+
 - Harness hiện hữu có --damage-settlement; vẫn dùng shipped Owner production build, HTTPS API, disposable Compact24 và MinIO thật.
 - Owner duyệt inspection có thiệt hại, nhập TenantDamage100.000/ảnh/căn cứ/human review từ cọc3.000.000. Backend chốt inspection version/hash; chỉ hoàn2.900.000, trừ đúng một lần. Không seed quyết định/refund/closure.
 - Owner browser lập/duyệt/ghi nhận manual execution với proof private, Tenant đọc approved deductions/refund/status, pending chặn closure; Owner review/complete mới RoomAvailable. Invoice Final/allocations/payer và history giữ nguyên.
-CHANGED FILES:
+  CHANGED FILES:
 - scripts/Verify-MoveOutClients.cjs; tools/BHome.ContractVerification/{ContractVerificationCli,FinanceVerificationCli}.cs
 - docs/api/DEPOSIT_DEDUCTIONS.md và báo cáo này.
-TESTS:
+  TESTS:
 - dotnet build tools/BHome.ContractVerification --no-restore: đạt, 0 warning/error.
 - dotnet run --project tools/BHome.ContractVerification --no-build -- --finance --main-draft --damage-settlement: exit0, 20/20 nhóm PASS.
 - Cùng lệnh bỏ --damage-settlement: exit0, 19/19 nhóm PASS. Logs huy-damage-moveout-browser.log và huy-undisputed-moveout-browser.log.
 - node --check, git diff --check đạt. API/browser fixture cleanup hoàn tất. Sao kê/bank/signing synthetic, không payout thật; Staff/Tenant là shipped MobileApi/shared transport, không native UI. Notification worker tắt.
-COMMIT:
+  COMMIT:
 - Message: test(moveout): [BE-19] verify evidenced deductions and remainder return E2E
 - SHA: `be28d6dd2fa6712967684dcd464bee6ca617b470`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Vũ Xuân Trường review Owner UX; Bùi Bảo Long thực hiện native acceptance khi có thiết bị.
-STATUS: DONE cho hai nhánh browser nêu trên; tổng BE-19/BE-X07 PARTIAL.
-REMAINING:
+  STATUS: DONE cho hai nhánh browser nêu trên; tổng BE-19/BE-X07 PARTIAL.
+  REMAINING:
 - Finance classification/retained compensation và notification; unsupported debt offset/fees vượt cọc. Native/MySign/bank-provider acceptance chưa có; không suy rộng kết quả fixture.
 
 TASK: BE-19 / BE-25 / BE-X07
 SLICE: Không cho unclassified receipt refund tự xóa pending-review
 IMPLEMENTED:
+
 - Trace UC-19/22/25, GBR-10/18 → PaymentRepository.PendingReviewAsync → Compact24RefundTests và closure regression.
 - Tổng Completed khớp tiền thừa chưa đủ. Kiểm state ExcessReceiptRefundV1 cuối cùng, đúng payer/beneficiary, source riêng, execution time/key/reference/SHA256 và Completed event; giữ ledger amount/Final invoice nguyên vẹn.
 - Dùng tổng allocations của receipt, không chỉ một allocation. Unknown legacy hoặc metadata không khớp giữ pending để settlement không bỏ qua nghĩa vụ.
-CHANGED FILES:
+  CHANGED FILES:
 - Infrastructure/PaymentsDebt/PaymentRepository.cs; IntegrationTests/Compact24/Compact24RefundTests.cs
 - docs/api/REFUNDS.md và báo cáo này.
-TESTS:
+  TESTS:
 - dotnet test IntegrationTests --filter Compact24RefundTests|DepositReturn|RealLedgerRequiresReviewedSnapshot|NewAdjustmentAfterSettlement: 11/11 đạt, 0 skip; log huy-refund-review-guard-pg.log.
 - Có raw legacy Completed đúng bằng excess, appended last state thiếu hash/sai reference, recovery bằng append state hợp lệ, paid amount không đổi và valid workflow regression.
 - Fixture đầu cố thay history bị trigger append-only chặn; sửa fixture thành append đúng lịch sử, giữ trigger/production invariant. Không bỏ hoặc nới guard.
-COMMIT:
+  COMMIT:
 - Message: fix(payment): [BE-25] retain review for unclassified completed excess returns
 - SHA: `c39a58b910a92c380453e3ff043685b54c9b4739`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner/Mobile tiếp tục dùng pendingReview server, không thay UI hoặc tự suy payment success.
-STATUS: DONE cho defect đối soát này; các task nghiệp vụ còn giới hạn như đã ghi.
-REMAINING:
+  STATUS: DONE cho defect đối soát này; các task nghiệp vụ còn giới hạn như đã ghi.
+  REMAINING:
 - Finance phân loại deposit principal returns và làm rõ treatment retained damage. Bank/native/provider acceptance chưa có.
 
 TASK: BE-31 / BE-32 / BE-X07 / BE-X08
 SLICE: Phân loại hoàn gốc cọc riêng trong Finance, giữ mô hình Invoice/OPEX
 IMPLEMENTED:
+
 - Trace UC-19/31..34, GBR-10/15/16/18 và OQ-01/05 user authorization → FinancialReportRepository/Service và Owner report → unit/PG/UI.
 - Phân loại SecurityDepositRefundV1 cuối cùng với source Contract/occupant, attestation, plan ID nếu có, budget cọc, Completed event và proof key/reference/hash. Receipt-excess giữ nguồn riêng; malformed events giữ unknown thay vì query500.
 - Thêm verifiedDepositReturns chuỗi tiền, theo executed_at/kỳ Việt Nam/Location/Room, loại demo và pending requests. Không thay issued/collections/OPEX/profit/net/recovery; incomplete legacy/unknown vẫn guard toàn chuỗi.
 - Owner report hiện subtotal hoàn gốc và giải thích khoản giữ cọc bồi thường chưa nhập mô hình Invoice/OPEX. Saved What-if cũ thiếu optional field giữ null; không hồi tố snapshot.
 - Không tạo/sửa ledger, auto OPEX hoặc doanh thu từ approved plan. Chưa có liability rollup/realized compensation accounting.
-CHANGED FILES:
+  CHANGED FILES:
 - Application/Finance/FinancialReportService.cs; Infrastructure/Finance/{FinancialReportRepository,FinancialReportRefunds}.cs; PaymentsDebt/PaymentRepository.cs
 - Shared finance DTO; Owner FinancialReportsApiPage và test; FinancialReportTests; DepositDeductionTests/DepositRefundTests/Compact24RefundTests
 - API status/FINANCE/DEPOSIT_DEDUCTIONS và báo cáo này.
-TESTS:
+  TESTS:
 - Finance report/scenario unit: 9/9 đạt, exact decimal lớn và saved snapshot compatibility.
 - Compact24 damage/full-retention/undisputed/recovery/refund/finance/history tests: 13/13 đạt, 0 skip; có pending không tính, period/scope, demo exclusion, legacy/malformed-last-state guard, profit/collection/OPEX không đổi.
 - Owner report UI: 9/9 đạt, missing khác verified0; Owner build/lint đạt.
 - Logs huy-finance-deposit-{unit,pg,ui,build,lint}.log. Fixture assert ban đầu đặt ở reservation thay Completed và nhầm 1 invoice với 2 invoice đã trả; sửa theo actual fixture preconditions, không đổi formula/guard để làm xanh.
-COMMIT:
+  COMMIT:
 - Message: feat(finance): [BE-X08] classify verified deposit principal returns separately
 - SHA: `43a8318a14bfa5e5db2538b18ac8421525991ccd`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường review report note; Mobile không thêm quản trị Finance.
-STATUS: DONE cho principal-return classification được test; Finance/BE-19/BE-X07 PARTIAL theo giới hạn.
-REMAINING:
+  STATUS: DONE cho principal-return classification được test; Finance/BE-19/BE-X07 PARTIAL theo giới hạn.
+  REMAINING:
 - Browser report regression sau classification, full suites, report evidence package; realized compensation/liability report/upstream Work Order/native/MySign/bank/notification không được suy hoàn tất.
 
 TASK: BE-19 / BE-X07 / FE-07 / JOB-04
 SLICE: Inbox trả phòng, quyết định khấu trừ và hoàn cọc sau committed history
 IMPLEMENTED:
+
 - Trace UC-19/35/36, GBR-01/02/18, JOB-04 → existing NotificationEventPublisher → PG inbox/target/retry tests.
 - Reuse transaction/advisory publication lock và unique recipient/eventKey. Quét ContractMoveOutHistory và Compact24 DepositDeductionV1/SecurityDepositRefundV1, batch25/source; chỉ Owner signer/Tenant Contract có quyền xem settlement.
 - Generic status/link Contract, không amounts/private reason/bank reference/evidence; Staff/co-occupant khác không nhận dữ liệu tài chính. Approved báo chờ thực hiện; Completed cần actual execution/proof metadata. Không thêm contact rule/cadence/provider hoặc bảng.
 - Nguồn tài chính commit trước; asynchronous publish/retry không rollback contract/refund. Existing clients dùng inbox/target hiện hữu.
-CHANGED FILES:
+  CHANGED FILES:
 - Infrastructure/Modules/Notifications/{NotificationEventPublisher,SettlementNotificationPublisher}.cs
 - IntegrationTests/PaymentsDebt/{MoveOutNotificationTests,DepositDeductionTests,DepositRefundTests}.cs
 - docs/api/{NOTIFICATIONS,REFUNDS,API_IMPLEMENTATION_STATUS}.md và báo cáo này.
-TESTS:
+  TESTS:
 - Focused IntegrationTests 11/11 đạt, 0 skip: partial/full deduction/no-charge return, notifications/inbox/target và existing delivery failure/retry/lease regressions.
 - Có concurrent pump/replay/no duplicate, pending không báo completed, deep-link authorized/cross-Tenant404, Staff/otherTenant không thấy finance và no private payload. External delivery giữ Unconfigured, tài chính không đổi.
 - Lượt đầu consumer nhầm tên event decision Approved thay actual persisted APPROVED; test pending-stage phát hiện, sửa theo contract hiện hữu. Không sửa event đã phát hành hoặc nới assertion.
 - Log huy-settlement-notifications-pg.log. Chưa browser pump trong slice backend này; không claim email/push/native.
-COMMIT:
+  COMMIT:
 - Message: feat(notification): [BE-19] publish scoped move-out and deposit settlement events
 - SHA: `e3467b76fb2aa008bdc09fb8de9637b93af67667`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường, Mobile Bùi Bảo Long dùng inbox/Contract target hiện có; native acceptance còn thiếu.
-STATUS: DONE cho backend in-app consumer được kiểm chứng; external delivery BLOCKED bởi provider Unconfigured.
-REMAINING:
+  STATUS: DONE cho backend in-app consumer được kiểm chứng; external delivery BLOCKED bởi provider Unconfigured.
+  REMAINING:
 - Browser E2E explicit event pump và report classification; full regression/evidence package. Receipt-excess consumer riêng chưa triển khai trong slice này.
 
 TASK: BE-X08 / BE-X05
 SLICE: Khôi phục xUnit activation cho Compact24 workflow fixtures
 IMPLEMENTED:
+
 - Full regression phát hiện 23 test IClassFixture không được chạy vì xUnit coi optional IObjectStorage constructor argument là dependency bắt buộc.
 - Fixture có một public constructor không tham số; overload storage dành riêng test recovery là internal. Giữ nguyên factory/storage/default Compact24 và toàn bộ assertions/schema.
-CHANGED FILES:
+  CHANGED FILES:
 - tests/backend/BHome.IntegrationTests/Compact24/Compact24WorkflowRegressionTests.cs và báo cáo này.
-TESTS:
+  TESTS:
 - Full integration lần đầu: 603 pass, 23 fail fixture activation, 1 optional real-OCR skip / 627 total. Không tính 23 lỗi là skip/pass.
 - Focused Compact24ContractRegressionTests/MeterCaptureRegressionTests/Compact24DepositRecoveryTests sau fix: 24/24 đạt, 0 skip; log huy-fixture-constructor-pg.log.
 - Domain90, Application276, DigitalSigning41 pass và Owner155/Mobile381 pass ở lượt regression vừa chạy; full integration cần chạy lại sau fix.
-COMMIT:
+  COMMIT:
 - Message: fix(test): [BE-X08] initialize Compact24 workflow fixtures through xUnit
 - SHA: `d7fec61e7c1ce42547a68dd4b9486c956ffbfb1e`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Không thay frontend/business behavior; QA Nguyễn Quang Huy tiếp tục dùng cùng regression commands.
-STATUS: DONE cho fixture defect; final integration regression còn chờ chạy lại.
-REMAINING:
+  STATUS: DONE cho fixture defect; final integration regression còn chờ chạy lại.
+  REMAINING:
 - Full integration, browser report/inbox E2E, cập nhật evidence package và docs/audit links.
 
 TASK: BE-19 / BE-X07 / BE-X08 / JOB-04
 SLICE: Browser kiểm report classification và persistent settlement inbox
 IMPLEMENTED:
+
 - Extend real move-out harness sau manual return/closure; API report so với trước return giữ totals/capital và loại isDevelopmentDemo principal returns.
 - Explicit Testing-only process-events pump khi worker tắt. Owner browser mở closure notice → reauthorized Contract target; Tenant nhận đúng deduction/refund/closure, chạy lại không trùng. Staff/unassigned Staff/cross-Tenant/co-occupant không entitlement không nhận finance notice.
 - Owner report hiện verifiedDepositReturns và note retained damage chưa nằm trong Invoice/OPEX model; không fallback mock.
-CHANGED FILES:
+  CHANGED FILES:
 - scripts/Verify-MoveOutClients.cjs; docs/api/{CONTRACT_LIFECYCLE,REFUNDS,NOTIFICATIONS}.md và báo cáo này.
-TESTS:
+  TESTS:
 - dotnet build tools/BHome.ContractVerification --no-restore sau full testhost kết thúc: đạt, 0 warning/error.
 - --finance --main-draft --damage-settlement: exit0, 22/22 nhóm PASS; --finance --main-draft: exit0, 21/21 nhóm PASS.
 - Logs huy-final-{damage,undisputed}-browser.log, huy-final-harness-build-rerun.log. MinIO/API/browser/disposable DB cleanup hoàn tất; node --check và diff check đạt.
 - Build ban đầu chạy cùng testhost bị Windows khóa DLL (18 copy errors); tách tuần tự và build lại đạt. Script từng trùng local const target, node syntax check phát hiện và sửa trước chạy browser. Không tăng timeout/giảm assertions hoặc sửa production để che lỗi.
 - Manual pump chỉ nghiệm thu persistent inbox/deep-link, không JOB scheduling/email/push. Signing/bank synthetic; Mobile transport, không native UI.
-COMMIT:
+  COMMIT:
 - Message: test(moveout): [BE-19] verify settlement inbox and finance reporting in browser
 - SHA: `7cd6e1ac5f6706323d7b0eb7cd9c216e203a7587`.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Vũ Xuân Trường review UX; Mobile Bùi Bảo Long chạy native; QA Nguyễn Quang Huy chuyển evidence sang Report5.
-STATUS: DONE cho các browser paths nêu trên; external/native acceptance còn PARTIAL/BLOCKED.
-REMAINING:
+  STATUS: DONE cho các browser paths nêu trên; external/native acceptance còn PARTIAL/BLOCKED.
+  REMAINING:
 - Chốt current status/evidence package và cleanup test cluster. Không có Holding policy, staging MySign, bank/email/push hoặc device mới trong lượt này.
 
 TASK: DOC-01 / DOC-03 / BE-X04 / BE-X05 / BE-X08
 SLICE: Chốt regression, API handoff và gói bằng chứng Report2/3/4/5/7
 IMPLEMENTED:
+
 - Rollup mới ở đầu report để phân biệt current state với entry lịch sử. API status/module index/route inventory cập nhật theo code và manifest audit cuối.
 - Thêm NGUYEN_QUOC_HUY_2026-11-06_EVIDENCE.md: trace UC/GBR/OQ, implemented policy theo ủy quyền, thực tế thiết kế Compact24, gate/repro/limitations và việc cần chuyển sang báo cáo chính thức. Không sửa approved SRS/SDS DOCX.
 - Ghi rành mạch hai nhánh manual, simulation, browser vs Mobile transport/native, in-app pump vs worker/provider, principal vs Invoice/OPEX/retained damage, reviewer và dependency còn thiếu.
-TESTS:
+  TESTS:
 - Domain90/90; Application276/276; Integration626pass+1optional real-OCRskip/627total,0fail sau fixture fix; DigitalSigning41/41.
 - Owner155/155 +build/lint; Mobile381/381 +typecheck/lint. Full suites không bỏ hidden failures; lần integration đầu603pass/23fixturefail/1skip được lưu log và sửa bằng commit d7fec61.
 - Browser final có phí22/22 và không phí21/21, exit0; final harness build0warning/error. Node syntax và git diff --check đạt.
 - Runtime API audit6/6 trong full integration; 216 routes/211protected401/5anonymous/106OwnerGET0HTTP5xx. Generator235static calls/3dynamic candidates. 611 internal file links qua18Markdown files hợp lệ.
-- Logs .tools/huy-continue-*, huy-final-*, manifest .tools/continue-final-evidence/api-route-audit.json; ignored/local, không commit secrets/artifacts.
-CLEANUP:
+- Logs .tools/huy-continue-_, huy-final-_, manifest .tools/continue-final-evidence/api-route-audit.json; ignored/local, không commit secrets/artifacts.
+  CLEANUP:
 - Sau mọi gate, own PostgreSQL18 cluster temp port55440 có0 bhome_compact24_* DBs và pg_ctl stop exit0. Harness đã dispose API/browser/MinIO/fixture DB; không dừng dịch vụ PostgreSQL dự án hoặc sửa working bhome.
-COMMIT:
+  COMMIT:
 - Message: docs(project): [DOC-01] publish current implementation and regression evidence
 - Các SHA implementation/test trước đó đã ghi đầy đủ; SHA commit tài liệu cuối xác định từ Git HEAD và được trả trong kết quả bàn giao.
-FRONTEND HANDOFF:
+  FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long; QA Nguyễn Quang Huy đưa evidence sang Report5/ST/AT. Report5/7 template chưa có trong docs/reports; Markdown package không được ghi là đã cập nhật báo cáo chính thức.
-STATUS: DONE cho current API/evidence handoff và executable local regression, không phải toàn dự án DONE.
-REMAINING:
+  STATUS: DONE cho current API/evidence handoff và executable local regression, không phải toàn dự án DONE.
+  REMAINING:
 - BE-14 Holding: nội dung OQ-03/Q-H1 còn thiếu. MySign staging/approved templates/certificate ownership và bank/email/push provider chưa nghiệm thu.
 - Native/device và >=50-image OCR accuracy benchmark NOT RUN; coverage/NFR/ST/AT chưa đo. Debt offset/fees vượt cọc, realized compensation/liability và upstream payroll/Work Order chưa triển khai như đã nêu.
 - Không push/merge; team tiếp tục review/integration theo nhánh member/QHuy.
