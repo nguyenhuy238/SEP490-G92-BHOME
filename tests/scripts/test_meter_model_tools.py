@@ -14,9 +14,49 @@ from prepare_meter_training import audit_pairs, perceptual_hash, prepare
 from evaluate_finetuned_yolo import decode, digit_score, letterbox
 from download_public_meter_assets import fetch
 from train_meter_yolo import verify_training_audit
+from lcd_preview_training import digit_boxes
+from download_lcd_preview import fetch as fetch_preview
+from download_meter_previews import fetch as fetch_meter_preview
+from prepare_meter_challenges import prepare as prepare_challenges
 
 
 class DatasetSafety(unittest.TestCase):
+    def test_reading_controls_reject_training_authors_and_fabricated_numeric_gt(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalog = root / 'docs/datasets/meter'
+            catalog.mkdir(parents=True)
+            image_root = root / 'source'
+            image_root.mkdir()
+            assets = []
+            for i, name in enumerate(['train', 'challenge']):
+                path = image_root / (name + '.jpg')
+                Image.fromarray(np.random.default_rng(i+10).integers(0, 256, (64, 64, 3), dtype=np.uint8)).save(path)
+                assets.append({'id': name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'author': 'Training author'})
+            (catalog / 'public-sources.json').write_text(json.dumps({'assets': assets[:1]}))
+            (catalog / 'public-sources-expanded.json').write_text(json.dumps({'assets': assets[1:]}))
+            (catalog / 'water-lcd-public-previews.json').write_text(json.dumps({'assets': []}))
+            (catalog / 'four-class-development-v2.json').write_text(json.dumps({'samples': [
+                {'id': 'train', 'image': 'source/train.jpg', 'sha256': assets[0]['sha256'], 'split': 'train'}]}))
+            manifest = root / 'controls.json'
+            sample = {'id': 'challenge', 'expectedReading': None, 'review': {'method': 'synthetic'},
+                      'profiles': ['DigitalWater'], 'reason': 'blank'}
+            manifest.write_text(json.dumps({'samples': [sample]}))
+            with self.assertRaisesRegex(ValueError, 'overlapping'):
+                prepare_challenges(manifest, image_root, root, root / 'output')
+            assets[1]['author'] = 'Independent author'
+            (catalog / 'public-sources-expanded.json').write_text(json.dumps({'assets': assets[1:]}))
+            sample['expectedReading'] = '0000'
+            manifest.write_text(json.dumps({'samples': [sample]}))
+            with self.assertRaisesRegex(ValueError, 'numeric GT'):
+                prepare_challenges(manifest, image_root, root, root / 'output')
+            sample['expectedReading'] = None
+            manifest.write_text(json.dumps({'samples': [sample]}))
+            prepare_challenges(manifest, image_root, root, root / 'output')
+            with self.assertRaisesRegex(ValueError, 'overwrite'):
+                prepare_challenges(manifest, image_root, root, root / 'output')
+
     def test_perceptual_duplicate_cross_split_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "cross-split"):
             audit_pairs([{"id": "a", "split": "train"}, {"id": "b", "split": "test"}], {"a": 1234, "b": 1234})
@@ -43,6 +83,12 @@ class DatasetSafety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "license"):
                 fetch({"downloadUrl": "https://upload.wikimedia.org/f.jpg", "license": "unknown"}, Path(directory))
+
+    def test_public_preview_cannot_guess_other_assets_or_use_unverified_license(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for asset in ({"id": "meterocr_private"}, {"id": "meterocr_089j4CRbYLmnBVWRKauk", "license": "unknown"}):
+                with self.assertRaisesRegex(ValueError, "Unreviewed"):
+                    fetch_meter_preview(asset, Path(directory))
 
     def test_four_class_export_does_not_silently_accept_missing_classes(self):
         import hashlib
@@ -104,6 +150,37 @@ class InferenceSafety(unittest.TestCase):
         result = digit_score(samples, predictions, .5)
         self.assertEqual(result["falseProposals"], 1)
         self.assertEqual(result["exact"], 0)
+
+
+class LcdPreviewSafety(unittest.TestCase):
+    @staticmethod
+    def xml(extra="", outside=False):
+        digits = ''.join(f'<object><name>{i}</name><bndbox><xmin>{10+i*15}</xmin><ymin>10</ymin><xmax>{20+i*15}</xmax><ymax>30</ymax></bndbox></object>' for i in range(3))
+        zone = '<object><name>scoreboard</name><bndbox><xmin>0</xmin><ymin>0</ymin><xmax>90</xmax><ymax>90</ymax></bndbox></object>'
+        if outside:
+            zone = zone.replace('<xmax>90', '<xmax>20')
+        return ('<annotation><size><width>100</width><height>100</height></size>' + digits + zone + extra + '</annotation>').encode()
+
+    def test_serials_cannot_become_reading_digits(self):
+        serial = '<object><name>s9</name><bndbox><xmin>0</xmin><ymin>0</ymin><xmax>5</xmax><ymax>5</ymax></bndbox></object>'
+        self.assertEqual([b[0] for b in digit_boxes(self.xml(serial), (100, 100))], [0, 1, 2])
+
+    def test_wrong_dimensions_or_digits_outside_display_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'dimensions'):
+            digit_boxes(self.xml(), (200, 100))
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            digit_boxes(self.xml(outside=True), (100, 100))
+
+    def test_multiple_displays_and_xml_entities_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'One display'):
+            digit_boxes(self.xml('<object><name>scoreboard</name><bndbox><xmin>0</xmin><ymin>0</ymin><xmax>90</xmax><ymax>90</ymax></bndbox></object>'), (100, 100))
+        with self.assertRaisesRegex(ValueError, 'Unsupported'):
+            digit_boxes(b'<!DOCTYPE malicious>' + self.xml(), (100, 100))
+
+    def test_unreviewed_preview_paths_are_rejected_before_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, 'Unreviewed'):
+                fetch_preview('../private.jpg', Path(directory))
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace BHome.Infrastructure;
@@ -198,6 +199,8 @@ public static class DependencyInjection
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
         services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
         services.AddSingleton<YoloWaterDigitRecognizer>();
+        services.AddSingleton<IImageCategoryClassifier>(provider => new YoloMeterCategoryClassifier(
+            provider.GetRequiredService<OcrOptions>(), provider.GetRequiredService<IHostEnvironment>().IsDevelopment()));
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
         services.AddSingleton<LocalOcrService>();

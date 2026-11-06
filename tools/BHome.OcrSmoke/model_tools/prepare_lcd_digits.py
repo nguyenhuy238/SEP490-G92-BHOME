@@ -24,7 +24,7 @@ FILES = {
 }
 
 
-def prepare(source, catalog_path, commons, evaluation_path, output, crop_training_rows=False):
+def prepare(source, catalog_path, commons, evaluation_path, output, crop_training_rows=False, preview=None):
     for name, digest in FILES.items():
         if hashlib.sha256((source / name).read_bytes()).hexdigest() != digest:
             raise ValueError("CC0 source checksum mismatch")
@@ -132,6 +132,12 @@ def prepare(source, catalog_path, commons, evaluation_path, output, crop_trainin
                         **({"label": label.relative_to(output).as_posix(),
                             "labelSha256": hashlib.sha256(label.read_bytes()).hexdigest()} if sample["split"] == "val" else {}),
                         "source": asset["sourceUrl"], "license": asset["license"]})
+    preview_audit = None
+    if preview is not None:
+        if not crop_training_rows:
+            raise ValueError("Preview extension requires training row crops")
+        from lcd_preview_training import add_preview
+        preview_audit = add_preview(preview, output, samples, source_hashes)
     # Exact overlap across splits is always rejected, even for public data.
     split_hashes = {}
     for sample in samples:
@@ -143,6 +149,7 @@ def prepare(source, catalog_path, commons, evaluation_path, output, crop_trainin
              "classes": [str(i) for i in range(10)], "unsupportedClasses": [],
              "partialDevelopment": False, "task": "lcd_digit_detection",
              "trainingOnlyRowCrops": crop_training_rows, "exactDuplicateExclusions": duplicate_exclusions,
+             "lcdPreview": preview_audit,
              "sourcePerceptualPairs": audit_pairs(samples, source_hashes),
              "perceptualScope": "Full source images before any training/validation row crops; DCT63 Hamming<=6; not proof of physical identity",
              "sourceZipSha256": FILES["RAW IMAGES.zip"], "sourceCocoSha256": FILES[list(FILES)[1]],
@@ -168,8 +175,9 @@ def main():
     parser.add_argument("evaluation", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--crop-training-rows", action="store_true")
+    parser.add_argument("--preview", type=Path, help="Pinned CC-BY-NC preview, TRAIN only; no commercial activation")
     args = parser.parse_args()
-    prepare(args.source, args.catalog, args.commons, args.evaluation, args.output, args.crop_training_rows)
+    prepare(args.source, args.catalog, args.commons, args.evaluation, args.output, args.crop_training_rows, args.preview)
 
 
 if __name__ == "__main__":

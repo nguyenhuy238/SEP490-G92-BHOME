@@ -33,6 +33,17 @@ public sealed class WaterDigitRecognitionTests
         Assert.Null(YoloWaterDigitRecognizer.Assemble(boxes).Digits);
     }
     private static OcrText Text(params string[] lines) => new(lines.Select(t => new OcrLine(t, .9f)).ToArray(), "synthetic", []);
+    [Theory]
+    [InlineData("00123 m3/h")]
+    [InlineData("00123 Hz")]
+    [InlineData("GALLONS 00123")]
+    [InlineData("total: 00123 m3/h")]
+    public void Stage2CannotOverrideAnExplicitNonBillingSinglePpLine(string nonBilling)
+    {
+        var result = MeterRecognitionFusion.Combine(Text(nonBilling), new("00123", .99f, []));
+        Assert.Empty(result.Lines); Assert.Contains("billing_register_unverified", result.Warnings);
+        Assert.Contains("recognizer_conflict", result.Warnings);
+    }
     [Fact]
     public void SingleUnparseablePpLineCanUseCompleteDigitsButMultipleRegionsAndWrongUnitsCannot()
     {

@@ -1,0 +1,1995 @@
+{
+  "training": {
+    "status": "trained_not_activated",
+    "pretrainedSha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+    "pretrainedUrl": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+    "license": "Ultralytics AGPL-3.0; source image licenses retained separately",
+    "auditSha256": "06dab0326c3868b3f7db5e306d50004908f7c319d306f403d16060ac32f10e7e",
+    "manifestSha256": "3592bc6d3d4e3ce7b05f01d06b7130aac8f01de01b9a24034b25e9b85c183197",
+    "classes": [
+      "electricity_mechanical",
+      "electricity_digital",
+      "water_mechanical",
+      "water_digital"
+    ],
+    "unsupportedClasses": [],
+    "config": {
+      "data": ".tools/ocr-next-four-class-dataset/dataset.yaml",
+      "epochs": 100,
+      "imgsz": 416,
+      "batch": 8,
+      "device": "0",
+      "workers": 0,
+      "seed": 42,
+      "deterministic": true,
+      "amp": false,
+      "optimizer": "AdamW",
+      "lr0": 0.001,
+      "patience": 20,
+      "degrees": 15.0,
+      "translate": 0.1,
+      "scale": 0.25,
+      "perspective": 0.0003,
+      "fliplr": 0.0,
+      "flipud": 0.0,
+      "hsv_h": 0.01,
+      "hsv_s": 0.25,
+      "hsv_v": 0.3,
+      "mosaic": 0.3,
+      "mixup": 0.0,
+      "close_mosaic": 10,
+      "plots": false,
+      "save": true,
+      "project": ".tools/ocr-next-four-class-training",
+      "name": "body",
+      "exist_ok": false
+    },
+    "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "torch": "2.6.0+cu118",
+    "ultralytics": "8.3.224",
+    "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+    "elapsedSeconds": 35.96899999999732,
+    "bestSha256": "57366ec4d8f477c812635b9644ef1e58c805e8adb63adec454c3996d03904593",
+    "lastSha256": "b9a527160646dd5b572459ffdeae64065430905a2ae14ecc2728a568512ef856"
+  },
+  "actualEpochs": 29,
+  "bestFitnessEpoch": 9,
+  "pythonEvaluation": {
+    "model": "body",
+    "status": "evaluated_not_activated",
+    "classes": [
+      "electricity_mechanical",
+      "electricity_digital",
+      "water_mechanical",
+      "water_digital"
+    ],
+    "validationSelectionPassed": false,
+    "unsupportedClasses": [],
+    "weightsSha256": "57366ec4d8f477c812635b9644ef1e58c805e8adb63adec454c3996d03904593",
+    "onnxSha256": "c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7",
+    "input": [
+      1,
+      3,
+      416,
+      416
+    ],
+    "output": [
+      1,
+      8,
+      3549
+    ],
+    "preprocessing": "BGR->RGB/255, centered letterbox114, bilinear, actual rounded left/top",
+    "decode": "cxcywh pixels + per-class scores; no objectness; class-aware greedy NMS IoU .45",
+    "nativeOnnxParity": [
+      {
+        "id": "commons_45290164",
+        "maxAbsoluteDifference": 0.001922607421875,
+        "passed": true
+      },
+      {
+        "id": "commons_113793907",
+        "maxAbsoluteDifference": 0.001220703125,
+        "passed": true
+      },
+      {
+        "id": "commons_31937475",
+        "maxAbsoluteDifference": 0.00128173828125,
+        "passed": true
+      },
+      {
+        "id": "commons_33769214",
+        "maxAbsoluteDifference": 0.001007080078125,
+        "passed": true
+      },
+      {
+        "id": "commons_40388945",
+        "maxAbsoluteDifference": 0.0028839111328125,
+        "passed": true
+      },
+      {
+        "id": "commons_6979762",
+        "maxAbsoluteDifference": 0.00103759765625,
+        "passed": true
+      },
+      {
+        "id": "commons_141575682",
+        "maxAbsoluteDifference": 0.0009765625,
+        "passed": true
+      },
+      {
+        "id": "commons_136480278",
+        "maxAbsoluteDifference": 0.001708984375,
+        "passed": true
+      },
+      {
+        "id": "commons_136480279",
+        "maxAbsoluteDifference": 0.002227783203125,
+        "passed": true
+      },
+      {
+        "id": "commons_26507235",
+        "maxAbsoluteDifference": 0.001190185546875,
+        "passed": true
+      }
+    ],
+    "calibrationSource": "validation only, zero observed false proposals preferred",
+    "validationGrid": [
+      {
+        "threshold": 0.25,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      },
+      {
+        "threshold": 0.5,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      },
+      {
+        "threshold": 0.7,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      },
+      {
+        "threshold": 0.8,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      },
+      {
+        "threshold": 0.9,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      },
+      {
+        "threshold": 0.95,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      },
+      {
+        "threshold": 0.99,
+        "classes": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "precision": null,
+            "recall": 0.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "precision": null,
+            "recall": 0.0
+          }
+        },
+        "confusion": {
+          "electricity_mechanical": {
+            "unknown": 3
+          },
+          "electricity_digital": {
+            "unknown": 3
+          },
+          "water_mechanical": {
+            "unknown": 3
+          },
+          "water_digital": {
+            "unknown": 1
+          },
+          "not_meter": {
+            "unknown": 1
+          }
+        },
+        "samples": [
+          {
+            "id": "commons_45290164",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_113793907",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_33769214",
+            "actual": "electricity_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480278",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_136480279",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241182",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241190",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_109241180",
+            "actual": "water_mechanical",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_98999103",
+            "actual": "electricity_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_141189268",
+            "actual": "water_digital",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          },
+          {
+            "id": "commons_85653618",
+            "actual": "not_meter",
+            "predicted": "unknown",
+            "localizedCorrectly": false,
+            "detections": 0
+          }
+        ],
+        "wrongCategory": 0,
+        "correctSingleCategory": 0
+      }
+    ],
+    "selectedValidation": {
+      "threshold": 0.25,
+      "classes": {
+        "electricity_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "precision": null,
+          "recall": 0.0
+        },
+        "electricity_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "precision": null,
+          "recall": 0.0
+        },
+        "water_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "precision": null,
+          "recall": 0.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": null,
+          "recall": 0.0
+        }
+      },
+      "confusion": {
+        "electricity_mechanical": {
+          "unknown": 3
+        },
+        "electricity_digital": {
+          "unknown": 3
+        },
+        "water_mechanical": {
+          "unknown": 3
+        },
+        "water_digital": {
+          "unknown": 1
+        },
+        "not_meter": {
+          "unknown": 1
+        }
+      },
+      "samples": [
+        {
+          "id": "commons_45290164",
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_113793907",
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_33769214",
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_136480278",
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_136480279",
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_109241182",
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_109241190",
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_109241180",
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_98999103",
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_141189268",
+          "actual": "water_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_85653618",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        }
+      ],
+      "wrongCategory": 0,
+      "correctSingleCategory": 0
+    },
+    "test": {
+      "threshold": 0.25,
+      "classes": {
+        "electricity_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "precision": null,
+          "recall": 0.0
+        },
+        "electricity_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "precision": null,
+          "recall": 0.0
+        },
+        "water_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 2,
+          "precision": null,
+          "recall": 0.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": null,
+          "recall": 0.0
+        }
+      },
+      "confusion": {
+        "electricity_mechanical": {
+          "unknown": 3
+        },
+        "electricity_digital": {
+          "unknown": 3
+        },
+        "water_mechanical": {
+          "unknown": 2
+        },
+        "not_meter": {
+          "unknown": 6
+        },
+        "water_digital": {
+          "unknown": 1
+        }
+      },
+      "samples": [
+        {
+          "id": "commons_31937475",
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_40388945",
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_6979762",
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_141575682",
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_26507235",
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_167896665",
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_117569252",
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_111639614",
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_161109743",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_157635897",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_161110829",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_161108186",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_138131787",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_157780137",
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        },
+        {
+          "id": "commons_156125142",
+          "actual": "water_digital",
+          "predicted": "unknown",
+          "localizedCorrectly": false,
+          "detections": 0
+        }
+      ],
+      "wrongCategory": 0,
+      "correctSingleCategory": 0
+    },
+    "detectionMetrics": {
+      "val": {
+        "mAP50": 0.5535702878171523,
+        "mAP50_95": 0.3481382336664277,
+        "perClass": [
+          {
+            "class": "electricity_mechanical",
+            "precision": 0.045963703037105993,
+            "recall": 1.0,
+            "mAP50": 0.48322950819672134,
+            "mAP50_95": 0.2687709914739461
+          },
+          {
+            "class": "electricity_digital",
+            "precision": 0.0,
+            "recall": 0.0,
+            "mAP50": 0.07031348517715114,
+            "mAP50_95": 0.02057953091106291
+          },
+          {
+            "class": "water_mechanical",
+            "precision": 1.0,
+            "recall": 0.0,
+            "mAP50": 0.6657381578947368,
+            "mAP50_95": 0.3072024122807017
+          },
+          {
+            "class": "water_digital",
+            "precision": 0.2380481948884263,
+            "recall": 1.0,
+            "mAP50": 0.995,
+            "mAP50_95": 0.796
+          }
+        ]
+      },
+      "test": {
+        "mAP50": 0.21506559366610697,
+        "mAP50_95": 0.06361963679083064,
+        "perClass": [
+          {
+            "class": "electricity_mechanical",
+            "precision": 0.005076142131979695,
+            "recall": 1.0,
+            "mAP50": 0.2296153846153846,
+            "mAP50_95": 0.08959433303959954
+          },
+          {
+            "class": "electricity_digital",
+            "precision": 0.005076142131979695,
+            "recall": 1.0,
+            "mAP50": 0.05228914691178844,
+            "mAP50_95": 0.006657003026518213
+          },
+          {
+            "class": "water_mechanical",
+            "precision": 0.0017301038062283738,
+            "recall": 0.5,
+            "mAP50": 0.4954411764705882,
+            "mAP50_95": 0.10018554443053818
+          },
+          {
+            "class": "water_digital",
+            "precision": 0.0016891891891891893,
+            "recall": 1.0,
+            "mAP50": 0.08291666666666667,
+            "mAP50_95": 0.05804166666666667
+          }
+        ]
+      }
+    },
+    "cpuSessionMs": {
+      "p50": 28.11449999899196,
+      "p95": 34.529875000771426,
+      "max": 36.64009999920381
+    },
+    "limitations": "Small agent-reviewed development set; no independent human annotation review; no 90% or four-class accuracy claim; crop digit results are not billing readings."
+  },
+  "dotnetAdapterEvaluation": {
+    "modelSha256": "c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7",
+    "candidateThreshold": 0.25,
+    "nmsThreshold": 0.45,
+    "automaticClassificationMinConfidence": 0.9,
+    "validation": {
+      "images": 11,
+      "perClass": [
+        {
+          "category": "electricity_mechanical",
+          "images": 3,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 3
+        },
+        {
+          "category": "electricity_digital",
+          "images": 3,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 3
+        },
+        {
+          "category": "water_mechanical",
+          "images": 3,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 3
+        },
+        {
+          "category": "water_digital",
+          "images": 1,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 1
+        }
+      ],
+      "negatives": 1,
+      "negativeFalseClassifications": 0,
+      "confusion": [
+        {
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "count": 3
+        },
+        {
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "count": 3
+        },
+        {
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "count": 3
+        },
+        {
+          "actual": "water_digital",
+          "predicted": "unknown",
+          "count": 1
+        },
+        {
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "count": 1
+        }
+      ],
+      "latencyMs": {
+        "p50": 29.4892,
+        "p95": 59.7838,
+        "max": 59.7838
+      }
+    },
+    "test": {
+      "images": 15,
+      "perClass": [
+        {
+          "category": "electricity_mechanical",
+          "images": 3,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 3
+        },
+        {
+          "category": "electricity_digital",
+          "images": 3,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 3
+        },
+        {
+          "category": "water_mechanical",
+          "images": 2,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 2
+        },
+        {
+          "category": "water_digital",
+          "images": 1,
+          "correct": 0,
+          "wrong": 0,
+          "fallback": 1
+        }
+      ],
+      "negatives": 6,
+      "negativeFalseClassifications": 0,
+      "confusion": [
+        {
+          "actual": "electricity_mechanical",
+          "predicted": "unknown",
+          "count": 3
+        },
+        {
+          "actual": "electricity_digital",
+          "predicted": "unknown",
+          "count": 3
+        },
+        {
+          "actual": "water_mechanical",
+          "predicted": "unknown",
+          "count": 2
+        },
+        {
+          "actual": "not_meter",
+          "predicted": "unknown",
+          "count": 6
+        },
+        {
+          "actual": "water_digital",
+          "predicted": "unknown",
+          "count": 1
+        }
+      ],
+      "latencyMs": {
+        "p50": 29.0432,
+        "p95": 41.73,
+        "max": 41.73
+      }
+    },
+    "rows": [
+      {
+        "id": "commons_45290164",
+        "split": "val",
+        "expected": "electricity_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 59.7838
+      },
+      {
+        "id": "commons_113793907",
+        "split": "val",
+        "expected": "electricity_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 32.4688
+      },
+      {
+        "id": "commons_33769214",
+        "split": "val",
+        "expected": "electricity_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 47.1136
+      },
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "expected": "electricity_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 33.5318
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "expected": "electricity_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 32.4257
+      },
+      {
+        "id": "commons_109241182",
+        "split": "val",
+        "expected": "water_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.4892
+      },
+      {
+        "id": "commons_109241190",
+        "split": "val",
+        "expected": "water_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.9422
+      },
+      {
+        "id": "commons_109241180",
+        "split": "val",
+        "expected": "water_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.3751
+      },
+      {
+        "id": "commons_98999103",
+        "split": "val",
+        "expected": "electricity_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.709
+      },
+      {
+        "id": "commons_141189268",
+        "split": "val",
+        "expected": "water_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.175
+      },
+      {
+        "id": "commons_85653618",
+        "split": "val",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.0059
+      },
+      {
+        "id": "commons_31937475",
+        "split": "test",
+        "expected": "electricity_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 27.8486
+      },
+      {
+        "id": "commons_40388945",
+        "split": "test",
+        "expected": "electricity_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.0432
+      },
+      {
+        "id": "commons_6979762",
+        "split": "test",
+        "expected": "electricity_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.9315
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "expected": "electricity_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 31.2005
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "expected": "electricity_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 32.703
+      },
+      {
+        "id": "commons_167896665",
+        "split": "test",
+        "expected": "water_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.2682
+      },
+      {
+        "id": "commons_117569252",
+        "split": "test",
+        "expected": "water_mechanical",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.5706
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "expected": "electricity_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 41.73
+      },
+      {
+        "id": "commons_161109743",
+        "split": "test",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.2076
+      },
+      {
+        "id": "commons_157635897",
+        "split": "test",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.7498
+      },
+      {
+        "id": "commons_161110829",
+        "split": "test",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.4757
+      },
+      {
+        "id": "commons_161108186",
+        "split": "test",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.154
+      },
+      {
+        "id": "commons_138131787",
+        "split": "test",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.3196
+      },
+      {
+        "id": "commons_157780137",
+        "split": "test",
+        "expected": "not_meter",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 29.3157
+      },
+      {
+        "id": "commons_156125142",
+        "split": "test",
+        "expected": "water_digital",
+        "status": "unknown",
+        "predicted": "unknown",
+        "confidence": null,
+        "candidates": [],
+        "warnings": [
+          "classification_insufficient_evidence"
+        ],
+        "elapsedMs": 28.611
+      }
+    ],
+    "activationDecision": "not_activated",
+    "limitation": "Small development corpus; historical test groups were previously observed. Only one new blank LCD test group. Not representative independent four-class acceptance or reading accuracy."
+  },
+  "activationDecision": "rejected",
+  "reasons": [
+    "Inadequate water-digital source diversity and validation sample count",
+    "Zero accepted categories in actual adapter on validation at existing thresholds",
+    "No representative independent acceptance"
+  ],
+  "trainingLogSha256": "0fcccf66d647231789c423c1d9f1c930a198956589b7465bffcb416f7e01ab11",
+  "datasetAuditSha256": "06dab0326c3868b3f7db5e306d50004908f7c319d306f403d16060ac32f10e7e",
+  "dotnetParity": {
+    "passed": true,
+    "inputShape": [
+      1,
+      3,
+      416,
+      416
+    ],
+    "outputShape": [
+      1,
+      8,
+      3549
+    ],
+    "classes": [
+      "electricity_mechanical",
+      "electricity_digital",
+      "water_mechanical",
+      "water_digital"
+    ],
+    "rows": [
+      {
+        "id": "commons_45290164",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_113793907",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_31937475",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_33769214",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_40388945",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_6979762",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_141575682",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_136480278",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_136480279",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      },
+      {
+        "id": "commons_26507235",
+        "inputMaxDelta": 0,
+        "outputMaxDelta": 0,
+        "passed": true
+      }
+    ],
+    "limitation": "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim."
+  }
+}

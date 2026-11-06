@@ -1,5 +1,27 @@
 # Huấn luyện offline có kiểm chứng
 
+Revision tiếp nối sau83317cb: [four-class-development-v2.json](four-class-development-v2.json),
+image root là repository (`.`). Provision ảnh Commons cũ vào `.tools/master-dataset/commons`,
+catalog mở rộng vào `.tools/ocr-next-public-images-expanded`, ba public examples vào
+`.tools/ocr-next-publisher-previews` bằng `download_meter_previews.py` và catalog
+`water-lcd-public-previews.json`. Không dùng `--allow-partial-development` cho revision này.
+
+Negative reading holdout riêng: [independent-reading-controls](independent-reading-controls.json),
+8 ảnh/17 profile observations, author/hash/pHash không trùng body train/val hiện tại.
+Không có positive GT để tính exact accuracy; chưa biết toàn bộ pretraining của
+provider. Chuẩn bị trước khi chấm bằng:
+
+```powershell
+& $py tools/BHome.OcrSmoke/model_tools/prepare_meter_challenges.py docs/datasets/meter/independent-reading-controls.json .tools/ocr-next-public-images-expanded . .tools/ocr-next-reading-controls
+```
+
+Không overwrite output frozen. Blank LCD giữ đúng category water digital với
+`visibility=blank`, `digitCount=0`, `digits=null`, `decimalPlaces=null`, register
+unknown; không gán số0. [Annotation đã kiểm](blank-lcd-annotation.json) dùng window
+rectangle thô, không phải GT để công bố display IoU/recall. Validator vẫn giữ
+quy tắc exact digits/unreadable cho ảnh có chỉ số; chỉ trạng thái blank/status
+mới cho phép không có digit positions. Tất cả ảnh nguồn/crop ở `.tools`, ngoài Git.
+
 Đọc [nghiên cứu nguồn](../../development/OCR_DATASET_RESEARCH.md) trước khi tải.
 Ảnh, weights, caches, runs nằm trong `.tools/`, không đưa vào Git. Catalog ghi
 license/author/credit từng ảnh. Nhãn Commons mới phát hành CC BY-SA 4.0; giữ
@@ -38,6 +60,24 @@ crop/rotation/near-duplicate. Nhãn do agent xem ảnh và xem lại overlay; ch
 independent human annotation review. Quality flags chỉ là ghi nhận thô.
 
 ## Dataset chữ số LCD
+
+Tiếp nối 06/11, preview LCD có giấy phép CC-BY-NC-4.0 chỉ phục vụ nghiên cứu
+phi thương mại offline, không triển khai/phân phối model thương mại. Nguồn,
+revision, exclusions và leakage audit ở [metadata](lcd-preview-preparation.json).
+Không dùng tên dataset làm nhãn bốn loại. Toàn nguồn mới giữ trong TRAIN:
+
+```powershell
+& $py tools/BHome.OcrSmoke/model_tools/download_lcd_preview.py .tools/ocr-20261106-lcd-preview
+& $py tools/BHome.OcrSmoke/model_tools/prepare_lcd_digits.py .tools/master-dataset docs/datasets/meter/public-sources.json .tools/master-dataset/commons docs/datasets/meter/lcd-evaluation.json .tools/reproduced-lcd-preview --crop-training-rows --preview .tools/ocr-20261106-lcd-preview
+```
+
+Preparer giữ nguyên guard output rỗng; dùng thư mục mới cho mỗi revision. Kiểm
+checksum của 151 asset, kích thước XML/ảnh, display containment, digit row và
+serial namespace. Quarantine nhãn không nhất quán thay vì sửa/cắt box. Ba ảnh
+blank/segment-test đã duyệt bị loại riêng. Kết quả thực thi: 163+43 train,
+2 val, 4 development test; pHash trên ảnh nguồn trước crop. Val/test giữ nguyên
+manifest cũ, không gọi chúng là independent acceptance mới. Fine-tune dùng
+script/config/seed/base-weight guard hiện có; Python không chạy trong backend.
 
 Tải đúng hai asset của Mendeley v1 (không dùng URL Labelbox trong COCO):
 

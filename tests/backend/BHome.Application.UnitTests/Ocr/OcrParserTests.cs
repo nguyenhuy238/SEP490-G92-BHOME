@@ -7,6 +7,46 @@ namespace BHome.Application.UnitTests.Ocr;
 public sealed class OcrParserTests
 {
     [Theory]
+    [InlineData("m³/h")]
+    [InlineData("m3/min")]
+    [InlineData("m³ h−1")]
+    [InlineData("L/min")]
+    [InlineData("/h")]
+    [InlineData("V")]
+    [InlineData("A")]
+    [InlineData("Hz")]
+    [InlineData("kW")]
+    [InlineData("°C")]
+    [InlineData("ppm")]
+    [InlineData("GALLONS")]
+    public void SeparateNonBillingUnitCannotTurnBareDigitsIntoConsumption(string unit)
+    {
+        OcrLine[] lines = [new("00123.45", .99f) { Bounds = new(20, 30, 140, 30) },
+            new(unit, .98f) { Bounds = new(165, 30, 80, 30) }];
+        var result = OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.DigitalWater);
+        Assert.True(result.IsFallback); Assert.Empty(result.ProposedFields);
+        Assert.Contains("billing_register_unverified", result.Warnings);
+    }
+
+    [Fact]
+    public void DistantParameterUnitDoesNotSuppressAnExplicitTotalRegister()
+    {
+        OcrLine[] lines = [new("00123.45", .99f) { Bounds = new(20, 30, 140, 30) },
+            new("m3", .98f) { Bounds = new(165, 30, 40, 30) },
+            new("V", .98f) { Bounds = new(600, 400, 30, 30) }];
+        var result = OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.DigitalWater);
+        Assert.Equal("00123.45", result.ProposedFields["reading"]);
+        Assert.DoesNotContain("billing_register_unverified", result.Warnings);
+    }
+
+    [Fact]
+    public void MissingGeometryCannotEstablishThatAFlowUnitBelongsElsewhere()
+    {
+        var result = OcrFieldParser.Parse(new([new("00123.45", .99f), new("m3/h", .98f)], "synthetic", []), OcrDocumentKind.DigitalWater);
+        Assert.True(result.IsFallback); Assert.Empty(result.ProposedFields);
+    }
+
+    [Theory]
     [InlineData("123.45 kWh")]
     [InlineData("123.45")]
     public void EqualReadingsOnTwoDisplaysStillRequireHumanSelection(string text)

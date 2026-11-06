@@ -178,6 +178,32 @@ disagreement, multiple regions, wrong utility or unclear digits. The diagnostic
 Mobile screen can re-read the same bounded meter image with user-confirmed
 precision after capture; production task precision remains server-authoritative.
 
+Meter parsing also checks nearby separately detected unit boxes. A bare number
+next to a flow-rate/electrical-parameter/TDS/unsupported volume unit (for example
+`m³/h`, `V`, `Hz`, `ppm` or gallons) is not an accumulated kWh/m³ reading; it
+returns fallback with `billing_register_unverified`. A distant parameter label
+does not suppress a properly associated billing unit. No unit conversion or
+client precision change is introduced.
+Stage2 fusion also retains this rejection for a single PP line with an explicit
+non-billing quantity; it cannot treat that line as malformed text to bypass the veto.
+
+An experimental four-class YOLO category adapter is available through
+`Ocr:VisualClassifier` but remains disabled by default and refuses inference
+outside Development. No validated four-class weights are bundled. It requires
+an explicitly configured model path/SHA256, exact four-class metadata and tensor
+contract. Unknown/multiple/conflicting detections remain review cases; an adapter
+outage preserves existing OCR with `visual_classifier_unavailable`. In Staff
+tasks, confident visual mismatch suppresses the reading with `meter_type_mismatch`;
+visual evidence never changes server Meter kind, ownership or precision. No new
+endpoint or response fields. See [architecture and activation gates](../development/OCR_MODEL_ARCHITECTURE.md).
+
+When an evaluated visual adapter identifies mechanical water and Stage1 verifies
+one reading display, automatic OCR now uses the existing PP/Stage2 fusion and
+returns the same optional crop preview/detection confidence as other localized
+results. Category confidence remains separate. Unsafe crop evidence suppresses
+the reading; a body-only crop does not authorize Stage2. Other profiles retain
+their existing readers. This wiring does not enable the rejected four-class model.
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được

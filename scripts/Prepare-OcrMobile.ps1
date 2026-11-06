@@ -109,16 +109,9 @@ $mobileSettings | ConvertTo-Json -Compress | dotnet user-secrets set --id $secre
 if ($LASTEXITCODE -ne 0) { throw 'Could not synchronize Visual Studio mobile configuration.' }
 Write-Output 'Visual Studio Development configuration synchronized. Restart debugging to apply it; do not start a second API.'
 if (-not $SkipDatabase) {
-    $connection = New-Object System.Data.Common.DbConnectionStringBuilder
-    $connection.set_ConnectionString($env:ConnectionStrings__Database)
-    if ([string]$connection['Host'] -notin @('localhost','127.0.0.1','::1') -or [string]$connection['Database'] -ne 'bhome') { throw 'Refusing migration: only local loopback database bhome is supported.' }
-    Push-Location $repo
-    try {
-        dotnet tool restore
-        if ($LASTEXITCODE -ne 0) { throw 'dotnet tool restore failed.' }
-        dotnet tool run dotnet-ef database update --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
-        if ($LASTEXITCODE -ne 0) { throw 'EF migration failed.' }
-    } finally { Pop-Location }
+    # The active persistence is Compact24. Legacy EF migrations would add the
+    # retired schema to this database and cannot upgrade its property shape.
+    & (Join-Path $PSScriptRoot 'Update-LocalDatabase.ps1')
 }
 Write-Output "API: https://${LanIp}:7240"
 Write-Output "Public CA download (development only): http://${LanIp}:5240/development/mobile-ca.cer"

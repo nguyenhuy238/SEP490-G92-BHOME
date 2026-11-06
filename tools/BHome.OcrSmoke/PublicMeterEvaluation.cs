@@ -75,7 +75,7 @@ internal static class PublicMeterEvaluation
         return 0;
     }
 
-    private static string ImagePath(string directory, JsonElement sample)
+    internal static string ImagePath(string directory, JsonElement sample)
     {
         var root = Path.GetFullPath(directory);
         var path = Path.GetFullPath(sample.GetProperty("image").GetString()!, root);

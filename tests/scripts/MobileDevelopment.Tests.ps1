@@ -122,6 +122,12 @@ $global:prepared += $LanIp
     }
     function Get-CimInstance {
         param($ClassName, $Filter)
+        if ($Filter -like 'Name =*') {
+            if ($global:unboundApi) {
+                [pscustomobject]@{ ProcessId = 123; CommandLine = ('"' + (Join-Path $testRoot 'src/backend/BHome.Api.exe') + '"'); ExecutablePath = $null }
+            }
+            return
+        }
         [pscustomobject]@{ CommandLine = $(if ($global:foreignApi) { 'C:\another-checkout\BHome.Api.exe' } else { Join-Path $testRoot 'src/backend/BHome.Api.exe' }) }
     }
     function Get-Command { param($Name) [pscustomobject]@{ Source = 'node.exe' } }
@@ -233,9 +239,21 @@ $global:prepared += $LanIp
         if ($_.Exception.Message -notlike 'API HTTPS readiness failed*') { throw }
         Assert-Equal $_.Exception.Message.Contains('Check the running API/Visual Studio output') $true 'reused API failure does not direct users to stale standalone logs'
         Assert-Equal $_.Exception.Message.Contains('scripts/Update-LocalDatabase.ps1 -Check') $true 'provide read-only database diagnosis before suggesting migration'
+        Assert-Equal $_.Exception.Message.Contains('-UpgradePropertySchema') $true 'property schema upgrade has its own explicit command'
+        Assert-Equal $_.Exception.Message.Contains('ECONNREFUSED means no API listener') $true 'distinguish startup refusal from HTTP readiness failure'
     }
     Assert-Equal $global:apiDiagnoses 2 'diagnose existing API without launching a duplicate'
     Assert-Equal $global:stopped.Contains(123) $false 'unhealthy debugger API remains owned by user'
+    $global:noApi = $true; $global:unboundApi = $true; $global:readinessClock = 0; $global:addressCalls = 0
+    $apiStartsBeforePausedDebugger = $global:apiStarts
+    try { & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null; throw 'Paused API was accepted as ready.' }
+    catch {
+        if ($_.Exception.Message -notlike 'API HTTPS readiness failed*') { throw }
+        Assert-Equal $_.Exception.Message.Contains('Check the running API/Visual Studio output') $true 'unbound existing API uses debugger diagnostics'
+    }
+    Assert-Equal $global:apiStarts $apiStartsBeforePausedDebugger 'paused API without a listener does not launch a duplicate API'
+    Assert-Equal $global:stopped.Contains(123) $false 'never stop a paused debugger API'
+    $global:unboundApi = $false
     $global:failReadiness = $false; $global:failModels = $true; $global:noApi = $false
     $global:prepared = @(); $global:started = 0; $global:addressCalls = 0
     Remove-Item -LiteralPath (Join-Path $testRoot '.tools/ocr-models/charset.txt')
@@ -276,9 +294,16 @@ $global:prepared += $LanIp
         Assert-Equal ($global:databaseCalls[1] -contains '--archive-legacy') $true 'explicit recreate forwards archive mode'
         Assert-Equal $env:DOTNET_ENVIRONMENT 'SyntheticOriginal' 'restore caller environment after recreate'
         $global:databaseCalls = @()
+        & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -UpgradePropertySchema
+        Assert-Equal ($global:databaseCalls[1] -contains '--upgrade-property-schema') $true 'forward explicit property upgrade independently of legacy archive'
+        Assert-Equal ($global:databaseCalls[1] -contains '--archive-legacy') $false 'property upgrade cannot archive the database'
+        $global:databaseCalls = @()
         try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -Check -RecreateDatabase; throw 'Conflicting modes were accepted.' }
-        catch { if ($_.Exception.Message -ne 'Use either -Check or -RecreateDatabase.') { throw } }
+        catch { if ($_.Exception.Message -ne 'Select only one database operation.') { throw } }
         Assert-Equal $global:databaseCalls.Count 0 'conflicting modes cannot start a database operation'
+        try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -Check -UpgradePropertySchema; throw 'Conflicting property modes were accepted.' }
+        catch { if ($_.Exception.Message -ne 'Select only one database operation.') { throw } }
+        Assert-Equal $global:databaseCalls.Count 0 'read-only inspection cannot run a property upgrade'
         $global:databaseCalls = @(); $global:failDatabaseBuild = $true
         try { & (Join-Path $testRoot 'scripts/Update-LocalDatabase.ps1') -EnvironmentFile (Join-Path $testRoot '.env') -Check; throw 'Failed database build was accepted.' }
         catch { if ($_.Exception.Message -ne 'Local database tool build failed.') { throw } }

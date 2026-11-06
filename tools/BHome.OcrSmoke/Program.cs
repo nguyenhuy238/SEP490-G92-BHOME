@@ -15,6 +15,18 @@ if (args.Length == 4 && args[0] == "--stage2-parity")
     return Stage2Parity.Run(args[1], args[2], args[3]);
 if (args.Length == 3 && args[0] == "--trained-yolo-parity")
     return TrainedYoloParity.Run(args[1], args[2]);
+if (args.Length == 4 && args[0] == "--visual-category-benchmark")
+    return VisualCategoryEvaluation.Run(args[1], args[2], args[3]);
+if (args.Length == 5 && args[0] == "--meter-reading-controls")
+{
+    var controlOptions = new OcrOptions { Enabled = true, ModelDirectory = args[1], MeterDetectionMinConfidence = .7f,
+        MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = args[2] } };
+    using var controlDetector = new YoloMeterSceneDetector(controlOptions);
+    using var controlDigits = new YoloWaterDigitRecognizer(controlOptions);
+    using var controlEngine = new OnnxOcrEngine(controlOptions, new ImagePreprocessor(controlOptions), controlDetector, waterDigits: controlDigits);
+    using var controlService = new LocalOcrService(controlOptions, new Lazy<IOcrEngine>(() => controlEngine), NullLogger<LocalOcrService>.Instance);
+    return await OcrEvaluation.RunAsync(controlService, args[3], args[4]);
+}
 if (args.Length == 4 && args[0] == "--public-lcd-baseline")
     return PublicMeterEvaluation.Lcd(args[1], args[2], args[3]);
 if (args.Length == 6 && args[0] == "--public-category-baseline")

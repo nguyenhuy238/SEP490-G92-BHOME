@@ -34,7 +34,7 @@ try {
     if ($InspectSchema) { $runnerArguments += '--inspect-schema' }
     & dotnet @runnerArguments
     if ($Check -and $LASTEXITCODE -eq 2) { return }
-    if ($LASTEXITCODE -ne 0) { throw 'Compact24 preparation failed. Use -Check to inspect; -RecreateDatabase explicitly archives a legacy database without dropping it.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Compact24 preparation failed. Use -Check to inspect. PROPERTY_UPGRADE_REQUIRED needs a backup, a stopped API and -UpgradePropertySchema; populated retired catalog data must be migrated explicitly. -RecreateDatabase is only for an explicitly approved legacy archive, not a property upgrade.' }
 } finally {
     $env:ConnectionStrings__Database = $previousConnection
     $env:DOTNET_ENVIRONMENT = $previousEnvironment
