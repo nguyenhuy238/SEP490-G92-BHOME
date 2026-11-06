@@ -36,6 +36,63 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private const string Password = "Synthetic-Test-Password!123";
 
     [Fact]
+    public async Task MeterOcrUsesPersistedProfilesAndRejectsOtherLocationsBeforeInference()
+    {
+        var w = await Workspace();
+        var engine = new ProfileEngine();
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
+                new Lazy<IOcrEngine>(() => engine), NullLogger<LocalOcrService>.Instance))));
+        using var client = host.CreateClient();
+        await using (var loginScope = host.Services.CreateAsyncScope())
+        {
+            var email = (await loginScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Users.SingleAsync(u => u.Id == w.StaffId)).Email;
+            var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
+            login.EnsureSuccessStatusCode();
+            client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
+        }
+        var profiles = new[] {
+            (UtilityType.Water, MeterDisplay.Mechanical, OcrDocumentKind.MechanicalWater),
+            (UtilityType.Water, MeterDisplay.Digital, OcrDocumentKind.DigitalWater),
+            (UtilityType.Electricity, MeterDisplay.Mechanical, OcrDocumentKind.MechanicalElectricity),
+            (UtilityType.Electricity, MeterDisplay.Digital, OcrDocumentKind.DigitalElectricity) };
+        foreach (var (utility, display, expected) in profiles)
+        {
+            var room = await Create(w.Owner, "rooms", new RoomInput(w.Location, "SYN-" + expected, 2));
+            var meter = await Create(w.Owner, "meters", new MeterInput(room, "SYN-" + expected, utility, display, 2, Today.AddDays(-10)));
+            var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(meter, ReadingPurpose.Initial, Today, null));
+            using var image = new ByteArrayContent(Image()); image.Headers.ContentType = new("image/png");
+            var response = await client.PostAsync($"/api/v1/ocr/meter-tasks/{task}?kind=DigitalElectricity&decimalPlaces=0", image);
+            response.EnsureSuccessStatusCode();
+            var proposal = (await response.Content.ReadFromJsonAsync<OcrProposal>())!;
+            Assert.Equal(expected, engine.Kinds.Last());
+            Assert.Equal("000123.45", proposal.ProposedFields["reading"]);
+            Assert.True(proposal.RequiresConfirmation);
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal(123.45m, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == task)).OcrProposedValue);
+            Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
+        }
+        Assert.Equal(4, engine.Kinds.Count);
+        var foreign = await Workspace();
+        var foreignTask = await Create(foreign.Owner, "meter-tasks", new MeterTaskInput(foreign.Meter, ReadingPurpose.Initial, Today, null));
+        using var rejectedImage = new ByteArrayContent(Image()); rejectedImage.Headers.ContentType = new("image/png");
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/v1/ocr/meter-tasks/{foreignTask}", rejectedImage)).StatusCode);
+        Assert.Equal(4, engine.Kinds.Count);
+        await using var finalScope = fixture.Factory.Services.CreateAsyncScope();
+        Assert.Null((await finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<OperationalTask>().SingleAsync(t => t.Id == foreignTask)).OcrProposedValue);
+        var bad = await w.Owner.PostAsJsonAsync("/api/v1/capture/meters", new MeterInput(w.Room, "SYN-INVALID", UtilityType.Water, (MeterDisplay)99, 2, Today));
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
+    private sealed class ProfileEngine : IOcrEngine
+    {
+        public List<OcrDocumentKind> Kinds { get; } = [];
+        public Task<OcrText> RecognizeAsync(ReadOnlyMemory<byte> image, OcrDocumentKind kind, CancellationToken token)
+        { Kinds.Add(kind); return Task.FromResult(new OcrText([new("00012345", .99f)], "synthetic-profile-test", [])); }
+    }
+
+    [Fact]
     public async Task OcrPersistsOnlyTheProposalUsingDatabaseDisplayPrecision()
     {
         var w = await Workspace();
