@@ -1,4 +1,4 @@
-import type { ContractRequest } from './contracts';
+import type { ContractRequest, DepositDeductionPlan } from './contracts';
 export interface RefundEvent {
   action: string;
   actor: string;
@@ -39,6 +39,7 @@ export interface RefundSource {
   verifiedDepositAmount?: string | null;
   financialReference?: string | null;
   blockers?: string[] | null;
+  depositDeductions?: DepositDeductionPlan | null;
   excessAmount: string;
   refundedAmount: string;
   reservedAmount: string;
@@ -73,6 +74,8 @@ export function refundClient(request: ContractRequest) {
         expectedFinancialReference: string;
         beneficiaryVerified: boolean;
         noDeductionsConfirmed: boolean;
+        expectedDeductionPlanId?: string;
+        deductionsConfirmed?: boolean;
       },
       key: string,
     ) =>
@@ -113,6 +116,10 @@ export function refundClient(request: ContractRequest) {
 export function refundError(error: unknown): string {
   const e = error as { status?: number; code?: string; problem?: { code?: string } };
   const messages: Record<string, string> = {
+    deposit_deduction_review_required:
+      'Cần xem đúng quyết định khấu trừ đã duyệt trước khi yêu cầu hoàn phần còn lại.',
+    deduction_evidence_integrity_failed:
+      'Chứng từ thiệt hại không khớp quyết định. Cần Owner đối chiếu lại.',
     refund_amount_unavailable: 'Nguồn tiền đã được giữ chỗ hoặc hoàn. Hãy tải lại nguồn.',
     deposit_refund_confirmation_required:
       'Cần xác minh người nộp cọc và xác nhận không khấu trừ trước khi lập yêu cầu.',

@@ -80,5 +80,12 @@ transferVerificationStatus=NotRequired; không tạo giao dịch hoàn bằng 0 
 
 Backend focused: **25 unit + 19 integration/audit đạt**, 0 skip. Có race/replay/stale/version,
 scope, unknown evidence, vượt cọc, revision append-only, proof tamper, partial remainder return và
-full retention/closure; không đổi issued invoice. Owner UI cho plan, browser có khấu trừ, native và
-Finance classification chưa nghiệm thu trong slice backend này. Handoff Vũ Xuân Trường/Bùi Bảo Long.
+full retention/closure; không đổi issued invoice.
+
+Owner Web đã có editor ngay trong Contract lifecycle: chọn Room/Asset và ảnh inspection, nhập mức
+thiệt hại/căn cứ, xác nhận chưa tính trên invoice rồi duyệt. Thay input hoặc summary reference phải
+xác nhận lại; retry ambiguous failure giữ cùng key/payload, không báo duyệt trước response. Khi có
+reservation/nguồn chưa đủ điều kiện, editor chỉ đọc. RefundPanel hiển thị plan hiện tại và buộc
+review đúng plan trước khi yêu cầu phần còn lại. Focused Owner UI **26/26 đạt**, build/lint và
+Mobile typecheck đạt. Browser có khấu trừ, native và Finance classification chưa nghiệm thu trong
+slice UI này. Handoff Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long.

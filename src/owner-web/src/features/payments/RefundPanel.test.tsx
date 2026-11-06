@@ -135,6 +135,58 @@ it('shows unknown deposit availability and blocks approval while still allowing 
   expect(screen.getByRole('button', { name: 'Duyệt yêu cầu hoàn' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Từ chối hoàn' })).toBeEnabled();
 });
+it('binds a remainder refund to the approved deduction instead of claiming there were no deductions', async () => {
+  request.mockImplementation(async (_url, init) => {
+    if (init?.method === 'POST') throw { status: 503 };
+    return {
+      ...source,
+      sourcePaymentId: null,
+      sourceDepositContractId: 'root',
+      verifiedDepositAmount: '400000',
+      availableAmount: '300000',
+      financialReference: 'D-plan',
+      depositDeductions: {
+        id: 'plan-1',
+        version: 2,
+        total: '100000',
+        items: [{ description: 'Synthetic damage', amount: '100000' }],
+      },
+    };
+  });
+  mount('SecurityDeposit');
+  await screen.findByText('Khấu trừ đã duyệt phiên bản 2: 100.000 ₫');
+  expect(
+    screen.queryByLabelText(
+      'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý',
+    ),
+  ).toBeNull();
+  fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn đã xác minh'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
+  fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
+    target: { value: '300000' },
+  });
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
+    target: { value: 'Only return the remainder' },
+  });
+  for (const label of [
+    'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn',
+    'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại',
+  ])
+    fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await vi.waitFor(() =>
+    expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+  );
+  const body = JSON.parse(request.mock.calls.find(([, init]) => init?.method === 'POST')![1].body);
+  expect(body).toMatchObject({
+    noDeductionsConfirmed: false,
+    deductionsConfirmed: true,
+    expectedDeductionPlanId: 'plan-1',
+    expectedFinancialReference: 'D-plan',
+  });
+  expect(body.refund.amount).toBe('300000');
+});
 function mount(kind: 'Receipt' | 'SecurityDeposit' = 'Receipt') {
   return render(
     <QueryClientProvider

@@ -81,6 +81,8 @@ const blockers: Record<string, string> = {
     'Khoản hoàn cọc chưa đủ bằng chứng phân loại hoặc nghĩa vụ đã thay đổi.',
   deposit_source_requires_review: 'Nguồn cọc có phân bổ hoặc số dư chưa được xác minh.',
   deposit_deductions_require_review: 'Còn phí hoặc khấu trừ cần xử lý trước khi hoàn cọc.',
+  deposit_deduction_reapproval_required:
+    'Nghĩa vụ hoặc biên bản đã đổi; Owner cần xem xét lại quyết định khấu trừ.',
   deposit_contract_not_active: 'Hợp đồng đã kết thúc hoặc chưa Active; không lập khoản hoàn mới.',
   refund_source_requires_manual_review:
     'Có khoản hoàn cũ chưa được phân loại; cần đối chiếu nguồn.',

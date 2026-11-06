@@ -33,6 +33,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { ChartCard } from '../../components/common/PortalUI';
 import { RefundPanel } from '../payments/RefundPanel';
+import { DepositDeductionsPanel } from './DepositDeductionsPanel';
 
 export function ContractLifecyclePanel({
   api,
@@ -276,14 +277,33 @@ export function ContractLifecyclePanel({
               </Alert>
             ))}
             {!/^0(?:\.0+)?$/.test(summary.verifiedSecurityDeposit) && (
-              <RefundPanel
-                sourceId={contract.id}
-                sourceKind="SecurityDeposit"
-                onChanged={() => {
-                  q.reload();
-                  onChanged();
-                }}
-              />
+              <>
+                {inspection?.ownerDecision === 'Confirmed' &&
+                  (summary.depositDeductions ||
+                    summary.unresolvedItems.includes(
+                      'final_charges_and_damage_policy_pending',
+                    )) && (
+                    <DepositDeductionsPanel
+                      key={`deductions:${summary.reference}`}
+                      api={api}
+                      id={contract.id}
+                      summary={summary}
+                      inspection={inspection}
+                      saved={async () => {
+                        await reload();
+                        onChanged();
+                      }}
+                    />
+                  )}
+                <RefundPanel
+                  sourceId={contract.id}
+                  sourceKind="SecurityDeposit"
+                  onChanged={() => {
+                    q.reload();
+                    onChanged();
+                  }}
+                />
+              </>
             )}
             {summary.resolved && (
               <Alert severity="success">Các nguồn hiện tại đủ điều kiện xem xét hoàn tất.</Alert>

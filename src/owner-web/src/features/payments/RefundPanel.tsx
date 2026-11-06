@@ -55,6 +55,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
         source.data.availableAmount,
         source.data.refundedAmount,
         source.data.reservedAmount,
+        source.data.depositDeductions?.id,
         source.data.beneficiaries.map((p) => p.id),
         source.data.requests.map((r) => [r.id, r.version, r.executionIntent?.key]),
       ])
@@ -109,7 +110,14 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
             refund: body,
             expectedFinancialReference: source.data.financialReference,
             beneficiaryVerified: beneficiarySource === signature,
-            noDeductionsConfirmed: zeroDeductionSource === signature,
+            noDeductionsConfirmed:
+              !source.data.depositDeductions && zeroDeductionSource === signature,
+            ...(source.data.depositDeductions
+              ? {
+                  expectedDeductionPlanId: source.data.depositDeductions.id,
+                  deductionsConfirmed: zeroDeductionSource === signature,
+                }
+              : {}),
           },
           key.current.value,
         );
@@ -129,12 +137,14 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
     <Stack spacing={2}>
       <Typography variant="h6">
         {sourceKind === 'SecurityDeposit'
-          ? 'Hoàn cọc không khấu trừ'
+          ? source.data?.depositDeductions
+            ? 'Hoàn cọc theo quyết định khấu trừ'
+            : 'Hoàn cọc không khấu trừ'
           : 'Hoàn tiền thừa từ giao dịch'}
       </Typography>
       <Alert severity="info">
         Owner tự thực hiện chuyển khoản hoàn bên ngoài. BHOME chỉ ghi nhận sau khi Owner đối chiếu
-        sao kê; không tự chuyển tiền hoặc khấu trừ cọc.
+        sao kê; không tự chuyển tiền.
       </Alert>
       {source.isFetching && <LinearProgress />}
       {(error || source.error) && (
@@ -169,6 +179,19 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
               {settlementBlocker(b)}
             </Alert>
           ))}
+          {source.data.depositDeductions && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography>
+                Khấu trừ đã duyệt phiên bản {source.data.depositDeductions.version}:{' '}
+                {formatContractMoney(source.data.depositDeductions.total)}
+              </Typography>
+              {source.data.depositDeductions.items.map((item, index) => (
+                <Typography key={index}>
+                  {item.description}: {formatContractMoney(item.amount)}
+                </Typography>
+              ))}
+            </Paper>
+          )}
           {sourceKind === 'SecurityDeposit' && (
             <Alert severity="info">
               Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu
@@ -248,7 +271,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                         }
                       />
                     }
-                    label="Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý"
+                    label={
+                      source.data.depositDeductions
+                        ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
+                        : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'
+                    }
                   />
                 </>
               )}

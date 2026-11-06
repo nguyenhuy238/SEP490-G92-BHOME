@@ -589,9 +589,34 @@ TESTS:
 - API audit mới 216 routes, 211 protected, 5 anonymous, 106 Owner GET, 0 5xx; generated inventory khớp manifest riêng. Build 0 warning/error. Không chạy browser có phí/native/provider trong slice backend.
 COMMIT:
 - Message: feat(deposit): [BE-X07] approve evidenced damage deductions and refund remainders
-- SHA ghi sau commit deduction backend.
+- SHA: `83cda815f9659c896cd9c7d8b9297efffd5b75fe`.
 FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường: cần plan editor và approved-plan consent. Mobile Bùi Bảo Long: authorized fee breakdown/read-only; không cấp Staff quyền duyệt.
 STATUS: PARTIAL — backend supported TenantDamage branch đã test; BE-19/BE-X07 chưa DONE.
 REMAINING:
 - Owner UI/bank-evidence E2E có phí, Finance classification/retained compensation, notification. Debt offset/fees vượt cọc/semantic duplicate fee nhập tay không tự suy quyết định; xem DEPOSIT_DEDUCTIONS.md. Không tuyên bố native/bank/MySign acceptance.
+
+TASK: BE-19 / BE-X07
+SLICE: Owner Web quyết định thiệt hại và review hoàn phần cọc còn lại
+IMPLEMENTED:
+- Reuse Contract lifecycle và RefundPanel; shared client gọi POST deposit-deductions, không frontend mock fallback.
+- Owner chọn Room/Asset/ảnh inspection, nhập số tiền/căn cứ và xác nhận chưa tính invoice. Summary đổi remount editor; sửa input reset consent. Server quyết định tổng/eligibility, reservation hoặc unknown source giữ read-only.
+- Retry ambiguous response giữ UUID/payload; lỗi không báo đã duyệt. Empty items chỉ gửi khi Owner nhập căn cứ và xác nhận quyết định rõ ràng.
+- Refund source hiện plan/version/items; bắt buộc review đúng plan ID, deductionsConfirmed và không dùng no-deduction attestation cho plan có phí. Nguồn khác giữ flow cũ.
+CHANGED FILES:
+- packages/client-core/src/{contracts,refunds,useContractLifecycle}.ts
+- src/owner-web/src/features/contracts/{DepositDeductionsPanel,DepositDeductionsPanel.test,ContractLifecyclePanel}.tsx
+- src/owner-web/src/features/payments/{RefundPanel,RefundPanel.test}.tsx
+- docs/api/{DEPOSIT_DEDUCTIONS,REFUNDS}.md và báo cáo này.
+TESTS:
+- Owner focused DepositDeductionsPanel/ContractLifecyclePanel/RefundPanel/Payments: 26/26 đạt.
+- npm.cmd run build và lint --workspace src/owner-web: đạt; npm.cmd run typecheck --workspace src/mobile: đạt.
+- Logs .tools/huy-damage-owner-{ui,build,lint}.log, huy-damage-mobile-typecheck.log. Chưa chạy browser có khấu trừ/native/provider ở slice này.
+COMMIT:
+- Message: feat(moveout): [BE-19] review evidenced deposit deductions in Owner Web
+- SHA ghi sau commit deduction UI.
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường review UX; Mobile Bùi Bảo Long giữ role-scoped read-only.
+STATUS: PARTIAL — UI được kiểm component/build/lint, toàn BE-19/BE-X07 chưa DONE.
+REMAINING:
+- Real browser có khấu trừ/private proof/closure, Finance deposit source classification và notification. Debt offset/over-deposit fees chưa hỗ trợ; MySign/bank thật và native acceptance vẫn blocked/NOT RUN.
