@@ -51,7 +51,7 @@ module.exports = async function verify({ owner, tenants, excess, invoiceId, sett
   assert.equal((await owner.api.request(sourceRoute)).refundedAmount, '0');
   const evidence = Buffer.from(
     await page.evaluate(() => {
-      const canvas = document.createElement('canvas');
+      const canvas = globalThis.document.createElement('canvas');
       canvas.width = 600;
       canvas.height = 160;
       const ctx = canvas.getContext('2d');

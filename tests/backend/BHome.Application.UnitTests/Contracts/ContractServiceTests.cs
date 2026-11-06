@@ -4,6 +4,7 @@ using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Storage;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.Locations;
 using BHome.Domain.PropertyManagement;
@@ -51,6 +52,10 @@ public sealed class ContractServiceTests
             Repo.MoveOutAsync(default, default).ReturnsForAnyArgs(c => Moves.SingleOrDefault(x => x.ContractId == c.Arg<Guid>()));
             Repo.DepositTotalAsync(default, default).ReturnsForAnyArgs(c => Deposits.Where(d => d.ContractId == c.Arg<Guid>()).Sum(d => d.Amount));
             Repo.BankReferenceAsync(default!, default).ReturnsForAnyArgs(c => Deposits.SingleOrDefault(d => d.BankTransactionReference == c.Arg<string>()));
+            Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(Room.Id, Today,
+                [new PolicyDto(Guid.NewGuid(), Room.LocationId, null, Room.Id, ChargeCategory.Rent, "RENT", "Rent",
+                    ChargingMethod.FixedPerRoomPerMonth, 3000000, Today.AddMonths(-1), null, 1)], []));
+            Repo.MainForHoldingAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.HoldingContractId == c.Arg<Guid>()));
             Repo.OperationAsync(default, default, default!, default).ReturnsForAnyArgs(c => Operations.SingleOrDefault(o => o.ActorId == c.ArgAt<Guid>(0) && o.Key == c.ArgAt<Guid>(1) && o.Operation == c.Arg<string>()));
             Repo.InTransactionAsync(default, default(Func<Task<ContractId>>)!, default).ReturnsForAnyArgs(c => c.Arg<Func<Task<ContractId>>>()());
             Repo.InTransactionAsync(default, default(Func<Task<ContractView>>)!, default).ReturnsForAnyArgs(c => c.Arg<Func<Task<ContractView>>>()());
@@ -72,6 +77,9 @@ public sealed class ContractServiceTests
             Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock());
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
+        public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
+            Today.AddDays(1), Today.AddMonths(12), new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero),
+            2000000, "Synthetic Holding terms", 1);
         public async Task<Contract> Create()
         { var id = await Service.CreateAsync(Draft, Guid.NewGuid(), default); return Contracts.Single(c => c.Id == id.Id); }
         public async Task<Contract> Ready()
@@ -92,6 +100,69 @@ public sealed class ContractServiceTests
             Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(bytes));
             Deposits.Add(new DepositVerification { ContractId = c.Id, Amount = c.RequiredDeposit }); return c;
         }
+    }
+
+    [Fact]
+    public async Task HoldingDraftUsesResolvedRentAndDoesNotReserveRoom()
+    {
+        var r = new Rig();
+        var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
+        var holding = Assert.Single(r.Contracts, c => c.Id == id.Id);
+        Assert.Equal(ContractKind.Holding, holding.Kind);
+        Assert.Equal(3000000, holding.MonthlyRent);
+        Assert.Equal(ContractStatus.Draft, holding.Status);
+        Assert.Equal(RoomStatus.Available, r.Room.Status);
+        Assert.Null(holding.ApprovedAt);
+    }
+
+    [Fact]
+    public async Task HoldingDepositLocksApprovedPriceOnlyOnce()
+    {
+        var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
+        await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved reviewed terms"), Guid.NewGuid(), default);
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-ONE", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
+        var holding = r.Contracts.Single(); var locked = holding.AgreedPriceSnapshot; var lockedAt = holding.PriceLockedAt;
+        r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today,
+            [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, null, r.Room.Id, ChargeCategory.Rent, "RENT", "Changed",
+                ChargingMethod.FixedPerRoomPerMonth, 9000000, Today, null, 2)], []));
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
+        Assert.Equal("VerifiedDeposit", holding.PriceLockTrigger);
+        Assert.Equal(lockedAt, holding.PriceLockedAt);
+        Assert.Equal(locked, holding.AgreedPriceSnapshot);
+    }
+
+    [Fact]
+    public async Task FullySatisfiedHoldingActivatesOnHoldAndCancellationReleasesIt()
+    {
+        var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
+        await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved reviewed terms"), Guid.NewGuid(), default);
+        var holding = r.Contracts.Single(); holding.Status = ContractStatus.PendingActivation;
+        var bytes = Encoding.UTF8.GetBytes("TEST ONLY signed Holding PDF"); var hash = Convert.ToHexString(SHA256.HashData(bytes));
+        foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSignature
+        {
+            ContractId = holding.Id, SignerUserId = signer, Status = SignatureStatus.Signed, SnapshotHash = holding.SnapshotHash,
+            SignedObjectKey = "holding-signed", SignedHash = hash, ProviderReference = Guid.NewGuid().ToString(), SignedAt = new Clock().GetUtcNow()
+        });
+        r.Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(bytes));
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-FULL", 2000000, "Verified bank statement"), Guid.NewGuid(), default);
+        await r.Service.ActivateHoldingAsync(id.Id, Guid.NewGuid(), default);
+        Assert.Equal(ContractStatus.Active, holding.Status); Assert.Equal(RoomStatus.OnHold, r.Room.Status); Assert.Equal(2, r.Room.Version);
+        await r.Service.CancelHoldingAsync(id.Id, new("Tenant and Owner cancelled"), Guid.NewGuid(), default);
+        Assert.Equal(ContractStatus.Cancelled, holding.Status); Assert.Equal(RoomStatus.Available, r.Room.Status); Assert.Equal(3, r.Room.Version);
+    }
+
+    [Fact]
+    public async Task ConversionReusesHoldingLedgerAndDoesNotMarkHoldingConvertedAtDraftTime()
+    {
+        var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
+        var holding = r.Contracts.Single(); holding.Status = ContractStatus.Active; holding.ApprovedAt = new Clock().GetUtcNow();
+        holding.PriceLockedAt = new Clock().GetUtcNow(); holding.AgreedPriceSnapshot = "{\"locked\":true}"; r.Room.Status = RoomStatus.OnHold;
+        r.Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(call =>
+            new HoldingDepositApplication(holding.Id, holding.RoomId, holding.TenantUserId!.Value, 2000000, "allocation-once"));
+        var mainId = await r.Service.ConvertHoldingAsync(holding.Id, new(3000000), Guid.NewGuid(), default);
+        var main = r.Contracts.Single(c => c.Id == mainId.Id);
+        Assert.Equal(holding.Id, main.HoldingContractId); Assert.Equal(2000000, main.AppliedHoldingDeposit);
+        Assert.Equal(ContractStatus.Active, holding.Status); Assert.Null(holding.ConvertedMainContractId);
     }
 
     [Theory]

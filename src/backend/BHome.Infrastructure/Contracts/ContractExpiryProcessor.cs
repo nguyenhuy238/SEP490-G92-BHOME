@@ -1,6 +1,8 @@
 using BHome.Application.Contracts;
 using BHome.Application.Jobs;
 using BHome.Domain.TenantContracts;
+using BHome.Domain.PropertyManagement;
+using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Contracts;
@@ -15,15 +17,37 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
         var through = today.AddDays(30); Guid? after = null;
         while (true)
         {
-            var batch = await db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active && c.EndDate <= through && (after == null || c.Id.CompareTo(after.Value) > 0))
-                .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId }).Take(100).ToArrayAsync(t);
+            var now = clock.GetUtcNow();
+            var batch = await db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active &&
+                (c.Kind == ContractKind.Holding ? c.HoldingExpiryAt <= now : c.EndDate <= through) &&
+                (after == null || c.Id.CompareTo(after.Value) > 0))
+                .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId, c.Room.LocationId }).Take(100).ToArrayAsync(t);
             if (batch.Length == 0) break;
             foreach (var item in batch)
             {
                 await using var tx = await db.Database.BeginTransactionAsync(t);
-                await db.Locked<BHome.Domain.PropertyManagement.Room>(item.RoomId).AsNoTracking().SingleAsync(t);
-                var c = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == item.Id, t);
-                if (c.Status == ContractStatus.Active && c.EndDate <= through)
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
+                await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({item.LocationId.ToString()},0))", t);
+                var room = await db.Locked<Room>(item.RoomId).SingleAsync(t);
+                var c = await db.Set<Contract>().SingleAsync(c => c.Id == item.Id, t);
+                if (c.Kind == ContractKind.Holding && c.Status == ContractStatus.Active && c.HoldingExpiryAt <= now)
+                {
+                    c.Status = ContractStatus.Expired; c.ActualEndDate = today; c.LifecycleActorId = c.OwnerSignerId;
+                    c.LifecycleAt = now; c.LifecycleReason = "HoldingExpired";
+                    var otherBinding = await db.Set<Contract>().AnyAsync(x => x.RoomId == c.RoomId && x.Id != c.Id && x.Status == ContractStatus.Active, t);
+                    if (room.Status == RoomStatus.OnHold && !otherBinding)
+                    {
+                        var before = System.Text.Json.JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id });
+                        room.Status = RoomStatus.Available; room.Version++;
+                        db.Add(new PropertyChange { ActorId = c.OwnerSignerId, LocationId = room.LocationId, TargetId = room.Id,
+                            TargetType = nameof(Room), Action = RoomTransitionSource.HoldingRelease.ToString(), Reason = "HoldingExpired",
+                            Before = before, After = System.Text.Json.JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id }), OccurredAt = now });
+                    }
+                    db.SecurityAudit.Add(new SecurityAuditRecord { UserId = c.OwnerSignerId, Event = "HoldingExpired", TargetId = c.Id,
+                        TargetType = "Contract", Succeeded = true, OccurredAt = now });
+                    await db.SaveChangesAsync(t);
+                }
+                else if (c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.EndDate <= through)
                 {
                     var stage = c.EndDate < today ? "Expired" : "Upcoming30";
                     foreach (var recipient in new[] { c.OwnerSignerId, c.TenantUserId }.Distinct())

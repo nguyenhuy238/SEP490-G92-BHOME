@@ -39,6 +39,25 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
         catch (PostgresException error) when (error.SqlState is "23505" or "23514" or "40001" or "40P01")
         { throw new PaymentException(409, "payment_concurrent_or_duplicate_effect"); }
     }
+    public async Task<T> DepositTransactionAsync<T>(Guid transferId, Guid contractId, Func<Task<T>> work, CancellationToken t)
+    {
+        db.ChangeTracker.Clear();
+        await using var transaction = await db.Database.BeginTransactionAsync(t);
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
+        if (!await db.Locked<PaymentTransfer>(transferId).AnyAsync(t)) throw new PaymentException(404, "bank_transfer_not_found");
+        var room = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Id == contractId)
+            .Select(c => new { c.RoomId, c.Room.LocationId }).SingleOrDefaultAsync(t) ?? throw new PaymentException(404, "holding_contract_not_found");
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({room.LocationId.ToString()},0))", t);
+        await db.Locked<BHome.Domain.PropertyManagement.Room>(room.RoomId).SingleAsync(t);
+        try
+        {
+            var result = await work(); await db.SaveChangesAsync(t); await transaction.CommitAsync(t); return result;
+        }
+        catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: "23505" or "23514" })
+        { throw new PaymentException(409, "payment_concurrent_or_duplicate_effect"); }
+        catch (PostgresException error) when (error.SqlState is "23505" or "23514" or "40001" or "40P01")
+        { throw new PaymentException(409, "payment_concurrent_or_duplicate_effect"); }
+    }
     public Task<Invoice?> InvoiceAsync(Guid id, PaymentScope scope, CancellationToken t) => db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == id &&
         (scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.ActorId)), t);
     public Task<PaymentTransfer?> TransferAsync(Guid id, CancellationToken t) => db.Set<PaymentTransfer>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
@@ -54,6 +73,11 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
          orderby allocation.AllocatedAt descending, allocation.Id
          select new PaymentLedgerEntry(allocation, transfer)).ToArrayAsync(t);
     public async Task<decimal> AllocatedAsync(Guid invoiceId, CancellationToken t) => await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == invoiceId).SumAsync(a => (decimal?)a.Amount, t) ?? 0m;
+    public async Task<decimal> DepositAllocatedAsync(Guid contractId, CancellationToken t) => await db.Set<PaymentAllocation>()
+        .Where(a => a.TargetDepositContractId == contractId).SumAsync(a => (decimal?)a.Amount, t) ?? 0m;
+    public Task<BHome.Domain.TenantContracts.Contract?> HoldingAsync(Guid contractId, CancellationToken t) => db.Set<BHome.Domain.TenantContracts.Contract>()
+        .Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Room).ThenInclude(r => r.RoomType)
+        .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery().SingleOrDefaultAsync(c => c.Id == contractId, t);
     public Task<BHome.Application.Billing.InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t) => db.FinancialsAsync(invoiceId, t);
     public Task<bool> ReferenceClaimedAsync(string reference, CancellationToken t) => db.Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == reference, t);
     public Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t) => db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == payerId, t);
@@ -107,9 +131,10 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                 x.StatementReference, x.VerificationReason, x.VerifiedByUserId, x.VerifiedAt, x.ProposedInvoiceId,
                 db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) ? "Allocated" : db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Decision).FirstOrDefault() ?? "PendingReview",
                 db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Reason).FirstOrDefault() ?? (db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) ? "verified_full_payment" : "owner_allocation_confirmation_required"),
-                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
                 db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0,
-                x.Amount - (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0)));
+                x.Amount - (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0),
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.TargetDepositContractId).FirstOrDefault()));
         return new(await views.ToArrayAsync(t),
             query.Page, query.PageSize, await source.CountAsync(t));
     }

@@ -3,7 +3,7 @@ using BHome.Domain.Common;
 namespace BHome.Domain.PropertyManagement;
 
 public enum RoomStatus { Available, OnHold, Occupied, Unavailable }
-public enum RoomTransitionSource { Configuration, ContractActivation, ContractTermination }
+public enum RoomTransitionSource { Configuration, ContractActivation, ContractTermination, HoldingActivation, HoldingRelease }
 public enum AssetStatus { Active, NeedsRepair, UnderRepair, Retired }
 public enum ChargeCategory { Rent, Electricity, Water, ServiceFee }
 public enum ChargingMethod { FixedPerRoomPerMonth, Metered }
@@ -87,10 +87,12 @@ public static class PropertyRules
                 current is RoomStatus.Available or RoomStatus.Unavailable &&
                 requested is RoomStatus.Available or RoomStatus.Unavailable && !hasObligations,
             RoomTransitionSource.ContractActivation =>
-                current is RoomStatus.Available or RoomStatus.Occupied && requested == RoomStatus.Occupied,
+                current is RoomStatus.Available or RoomStatus.OnHold or RoomStatus.Occupied && requested == RoomStatus.Occupied,
             RoomTransitionSource.ContractTermination => hasOtherActiveContracts
                 ? requested == RoomStatus.Occupied
                 : requested == (current == RoomStatus.Occupied ? RoomStatus.Available : current),
+            RoomTransitionSource.HoldingActivation => current == RoomStatus.Available && requested == RoomStatus.OnHold,
+            RoomTransitionSource.HoldingRelease => current == RoomStatus.OnHold && requested == RoomStatus.Available,
             _ => false
         };
 

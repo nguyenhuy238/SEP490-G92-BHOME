@@ -108,13 +108,39 @@ public sealed partial class Compact24DbContext
     private async Task ValidateAllocationAsync(PaymentAllocation allocation, CancellationToken token)
     {
         await Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", token);
-        if (await Set<PaymentAllocation>().AnyAsync(a => a.TransferId == allocation.TransferId, token)) throw LedgerConflict();
-        var transfer = await Set<PaymentTransfer>().SingleAsync(p => p.Id == allocation.TransferId, token);
-        var invoice = await Set<Invoice>().SingleAsync(i => i.Id == allocation.InvoiceId, token);
-        var paid = await Set<PaymentAllocation>().Where(a => a.InvoiceId == allocation.InvoiceId).SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
-        var adjustments = await Set<InvoiceAdjustmentDecision>().Where(d => d.InvoiceId == allocation.InvoiceId && d.Outcome == "Approved" && d.InvoiceStatus == InvoiceStatus.Final).SumAsync(d => (decimal?)d.Delta, token) ?? 0m;
-        if (invoice.Status != InvoiceStatus.Final || allocation.Amount <= 0 || allocation.Amount != Math.Min(transfer.Amount, invoice.Total + adjustments - paid) ||
-            await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
+        if (allocation.TransferId is { } transferId)
+        {
+            if (allocation.SourceDepositContractId is not null ||
+                (allocation.TargetDepositContractId is null) == (allocation.InvoiceId is null) ||
+                await Set<PaymentAllocation>().AnyAsync(a => a.TransferId == transferId, token)) throw LedgerConflict();
+            var transfer = await Set<PaymentTransfer>().SingleAsync(p => p.Id == transferId, token);
+            if (allocation.TargetDepositContractId is { } depositContractId)
+            {
+                var depositHolding = await Set<Contract>().SingleAsync(c => c.Id == depositContractId, token);
+                var paymentReceived = await Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == depositContractId)
+                    .SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
+                if (depositHolding.Kind != ContractKind.Holding || depositHolding.ApprovedAt is null || depositHolding.Status is ContractStatus.Expired or ContractStatus.Cancelled or ContractStatus.Converted ||
+                    depositHolding.HoldingExpiryAt <= allocation.AllocatedAt || allocation.Amount <= 0 ||
+                    allocation.Amount != Math.Min(transfer.Amount, depositHolding.RequiredDeposit - paymentReceived) ||
+                    await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
+                return;
+            }
+            var invoice = await Set<Invoice>().SingleAsync(i => i.Id == allocation.InvoiceId, token);
+            var paid = await Set<PaymentAllocation>().Where(a => a.InvoiceId == allocation.InvoiceId).SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
+            var adjustments = await Set<InvoiceAdjustmentDecision>().Where(d => d.InvoiceId == allocation.InvoiceId && d.Outcome == "Approved" && d.InvoiceStatus == InvoiceStatus.Final).SumAsync(d => (decimal?)d.Delta, token) ?? 0m;
+            if (invoice.Status != InvoiceStatus.Final || allocation.Amount <= 0 || allocation.Amount != Math.Min(transfer.Amount, invoice.Total + adjustments - paid) ||
+                await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
+            return;
+        }
+        if (allocation.SourceDepositContractId is not { } source || allocation.TargetDepositContractId is not { } target || allocation.InvoiceId is not null ||
+            allocation.Amount <= 0 || await Set<PaymentAllocation>().AnyAsync(a => a.SourceDepositContractId == source, token)) throw LedgerConflict();
+        var holding = await Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == source, token);
+        var main = ChangeTracker.Entries<Contract>().SingleOrDefault(e => e.Entity.Id == target)?.Entity ??
+            await Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == target, token);
+        var received = await Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == source).SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
+        if (holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active || main is null || main.Kind != ContractKind.Main ||
+            main.HoldingContractId != source || main.RoomId != holding.RoomId || main.TenantUserId != holding.TenantUserId ||
+            allocation.Amount != Math.Min(received, main.RequiredDeposit)) throw LedgerConflict();
     }
 
     private async Task ClaimReferenceAsync(Guid paymentId, Guid? allocationId, Guid? depositId, CancellationToken token)
