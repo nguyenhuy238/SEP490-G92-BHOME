@@ -7,13 +7,13 @@ Quyết định triển khai theo ủy quyền người dùng OQ-01/02/05: chỉ
 
 Owner-only API/service, Staff/Tenant 403, anonymous 401; mô hình Owner toàn chuỗi hiện hữu. Beneficiary phải là Resident đã xác minh/liên kết với actual payer của allocation tại đúng Room, không lấy người đại diện mặc định. Chưa xác định payer thì chặn lập yêu cầu. Requested/Approved/Completed giữ chỗ; Rejected trả khả dụng. Các mutation dùng chung ledger advisory lock với allocation, revalidate nguồn/số dư trong transaction, version và UUID Idempotency-Key; replay giữ kết quả, payload thay đổi 409. Demo mutation chỉ Development/Testing, không dùng receipt demo trong Production. Giới hạn kỹ thuật 100 requests/receipt; chưa hỗ trợ đổi người nhận nếu Resident đã chuyển Room. Không có delete/direct-edit hoặc tự hoàn theo deadline.
 
-| Method | Route | Contract |
-| --- | --- | --- |
-| GET | /api/v1/payment-transactions/{id}/refunds | Nguồn: excessAmount/refundedAmount/reservedAmount/availableAmount (chuỗi VND), beneficiary choices tối thiểu và requests |
-| POST | /api/v1/payment-transactions/{id}/refunds | {beneficiaryResidentId,amount,reason,humanConfirmed:true}, UUID key → RefundView |
-| POST | /api/v1/refund-requests/{id}/decision | {expectedVersion,approve,reason,humanConfirmed:true}, UUID key → RefundView |
-| POST | /api/v1/refund-requests/{id}/execution | multipart: expectedVersion, executedAt UTC, externalReference, reason, humanConfirmed=true, evidence PNG/JPEG <=5 MB; UUID key → RefundView |
-| GET | /api/v1/refund-requests/{id}/evidence | Private image sau Completed, kiểm length/hash trước trả bytes |
+| Method | Route                                     | Contract                                                                                                                                    |
+| ------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | /api/v1/payment-transactions/{id}/refunds | Nguồn: excessAmount/refundedAmount/reservedAmount/availableAmount (chuỗi VND), beneficiary choices tối thiểu và requests                    |
+| POST   | /api/v1/payment-transactions/{id}/refunds | {beneficiaryResidentId,amount,reason,humanConfirmed:true}, UUID key → RefundView                                                            |
+| POST   | /api/v1/refund-requests/{id}/decision     | {expectedVersion,approve,reason,humanConfirmed:true}, UUID key → RefundView                                                                 |
+| POST   | /api/v1/refund-requests/{id}/execution    | multipart: expectedVersion, executedAt UTC, externalReference, reason, humanConfirmed=true, evidence PNG/JPEG <=5 MB; UUID key → RefundView |
+| GET    | /api/v1/refund-requests/{id}/evidence     | Private image sau Completed, kiểm length/hash trước trả bytes                                                                               |
 
 RefundView: id/sourcePaymentId/beneficiaryResidentId/beneficiaryLabel/amount/reason/status/version/requestedAt/decisionReason/decidedAt/executedAt/externalReference/isDevelopmentDemo/history và executionIntent metadata nếu upload gián đoạn. Không trả object key/bank login/CCCD. History giữ actor/action/time/reason/version. Số tiền nguyên >0, <=phần nguồn còn khả dụng, <10^18. Reason 1–2000, externalReference 1–200 ký tự ASCII chữ/số `-_:./`, chuẩn hóa uppercase để chống trùng toàn chuỗi trong luồng này. Owner đưa mã ngân hàng vào tham chiếu nếu cần phân biệt nguồn. Không ghi số tài khoản nhận vào JSON; Owner tự kiểm bên nhận trên sao kê.
 
@@ -23,18 +23,18 @@ JSON dùng camelCase; cả GET và các POST thành công trả **200** (không 
 Các POST bắt buộc Bearer Owner và `Idempotency-Key` UUID khác rỗng. Header không phải request ID
 hoặc bank reference. GET không cần key. API đặt no-store; file private trả ảnh/filename do server tạo.
 
-| Field / trạng thái | Giá trị thực tế |
-| --- | --- |
-| RefundSource | `sourcePaymentId`, bốn số tiền dạng chuỗi, `isDevelopmentDemo`, `beneficiaries:[{id,label}]`, `requests:RefundView[]` |
-| `excessAmount` | receipt VERIFIED trừ allocation vào Invoice; chưa trừ refund |
-| `refundedAmount` | Tổng requests `COMPLETED` của nguồn |
-| `reservedAmount` | Tổng requests `REQUESTED` hoặc `APPROVED`, chưa gồm Completed |
-| `availableAmount` | max(0, excessAmount − refundedAmount − reservedAmount), do server tính dưới ledger lock |
-| `status` | Chuỗi uppercase: `REQUESTED`, `APPROVED`, `REJECTED`, `COMPLETED` |
-| `version` | 1 khi tạo, tăng theo decision/Completed; tạo upload intent có thể giữ nguyên version |
-| `history` | Event `{action,actor,at,reason,version,key,fingerprint}`; timestamp UTC. Key/fingerprint phục vụ trace/replay, không phải credential |
-| `executionIntent` | Null nếu chưa có intent hoặc đã Completed; khi pending: `{key,contentType,length,sha256,executedAt,externalReference,reason}` |
-| Metadata nullable | `decisionReason`, `decidedAt`, `executedAt`, `externalReference`; null không có nghĩa đã thành công |
+| Field / trạng thái | Giá trị thực tế                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| RefundSource       | `sourcePaymentId`, bốn số tiền dạng chuỗi, `isDevelopmentDemo`, `beneficiaries:[{id,label}]`, `requests:RefundView[]`                |
+| `excessAmount`     | receipt VERIFIED trừ allocation vào Invoice; chưa trừ refund                                                                         |
+| `refundedAmount`   | Tổng requests `COMPLETED` của nguồn                                                                                                  |
+| `reservedAmount`   | Tổng requests `REQUESTED` hoặc `APPROVED`, chưa gồm Completed                                                                        |
+| `availableAmount`  | max(0, excessAmount − refundedAmount − reservedAmount), do server tính dưới ledger lock                                              |
+| `status`           | Chuỗi uppercase: `REQUESTED`, `APPROVED`, `REJECTED`, `COMPLETED`                                                                    |
+| `version`          | 1 khi tạo, tăng theo decision/Completed; tạo upload intent có thể giữ nguyên version                                                 |
+| `history`          | Event `{action,actor,at,reason,version,key,fingerprint}`; timestamp UTC. Key/fingerprint phục vụ trace/replay, không phải credential |
+| `executionIntent`  | Null nếu chưa có intent hoặc đã Completed; khi pending: `{key,contentType,length,sha256,executedAt,externalReference,reason}`        |
+| Metadata nullable  | `decisionReason`, `decidedAt`, `executedAt`, `externalReference`; null không có nghĩa đã thành công                                  |
 
 Transition: `REQUESTED → APPROVED → COMPLETED`, hoặc `REQUESTED → REJECTED`.
 Không có reject sau Approved, cancel/delete, sửa trực tiếp hay đổi beneficiary. Approval/rejection
@@ -73,17 +73,17 @@ phục hồi. Sau Completed, GET evidence kiểm length/hash trước trả byte
 ProblemDetails có `status`, safe `code`, `correlationId`; validation/binding có thể trả lỗi framework
 không có business code. Không hiển thị arbitrary detail hoặc tự phân loại lỗi thành thành công.
 
-| HTTP / code | Hành động tích hợp |
-| --- | --- |
-| 400 `idempotency_key_required`, `invalid_refund_request`, `invalid_refund_reason`, `invalid_refund_decision`, `invalid_refund_execution`, `refund_evidence_required` | Sửa input/key/human confirmation, không retry mù |
-| 401 / 403 | Đăng nhập/refresh theo transport; Staff/Tenant không được dùng workflow Owner |
-| 404 `bank_transfer_not_found`, `refund_not_found`, `refund_evidence_not_found` | Nguồn/record/file không khả dụng; evidence chỉ sau Completed |
-| 409 `refund_amount_unavailable`, `refund_changed`, `refund_source_changed` | Tải lại nguồn/version, review trước khi tạo lệnh mới |
-| 409 `refund_verified_payer_required`, `refund_source_requires_manual_review` | Owner xác minh nguồn/người trả; không thay người nhận bằng representative để lách guard |
-| 409 `refund_idempotency_conflict`, `refund_execution_intent_conflict`, `refund_reference_used` | Giữ key/bytes của intent đúng; kiểm thao tác/tham chiếu trước khi gửi tiếp |
-| 409 `development_payment_unavailable` | Không mutation receipt demo trong Production |
-| 413 `refund_evidence_too_large` hoặc HTTP body limit | Chọn ảnh đúng giới hạn; body limit có thể không trả business code |
-| 409 `refund_evidence_integrity_failed` / lỗi storage 5xx | Không coi upload/download thành công; giữ intent, kiểm tra storage và retry có kiểm soát; storage chưa cấu hình trả 503, lỗi ngoài mapping có thể 500 |
+| HTTP / code                                                                                                                                                          | Hành động tích hợp                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400 `idempotency_key_required`, `invalid_refund_request`, `invalid_refund_reason`, `invalid_refund_decision`, `invalid_refund_execution`, `refund_evidence_required` | Sửa input/key/human confirmation, không retry mù                                                                                                      |
+| 401 / 403                                                                                                                                                            | Đăng nhập/refresh theo transport; Staff/Tenant không được dùng workflow Owner                                                                         |
+| 404 `bank_transfer_not_found`, `refund_not_found`, `refund_evidence_not_found`                                                                                       | Nguồn/record/file không khả dụng; evidence chỉ sau Completed                                                                                          |
+| 409 `refund_amount_unavailable`, `refund_changed`, `refund_source_changed`                                                                                           | Tải lại nguồn/version, review trước khi tạo lệnh mới                                                                                                  |
+| 409 `refund_verified_payer_required`, `refund_source_requires_manual_review`                                                                                         | Owner xác minh nguồn/người trả; không thay người nhận bằng representative để lách guard                                                               |
+| 409 `refund_idempotency_conflict`, `refund_execution_intent_conflict`, `refund_reference_used`                                                                       | Giữ key/bytes của intent đúng; kiểm thao tác/tham chiếu trước khi gửi tiếp                                                                            |
+| 409 `development_payment_unavailable`                                                                                                                                | Không mutation receipt demo trong Production                                                                                                          |
+| 413 `refund_evidence_too_large` hoặc HTTP body limit                                                                                                                 | Chọn ảnh đúng giới hạn; body limit có thể không trả business code                                                                                     |
+| 409 `refund_evidence_integrity_failed` / lỗi storage 5xx                                                                                                             | Không coi upload/download thành công; giữ intent, kiểm tra storage và retry có kiểm soát; storage chưa cấu hình trả 503, lỗi ngoài mapping có thể 500 |
 
 ## Kiểm chứng và việc chưa có
 

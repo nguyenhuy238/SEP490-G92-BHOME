@@ -54,7 +54,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         return (owner.Client, owner.UserId, location, room);
     }
     private static PolicyWrite Rent(Guid location, decimal rate, DateOnly? from = null,
-        DateOnly? to = null, Guid? type = null, Guid? room = null) =>
+        DateOnly? to = null, Guid? room = null) =>
         new(location, room, ChargeCategory.Rent, "RENT", "Tiền thuê", ChargingMethod.FixedPerRoomPerMonth,
             rate, from ?? Today, to);
 
@@ -379,7 +379,9 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var active = await Created<PolicyDto>(owner, "billing-policies", Rent(w.Location.Id, 100));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/billing-policies/{active.Id}",
             new PolicyUpdate(Rent(w.Location.Id, 200, Today.AddDays(5)), active.Version))).StatusCode);
-        var usedInput = Rent(w.Location.Id, 200, Today.AddDays(10), type: Guid.Empty);
+        // RoomType is no longer part of the Compact24 model. Use a room-scoped
+        // future rate so it is independent from the active location-wide rate.
+        var usedInput = Rent(w.Location.Id, 200, Today.AddDays(10), room: w.Room.Id);
         var used = await Created<PolicyDto>(owner, "billing-policies", usedInput);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var entity = await db.Set<BillingPolicy>().SingleAsync(x => x.Id == used.Id);

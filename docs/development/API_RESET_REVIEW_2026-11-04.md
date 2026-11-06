@@ -6,12 +6,12 @@ Yêu cầu trực tiếp ngày 04/11/2026 bỏ Chain và RoomType có ưu tiên 
 
 Baseline: `b9ff8c6`; working branch `THuy/feature-incident-core-api`. Working tree ban đầu sạch. Incident implementation của người dùng ở `5f5966f`, bị revert bởi `4ea7e57`; dùng lại code/contract đã có và chuyển persistence, không khôi phục migration cũ.
 
-| Hành vi / nguồn | Thành phần | Kiểm chứng cần chạy |
-| --- | --- | --- |
-| UC-01..03, GBR-01/02/13: JWT, refresh, RBAC | Identity, users, refresh_tokens, audit | invalid/expired/revoked JWT, refresh rotation/reuse/concurrency, role change |
-| BF-02, UC-08..12, DBR-01: Staff Location scope/task | Assignment, ResourceAccess, OperationalTask | assignment theo ngày Việt Nam, cross-Location, mất assignment với token cũ, task lifecycle/races |
-| BF-01, UC-04..07, GBR-08 + yêu cầu bỏ Chain/RoomType | PropertyService, Capture, MainDraft, Compact24 | tạo Location/Room trên DB trống, không bootstrap Chain/catalog, scope/duplicate, giá Room ghi đè Location, immutable historical price |
-| BF-07, UC-26..30, GBR-11/12/18 | IncidentService/repository/files, incident_reports, operational_tasks, operating_expenses, notifications | report/scope/tenant isolation, emergency, Owner decision, Work Order approval/verification, evidence privacy, replay/race |
+| Hành vi / nguồn                                      | Thành phần                                                                                               | Kiểm chứng cần chạy                                                                                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| UC-01..03, GBR-01/02/13: JWT, refresh, RBAC          | Identity, users, refresh_tokens, audit                                                                   | invalid/expired/revoked JWT, refresh rotation/reuse/concurrency, role change                                                          |
+| BF-02, UC-08..12, DBR-01: Staff Location scope/task  | Assignment, ResourceAccess, OperationalTask                                                              | assignment theo ngày Việt Nam, cross-Location, mất assignment với token cũ, task lifecycle/races                                      |
+| BF-01, UC-04..07, GBR-08 + yêu cầu bỏ Chain/RoomType | PropertyService, Capture, MainDraft, Compact24                                                           | tạo Location/Room trên DB trống, không bootstrap Chain/catalog, scope/duplicate, giá Room ghi đè Location, immutable historical price |
+| BF-07, UC-26..30, GBR-11/12/18                       | IncidentService/repository/files, incident_reports, operational_tasks, operating_expenses, notifications | report/scope/tenant isolation, emergency, Owner decision, Work Order approval/verification, evidence privacy, replay/race             |
 
 SRS `(2)` và SDS `(5)` có trong `docs/reports`; mô hình Compact24 tại `docs/database/2026-11-03/compact-24`. Không dùng schema/entity như bằng chứng rằng API đã tồn tại. Kiểm thử dùng dữ liệu tổng hợp trong DB tạm, không dùng dữ liệu Tenant thật.
 

@@ -61,7 +61,10 @@ module.exports = async function verify(page) {
   assert.equal(downloaded.status(), 200);
   const savedBytes = await readFile(await saved.path());
   assert.equal(savedBytes.length, photo.length);
-  assert.equal(createHash('sha256').update(savedBytes).digest('hex'), createHash('sha256').update(photo).digest('hex'));
+  assert.equal(
+    createHash('sha256').update(savedBytes).digest('hex'),
+    createHash('sha256').update(photo).digest('hex'),
+  );
   await dialog.getByRole('button', { name: 'Đóng', exact: true }).click();
   console.log(
     'PASS: Owner browser uploads, reloads and downloads exact private expense evidence bytes through Compact24 and real MinIO.',

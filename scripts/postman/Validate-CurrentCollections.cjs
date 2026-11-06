@@ -18,49 +18,97 @@ function scripts(item) {
   for (const event of item.event || []) new vm.Script(event.script.exec.join('\n'));
   for (const child of item.item || []) scripts(child);
 }
-const routes = api ? Object.entries(api.paths).flatMap(([url, operations]) =>
-  Object.keys(operations).filter((method) => /^(get|post|put|patch|delete)$/.test(method))
-    .map((method) => ({ method: method.toUpperCase(), pattern: new RegExp('^' + url.replace(/\{[^}]+\}/g, '[^/]+') + '$') }))) : [];
+const routes = api
+  ? Object.entries(api.paths).flatMap(([url, operations]) =>
+      Object.keys(operations)
+        .filter((method) => /^(get|post|put|patch|delete)$/.test(method))
+        .map((method) => ({
+          method: method.toUpperCase(),
+          pattern: new RegExp('^' + url.replace(/\{[^}]+\}/g, '[^/]+') + '$'),
+        })),
+    )
+  : [];
 let total = 0;
 for (const name of ['BHome.Simple.postman_collection.json']) {
   const collection = read(name);
-  assert.equal(collection.info.schema, 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json');
-  assert.ok(collection.item.every((item) => item.request && !item.item), 'Requests must stay at the collection root without folders.');
+  assert.equal(
+    collection.info.schema,
+    'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+  );
+  assert.ok(
+    collection.item.every((item) => item.request && !item.item),
+    'Requests must stay at the collection root without folders.',
+  );
   scripts(collection);
   const entries = [...requests(collection.item)];
   for (const item of entries) {
     const request = item.request;
     let url = typeof request.url === 'string' ? request.url : request.url.raw;
-    assert.ok(!/\/api\/v1\/(chain|room-types)(?:[/?]|$)|\/capture\/chains/.test(url), item.name + ': retired route');
-    assert.ok(!/(?:roomTypeId|chainId)=/.test(url) && !/"(?:roomTypeId|chainId)"\s*:/.test(request.body?.raw || ''), item.name + ': retired field');
+    assert.ok(
+      !/\/api\/v1\/(chain|room-types)(?:[/?]|$)|\/capture\/chains/.test(url),
+      item.name + ': retired route',
+    );
+    assert.ok(
+      !/(?:roomTypeId|chainId)=/.test(url) &&
+        !/"(?:roomTypeId|chainId)"\s*:/.test(request.body?.raw || ''),
+      item.name + ': retired field',
+    );
     assert.ok(!/DIEN_ROOM_TYPE/.test(JSON.stringify(item)), item.name + ': retired placeholder');
     if (request.body?.mode === 'raw') {
       // Preserve quoted strings and substitute standalone runtime JSON variables.
-      JSON.parse(request.body.raw.replace(/"(?:\\.|[^"\\])*"|\{\{[^}]+\}\}/g, (token) => token.startsWith('"') ? token : '0'));
+      JSON.parse(
+        request.body.raw.replace(/"(?:\\.|[^"\\])*"|\{\{[^}]+\}\}/g, (token) =>
+          token.startsWith('"') ? token : '0',
+        ),
+      );
     }
     if (/^(?:11[9]|1[2-7][0-9]|18[01]) —/.test(item.name)) {
-      const prepare = (item.event || []).filter((event) => event.listen === 'prerequest').map((event) => event.script.exec.join('\n')).join('\n');
+      const prepare = (item.event || [])
+        .filter((event) => event.listen === 'prerequest')
+        .map((event) => event.script.exec.join('\n'))
+        .join('\n');
       for (const stable of ['', 'synthetic-stable-key']) {
         const values = new Map([['incidentIdempotencyKey', stable]]);
-        vm.runInNewContext(prepare, { pm: { variables: {
-          get: (key) => values.get(key), set: (key, value) => values.set(key, value),
-          replaceIn: () => 'synthetic-fresh-key',
-        } } });
-        assert.equal(values.get('incidentRequestKey'), stable || 'synthetic-fresh-key', item.name + ': inherited idempotency script');
+        vm.runInNewContext(prepare, {
+          pm: {
+            variables: {
+              get: (key) => values.get(key),
+              set: (key, value) => values.set(key, value),
+              replaceIn: () => 'synthetic-fresh-key',
+            },
+          },
+        });
+        assert.equal(
+          values.get('incidentRequestKey'),
+          stable || 'synthetic-fresh-key',
+          item.name + ': inherited idempotency script',
+        );
       }
     }
     if (api) {
-      url = url.replace(/^\{\{baseUrl\}\}\/?/, '/').replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+      url = url
+        .replace(/^\{\{baseUrl\}\}\/?/, '/')
+        .replace(/^https?:\/\/[^/]+/, '')
+        .split('?')[0];
       const health = request.method === 'GET' && ['/health/live', '/health/ready'].includes(url);
-      assert.ok(health || routes.some((route) => route.method === request.method && route.pattern.test(url)), item.name + ': no matching OpenAPI route');
+      assert.ok(
+        health ||
+          routes.some((route) => route.method === request.method && route.pattern.test(url)),
+        item.name + ': no matching OpenAPI route',
+      );
     }
   }
   total += entries.length;
-  console.log(`PASS ${name}: ${entries.length} requests, JSON bodies, scripts${api ? ', current OpenAPI routes' : ''}`);
+  console.log(
+    `PASS ${name}: ${entries.length} requests, JSON bodies, scripts${api ? ', current OpenAPI routes' : ''}`,
+  );
 }
 for (const name of ['BHome.Local.postman_environment.json']) {
   const environment = read(name);
-  assert.equal(new Set(environment.values.map((value) => value.key)).size, environment.values.length);
+  assert.equal(
+    new Set(environment.values.map((value) => value.key)).size,
+    environment.values.length,
+  );
   for (const value of environment.values) {
     if (value.type === 'secret' || /(?:password|accessToken|refreshToken)$/i.test(value.key))
       assert.equal(value.value, '', name + ': credentials must remain empty');
@@ -71,15 +119,28 @@ for (const name of ['BHome.Local.postman_environment.json']) {
   const collection = read('BHome.Simple.postman_collection.json');
   const item = (number) => collection.item.find((entry) => entry.name.startsWith(number + ' '));
   const values = new Map();
-  const storage = { name: 'Synthetic test', get: (key) => values.get(key), set: (key, value) => values.set(key, value), unset: (key) => values.delete(key) };
+  const storage = {
+    name: 'Synthetic test',
+    get: (key) => values.get(key),
+    set: (key, value) => values.set(key, value),
+    unset: (key) => values.delete(key),
+  };
   const locationId = '00000000-0000-4000-8000-000000000001';
   function execute(number, listen, status, data) {
     const pm = {
-      environment: storage, collectionVariables: storage, variables: storage,
-      test: (_name, work) => work(), expect: (value) => ({ to: { eql: (expected) => assert.equal(value, expected) } }),
-      response: { code: status, json: () => data, to: { have: { status: (expected) => assert.equal(status, expected) } } },
+      environment: storage,
+      collectionVariables: storage,
+      variables: storage,
+      test: (_name, work) => work(),
+      expect: (value) => ({ to: { eql: (expected) => assert.equal(value, expected) } }),
+      response: {
+        code: status,
+        json: () => data,
+        to: { have: { status: (expected) => assert.equal(status, expected) } },
+      },
     };
-    for (const event of item(number).event || []) if (event.listen === listen) vm.runInNewContext(event.script.exec.join('\n'), { pm });
+    for (const event of item(number).event || [])
+      if (event.listen === listen) vm.runInNewContext(event.script.exec.join('\n'), { pm });
   }
   execute('26', 'test', 201, { id: locationId, version: 1 });
   assert.equal(values.get('locationVersion'), 1);
@@ -91,7 +152,10 @@ for (const name of ['BHome.Local.postman_environment.json']) {
   assert.equal(values.get('locationVersion'), 2);
   execute('37', 'test', 200, { id: locationId, version: 3 });
   assert.equal(values.get('locationVersion'), 3);
-  for (const number of ['37', '76', '79']) assert.match(item(number).request.body.raw, /"version":\s*\{\{locationVersion\}\}/);
-  console.log('PASS Location create -> assignment invalidation -> GET -> PUT version synchronization.');
+  for (const number of ['37', '76', '79'])
+    assert.match(item(number).request.body.raw, /"version":\s*\{\{locationVersion\}\}/);
+  console.log(
+    'PASS Location create -> assignment invalidation -> GET -> PUT version synchronization.',
+  );
 }
 console.log(`PASS ${total} request definitions. No business HTTP requests sent.`);

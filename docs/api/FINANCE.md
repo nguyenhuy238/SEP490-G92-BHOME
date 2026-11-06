@@ -85,14 +85,14 @@ Truy vết UC-07/UC-32, FE-08 và GBR-01/02/16: response bổ sung nullable `his
 
 Kỳ đóng gồm from..to theo ngày Việt Nam. Mỗi Room/ngày được tính tối đa một lần dù có nhiều Resident; chỉ tính ngày Location hoạt động và Room có thể cho thuê (không Unavailable), dùng audit trạng thái và khoảng residence của Contract đã kích hoạt. `occupancyRate = round(occupiedRoomDays * 100 / rentableRoomDays, 2)` theo bộ tính Property hiện hữu. Nếu mẫu số 0 thì tỷ lệ null, không phải 0%. Không dùng Room.Status hiện tại để dựng quá khứ, không tự ước tính ngày chưa có evidence.
 
-| status | Điều kiện và kết quả |
-| --- | --- |
-| Complete | Đủ creation/status audit Location/Rooms cho kỳ; trả ngày-phòng và tỷ lệ, có thể null khi mẫu số 0 |
-| InsufficientData | Thiếu audit theo điều kiện completeness của Property; cả số ngày-phòng và tỷ lệ null |
-| LocationRequired | Chưa chọn đúng một Location; chưa tổng hợp lịch sử toàn chuỗi |
-| RoomFilterUnsupported | Có Room filter; lịch sử hiện chỉ hỗ trợ phạm vi Location |
-| PeriodUnsupported | Chênh lệch to/from vượt 366 ngày, cùng giới hạn kỹ thuật API occupancy-summary |
-| FuturePeriod | to sau ngày hiện tại Asia/Ho_Chi_Minh; không gọi dự báo là lịch sử |
+| status                | Điều kiện và kết quả                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| Complete              | Đủ creation/status audit Location/Rooms cho kỳ; trả ngày-phòng và tỷ lệ, có thể null khi mẫu số 0 |
+| InsufficientData      | Thiếu audit theo điều kiện completeness của Property; cả số ngày-phòng và tỷ lệ null              |
+| LocationRequired      | Chưa chọn đúng một Location; chưa tổng hợp lịch sử toàn chuỗi                                     |
+| RoomFilterUnsupported | Có Room filter; lịch sử hiện chỉ hỗ trợ phạm vi Location                                          |
+| PeriodUnsupported     | Chênh lệch to/from vượt 366 ngày, cùng giới hạn kỹ thuật API occupancy-summary                    |
+| FuturePeriod          | to sau ngày hiện tại Asia/Ho_Chi_Minh; không gọi dự báo là lịch sử                                |
 
 Các trạng thái unavailable không làm mất chỉ tiêu tài chính hợp lệ của cùng báo cáo. UI hiển thị kỳ dd/MM/yyyy, số liệu server hoặc lý do tiếng Việt, giữ tách biệt với occupancy hiện tại. Field optional cho client và saved What-if baseline cũ; thiếu field hiển thị chưa có dữ liệu, không tính bù. Snapshot What-if mới giữ lịch sử đã đọc, nhưng thuật toán giả định `management-constant-v1` không đổi và không dùng lịch sử này để sửa ledger thật.
 

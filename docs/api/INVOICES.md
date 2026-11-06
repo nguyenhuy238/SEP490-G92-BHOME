@@ -29,7 +29,7 @@ Final total vẫn là số tiền đã phát hành; effective balance đọc qua
 | POST   | `/invoices/drafts`                        | Owner; roomId, billingPeriod YYYY-MM-01, representativeContractId         |
 | GET    | `/invoices?page=1&pageSize=20&roomId=...` | Owner/Tenant, lọc quyền trước count/page                                  |
 | GET    | `/invoices/{id}`                          | Owner/Tenant, ngoài phạm vi 404                                           |
-| POST   | `/invoices/{id}/finalize`                  | Owner; expectedVersion; revalidate trước Final                            |
+| POST   | `/invoices/{id}/finalize`                 | Owner; expectedVersion; revalidate trước Final                            |
 | POST   | `/invoices/{id}/refresh`                  | Owner; expectedVersion; chỉ Draft, thay dòng từ input hiện tại            |
 | GET    | `/capture/meter-tasks/{id}`               | Owner/Staff hiện được giao Location                                       |
 | GET    | `/capture/readings/{id}`                  | Owner/Staff, confirmedValue/previousValue/consumption dạng decimal string |

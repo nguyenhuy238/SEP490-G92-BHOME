@@ -299,11 +299,11 @@ Ba API Phase 1B chỉ đọc, dùng `property.view`: Owner xem toàn hệ thốn
 Tenant không truy cập. Resource ngoài scope trả 404. Không API nào lưu readiness, đổi Room/Contract,
 hay tạo audit mới.
 
-| Method | Route                                  | Hành vi                                                                |
-| ------ | -------------------------------------- | ---------------------------------------------------------------------- |
-| GET    | `/rooms/{id}/readiness?purpose=Holding` hoặc `purpose=MoveIn`                                                      | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
-| GET    | `/rooms/{id}/history`                  | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
-| GET    | `/locations/{id}/occupancy-summary`    | Snapshot Room; room-day lịch sử chỉ khi đủ evidence                    |
+| Method | Route                                                         | Hành vi                                                                |
+| ------ | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| GET    | `/rooms/{id}/readiness?purpose=Holding` hoặc `purpose=MoveIn` | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId`   |
+| GET    | `/rooms/{id}/history`                                         | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
+| GET    | `/locations/{id}/occupancy-summary`                           | Snapshot Room; room-day lịch sử chỉ khi đủ evidence                    |
 
 Readiness nhận `effectiveOn` tùy chọn (mặc định ngày Việt Nam). Response có `status` (`Ready`, `Blocked`,
 `Indeterminate`), `blockers`, `warnings`, `unverifiedConditions`. Holding luôn có

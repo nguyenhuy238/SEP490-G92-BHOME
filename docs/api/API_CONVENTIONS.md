@@ -288,12 +288,12 @@ provider status check or audited pending-review/manual-verification path.
 
 ## Upload và financial workflows hiện tại
 
-| Module | Request body / kiểm tra phía client |
-| --- | --- |
-| OCR proposal | Raw PNG/JPEG theo endpoint; không multipart và không tự confirm/persist |
-| Adjustment evidence | PUT raw PNG/JPEG, tối đa 5 MiB; nhận ID rồi link vào request |
-| Expense evidence | POST raw PNG/JPEG, tối đa 5 MiB, UUID `Idempotency-Key`; PendingUpload chưa tải được |
-| Refund execution | POST `multipart/form-data`, ảnh PNG/JPEG tối đa 5 MiB và execution metadata; UUID key + expectedVersion + humanConfirmed |
+| Module              | Request body / kiểm tra phía client                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| OCR proposal        | Raw PNG/JPEG theo endpoint; không multipart và không tự confirm/persist                                                  |
+| Adjustment evidence | PUT raw PNG/JPEG, tối đa 5 MiB; nhận ID rồi link vào request                                                             |
+| Expense evidence    | POST raw PNG/JPEG, tối đa 5 MiB, UUID `Idempotency-Key`; PendingUpload chưa tải được                                     |
+| Refund execution    | POST `multipart/form-data`, ảnh PNG/JPEG tối đa 5 MiB và execution metadata; UUID key + expectedVersion + humanConfirmed |
 
 Khi gửi `FormData`, để fetch/browser sinh `Content-Type` cùng boundary; không ép
 `application/json` hoặc tự đặt multipart header thiếu boundary. Private download vẫn dùng Bearer,

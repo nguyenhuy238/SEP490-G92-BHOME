@@ -6,28 +6,28 @@ Quyết định mới: bỏ Chain và RoomType. Location là cấp cao nhất, R
 
 Các đường dẫn dưới đây có tiền tố `/api/v1`. Owner quản lý toàn hệ thống. Staff chỉ đọc tài nguyên tại Location đang được phân công theo ngày Việt Nam; scope được đọc lại ở server trên mỗi request, trước count/paging. Tenant không truy cập nhóm API quản trị này.
 
-| Tài nguyên | API |
-| --- | --- |
-| Location | `GET/POST /locations`, `GET/PUT /locations/{id}` |
-| Location của Staff | `GET /locations/assigned-to-me` |
-| Phân công Staff | `GET/POST /staff-location-assignments`; giữ contract ngày bắt đầu/kết thúc hiện có |
-| Room | `GET/POST /rooms`, `GET/PUT /rooms/{id}` |
-| Asset | `GET/POST /assets`, `GET/PUT /assets/{id}` |
-| Giá/phí | `GET/POST /billing-policies`, `GET/PUT /billing-policies/{id}`, `POST /billing-policies/{id}/replacement`, `POST /billing-policies/{id}/end` |
-| Giá hiệu lực của phòng | `GET /rooms/{id}/prices?effectiveOn=YYYY-MM-DD` |
+| Tài nguyên             | API                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Location               | `GET/POST /locations`, `GET/PUT /locations/{id}`                                                                                             |
+| Location của Staff     | `GET /locations/assigned-to-me`                                                                                                              |
+| Phân công Staff        | `GET/POST /staff-location-assignments`; giữ contract ngày bắt đầu/kết thúc hiện có                                                           |
+| Room                   | `GET/POST /rooms`, `GET/PUT /rooms/{id}`                                                                                                     |
+| Asset                  | `GET/POST /assets`, `GET/PUT /assets/{id}`                                                                                                   |
+| Giá/phí                | `GET/POST /billing-policies`, `GET/PUT /billing-policies/{id}`, `POST /billing-policies/{id}/replacement`, `POST /billing-policies/{id}/end` |
+| Giá hiệu lực của phòng | `GET /rooms/{id}/prices?effectiveOn=YYYY-MM-DD`                                                                                              |
 
 `/chain`, `/room-types` và `/capture/chains` đã bỏ. DTO Location không có `chainId`; DTO Room/Policy không có `roomTypeId`. Các write DTO mới từ chối JSON field không được hỗ trợ với 400, tránh hiểu nhầm một giá theo RoomType thành giá toàn Location.
 
 Tạo Location:
 
 ```json
-{"name":"Cơ sở thử nghiệm","address":"Địa chỉ thử nghiệm","isActive":true}
+{ "name": "Cơ sở thử nghiệm", "address": "Địa chỉ thử nghiệm", "isActive": true }
 ```
 
 Tạo Room:
 
 ```json
-{"locationId":"<uuid>","roomNumber":"P101","floor":"1","capacity":2,"status":0}
+{ "locationId": "<uuid>", "roomNumber": "P101", "floor": "1", "capacity": 2, "status": 0 }
 ```
 
 Tạo giá/phí: `locationId`, `roomId` tùy chọn, `category`, `chargeCode`, `name`, `method`, `rate`, `effectiveFrom`, `effectiveTo` tùy chọn, `reason`. Không gửi `roomTypeId`. Enum/đơn vị giữ các giá trị hiện có trong OpenAPI, không thêm phương pháp tính mới.
