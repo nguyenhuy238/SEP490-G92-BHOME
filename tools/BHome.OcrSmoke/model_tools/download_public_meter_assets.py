@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import requests
 from PIL import Image
 
+USER_AGENT = "BHOME-OCR-Research/1.0 (https://github.com/nguyenhuy238/SEP490-G92-BHOME; licensed public meter research)"
 
 def fetch(asset, root):
     url = asset["downloadUrl"]
@@ -32,7 +33,7 @@ def fetch(asset, root):
         content = destination.read_bytes()
     else:
         response = requests.get(url, timeout=(15, 90), stream=True,
-                                headers={"User-Agent": "BHOME-University-OCR-Research/1.0"})
+                                headers={"User-Agent": USER_AGENT})
         response.raise_for_status()
         chunks, size = [], 0
         for chunk in response.iter_content(65536):
@@ -70,7 +71,8 @@ def main():
             try:
                 receipts.append(future.result())
             except (requests.RequestException, ValueError, OSError) as error:
-                failures.append({"id": asset["id"], "error": type(error).__name__})
+                failures.append({"id": asset["id"], "error": type(error).__name__,
+                                 "httpStatus": error.response.status_code if isinstance(error, requests.HTTPError) and error.response is not None else None})
     report = {"catalogSha256": hashlib.sha256(args.catalog.read_bytes()).hexdigest(),
               "downloaded": sorted(receipts, key=lambda x: x["id"]), "failures": failures}
     (args.output / "receipts.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

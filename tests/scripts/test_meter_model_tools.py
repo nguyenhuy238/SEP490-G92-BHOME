@@ -16,6 +16,7 @@ from download_public_meter_assets import fetch
 from train_meter_yolo import verify_training_audit
 from lcd_preview_training import digit_boxes
 from download_lcd_preview import fetch as fetch_preview
+from download_meter_previews import fetch as fetch_meter_preview
 
 
 class DatasetSafety(unittest.TestCase):
@@ -45,6 +46,12 @@ class DatasetSafety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "license"):
                 fetch({"downloadUrl": "https://upload.wikimedia.org/f.jpg", "license": "unknown"}, Path(directory))
+
+    def test_public_preview_cannot_guess_other_assets_or_use_unverified_license(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for asset in ({"id": "meterocr_private"}, {"id": "meterocr_089j4CRbYLmnBVWRKauk", "license": "unknown"}):
+                with self.assertRaisesRegex(ValueError, "Unreviewed"):
+                    fetch_meter_preview(asset, Path(directory))
 
     def test_four_class_export_does_not_silently_accept_missing_classes(self):
         import hashlib
