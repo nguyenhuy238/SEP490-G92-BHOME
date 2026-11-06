@@ -18,6 +18,22 @@ Owner Web: 16/16 component tests (MainDraftReleasePanel, MainDraftSettingsPanel,
 
 Backend: `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24MainDraftRegressionTests|FullyQualifiedName~Compact24ContractRegressionTests|FullyQualifiedName~ReviewedMainDraftReleasesOnce|FullyQualifiedName~ReleaseRejectsStaleReview|FullyQualifiedName~ContractPdfRendererTests' --verbosity minimal`: **57/57 đạt, 0 skip**. Đã sửa lỗi storage key trùng và giữ signing mode bất biến được phát hiện qua legacy regression; không nới ràng buộc DB. Backend build 0 warning/error. PostgreSQL riêng port 55440, dữ liệu tổng hợp; các fixture tự xóa database riêng.
 
+Commit slice release: `0e0c3aeed0b8c3c91e3c739df29ac9d6f18f9948` — `feat(contract): [BE-15] release reviewed Main Draft into signing`.
+
+### Slice BE-15 — kiểm chứng client thực ngày 06/11/2026
+
+Đã sửa nhánh Owner Web mở Main Draft từ danh sách: sau release chuyển sang ContractDetailPanel thay vì tiếp tục hiển thị editor. Truy vết UC-15/GBR-04/18; không đổi API/DB. Mở rộng harness hiện hữu bằng `--finance --main-draft`, sử dụng bản build thật của Owner Web, API thật, PostgreSQL Compact24 tạm và MinIO Docker riêng. Không thêm ứng dụng UI khác, không intercept/mock API, không đổi CA trust của Windows. Browser chỉ bỏ kiểm CA trong context localhost tổng hợp; không công bố đây là nghiệm thu TLS production.
+
+`dotnet run --project tools/BHome.ContractVerification --no-build -- --finance --main-draft`: **8/8 nhóm đạt**, exit 0: 5 nhóm Finance/settings cũ và 3 nhóm Main Draft mới. Staff dùng MobileApi + shared mainDraftClient thật để tạo/xác nhận Resident tổng hợp, lưu/đọc lại Draft sử dụng cấu hình Owner. Owner dùng browser tải PDF từ LibreOffice/MinIO, human confirmation, chọn Tenant, release từ danh sách. Tenant dùng MobileApi thật tải đúng bytes/hash canonical PDF; Tenant khác 404, Staff 403. Owner/Tenant ký **simulation được gắn nhãn**, xác nhận sao kê tổng hợp, Owner kích hoạt; Tenant thấy Active/2 Simulated signatures/1 deposit và Room Occupied. Kích hoạt thiếu điều kiện bị 409. Không có MySign thật hoặc giao dịch ngân hàng thật; nghiệm thu provider vẫn BLOCKED.
+
+`npm.cmd run test --workspace src/mobile -- signing-ui.test.tsx contracts.test.ts --maxWorkers=1` với Node 22: **27/27 đạt**. Test bổ sung Tenant consent, pending response, chống double submit, chỉ callback success sau backend; đây là component test, không phải native device E2E. Không thấy adb trong PATH, native acceptance NOT RUN. Không sửa production Mobile vì màn ký và private download đã có.
+
+`npm.cmd run test --workspace src/owner-web -- src/app/router.test.tsx --maxWorkers=1`: **37/37 đạt**. Timeout lịch sử không tái hiện khi chạy riêng; không tăng timeout, không giảm assertion, chưa kết luận đã sửa một lỗi router sản phẩm. Lần browser dev-server đầu timeout navigation; harness chuyển sang bản build production trong TEMP và đã đạt. Một lỗi locator test chọn cả Drawer và action dialog đã sửa bằng accessible dialog name, không thay logic sản phẩm.
+
+Changed files: ContractsPage, FinanceVerificationCli/ContractVerificationCli, Verify-FinanceClients/Verify-MainDraftClients, mobile signing-ui test, báo cáo/API notes. Handoff Owner Web Vũ Xuân Trường và Mobile Bùi Bảo Long; task tổng BE-15/BE-X06 vẫn PARTIAL do provider/mẫu production và native acceptance.
+
+Validation slice: harness .NET build **0 warning/error**; Owner Web build/lint đạt; Mobile typecheck/lint đạt với Node 22. Các lệnh/kết quả chỉ áp dụng các thay đổi đã nêu, chưa thay cho full regression cuối đợt.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết

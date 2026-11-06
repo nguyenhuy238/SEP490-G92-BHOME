@@ -12,6 +12,8 @@ Release ghi `PendingSigning`, liên kết Tenant đại diện và seal snapshot
 
 Owner Web yêu cầu lưu hết thay đổi, chọn tài khoản, tải PDF và xác nhận xem xét trước release. Bản simulation luôn hiển thị nhãn thử nghiệm. Nghiệm thu nhà cung cấp thật vẫn BLOCKED vì chưa có MySign staging và mẫu production được duyệt. Các kiểm thử converter/MinIO cục bộ không thay thế nghiệm thu staging.
 
+Kiểm chứng 06/11: `BHome.ContractVerification --finance --main-draft` dùng API thật, Compact24/MinIO tạm, Owner Web build thật và Staff/Tenant Mobile transport thật. Đạt review/release từ danh sách, bytes PDF giống nhau, scope âm, ký simulation/cọc tổng hợp/Owner activation. UI sau release chuyển khỏi editor; native device và MySign staging chưa nghiệm thu. Bằng chứng chi tiết ở [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
+
 Truy vết: BF-03B/BF-04A, FE-03, UC-15/16/19, GBR-01/02/04/18, DBR-02/03.
 Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 [bàn giao backend](../development/CONTRACT_LIFECYCLE_DELIVERY.md).
