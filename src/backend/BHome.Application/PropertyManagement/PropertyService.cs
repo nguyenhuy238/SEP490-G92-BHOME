@@ -431,10 +431,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 Block("ACTIVE_TENANCY_CONFLICT", "The Room already has an active tenancy obligation.");
             if (data.Obligations.HasBindingPendingContracts)
                 Block("PROTECTED_PENDING_CONTRACT", "The Room has a protected pending contract obligation.");
-            if (data.Obligations.HasCurrentOccupancy || data.Obligations.HasResidentRecords)
-                Block("RESIDENT_OBLIGATION", "Resident records require workflow validation before a new commitment.");
-            unverified.Add(new("HOLDING_WORKFLOW_UNSUPPORTED",
-                "Holding Contract payment, signing and conversion validation is not implemented."));
+            if (data.Obligations.HasCurrentOccupancy)
+                Block("RESIDENT_OBLIGATION", "Current occupancy prevents a new Holding commitment.");
         }
         else
         {

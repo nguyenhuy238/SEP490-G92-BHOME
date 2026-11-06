@@ -20,12 +20,15 @@ public sealed class PaymentTransfer : AuditableEntity
     public Guid VerifiedByUserId { get; set; }
     public DateTimeOffset VerifiedAt { get; set; }
     public Guid? ProposedInvoiceId { get; set; }
+    public Guid? ProposedDepositContractId { get; set; }
     public bool IsDevelopmentDemo { get; set; }
 }
 public sealed class PaymentAllocation : AuditableEntity
 {
-    public Guid TransferId { get; set; }
-    public Guid InvoiceId { get; set; }
+    public Guid? TransferId { get; set; }
+    public Guid? SourceDepositContractId { get; set; }
+    public Guid? InvoiceId { get; set; }
+    public Guid? TargetDepositContractId { get; set; }
     public decimal Amount { get; set; }
     public Guid? PaidByUserId { get; set; }
     public Guid VerifiedByUserId { get; set; }
@@ -36,6 +39,7 @@ public sealed class PaymentReconciliation : AuditableEntity
     public long Sequence { get; set; }
     public Guid TransferId { get; set; }
     public Guid? InvoiceId { get; set; }
+    public Guid? DepositContractId { get; set; }
     public string Decision { get; set; } = "PendingReview";
     public string Reason { get; set; } = "";
     public Guid ActorId { get; set; }
@@ -93,4 +97,5 @@ public static partial class PaymentRules
         do { number = BigInteger.DivRem(number, 36, out var remainder); text = alphabet[(int)remainder] + text; } while (number > 0);
         return text.PadLeft(25, '0');
     }
+    public static string DepositReference(Guid id) => "H" + InvoiceReference(id)[1..];
 }

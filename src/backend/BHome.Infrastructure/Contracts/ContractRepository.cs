@@ -1,4 +1,5 @@
 using BHome.Application.Contracts;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
@@ -85,7 +86,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
     {
         var capacity = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.Capacity).SingleAsync(t);
         var others = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == roomId && c.Id != exceptId &&
-            c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from).ToArrayAsync(t);
+            c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from).ToArrayAsync(t);
         if (others.Any(c => c.Residents.Any(r => residentIds.Contains(r.ResidentId)))) return true;
         var dates = others.Select(c => c.StartDate < from ? from : c.StartDate).Append(from).Distinct();
         return dates.Any(date => residentIds.Length + others.Where(c => c.StartDate <= date && c.EndDate >= date).SelectMany(c => c.Residents).Select(r => r.ResidentId).Distinct().Count() > capacity);
@@ -100,6 +101,25 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
         await db.Set<DepositVerification>().Where(d => d.ContractId == contractId).SumAsync(d => (decimal?)d.Amount, t) ?? 0;
     public Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t) =>
         db.Set<DepositVerification>().SingleOrDefaultAsync(d => d.BankTransactionReference == reference, t);
+    public async Task<ResolvedPrices> ResolvePricesAsync(Guid roomId, DateOnly effectiveOn, CancellationToken t)
+    {
+        var room = await db.Set<Room>().AsNoTracking().SingleAsync(r => r.Id == roomId, t);
+        var candidates = await db.Set<BillingPolicy>().AsNoTracking().Where(x => x.LocationId == room.LocationId &&
+            (x.RoomId == roomId || x.RoomTypeId == room.RoomTypeId && x.RoomTypeId != null || x.RoomId == null && x.RoomTypeId == null) &&
+            x.EffectiveFrom <= effectiveOn && (x.EffectiveTo == null || x.EffectiveTo >= effectiveOn)).ToArrayAsync(t);
+        var charges = candidates.GroupBy(x => x.ChargeCode).Select(g =>
+            g.OrderByDescending(x => x.RoomId.HasValue ? 2 : x.RoomTypeId.HasValue ? 1 : 0).First())
+            .OrderBy(x => x.ChargeCode, StringComparer.Ordinal).Select(PropertyService.Map).ToArray();
+        return new(roomId, effectiveOn, charges, new[] { "RENT", "ELECTRICITY", "WATER" }.Except(charges.Select(x => x.ChargeCode)).ToArray());
+    }
+    public Task<bool> HoldingConflictAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t) =>
+        db.Set<Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from &&
+            (c.Kind == ContractKind.Holding && c.Status == ContractStatus.Active ||
+             c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active), t);
+    public Task<Contract?> MainForHoldingAsync(Guid holdingId, CancellationToken t) => db.Set<Contract>()
+        .Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Room).ThenInclude(r => r.RoomType)
+        .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery()
+        .SingleOrDefaultAsync(c => c.HoldingContractId == holdingId, t);
     public Task<ContractMoveOut?> MoveOutAsync(Guid contractId, CancellationToken t) => db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == contractId, t);
     public async Task<IReadOnlyList<ContractInspectionEvidence>> InspectionEvidenceAsync(Guid contractId, CancellationToken t) =>
         await db.Set<ContractInspectionEvidence>().Where(e => e.ContractId == contractId).Take(50).ToArrayAsync(t);

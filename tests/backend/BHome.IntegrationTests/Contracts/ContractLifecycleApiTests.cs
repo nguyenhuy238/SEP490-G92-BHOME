@@ -510,35 +510,35 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     [Fact]
     public async Task HoldingAllocationIsPersistedOnceAndCannotFundTwoMainContracts()
     {
-        var w = await Setup(); var holding = Guid.NewGuid();
-        await using (var holdingScope = fixture.Factory.Services.CreateAsyncScope())
+        var w = await Setup();
+        await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
-            var holdingDb = holdingScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            if (holdingDb is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
-            {
-                // The test holding-provider boundary supplies a canonical target reference. This
-                // does not implement or configure the production holding provider/financial policy.
-                await holdingDb.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO contracts(id,room_id,representative_resident_id,tenant_user_id,owner_signer_id,contract_type,start_date,end_date,
-                      monthly_rent,deposit_required,terms,status)
-                    VALUES({holding},{w.Room},{w.Resident},{w.Tenant.Id},{w.Owner.Id},'HOLDING',{Today},{Today.AddDays(30)},0,1000000,'SYNTHETIC holding provider fixture',0)
-                    """);
-            }
+            var setupDb = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC HOLDING TYPE", DefaultCapacity = 2 };
+            setupDb.Add(type); (await setupDb.Set<Room>().SingleAsync(r => r.Id == w.Room)).RoomTypeId = type.Id;
+            setupDb.Add(new BillingPolicy { LocationId = w.Location, RoomTypeId = type.Id, Category = ChargeCategory.Rent,
+                ChargeCode = "RENT", Name = "Synthetic Holding Rent", Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 3000000, EffectiveFrom = Today });
+            await setupDb.SaveChangesAsync();
         }
-        await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<IContractHoldingLedger, TestHoldingLedger>()));
-        var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        var input = Input(w) with { HoldingContractId = holding };
-        var id = (await Success<ContractId>(await Post(actor, "/api/v1/contracts", input))).Id;
-        var ready = (await actor.Client.GetFromJsonAsync<ActivationReadiness>(Path(id, "activation-readiness")))!;
-        Assert.Equal(1000000, ready.VerifiedDeposit); Assert.Equal(2000000, ready.RemainingDeposit);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(actor, "/api/v1/contracts", input)).StatusCode);
+        var holdingInput = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident],
+            Today.AddDays(1), Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "SYNTHETIC protected Holding terms", 1);
+        var holding = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", holdingInput))).Id;
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(holding, "holding-approval"), new HoldingDecisionInput("Not allowed"))).StatusCode);
+        await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-approval"), new HoldingDecisionInput("Owner reviewed and approved")));
+        await Signed(w, holding); await Deposit(w, holding, 1000000);
+        var activeHolding = await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-activation")));
+        Assert.Equal("Active", activeHolding.Status); Assert.Equal("VerifiedDeposit", activeHolding.PriceLockTrigger);
+        var conversionKey = Guid.NewGuid();
+        var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id;
+        Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id);
+        Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.Status);
+        await Signed(w, main); await Deposit(w, main, 2000000); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<Contract>().CountAsync(c => c.HoldingContractId == holding));
-    }
-    private sealed class TestHoldingLedger : IContractHoldingLedger
-    {
-        public Task<HoldingDepositApplication> ApplyAsync(Guid holdingId, Guid mainId, Guid roomId, Guid tenantId, decimal required, CancellationToken t)
-            => Task.FromResult(new HoldingDepositApplication(holdingId, roomId, tenantId, 1000000, "TEST-ONLY-HOLDING-" + holdingId));
+        Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding));
+        Assert.Equal(ContractStatus.Converted, (await db.Set<Contract>().SingleAsync(c => c.Id == holding)).Status);
+        Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
     }
 
     [Fact]

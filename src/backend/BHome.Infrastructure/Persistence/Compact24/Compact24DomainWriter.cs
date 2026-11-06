@@ -187,12 +187,12 @@ public sealed partial class Compact24DbContext
             sql += " AND t.version=@version";
         var affected = await CommandAsync(sql, state, envelope, key, token, entry);
         if (affected != 1) throw new DbUpdateConcurrencyException("Compact24 record changed or no longer exists.");
-        if (entry.Entity is PaymentAllocation paid)
+        if (entry.Entity is PaymentAllocation paid && paid.TransferId is { } transferId)
         {
             await ExecuteAsync("UPDATE payments SET history=history||jsonb_build_array(@envelope::jsonb) WHERE id=@id", token,
-                ("id", paid.TransferId), ("envelope", envelope));
+                ("id", transferId), ("envelope", envelope));
             if (!Importing)
-                await ClaimReferenceAsync(paid.TransferId, paid.Id, null, token);
+                await ClaimReferenceAsync(transferId, paid.Id, null, token);
         }
     }
 

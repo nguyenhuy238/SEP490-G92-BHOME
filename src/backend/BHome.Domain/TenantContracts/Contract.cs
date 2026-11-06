@@ -3,8 +3,8 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Domain.TenantContracts;
 
-public enum ContractKind { Main, Renewal }
-public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled }
+public enum ContractKind { Main, Renewal, Holding }
+public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled, Expired, Converted }
 public enum SignatureStatus { Prepared, Dispatching, Pending, Signed, Failed, ManualReview, Simulated }
 public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, Settled, Completed }
 
@@ -23,6 +23,18 @@ public sealed class Contract : AuditableEntity
     public Guid? HoldingContractId { get; set; }
     public decimal AppliedHoldingDeposit { get; set; }
     public string? HoldingAllocationReference { get; set; }
+    public DateTimeOffset? HoldingExpiryAt { get; set; }
+    public short? ReservedCapacity { get; set; }
+    public Guid? ApprovedByUserId { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
+    public string? ApprovalReason { get; set; }
+    public string AgreedPriceSnapshot { get; set; } = "{}";
+    public string? PriceLockTrigger { get; set; }
+    public DateTimeOffset? PriceLockedAt { get; set; }
+    public Guid? ConvertedMainContractId { get; set; }
+    public Guid? LifecycleActorId { get; set; }
+    public DateTimeOffset? LifecycleAt { get; set; }
+    public string? LifecycleReason { get; set; }
     public ContractKind Kind { get; set; }
     public ContractStatus Status { get; set; }
     public DateOnly StartDate { get; set; }

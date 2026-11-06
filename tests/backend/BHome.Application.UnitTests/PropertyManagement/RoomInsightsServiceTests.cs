@@ -47,7 +47,7 @@ public sealed class RoomInsightsServiceTests
             electricity, water, electricityBaseline, waterBaseline, false, contract);
 
     [Fact]
-    public async Task HoldingNeverClaimsReadyAndSeparatesKnownBlockersFromUnsupportedWorkflow()
+    public async Task HoldingUsesAuthoritativeKnownBlockersWithoutUnsupportedWorkflowPlaceholder()
     {
         var (service, property, insights, _, _, _) = Create(Roles.Owner);
         var (_, room) = Scope(property);
@@ -57,7 +57,7 @@ public sealed class RoomInsightsServiceTests
 
         Assert.Equal("Blocked", result.Status);
         Assert.Contains(result.Blockers, x => x.Code == "RENT_POLICY_MISSING");
-        Assert.Contains(result.UnverifiedConditions, x => x.Code == "HOLDING_WORKFLOW_UNSUPPORTED");
+        Assert.DoesNotContain(result.UnverifiedConditions, x => x.Code == "HOLDING_WORKFLOW_UNSUPPORTED");
         Assert.Empty(result.Warnings);
         property.DidNotReceive().Audit(Arg.Any<PropertyChange>());
     }

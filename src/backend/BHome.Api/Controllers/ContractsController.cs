@@ -58,6 +58,19 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpPost, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]   // Dòng 58–62
     public async Task<IActionResult> Create(ContractDraftInput x, CancellationToken t)
     { var result = await service.CreateAsync(x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
+    [HttpPost("holdings"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public async Task<IActionResult> CreateHolding(HoldingDraftInput x, CancellationToken t)
+    { var result = await service.CreateHoldingAsync(x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
+    [HttpPost("{id:guid}/holding-approval"), Authorize(Roles = Roles.Owner)]
+    public Task<ContractView> ApproveHolding(Guid id, HoldingDecisionInput x, CancellationToken t) => service.ApproveHoldingAsync(id, x, Key(), t);
+    [HttpGet("{id:guid}/holding-deposit")]
+    public Task<HoldingDepositStatus> HoldingDeposit(Guid id, CancellationToken t) => service.HoldingDepositAsync(id, t);
+    [HttpPost("{id:guid}/holding-activation"), Authorize(Roles = Roles.Owner)]
+    public Task<ContractView> ActivateHolding(Guid id, CancellationToken t) => service.ActivateHoldingAsync(id, Key(), t);
+    [HttpPost("{id:guid}/holding-cancellation"), Authorize(Roles = Roles.Owner)]
+    public Task<ContractView> CancelHolding(Guid id, HoldingDecisionInput x, CancellationToken t) => service.CancelHoldingAsync(id, x, Key(), t);
+    [HttpPost("{id:guid}/holding-conversion"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<ContractId> ConvertHolding(Guid id, HoldingConversionInput x, CancellationToken t) => service.ConvertHoldingAsync(id, x, Key(), t);
     [HttpGet("{id:guid}")]
     public Task<ContractView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
     [HttpGet("{id:guid}/activation-readiness"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

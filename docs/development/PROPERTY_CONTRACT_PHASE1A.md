@@ -149,3 +149,24 @@ Các rule/unit/API regression hiện pass, nhưng yêu cầu Phase 1A cấm kh�
 Không cho phép mở rộng write path Room/Contract và không được coi quyết định này là Phase 1A ACCEPTED.
 10 `PropertyContractDockerTests` vẫn BLOCKED BY ENVIRONMENT và phải pass trước khi kết luận PostgreSQL
 concurrency safety. Phase 1B và giới hạn verification được ghi ở `ROOM_READINESS_PHASE1B.md`.
+
+## I. Re-verification 06/11/2026
+
+Quyết định acceptance hiện tại vẫn là **NOT ACCEPTED — BLOCKED BY ENVIRONMENT**.
+
+- `docker version`: Docker Client 29.4.0 và Linux Server 29.4.0 (`linux/amd64`) đều trả về thành công.
+- `docker info`: Docker Linux Engine hoạt động (`OSType=linux`, `Architecture=x86_64`).
+- Testcontainers vẫn cấu hình một PostgreSQL 16 disposable bằng `postgres:16-alpine`; fixture dùng embedded Compact24 schema và không truy cập database dùng chung.
+- Máy chưa có local image `postgres:16-alpine`. Hai lần `docker pull postgres:16-alpine` đều tải được một số layer nhưng bị ngắt bởi `EOF` từ `production.cloudfront.docker.com`; image cuối cùng vẫn không tồn tại trong engine.
+- Lệnh Release discover và khởi chạy **11 test case từ 10 test methods** (hai `[Theory]` sinh thêm case). Cả 11 case dừng ở `PropertyContractDockerFixture.InitializeAsync` trước khi container/schema và assertion nghiệp vụ được tạo. Kết quả nghiệp vụ: **0 PASS, 0 FAIL, 11 BLOCKED, 0 assertion được thực thi**.
+- Runner hiển thị 11 `FAIL` do shared fixture throw `DockerImageNotFoundException: No such image: postgres:16-alpine`; đây là lỗi môi trường, không phải bằng chứng product regression.
+
+Lệnh chính xác:
+
+```powershell
+dotnet test tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj `
+  -c Release --filter "FullyQualifiedName~PropertyContractDockerTests" `
+  --logger "console;verbosity=minimal"
+```
+
+Do critical PostgreSQL tests chưa đi tới code nghiệp vụ, Phase 1A không đạt gate 100% critical integration scenarios. Không được dùng các unit/API result cũ để thay thế bằng chứng PostgreSQL concurrency.
