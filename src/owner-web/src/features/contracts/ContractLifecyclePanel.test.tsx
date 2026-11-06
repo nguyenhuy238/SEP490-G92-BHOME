@@ -145,6 +145,32 @@ it('requires a new settlement consent when a refreshed financial snapshot change
   await waitFor(() => expect(screen.getByLabelText(label)).not.toBeChecked());
   expect(screen.getByRole('button', { name: 'Lưu xem xét quyết toán' })).toBeDisabled();
 });
+it('invalidates the current Contract deposit source after a decision even within the app cache freshness window', async () => {
+  const { api } = setup();
+  vi.spyOn(api, 'mutate').mockResolvedValue({});
+  const cache = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 10000 } },
+  });
+  const key = ['refund-source', 'owner', 'SecurityDeposit', id];
+  const other = ['refund-source', 'owner', 'SecurityDeposit', 'other-contract'];
+  const receipt = ['refund-source', 'owner', 'Receipt', 'bank-receipt'];
+  for (const k of [key, other, receipt])
+    cache.setQueryData(k, { blockers: ['owner_confirmed_inspection_required'] });
+  render(
+    <QueryClientProvider client={cache}>
+      <ContractLifecyclePanel api={api} contract={contract} moveOut={moveOut} onChanged={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  await screen.findByLabelText('Lý do / căn cứ của Owner');
+  fireEvent.change(screen.getByLabelText('Lý do / căn cứ của Owner'), {
+    target: { value: 'Decision changes deposit eligibility' },
+  });
+  fireEvent.click(screen.getByLabelText('Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý'));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu xem xét quyết toán' }));
+  await waitFor(() => expect(cache.getQueryState(key)?.isInvalidated).toBe(true));
+  expect(cache.getQueryState(other)?.isInvalidated).toBe(false);
+  expect(cache.getQueryState(receipt)?.isInvalidated).toBe(false);
+});
 
 it('clears stale data during reloads and contract changes, ignores aborted responses and handles errors', async () => {
   const { api } = setup();

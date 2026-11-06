@@ -41,6 +41,9 @@ client thật. Hiển thị số cọc từ server, người nhận không tự 
 nộp/không khấu trừ; snapshot hoặc số dư đổi phải xác nhận lại. Available null hiện Chờ đối chiếu,
 không đổi thành 0. Blockers chặn create/approve/execution; Reject vẫn mở để giải phóng reservation.
 Owner review settlement và NoAdditionalCharges gắn reference/inspection version đang hiển thị.
+Sau Contract lifecycle decision hoặc bấm tải lại quyết toán, Owner Web invalidate đúng cache nguồn
+cọc của Contract, kể cả trong staleTime 10 giây của PortalProvider; không giữ eligibility cũ hoặc
+invalidate nguồn receipt/Contract khác. Regression focused sau sửa cache **21/21 đạt**, build/lint đạt.
 Tenant xem authorized summary,
 không có quyền duyệt/execution/tải private proof. Native/provider acceptance chưa chạy.
 

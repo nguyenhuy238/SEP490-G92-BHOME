@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Button,
@@ -46,6 +46,15 @@ export function ContractLifecyclePanel({
   onChanged: () => void;
 }) {
   const q = useContractLifecycle(api, contract.id, 'Owner');
+  const cache = useQueryClient();
+  async function reload() {
+    await cache.invalidateQueries({
+      queryKey: ['refund-source'],
+      predicate: (query) =>
+        query.queryKey[2] === 'SecurityDeposit' && query.queryKey[3] === contract.id,
+    });
+    q.reload();
+  }
   const staff = useQuery({
     queryKey: ['inspection-staff', contract.locationId],
     queryFn: ({ signal }) => api.inspectionStaff(contract.locationId, signal),
@@ -74,7 +83,7 @@ export function ContractLifecyclePanel({
       setNoChargesInspection(null);
       setReason('');
       setNotice('Đã lưu tại máy chủ.');
-      q.reload();
+      await reload();
       onChanged();
     } catch (e) {
       setError(contractError(e));
@@ -92,7 +101,7 @@ export function ContractLifecyclePanel({
   return (
     <ChartCard title="Kiểm tra & quyết toán trả phòng">
       <Stack spacing={2}>
-        <Button disabled={busy || q.loading} onClick={q.reload}>
+        <Button disabled={busy || q.loading} onClick={() => void reload()}>
           Tải lại dữ liệu quyết toán
         </Button>
         {q.loading && <Typography>Đang đối chiếu dữ liệu…</Typography>}

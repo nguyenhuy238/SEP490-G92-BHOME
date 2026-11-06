@@ -514,7 +514,7 @@ TESTS:
 
 COMMIT:
 - Message: feat(mobile): [BE-19] show authorized deposit settlement and return status
-- SHA ghi sau commit Mobile.
+- SHA: `9d6aaaccaa84ab00fac0530e3aef01b078997c00`.
 
 FRONTEND HANDOFF:
 - Bùi Bảo Long review Mobile UX/device. Vũ Xuân Trường tiếp tục Owner Web; không nhân bản quản trị hoàn cọc Owner lên Mobile.
@@ -523,3 +523,23 @@ STATUS: PARTIAL — Mobile visibility component/typecheck/lint đạt; BE-19/BE-
 
 REMAINING:
 - Browser real Web/API/Compact24/MinIO và native acceptance. Repro native: đăng nhập Staff đúng Location → mở inspection, chọn Final readings/ảnh, sửa field kiểm consent reset → Tenant đăng nhập đọc own summary → Owner Web hoàn theo sao kê → Tenant reload thấy VerifiedManual; Staff/cross-Tenant không thấy tài chính. Không có provider/bank thật trong lượt này.
+
+TASK: BE-19
+SLICE: Sửa cache eligibility cọc sau Owner lifecycle decision
+IMPLEMENTED:
+- Browser harness phát hiện nguồn deposit-refunds vẫn giữ blockers cũ trong staleTime=10000 của PortalProvider sau khi inspection-review đã commit.
+- ContractLifecyclePanel nay invalidate đúng source SecurityDeposit/Contract ID trước reload; manual reload cũng làm mới source. Receipt/Contract khác giữ cache riêng. Consent source hiện hữu tiếp tục reset khi snapshot thực sự đổi.
+CHANGED FILES:
+- src/owner-web/src/features/contracts/{ContractLifecyclePanel,ContractLifecyclePanel.test}.tsx; docs/api/REFUNDS.md; báo cáo này.
+TESTS:
+- Owner Lifecycle/Refund/Payments focused: 21/21 đạt, thêm QueryClient regression với staleTime=10000 và scope isolation.
+- Owner build/lint đạt; logs .tools/huy-deposit-cache-{ui,build,lint}.log.
+- Harness đầy đủ chưa pass tại lúc sửa; còn chạy lại sau commit. Các lỗi locator nhầm nhãn Mobile và datetime-local trailing-zero normalization là ở harness, không tăng timeout/giảm guard.
+COMMIT:
+- Message: fix(moveout): [BE-19] refresh scoped deposit eligibility after decisions
+- SHA ghi sau commit cache fix.
+FRONTEND HANDOFF:
+- Owner Web: Vũ Xuân Trường; Mobile không đổi trong fix này.
+STATUS: DONE cho defect cache được tái hiện; BE-19 vẫn PARTIAL.
+REMAINING:
+- Tiếp tục E2E real Web/API/MinIO của nhánh cọc mới; khấu trừ có phí/native/provider chưa hoàn tất.
