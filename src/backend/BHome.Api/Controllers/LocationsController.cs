@@ -31,6 +31,10 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
     [HttpGet("{id:guid}"), Authorize(Policy = Permissions.Property.View)]
     public Task<LocationDto> Get(Guid id, CancellationToken t) => properties.GetLocationAsync(id, t);
 
+    [HttpGet("{id:guid}/occupancy-summary"), Authorize(Policy = Permissions.Property.View)]
+    public Task<OccupancySummaryDto> OccupancySummary(Guid id, [FromQuery] OccupancySummaryQuery query,
+        CancellationToken t) => properties.OccupancySummaryAsync(id, query, t);
+
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
     public Task<LocationDto> Update(Guid id, LocationWrite input, CancellationToken t) => properties.SaveLocationAsync(id, input, t);
 
@@ -96,7 +100,34 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
         return assignments is null ? NotFound() : Ok(assignments);
     }
 
+    [HttpPut("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<ChangeAssignmentResult>> Replace(Guid locationId,
+        ChangeStaffAssignmentRequest request, CancellationToken t) =>
+        Result(await locations.ReplaceAssignmentAsync(UserId, locationId, request.StaffUserId,
+            request.EffectiveFrom, request.LocationVersion, request.Reason, t));
+
+    [HttpDelete("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<ChangeAssignmentResult>> Remove(Guid locationId,
+        [FromBody] RemoveStaffAssignmentRequest request, CancellationToken t) =>
+        Result(await locations.RemoveAssignmentAsync(UserId, locationId, request.EffectiveFrom,
+            request.LocationVersion, request.Reason, t));
+
+    private ActionResult<ChangeAssignmentResult> Result(ChangeAssignmentResult result) => result.Status switch
+    {
+        ChangeAssignmentStatus.Changed => Ok(result),
+        ChangeAssignmentStatus.Invalid => Problem(statusCode: 400, title: "Invalid assignment change."),
+        ChangeAssignmentStatus.LocationNotFound => NotFound(),
+        ChangeAssignmentStatus.StaffUnavailable => Problem(statusCode: 400, title: "Staff is unavailable."),
+        ChangeAssignmentStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Location version is stale." }),
+        ChangeAssignmentStatus.NoCurrentAssignment => Conflict(new ProblemDetails { Status = 409, Title = "Location has no current Staff assignment." }),
+        _ => throw new InvalidOperationException("Unsupported assignment change result.")
+    };
+
     private Guid UserId => currentUser.UserId ?? throw new InvalidOperationException("Authenticated user is unavailable.");
 }
 
 public sealed record CreateStaffAssignmentRequest(Guid LocationId, Guid StaffUserId, DateOnly StartDate, DateOnly EndDate);
+public sealed record ChangeStaffAssignmentRequest(Guid StaffUserId, DateOnly EffectiveFrom,
+    [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);
+public sealed record RemoveStaffAssignmentRequest(DateOnly EffectiveFrom,
+    [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);

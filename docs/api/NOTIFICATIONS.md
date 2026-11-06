@@ -1,5 +1,10 @@
 # Notification inbox — UC-35/36
 
+Cập nhật **06/11/2026**: inbox, business-event publisher và JOB-04 delivery engine đã có trong
+runtime Compact24. Provider email/push thật vẫn Unconfigured. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md).
+`UserNotifications`, `OperationalTaskNotifications` và tên event dưới đây là tên logic CLR;
+runtime dùng `notifications`/JSON và technical queue trong `operational_tasks`, không các bảng EF legacy riêng.
+
 `/api/v1/notifications` dùng permission notifications.read-own; không nhận recipientId từ client.
 Scope từ actor hiện hành, audience role đã lưu và current Staff Location assignment.
 Owner chỉ đọc thông báo gửi cho mình; Tenant chỉ của mình; Staff chỉ Task thuộc Location hiện có quyền.
@@ -16,28 +21,47 @@ Target trả objectType/objectId/locationId/billingPeriod, không URL tùy ý ho
 Client vẫn dùng endpoint nghiệp vụ có auth khi tải đối tượng. Không coi saved link là quyền.
 Response không có bank reference, payer details, CCCD, private reason hoặc evidence.
 
-UserNotifications là inbox dùng chung đầu tiên; OperationalTaskNotifications có Task FK bắt buộc
-được giữ làm nguồn nghiệp vụ tương thích. SourceTaskNotificationId cho phép đọc trạng thái cũ;
+UserNotification là inbox dùng chung; OperationalTaskNotification giữ liên kết Task và được
+adapter giữ làm nguồn tương thích. SourceTaskNotificationId cho phép đọc trạng thái cũ;
 đánh dấu inbox cập nhật cả source read-state của đúng recipient. Không nhân đôi UI inbox live.
 Unique recipient/eventKey, publication markers và immutable intent; read/delivery state được cập nhật.
 Mặc định external DeliveryState Unconfigured, không báo push/email thành công khi chưa có provider.
 
 ## Business consumers
 
+Consumers trả phòng/cọc đọc committed history, batch25/source và publication marker/recipient key
+bền vững. Chạy lặp hoặc đồng thời không nhân đôi inbox; lỗi publish/delivery không rollback ledger.
+Thông báo chỉ ghi event/status chung, không số tiền, reason, payer, bank reference hoặc file/hash.
+Completed refund cần state cuối, actual execution time và proof metadata hợp lệ; approved vẫn báo
+chờ thực hiện. Target kiểm lại quyền Contract ở server, không mở rộng quyền xem quyết toán.
+Deposit sources chỉ có trên Compact24; offline legacy regression không được coi là runtime fallback.
+External email/push tiếp tục Unconfigured; không có cadence/reminder hoặc contact policy mới.
+
 `notification-publish` dùng queue/worker và shared scheduler contributors. Mỗi source event được
 xử lý trong transaction riêng, advisory lock theo key và publication marker; inbox unique
 recipient/eventKey. Nguồn chỉ đọc sau commit; không chạy provider trong transaction tài chính.
 Batch tối đa 25/source mỗi lượt, backlog tiếp tục các lượt sau, không có cursor in-memory.
 
-| Source                                       | Recipients / safe links                                                                             |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| InvoiceIssuedEvents                          | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                              |
-| PaymentConfirmedEvents + verified allocation | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data             |
-| Adjustment requested                         | Owner phụ trách; Adjustment                                                                         |
-| Adjustment decided                           | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update |
-| ContractExpiryNotices JOB-02                 | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                           |
-| OperationalTaskNotifications                 | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                |
-| Automation execution PendingInputs           | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                   |
+Harness move-out hiện đã explicit gọi Testing-only `process-events`, đọc Tenant inbox, kiểm quyền
+Staff/Tenant khác và Owner browser mở đúng Contract từ thông báo closure. Hai chế độ đạt
+22 nhóm có phí/21 nhóm không phí; no duplicate publication. Worker vẫn tắt, DeliveryState giữ
+Unconfigured; không suy kết quả này thành kiểm chứng lịch worker, email/push hoặc native UI.
+
+| Source                                        | Recipients / safe links                                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| InvoiceIssuedEvents                           | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                                                                           |
+| PaymentConfirmedEvents + verified allocation  | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data                                                          |
+| Adjustment requested                          | Owner phụ trách; Adjustment                                                                                                                      |
+| Adjustment decided                            | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update                                              |
+| ContractExpiryNotices JOB-02                  | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                                                                        |
+| OperationalTaskNotifications                  | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                                                             |
+| Automation execution PendingInputs            | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                                                                |
+| ContractMoveOutHistory đã commit              | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract                              |
+| DepositDeductionV1 và SecurityDepositRefundV1 | Owner signer + Tenant Contract; plan đã duyệt, request/APPROVED/REJECTED/Completed. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng |
+
+Receipt-excess refund mới chưa có event consumer riêng; không suy notification hoàn tiền đã tồn tại
+từ payment-confirmed. Browser finance/refund harness tắt worker, nên kết quả browser đó không chứng minh
+publication/delivery. Regression notification có fixture riêng; chưa nghiệm thu email/push thật.
 
 Role/account được kiểm tra từ DB trước publish, nguồn không đủ điều kiện được đánh dấu đã
 xử lý với recipient count phù hợp. Không broadcast đến mọi Owner/Staff. Private adjustment

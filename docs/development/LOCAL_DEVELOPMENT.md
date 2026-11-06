@@ -96,6 +96,12 @@ configuration still requires the one-time setup; the project does not install/st
 No users, contracts, invoices or shared passwords are automatically seeded. Use
 `scripts/New-LocalTestUsers.ps1` once and choose your own password at its hidden prompt.
 
+For a development dataset beyond Auth, explicitly run `scripts/Seed-LocalDevelopmentData.ps1`
+after preparing Compact24. It creates synthetic Locations/Rooms/meters/rates/pending residents/tasks
+and four sample accounts; reruns preserve edits and passwords. Use `-SetSamplePasswords` to choose
+new passwords for those accounts only. See the [database guide](../database/2026-11-03/README.md)
+and [complete API implementation/integration inventory](../api/API_IMPLEMENTATION_STATUS.md).
+
 ### Existing legacy database: one-time replacement
 
 Normal startup refuses an existing 70-table schema and explains the one-time command:
@@ -121,6 +127,20 @@ and reconciliation described in [the database guide](../database/2026-11-03/READ
 Running `Update-LocalDatabase.ps1` without a switch initializes/verifies without replacing a legacy
 database. `-Check` is read-only and reports MISSING/EMPTY/LEGACY_REQUIRES_RECREATE/READY. These
 commands accept `-EnvironmentFile` for local overrides and do not change `.env` or connection strings.
+
+### Existing Compact24 property schema
+
+`-Check` can also report `PROPERTY_UPGRADE_REQUIRED` for the previous Compact24 property shape.
+This is different from a legacy 70-table database. Back up the local database, stop API/debugging,
+then run `scripts/Update-LocalDatabase.ps1 -UpgradePropertySchema` and repeat `-Check` before
+restarting. The upgrade is transactional and refuses to discard populated retired RoomType
+catalogs/references; their disposition needs an explicit project-owner decision and migration.
+Do not use `-RecreateDatabase` or legacy EF migrations to bypass that guard. Running without
+a switch initializes missing/empty Compact24 only; it does not perform this property upgrade.
+
+`Prepare-OcrMobile.ps1` uses this Compact24 tool when database preparation is requested. It
+does not run the retired EF schema migrations. The normal `npm.cmd run mobile` launcher
+does not upgrade an existing database automatically.
 
 ## Clients
 

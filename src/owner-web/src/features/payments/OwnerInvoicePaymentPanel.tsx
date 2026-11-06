@@ -32,6 +32,7 @@ import {
 } from '../../../../../packages/client-core/src/payments';
 import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
+import { RefundPanel } from './RefundPanel';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
@@ -352,6 +353,7 @@ export function ReconcileTransfer({
     queryKey: ['payment-reviews', actor, transfer.id],
     queryFn: ({ signal }) => api.reviews(transfer.id, signal),
   });
+  const [refundsOpen, setRefundsOpen] = useState(false);
   const data = latest.data ?? transfer;
   async function perform(rejection = false) {
     if (lock.current) return;
@@ -391,8 +393,24 @@ export function ReconcileTransfer({
         <Typography>
           {data.bankReference} · {formatContractMoney(data.amount)} · {paymentText(data.status)}
         </Typography>
-        <Typography>{paymentText(data.reason)}</Typography>
+        <Typography>
+          {data.reason === 'verified_excess_payment_pending_review'
+            ? 'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.'
+            : paymentText(data.reason)}
+        </Typography>
+        {data.allocatedAmount !== undefined && (
+          <Typography>
+            Đã phân bổ: {formatContractMoney(data.allocatedAmount)} · Chưa phân bổ:{' '}
+            {formatContractMoney(data.unallocatedAmount ?? '0')}
+          </Typography>
+        )}
         {notice && <Alert severity="info">{notice}</Alert>}
+        {data.status === 'Allocated' &&
+          data.unallocatedAmount !== undefined &&
+          /^0*(?:\.0+)?$/.test(data.unallocatedAmount) === false && (
+            <Button onClick={() => setRefundsOpen(true)}>Xử lý hoàn tiền thừa</Button>
+          )}
+        {refundsOpen && <RefundPanel key={transfer.id} sourceId={transfer.id} />}
         {(latest.error || history.error) && (
           <Alert
             severity="error"
@@ -477,7 +495,8 @@ export function ReconcileTransfer({
           <DialogTitle>Xác nhận đối soát giao dịch?</DialogTitle>
           <DialogContent>
             Ghi nhận {formatContractMoney(data.amount)} từ sao kê cho hóa đơn đã chọn. Hệ thống sẽ
-            kiểm tra số dư và chống ghi có trùng.
+            kiểm tra số dư và chống ghi có trùng. Nếu thiếu tiền, chỉ ghi nhận số đã nhận và giữ dư
+            nợ. Nếu thừa tiền, chỉ phân bổ tối đa dư nợ; phần thừa chờ Owner xử lý, chưa tự hoàn.
           </DialogContent>
           <DialogActions>
             <Button disabled={busy} onClick={() => setConfirm(false)}>

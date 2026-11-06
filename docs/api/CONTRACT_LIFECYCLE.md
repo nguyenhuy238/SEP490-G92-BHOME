@@ -1,5 +1,25 @@
 # Contract UI — bổ sung API D011/D012
 
+Cập nhật **06/11/2026**, runtime Compact24. [Trạng thái và giới hạn](API_IMPLEMENTATION_STATUS.md),
+[route/input/policy đầy đủ](API_RUNTIME_ROUTES.md). Main/Renewal có workflow; Holding ledger vẫn
+Unconfigured. Cọc đã xác minh để activation không đồng nghĩa đã có quyết toán/hoàn cọc khi move-out.
+
+## Main Draft → tài liệu xem xét → ký (05/11/2026)
+
+UC-15 / GBR-04 / DBR-03. Bổ sung vào controller Main Draft hiện hữu:
+
+- `POST /api/v1/contracts/main-drafts/{id}/signing-review`: Owner hoặc Staff đang được phân công Location, trả `ContractDocumentView` với `kind=SigningReview`. Tái sử dụng file của snapshot hiện tại. PDF được chuyển đổi từ mẫu DOCX hiện hữu và lưu private, có hash/length. Mẫu hiện tại chỉ được phép Development/Testing và có nhãn tài liệu kiểm thử; Production trả 503 `main_draft_signing_template_not_approved`.
+- `GET .../{id}/documents/{fileId}`: dùng endpoint download hiện hữu, kiểm quyền/snapshot/hash trước khi trả bytes. Tài liệu phiên bản cũ trả 409.
+- `POST .../{id}/release`: chỉ Owner signer; bắt buộc `Idempotency-Key` UUID. Body `{ tenantUserId, expectedVersion, reviewedFileId, humanReviewed: true }`; trả `{ id }`. Kiểm tra bản nháp, cấu hình/giá hiện hành, tài khoản Tenant hoạt động, liên kết Resident, room conflict và đúng file đã xem xét. Không đổi signing mode đã ghi lúc tạo Draft. Lặp cùng key/payload trả cùng kết quả; khác payload trả 409.
+
+Release ghi `PendingSigning`, liên kết Tenant đại diện và seal snapshot; giữ encrypted draft metadata và evidence cũ. Tạo Preview bất biến bằng đúng bytes/hash PDF đã xem xét, với object key riêng. `onboardingDraft` trong list/detail chỉ true khi vẫn là Draft; Owner Web chuyển sang workflow ký hiện hữu. Tenant dùng preview/private-download/signing/sync hiện hữu; cả adapter simulation và MySign lấy canonical PDF này thay vì dựng lại mẫu khác. Chưa ký/chưa cọc thì không tự Active hoặc Occupied.
+
+Owner Web yêu cầu lưu hết thay đổi, chọn tài khoản, tải PDF và xác nhận xem xét trước release. Bản simulation luôn hiển thị nhãn thử nghiệm. Nghiệm thu nhà cung cấp thật vẫn BLOCKED vì chưa có MySign staging và mẫu production được duyệt. Các kiểm thử converter/MinIO cục bộ không thay thế nghiệm thu staging.
+
+Kiểm chứng 06/11: `BHome.ContractVerification --finance --main-draft` dùng API thật, Compact24/MinIO tạm, Owner Web build thật và Staff/Tenant Mobile transport thật. Đạt review/release từ danh sách, bytes PDF giống nhau, scope âm, ký simulation/cọc tổng hợp/Owner activation. UI sau release chuyển khỏi editor; native device và MySign staging chưa nghiệm thu. Bằng chứng chi tiết ở [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
+
+UC-17 regression tiếp theo: evidence/meter baseline → Staff record → Tenant dispute/correction → same-version Tenant/Staff confirmation → Owner Web monitor/download đã đạt qua API/Compact24/MinIO thật. Shared hook không giữ record từ context cũ; Mobile consent gắn Contract/version và reset khi server trả version mới. Không đổi endpoint/DTO; native camera/device vẫn chưa chạy.
+
 Truy vết: BF-03B/BF-04A, FE-03, UC-15/16/19, GBR-01/02/04/18, DBR-02/03.
 Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 [bàn giao backend](../development/CONTRACT_LIFECYCLE_DELIVERY.md).
@@ -101,4 +121,37 @@ handler re-read dưới Room lock, unique Contract/enddate/stage/recipient. Upco
 0..30 ngày trước hạn; Expired khi ngày hiện tại vượt EndDate. Không tự đóng hoặc đổi Room.
 GET `expiry-reminders`: Owner xem nhắc hợp đồng hiện hành (mỗi hợp đồng một nhắc), Tenant
 chỉ nhận nhắc của mình; Staff 403. Tối đa 100 nhắc mới nhất, loại hợp đồng đã kết thúc/gia hạn.
-Notices được lưu để xem trong Web/Mobile; external push/email consumer vẫn chưa triển khai.
+Notices được lưu để xem trong Web/Mobile và đã được `notification-publish` đưa vào inbox theo
+[NOTIFICATIONS.md](NOTIFICATIONS.md). JOB-04 retry có implementation; external email/push provider
+vẫn Unconfigured, chưa nghiệm thu gửi thật.
+
+[Receipt-excess refund](REFUNDS.md) chỉ hoàn phần receipt chưa phân bổ, không phải refund cọc.
+Hoàn xong khoản dư đó không tự bỏ blocker `deposit_deduction_refund_policy_required` hoặc giải phóng Room.
+Slice mới [hoàn cọc không khấu trừ](REFUNDS.md) đã có nguồn deposit riêng và manual execution/evidence;
+chỉ hoàn đầy đủ, không reservation, source hợp lệ và mọi guard khác đạt mới bỏ blocker cọc. Nhánh
+khấu trừ `TenantDamage` nay có [backend plan/evidence/remainder journal](DEPOSIT_DEDUCTIONS.md),
+Owner Web editor/refund review và browser có phí đã chạy; nullable không được đổi thành 0 để giả
+resolved. Final harness đạt 22 nhóm có phí và 21 nhóm không phí, gồm inbox explicit pump và Finance
+report. Không suy thành native, bank-provider/MySign hoặc notification scheduling/delivery acceptance.
+Chưa có MySign staging thật hoặc mẫu Production được duyệt.
+
+## Settlement calculation — BE-19, 06/11/2026
+
+GET `move-out/settlement-summary` bổ sung optional `calculation`; không thêm route/schema.
+Tiền là chuỗi decimal nguyên: `issuedTotal`, `approvedAdjustmentTotal`, `payableTotal`,
+`verifiedInvoicePayments`, `roomOutstanding`, nullable `contractSpecificOutstanding`,
+`potentialInvoiceExcess`, nullable `depositAllocated`, `depositRefunded`, `depositReserved`,
+`availableSecurityDeposit`; `depositPositionConsistent` là boolean.
+
+Không cộng cọc vào tiền thu hóa đơn hoặc cộng Adjustment hai lần. Hóa đơn chung còn nợ giữ
+nghĩa vụ cá nhân null. Available = received − net outgoing deposit allocations − Completed
+deposit refunds − Requested/Approved deposit refunds, đọc ledger Compact24 cùng transaction/lock
+của summary. Rejected/Cancelled không giữ chỗ. Chuỗi renewal đọc một lần theo ID, không cộng lặp
+cọc root theo số phiên bản. Received phải khớp deposit verifications; position âm/sai nguồn trả
+available null và blocker `deposit_ledger_reconciliation_required`.
+
+Đây là số dư nguồn trước quyết định Owner, **không phải lệnh khấu trừ hoặc số hoàn đã duyệt**.
+`refundAmount`/`approvedDeductions` vẫn null khi thiếu quyết định/verified completion; nhánh hoàn cọc
+không khấu trừ có thể xác nhận 0 deduction sau khi trả đủ. Mọi thay đổi position đổi reference;
+`financialReference` riêng giữ source obligations khi reservation/return thay đổi. Reader legacy
+offline trả unknown, không truy cập database khác.

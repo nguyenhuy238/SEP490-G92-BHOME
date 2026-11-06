@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router';
 import { LoginRoute, ProtectedRoute } from './routeGuards';
 import { AppShell } from '../components/layout/AppShell';
 import { LoadingState } from '../components/common/PortalUI';
+import { SharedConfigurationProvider } from '../features/configuration/SharedConfigurationContext';
 const NotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'));
 const LocationsPage = lazy(() => import('../features/locations/pages/LocationsPage'));
 const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
@@ -23,6 +24,7 @@ const SchedulesPage = lazy(() => import('../features/schedules/pages/SchedulesPa
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
+const DigitalSigningPage = lazy(() => import('../features/contracts/pages/DigitalSigningPage'));
 const HandoversPage = lazy(() => import('../features/handovers/pages/HandoversPage'));
 const TemporaryResidencePage = lazy(
   () => import('../features/temporary-residence/pages/TemporaryResidencePage'),
@@ -45,60 +47,87 @@ const LocationWorkspace = lazy(() =>
     default: module.LocationWorkspace,
   })),
 );
+const RoomTypeTemplatesPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.RoomTypeTemplatesPage,
+  })),
+);
+const AssetCatalogPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.AssetCatalogPage,
+  })),
+);
+const PricingFeeTemplatesPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.PricingFeeTemplatesPage,
+  })),
+);
+const PolicyTemplatesPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.PolicyTemplatesPage,
+  })),
+);
 export function AppRouter() {
   return (
-    <Suspense fallback={<LoadingState />}>
-      <Routes>
-        <Route path="/login" element={<LoginRoute />} />
-        <Route element={<ProtectedRoute />}>
-          <Route element={<AppShell />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/locations" element={<LocationsPage />} />
-            <Route path="/locations/:locationId" element={<LocationWorkspace />}>
-              <Route index element={<Navigate to="overview" replace />} />
-              <Route path="overview" element={<></>} />
-              <Route path="rooms/new" element={<CreateRooms />} />
-              <Route path="rooms" element={<RoomsPage />} />
-              <Route path="room-types" element={<RoomTypesPage />} />
-              <Route path="assets" element={<AssetsPage />} />
-              <Route path="pricing" element={<PricingPage />} />
-              <Route path="rules" element={<></>} />
-              <Route path="history" element={<></>} />
-              <Route path="settings" element={<></>} />
-              <Route path="investment" element={<ExpensesPage />} />
+    <SharedConfigurationProvider>
+      <Suspense fallback={<LoadingState />}>
+        <Routes>
+          <Route path="/login" element={<LoginRoute />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/locations" element={<LocationsPage />} />
+              <Route path="/configuration/room-types" element={<RoomTypeTemplatesPage />} />
+              <Route path="/configuration/assets" element={<AssetCatalogPage />} />
+              <Route path="/configuration/pricing-fees" element={<PricingFeeTemplatesPage />} />
+              <Route path="/configuration/policies" element={<PolicyTemplatesPage />} />
+              <Route path="/locations/:locationId" element={<LocationWorkspace />}>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route path="overview" element={<></>} />
+                <Route path="rooms/new" element={<CreateRooms />} />
+                <Route path="rooms" element={<RoomsPage />} />
+                <Route path="room-types" element={<RoomTypesPage />} />
+                <Route path="assets" element={<AssetsPage />} />
+                <Route path="pricing" element={<PricingPage />} />
+                <Route path="rules" element={<></>} />
+                <Route path="history" element={<></>} />
+                <Route path="settings" element={<></>} />
+                <Route path="investment" element={<ExpensesPage />} />
+              </Route>
+              <Route path="/rooms" element={<RoomsPage />} />
+              <Route path="/rooms/new" element={<CreateRooms />} />
+              <Route path="/rooms/:id" element={<RoomDetail />} />
+              <Route path="/asset-allocation" element={<AssetAllocation />} />
+              <Route path="/room-types" element={<RoomTypesPage />} />
+              <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/staff" element={<StaffPage />} />
+              <Route path="/schedules" element={<SchedulesPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/tenants" element={<TenantsPage />} />
+              <Route path="/contracts" element={<ContractsPage />} />
+              <Route path="/digital-signing" element={<DigitalSigningPage />} />
+              <Route path="/handovers" element={<HandoversPage />} />
+              <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
+              <Route path="/meters" element={<MetersPage />} />
+              <Route path="/invoices" element={<InvoicesPage />} />
+              <Route path="/billing-automation" element={<AutomationPage />} />
+              <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />
+              <Route path="/payments" element={<PaymentsPage />} />
+              <Route path="/debts" element={<DebtsPage />} />
+              <Route path="/incidents" element={<IncidentsPage />} />
+              <Route path="/maintenance" element={<MaintenancePage />} />
+              <Route path="/expenses" element={<ExpensesPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/what-if" element={<WhatIfPage />} />
+              <Route path="/public-content" element={<PublicContentPage />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
-            <Route path="/rooms" element={<RoomsPage />} />
-            <Route path="/rooms/new" element={<CreateRooms />} />
-            <Route path="/rooms/:id" element={<RoomDetail />} />
-            <Route path="/asset-allocation" element={<AssetAllocation />} />
-            <Route path="/room-types" element={<RoomTypesPage />} />
-            <Route path="/assets" element={<AssetsPage />} />
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/staff" element={<StaffPage />} />
-            <Route path="/schedules" element={<SchedulesPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/tenants" element={<TenantsPage />} />
-            <Route path="/contracts" element={<ContractsPage />} />
-            <Route path="/handovers" element={<HandoversPage />} />
-            <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
-            <Route path="/meters" element={<MetersPage />} />
-            <Route path="/invoices" element={<InvoicesPage />} />
-            <Route path="/billing-automation" element={<AutomationPage />} />
-            <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/debts" element={<DebtsPage />} />
-            <Route path="/incidents" element={<IncidentsPage />} />
-            <Route path="/maintenance" element={<MaintenancePage />} />
-            <Route path="/expenses" element={<ExpensesPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/what-if" element={<WhatIfPage />} />
-            <Route path="/public-content" element={<PublicContentPage />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
-        </Route>
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+    </SharedConfigurationProvider>
   );
 }

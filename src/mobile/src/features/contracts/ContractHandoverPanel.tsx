@@ -40,9 +40,23 @@ export function ContractHandoverPanel({
   const [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState(),
     [notice, setNotice] = useFeedbackState('success'),
-    [note, setNote] = useState(''),
-    [checked, setChecked] = useState(false),
     [safePhoto, setSafePhoto] = useState(false);
+  const confirmationKey = `${contract.id}:${h?.version ?? ''}`;
+  const [confirmation, setConfirmation] = useState({ key: '', checked: false, note: '' });
+  const checked = confirmation.key === confirmationKey && confirmation.checked;
+  const note = confirmation.key === confirmationKey ? confirmation.note : '';
+  const setChecked = (value: boolean) =>
+    setConfirmation((current) => ({
+      key: confirmationKey,
+      checked: value,
+      note: current.key === confirmationKey ? current.note : '',
+    }));
+  const setNote = (value: string) =>
+    setConfirmation((current) => ({
+      key: confirmationKey,
+      checked: current.key === confirmationKey && current.checked,
+      note: value,
+    }));
   const [keys] = useState(() => mutationKeys(randomUUID)),
     lock = useRef(false);
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
@@ -291,7 +305,7 @@ export function ContractHandoverPanel({
             <Checkbox.Item
               label={`Tôi đã kiểm tra nội dung phiên bản ${h.version}`}
               status={checked ? 'checked' : 'unchecked'}
-              onPress={() => setChecked((v) => !v)}
+              onPress={() => setChecked(!checked)}
               disabled={busy}
             />
             {role === 'Tenant' && (

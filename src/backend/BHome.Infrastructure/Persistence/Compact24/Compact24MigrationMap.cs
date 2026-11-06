@@ -70,7 +70,7 @@ public static class Compact24MigrationMap
         ["RefreshTokens"] = "refresh_tokens: dòng SESSION/TOKEN, giữ ID và liên kết chuỗi rotation",
         ["Residents"] = "residents: giữ envelope mã hóa, ID Resident/Owner và phiên bản khóa HMAC",
         ["Rooms"] = "rooms",
-        ["RoomTypes"] = "locations.room_types: giữ ID catalog, version, cấu hình mặc định và lịch sử",
+        ["RoomTypes"] = "locations.operating_settings.legacyRoomTypes (offline history only): giữ ID catalog, version, cấu hình mặc định và lịch sử",
         ["SecurityAudit"] = "notifications loại AUDIT: giữ actor, thời gian, hành động, lý do, tham chiếu trước/sau, ID nguồn và namespace sự kiện",
         ["SigningCertificates"] = "users.signing_credentials; chụp chứng thư dùng lúc ký vào contract_signings",
         ["StaffLocationAssignments"] = "locations.staff_assignments: phân công có hiệu lực, giữ ID phân công cũ",

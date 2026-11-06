@@ -28,7 +28,7 @@ public sealed class ContractWorkflowGuardTests
         using var backend = ContractPdfRendererTests.Backend(environment, simulation: true);
         using var scope = backend.CreateScope();
         var type = typeof(BHome.Infrastructure.Contracts.ViettelMySignContractAdapter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!;
-        var adapter = (IContractSigningProvider)ActivatorUtilities.CreateInstance(scope.ServiceProvider, type, new Actor());
+        var adapter = (IContractSigningProvider)ActivatorUtilities.CreateInstance(scope.ServiceProvider, type, new Actor(), new GenericDocumentSource());
         var input = ContractPdfRendererTests.Snapshot();
         var result = await adapter.PrepareAsync(input, Guid.Empty, null, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(result.PreparedPdf)));
@@ -47,4 +47,8 @@ public sealed class ContractWorkflowGuardTests
         Assert.Throws<LocalTestAccountException>(() => ContractDemoSeed.ValidateTarget(environment, $"Host={host};Database={database};Username=unconfigured"));
     private sealed class Actor : ICurrentUser
     { public static readonly Guid Id = Guid.NewGuid(); public Guid? UserId => Id; public bool IsInRole(string role) => role == "Owner"; }
+    // This PDF/mode check has no persisted onboarding contract. Main Draft source integrity
+    // is exercised with the real repository/storage source by MainDraftReleaseTests.
+    private sealed class GenericDocumentSource : IContractSigningDocumentSource
+    { public Task<byte[]?> ReadAsync(ContractDocument document, CancellationToken t) => Task.FromResult<byte[]?>(null); }
 }

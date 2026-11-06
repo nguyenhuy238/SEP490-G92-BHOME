@@ -61,6 +61,27 @@ const state = {
   pendingReview: false,
   history: [],
 };
+
+it('shows backend allocation and surplus separately without offering another allocation', async () => {
+  const excess = {
+    ...transfer,
+    status: 'Allocated',
+    reason: 'verified_excess_payment_pending_review',
+    allocatedAmount: '100000',
+    unallocatedAmount: '20000',
+  };
+  mocks.api.transfer.mockResolvedValue(excess);
+  mount(<ReconcileTransfer transfer={excess} />);
+  expect(
+    await screen.findByText('Đã phân bổ: 100.000 ₫ · Chưa phân bổ: 20.000 ₫'),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xác nhận đối soát' })).not.toBeInTheDocument();
+});
 function mount(element: React.ReactNode) {
   return render(
     <ThemeProvider theme={theme}>

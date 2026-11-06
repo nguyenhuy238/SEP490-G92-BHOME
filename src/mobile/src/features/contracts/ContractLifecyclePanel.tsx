@@ -40,8 +40,9 @@ export function ContractLifecyclePanel({
   const [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
-    [checked, setChecked] = useState(false),
-    [noCharges, setNoCharges] = useState(false);
+    [reviewedReference, setReviewedReference] = useState<string | null>(null),
+    [noChargesInspection, setNoChargesInspection] = useState<string | null>(null),
+    [confirmedInspectionInput, setConfirmedInspectionInput] = useState<string | null>(null);
   const [error, setError] = useFeedbackState(),
     [notice, setNotice] = useFeedbackState('success');
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -56,8 +57,9 @@ export function ContractLifecyclePanel({
     try {
       await api.mutate(id, operation, body, keys.get(operation, body));
       keys.confirmed(operation, body);
-      setChecked(false);
-      setNoCharges(false);
+      setReviewedReference(null);
+      setNoChargesInspection(null);
+      setConfirmedInspectionInput(null);
       setSelected([]);
       setValues({});
       setNotice('Máy chủ đã lưu.');
@@ -73,6 +75,19 @@ export function ContractLifecyclePanel({
   const baseline = q.preparation?.baseline?.snapshot,
     inspection = q.inspections[0],
     summary = q.summary;
+  const inspectionKey = inspection ? `${id}:${inspection.id}:${inspection.version}` : null;
+  const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
+  const checked = !!summary && reviewedReference === summary.reference;
+  const inspectionInput = JSON.stringify([
+    id,
+    moveOut.version,
+    q.preparation?.baselineContractId,
+    q.preparation?.baseline?.version,
+    q.preparation?.finalReadings,
+    values,
+    selected,
+  ]);
+  const inspectionChecked = !!baseline && confirmedInspectionInput === inspectionInput;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
   const usedEvidence = new Set(q.inspections.flatMap((i) => i.observed.evidenceIds));
   const unusedEvidence = evidenceIds.filter((e) => !usedEvidence.has(e));
@@ -199,11 +214,13 @@ export function ContractLifecyclePanel({
                 ))}
                 <Checkbox.Item
                   label="Tôi xác nhận hiện trạng và chỉ số đã đối chiếu thực tế"
-                  status={checked ? 'checked' : 'unchecked'}
-                  onPress={() => setChecked((v) => !v)}
+                  status={inspectionChecked ? 'checked' : 'unchecked'}
+                  onPress={() =>
+                    setConfirmedInspectionInput(inspectionChecked ? null : inspectionInput)
+                  }
                 />
                 <Action
-                  disabled={busy || !checked || !selected.length || selected.length > 5}
+                  disabled={busy || !inspectionChecked || !selected.length || selected.length > 5}
                   onPress={() => {
                     try {
                       const body = {
@@ -245,6 +262,30 @@ export function ContractLifecyclePanel({
           <Text>
             Khấu trừ đã duyệt: {money(summary.approvedDeductions)} · Hoàn tiền:{' '}
             {money(summary.refundAmount)}
+          </Text>
+          {summary.calculation && (
+            <>
+              <Text>
+                Đã phát hành: {money(summary.calculation.issuedTotal)} · Phải thu hiệu lực:{' '}
+                {money(summary.calculation.payableTotal)} · Đã phân bổ hóa đơn:{' '}
+                {money(summary.calculation.verifiedInvoicePayments)}
+              </Text>
+              <Text>
+                Cọc đã dùng: {money(summary.calculation.depositAllocated)} · Đã hoàn cọc:{' '}
+                {money(summary.calculation.depositRefunded)}
+              </Text>
+              <Text>
+                Cọc giữ chỗ hoàn: {money(summary.calculation.depositReserved)} · Cọc khả dụng:{' '}
+                {money(summary.calculation.availableSecurityDeposit)}
+              </Text>
+            </>
+          )}
+          <Text>
+            {summary.transferVerificationStatus === 'VerifiedManual'
+              ? 'Hoàn cọc đã được Owner xác minh thủ công bằng sao kê và chứng từ.'
+              : summary.transferVerificationStatus === 'NotRequired'
+                ? 'Không có khoản cọc cần hoàn theo nguồn hiện tại.'
+                : 'Cọc đang được đối chiếu hoặc chờ giao dịch hoàn được xác minh.'}
           </Text>
           <Text>
             {summary.otherActiveContracts
@@ -293,7 +334,7 @@ export function ContractLifecyclePanel({
               <Checkbox.Item
                 label="Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu"
                 status={noCharges ? 'checked' : 'unchecked'}
-                onPress={() => setNoCharges((v) => !v)}
+                onPress={() => setNoChargesInspection(noCharges ? null : inspectionKey)}
               />
               <Action
                 disabled={busy || !values.reason?.trim()}
@@ -328,7 +369,7 @@ export function ContractLifecyclePanel({
               <Checkbox.Item
                 label="Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý"
                 status={checked ? 'checked' : 'unchecked'}
-                onPress={() => setChecked((v) => !v)}
+                onPress={() => setReviewedReference(checked ? null : summary.reference)}
               />
               <Action
                 disabled={busy || !checked || !values.reason?.trim()}

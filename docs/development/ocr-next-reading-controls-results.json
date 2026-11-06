@@ -1,0 +1,387 @@
+{
+  "results": {
+    "dataset": "meter-evaluation",
+    "engineVersions": [
+      "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2"
+    ],
+    "sourceCount": 8,
+    "total": 17,
+    "exactMatches": 17,
+    "expectedRejections": 17,
+    "falseProposals": 0,
+    "incorrectExpectedFields": 0,
+    "missingExpectedFields": 0,
+    "fallbacks": 17,
+    "meterProposalMetrics": {
+      "positiveCases": 0,
+      "exactReadings": 0,
+      "emittedReadings": 0,
+      "falseReadings": 0,
+      "exactReadingAccuracyPercent": null,
+      "falseReadingRatePercent": null
+    },
+    "proposalOrFallbackWithin10Seconds": 17,
+    "maxMilliseconds": 5760,
+    "profiles": {
+      "DigitalWater": {
+        "total": 7,
+        "exactMatches": 7,
+        "expectedRejections": 7,
+        "sourceCount": 7,
+        "p95Milliseconds": 5760
+      },
+      "MechanicalWater": {
+        "total": 6,
+        "exactMatches": 6,
+        "expectedRejections": 6,
+        "sourceCount": 6,
+        "p95Milliseconds": 273
+      },
+      "MechanicalElectricity": {
+        "total": 2,
+        "exactMatches": 2,
+        "expectedRejections": 2,
+        "sourceCount": 2,
+        "p95Milliseconds": 966
+      },
+      "DigitalElectricity": {
+        "total": 2,
+        "exactMatches": 2,
+        "expectedRejections": 2,
+        "sourceCount": 2,
+        "p95Milliseconds": 1059
+      }
+    },
+    "fieldAccuracy": {},
+    "p50Milliseconds": 273,
+    "p95Milliseconds": 5760,
+    "results": [
+      {
+        "index": 0,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 2141,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "multiple_reading_regions",
+          "ambiguous_reading"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 1,
+        "profile": "MechanicalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 153,
+        "isFallback": true,
+        "warnings": [
+          "meter_not_detected",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 2,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 2545,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "orientation_corrected",
+          "ambiguous_reading"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 3,
+        "profile": "MechanicalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 125,
+        "isFallback": true,
+        "warnings": [
+          "meter_detection_uncertain",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 4,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 2795,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 5,
+        "profile": "MechanicalElectricity",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 966,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "no_text",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 6,
+        "profile": "DigitalElectricity",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 1059,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "no_text",
+          "billing_register_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 7,
+        "profile": "MechanicalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 125,
+        "isFallback": true,
+        "warnings": [
+          "meter_not_detected",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 8,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 1169,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "no_text",
+          "billing_register_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 9,
+        "profile": "MechanicalElectricity",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 202,
+        "isFallback": true,
+        "warnings": [
+          "possible_glare",
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 10,
+        "profile": "DigitalElectricity",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 224,
+        "isFallback": true,
+        "warnings": [
+          "possible_glare",
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 11,
+        "profile": "MechanicalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 109,
+        "isFallback": true,
+        "warnings": [
+          "possible_glare",
+          "meter_not_detected",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 12,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 223,
+        "isFallback": true,
+        "warnings": [
+          "possible_glare",
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 13,
+        "profile": "MechanicalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 122,
+        "isFallback": true,
+        "warnings": [
+          "meter_not_detected",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 14,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 2128,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 15,
+        "profile": "MechanicalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 273,
+        "isFallback": true,
+        "warnings": [
+          "meter_category_unverified",
+          "unclear_digit",
+          "reading_not_recognized"
+        ],
+        "expectedRejection": true
+      },
+      {
+        "index": 16,
+        "profile": "DigitalWater",
+        "passed": true,
+        "fields": {},
+        "elapsedMilliseconds": 5760,
+        "isFallback": true,
+        "warnings": [
+          "meter_localization_unavailable",
+          "reading_region_unverified",
+          "billing_register_unverified",
+          "orientation_corrected",
+          "ambiguous_reading"
+        ],
+        "expectedRejection": true
+      }
+    ]
+  },
+  "datasetAudit": {
+    "manifestSha256": "5ec730ac313c5afdf7aa4e66956a58fa4e59f50422d96f79e1c50a4e454bd91b",
+    "independentImages": 8,
+    "profileObservations": 17,
+    "sourceRows": [
+      {
+        "id": "commons_156125142",
+        "sourceSha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+        "authorGroup": "boutboul",
+        "imageSha256": "d32669dd9a098132c8c2251793c9f1708663405264ea3ec6f00def148afe22c9",
+        "sourcePhash": "4d10b3674d58d4ae",
+        "reason": "blank_lcd"
+      },
+      {
+        "id": "commons_6780055",
+        "sourceSha256": "806185afa3a4dc798babcb76f2e24582a9dc4fa62a02a73b3fbf88b22734e090",
+        "authorGroup": "cjp24",
+        "imageSha256": "c0892f7fa8f3687a3e6fed0a5fe22460993524e25acf2b76c9e7a96e176c0549",
+        "sourcePhash": "2224e4b9d9e5a99a",
+        "reason": "flow_rate_not_accumulated_volume"
+      },
+      {
+        "id": "commons_177890994",
+        "sourceSha256": "ec7d1d3f307b8455cf6578a6ee798c8ff1a998e384a9b92d31e12a12f9bbfdac",
+        "authorGroup": "gpkp",
+        "imageSha256": "f36fa0a1c7f28292e3fea1a57928e5770dfa0e8dd855f0bbbe06af73ebe929ad",
+        "sourcePhash": "6d0c0a51e5eb16ad",
+        "reason": "tds_probe_not_consumption_meter"
+      },
+      {
+        "id": "commons_21978614",
+        "sourceSha256": "2ec5999258f0ac1fdd9c9621a7d711232d9ae54b00e4d870b2f1652bebee19b8",
+        "authorGroup": "twobitswivel",
+        "imageSha256": "583bb6fc0d15918e3ed2f8d12a206eccc13e4773984df8a60a261d0c2a5462e7",
+        "sourcePhash": "41ccf970be0f01f1",
+        "reason": "water_tower_no_meter"
+      },
+      {
+        "id": "commons_92903699",
+        "sourceSha256": "5f991ed63149e0338a69c7268dc4c9d51062fd4b0e12a6204ff4e4b841c5cf98",
+        "authorGroup": "zakjohnston",
+        "imageSha256": "81bd6ad6f5911d49d5da18d1a88e1039a0e0942bcbe5a949e6b6f7dd47585d59",
+        "sourcePhash": "631b136e6cb91744",
+        "reason": "symbol_no_meter"
+      },
+      {
+        "id": "commons_195349404",
+        "sourceSha256": "3c81cb1c0dfbcf172b7aba08c5afa525a289a7bc6e25874a0a160971d2178f79",
+        "authorGroup": "axxter99",
+        "imageSha256": "4e7b13faaaf8363bdf436e46df8b66ad2dd71d10dc6f2360bfb47e15074b850e",
+        "sourcePhash": "30acc936a8965eea",
+        "reason": "cover_no_visible_display"
+      },
+      {
+        "id": "commons_107725262",
+        "sourceSha256": "4dba0d5c6f77ba9bf8b43c2135a30548d656f1ddd8d75cd161f05924ecaf8ea1",
+        "authorGroup": "utilitysupplies",
+        "imageSha256": "16c0140d782e09e763401ce240ccf4d8e4142a0adae04779919d1a32d642e313",
+        "sourcePhash": "5b1e1f5e24aa5c84",
+        "reason": "gallons_register_not_supported_m3_reading"
+      },
+      {
+        "id": "commons_152002068",
+        "sourceSha256": "00b166a538cad07b7eced3097971a24694eb956130fb702bf3af832dfe72d8d6",
+        "authorGroup": "vaibhavratnaparkhi",
+        "imageSha256": "7ca1a0c969b287781e93723009e4f32bb2284e6d83c6732936c3724b61908f75",
+        "sourcePhash": "4f9a149d51a39d19",
+        "reason": "multiple_devices_one_foreground_unreadable"
+      }
+    ],
+    "limitation": "Negative-only public corpus; author/hash/pHash disjoint from BHOME body train/val. Unknown pretraining and physical identity; no positive reading accuracy claim."
+  },
+  "rawReportSha256": "c1d921bb03128629c2b47230241f5b7a297e5daa1082b5d2798e85d7cb8cf1a8",
+  "scope": "Negative reading controls only; 8 images,17 profile observations. No positive or representative four-category accuracy claim."
+}

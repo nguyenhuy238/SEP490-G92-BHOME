@@ -76,11 +76,48 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
             layout.Add(new Paragraph(template.Fields.Single(f => f.Key == nameof(ContractDocument.Terms)).Label));
             // Plain text, never HTML. Preserve the stored terms; no legal clauses or client PDF are substituted.
             layout.Add(new Paragraph(snapshot.Terms));
+            AddSignatureBlock(pdf, layout, info);
         }
         t.ThrowIfCancellationRequested();
         var bytes = output.ToArray();
         if (bytes.Length > 10 * 1024 * 1024) throw ContractException.Invalid("contract_pdf_invalid");
         return Task.FromResult(bytes);
+    }
+
+    // "Đại diện bên A / bên B" with an empty box under each heading, drawn at fixed positions after the terms, so the
+    // place each party's visible signature goes is known exactly. The boxes are recorded in the document information
+    // (ContractSignatureSlots) and survive the incremental updates the two signatures add.
+    private const float Margin = 36f, Gap = 20f, BlockHeight = 190f, HeadingHeight = 34f, BoxHeight = 135f;
+    private static void AddSignatureBlock(PdfDocument pdf, Document layout, PdfDocumentInfo info)
+    {
+        var area = layout.GetRenderer().GetCurrentArea();
+        var page = area.GetPageNumber();
+        var top = area.GetBBox().GetTop();
+        if (area.GetBBox().GetHeight() < BlockHeight + 10)
+        {
+            pdf.AddNewPage(PageSize.A4);
+            page = pdf.GetNumberOfPages();
+            top = PageSize.A4.GetHeight() - Margin;
+        }
+        var size = pdf.GetPage(page).GetPageSize();
+        var column = (size.GetWidth() - 2 * Margin - Gap) / 2;
+        var headingBottom = top - 10 - HeadingHeight;
+        var boxTop = headingBottom - 4;
+        foreach (var (party, title, left) in new[]
+                 {
+                     (ContractSignatureSlots.Owner, "ĐẠI DIỆN BÊN A (CHỦ NHÀ)", Margin),
+                     (ContractSignatureSlots.Tenant, "ĐẠI DIỆN BÊN B (NGƯỜI THUÊ)", Margin + column + Gap)
+                 })
+        {
+            layout.Add(new Paragraph(title + "\nKý số từ xa qua Viettel MySign").SetFontSize(10)
+                .SetTextAlignment(TextAlignment.CENTER).SetFixedPosition(page, left, headingBottom, column));
+            var box = new iText.Kernel.Pdf.Canvas.PdfCanvas(pdf.GetPage(page));
+            box.SaveState().SetLineWidth(0.5f).SetStrokeColorGray(0.75f).SetLineDash(3, 3)
+                .Rectangle(left, boxTop - BoxHeight, column, BoxHeight).Stroke().RestoreState();
+            var slot = new ContractSignatureSlot(page, (left + column * 0.05f) / size.GetWidth(),
+                (size.GetHeight() - boxTop + 4) / size.GetHeight(), column * 0.9f / size.GetWidth());
+            info.SetMoreInfo(party, slot.Format());
+        }
     }
 
     private Template ResolveTemplate()

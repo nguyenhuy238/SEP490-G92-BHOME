@@ -19,5 +19,7 @@ public interface IPdfSigner
 public sealed record PreparedSignature(byte[] PreparedPdf, string FieldName, byte[] DocumentDigest, byte[] DataToSignDigest);
 
 // Page is 1-based; X, Y and Width are fractions of the page measured from its top-left. With Image (a PNG) the box
-// shows the signer's picture and its height follows the picture's proportions; without, it shows Text.
-public sealed record VisibleSignature(int Page, double X, double Y, double Width, string Text, byte[]? Image = null);
+// shows the signer's picture and its height follows the picture's proportions; without, it shows Text. With
+// CaptionUnderImage the picture is followed by Text ("Ký bởi / Ngày ký"), as a contract's signature block shows both.
+public sealed record VisibleSignature(int Page, double X, double Y, double Width, string Text, byte[]? Image = null,
+    bool CaptionUnderImage = false);

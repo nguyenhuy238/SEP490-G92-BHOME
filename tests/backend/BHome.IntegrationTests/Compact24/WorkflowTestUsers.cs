@@ -12,6 +12,9 @@ internal sealed class SingleOwnerMigrationFixture;
 
 internal static class WorkflowTestUsers
 {
+    // Compact24 has one Owner. Cross-module fixtures must authenticate that same synthetic
+    // account with one password instead of depending on whichever test created it first.
+    internal const string Password = "Synthetic-Workflow!2026";
     internal static async Task<ApplicationUser> CreateAsync(IServiceProvider services, ApplicationUser user, string role, string password)
     {
         var db = services.GetRequiredService<BHomePersistenceContext>();
@@ -30,8 +33,6 @@ internal static class WorkflowTestUsers
         var created = await manager.CreateAsync(user, password);
         Assert.True(created.Succeeded, string.Join(',', created.Errors.Select(e => e.Code)));
         if (!await manager.IsInRoleAsync(user, role)) Assert.True((await manager.AddToRoleAsync(user, role)).Succeeded);
-        if (db is Compact24DbContext && role == "Owner" && !await db.Set<Chain>().AnyAsync())
-        { db.Add(new Chain { Name = "Synthetic Compact24 chain" }); await db.SaveChangesAsync(); }
         return user;
     }
 }

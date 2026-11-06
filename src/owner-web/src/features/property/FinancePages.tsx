@@ -11,6 +11,7 @@ import { currency, dateLabel, matches } from './propertyUtils';
 import { usePropertyMutation } from './usePropertyMutation';
 import { isMockMode } from '../../services/config';
 import { BillingConfigurationPage } from '../invoices/BillingConfigurationPage';
+import { ExpensesApiPage } from '../expenses/ExpensesApiPage';
 
 export function Pricing() {
   if (!isMockMode) return <BillingConfigurationPage />;
@@ -292,6 +293,7 @@ function PriceEditor({
 }
 
 export function Investments() {
+  if (!isMockMode) return <ExpensesApiPage />;
   return <PropertyBoundary>{(db) => <InvestmentContent db={db} />}</PropertyBoundary>;
 }
 function InvestmentContent({ db }: { db: DemoDatabase }) {

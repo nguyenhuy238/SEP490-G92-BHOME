@@ -12,7 +12,7 @@ internal static class MeterReadingParser
     private const string Label = @"(?:chi so(?:\s+(?:cong to|dien|nuoc))?|reading|index|total)\s*:?\s*";
 
     public static (string Value, float Confidence)? Parse(IReadOnlyList<OcrLine> lines,
-        OcrDocumentKind kind, List<string> warnings)
+        OcrDocumentKind? kind, List<string> warnings)
     {
         lines = JoinDigitBoxes(lines);
         var candidates = new List<(string Value, float Confidence, bool Context)>();
@@ -23,13 +23,25 @@ internal static class MeterReadingParser
             var match = Match(text, $@"^(?<label>{Label})?(?:(?<prefix>{Unit})\s*:?\s*)?(?<value>{Number})\s*(?<unit>{Unit})?$");
             if (!match.Success)
             {
+                if (MeterOcrLayout.IsNonBillingQuantity(text)) warnings.Add("billing_register_unverified");
                 unmatchedNumbers |= text.Any(char.IsDigit);
                 continue; // serials, voltage/current, dates, OBIS and malformed decimals
             }
             var unit = match.Groups["unit"].Value;
             var prefix = match.Groups["prefix"].Value;
-            if ((unit.Length > 0 && !MeterOcrLayout.IsCorrectUnit(unit, kind)) ||
-                (prefix.Length > 0 && !MeterOcrLayout.IsCorrectUnit(prefix, kind))) { unmatchedNumbers = true; continue; }
+            if ((kind is { } known && unit.Length > 0 && !MeterOcrLayout.IsCorrectUnit(unit, known)) ||
+                (kind is { } prefixKind && prefix.Length > 0 && !MeterOcrLayout.IsCorrectUnit(prefix, prefixKind)) ||
+                (match.Groups["label"].Value.Contains("dien", StringComparison.OrdinalIgnoreCase) && kind is OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater) ||
+                (match.Groups["label"].Value.Contains("nuoc", StringComparison.OrdinalIgnoreCase) && kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity))
+            { unmatchedNumbers = true; warnings.Add("meter_type_mismatch"); continue; }
+            if (unit.Length == 0 && prefix.Length == 0 && lines.Any(other =>
+                MeterOcrLayout.IsNonBillingUnit(other.Text) &&
+                (line.Bounds is not { } quantity || other.Bounds is { } parameter && MeterOcrLayout.Nearby(quantity, parameter))))
+            {
+                unmatchedNumbers = true;
+                warnings.Add("billing_register_unverified");
+                continue;
+            }
             var contextual = match.Groups["label"].Success || unit.Length > 0 || prefix.Length > 0;
             var score = line.Confidence;
             // Unit can be a separate text box; only associate it with the same nearby display row.
@@ -37,7 +49,8 @@ internal static class MeterReadingParser
             {
                 var units = lines.Where(other => other.Bounds is { } b && MeterOcrLayout.Nearby(bounds, b) &&
                     MeterOcrLayout.IsUnit(other.Text)).ToArray();
-                if (units.Any(other => !MeterOcrLayout.IsCorrectUnit(other.Text, kind))) { unmatchedNumbers = true; continue; }
+                if (kind is { } unitKind && units.Any(other => !MeterOcrLayout.IsCorrectUnit(other.Text, unitKind)))
+                { unmatchedNumbers = true; warnings.Add("meter_type_mismatch"); continue; }
                 if (units.Length > 0)
                 {
                     contextual = true;
@@ -50,14 +63,16 @@ internal static class MeterReadingParser
         }
 
         var selected = candidates.Any(c => c.Context) ? candidates.Where(c => c.Context).ToArray() : candidates.ToArray();
-        var unique = selected.Select(c => c.Value).Distinct().ToArray();
+        if (selected.Length > 1) warnings.Add("multiple_reading_regions");
+        // Equal values at two locations are still two plausible displays/meters. Equality
+        // cannot establish which physical meter belongs to the assigned Room.
         if (!selected.Any(c => c.Context) && unmatchedNumbers)
         {
             warnings.Add("ambiguous_reading");
             return null;
         }
-        if (unique.Length == 1) return (unique[0], selected.Min(c => c.Confidence));
-        warnings.Add(unique.Length > 1 ? "ambiguous_reading" : "reading_not_recognized");
+        if (selected.Length == 1) return (selected[0].Value, selected[0].Confidence);
+        warnings.Add(selected.Length > 1 ? "ambiguous_reading" : "reading_not_recognized");
         return null;
     }
 

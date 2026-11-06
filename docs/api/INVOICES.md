@@ -1,12 +1,17 @@
 # BH-21 — Billing API
 
+Cập nhật **06/11/2026**: runtime Compact24; [trạng thái](API_IMPLEMENTATION_STATUS.md).
+JOB-09/10 đã có trong [Billing automation](BILLING_AUTOMATION.md), chỉ chạy theo plan Owner opt-in
+và quyền được kiểm lại. Notification publisher đã có; email/push thật vẫn Unconfigured.
+
 POST `/api/v1/invoices/{id}/finalize`: Owner, `{ "expectedVersion": n }`.
 Chỉ phát hành từ Draft đã đến ngày Final, đủ readings/rates và khớp input được revalidate
 trong cùng Location/Room lock. Input thay đổi yêu cầu refresh rồi review lại; không âm thầm
 phát hành số tiền mới. Replay/concurrent finalization trả cùng Final; một audit effect.
 DB triggers cấm sửa/xóa/truncate hóa đơn Final, lines và recipient, kiểm tổng khớp lines.
 Hạn thanh toán lấy từ snapshot schedule, không tự áp số ngày sau ngày phát hành.
-Các endpoint này là thao tác Owner; chưa triển khai scheduler JOB-10 hay push/email billing.
+Endpoint finalize trực tiếp là thao tác Owner; automatic Final chỉ qua delegation Owner đã lưu.
+Không có lịch mặc định tự phát hành thay Owner khi chưa cấu hình/ủy quyền.
 
 Nguồn nghiệp vụ: [quyết định và traceability](../development/BH21_TRACEABILITY.md).
 Thay DBR-06 bằng unique Room + tháng theo quyết định người dùng 01/11/2026.
@@ -24,6 +29,7 @@ Final total vẫn là số tiền đã phát hành; effective balance đọc qua
 | POST   | `/invoices/drafts`                        | Owner; roomId, billingPeriod YYYY-MM-01, representativeContractId         |
 | GET    | `/invoices?page=1&pageSize=20&roomId=...` | Owner/Tenant, lọc quyền trước count/page                                  |
 | GET    | `/invoices/{id}`                          | Owner/Tenant, ngoài phạm vi 404                                           |
+| POST   | `/invoices/{id}/finalize`                 | Owner; expectedVersion; revalidate trước Final                            |
 | POST   | `/invoices/{id}/refresh`                  | Owner; expectedVersion; chỉ Draft, thay dòng từ input hiện tại            |
 | GET    | `/capture/meter-tasks/{id}`               | Owner/Staff hiện được giao Location                                       |
 | GET    | `/capture/readings/{id}`                  | Owner/Staff, confirmedValue/previousValue/consumption dạng decimal string |
@@ -54,5 +60,11 @@ Client giữ nguyên độ chính xác, chỉ format dấu phân cách Việt Na
 403 role, 404 scoped lookup, 409 missing configuration/stale/duplicate/state. Lỗi theo
 ProblemDetails, không chứa input tài chính nhạy cảm, credential hoặc danh sách Tenant khác.
 
-Thay đổi schema dùng migration, chỉ kiểm chứng trên database Testcontainers/Development riêng.
-Rollback chặn khi đã có billing data hoặc nhiều Active contracts/phòng; không xóa dữ liệu để rollback.
+Runtime lưu dữ liệu trong Compact24, không cần tạo lại các bảng billing của persistence legacy.
+Các ghi chú EF migration/rollback trong delivery note ban đầu thuộc lịch sử; không dùng làm lệnh
+triển khai Compact24. Hồi quy hiện dùng database PostgreSQL disposable, không database làm việc.
+
+Chuỗi browser tổng hợp đã kiểm một Main Contract có representative và hai co-occupants → một
+Invoice/ba recipients, không nhân tiền thuê theo số người, rồi partial payment và Adjustment sau
+Final giữ nguyên issued DTO. Staff/Tenant đi qua MobileApi transport thật; chưa nghiệm thu UI
+native hoặc delivery ngoài hệ thống. Bằng chứng: [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).

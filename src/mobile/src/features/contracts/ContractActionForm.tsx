@@ -1,6 +1,6 @@
 import { conciseMessage } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
 import {
   actionPayload,
@@ -18,6 +18,16 @@ import { useSigningCertificates } from '../../../../../packages/client-core/src/
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
+import {
+  signingClient,
+  signingError,
+  signingPayload,
+} from '../../../../../packages/client-core/src/signing';
+import {
+  SignatureImageSection,
+  SignaturePlacementField,
+  type PlacementChoice,
+} from './SigningSetup';
 
 export function ContractActionForm({
   api,
@@ -52,6 +62,9 @@ export function ContractActionForm({
       !!directory.error ||
       !selectedCertificate ||
       !canUseCertificate(selectedCertificate));
+  const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
+  const signing = useMemo(() => signingClient(api.transport), [api]);
+  const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
   const [readings, setReadings] = useState<FinalMeterTask[]>([]);
   const lock = useRef(false);
   useEffect(() => {
@@ -87,7 +100,9 @@ export function ContractActionForm({
       return;
     let body;
     try {
-      body = actionPayload(action, values, contract, evidenceIds);
+      body = remoteSigning
+        ? signingPayload(values.certificateId ?? '', choice.placement, choice.usePicture)
+        : actionPayload(action, values, contract, evidenceIds);
     } catch (e) {
       setError((e as Error).message);
       return;
@@ -197,6 +212,16 @@ export function ContractActionForm({
           >
             Tải lại chứng thư
           </Button>
+          <SignaturePlacementField
+            signing={signing}
+            contractId={contract.id}
+            value={choice}
+            onChange={(next) => {
+              setChoice(next);
+              setChecked(false);
+            }}
+            disabled={busy}
+          />
         </>
       )}
       {action.operation === 'move-out/inspection' && (
@@ -233,6 +258,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
     [notice, setNotice] = useFeedbackState('success');
   const lock = useRef(false);
   const directory = useSigningCertificates(api, open);
+  const signing = useMemo(() => signingClient(api.transport), [api]);
   async function run(work: () => Promise<unknown>, message: string) {
     if (lock.current) return;
     lock.current = true;
@@ -246,7 +272,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
       setNotice(message);
       directory.reload();
     } catch (e) {
-      setError(contractError(e));
+      setError(signingError(e));
       directory.reload();
     } finally {
       lock.current = false;
@@ -298,6 +324,14 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
               >
                 {c.locked ? 'Mở khóa chứng thư' : 'Khóa chứng thư'}
               </Button>
+              <Button
+                disabled={busy || directory.loading}
+                onPress={() =>
+                  void run(() => signing.removeCertificate(c.id), 'Đã gỡ chứng thư khỏi BHOME.')
+                }
+              >
+                Gỡ chứng thư
+              </Button>
             </Box>
           ))}
           <Button disabled={busy || directory.loading} onPress={directory.reload}>
@@ -323,6 +357,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
           >
             Tra cứu và lưu chứng thư
           </Action>
+          <SignatureImageSection signing={signing} />
         </>
       )}
     </>

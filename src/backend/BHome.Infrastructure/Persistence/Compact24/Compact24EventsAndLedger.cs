@@ -23,6 +23,15 @@ public sealed partial class Compact24DbContext
         };
         var id = entry.Metadata.FindProperty("Id") is not null ? (Guid)entry.Property("Id").CurrentValue! : DeterministicId(spec.Name + "/" + key);
         var inbox = entry.Entity as BHome.Domain.Notifications.UserNotification;
+        if (entry.Entity is BHome.Domain.IncidentMaintenance.IncidentNotification incidentNotice && entry.State == EntityState.Modified)
+        {
+            if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not
+                ("ReadAt" or "DeliveryState" or "DeliveryReference" or "DeliveryError" or "UpdatedAt")))
+                throw new InvalidOperationException("Incident notification event is immutable.");
+            await ExecuteAsync("UPDATE notifications SET read_at=@read,delivery_status=@status,delivery_history=delivery_history||jsonb_build_array(@envelope::jsonb) WHERE id=@id AND record_kind='OUTBOX'", token,
+                ("id", id), ("read", incidentNotice.ReadAt), ("status", incidentNotice.DeliveryState), ("envelope", envelope));
+            return;
+        }
         if (entry.Entity is BHome.Domain.StaffOperations.OperationalTaskNotification taskNotice && entry.State == EntityState.Modified)
         {
             if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not ("ReadAt" or "UpdatedAt")))
@@ -104,7 +113,7 @@ public sealed partial class Compact24DbContext
         var invoice = await Set<Invoice>().SingleAsync(i => i.Id == allocation.InvoiceId, token);
         var paid = await Set<PaymentAllocation>().Where(a => a.InvoiceId == allocation.InvoiceId).SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
         var adjustments = await Set<InvoiceAdjustmentDecision>().Where(d => d.InvoiceId == allocation.InvoiceId && d.Outcome == "Approved" && d.InvoiceStatus == InvoiceStatus.Final).SumAsync(d => (decimal?)d.Delta, token) ?? 0m;
-        if (invoice.Status != InvoiceStatus.Final || transfer.Amount != allocation.Amount || allocation.Amount != invoice.Total + adjustments - paid ||
+        if (invoice.Status != InvoiceStatus.Final || allocation.Amount <= 0 || allocation.Amount != Math.Min(transfer.Amount, invoice.Total + adjustments - paid) ||
             await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
     }
 

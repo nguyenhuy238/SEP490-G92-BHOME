@@ -159,7 +159,19 @@ public sealed class Compact24MigrationTests
         await using var pair = await Pair.Create();
         using var sourceHost = new ApiFactory { ConnectionString = pair.Source.Database.GetConnectionString()! };
         var fixture = new AuthenticationDatabaseFixture(sourceHost);
-        await new BHome.IntegrationTests.PropertyManagement.PropertyApiTests(fixture).FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots();
+        await using (var scope = sourceHost.Services.CreateAsyncScope())
+        {
+            var account = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
+                new ApplicationUser { UserName = "synthetic-import-owner", Email = "synthetic-import-owner@example.invalid" }, "Owner", "Synthetic!Import-493");
+            var location = new Location("Synthetic historical property") { ChainId = await pair.Source.Set<Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
+            var asset = new Asset { LocationId = location.Id, Name = "Synthetic asset", Category = "Equipment", Condition = "Good", CommonArea = "Lobby" };
+            pair.Source.AddRange(location, asset, new PropertyChange
+            {
+                ActorId = account.Id, LocationId = location.Id, TargetId = asset.Id, TargetType = "Asset", Action = "Created",
+                Reason = "Synthetic import", After = "{\"condition\":\"Good\"}", OccurredAt = DateTimeOffset.UtcNow
+            });
+            await pair.Source.SaveChangesAsync();
+        }
         var owner = await pair.Source.UserRoles.Where(r => r.RoleId == Guid.Parse("00000000-0000-0000-0000-000000000001")).Select(r => r.UserId).SingleAsync();
         pair.Source.Add(new BHome.Domain.PaymentsDebt.ReceivingBankAccount
         {

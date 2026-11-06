@@ -6,6 +6,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -13,10 +14,30 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
-    public async Task<Chain?> GetSystemChainAsync(CancellationToken token)
+    public async Task<Guid?> LegacySystemChainIdAsync(CancellationToken token)
     {
-        var id = await db.Set<Chain>().Select(x => (Guid?)x.Id).SingleOrDefaultAsync(token);
-        return id.HasValue ? await FindAsync<Chain>(id.Value, token) : null;
+        if (db is Compact24DbContext) return null;
+        return await db.Set<Chain>().Select(x => (Guid?)x.Id).SingleOrDefaultAsync(token);
+    }
+
+    public async Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomId, DateOnly today,
+        CancellationToken token)
+    {
+        var rooms = db.Set<Room>().Where(r => r.LocationId == locationId &&
+            (!roomId.HasValue || r.Id == roomId)).Select(r => r.Id);
+        var contracts = db.Set<Contract>().Where(c => rooms.Contains(c.RoomId));
+        var residents = await db.Set<Resident>().AnyAsync(r => rooms.Contains(r.RoomId), token);
+        var occupancy = await contracts.AnyAsync(c => c.Status == ContractStatus.Active &&
+            c.Residents.Any(r => r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
+        var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
+        // Status alone is not a reservation. Protect signed evidence or verified money;
+        // do not infer a Holding Contract or replace activation's stricter readiness checks.
+        var pending = await contracts.AnyAsync(c =>
+            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation) &&
+            (c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
+                s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
+             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0)), token);
+        return new(residents, occupancy, active, pending);
     }
     public async Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity
     {
@@ -50,7 +71,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     }
     public async Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token) =>
         await db.Set<BillingPolicy>().AsNoTracking().Where(x => x.LocationId == room.LocationId &&
-            (x.RoomId == room.Id || x.RoomTypeId == room.RoomTypeId && x.RoomTypeId != null || x.RoomId == null && x.RoomTypeId == null) &&
+            (x.RoomId == room.Id || x.RoomId == null) && x.RoomTypeId == null &&
             x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date)).ToArrayAsync(token);
 
     public async Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token)

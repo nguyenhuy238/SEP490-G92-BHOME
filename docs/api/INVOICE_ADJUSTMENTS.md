@@ -1,5 +1,8 @@
 # UC-24 — Invoice Adjustment API
 
+Cập nhật **06/11/2026**: runtime Compact24; [trạng thái](API_IMPLEMENTATION_STATUS.md).
+Correction Draft và effect Final giữ nguyên hai cơ chế riêng; không ghi đè hóa đơn đã Final.
+
 Tiền VND nguyên, truyền chuỗi decimal; lỗi ProblemDetails có code. Mọi JSON POST cần GUID
 Idempotency-Key, cùng actor/operation/key/payload replay, đổi payload 409. Authentication bắt buộc.
 
@@ -18,7 +21,8 @@ sau 24 giờ; linked evidence và request/event/command giữ append-only. Staff
 
 Co-Tenant không xem reason/evidence/request cá nhân của người khác; quyền xem số dư chung không
 mở quyền xem yêu cầu riêng. Durable event `invoice.adjustment.requested.v1` có
-`{requestId,invoiceId,requesterId,occurredAt}`, key requestId+name. Notification consumer pending.
+`{requestId,invoiceId,requesterId,occurredAt}`, key requestId+name. `notification-publish` đã consume
+requested/decided vào inbox theo [NOTIFICATIONS.md](NOTIFICATIONS.md); external provider chưa cấu hình.
 
 Owner POST `/invoice-adjustments/{id}/approve` hoặc `/reject` dùng permission
 `invoice-adjustments.approve`, body `{expectedVersion:1, expectedInvoiceVersion,
@@ -57,3 +61,8 @@ entitlement Tenant; invoice xem nhờ assignment Staff vẫn dùng DTO giới h�
 Snapshot mới lưu số tiền dạng chuỗi decimal, không đưa qua JavaScript Number. Canonicalize
 proposedAmount trước fingerprint để retry số VND cùng giá trị không xung đột vì decimal scale.
 Mobile Web chọn ảnh PNG/JPEG, xem trước rồi upload; native tái sử dụng camera/review hiện có.
+
+`potentialExcessAmount` do giảm payable sau Paid tiếp tục PendingReview; [Refund API](REFUNDS.md)
+hiện chỉ hoàn phần receipt chưa phân bổ, chưa xử lý khoản dư đang nằm trong allocation cũ.
+Không tạo allocation âm hoặc tự hoàn khoản này. Browser tổng hợp đã kiểm co-occupant gửi evidence,
+Owner approve và ba số dư cập nhật, issued Invoice không đổi; chưa nghiệm thu camera/native UI.

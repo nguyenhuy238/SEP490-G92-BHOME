@@ -16,6 +16,9 @@ public sealed class ContractSigningCertificatesController(SigningCertificateServ
     [HttpPost]
     public async Task<IActionResult> Declare(ContractCertificateInput x, CancellationToken t)
         => StatusCode(201, await service.DeclareAsync(new DeclareCertificate(x.ProviderUserId, x.SerialNumber), t));
+    // Refused (409 certificate_has_contract_history) once the certificate signed or was asked to sign a contract.
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Remove(Guid id, CancellationToken t) { await service.RemoveAsync(id, t); return NoContent(); }
     [HttpPost("{id:guid}/lock")]
     public async Task<IActionResult> Lock(Guid id, ContractCertificateLockInput x, CancellationToken t)
     { await service.LockAsync(id, x.Locked, t); return NoContent(); }

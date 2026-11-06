@@ -7,7 +7,7 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 public static class Compact24Schema
 {
-    public const string Version = "compact24-2026-11-04";
+    public const string Version = "compact24-2026-11-04-location-room";
     private static readonly string Script = ReadScript();
     public static string ScriptSha256 { get; } = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Script)));
     private static readonly string[] Tables = Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal).ToArray();
@@ -46,7 +46,7 @@ public static class Compact24Schema
             while (await reader.ReadAsync(token)) columns.Add($"{reader.GetString(0)}.{reader.GetString(1)}:{reader.GetString(2)}:{reader.GetBoolean(3)}");
         }
         var expected = ExpectedColumns();
-        if (columns.Count != 386 || !columns.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal)) ||
+        if (columns.Count != expected.Length || !columns.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal)) ||
             !columns.Select(c => c.Split('.')[0]).Distinct().Order(StringComparer.Ordinal).SequenceEqual(Tables)) return false;
         var foreignKeys = new List<string>();
         await using (var query = new NpgsqlCommand("""

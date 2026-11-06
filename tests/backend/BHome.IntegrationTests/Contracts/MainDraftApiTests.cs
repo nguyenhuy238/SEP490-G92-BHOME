@@ -25,7 +25,7 @@ using iText.Kernel.Pdf;
 namespace BHome.IntegrationTests.Contracts;
 
 [Trait("Category", "Docker")]
-public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
+public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
 {
     private const string Root = "/api/v1/contracts/main-drafts";
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
@@ -48,14 +48,13 @@ public sealed class MainDraftApiTests(ContractFixture fixture) : IClassFixture<C
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var outside = await User(Roles.Staff);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var location = new Location("SYNTHETIC DRAFT LOCATION") { Address = "Địa chỉ kiểm thử tổng hợp", ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
-        var type = new RoomType { LocationId = location.Id, Name = "SYNTHETIC", DefaultCapacity = 3 };
-        var room = new Room { LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = "TEST-DRAFT", Capacity = 3, Status = RoomStatus.Available };
+        var location = new Location("SYNTHETIC DRAFT LOCATION") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Địa chỉ kiểm thử tổng hợp", IsActive = true };
+        var room = new Room { LocationId = location.Id, RoomNumber = "TEST-DRAFT", Capacity = 3, Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "SYNTHETIC RESIDENT", VerificationStatus = verified ? IdentityVerificationStatus.Verified : IdentityVerificationStatus.Pending };
         var identity = new IdentityConfirmation(true, "000000000123", "NGƯỜI KIỂM THỬ", new(2000, 1, 2), "Địa chỉ thường trú kiểm thử", "TEST", null, null, new(2021, 6, 15), new(2030, 1, 1));
         var bytes = JsonSerializer.SerializeToUtf8Bytes(identity);
         try { resident.IdentityData = JsonSerializer.Serialize(scope.ServiceProvider.GetRequiredService<IIdentityProtection>().Encrypt(bytes, new(owner.Id, resident.Id))); } finally { CryptographicOperations.ZeroMemory(bytes); }
-        db.AddRange(location, type, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-5), Today.AddDays(500)));
+        db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-5), Today.AddDays(500)));
         if (prices) foreach (var (code, category, rate) in new[] { ("RENT", ChargeCategory.Rent, 3100000m), ("ELECTRICITY", ChargeCategory.Electricity, 3500m), ("WATER", ChargeCategory.Water, 18000m) }) db.Add(new BillingPolicy { LocationId = location.Id, Category = category, ChargeCode = code, Name = code, Rate = rate, Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered, EffectiveFrom = Today.AddDays(-1) });
         await db.SaveChangesAsync();
         if (settings)

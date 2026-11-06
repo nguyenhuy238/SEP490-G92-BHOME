@@ -28,6 +28,7 @@ import { LocationRoomsTab } from '../components/tabs/LocationRoomsTab';
 import { LocationRulesTab } from '../components/tabs/LocationRulesTab';
 import { LocationSettingsTab } from '../components/tabs/LocationSettingsTab';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
+import { isMockMode } from '../../../services/config';
 
 const LOCATION_WORKSPACE_TABS = [
   ['overview', 'Tổng quan', Building2],
@@ -61,6 +62,10 @@ export function LocationWorkspace() {
       portal.setSearch('');
     }
   }, [locationId, portal]);
+
+  // Finance has its own real API data source. The Location prototype provider must
+  // not prevent the implemented finance child route from loading in API mode.
+  if (!isMockMode && activeTab === 'investment') return <Outlet />;
 
   if (query.isPending) return <LoadingState />;
   if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
@@ -189,7 +194,8 @@ export function LocationWorkspace() {
       )}
 
       {/* If any other route was triggered */}
-      {!LOCATION_WORKSPACE_TABS.some(([key]) => key === activeTab) && <Outlet />}
+      {(activeTab === 'investment' ||
+        !LOCATION_WORKSPACE_TABS.some(([key]) => key === activeTab)) && <Outlet />}
 
       {/* Integrated Setup & Copy Modals */}
       <InitialLocationSetupWizard

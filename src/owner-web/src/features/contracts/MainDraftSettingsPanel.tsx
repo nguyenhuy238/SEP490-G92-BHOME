@@ -41,6 +41,7 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
   const [locations, setLocations] = useState<{ id: string; label: string }[]>([]);
   const [value, setValue] = useState<MainContractSettings | null>(null);
   const [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(false),
     [error, setError] = useState(''),
     [success, setSuccess] = useState(false);
   const lock = useRef(false);
@@ -87,6 +88,9 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(contractError(e));
+      })
+      .finally(() => {
+        if (!c.signal.aborted) setLoading(false);
       });
     return () => c.abort();
   }, [location, open, request, session]);
@@ -122,7 +126,15 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
   ] as const;
   return (
     <>
-      <Button variant="outlined" onClick={() => setOpen(true)}>
+      <Button
+        variant="outlined"
+        onClick={() => {
+          setError('');
+          setSuccess(false);
+          setLoading(!!location);
+          setOpen(true);
+        }}
+      >
         Cấu hình bên cho thuê & tiền cọc
       </Button>
       <Dialog
@@ -138,86 +150,108 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
       >
         <DialogTitle>Cấu hình hợp đồng nháp theo cơ sở</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Alert severity="info">
-              Chỉ Owner cập nhật thông tin của mình. Staff đọc thông tin áp dụng khi lập nháp; không
-              cấp tài khoản hoặc kích hoạt hợp đồng.
-            </Alert>
-            {!!error && <Alert severity="error">{error}</Alert>}
-            {success && <Alert severity="success">Đã lưu cấu hình.</Alert>}
-            <TextField
-              select
-              label="Cơ sở"
-              value={location}
-              disabled={busy}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                setValue(null);
-                setSuccess(false);
-                setError('');
-              }}
-            >
-              {locations.map((l) => (
-                <MenuItem key={l.id} value={l.id}>
-                  {l.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            {value && (
-              <>
-                {ownerFields.map(([key, label, type]) => (
+          <form
+            id="main-contract-settings"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+          >
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Alert severity="info">
+                Chỉ Owner cập nhật thông tin của mình. Staff đọc thông tin áp dụng khi lập nháp;
+                không cấp tài khoản hoặc kích hoạt hợp đồng.
+              </Alert>
+              {!!error && <Alert severity="error">{error}</Alert>}
+              {success && <Alert severity="success">Đã lưu cấu hình.</Alert>}
+              {loading && <Alert severity="info">Đang tải cấu hình…</Alert>}
+              <TextField
+                select
+                label="Cơ sở"
+                value={location}
+                disabled={busy}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  setValue(null);
+                  setLoading(true);
+                  setSuccess(false);
+                  setError('');
+                }}
+              >
+                {locations.map((l) => (
+                  <MenuItem key={l.id} value={l.id}>
+                    {l.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {value && (
+                <>
+                  {ownerFields.map(([key, label, type]) => (
+                    <TextField
+                      key={key}
+                      label={label}
+                      type={type}
+                      value={value.owner[key]}
+                      disabled={busy}
+                      required
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      onChange={(e) =>
+                        setValue((v) => v && { ...v, owner: { ...v.owner, [key]: e.target.value } })
+                      }
+                    />
+                  ))}
                   <TextField
-                    key={key}
-                    label={label}
-                    type={type}
-                    value={value.owner[key]}
+                    label="Hiệu lực từ"
+                    type="date"
+                    value={value.effectiveFrom}
                     disabled={busy}
                     required
                     slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(e) => setValue((v) => v && { ...v, effectiveFrom: e.target.value })}
+                  />
+                  <TextField
+                    label="Hiệu lực đến (nếu có)"
+                    type="date"
+                    value={value.effectiveTo ?? ''}
+                    disabled={busy}
+                    slotProps={{ inputLabel: { shrink: true } }}
                     onChange={(e) =>
-                      setValue((v) => v && { ...v, owner: { ...v.owner, [key]: e.target.value } })
+                      setValue((v) => v && { ...v, effectiveTo: e.target.value || null })
                     }
                   />
-                ))}
-                <TextField
-                  label="Hiệu lực từ"
-                  type="date"
-                  value={value.effectiveFrom}
-                  required
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  onChange={(e) => setValue((v) => v && { ...v, effectiveFrom: e.target.value })}
-                />
-                <TextField
-                  label="Hiệu lực đến (nếu có)"
-                  type="date"
-                  value={value.effectiveTo ?? ''}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  onChange={(e) =>
-                    setValue((v) => v && { ...v, effectiveTo: e.target.value || null })
-                  }
-                />
-                <TextField
-                  label="Tiền cọc đảm bảo (VND)"
-                  value={value.securityDeposit}
-                  required
-                  onChange={(e) => setValue((v) => v && { ...v, securityDeposit: e.target.value })}
-                />
-                <TextField
-                  label="Hình thức / chính sách thanh toán"
-                  value={value.paymentTerms}
-                  required
-                  multiline
-                  onChange={(e) => setValue((v) => v && { ...v, paymentTerms: e.target.value })}
-                />
-                <TextField
-                  label="Điều khoản bổ sung của Owner"
-                  value={value.additionalTerms}
-                  multiline
-                  onChange={(e) => setValue((v) => v && { ...v, additionalTerms: e.target.value })}
-                />
-              </>
-            )}
-          </Stack>
+                  <TextField
+                    label="Tiền cọc đảm bảo (VND)"
+                    value={value.securityDeposit}
+                    disabled={busy}
+                    slotProps={{
+                      htmlInput: { inputMode: 'numeric', pattern: '[0-9]+', maxLength: 18 },
+                    }}
+                    required
+                    onChange={(e) =>
+                      setValue((v) => v && { ...v, securityDeposit: e.target.value })
+                    }
+                  />
+                  <TextField
+                    label="Hình thức / chính sách thanh toán"
+                    value={value.paymentTerms}
+                    disabled={busy}
+                    required
+                    multiline
+                    onChange={(e) => setValue((v) => v && { ...v, paymentTerms: e.target.value })}
+                  />
+                  <TextField
+                    label="Điều khoản bổ sung của Owner"
+                    value={value.additionalTerms}
+                    disabled={busy}
+                    multiline
+                    onChange={(e) =>
+                      setValue((v) => v && { ...v, additionalTerms: e.target.value })
+                    }
+                  />
+                </>
+              )}
+            </Stack>
+          </form>
         </DialogContent>
         <DialogActions>
           <Button
@@ -229,7 +263,12 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
           >
             Đóng
           </Button>
-          <Button variant="contained" disabled={busy || !value} onClick={() => void save()}>
+          <Button
+            variant="contained"
+            type="submit"
+            form="main-contract-settings"
+            disabled={busy || loading || !value}
+          >
             {busy ? 'Đang lưu…' : 'Lưu cấu hình'}
           </Button>
         </DialogActions>

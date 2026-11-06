@@ -69,9 +69,10 @@ trust store, và luồng duyệt hồ sơ cấp trên.
 
 ## API
 
-Bảng này mô tả API của module độc lập/sandbox. Backend BHOME chính chỉ công khai
-GET/POST certificates và POST certificates/{id}/lock cho Owner/Tenant, cùng các API
-ký/sync/recover/document của Contract. Staff không được ký hợp đồng hoặc quản lý chứng thư
+Bảng này mô tả API của module độc lập/sandbox. Backend BHOME chính (06/11/2026) công khai cho Owner/Tenant:
+certificates (GET/POST/DELETE, lock), signature-image (GET/PUT/DELETE, generate), settings/viettel (chỉ Owner),
+cùng các API ký/layout/pages/sync/recover/document của Contract; xem
+[bàn giao cập nhật](../../docs/development/DIGITAL_SIGNING_COMPLETION.md). Staff không được ký hợp đồng hoặc quản lý chứng thư
 qua các controller của backend chính. Không đăng ký toàn bộ controller sandbox vào production.
 
 | Method         | Đường dẫn                                            | Quyền              | Việc                                                                                    |

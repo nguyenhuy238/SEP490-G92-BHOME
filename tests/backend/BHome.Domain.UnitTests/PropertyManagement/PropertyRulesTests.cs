@@ -4,6 +4,18 @@ namespace BHome.Domain.UnitTests.PropertyManagement;
 
 public sealed class PropertyRulesTests
 {
+    [Theory]
+    [InlineData(RoomStatus.Available, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, true)]
+    [InlineData(RoomStatus.Occupied, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, true)]
+    [InlineData(RoomStatus.Unavailable, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, false)]
+    [InlineData(RoomStatus.OnHold, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, false)]
+    [InlineData(RoomStatus.Occupied, RoomStatus.Available, RoomTransitionSource.ContractTermination, true, false)]
+    [InlineData(RoomStatus.Occupied, RoomStatus.Occupied, RoomTransitionSource.ContractTermination, true, true)]
+    [InlineData(RoomStatus.Occupied, RoomStatus.Available, RoomTransitionSource.ContractTermination, false, true)]
+    public void SharedTransitionsPreserveWorkflowAndRemainingContracts(RoomStatus current, RoomStatus requested,
+        RoomTransitionSource source, bool otherActive, bool allowed) =>
+        Assert.Equal(allowed, PropertyRules.CanChangeRoomStatus(current, requested, source, hasOtherActiveContracts: otherActive));
+
     [Fact]
     public void UsageRecordsFirstUtcInstantAndDoesNotRewriteItOnRetry()
     {

@@ -1,6 +1,6 @@
-param([string]$EnvironmentFile = '.env', [switch]$Check, [switch]$RecreateDatabase)
+param([string]$EnvironmentFile = '.env', [switch]$Check, [switch]$RecreateDatabase, [switch]$UpgradePropertySchema, [switch]$InspectSchema)
 $ErrorActionPreference = 'Stop'
-if ($Check -and $RecreateDatabase) { throw 'Use either -Check or -RecreateDatabase.' }
+if (@($Check, $RecreateDatabase, $UpgradePropertySchema, $InspectSchema).Where({ $_ }).Count -gt 1) { throw 'Select only one database operation.' }
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 $configurationPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $repo $EnvironmentFile }
@@ -30,9 +30,11 @@ try {
     $runnerArguments = @($runner)
     if ($Check) { $runnerArguments += '--check' }
     if ($RecreateDatabase) { $runnerArguments += '--archive-legacy' }
+    if ($UpgradePropertySchema) { $runnerArguments += '--upgrade-property-schema' }
+    if ($InspectSchema) { $runnerArguments += '--inspect-schema' }
     & dotnet @runnerArguments
     if ($Check -and $LASTEXITCODE -eq 2) { return }
-    if ($LASTEXITCODE -ne 0) { throw 'Compact24 preparation failed. Use -Check to inspect; -RecreateDatabase explicitly archives a legacy database without dropping it.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Compact24 preparation failed. Use -Check to inspect. PROPERTY_UPGRADE_REQUIRED needs a backup, a stopped API and -UpgradePropertySchema; populated retired catalog data must be migrated explicitly. -RecreateDatabase is only for an explicitly approved legacy archive, not a property upgrade.' }
 } finally {
     $env:ConnectionStrings__Database = $previousConnection
     $env:DOTNET_ENVIRONMENT = $previousEnvironment

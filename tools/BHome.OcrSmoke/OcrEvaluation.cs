@@ -25,6 +25,7 @@ internal static class OcrEvaluation
         var times = new List<long>();
         var matched = 0; var rejected = 0; var falseProposals = 0; var fallbacks = 0;
         var incorrectFields = 0; var missingFields = 0;
+        var meterPositives = 0; var exactReadings = 0; var meterProposals = 0; var falseReadings = 0;
         var fields = new Dictionary<string, (int Correct, int Total)>();
         var engineVersions = new HashSet<string>();
         for (var index = 0; index < manifest.Cases.Count; index++)
@@ -51,6 +52,17 @@ internal static class OcrEvaluation
                 proposal = MeterReadingPrecision.Apply(proposal, sample.DecimalPlaces);
             times.Add(clock.ElapsedMilliseconds);
             if (proposal.IsFallback) fallbacks++;
+            if (sample.Kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
+            {
+                if (!sample.ExpectFallback) meterPositives++;
+                if (proposal.ProposedFields.TryGetValue("reading", out var proposedReading))
+                {
+                    meterProposals++;
+                    if (!sample.ExpectFallback && sample.ExpectedFields.TryGetValue("reading", out var expectedReading) &&
+                        proposedReading == expectedReading) exactReadings++;
+                    else falseReadings++;
+                }
+            }
             var fieldResults = sample.ExpectedFields.ToDictionary(field => field.Key,
                 field => proposal.ProposedFields.TryGetValue(field.Key, out var actual) && actual == field.Value);
             incorrectFields += fieldResults.Count(field => !field.Value && proposal.ProposedFields.ContainsKey(field.Key));
@@ -101,6 +113,19 @@ internal static class OcrEvaluation
             incorrectExpectedFields = incorrectFields,
             missingExpectedFields = missingFields,
             fallbacks,
+            meterProposalMetrics = new
+            {
+                positiveCases = meterPositives,
+                exactReadings,
+                emittedReadings = meterProposals,
+                falseReadings,
+                // Denominators are explicit: missing readings reduce exact accuracy;
+                // a wrong emitted value counts even on a positive image, not just negatives.
+                exactReadingAccuracyPercent = meterPositives == 0 ? (decimal?)null : decimal.Round(100m * exactReadings / meterPositives, 2),
+                falseReadingRatePercent = meterProposals == 0 ? (decimal?)null : decimal.Round(100m * falseReadings / meterProposals, 2)
+            },
+            proposalOrFallbackWithin10Seconds = times.Count(milliseconds => milliseconds <= 10_000),
+            maxMilliseconds = times.Max(),
             profiles,
             fieldAccuracy = fields.ToDictionary(field => field.Key, field => new
             {

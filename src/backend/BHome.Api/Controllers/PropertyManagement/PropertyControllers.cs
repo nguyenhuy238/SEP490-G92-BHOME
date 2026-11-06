@@ -5,21 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BHome.Api.Controllers.PropertyManagement;
 
-[ApiController, Route("api/v1/room-types"), Authorize(Policy = Permissions.Property.View)]
-[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(32768)]
-public sealed class RoomTypesController(PropertyService service) : ControllerBase
-{
-    [HttpGet] public Task<PagedResult<RoomTypeDto>> List([FromQuery] PropertyQuery q, CancellationToken t) => service.RoomTypesAsync(q, t);
-    [HttpGet("{id:guid}")] public Task<RoomTypeDto> Get(Guid id, CancellationToken t) => service.GetRoomTypeAsync(id, t);
-    [HttpPost, Authorize(Policy = Permissions.Property.Manage)]
-    public async Task<ActionResult<RoomTypeDto>> Create(RoomTypeWrite input, CancellationToken t)
-    {
-        var x = await service.SaveRoomTypeAsync(null, input, t); return CreatedAtAction(nameof(Get), new { id = x.Id }, x);
-    }
-    [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
-    public Task<RoomTypeDto> Update(Guid id, RoomTypeWrite input, CancellationToken t) => service.SaveRoomTypeAsync(id, input, t);
-}
-
 [ApiController, Route("api/v1/rooms"), Authorize(Policy = Permissions.Property.View)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(32768)]
 public sealed class RoomsController(PropertyService service) : ControllerBase
@@ -28,6 +13,13 @@ public sealed class RoomsController(PropertyService service) : ControllerBase
     [HttpGet("{id:guid}")] public Task<RoomDto> Get(Guid id, CancellationToken t) => service.GetRoomAsync(id, t);
     [HttpGet("{id:guid}/prices")]
     public Task<ResolvedPrices> Prices(Guid id, [FromQuery] DateOnly effectiveOn, CancellationToken t) => service.ResolvePricesAsync(id, effectiveOn, t);
+    [HttpGet("{id:guid}/readiness")]
+    public Task<RoomReadinessDto> Readiness(Guid id, [FromQuery] RoomReadinessPurpose purpose,
+        [FromQuery] Guid? contractId, [FromQuery] DateOnly? effectiveOn, CancellationToken t) =>
+        service.RoomReadinessAsync(id, purpose, contractId, effectiveOn, t);
+    [HttpGet("{id:guid}/history")]
+    public Task<RoomHistoryPage> History(Guid id, [FromQuery] RoomHistoryQuery query, CancellationToken t) =>
+        service.RoomHistoryAsync(id, query, t);
     [HttpPost, Authorize(Policy = Permissions.Property.Manage)]
     public async Task<ActionResult<RoomDto>> Create(RoomWrite input, CancellationToken t)
     {
@@ -50,6 +42,8 @@ public sealed class AssetsController(PropertyService service) : ControllerBase
     }
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
     public Task<AssetDto> Update(Guid id, AssetWrite input, CancellationToken t) => service.SaveAssetAsync(id, input, t);
+    [HttpPatch("{id:guid}/condition"), Authorize(Policy = Permissions.Assets.UpdateCondition)]
+    public Task<AssetDto> UpdateCondition(Guid id, AssetConditionUpdate input, CancellationToken t) => service.UpdateAssetConditionAsync(id, input, t);
 }
 
 [ApiController, Route("api/v1/billing-policies"), Authorize(Policy = Permissions.Property.View)]

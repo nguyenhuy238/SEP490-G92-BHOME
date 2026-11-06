@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -22,6 +23,109 @@ namespace BHome.IntegrationTests.Ocr;
 // Test-only principal/resource/assignment adapters, never shipped or used as production auth evidence.
 public sealed class OcrApiTests
 {
+    [LocalMeterModelsFact]
+    public async Task RealModelsReadWaterThroughDiagnosticHttpAndResolveElectricLabelWithoutPersistence()
+    {
+        var directory = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
+        var options = new OcrOptions { Enabled = true, ModelDirectory = Path.Combine(directory, ".tools/ocr-models"),
+            MeterDetectionMinConfidence = .7f, MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true,
+                ModelDirectory = Path.Combine(directory, ".tools/meter-detection-models") } };
+        using var detector = new YoloMeterSceneDetector(options);
+        using var digits = new YoloWaterDigitRecognizer(options);
+        using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
+        using var root = new ApiFactory(); var resources = new TestResources();
+        using var factory = Configure(root, resources, new TestAssignments(), "Development", true, engine);
+        using var client = factory.CreateClient();
+        using var frame = Cv2.ImRead(Path.Combine(directory, ".tools/meter-detection-all-test/wm_clean_000058.jpg"));
+        using var resized = new Mat(); var ratio = Math.Min(1, 1600d / Math.Max(frame.Width, frame.Height));
+        Cv2.Resize(frame, resized, new((int)(frame.Width * ratio), (int)(frame.Height * ratio)), 0, 0, InterpolationFlags.Area);
+        using var request = Request("diagnostics/water-mechanical", Roles.Staff, resized.ImEncode(".jpg", new ImageEncodingParam(ImwriteFlags.JpegQuality, 85)));
+        request.Content!.Headers.ContentType = new("image/jpeg");
+        var response = await client.SendAsync(request); Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("00431469", body.RootElement.GetProperty("proposal").GetProperty("proposedFields").GetProperty("reading").GetString());
+        Assert.True(body.RootElement.GetProperty("proposal").GetProperty("requiresConfirmation").GetBoolean());
+        using var electricRequest = Request("diagnostics/auto", Roles.Owner, await File.ReadAllBytesAsync(Path.Combine(directory, ".tools/ocr-real/meter.png")));
+        var electric = await client.SendAsync(electricRequest); Assert.Equal(HttpStatusCode.OK, electric.StatusCode);
+        using var electricBody = System.Text.Json.JsonDocument.Parse(await electric.Content.ReadAsStringAsync());
+        var analysis = electricBody.RootElement.GetProperty("analysis");
+        Assert.Equal("electricity_digital", analysis.GetProperty("detectedCategory").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, analysis.GetProperty("classificationConfidence").ValueKind);
+        Assert.Equal(0, resources.Lookups); Assert.Contains("no-store", electric.Headers.CacheControl!.ToString());
+        using var electricFrame = Cv2.ImRead(Path.Combine(directory, ".tools/ocr-real/meter.png"));
+        using var upsideDown = new Mat(); Cv2.Rotate(electricFrame, upsideDown, RotateFlags.Rotate180);
+        using var rotatedRequest = Request("diagnostics/auto", Roles.Owner, upsideDown.ImEncode(".png"));
+        var rotated = await client.SendAsync(rotatedRequest); Assert.Equal(HttpStatusCode.OK, rotated.StatusCode);
+        using var rotatedBody = System.Text.Json.JsonDocument.Parse(await rotated.Content.ReadAsStringAsync());
+        var rotatedAnalysis = rotatedBody.RootElement.GetProperty("analysis");
+        Assert.True(rotatedAnalysis.GetProperty("detectedCategory").GetString() == "electricity_digital",
+            $"Rotated public meter: status={rotatedAnalysis.GetProperty("classificationStatus").GetString()}; " +
+            $"warnings={string.Join(',', rotatedAnalysis.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()))}");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, rotatedAnalysis.GetProperty("classificationConfidence").ValueKind);
+        Assert.True(rotatedAnalysis.GetProperty("requiresReview").GetBoolean());
+        Assert.True(rotatedAnalysis.GetProperty("meterProposal").GetProperty("requiresConfirmation").GetBoolean());
+        Assert.Equal(0, resources.Lookups);
+    }
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData(Roles.Tenant, HttpStatusCode.Forbidden)]
+    [InlineData(Roles.Owner, HttpStatusCode.OK)]
+    [InlineData(Roles.Staff, HttpStatusCode.OK)]
+    public async Task AutomaticDiagnosticsRequiresAuthorizedRoleAndNoSelectedProfile(string? role, HttpStatusCode status)
+    {
+        using var root = new ApiFactory();
+        var engine = new TestEngine(); var resources = new TestResources();
+        using var factory = Configure(root, resources, new TestAssignments(), "Development", true, engine);
+        using var client = factory.CreateClient();
+        using var request = Request("diagnostics/auto", role, Image());
+        var response = await client.SendAsync(request);
+        Assert.Equal(status, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+        Assert.Null(engine.LastKind);
+        if (status == HttpStatusCode.OK)
+        {
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            var analysis = json.GetProperty("analysis");
+            Assert.Equal("cccd_front", analysis.GetProperty("detectedCategory").GetString());
+            Assert.Equal("classified", analysis.GetProperty("classificationStatus").GetString());
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, analysis.GetProperty("classificationConfidence").ValueKind);
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, analysis.GetProperty("meterProposal").ValueKind);
+            Assert.True(analysis.GetProperty("identityProposal").GetProperty("requiresConfirmation").GetBoolean());
+            Assert.Equal(1, engine.AnalysisCalls);
+            Assert.All(engine.Captured.ToArray(), value => Assert.Equal(0, value));
+            Assert.Equal(0, resources.Lookups);
+            Assert.DoesNotContain("sourceImageHash", await response.Content.ReadAsStringAsync());
+        }
+        else Assert.Equal(0, engine.AnalysisCalls);
+    }
+
+    [Theory]
+    [InlineData("Production", true)]
+    [InlineData("Development", false)]
+    public async Task AutomaticDiagnosticsRemainsDevelopmentOptIn(string environment, bool enabled)
+    {
+        using var root = new ApiFactory(); var engine = new TestEngine();
+        using var factory = Configure(root, new TestResources(), new TestAssignments(), environment, enabled, engine);
+        using var client = factory.CreateClient(); using var request = Request("diagnostics/auto", Roles.Owner, []);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(request)).StatusCode);
+        Assert.Equal(0, engine.AnalysisCalls);
+    }
+
+    [Fact]
+    public async Task AutomaticDiagnosticsRejectsInvalidImageAndMimeBeforeAnalysis()
+    {
+        using var root = new ApiFactory(); var engine = new TestEngine();
+        using var factory = Configure(root, new TestResources(), new TestAssignments(), "Development", true, engine);
+        using var client = factory.CreateClient();
+        using var invalid = Request("diagnostics/auto", Roles.Staff, "invalid"u8.ToArray());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(invalid)).StatusCode);
+        using var oversized = Request("diagnostics/auto", Roles.Staff, new byte[5 * 1024 * 1024 + 1]);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await client.SendAsync(oversized)).StatusCode);
+        using var mime = Request("diagnostics/auto", Roles.Staff, Image()); mime.Content!.Headers.ContentType = new("application/pdf");
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await client.SendAsync(mime)).StatusCode);
+        Assert.Equal(0, engine.AnalysisCalls);
+    }
+
     private static readonly Guid UserId = Guid.NewGuid();
 
     [Theory]
@@ -242,8 +346,16 @@ public sealed class OcrApiTests
             AddTestAuthentication(services);
             services.AddSingleton<IOcrWorkflowResources>(resources);
             services.AddSingleton<IStaffLocationAccess>(assignments);
-            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
+            // OcrWarmup resolves the engine registered by production. Keep these API tests
+            // independent from the separately provisioned, git-ignored ONNX model files.
+            services.RemoveAll<IOcrEngine>();
+            services.AddSingleton<IOcrEngine>(_ => engine ?? new TestEngine());
+            services.RemoveAll<Lazy<IOcrEngine>>();
+            services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
+            services.AddSingleton<LocalOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
                 new Lazy<IOcrEngine>(() => engine ?? new TestEngine()), NullLogger<LocalOcrService>.Instance));
+            services.AddSingleton<IOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
+            services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         }));
 
     private static void AddTestAuthentication(IServiceCollection services)
@@ -268,11 +380,12 @@ public sealed class OcrApiTests
         public Guid ResidentId { get; } = Guid.NewGuid(); public Guid TaskId { get; } = Guid.NewGuid();
         public bool Open { get; set; } = true;
         public int? DecimalPlaces { get; set; }
+        public int Lookups { get; private set; }
         private readonly Guid locationId = Guid.NewGuid();
         public Task<OcrWorkflowResource?> FindIdentityAsync(Guid id, CancellationToken token)
-            => Task.FromResult(id == ResidentId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.IdentityFront) : null);
+        { Lookups++; return Task.FromResult(id == ResidentId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.IdentityFront) : null); }
         public Task<OcrWorkflowResource?> FindMeterTaskAsync(Guid id, CancellationToken token)
-            => Task.FromResult(id == TaskId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.DigitalWater, DecimalPlaces) : null);
+        { Lookups++; return Task.FromResult(id == TaskId ? new OcrWorkflowResource(new(locationId, null), Open, OcrDocumentKind.DigitalWater, DecimalPlaces) : null); }
     }
 
     private sealed class TestAssignments : IStaffLocationAccess
@@ -280,8 +393,17 @@ public sealed class OcrApiTests
         public bool Assigned { get; set; }
         public Task<bool> IsAssignedAsync(Guid staff, Guid location, CancellationToken token) => Task.FromResult(Assigned);
     }
-    private sealed class TestEngine : IOcrEngine
+    private sealed class TestEngine : IOcrEngine, IOcrAnalysisEngine
     {
+        public int AnalysisCalls { get; private set; }
+        public ReadOnlyMemory<byte> Captured { get; private set; }
+        public Task<OcrImageAnalysis> AnalyzeAsync(ReadOnlyMemory<byte> image, CancellationToken token)
+        {
+            AnalysisCalls++; Captured = image;
+            return Task.FromResult(new OcrImageAnalysis(new OcrText([
+                new("CĂN CƯỚC CÔNG DÂN", .99f), new("Số: 000000000000", .99f),
+                new("Họ và tên: NGƯỜI KIỂM THỬ", .99f), new("Ngày sinh: 01/02/2000", .99f)], "synthetic-test", [])));
+        }
         public OcrDocumentKind? LastKind { get; private set; }
         public Task<OcrText> RecognizeAsync(ReadOnlyMemory<byte> image, OcrDocumentKind kind, CancellationToken token)
         {

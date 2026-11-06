@@ -121,7 +121,26 @@ public sealed class ContractServiceTests
         var r = new Rig(); var c = await r.Ready(); var key = Guid.NewGuid();
         await r.Service.ActivateAsync(c.Id, key, default); await r.Service.ActivateAsync(c.Id, key, default);
         Assert.Equal(ContractStatus.Active, c.Status); Assert.Equal(RoomStatus.Occupied, r.Room.Status);
+        Assert.Equal(2, r.Room.Version);
+        r.Repo.Received(1).Add(Arg.Is<PropertyChange>(a => a.TargetId == r.Room.Id && a.ActorId == r.User.UserId &&
+            a.Before!.Contains("\"Version\":1") && a.After.Contains("\"Version\":2")));
         r.Repo.Received(1).Audit(r.User.UserId!.Value, "ContractActivated", c.Id, Arg.Any<DateTimeOffset>());
+    }
+    [Fact]
+    public async Task ActivationInAlreadyOccupiedRoomDoesNotIncrementRoomVersionOrAddRoomHistory()
+    {
+        var r = new Rig(); var c = await r.Ready(); r.Room.Status = RoomStatus.Occupied;
+        await r.Service.ActivateAsync(c.Id, Guid.NewGuid(), default);
+        Assert.Equal(ContractStatus.Active, c.Status); Assert.Equal(1, r.Room.Version);
+        r.Repo.DidNotReceive().Add(Arg.Any<PropertyChange>());
+    }
+    [Fact]
+    public async Task ActivationRechecksRoomTypeConfiguration()
+    {
+        var r = new Rig(); var c = await r.Ready(); r.Room.RoomType = new RoomType { IsActive = false };
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.ActivateAsync(c.Id, Guid.NewGuid(), default));
+        Assert.Equal(ContractStatus.PendingActivation, c.Status); Assert.Equal(1, r.Room.Version);
+        r.Repo.DidNotReceive().Add(Arg.Any<PropertyChange>());
     }
     [Theory]
     [InlineData("signature")]
@@ -211,8 +230,10 @@ public sealed class ContractServiceTests
         await Assert.ThrowsAsync<ContractException>(() => r.Service.CompleteAsync(c.Id, new(Today), Guid.NewGuid(), default));
         Assert.Equal(ContractStatus.Active, c.Status); Assert.Equal(RoomStatus.Occupied, r.Room.Status);
     }
-    [Fact]
-    public async Task T14_CompleteRequiresRevalidatedLedgerAndPreservesHistory()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task T14_CompleteRequiresRevalidatedLedgerAndPreservesHistory(bool otherActive)
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active; r.Room.Status = RoomStatus.Occupied;
         r.Moves.Add(new()
@@ -226,8 +247,12 @@ public sealed class ContractServiceTests
             SettlementLedgerReference = "verified-synthetic-ledger"
         });
         r.Ledger.ReadAsync(default, default, default, default).ReturnsForAnyArgs(new SettlementLedgerState(true, true, true, "verified-synthetic-ledger"));
+        r.Repo.HasOtherActiveContractsAsync(c.RoomId, c.Id, default).Returns(otherActive);
         await r.Service.CompleteAsync(c.Id, new(Today), Guid.NewGuid(), default);
-        Assert.Equal(ContractStatus.Terminated, c.Status); Assert.Equal(RoomStatus.Available, r.Room.Status); Assert.Equal(Today, c.Residents.Single().ResidenceTo); Assert.Equal(2, c.Signatures.Count);
+        Assert.Equal(ContractStatus.Terminated, c.Status); Assert.Equal(otherActive ? RoomStatus.Occupied : RoomStatus.Available, r.Room.Status);
+        Assert.Equal(otherActive ? 1 : 2, r.Room.Version);
+        r.Repo.Received(otherActive ? 0 : 1).Add(Arg.Any<PropertyChange>());
+        Assert.Equal(Today, c.Residents.Single().ResidenceTo); Assert.Equal(2, c.Signatures.Count);
     }
     [Fact]
     public async Task T15_UnconfiguredProviderKeepsPendingSigning()

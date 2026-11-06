@@ -15,6 +15,9 @@ namespace BHome.IntegrationTests.Compact24;
 // Storage is an explicit test substitute. Real MinIO remains a separate integration gate.
 public sealed class Compact24WorkflowFixture : IAsyncLifetime
 {
+    private readonly IObjectStorage? storageOverride;
+    public Compact24WorkflowFixture() { }
+    internal Compact24WorkflowFixture(IObjectStorage storageOverride) { this.storageOverride = storageOverride; }
     internal static ConcurrentQueue<string> Diagnostics { get; } = new();
     private readonly Compact24Fixture database = new();
     private WebApplicationFactory<Program>? host;
@@ -23,7 +26,7 @@ public sealed class Compact24WorkflowFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await database.InitializeAsync(); if (database.Factory is null) return;
-        var storage = new TestObjectStorage();
+        var storage = storageOverride ?? new TestObjectStorage();
         var encryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var hmacKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         host = database.Factory.WithWebHostBuilder(b =>
@@ -87,6 +90,14 @@ public sealed class Compact24InvoiceRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24PaymentRegressionTests
 {
+    [CompactPostgresFact] public Task DamageDeductionAndRemainder() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(100000));
+    [CompactPostgresFact] public Task FullDamageDeduction() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(400000));
+    [CompactPostgresFact] public Task DamageDeductionHistoryAndEvidence() => Run(t => t.DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle());
+    [CompactPostgresFact] public Task DepositReturnAndClosure() => Run(t => t.UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure());
+    [CompactPostgresFact] public Task DepositReturnChangedSource() => Run(t => t.ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased());
+    [CompactPostgresFact] public Task DepositReturnUnknownHistory() => Run(t => t.UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn());
+    [CompactPostgresFact] public Task SettlementCalculation() => Run(t => t.SettlementReadsActualSharedDebtAdjustmentsAndDepositsWithoutAssigningRoomDebtToTenant());
+    [CompactPostgresFact] public Task DepositPositions() => Run(t => t.SettlementSubtractsDepositUsesCompletedAndReservedRefundsWithoutDoubleCounting());
     [CompactPostgresFact] public Task RecipientInbox() => Run(t => t.InboxIsRecipientScopedPaginatedAndReadStatePersistsWithoutCrossTenantMutation());
     [CompactPostgresFact] public Task RevalidateTarget() => Run(t => t.NotificationTargetRechecksInvoiceEntitlementInsteadOfTrustingSavedLink());
     [CompactPostgresFact] public Task StaffReadMirror() => Run(t => t.StaffInboxMirrorsTaskReadStateAndLosesAccessWhenAssignmentEnds());
@@ -113,8 +124,8 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task ReconciliationApi() => Run(t => t.OwnerApiReconcilesPersistedInvoiceAndRejectsUnmatchedTransferWithHistory());
     [CompactPostgresFact] public Task PayerPrivacy() => Run(t => t.SharedTenantStatusAndHistoricalAccessStayScopedWithoutLeakingStatementOrAnotherPayerIdentity());
     [CompactPostgresFact] public Task CompetingPayments() => Run(t => t.ConcurrentTenantsCannotDoubleSettleAndSecondTransferIsPreservedForReview());
-    [CompactPostgresFact] public Task Underpayment() => Run(t => t.AmountMismatchDoesNotInventPartialOrRefundPolicy(99999, "partial_payment_policy_required"));
-    [CompactPostgresFact] public Task Overpayment() => Run(t => t.AmountMismatchDoesNotInventPartialOrRefundPolicy(100001, "excess_payment_policy_required"));
+    [CompactPostgresFact] public Task Underpayment() => Run(t => t.OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(99999, "verified_partial_payment"));
+    [CompactPostgresFact] public Task Overpayment() => Run(t => t.OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(100001, "verified_excess_payment_pending_review"));
     [CompactPostgresFact] public Task InvalidAndUnauthorized() => Run(t => t.UnauthorizedAndInvalidOrConflictingInputsCannotCreatePaidState());
     [CompactPostgresFact] public Task AdjustmentSubmission() => Run(t => t.AdjustmentSubmissionIsPersistedIdempotentAndPrivateToRequesterAndOwner());
     [CompactPostgresFact] public Task PrivateEvidence() => Run(t => t.AdjustmentEvidenceIsValidatedPrivateAndCannotBeReusedOrStolen());
@@ -147,13 +158,14 @@ public sealed class Compact24PropertyRegressionTests
         try { await scenario(new BHome.IntegrationTests.PropertyManagement.PropertyApiTests(fixture)); }
         finally { await fixture.DisposeAsync(); await database.DisposeAsync(); }
     }
+    [CompactPostgresFact] public Task ConfigurationAudit() => Run(t => t.FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots());
     [CompactPostgresFact] public Task ScopedStaff() => Run(t => t.StaffReadsOnlyCurrentAssignmentsBeforeCountingAndCannotMutate());
     [CompactPostgresFact] public Task InvalidScopes() => Run(t => t.InvalidScopesReservedStatesAndDeactivationAreRejected());
     [CompactPostgresFact] public Task DuplicateRaces() => Run(t => t.DuplicateRoomAndPolicyRacesHaveOneWinnerAndNoOrphanAudit());
     [CompactPostgresFact] public Task PricePrecedence() => Run(t => t.PriceResolutionUsesPerChargeSpecificityAndPreservesMissingAndZero());
     [CompactPostgresFact] public Task PolicyReplacement() => Run(t => t.ReplacementSplitsInclusiveDatesAndFailedReplacementRollsBackOldVersion());
     [CompactPostgresFact] public Task InvalidPrices() => Run(t => t.NegativeAmountsUnsupportedMethodsRetroactiveDatesAndInvalidPagingAreRejected());
-    [CompactPostgresFact] public Task NormalizedCodes() => Run(t => t.NormalizedTypeAndAssetCodesAreUniqueWithinLocationAndOwnerAccessIsGlobal());
+    [CompactPostgresFact] public Task NormalizedCodes() => Run(t => t.NormalizedAssetCodesAreUniqueWithinLocationAndOwnerAccessIsGlobal());
     [CompactPostgresFact] public Task OccupiedRoom() => Run(t => t.ExistingResidentsBlockClosureAndCaptureCannotBypassUnavailableRoom());
     [CompactPostgresFact] public Task CrossLocationReferences() => Run(t => t.ParallelEditsUseExpectedVersionAndDatabaseEnforcesCrossLocationReferences());
     [CompactPostgresFact] public Task FuturePriceEdit() => Run(t => t.OwnerEditsUnusedFuturePriceInPlaceWithVersionAndAudit());
@@ -187,6 +199,7 @@ public sealed class Compact24ContractRegressionTests(Compact24WorkflowFixture fi
     [CompactPostgresFact] public Task FailedSigningRetry() => Run(t => t.FailedSignatureCanBeRetriedWhileRetainingTheFailedAttempt());
     [CompactPostgresFact] public Task FailedUpload() => Run(t => t.UploadFailureLeavesDurableCleanupIntentAndNoDanglingSignatureReference());
     [CompactPostgresFact] public Task RemoteSigningAdapter() => Run(t => t.ProductionAdapterAndPdfSignerCompleteTwoPartyContractThroughApiWithSyntheticRemoteCa());
+    [CompactPostgresFact] public Task SignedDocumentIntegrity() => Run(t => t.SignedDocumentDownloadRejectsTamperedBytesAndPreservesSignerScope());
 }
 
 [Trait("Category", "CompactPostgres")]
@@ -205,4 +218,6 @@ public sealed class Compact24MainDraftRegressionTests
     [CompactPostgresFact] public Task ConcurrentDraft() => Run(t => t.RejectsUnavailableRoomAndConcurrentCreationReplaysOneDraft());
     [CompactPostgresFact] public Task IncompleteIdentity() => Run(t => t.VerifiedFlagWithoutConfirmedIdentityDoesNotGenerateAnIncompleteContract());
     [CompactPostgresFact] public Task OccupantModels() => Run(t => t.FamilyMembersShareOneDraftButIndependentRepresentativesGetSeparateContracts());
+    [CompactPostgresFact] public Task ReviewReleaseAndActivation() => Run(t => t.ReviewedMainDraftReleasesOnceAndBothPartiesUseTheSamePdfThroughSimulatedActivation());
+    [CompactPostgresFact] public Task RejectInvalidRelease() => Run(t => t.ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate());
 }

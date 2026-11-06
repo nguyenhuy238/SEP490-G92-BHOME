@@ -28,7 +28,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     private async Task<Actor> User(string role)
     {
         var id = Guid.NewGuid(); var email = id + "@example.invalid";
-        const string password = "Synthetic-Billing-Test!123";
+        const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
@@ -51,9 +51,8 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
         var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var location = new Location("Synthetic Billing") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
-        var type = new RoomType { LocationId = location.Id, Name = "Synthetic Shared", DefaultCapacity = 2 };
-        var room = new Room { LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
+        var location = new Location("Synthetic Billing") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
+        var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
         var resident = new Resident { RoomId = room.Id, TenantUserId = tenant.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
         var second = new Resident { RoomId = room.Id, TenantUserId = other.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Other", VerificationStatus = IdentityVerificationStatus.Verified };
         Contract ContractFor(Resident person) => new()
@@ -73,7 +72,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.Representative }]
         };
         var contract = ContractFor(resident); var secondContract = ContractFor(second);
-        db.AddRange(location, type, room, resident, second, contract, secondContract,
+        db.AddRange(location, room, resident, second, contract, secondContract,
             new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
         foreach (var (category, code, rate) in new[] { (ChargeCategory.Rent, "RENT", 3000000m), (ChargeCategory.Electricity, "ELECTRICITY", 3500m), (ChargeCategory.Water, "WATER", 15000m) })
             db.Add(new BillingPolicy

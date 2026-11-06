@@ -19,6 +19,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace BHome.Infrastructure;
@@ -121,15 +122,42 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.StaffOperations.ITaskEvidenceFiles, BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceFiles>();
         services.AddScoped<BHome.Application.StaffOperations.OperationalTaskService>();
         services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
+        services.AddScoped<BHome.Application.Operations.IOperationsRepository,
+            BHome.Infrastructure.Modules.Operations.CompactOperationsRepository>();
+        services.AddScoped<BHome.Application.Operations.IOperationsFiles,
+            BHome.Infrastructure.Modules.Operations.OperationsFiles>();
+        services.AddScoped<BHome.Application.Operations.OperationsService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
         services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
+        services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
+        services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.IAdministrativeContractReadiness>(provider =>
+            provider.GetRequiredService<BHome.Application.Contracts.ContractService>());
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
+        services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.IExpenseEvidenceRepository, BHome.Infrastructure.Finance.ExpenseEvidenceRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpenseEvidenceService>();
+        services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();
+        services.AddScoped<BHome.Application.Finance.IRefundRepository, BHome.Infrastructure.Finance.RefundRepository>();
+        services.AddScoped<BHome.Application.Finance.RefundService>();
+        services.AddScoped<BHome.Application.Finance.FinancialReportService>();
+        services.AddScoped<BHome.Application.Finance.IFinancialScenarioRepository, BHome.Infrastructure.Finance.FinancialScenarioRepository>();
+        services.AddScoped<BHome.Application.Finance.FinancialScenarioService>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftPreviewRenderer, BHome.Infrastructure.Contracts.MainDraftPreviewRenderer>();
@@ -137,6 +165,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningProvider>(p => p.GetRequiredService<BHome.Application.Contracts.IContractWorkflowMode>().SimulatedSigningEnabled
             ? p.GetRequiredService<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>()
@@ -147,12 +176,21 @@ public static class DependencyInjection
             .Validate(o => o.IsValid(), "ContractPdf:TemplateId must be an embedded template identifier of at most 80 ASCII letters, digits or hyphens.").ValidateOnStart();
         services.AddScoped<BHome.Application.Contracts.IContractDocumentRenderer, BHome.Infrastructure.Contracts.ContractPdfRenderer>();
         services.AddScoped<BHome.Application.Contracts.IContractSettlementLedger, BHome.Infrastructure.Contracts.ContractSettlementLedger>();
+        services.AddScoped<BHome.Application.Contracts.IContractDepositPosition, BHome.Infrastructure.Contracts.ContractDepositPosition>();
+        services.AddScoped<BHome.Application.Contracts.IDepositDeductionRepository, BHome.Infrastructure.Contracts.DepositDeductionRepository>();
+        services.AddScoped<BHome.Application.Contracts.IDepositDeductionEvidence, BHome.Infrastructure.Contracts.DepositDeductionEvidence>();
+        services.AddScoped<BHome.Application.Contracts.DepositDeductionService>();
         services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.UnconfiguredContractHoldingLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractPdfSigning(services);
-        services.AddScoped<BHome.DigitalSigning.Application.IViettelAccountSource, BHome.Infrastructure.Contracts.ContractMySignAccount>();
+        // Viettel account: configuration (DigitalSigning:Viettel), overridden by what the Owner saved on the settings screen.
+        services.AddScoped<BHome.DigitalSigning.Application.ISigningSettingsStore, BHome.Infrastructure.Contracts.CompactSigningSettingsStore>();
+        services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
+        BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
+        services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
+        services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
         services.AddScoped<BHome.DigitalSigning.Application.Services.SigningCertificateService>();
@@ -160,9 +198,15 @@ public static class DependencyInjection
             .Validate(o => o.IsValid(), "OCR limits or profiles are outside supported bounds.").ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
+        services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
+        services.AddSingleton<YoloWaterDigitRecognizer>();
+        services.AddSingleton<IImageCategoryClassifier>(provider => new YoloMeterCategoryClassifier(
+            provider.GetRequiredService<OcrOptions>(), provider.GetRequiredService<IHostEnvironment>().IsDevelopment()));
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
-        services.AddSingleton<IOcrService, LocalOcrService>();
+        services.AddSingleton<LocalOcrService>();
+        services.AddSingleton<IOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
+        services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         services.AddHostedService<OcrWarmup>();
         services.AddScoped<IOcrWorkflowResources, CaptureWorkflowResources>();
         services.AddScoped<OcrWorkflowService>();

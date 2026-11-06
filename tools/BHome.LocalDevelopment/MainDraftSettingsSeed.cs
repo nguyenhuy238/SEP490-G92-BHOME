@@ -55,12 +55,7 @@ internal static class MainDraftSettingsSeed
             created++;
         }
 
-        var roomTypes = await db.Set<RoomType>().Where(x => x.LocationId == location.Id && x.IsActive).ToArrayAsync();
-        foreach (var type in roomTypes)
-        {
-            if (type.Name is not ("TEST - Tiêu chuẩn" or "TEST - Gia đình")) continue;
-            await AddPolicy(type.Id, ChargeCategory.Rent, "RENT", type.Name == "TEST - Gia đình" ? 4500000m : 3000000m);
-        }
+        await AddPolicy(null, ChargeCategory.Rent, "RENT", 3000000m);
         await AddPolicy(null, ChargeCategory.Electricity, "ELECTRICITY", 3500m);
         await AddPolicy(null, ChargeCategory.Water, "WATER", 15000m);
         await AddPolicy(null, ChargeCategory.ServiceFee, "SERVICE", 100000m);
@@ -97,10 +92,10 @@ internal static class MainDraftSettingsSeed
         Console.WriteLine($"Verified representative profiles ready for preparation: {readyProfiles}/{representatives.Length}. No identity data changed.");
         Console.WriteLine($"Created {created} missing configuration records. Existing data preserved. Staff workspace ready for Draft preparation.");
 
-        async Task AddPolicy(Guid? roomType, ChargeCategory category, string code, decimal rate)
+        async Task AddPolicy(Guid? room, ChargeCategory category, string code, decimal rate)
         {
-            if (await db.Set<BillingPolicy>().AnyAsync(p => p.LocationId == location.Id && p.RoomTypeId == roomType && p.RoomId == null && p.ChargeCode == code && (p.EffectiveTo == null || p.EffectiveTo >= today))) return;
-            await properties.CreatePolicyAsync(new(location.Id, roomType, null, category, code,
+            if (await db.Set<BillingPolicy>().AnyAsync(p => p.LocationId == location.Id && p.RoomTypeId == null && p.RoomId == room && p.ChargeCode == code && (p.EffectiveTo == null || p.EffectiveTo >= today))) return;
+            await properties.CreatePolicyAsync(new(location.Id, room, category, code,
                 $"TEST BHOME - {code}", category is ChargeCategory.Electricity or ChargeCategory.Water ? ChargingMethod.Metered : ChargingMethod.FixedPerRoomPerMonth,
                 rate, today, null, "Dữ liệu test cấu hình hợp đồng theo yêu cầu người dùng; không thay biểu phí đã có."), default);
             created++;

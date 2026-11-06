@@ -2,11 +2,12 @@ import { useRef, useState } from 'react';
 import { Alert, Button, LinearProgress, Paper, Stack, TextField, Typography } from '@mui/material';
 import {
   certificateStatus,
-  contractError,
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { signingError } from '../../../../../packages/client-core/src/signing';
+import { useSigningApi } from './useContractsApi';
 
 export function SigningCertificates({ api }: { api: ContractClient }) {
   const [open, setOpen] = useState(false);
@@ -17,6 +18,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
     [notice, setNotice] = useState('');
   const lock = useRef(false);
   const directory = useSigningCertificates(api, open);
+  const signing = useSigningApi(api);
   async function run(work: () => Promise<unknown>, message: string) {
     if (lock.current) return;
     lock.current = true;
@@ -30,7 +32,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
       setNotice(message);
       directory.reload();
     } catch (e) {
-      setError(contractError(e));
+      setError(signingError(e));
       directory.reload();
     } finally {
       lock.current = false;
@@ -81,6 +83,18 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
                 }
               >
                 {c.locked ? 'Mở khóa chứng thư' : 'Khóa chứng thư'}
+              </Button>
+              <Button
+                color="error"
+                disabled={busy || directory.loading}
+                onClick={() =>
+                  window.confirm(
+                    'Gỡ chứng thư này khỏi BHOME? Chứng thư tại Viettel không bị ảnh hưởng.',
+                  ) &&
+                  void run(() => signing.removeCertificate(c.id), 'Đã gỡ chứng thư khỏi BHOME.')
+                }
+              >
+                Gỡ chứng thư
               </Button>
             </Paper>
           ))}

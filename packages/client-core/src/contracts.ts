@@ -209,6 +209,23 @@ export interface InspectionPreparation {
   otherTenantsRemain: boolean;
 }
 export interface SettlementSummary {
+  obligationReference?: string;
+  depositDeductions?: DepositDeductionPlan | null;
+  financialReference?: string;
+  calculation?: {
+    issuedTotal: string;
+    approvedAdjustmentTotal: string;
+    payableTotal: string;
+    verifiedInvoicePayments: string;
+    roomOutstanding: string;
+    contractSpecificOutstanding: string | null;
+    potentialInvoiceExcess: string;
+    depositAllocated: string | null;
+    depositRefunded: string | null;
+    depositReserved: string | null;
+    availableSecurityDeposit: string | null;
+    depositPositionConsistent: boolean;
+  } | null;
   contractId: string;
   depositContractId: string;
   roomNumber: string;
@@ -236,6 +253,29 @@ export interface SettlementSummary {
   resolved: boolean;
   reference: string;
   transferVerificationStatus: string;
+}
+export interface DepositDeductionItem {
+  assetId: string | null;
+  reasonCode: 'TenantDamage';
+  amount: string;
+  description: string;
+  evidenceIds: string[];
+}
+export interface DepositDeductionPlan {
+  id: string;
+  contractId: string;
+  depositContractId: string;
+  inspectionId: string;
+  inspectionVersion: number;
+  version: number;
+  approvedByUserId: string;
+  approvedAt: string;
+  reason: string;
+  obligationReference: string;
+  total: string;
+  items: DepositDeductionItem[];
+  evidence: { id: string; length: number; sha256: string }[];
+  isDevelopmentDemo: boolean;
 }
 export interface SettlementReview {
   id: string;
@@ -285,6 +325,8 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    /** The authenticated transport, so related clients (digital signing) share auth and refresh. */
+    transport: request,
     expiryReminders: (signal?: AbortSignal) =>
       request<ContractExpiryNotice[]>(`${root}/expiry-reminders`, { signal }),
     inspections: (id: string, signal?: AbortSignal) =>
@@ -293,6 +335,22 @@ export function contractClient(request: ContractRequest) {
       request<InspectionPreparation>(`${root}/${id}/move-out/inspection-preparation`, { signal }),
     settlementSummary: (id: string, signal?: AbortSignal) =>
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
+    approveDepositDeductions: (
+      id: string,
+      body: {
+        expectedVersion: number;
+        expectedReference: string;
+        reason: string;
+        humanConfirmed: boolean;
+        items: DepositDeductionItem[];
+      },
+      key: string,
+    ) =>
+      request<DepositDeductionPlan>(`${root}/${id}/deposit-deductions`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
     moveOutHistory: (id: string, signal?: AbortSignal) =>
       request<{ version: number; action: string; occurredAt: string }[]>(
         `${root}/${id}/move-out/history`,
@@ -608,6 +666,18 @@ export const labels: Record<string, string> = {
   move_out_not_ready_for_inspection:
     'Cần duyệt yêu cầu, đặt lịch và đến ngày trả phòng trước khi lập biên bản.',
   settlement_unresolved: 'Nghĩa vụ quyết toán chưa hoàn tất hoặc đã thay đổi.',
+  deposit_deduction_review_changed:
+    'Số liệu hoặc phiên bản quyết định đã đổi. Tải lại và xem xét trước khi duyệt.',
+  deposit_deduction_not_ready: 'Chưa đủ điều kiện khấu trừ hoặc đã có khoản hoàn giữ chỗ/hoàn tất.',
+  deposit_deduction_exceeds_available:
+    'Tổng khấu trừ vượt cọc còn khả dụng. Cần xử lý phần nghĩa vụ còn thiếu.',
+  invalid_deposit_deduction_item:
+    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng biên bản/phạm vi.',
+  duplicate_deposit_deduction: 'Mỗi phòng hoặc tài sản chỉ được ghi một khoản trong quyết định.',
+  deposit_deduction_idempotency_conflict:
+    'Mã quyết định đã dùng với nội dung khác. Hãy tải lại để kiểm tra.',
+  deduction_evidence_integrity_failed:
+    'Chứng từ thiệt hại không khớp bản đã duyệt. Cần Owner đối chiếu lại.',
   settlement_review_changed:
     'Số liệu quyết toán đã thay đổi. Tải lại để đối chiếu và xác nhận phiên bản mới.',
   move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',

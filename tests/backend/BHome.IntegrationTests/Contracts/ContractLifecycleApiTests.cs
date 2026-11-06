@@ -29,7 +29,7 @@ using Npgsql;
 namespace BHome.IntegrationTests.Contracts;
 
 [Trait("Category", "Docker")]
-public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
+public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
 {
     private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
     private sealed record Actor(HttpClient Client, Guid Id);
@@ -37,7 +37,7 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     private async Task<Actor> User(string role)
     {
         var id = Guid.NewGuid(); var name = id.ToString("N") + "@example.invalid";
-        const string password = "Synthetic-Contract!537";
+        const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -53,7 +53,7 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var location = new Location("Synthetic Contract Location") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
+        var location = new Location("Synthetic Contract Location") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
@@ -89,8 +89,6 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
             var setupDb = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC TYPE", DefaultCapacity = 2 };
-            setupDb.Add(type); (await setupDb.Set<Room>().FindAsync(w.Room))!.RoomTypeId = type.Id; await setupDb.SaveChangesAsync();
         }
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
@@ -638,7 +636,20 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
             var certificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(actor,
                 "/api/v1/digital-signing/certificates", new { providerUserId = subscriber, serialNumber = (string?)null }));
             var key = Guid.NewGuid();
-            var input = new SigningInput(certificate.Id);
+            // What the signing screen shows first: the pages of the PDF to sign and the signer's own box.
+            var layout = (await actor.Client.GetFromJsonAsync<SigningLayout>(Path(id, "signing/layout")))!;
+            Assert.Equal(signer.Id == w.Owner.Id ? "Owner" : "Tenant", layout.Party);
+            Assert.Equal(layout.PageCount, layout.Pages.Count);
+            Assert.NotNull(layout.Suggested);
+            var page = await actor.Client.GetAsync(Path(id, $"signing/pages/{layout.Suggested!.Page}?width=400"));
+            page.EnsureSuccessStatusCode();
+            Assert.Equal("image/png", page.Content.Headers.ContentType!.MediaType);
+            Assert.Equal(HttpStatusCode.BadRequest, (await actor.Client.GetAsync(Path(id, $"signing/pages/{layout.PageCount + 1}"))).StatusCode);
+            // The Owner signs in the suggested box; the Tenant moves the box and signs with text only.
+            var input = signer.Id == w.Owner.Id ? new SigningInput(certificate.Id)
+                : new SigningInput(certificate.Id, layout.Suggested with { Y = layout.Suggested.Y - 0.05 }, false);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(actor, Path(id, "signing"),
+                new SigningInput(certificate.Id, new SignaturePlacementInput(1, 0.9, 0.1, 0.3)), Guid.NewGuid())).StatusCode);
             var requested = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
             if (requested.Status != "Pending")
             {
@@ -665,6 +676,8 @@ public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassF
         Assert.Equal(2, fields.Count);
         Assert.All(fields, name => Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity()));
         Assert.True(signatures.SignatureCoversWholeDocument(fields[^1]));
+        var form = iText.Forms.PdfAcroForm.GetAcroForm(document, false);
+        Assert.All(fields, name => Assert.True(form.GetField(name).GetWidgets()[0].GetRectangle().ToRectangle().GetWidth() > 50, "visible signature"));
         Assert.Equal(id.ToString(), document.GetDocumentInfo().GetMoreInfo("BHomeContractId"));
         Assert.Equal(ContractPdfRendererTests.TemplateId, document.GetDocumentInfo().GetMoreInfo("BHomeTemplateId"));
         Assert.Contains("Nguyễn Ánh", ContractPdfRendererTests.Text(document));

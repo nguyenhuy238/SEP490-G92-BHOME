@@ -10,6 +10,16 @@ namespace BHome.Infrastructure.Locations;
 
 internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocationAssignments, IStaffLocationAccess
 {
+    // Legacy-schema test adapter. The running Compact24 application uses CompactLocationAssignments,
+    // where replacement also reassigns open tasks in one transaction.
+    public Task<ChangeAssignmentResult> ReplaceAssignmentAsync(Guid actorId, Guid locationId, Guid staffUserId,
+        DateOnly effectiveFrom, int expectedLocationVersion, string reason, CancellationToken cancellationToken) =>
+        Task.FromResult(new ChangeAssignmentResult(ChangeAssignmentStatus.Invalid));
+
+    public Task<ChangeAssignmentResult> RemoveAssignmentAsync(Guid actorId, Guid locationId, DateOnly effectiveFrom,
+        int expectedLocationVersion, string reason, CancellationToken cancellationToken) =>
+        Task.FromResult(new ChangeAssignmentResult(ChangeAssignmentStatus.Invalid));
+
     public async Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffUserId,
         DateOnly effectiveDate, CancellationToken cancellationToken) =>
         await db.StaffLocationAssignments.AsNoTracking()

@@ -23,7 +23,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
         var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(c => new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
-                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent, c.DraftMetadata != "{}")).ToArrayAsync(t);
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent, c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft)).ToArrayAsync(t);
         return new(items, page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
@@ -46,26 +46,33 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
          select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt!.Value, m.Version)).Take(100).ToArrayAsync(t);
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
-        // All contract writes lock the same authoritative Room row. This serializes activation, renewal,
-        // payment allocation and move-out across API instances; constraints also protect direct writers.
+        // Order: payment ledger -> Location advisory -> Room row. Property and Invoice start at
+        // Location and never acquire the ledger afterward. Re-read domain state only after locking.
         db.ChangeTracker.Clear();
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         try
         {
             await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
+            var locationId = await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId)
+                .Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", t);
             if (!await db.Locked<Room>(roomId).AnyAsync(t))
                 throw ContractException.Missing();
             var value = await work();
             await db.SaveChangesAsync(t); await transaction.CommitAsync(t); return value;
         }
+        catch (DbUpdateConcurrencyException)
+        { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23P01" or "23514" })
         { throw ContractException.Conflict("contract_concurrent_or_duplicate_operation"); }
         catch (PostgresException e) when (e.SqlState is "40001" or "40P01" or "23514" or "23505" or "23P01")
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
     }
     public Task<Contract?> FindAsync(Guid id, CancellationToken t) => db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
+        .Include(c => c.Room).ThenInclude(r => r.RoomType)
         .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery().SingleOrDefaultAsync(c => c.Id == id, t);
-    public Task<Room?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().Include(r => r.Location).Include(r => r.RoomType).SingleOrDefaultAsync(r => r.Id == id, t);
+    public Task<Room?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == id, t);
     public async Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t)
         => await db.Set<Resident>().Where(r => r.RoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t);
     public Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t) =>

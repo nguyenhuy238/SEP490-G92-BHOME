@@ -63,7 +63,6 @@ public static class LocalTestAccounts
             var assigned = await users.IsInRoleAsync(user, role) ? IdentityResult.Success : await users.AddToRoleAsync(user, role);
             if (!assigned.Succeeded) throw Failure(assigned);
         }
-        await LocalSchemaSeed.EnsureChainAsync(db, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

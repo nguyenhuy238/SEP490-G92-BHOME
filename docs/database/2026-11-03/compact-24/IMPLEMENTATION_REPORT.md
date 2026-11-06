@@ -1,4 +1,6 @@
-﻿# BHOME – Báo cáo chuyển backend sang Compact24
+> C?p nh?t sau reset 04/11/2026: schema hi?n h?nh c? 24 b?ng / 383 c?t / 83 FK, b? Chain/RoomType ? API v? ph?c h?i incident-core. C?c k?t qu? 386 c?t b?n d??i thu?c m?c tr??c thay ??i. Xem [bi?n b?n m?i](../../../development/API_RESET_REVIEW_2026-11-04.md).
+
+# BHOME – Báo cáo chuyển backend sang Compact24
 
 Cập nhật 04/11/2026, nhánh `member/QHuy`, baseline `3b5dd018f87ce6dcc8396cb779609733fffd42bb`. Báo cáo này thay trạng thái triển khai bốn slice ban đầu.
 
@@ -138,7 +140,30 @@ Lượt regression đầu phát hiện 17 HTTP tests dùng Development giả ch�
 
 Team sau khi pull: chuẩn bị `.env` riêng và PostgreSQL một lần; máy có schema legacy chạy `scripts/Update-LocalDatabase.ps1 -RecreateDatabase` một lần, rồi `scripts/Start-Api.ps1` hằng ngày. Tạo tài khoản tổng hợp bằng `scripts/New-LocalTestUsers.ps1` với mật khẩu tự nhập; MinIO/bucket/provider cấu hình riêng. Hướng dẫn đầy đủ ở README gốc và [database guide](../README.md).
 
-## Danh sách file thay đổi
+## Rà soát toàn bộ API và seed local — 04/11/2026
+
+Lượt này kiểm tra host thực tế và source frontend thay vì suy ra chức năng từ schema. Nguồn yêu cầu: yêu cầu người dùng + hợp đồng controller/service hiện có; traceability BF-01/UC-04..07, BF-02/UC-08..12, BF-03/04/UC-13..19, BF-05/06/UC-20..25, FE-07/GBR-01..04/07..10/18 và JOB-09/10. Không thay chính sách tài chính/quyền, không mở rộng bảng. Chi tiết từng route, input DTO, quyền và nguồn gọi frontend ở [API_IMPLEMENTATION_STATUS.md](../../../api/API_IMPLEMENTATION_STATUS.md).
+
+- **189 controller routes đang mount**, gồm 184 route bảo vệ trả 401 khi không có phiên; thêm 2 health endpoints. Đã probe 92 GET nghiệp vụ bằng Owner, không có 5xx; 12 GET với query/dữ liệu mẫu hợp lệ trả 200. ID không tồn tại/thiếu query trả 400/403/404 không được tính là happy-path thành công.
+- **Runtime persistence vẫn Compact24**, không DI/fallback legacy. Không phát hiện lỗi SQL/schema trong các workflow regression đã chạy. Context/migrations cũ còn phục vụ import và fixture nguồn.
+- **Đã sửa 2 lỗi nối Mobile:** màn setup gọi POST `capture/chains` không tồn tại → GET/PUT `chain` với version backend; tạo Room thiếu RoomTypeId → tải loại phòng active theo Location, bắt buộc chọn và gửi capacity. Có component regression cho hai lỗi; không nới quyền/backend validation.
+- **Chưa phải toàn hệ thống đã nối:** Owner Web Property/Location/Room/Asset và các màn quản trị khác còn mock/unavailable; Tasks API mode hiện đọc list/detail. Module `BHome.DigitalSigning.Api` có 16 route khai báo trong source nhưng không được host tham chiếu/mount; native Contract/certificate endpoints đã dùng Compact24. Không tự mount module cũ vì sẽ thêm context/bảng, trùng route và thay phạm vi ký. Incident/Work Order, Finance/What-if/reporting, residence workflow riêng và public content còn thiếu API tương ứng. Đây là khoảng trống hiện có, không giả là đã hoàn thành nhờ chuyển DB.
+- **Đã seed thật vào native `bhome` PostgreSQL 18.6**: 4 sample accounts, 2 Locations, 2 RoomTypes, 6 Rooms, 6 Assets, 12 Meters, 8 biểu phí mẫu, 3 Residents Pending, 1 Staff assignment, 4 Tasks Assigned cùng history/notification/audit. Đối chiếu sau seed **24 bảng/386 cột/83 FK**. Seed replay báo `SAMPLE_ALREADY_PRESENT`; không đổi dữ liệu. Giữ archive cũ nguyên trạng. Mật khẩu lúc seed được tạo ngẫu nhiên, không in/không lưu; chọn mật khẩu riêng qua `Seed-LocalDevelopmentData.ps1 -SetSamplePasswords` trước khi đăng nhập.
+- **Không tạo dữ liệu hoàn tất nghiệp vụ giả:** không ảnh CCCD, không confirmed reading/signed contract/paid invoice/payment. Contract/Invoice/Payment local hiện 0; cần thực hiện đúng workflow với provider/storage được cấu hình. Các fixture tài chính/lifecycle phong phú vẫn chạy ở DB test cô lập.
+
+| Kiểm tra đã chạy                       | Kết quả                                                                                                                                                               | Bằng chứng local                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Backend đầy đủ, `Category!=Docker`     | **571 PASS** = Application 177 + Domain 83 + Integration 311; 0 fail/skip; PostgreSQL 16.15 cô lập                                                                    | `.tools/api-compact24-audit/backend-final.log`                                                |
+| Audit/seed mới, sau bổ sung GET hợp lệ | **6 PASS**; route/auth, seed idempotency/preserve edits/scope, explicit password reset thu hồi session, rollback mật khẩu sai, Production/remote/wrong target refusal | `cli-composition.log`, `evidence/api-route-audit.json` trong cùng thư mục                     |
+| Mobile                                 | **312 PASS**; kiểm lại hai regression setup cuối đạt 2/2; typecheck/lint đạt                                                                                          | `mobile.log`, `mobile-setup-final.log`, `mobile-typecheck.log`, `mobile-lint.log`             |
+| Owner Web                              | **104 PASS**, một worker; typecheck đạt                                                                                                                               | `owner-web.log`, `owner-typecheck.log`                                                        |
+| Local bhome sau seed                   | Readiness/liveness 200; protected Rooms 401; Swagger 188 operations (CA Development IgnoreApi); seed + replay thành công                                              | `local-api-smoke.json`, `local-sample-counts.json`, `local-seed.log`, `local-seed-replay.log` |
+
+Giới hạn: không chạy browser/device E2E toàn bộ mutation; không có nghiệm thu MinIO/bank/MySign/email/push thật, coverage/performance/ST/AT mới. HTTP fixture dùng private in-memory object storage và provider boundary tổng hợp đã khai báo; không coi là production integration. Host local chạy để smoke đã dừng, PostgreSQL native giữ nguyên. Đã chạy thêm solution Digital Signing: 41/41 PASS (`.tools/api-compact24-audit/signing.log`). Lượt backend cuối cũng kiểm tra seed từ chối Owner có sẵn và reset password bằng đúng composition CLI. Cluster test PostgreSQL 16 đã được dừng sau khi xác nhận 0 database fixture còn lại.
+
+Các file trong lượt này: `Compact24SampleSeed.cs`, `LocalDevelopmentCli.cs`, `Seed-LocalDevelopmentData.ps1`, `Compact24ApiAuditTests.cs`, Mobile `setup.tsx`/`setup-api.test.tsx`, `Generate-ApiImplementationInventory.cjs`, `API_IMPLEMENTATION_STATUS.md`, README gốc, database README, local development guide và báo cáo này. Không sửa DDL/diagram/migration/snapshot/connection string hoặc đối soát import lịch sử.
+
+## Danh sách file thay đổi ở các lượt chuyển đổi trước
 
 Danh sách working tree trong phạm vi tác vụ và các phiên tiếp tục (131 file; gồm artifact thiết kế untracked từ trước được giữ/cập nhật). Không gồm credential, database backup hay build/logs trong `.tools`:
 

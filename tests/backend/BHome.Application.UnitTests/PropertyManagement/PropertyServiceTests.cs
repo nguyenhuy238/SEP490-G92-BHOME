@@ -24,6 +24,45 @@ public sealed class PropertyServiceTests
     private static readonly DateTimeOffset BeforeVietnamMidnight = new(2026, 10, 29, 16, 59, 59, TimeSpan.Zero);
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task EachObligationBlocksStatusAndCapacityChangesEvenWhenRoomAppearsAvailable(int kind)
+    {
+        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
+        var location = new Location("Synthetic") { Address = "Synthetic Address" };
+        var room = new Room { LocationId = location.Id, Capacity = 2, Status = RoomStatus.Available };
+        repository.FindAsync<Location>(location.Id, default).Returns(location);
+        repository.FindAsync<Room>(room.Id, default).Returns(room);
+        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<RoomDto>>>(), default)
+            .Returns(c => c.Arg<Func<Task<RoomDto>>>()());
+        repository.ObligationsAsync(location.Id, room.Id, Arg.Any<DateOnly>(), default)
+            .Returns(new RoomObligations(kind == 0, kind == 1, kind == 2, kind == 3));
+        var input = new RoomWrite(location.Id, "A-1", null, 2, RoomStatus.Unavailable, 1);
+        Assert.Equal("room_status_controlled", (await Assert.ThrowsAsync<PropertyException>(() => service.SaveRoomAsync(room.Id, input, default))).Code);
+        Assert.Equal("room_has_obligations", (await Assert.ThrowsAsync<PropertyException>(() => service.SaveRoomAsync(room.Id,
+            input with { Status = RoomStatus.Available, Capacity = 3 }, default))).Code);
+        Assert.Equal(1, room.Version); Assert.Equal(RoomStatus.Available, room.Status);
+        repository.DidNotReceive().Audit(Arg.Any<PropertyChange>());
+    }
+
+    [Fact]
+    public async Task ContractVersionInvalidatesOldPropertyRequestBeforeStatusChecks()
+    {
+        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
+        var location = new Location("Synthetic") { Address = "Synthetic Address" };
+        var room = new Room { LocationId = location.Id, Status = RoomStatus.Occupied, Version = 2 };
+        repository.FindAsync<Location>(location.Id, default).Returns(location);
+        repository.FindAsync<Room>(room.Id, default).Returns(room);
+        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<RoomDto>>>(), default).Returns(c => c.Arg<Func<Task<RoomDto>>>()());
+        var error = await Assert.ThrowsAsync<PropertyException>(() => service.SaveRoomAsync(room.Id,
+            new(location.Id, "Old name", null, 1, RoomStatus.Available, 1), default));
+        Assert.Equal("stale_version", error.Code); Assert.Equal(2, room.Version);
+        repository.DidNotReceive().Audit(Arg.Any<PropertyChange>());
+    }
+
+    [Theory]
     [InlineData(Roles.Staff)]
     [InlineData(Roles.Tenant)]
     public async Task WritesAreDeniedBeforeAnyPersistenceLookup(string role)
@@ -53,7 +92,7 @@ public sealed class PropertyServiceTests
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
         var exception = await Assert.ThrowsAsync<PropertyException>(() => service.CreatePolicyAsync(
-            new(Guid.NewGuid(), null, null, ChargeCategory.Rent, "RENT", "Rent", ChargingMethod.FixedPerRoomPerMonth,
+            new(Guid.NewGuid(), null, ChargeCategory.Rent, "RENT", "Rent", ChargingMethod.FixedPerRoomPerMonth,
                 rate, new(2026, 10, 29), null), default));
         Assert.Equal(400, exception.Status);
         repository.DidNotReceive().Add(Arg.Any<BillingPolicy>());
@@ -65,7 +104,7 @@ public sealed class PropertyServiceTests
     public async Task FutureEditCannotBecomeEffectiveOnTheNewVietnamBusinessDate(int hour, int minute, bool accepted)
     {
         var (service, repository) = Create(Roles.Owner, new(2026, 10, 29, hour, minute, 0, TimeSpan.Zero));
-        var location = new Location("Synthetic") { ChainId = Guid.NewGuid(), Address = "Synthetic Address" };
+        var location = new Location("Synthetic") { Address = "Synthetic Address" };
         var policy = new BillingPolicy
         {
             LocationId = location.Id,
@@ -80,7 +119,7 @@ public sealed class PropertyServiceTests
         repository.FindAsync<BillingPolicy>(policy.Id, Arg.Any<CancellationToken>()).Returns(policy);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
-        var input = new PolicyWrite(location.Id, null, null, ChargeCategory.Rent, "RENT", "Rent",
+        var input = new PolicyWrite(location.Id, null, ChargeCategory.Rent, "RENT", "Rent",
             ChargingMethod.FixedPerRoomPerMonth, 200, new(2026, 10, 30), null);
         if (accepted)
             Assert.Equal(200, (await service.UpdateFuturePolicyAsync(policy.Id, new(input, 1), default)).Rate);
@@ -97,11 +136,11 @@ public sealed class PropertyServiceTests
     public async Task PolicyStartUsesVietnamDateAcrossUtcMidnightBoundary(int hour, int minute, bool accepted)
     {
         var (service, repository) = Create(Roles.Owner, new(2026, 10, 29, hour, minute, 0, TimeSpan.Zero));
-        var location = new Location("Synthetic") { ChainId = Guid.NewGuid(), Address = "Synthetic Address" };
+        var location = new Location("Synthetic") { Address = "Synthetic Address" };
         repository.FindAsync<Location>(location.Id, Arg.Any<CancellationToken>()).Returns(location);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
-        var input = new PolicyWrite(location.Id, null, null, ChargeCategory.Rent, "RENT", "Rent",
+        var input = new PolicyWrite(location.Id, null, ChargeCategory.Rent, "RENT", "Rent",
             ChargingMethod.FixedPerRoomPerMonth, 100, new(2026, 10, 29), null);
         if (accepted)
             Assert.Equal(input.EffectiveFrom, (await service.CreatePolicyAsync(input, default)).EffectiveFrom);

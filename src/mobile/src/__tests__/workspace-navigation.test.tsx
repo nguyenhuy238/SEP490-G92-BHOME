@@ -2,10 +2,16 @@
 import React, { forwardRef, useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-const state = vi.hoisted(() => ({ push: vi.fn(), leave: vi.fn(), role: 'Staff' }));
-vi.mock('expo-router', () => ({ router: { push: state.push } }));
+const state = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  leave: vi.fn(),
+  roles: ['Staff'],
+  signedIn: true,
+}));
+vi.mock('expo-router', () => ({ router: { push: state.push, replace: state.replace } }));
 vi.mock('../lib/SessionProvider', () => ({
-  useSession: () => ({ session: { roles: [state.role] } }),
+  useSession: () => ({ session: state.signedIn ? { roles: state.roles } : null }),
 }));
 vi.mock('../components/NotificationBadge', () => ({ NotificationBadge: () => null }));
 vi.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -104,10 +110,60 @@ import { WorkspaceProvider, useWorkspace } from '../features/workspace/Workspace
 import { WorkspaceShell } from '../components/WorkspaceShell';
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
+  state.roles = ['Staff'];
+  state.signedIn = true;
   vi.clearAllMocks();
-  state.role = 'Staff';
 });
 afterEach(cleanup);
+it.each(['Owner', 'Staff'])('opens the OCR test directly from the %s development home', (role) => {
+  state.roles = [role];
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen={role === 'Owner' ? 'owner-home' : 'staff-home'}>
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Test OCR' }));
+  expect(state.push).toHaveBeenCalledWith('/ocr-test');
+});
+it.each([
+  { development: false, role: 'Staff', home: 'staff-home' as const },
+  { development: false, role: 'Owner', home: 'owner-home' as const },
+  { development: true, role: 'Tenant', home: 'tenant-home' as const },
+  { development: true, role: 'Staff', home: 'notifications' as const },
+])(
+  'hides the OCR test outside an authorized development home: %o',
+  ({ development, role, home }) => {
+    vi.stubGlobal('__DEV__', development);
+    state.roles = [role];
+    render(
+      <WorkspaceProvider>
+        <WorkspaceShell screen={home}>
+          <span>Nội dung</span>
+        </WorkspaceShell>
+      </WorkspaceProvider>,
+    );
+    expect(screen.queryByRole('button', { name: 'Test OCR' })).toBeNull();
+  },
+);
+it('does not offer a real OCR action in role preview without a session', () => {
+  state.signedIn = false;
+  function Preview() {
+    const { startPreview } = useWorkspace();
+    return <button onClick={() => startPreview('Staff')}>Xem mẫu</button>;
+  }
+  render(
+    <WorkspaceProvider>
+      <Preview />
+      <WorkspaceShell screen="staff-home">
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Xem mẫu' }));
+  expect(screen.queryByRole('button', { name: 'Test OCR' })).toBeNull();
+});
 function Draft() {
   const { registerExitGuard, go } = useWorkspace();
   useEffect(() => registerExitGuard(() => true, state.leave), [registerExitGuard]);
@@ -127,6 +183,20 @@ it('lets meter steps use the Staff shell back action without navigating home', (
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect(back).toHaveBeenCalledOnce();
   expect(state.push).not.toHaveBeenCalled();
+});
+it('keeps the draft exit guard when opening the OCR test', () => {
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="staff-home">
+        <Draft />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Test OCR' }));
+  expect(state.push).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
+  expect(state.leave).toHaveBeenCalledOnce();
+  expect(state.push).toHaveBeenCalledWith('/ocr-test');
 });
 it('asks before leaving a draft and navigates only after explicit confirmation', () => {
   render(
@@ -170,7 +240,7 @@ it.each([
   ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Thông báo', 'Cá nhân']],
   ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Báo sự cố', 'Tài khoản']],
 ] as const)('keeps %s destinations in the shared Staff shell', (role, home, labels) => {
-  state.role = role;
+  state.roles = [role];
   const view = render(
     <WorkspaceProvider>
       <WorkspaceShell screen={home}>

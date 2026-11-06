@@ -41,6 +41,7 @@ export default function RootLayout() {
                   name="meter"
                   options={{ headerShown: false, gestureEnabled: false }}
                 />
+                <Stack.Screen name="ocr-test" options={{ title: 'Th? OCR' }} />
                 <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
               </Stack>
             </WorkspaceProvider>

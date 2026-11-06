@@ -3,6 +3,7 @@ using BHome.Domain.Common;
 namespace BHome.Domain.PropertyManagement;
 
 public enum RoomStatus { Available, OnHold, Occupied, Unavailable }
+public enum RoomTransitionSource { Configuration, ContractActivation, ContractTermination }
 public enum AssetStatus { Active, NeedsRepair, UnderRepair, Retired }
 public enum ChargeCategory { Rent, Electricity, Water, ServiceFee }
 public enum ChargingMethod { FixedPerRoomPerMonth, Metered }
@@ -76,7 +77,22 @@ public static class PropertyRules
 
     public static bool CanManuallyChange(RoomStatus current, RoomStatus requested, bool hasResidents) =>
         requested is RoomStatus.Available or RoomStatus.Unavailable &&
-        (current == requested || current is RoomStatus.Available or RoomStatus.Unavailable && !hasResidents);
+        CanChangeRoomStatus(current, requested, RoomTransitionSource.Configuration, hasResidents);
+
+    public static bool CanChangeRoomStatus(RoomStatus current, RoomStatus requested,
+        RoomTransitionSource source, bool hasObligations = false, bool hasOtherActiveContracts = false) =>
+        Enum.IsDefined(current) && Enum.IsDefined(requested) && source switch
+        {
+            RoomTransitionSource.Configuration => current == requested ||
+                current is RoomStatus.Available or RoomStatus.Unavailable &&
+                requested is RoomStatus.Available or RoomStatus.Unavailable && !hasObligations,
+            RoomTransitionSource.ContractActivation =>
+                current is RoomStatus.Available or RoomStatus.Occupied && requested == RoomStatus.Occupied,
+            RoomTransitionSource.ContractTermination => hasOtherActiveContracts
+                ? requested == RoomStatus.Occupied
+                : requested == (current == RoomStatus.Occupied ? RoomStatus.Available : current),
+            _ => false
+        };
 
     public static bool ValidCharge(ChargeCategory category, ChargingMethod method, string code) =>
         category switch

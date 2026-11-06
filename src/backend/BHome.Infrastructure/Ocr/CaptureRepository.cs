@@ -38,10 +38,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" })
         { throw new CaptureConflictException("duplicate_or_conflicting_record"); }
     }
-    public async Task<IReadOnlyList<NamedResource>> ChainsAsync(CancellationToken t) => await db.Set<Chain>().AsNoTracking()
-        .OrderBy(c => c.Name).Take(100).Select(c => new NamedResource(c.Id, c.Name, null)).ToListAsync(t);
     public async Task<IReadOnlyList<NamedResource>> LocationsAsync(CancellationToken t) => await scope.VisibleLocations.AsNoTracking()
-        .OrderBy(l => l.Name).Take(100).Select(l => new NamedResource(l.Id, l.Name, l.ChainId)).ToListAsync(t);
+        .OrderBy(l => l.Name).Take(100).Select(l => new NamedResource(l.Id, l.Name, null)).ToListAsync(t);
     public async Task<IReadOnlyList<NamedResource>> RoomsAsync(Guid id, CancellationToken t)
     {
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();
@@ -80,7 +78,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         return await properties.WithLocationLockAsync(locationId, async () =>
         {
             if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId && r.Location.IsActive &&
-                    r.Status != RoomStatus.Unavailable && r.RoomTypeId != null && r.RoomType!.IsActive, t))
+                    r.Status != RoomStatus.Unavailable, t))
                 throw new CaptureConflictException("room_unavailable");
             var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
             db.Add(resident); Audit("ResidentCreated", "Resident", resident.Id); return new IdResult(resident.Id);
