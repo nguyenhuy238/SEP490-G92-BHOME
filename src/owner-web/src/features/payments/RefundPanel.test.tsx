@@ -187,6 +187,55 @@ it('keeps an interrupted execution Approved and displays recovery metadata', asy
   ).toBeDisabled();
   expect(screen.queryByRole('button', { name: 'Tải chứng từ hoàn tiền' })).not.toBeInTheDocument();
 });
+it('rebinds consent and pending fields when a server intent arrives without a version change', async () => {
+  let pending = false;
+  request.mockImplementation(async () => ({
+    ...source,
+    requests: [
+      {
+        ...row,
+        status: 'APPROVED',
+        version: 2,
+        executionIntent: pending
+          ? {
+              key: 'server-key',
+              contentType: 'image/png',
+              length: 100,
+              sha256: 'ABC',
+              executedAt: '2026-11-06T00:01:00Z',
+              externalReference: 'SYN-SERVER',
+              reason: 'Confirmed server intent',
+            }
+          : null,
+      },
+    ],
+  }));
+  mount();
+  await screen.findByText('Đã duyệt, chờ ghi nhận hoàn · 20.000 ₫ · Synthetic actual payer');
+  fireEvent.change(screen.getByLabelText('Lý do quyết định / xác minh hoàn'), {
+    target: { value: 'Old text' },
+  });
+  fireEvent.click(
+    screen.getByLabelText(
+      'Tôi đã đối chiếu sao kê, xác minh giao dịch hoàn thực sự hoàn tất đúng người nhận',
+    ),
+  );
+  pending = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại nguồn hoàn tiền' }));
+  await vi.waitFor(() =>
+    expect(screen.getByLabelText('Tham chiếu giao dịch hoàn trên sao kê')).toHaveValue(
+      'SYN-SERVER',
+    ),
+  );
+  expect(screen.getByLabelText('Lý do quyết định / xác minh hoàn')).toHaveValue(
+    'Confirmed server intent',
+  );
+  expect(
+    screen.getByLabelText(
+      'Tôi đã đối chiếu sao kê, xác minh giao dịch hoàn thực sự hoàn tất đúng người nhận',
+    ),
+  ).not.toBeChecked();
+});
 it('lets fetch set multipart boundaries while keeping JSON request headers unchanged', async () => {
   const transport = vi.fn().mockImplementation(async () => new Response('{}', { status: 200 }));
   vi.stubGlobal('fetch', transport);

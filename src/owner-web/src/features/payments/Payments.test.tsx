@@ -76,7 +76,9 @@ it('shows backend allocation and surplus separately without offering another all
     await screen.findByText('Đã phân bổ: 100.000 ₫ · Chưa phân bổ: 20.000 ₫'),
   ).toBeInTheDocument();
   expect(
-    screen.getByText('Đã thanh toán đủ hóa đơn; tiền thừa giữ chờ Owner xử lý.'),
+    screen.getByText(
+      'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.',
+    ),
   ).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xác nhận đối soát' })).not.toBeInTheDocument();
 });

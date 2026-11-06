@@ -154,7 +154,13 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
               />
               <Button
                 disabled={
-                  busy || source.isFetching || !checked || !person || !amount || !reason.trim()
+                  busy ||
+                  source.isFetching ||
+                  !checked ||
+                  !person ||
+                  !amount ||
+                  !reason.trim() ||
+                  /^0(?:\.0+)?$/.test(source.data.availableAmount)
                 }
                 onClick={() => void create()}
               >
@@ -163,7 +169,11 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
             </>
           )}
           {source.data.requests.map((row) => (
-            <RefundItem key={`${row.id}:${row.version}`} row={row} saved={reload} />
+            <RefundItem
+              key={`${row.id}:${row.version}:${row.executionIntent?.key ?? ''}`}
+              row={row}
+              saved={reload}
+            />
           ))}
         </>
       )}

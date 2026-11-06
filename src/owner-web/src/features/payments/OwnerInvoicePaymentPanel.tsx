@@ -393,7 +393,11 @@ export function ReconcileTransfer({
         <Typography>
           {data.bankReference} · {formatContractMoney(data.amount)} · {paymentText(data.status)}
         </Typography>
-        <Typography>{paymentText(data.reason)}</Typography>
+        <Typography>
+          {data.reason === 'verified_excess_payment_pending_review'
+            ? 'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.'
+            : paymentText(data.reason)}
+        </Typography>
         {data.allocatedAmount !== undefined && (
           <Typography>
             Đã phân bổ: {formatContractMoney(data.allocatedAmount)} · Chưa phân bổ:{' '}
