@@ -92,6 +92,74 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         { Kinds.Add(kind); return Task.FromResult(new OcrText([new("00012345", .99f)], "synthetic-profile-test", [])); }
     }
 
+    // Invoked only by the explicit local-model + disposable-PostgreSQL test.
+    // Public fixture pixels are real; accounts and configured precision are synthetic.
+    internal async Task RealMeterModelsPersistProposalThenStaffCorrectionAndEvidence()
+    {
+        var root = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
+        var source = await File.ReadAllBytesAsync(Path.Combine(root, ".tools/meter-detection-all-test/wm_clean_000058.jpg"));
+        using var manifest = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root,
+            "tools/BHome.OcrSmoke/model_tools/evaluation-full-test-manifest.json")));
+        Assert.Equal(manifest.RootElement.GetProperty("wm_clean_000058.jpg").GetString(),
+            Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant());
+        using var frame = Cv2.ImDecode(source, ImreadModes.Color); using var resized = new Mat();
+        var ratio = Math.Min(1d, 1600d / Math.Max(frame.Width, frame.Height));
+        Cv2.Resize(frame, resized, new((int)(frame.Width * ratio), (int)(frame.Height * ratio)), 0, 0, InterpolationFlags.Area);
+        var bytes = resized.ImEncode(".jpg", new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
+        var w = await Workspace();
+        var room = await Create(w.Owner, "rooms", new RoomInput(w.Location, "SYN-REAL-MODEL", 2));
+        var meter = await Create(w.Owner, "meters", new MeterInput(room, "SYN-REAL-WATER", UtilityType.Water, MeterDisplay.Mechanical, 2, Today.AddDays(-10)));
+        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(meter, ReadingPurpose.Initial, Today, null));
+        var options = new OcrOptions { Enabled = true, ModelDirectory = Path.Combine(root, ".tools/ocr-models"),
+            MeterDetectionMinConfidence = .7f, MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true,
+                ModelDirectory = Path.Combine(root, ".tools/meter-detection-models") } };
+        using var detector = new YoloMeterSceneDetector(options);
+        using var digits = new YoloWaterDigitRecognizer(options);
+        using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IOcrService>(_ => new LocalOcrService(options, new Lazy<IOcrEngine>(() => engine), NullLogger<LocalOcrService>.Instance))));
+        using var client = host.CreateClient();
+        // Each test host has its own signing key; authenticate on this host.
+        await using (var loginScope = host.Services.CreateAsyncScope())
+        {
+            var email = (await loginScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Users.SingleAsync(u => u.Id == w.StaffId)).Email;
+            var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password }); login.EnsureSuccessStatusCode();
+            client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
+        }
+        using var image = new ByteArrayContent(bytes); image.Headers.ContentType = new("image/jpeg");
+        var response = await client.PostAsync($"/api/v1/ocr/meter-tasks/{task}", image); response.EnsureSuccessStatusCode();
+        var proposal = (await response.Content.ReadFromJsonAsync<OcrProposal>())!;
+        Assert.Equal("004314.69", proposal.ProposedFields["reading"]);
+        Assert.Equal(OnnxOcrEngine.Version, proposal.EngineVersion);
+        Assert.True(proposal.RequiresConfirmation);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
+            Assert.Equal(4314.69m, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == task)).OcrProposedValue);
+        }
+        using var evidenceBytes = new ByteArrayContent(bytes); evidenceBytes.Headers.ContentType = new("image/jpeg");
+        var upload = await client.PutAsync($"/api/v1/capture/meter-tasks/{task}/evidence", evidenceBytes); upload.EnsureSuccessStatusCode();
+        var evidence = (await upload.Content.ReadFromJsonAsync<IdResult>())!.Id;
+        var confirmation = new MeterConfirmation(true, 4314.70m, evidence);
+        var confirmed = await client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", confirmation); confirmed.EnsureSuccessStatusCode();
+        var result = (await confirmed.Content.ReadFromJsonAsync<ConfirmedReading>())!;
+        var replay = await client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", confirmation); replay.EnsureSuccessStatusCode();
+        Assert.Equal(result.Id, (await replay.Content.ReadFromJsonAsync<ConfirmedReading>())!.Id);
+        await using var finalScope = host.Services.CreateAsyncScope();
+        var storedDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var stored = await storedDb.Set<MeterReading>().SingleAsync(r => r.TaskId == task);
+        Assert.Equal(MeterReadingStatus.Corrected, stored.Status);
+        Assert.Equal(4314.69m, stored.OcrProposedValue);
+        Assert.Equal(4314.70m, stored.ConfirmedValue);
+        Assert.Null(stored.Consumption);
+        var storedEvidence = await storedDb.Set<MeterEvidence>().SingleAsync(e => e.Id == evidence);
+        Assert.True(storedEvidence.IsLinked);
+        using var downloaded = new MemoryStream();
+        await finalScope.ServiceProvider.GetRequiredService<IObjectStorage>().CopyToAsync(storedEvidence.ObjectKey, downloaded, default);
+        Assert.Equal(SHA256.HashData(bytes), SHA256.HashData(downloaded.ToArray()));
+    }
+
     [Fact]
     public async Task OcrPersistsOnlyTheProposalUsingDatabaseDisplayPrecision()
     {

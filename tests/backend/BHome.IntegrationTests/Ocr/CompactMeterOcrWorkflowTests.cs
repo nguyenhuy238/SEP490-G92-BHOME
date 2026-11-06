@@ -19,4 +19,15 @@ public sealed class CompactMeterOcrWorkflowTests
     [CompactPostgresFact] public Task ProposalIsNotConfirmed() => Run(t => t.OcrPersistsOnlyTheProposalUsingDatabaseDisplayPrecision());
     [CompactPostgresFact] public Task MonotonicityRequiresReview() => Run(t => t.OcrWarnsAgainstTheSameMetersConfirmedBaselineWithoutCompletingTheTask());
     [CompactPostgresFact] public Task ConfirmationEvidenceAndReplay() => Run(t => t.ConfirmMeterWorkflowAsync(verifyMinioObject: false));
+    [LocalMeterPostgresFact] public Task RealModelsProposalCorrectionAndEvidence() => Run(t => t.RealMeterModelsPersistProposalThenStaffCorrectionAndEvidence());
+}
+
+public sealed class LocalMeterPostgresFactAttribute : FactAttribute
+{
+    public LocalMeterPostgresFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")))
+            Skip = "Requires disposable loopback PostgreSQL and pinned public local OCR models.";
+    }
 }
