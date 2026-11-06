@@ -561,9 +561,37 @@ TESTS:
 - Lượt đầu dùng nhầm label Mobile thay label Owner; sau đó consent reset do cached eligibility dẫn tới fix a7aa72e (21/21 UI tests). Datetime-local trailing-zero .900 bị Chromium normalize nên dùng chuỗi canonical giữ nguyên instant, không tăng timeout/đổi clock/giảm approval guard.
 COMMIT:
 - Message: test(moveout): [BE-19] verify manual deposit return and room release E2E
-- SHA ghi sau commit E2E.
+- SHA: `2c1c3c5fb074cff2d1ddb8d124cb8cee69d0baee`.
 FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long. Actual Owner build/API mode được chạy; Staff/Tenant dùng shipped MobileApi/shared client, không native UI.
 STATUS: DONE cho nhánh E2E không khấu trừ; BE-19/BE-X07 vẫn PARTIAL.
 REMAINING:
 - Khấu trừ có phí/damage/debt journal chưa triển khai, Finance deposit refund classification tiếp tục pending guard, notification worker tắt nên không claim notification E2E. MySign thật/native bank/device acceptance vẫn chưa đạt; không payout thật hoặc tuyên bố simulation có giá trị pháp lý.
+
+TASK: BE-19 / BE-X07
+SLICE: Backend Owner quyết định khấu trừ TenantDamage có evidence và hoàn phần còn lại
+IMPLEMENTED:
+- Truy vết UC-19/SRS p1833–1840, GBR-01/02/18, OQ-01/05 theo ủy quyền người dùng → DepositDeductionService/repository/ledger/refund source → unit/PG role/race/history/evidence/closure tests.
+- POST contracts/{id}/deposit-deductions Owner-only, expectedVersion/current summary reference, UUID key và human approval. Chỉ TenantDamage do Owner nhập, evidence linked đúng inspection/Room/Asset, một item/Room/Asset, tổng <=available deposit. Không auto phí/phạt/lãi hoặc bù debt trực tiếp.
+- Append DepositDeductionV1 vào contracts.history với version/actor/reason/source/proof hashes và audit; không thêm bảng/cột. Revision thay current plan, giữ tất cả bản cũ, không cộng lặp; sau reserve/refund không sửa plan.
+- Nguồn thiếu/đổi/không khớp giữ pending. Available trừ approved deduction một lần. Source refund giữ deposit principal riêng, chỉ request phần còn lại, bắt buộc review plan ID/fingerprint và xác minh depositor. Không dùng cờ no-deduction cho plan có phí.
+- Partial deduction + verified refund hoặc full retained deposit mới đủ đối ứng nguồn; full retention không tạo refund0/bank success. Actual proof bị thay chặn refund/settlement/closure. Invoice/allocations gốc không đổi, không tự tạo OPEX/Work Order.
+CHANGED FILES:
+- Application/Contracts/DepositDeductionService.cs; ContractContracts.cs; SettlementCalculation.cs; Finance/RefundService.cs
+- Infrastructure/Contracts/{DepositDeductionRepository,DepositDeductionEvidence,ContractDepositPosition,ContractSettlementLedger}.cs
+- Infrastructure/Finance/{RefundRepository,DepositRefundSource}.cs; DependencyInjection.cs; Api/Controllers/DepositDeductionsController.cs
+- Application.UnitTests/Contracts/DepositDeductionTests.cs; IntegrationTests/PaymentsDebt/DepositDeductionTests.cs; Compact24WorkflowRegressionTests.cs
+- docs/api/DEPOSIT_DEDUCTIONS.md, index/conventions/refund/status/runtime docs và báo cáo này.
+TESTS:
+- dotnet test Application.UnitTests --filter DepositDeductionTests|SettlementCalculationTests|RefundModeTests: 25/25 đạt (log huy-deduction-unit.log).
+- dotnet test IntegrationTests --filter damage/fullDamage/depositReturn/Recovery/Refund/legacyClosure/ApiAudit: 19/19 đạt, 0 skip (log huy-deduction-pg.log). 3 damage + 7 existing refund + 3 legacy closure + 6 audit.
+- Có canonical exact money/version serialization, unsupported reason/negative/fraction/excess/unknown evidence, unauthorized before lookup, Production simulation denial, concurrent same/different keys, stale/revision/history, proof tamper, remainder return/full retention/closure và invoice immutable.
+- API audit mới 216 routes, 211 protected, 5 anonymous, 106 Owner GET, 0 5xx; generated inventory khớp manifest riêng. Build 0 warning/error. Không chạy browser có phí/native/provider trong slice backend.
+COMMIT:
+- Message: feat(deposit): [BE-X07] approve evidenced damage deductions and refund remainders
+- SHA ghi sau commit deduction backend.
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường: cần plan editor và approved-plan consent. Mobile Bùi Bảo Long: authorized fee breakdown/read-only; không cấp Staff quyền duyệt.
+STATUS: PARTIAL — backend supported TenantDamage branch đã test; BE-19/BE-X07 chưa DONE.
+REMAINING:
+- Owner UI/bank-evidence E2E có phí, Finance classification/retained compensation, notification. Debt offset/fees vượt cọc/semantic duplicate fee nhập tay không tự suy quyết định; xem DEPOSIT_DEDUCTIONS.md. Không tuyên bố native/bank/MySign acceptance.

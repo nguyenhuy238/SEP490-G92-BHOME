@@ -4,7 +4,7 @@ Ngày xác minh audit: **2026-11-06**. Schema: compact24-2026-11-04.
 
 Sinh từ action descriptors của BHome.Api và dò callsite client; không sửa bảng này bằng tay. Xem [trạng thái bàn giao và giới hạn](API_IMPLEMENTATION_STATUS.md), [quy ước](API_CONVENTIONS.md) và [mục lục module](README.md).
 
-**215 controller routes**, 210 protected (anonymous request trả 401), 5 anonymous; thêm 2 health endpoints. Owner GET probes: **106**, phân bố HTTP: 200=32, 204=2, 400=10, 403=3, 404=59.
+**216 controller routes**, 211 protected (anonymous request trả 401), 5 anonymous; thêm 2 health endpoints. Owner GET probes: **106**, phân bố HTTP: 200=32, 204=2, 400=10, 403=3, 404=59.
 
 Probe GET dùng ID không tồn tại hoặc thiếu query kiểm nhánh lỗi/không phụ thuộc legacy; không chứng minh mọi happy path. Route Development vẫn xuất hiện trong descriptor nhưng có environment/configuration gate. Có lời gọi nghĩa là có source callsite, chưa phải E2E; client dùng chung chưa chứng minh màn hình đã dùng. Wrapper action động có thể không được dò ra; xem phần đối chiếu thủ công trong trạng thái bàn giao.
 
@@ -166,6 +166,12 @@ Policy ở nhiều attribute áp dụng kết hợp; các role trong cùng attri
 | Method / route | Backend / database | Input / action | Quyền | Owner Web | Mobile |
 | --- | --- | --- | --- | --- | --- |
 | `GET /api/v1/debts` | Compact24 | [DebtsController.cs](../../src/backend/BHome.Api/Controllers/PaymentsDebt/DebtsController.cs).List: query: PaymentQuery (Query) | Owner,Staff,Tenant | Có lời gọi: [DebtsPage.tsx](../../src/owner-web/src/features/debts/pages/DebtsPage.tsx) | Có client; chưa xác nhận UI: [payments.ts:165](../../packages/client-core/src/payments.ts#L165) |
+
+### DepositDeductions
+
+| Method / route | Backend / database | Input / action | Quyền | Owner Web | Mobile |
+| --- | --- | --- | --- | --- | --- |
+| `POST /api/v1/contracts/{id:guid}/deposit-deductions` | Compact24 | [DepositDeductionsController.cs](../../src/backend/BHome.Api/Controllers/DepositDeductionsController.cs).Approve: id: Guid (Path); input: DepositDeductionInput (Body) | Owner | Chưa tìm thấy lời gọi tương ứng | Chưa tìm thấy lời gọi tương ứng |
 
 ### Expenses
 

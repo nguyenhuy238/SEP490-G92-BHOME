@@ -18,7 +18,17 @@ internal sealed partial class RefundRepository
         if (contract.Status != ContractStatus.Active) blockers.Add("deposit_contract_not_active");
         if (summary.VerifiedSecurityDeposit <= 0 || summary.Calculation?.DepositPositionConsistent != true ||
             summary.Calculation.DepositAllocated != 0) blockers.Add("deposit_source_requires_review");
-        if (summary.ApprovedFinalCharges != 0) blockers.Add("deposit_deductions_require_review");
+        if (summary.DepositDeductions is { } plan)
+        {
+            if (summary.ApprovedDeductions != plan.Total || summary.ApprovedFinalCharges != plan.Total)
+                blockers.Add("deposit_deductions_require_review");
+            else
+            {
+                if (deductionEvidence is null) throw new FinanceException(503, "deduction_evidence_unavailable");
+                await deductionEvidence.VerifyAsync(plan, t);
+            }
+        }
+        else if (summary.ApprovedFinalCharges != 0) blockers.Add("deposit_deductions_require_review");
         var requests = (await Rows.Where(r => r.SourceDepositContractId == summary.DepositContractId)
             .OrderByDescending(r => r.RequestedAt).ToArrayAsync(t)).Select(Decode).ToArray();
         var allReserved = await db.Database.SqlQuery<decimal>($"""
@@ -33,7 +43,8 @@ internal sealed partial class RefundRepository
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // Choices are eligible occupants, NOT inferred deposit payers. The Owner must explicitly verify
         // the original depositor before requesting; the attestation is retained in immutable refund history.
-        return new(summary.VerifiedSecurityDeposit, contract.IsDevelopmentDemo, people, requests,
-            summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit);
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0), contract.IsDevelopmentDemo, people, requests,
+            summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
+            summary.VerifiedSecurityDeposit, summary.DepositDeductions);
     }
 }

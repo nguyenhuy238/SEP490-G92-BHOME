@@ -87,6 +87,9 @@ public sealed class Compact24InvoiceRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24PaymentRegressionTests
 {
+    [CompactPostgresFact] public Task DamageDeductionAndRemainder() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(100000));
+    [CompactPostgresFact] public Task FullDamageDeduction() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(400000));
+    [CompactPostgresFact] public Task DamageDeductionHistoryAndEvidence() => Run(t => t.DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle());
     [CompactPostgresFact] public Task DepositReturnAndClosure() => Run(t => t.UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure());
     [CompactPostgresFact] public Task DepositReturnChangedSource() => Run(t => t.ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased());
     [CompactPostgresFact] public Task DepositReturnUnknownHistory() => Run(t => t.UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn());

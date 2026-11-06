@@ -1,6 +1,6 @@
 # BHOME — tài liệu API cho team
 
-Cập nhật **06/11/2026**, đối chiếu runtime `BHome.Api` trên Compact24 và mã client hiện có. Bắt đầu từ [trạng thái triển khai](API_IMPLEMENTATION_STATUS.md) để biết phần đã có, phần còn thiếu và mức kiểm chứng. [Danh mục runtime](API_RUNTIME_ROUTES.md) liệt kê đủ **215 controller routes**; đây không phải tuyên bố toàn bộ sản phẩm đã nghiệm thu.
+Cập nhật **06/11/2026**, đối chiếu runtime `BHome.Api` trên Compact24 và mã client hiện có. Bắt đầu từ [trạng thái triển khai](API_IMPLEMENTATION_STATUS.md) để biết phần đã có, phần còn thiếu và mức kiểm chứng. [Danh mục runtime](API_RUNTIME_ROUTES.md) liệt kê đủ **216 controller routes**; đây không phải tuyên bố toàn bộ sản phẩm đã nghiệm thu.
 
 | Tài liệu | Dùng khi phát triển |
 | --- | --- |
@@ -13,6 +13,7 @@ Cập nhật **06/11/2026**, đối chiếu runtime `BHome.Api` trên Compact24 
 | [INVOICE_ADJUSTMENTS.md](INVOICE_ADJUSTMENTS.md) | Tenant request/evidence, Owner approve/reject, hiệu lực trước/sau Final |
 | [PAYMENTS.md](PAYMENTS.md) | QR từ backend, sao kê thủ công, phân bổ thiếu/thừa, debt/history và privacy |
 | [REFUNDS.md](REFUNDS.md) | Receipt thừa và nguồn cọc không khấu trừ; Owner review/manual execution/private evidence |
+| [DEPOSIT_DEDUCTIONS.md](DEPOSIT_DEDUCTIONS.md) | Owner quyết định thiệt hại có evidence, giới hạn cọc và hoàn phần còn lại; backend đã có, UI tiếp tục |
 | [FINANCE.md](FINANCE.md) | Đầu tư/OPEX, chứng từ, báo cáo, historical occupancy, hoàn vốn và What-if |
 | [NOTIFICATIONS.md](NOTIFICATIONS.md) | Inbox, business-event publisher và JOB-04 delivery/retry |
 

@@ -162,6 +162,9 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractDocumentRenderer, BHome.Infrastructure.Contracts.ContractPdfRenderer>();
         services.AddScoped<BHome.Application.Contracts.IContractSettlementLedger, BHome.Infrastructure.Contracts.ContractSettlementLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractDepositPosition, BHome.Infrastructure.Contracts.ContractDepositPosition>();
+        services.AddScoped<BHome.Application.Contracts.IDepositDeductionRepository, BHome.Infrastructure.Contracts.DepositDeductionRepository>();
+        services.AddScoped<BHome.Application.Contracts.IDepositDeductionEvidence, BHome.Infrastructure.Contracts.DepositDeductionEvidence>();
+        services.AddScoped<BHome.Application.Contracts.DepositDeductionService>();
         services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.UnconfiguredContractHoldingLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();

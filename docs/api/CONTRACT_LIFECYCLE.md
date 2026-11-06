@@ -129,7 +129,8 @@ vẫn Unconfigured, chưa nghiệm thu gửi thật.
 Hoàn xong khoản dư đó không tự bỏ blocker `deposit_deduction_refund_policy_required` hoặc giải phóng Room.
 Slice mới [hoàn cọc không khấu trừ](REFUNDS.md) đã có nguồn deposit riêng và manual execution/evidence;
 chỉ hoàn đầy đủ, không reservation, source hợp lệ và mọi guard khác đạt mới bỏ blocker cọc. Nhánh
-khấu trừ có phí/journal đầy đủ còn thiếu; nullable không được đổi thành 0 để giả resolved.
+khấu trừ `TenantDamage` nay có [backend plan/evidence/remainder journal](DEPOSIT_DEDUCTIONS.md),
+Owner UI/E2E có phí đang tiếp tục; nullable không được đổi thành 0 để giả resolved.
 Chưa có MySign staging thật hoặc mẫu Production được duyệt.
 
 ## Settlement calculation — BE-19, 06/11/2026

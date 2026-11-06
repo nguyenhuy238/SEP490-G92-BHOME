@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
 
-internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome.Application.Contracts.IContractSettlementLedger ledger) : IRefundRepository
+internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome.Application.Contracts.IContractSettlementLedger ledger,
+    BHome.Application.Contracts.IDepositDeductionEvidence? deductionEvidence = null) : IRefundRepository
 {
     private const string Kind = "ExcessReceiptRefundV1";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);

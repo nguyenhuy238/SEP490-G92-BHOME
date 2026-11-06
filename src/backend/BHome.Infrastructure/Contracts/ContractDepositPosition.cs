@@ -27,7 +27,8 @@ internal sealed class ContractDepositPosition(BHomePersistenceContext db) : ICon
                 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(r.history) h
                   WHERE h->>'recordType'='SecurityDepositRefundV1'
                     AND h->'state'->>'sourceReference'={financialReference}
-                    AND h->'state'->>'beneficiaryVerified'='true' AND h->'state'->>'noDeductionsConfirmed'='true'
+                    AND h->'state'->>'beneficiaryVerified'='true'
+                    AND (h->'state'->>'noDeductionsConfirmed'='true' OR h->'state'->>'deductionsConfirmed'='true')
                     AND (r.status<>'COMPLETED' OR (
                       h->'state'->'upload'->>'objectKey'=r.execution_evidence_key
                       AND h->'state'->'upload'->>'externalReference'=r.external_refund_reference

@@ -5,6 +5,11 @@ Cập nhật **06/11/2026**, triển khai `12043f0`, UI recovery `17c4228`. [Tr�
 
 ## Bổ sung hoàn cọc không khấu trừ — BE-19/BE-X07
 
+Backend mới có [plan khấu trừ TenantDamage](DEPOSIT_DEDUCTIONS.md): nguồn deposit trả
+`depositDeductions`; sau Owner approval có thể hoàn phần còn lại bằng `expectedDeductionPlanId`,
+`deductionsConfirmed:true`, `noDeductionsConfirmed:false`. Guard/hash/approval/execution hiện hữu
+được giữ. Phần mô tả bên dưới là nhánh không plan; UI có phí được nối ở slice sau.
+
 GET/POST `/api/v1/contracts/{id}/deposit-refunds`, Owner-only. Dùng Security Deposit root của
 renewal chain, không dùng source_payment_id receipt. Không thêm bảng/cột. Chỉ khả dụng khi Contract
 Active, Owner đã duyệt termination/inspection và xác nhận NoAdditionalCharges, mọi kỳ invoice

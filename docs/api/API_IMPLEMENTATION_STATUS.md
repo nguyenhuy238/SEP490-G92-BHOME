@@ -2,9 +2,9 @@
 
 Rà soát **06/11/2026**, nhánh `member/QHuy`, backend tại commit `d75fea5` (gồm refund `12043f0` và sửa UI `17c4228`). Bổ sung tiếp BE-19/BE-X07: calculation và hoàn cọc không khấu trừ; không đổi schema hoặc dữ liệu làm việc.
 
-**215 controller routes đang được BHome.Api nạp**, gồm **210 protected** và **5 anonymous**, cộng 2 health endpoints. Danh sách đầy đủ, input/action, policy và source callsite: [API_RUNTIME_ROUTES.md](API_RUNTIME_ROUTES.md). [Mục lục module](README.md) và [quy ước tích hợp](API_CONVENTIONS.md) là điểm bắt đầu cho team.
+**216 controller routes đang được BHome.Api nạp**, gồm **211 protected** và **5 anonymous**, cộng 2 health endpoints. Danh sách đầy đủ, input/action, policy và source callsite: [API_RUNTIME_ROUTES.md](API_RUNTIME_ROUTES.md). [Mục lục module](README.md) và [quy ước tích hợp](API_CONVENTIONS.md) là điểm bắt đầu cho team.
 
-Đã chạy lại `Compact24ApiAuditTests` sau slice hoàn cọc không khấu trừ: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 210 protected routes trả 401 khi không có phiên. **106 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=59; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
+Đã chạy lại `Compact24ApiAuditTests` sau slice hoàn cọc không khấu trừ: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 211 protected routes trả 401 khi không có phiên. **106 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=59; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
 
 ## Cách đọc và dùng tài liệu
 
@@ -28,7 +28,7 @@ Rà soát **06/11/2026**, nhánh `member/QHuy`, backend tại commit `d75fea5` (
 | Residence — UC-18/GBR-06 | Có metadata residence trong dữ liệu người ở | Chưa có residence workflow API riêng; Tenant đăng ký ngoài BHOME qua VNeID, Owner xác nhận; Staff không đăng ký/duyệt thay |
 | Meter/billing/adjustment — BF-05/UC-20..21/24, JOB-09/10 | Confirmed reading → Draft/Final; Owner opt-in automation; Tenant request/private evidence → Owner decision; Final giữ bất biến | Browser tổng hợp một Invoice/ba Tenant đã chạy; native xuyên chu kỳ, delivery thực tế và reviewer còn thiếu |
 | Payment/debt — BF-06/UC-22..25 | Owner sao kê thủ công, allocation=min(receipt,outstanding), partial/excess, payer privacy, QR/debt/history từ backend | Chưa nghiệm thu bank callback/provider tự động; ảnh hoặc frontend không chứng minh tiền đã đến |
-| Refund receipt/cọc — BE-X07 | 7 API Owner-only: receipt và nguồn cọc riêng, request/approve/reject/execution/private download; receipt/cọc Owner Web đã nối trong màn Contract trả phòng | Owner chuyển tiền bên ngoài rồi xác minh; không tự giải ngân. Cọc chỉ nhánh Owner xác nhận không khấu trừ, mọi hóa đơn đã xử lý; Browser cọc không khấu trừ 19 nhóm đã chạy; native và finance classification còn thiếu. Chưa credit, deduction có phí hoặc refund dư do Adjustment sau Paid |
+| Refund receipt/cọc — BE-X07 | 7 API Owner-only: receipt và nguồn cọc riêng, request/approve/reject/execution/private download; receipt/cọc Owner Web đã nối trong màn Contract trả phòng | Owner chuyển tiền bên ngoài rồi xác minh; không tự giải ngân. Cọc chỉ nhánh Owner xác nhận không khấu trừ, mọi hóa đơn đã xử lý; Browser cọc không khấu trừ 19 nhóm đã chạy; native và finance classification còn thiếu. Backend TenantDamage deduction có evidence đã có; Owner UI có phí tiếp tục. Chưa credit hoặc refund dư do Adjustment sau Paid |
 | Finance — FE-08/UC-31..34, GBR-15/16 | 8 Expenses routes (CRUD, scoped refs, private evidence), report/capital recovery, 4 What-if routes; Owner Web API mode + browser đã chạy | Staff cost chưa tự sinh; Work Order chỉ tham chiếu nguồn có sẵn; historical occupancy chỉ một Location, không Room/toàn chuỗi; refund chưa phân loại giữ unavailable guard |
 | Notification — FE-07/UC-35..36, JOB-04 | Inbox, event publisher, delivery/retry/lease/monitoring có implementation và client; delivery lỗi không rollback nghiệp vụ | Email/push mặc định Unconfigured; chưa có delivery thật. Refund mới không có notification consumer riêng |
 | Incident/Emergency/Work Order — BF-07/UC-26..30 | Chưa có controller/service lifecycle BF-07 đầy đủ trong host | Owner Web còn mock; bảng/expense reference có sẵn không chứng minh review/plan/repair/verify đã triển khai |
@@ -40,7 +40,7 @@ Chính sách thiếu/thừa tiền và receipt-excess refund được triển kh
 
 | Bằng chứng | Kết quả thực tế | Thời điểm / giới hạn |
 | --- | --- | --- |
-| Audit API vừa chạy | 6/6, 215 routes, 210 protected trả 401, 106 Owner GET không 5xx | Chạy lại sau deposit-refund slice 06/11; synthetic Compact24 DB, không dùng working bhome |
+| Audit API vừa chạy | 6/6, 216 routes, 211 protected trả 401, 106 Owner GET không 5xx | Chạy lại sau deposit-refund slice 06/11; synthetic Compact24 DB, không dùng working bhome |
 | Kiểm tra tài liệu vừa chạy | Lượt tài liệu trước: 213 route + 2 health, 213 controller links, 580 liên kết nội bộ hợp lệ | Generator tái sinh cùng nội dung, giữ nguyên bản bàn giao; 4 trường hợp manifest sai bị từ chối trước khi ghi; node syntax và git diff --check đạt |
 | Full backend regression | Domain 90 + Application 253 + Integration 615 đạt; 1 optional real-OCR integration skip, 0 fail | Lượt triển khai trước, cùng mã backend; không chạy lại full suite trong lượt tài liệu |
 | Full frontend regression | Owner Web 144/144, Mobile 376/376 | Lượt triển khai trước; component/transport không thay thế native acceptance |
@@ -49,7 +49,7 @@ Chính sách thiếu/thừa tiền và receipt-excess refund được triển kh
 | Digital-signing solution riêng | 41/41 | Lượt trước; không chứng minh sandbox controllers đã mount hoặc MySign thật hoạt động |
 | Real OCR riêng | HTTP model smoke 1/1; OCR unit 125/125, integration focused 119/119 | Lượt trước; không phải benchmark >=50 ảnh/90% và không tính integration skip thành pass |
 
-Commands, kết quả và commit triển khai: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Log audit mới ở `.tools/huy-deposit-refund-pg.log`, manifest ở `.tools/deposit-refund-evidence/api-route-audit.json` (audit mới, local/ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
+Commands, kết quả và commit triển khai: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Log audit mới ở `.tools/huy-deposit-refund-pg.log`, manifest ở `.tools/deposit-deduction-evidence/api-route-audit.json` (audit mới, local/ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
 
 ## Điểm bắt đầu cho người phát triển tiếp
 
@@ -72,7 +72,7 @@ Các dòng này bổ sung cho kết quả dò tĩnh bảo thủ phía trên; ngu
 
 ## Module có controller source nhưng không được host BHome.Api nạp
 
-`src/digital-signing/BHome.DigitalSigning.Api` là thư viện controllers, không có Program/host riêng. BHome.Api không tham chiếu project này và không gọi AddDigitalSigning. Các route sau **không nằm trong runtime 215 routes**, không được coi là đã chuyển/đã nối. Không tự bật module vì sẽ thêm DigitalSigningDbContext/bảng ngoài Compact24 và có endpoint chứng thư trùng với controller native.
+`src/digital-signing/BHome.DigitalSigning.Api` là thư viện controllers, không có Program/host riêng. BHome.Api không tham chiếu project này và không gọi AddDigitalSigning. Các route sau **không nằm trong runtime 216 routes**, không được coi là đã chuyển/đã nối. Không tự bật module vì sẽ thêm DigitalSigningDbContext/bảng ngoài Compact24 và có endpoint chứng thư trùng với controller native.
 
 | Source                                                                                                                              | Route khai báo                                                | Trạng thái                                        |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
