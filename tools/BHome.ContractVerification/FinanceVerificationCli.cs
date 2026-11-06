@@ -46,7 +46,7 @@ internal static class FinanceVerificationCli
                 var result=await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user,password);
                 if(!result.Succeeded)throw new InvalidOperationException("Synthetic account creation failed.");
                 actors["owner"]=new{id=user.Id,email,password};
-                if(mainDraft)foreach(var (name,role) in new[]{("staff","Staff"),("tenant","Tenant"),("coTenant1","Tenant"),("coTenant2","Tenant"),("otherTenant","Tenant")})
+                if(mainDraft)foreach(var (name,role) in new[]{("staff","Staff"),("otherStaff","Staff"),("tenant","Tenant"),("coTenant1","Tenant"),("coTenant2","Tenant"),("otherTenant","Tenant")})
                 {
                     var account=new ApplicationUser{Id=Guid.NewGuid(),Email=$"draft-{Guid.NewGuid():N}@example.invalid",IsActive=true};account.UserName=account.Email;
                     db.PrepareUserRole(account,role);
@@ -119,8 +119,14 @@ internal static class FinanceVerificationCli
                     throw new InvalidOperationException("Shared invoice allocation invariant failed.");
                 if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE status='COMPLETED' AND requested_amount=10000 AND execution_evidence_key IS NOT NULL").SingleAsync()!=1)
                     throw new InvalidOperationException("Expected one explicitly recorded synthetic excess refund.");
+                if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={invoice.RepresentativeContractId} AND source_payment_id IS NULL AND status='COMPLETED' AND requested_amount=3000000 AND execution_evidence_key IS NOT NULL").SingleAsync()!=1)
+                    throw new InvalidOperationException("Expected one source-specific verified manual deposit return.");
+                var closed=await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c=>c.Id==invoice.RepresentativeContractId);
+                if(closed.Status!=BHome.Domain.TenantContracts.ContractStatus.Terminated || closed.ActualEndDate is null ||
+                    await db.Set<Room>().Where(r=>r.Id==invoice.RoomId).Select(r=>r.Status).SingleAsync()!=RoomStatus.Available)
+                    throw new InvalidOperationException("Deposit settlement did not close the Contract and release the Room.");
                 if(!await db.IsSchemaReadyAsync())throw new InvalidOperationException("Compact24 schema changed.");
-                Console.WriteLine("PASS: disposable database retains one immutable Final invoice, three recipients, two distinct payer allocations, one explicitly recorded synthetic excess refund and the unchanged Compact24 schema.");
+                Console.WriteLine("PASS: disposable database retains the immutable shared Final invoice and two payer allocations, distinct completed excess/deposit refunds, a closed Contract/released Room and unchanged Compact24 schema.");
             }
             return node.ExitCode;
         }

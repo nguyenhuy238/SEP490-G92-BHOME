@@ -537,9 +537,33 @@ TESTS:
 - Harness đầy đủ chưa pass tại lúc sửa; còn chạy lại sau commit. Các lỗi locator nhầm nhãn Mobile và datetime-local trailing-zero normalization là ở harness, không tăng timeout/giảm guard.
 COMMIT:
 - Message: fix(moveout): [BE-19] refresh scoped deposit eligibility after decisions
-- SHA ghi sau commit cache fix.
+- SHA: `a7aa72eb987fa3090a6ac8890cd20d1a2d2d571a`.
 FRONTEND HANDOFF:
 - Owner Web: Vũ Xuân Trường; Mobile không đổi trong fix này.
 STATUS: DONE cho defect cache được tái hiện; BE-19 vẫn PARTIAL.
 REMAINING:
 - Tiếp tục E2E real Web/API/MinIO của nhánh cọc mới; khấu trừ có phí/native/provider chưa hoàn tất.
+
+TASK: BE-19 / BE-X07
+SLICE: Real Web/API/Compact24/MinIO move-out và hoàn cọc không khấu trừ
+IMPLEMENTED:
+- Mở rộng harness hiện hữu sau shared billing/historical occupancy, không seed trạng thái move-out/Final reading/refund/closed Contract trực tiếp. Thêm otherStaff account không assignment để kiểm scope âm.
+- Tenant request → Owner browser approve → Owner schedule qua client → Staff MobileApi tạo/confirm Final120, inspection theo confirmed handover v2/assets/private evidence → Owner browser review NoAdditionalCharges.
+- Owner browser xác minh người nộp theo statement fixture, request/approve/manual execution cọc 3.000.000 kèm ảnh MinIO, private download đúng bytes → Tenant authorized summary VerifiedManual → Owner review đúng snapshot và complete → Room Available.
+- Approved/pending refund không cho complete; cross-Tenant/co-occupant không có Contract entitlement và Staff ngoài Location không đọc Final tasks/inspection. Tenant không tải Owner refund proof. Giữ một Final Invoice/ba recipients/hai allocations và hai refund source riêng (receipt10.000, deposit3.000.000).
+CHANGED FILES:
+- scripts/Verify-MoveOutClients.cjs (mới); scripts/Verify-MainDraftClients.cjs; scripts/Verify-ExcessRefundClients.cjs
+- tools/BHome.ContractVerification/FinanceVerificationCli.cs; docs/api/REFUNDS.md, API_IMPLEMENTATION_STATUS.md; báo cáo này.
+TESTS:
+- dotnet build tools/BHome.ContractVerification --no-restore: đạt, 0 warning/error.
+- dotnet run --project tools/BHome.ContractVerification --no-build -- --finance --main-draft: exit0, 19/19 nhóm PASS, DB/MinIO/API/browser fixture cleanup. Log .tools/huy-moveout-browser.log.
+- node --check các script mới/sửa và git diff --check đạt.
+- Lượt đầu dùng nhầm label Mobile thay label Owner; sau đó consent reset do cached eligibility dẫn tới fix a7aa72e (21/21 UI tests). Datetime-local trailing-zero .900 bị Chromium normalize nên dùng chuỗi canonical giữ nguyên instant, không tăng timeout/đổi clock/giảm approval guard.
+COMMIT:
+- Message: test(moveout): [BE-19] verify manual deposit return and room release E2E
+- SHA ghi sau commit E2E.
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long. Actual Owner build/API mode được chạy; Staff/Tenant dùng shipped MobileApi/shared client, không native UI.
+STATUS: DONE cho nhánh E2E không khấu trừ; BE-19/BE-X07 vẫn PARTIAL.
+REMAINING:
+- Khấu trừ có phí/damage/debt journal chưa triển khai, Finance deposit refund classification tiếp tục pending guard, notification worker tắt nên không claim notification E2E. MySign thật/native bank/device acceptance vẫn chưa đạt; không payout thật hoặc tuyên bố simulation có giá trị pháp lý.

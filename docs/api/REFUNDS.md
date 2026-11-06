@@ -63,6 +63,14 @@ Staff không fetch/hiển thị summary tài chính; confirmation inspection ri�
 không dùng consent quyết toán Owner. Component **5/5**, Mobile typecheck/lint đạt. ADB không có
 trên PATH/standard SDK path đã kiểm: native device E2E **NOT RUN**, handoff Bùi Bảo Long.
 
+E2E tiếp theo: `BHome.ContractVerification --finance --main-draft` đạt **19/19 nhóm**, real Owner
+Web/API/Compact24/MinIO. Từ Main Draft → shared bill/partial/Adjustment/excess refund → Tenant
+termination → Owner duyệt → assigned Staff Final readings/inspection → Owner xác nhận không phí
+→ deposit request/approve/manual execution/private download → settlement review → Contract
+Terminated/Room Available. Kiểm bytes chứng từ, invoice/allocations bất biến và đúng hai refund có
+nguồn khác nhau trong DB; Staff ngoài assignment/cross-Tenant bị chặn. Signing/bank vẫn synthetic,
+Mobile là transport/API, notification worker tắt; không suy thành native/provider/notification acceptance.
+
 ## Receipt-excess refund hiện hữu
 
 Quyết định triển khai theo ủy quyền người dùng OQ-01/02/05: chỉ hoàn phần chưa phân bổ của receipt VERIFIED đã có allocation và người trả xác định. Không tự phân bổ tiền thừa sang nghĩa vụ khác, tự chuyển tiền, tạo credit hoặc khấu trừ cọc. Source vẫn giữ nguyên Payment/Allocation/Final Invoice. Dùng refund_requests hiện hữu; không thêm bảng/cột. Deposit refund và khoản dư phát sinh từ Adjustment sau khi đã trả đủ nằm ngoài slice này.
