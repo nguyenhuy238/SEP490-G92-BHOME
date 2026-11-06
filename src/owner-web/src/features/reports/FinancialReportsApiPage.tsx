@@ -126,6 +126,17 @@ export function FinancialReportsApiPage() {
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Toàn bộ phạm vi đã chọn</Typography>
             <Totals value={value.total} />
+            <Typography>
+              Hoàn gốc cọc đã xác minh trong kỳ:{' '}
+              {value.verifiedDepositReturns == null
+                ? 'Chưa có dữ liệu phân loại'
+                : formatDraftMoney(value.verifiedDepositReturns)}
+            </Typography>
+            <Alert severity="info">
+              Hoàn gốc cọc được theo dõi riêng, không phải chi phí vận hành hoặc giảm doanh thu hóa
+              đơn. Báo cáo lợi nhuận và hoàn vốn dùng hóa đơn, khoản thu đã phân bổ và OPEX; khoản
+              giữ cọc bồi thường thiệt hại chưa được cộng vào các chỉ số này.
+            </Alert>
           </Paper>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Lấp đầy theo kỳ</Typography>

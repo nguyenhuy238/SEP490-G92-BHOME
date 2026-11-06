@@ -77,12 +77,16 @@ public sealed class Compact24RefundTests
             Assert.False(await Pending());
             var original = await db.Database.SqlQuery<string>($"SELECT history::text AS \"Value\" FROM refund_requests WHERE id={row.Id}").SingleAsync();
             var record = System.Text.Json.JsonDocument.Parse(original).RootElement.EnumerateArray().Last().GetRawText();
+            var malformed = System.Text.Json.Nodes.JsonNode.Parse(record)!;
+            malformed["state"]!["events"] = "invalid imported events";
             // Later imported/corrupted proof metadata has identical amounts/status to a valid return.
             // Neither may release settlement simply because COMPLETED sums match the excess.
             foreach (var history in new[] { record.Replace("sha256", "missingHash", StringComparison.Ordinal),
-                record.Replace("SYN-GUARD", "SYN-MISMATCH", StringComparison.Ordinal) }) {
+                record.Replace("SYN-GUARD", "SYN-MISMATCH", StringComparison.Ordinal), malformed.ToJsonString() }) {
                 await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({history}::jsonb) WHERE id={row.Id}");
                 Assert.True(await Pending());
+                var report = await Value<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
+                Assert.True(report.HasUnclassifiedRefunds); Assert.Null(report.Total.NetOperatingCashFlow);
                 Assert.Equal(100000, (await Value<InvoicePaymentView>(await owner.GetAsync($"/api/v1/invoices/{invoice}/payment"))).PaidAmount);
                 await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({record}::jsonb) WHERE id={row.Id}");
                 Assert.False(await Pending());

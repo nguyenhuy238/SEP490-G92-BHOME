@@ -77,8 +77,23 @@ public sealed partial class PaymentLedgerTests
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         await RefundValue<ContractView>(await Post(owner, root + "/move-out/complete", new CompletionInput(today)));
         Assert.Equal(originalInvoice, await owner.GetStringAsync($"/api/v1/invoices/{w.Invoice}"));
+        var report = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
+        Assert.False(report.HasUnclassifiedRefunds);
+        Assert.Equal((400000 - deduction).ToString(System.Globalization.CultureInfo.InvariantCulture), report.VerifiedDepositReturns);
+        Assert.Equal("200000", report.Total.VerifiedCollections); Assert.Equal("0", report.Total.OperatingExpenses);
+        Assert.Equal("200000", report.Total.OperatingProfit); Assert.Equal("200000", report.Total.NetOperatingCashFlow);
+        var future = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2100-01-01&to=2100-12-31"));
+        Assert.Equal("0", future.VerifiedDepositReturns);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == plan.Id && a.Event == "DepositDeductionApproved"));
+        var room = await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room);
+        var emptyRoom = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomTypeId = room.RoomTypeId,
+            RoomNumber = "SYN-OTHER", Capacity = 1, Status = BHome.Domain.PropertyManagement.RoomStatus.Available };
+        db.Add(emptyRoom); await db.SaveChangesAsync();
+        var otherRoom = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={emptyRoom.Id}"));
+        Assert.Equal("0", otherRoom.VerifiedDepositReturns);
+        var scoped = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&locationId={w.Location}&roomId={w.Room}"));
+        Assert.Equal(report.VerifiedDepositReturns, scoped.VerifiedDepositReturns);
     }
     internal async Task DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle()
     {

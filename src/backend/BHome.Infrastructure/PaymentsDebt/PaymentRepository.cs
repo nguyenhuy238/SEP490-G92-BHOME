@@ -75,7 +75,8 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                           AND latest.state->'upload'->>'objectKey'=r.execution_evidence_key
                           AND latest.state->'upload'->>'externalReference'=r.external_refund_reference
                           AND latest.state->'upload'->>'sha256' ~ {"^[A-F0-9]{64}$"}
-                          AND EXISTS(SELECT 1 FROM jsonb_array_elements(latest.state->'events') e WHERE e->>'action'='Completed')))))
+                          AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(latest.state->'events')='array'
+                            THEN latest.state->'events' ELSE '[]'::jsonb END) e WHERE e->>'action'='Completed')))))
                   OR EXISTS(SELECT 1 FROM (
                     SELECT p.id,(SELECT h->'state' FROM jsonb_array_elements(p.history) WITH ORDINALITY e(h,n)
                       WHERE h->>'recordType'='PaymentReconciliation' ORDER BY n DESC LIMIT 1) state

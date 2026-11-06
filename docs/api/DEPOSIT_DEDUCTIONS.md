@@ -96,3 +96,8 @@ Harness có phí chạy bằng `dotnet run --project tools/BHome.ContractVerific
 approvedDeductions/refund/status thực, pending return chặn complete, cuối cùng Owner review/close và
 Room Available; issued invoice và hai allocations giữ nguyên. Dữ liệu/sao kê/signing là synthetic;
 Staff/Tenant dùng shipped MobileApi, không native UI. Bank-provider/MySign acceptance chưa có.
+
+Finance phân loại phần **hoàn gốc** của plan riêng; `verifiedDepositReturns` loại demo và áp kỳ/
+Location/Room, không giảm doanh thu Invoice hoặc cộng OPEX. Mức TenantDamage giữ lại chưa nhập vào
+operating profit/capital recovery của mô hình Invoice/OPEX; UI report nêu rõ giới hạn. Xem
+[Finance](FINANCE.md); không suy approved plan là khoản thu doanh thu mới.

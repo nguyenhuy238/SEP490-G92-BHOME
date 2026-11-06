@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
 
-public sealed class FinancialReportRepository(BHomePersistenceContext db, IRoomInsightsRepository insights,
+public sealed partial class FinancialReportRepository(BHomePersistenceContext db, IRoomInsightsRepository insights,
     TimeProvider clock) : IFinancialReportRepository
 {
     public async Task<ReportBasis> ReadAsync(ReportFilter filter, CancellationToken token)
@@ -53,34 +53,14 @@ public sealed class FinancialReportRepository(BHomePersistenceContext db, IRoomI
               AND ({filter.LocationId}::uuid IS NULL OR i.location_id={filter.LocationId})
               AND ({filter.RoomId}::uuid IS NULL OR i.room_id={filter.RoomId}) GROUP BY i.location_id
             """).ToDictionaryAsync(c=>c.LocationId,token);
-        // Receipt excess was never counted as invoice collections. Its proven manual return
-        // is not OPEX/revenue reversal. All other completed refunds keep the uncertainty guard.
-        var refunds=await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS(SELECT 1 FROM refund_requests r WHERE r.status='COMPLETED' AND r.executed_at<{end}
-              AND NOT (r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL AND EXISTS(
-                SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
-                JOIN residents person ON person.id=r.beneficiary_resident_id
-                WHERE p.id=r.source_payment_id AND p.status='VERIFIED' AND a.target_invoice_id IS NOT NULL
-                  AND a.paid_by_user_id=person.user_id
-                  AND p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id)
-                    >= (SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr
-                    WHERE rr.source_payment_id=p.id AND rr.status='COMPLETED')
-                  AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h
-                    WHERE h->>'recordType'='ExcessReceiptRefundV1' AND h->'state'->>'classification'='ExcessReceiptRefundV1'
-                      AND h->'state'->'upload'->>'objectKey'=r.execution_evidence_key
-                      AND h->'state'->'upload'->>'externalReference'=r.external_refund_reference
-                      AND length(h->'state'->'upload'->>'sha256')=64
-                      AND h->'state'->'upload'->>'sha256' !~ '[^A-F0-9]'
-                      AND EXISTS(SELECT 1 FROM jsonb_array_elements(h->'state'->'events') e WHERE e->>'action'='Completed')))))
-              AS "Value"
-            """).SingleAsync(token);
+        var refunds = await RefundAccountingAsync(filter, start, end, token);
         var result=names.Select(l=>{
             issued.TryGetValue(l.Id,out var i); expense.TryGetValue(l.Id,out var e); collected.TryGetValue(l.Id,out var c); counts.TryGetValue(l.Id,out var r);
             return new FinanceBasis(l.Id,l.Name,i?.Issued??0,i?.Adjustments??0,c?.Collected??0,e?.Operating??0,i?.Debt??0,
                 e?.Investment??0,c?.CumulativeCollected??0,e?.CumulativeOperating??0,r?.Total??0,r?.Occupied??0);
         }).ToArray();
         var historical = await HistoricalAsync(filter, token);
-        await transaction.CommitAsync(token); return new(result,refunds,historical);
+        await transaction.CommitAsync(token); return new(result,refunds.HasUnclassified,historical,refunds.DepositReturned);
     }
 
     private async Task<HistoricalOccupancy> HistoricalAsync(ReportFilter filter, CancellationToken token)

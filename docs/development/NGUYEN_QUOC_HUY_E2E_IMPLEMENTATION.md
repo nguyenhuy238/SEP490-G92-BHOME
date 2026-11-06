@@ -659,9 +659,35 @@ TESTS:
 - Fixture đầu cố thay history bị trigger append-only chặn; sửa fixture thành append đúng lịch sử, giữ trigger/production invariant. Không bỏ hoặc nới guard.
 COMMIT:
 - Message: fix(payment): [BE-25] retain review for unclassified completed excess returns
-- SHA ghi sau commit refund review guard.
+- SHA: `c39a58b910a92c380453e3ff043685b54c9b4739`.
 FRONTEND HANDOFF:
 - Owner/Mobile tiếp tục dùng pendingReview server, không thay UI hoặc tự suy payment success.
 STATUS: DONE cho defect đối soát này; các task nghiệp vụ còn giới hạn như đã ghi.
 REMAINING:
 - Finance phân loại deposit principal returns và làm rõ treatment retained damage. Bank/native/provider acceptance chưa có.
+
+TASK: BE-31 / BE-32 / BE-X07 / BE-X08
+SLICE: Phân loại hoàn gốc cọc riêng trong Finance, giữ mô hình Invoice/OPEX
+IMPLEMENTED:
+- Trace UC-19/31..34, GBR-10/15/16/18 và OQ-01/05 user authorization → FinancialReportRepository/Service và Owner report → unit/PG/UI.
+- Phân loại SecurityDepositRefundV1 cuối cùng với source Contract/occupant, attestation, plan ID nếu có, budget cọc, Completed event và proof key/reference/hash. Receipt-excess giữ nguồn riêng; malformed events giữ unknown thay vì query500.
+- Thêm verifiedDepositReturns chuỗi tiền, theo executed_at/kỳ Việt Nam/Location/Room, loại demo và pending requests. Không thay issued/collections/OPEX/profit/net/recovery; incomplete legacy/unknown vẫn guard toàn chuỗi.
+- Owner report hiện subtotal hoàn gốc và giải thích khoản giữ cọc bồi thường chưa nhập mô hình Invoice/OPEX. Saved What-if cũ thiếu optional field giữ null; không hồi tố snapshot.
+- Không tạo/sửa ledger, auto OPEX hoặc doanh thu từ approved plan. Chưa có liability rollup/realized compensation accounting.
+CHANGED FILES:
+- Application/Finance/FinancialReportService.cs; Infrastructure/Finance/{FinancialReportRepository,FinancialReportRefunds}.cs; PaymentsDebt/PaymentRepository.cs
+- Shared finance DTO; Owner FinancialReportsApiPage và test; FinancialReportTests; DepositDeductionTests/DepositRefundTests/Compact24RefundTests
+- API status/FINANCE/DEPOSIT_DEDUCTIONS và báo cáo này.
+TESTS:
+- Finance report/scenario unit: 9/9 đạt, exact decimal lớn và saved snapshot compatibility.
+- Compact24 damage/full-retention/undisputed/recovery/refund/finance/history tests: 13/13 đạt, 0 skip; có pending không tính, period/scope, demo exclusion, legacy/malformed-last-state guard, profit/collection/OPEX không đổi.
+- Owner report UI: 9/9 đạt, missing khác verified0; Owner build/lint đạt.
+- Logs huy-finance-deposit-{unit,pg,ui,build,lint}.log. Fixture assert ban đầu đặt ở reservation thay Completed và nhầm 1 invoice với 2 invoice đã trả; sửa theo actual fixture preconditions, không đổi formula/guard để làm xanh.
+COMMIT:
+- Message: feat(finance): [BE-X08] classify verified deposit principal returns separately
+- SHA ghi sau commit finance deposit classification.
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường review report note; Mobile không thêm quản trị Finance.
+STATUS: DONE cho principal-return classification được test; Finance/BE-19/BE-X07 PARTIAL theo giới hạn.
+REMAINING:
+- Browser report regression sau classification, full suites, report evidence package; realized compensation/liability report/upstream Work Order/native/MySign/bank/notification không được suy hoàn tất.

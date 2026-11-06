@@ -53,6 +53,9 @@ public sealed partial class PaymentLedgerTests
         var row = await RefundValue<RefundView>(created[0]); Assert.Equal(row.Id, (await RefundValue<RefundView>(created[1])).Id);
         Assert.Null(row.SourcePaymentId); Assert.Equal(w.Contract, row.SourceDepositContractId);
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
+        var report = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
+        Assert.False(report.HasUnclassifiedRefunds); Assert.Equal("0", report.VerifiedDepositReturns);
+        Assert.Equal("0", report.Total.OperatingExpenses); Assert.Equal("200000", report.Total.VerifiedCollections);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, sourceRoute, input)).StatusCode);
         Assert.False((await RefundValue<ContractSettlementSummary>(await owner.GetAsync(contract + "/move-out/settlement-summary"))).Resolved);
         var decisions = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Post(owner, $"/api/v1/refund-requests/{row.Id}/decision",
@@ -91,6 +94,20 @@ public sealed partial class PaymentLedgerTests
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={w.Contract} AND status='COMPLETED'").SingleAsync());
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == row.Id && a.Event == "DepositRefundCompleted"));
+        var afterReturn = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
+        Assert.False(afterReturn.HasUnclassifiedRefunds); Assert.Equal("400000", afterReturn.VerifiedDepositReturns);
+        Assert.Equal(report.Total.OperatingExpenses, afterReturn.Total.OperatingExpenses);
+        Assert.Equal(report.Total.VerifiedCollections, afterReturn.Total.VerifiedCollections);
+        Assert.Equal(report.Capital.NetRecovery, afterReturn.Capital.NetRecovery);
+        // A correctly classified demo return stays separate from actual financial totals.
+        var history = await db.Database.SqlQuery<string>($"SELECT history::text AS \"Value\" FROM refund_requests WHERE id={row.Id}").SingleAsync();
+        var marker = System.Text.Json.Nodes.JsonNode.Parse(history)!.AsArray().Last()!.DeepClone();
+        marker["state"]!["isDevelopmentDemo"] = true;
+        var json = marker.ToJsonString();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({json}::jsonb) WHERE id={row.Id}");
+        var demo = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
+        Assert.False(demo.HasUnclassifiedRefunds); Assert.Equal("0", demo.VerifiedDepositReturns);
+        Assert.Equal(afterReturn.Total, demo.Total);
         Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
     }
@@ -127,6 +144,9 @@ public sealed partial class PaymentLedgerTests
         Assert.Null(summary.RefundAmount);
         var source = await RefundValue<RefundSource>(await owner.GetAsync(contract + "/deposit-refunds"));
         Assert.Contains("refund_source_requires_manual_review", source.Blockers!);
+        var report = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
+        Assert.True(report.HasUnclassifiedRefunds); Assert.Null(report.Total.NetOperatingCashFlow);
+        Assert.Equal("0", report.VerifiedDepositReturns);
         Assert.Equal(0, source.AvailableAmount); // Unknown completed money cannot be offered for refund again.
         var input = new DepositRefundInput(new(person, 20000, "Must not pay again", true), source.FinancialReference!, true, true);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, contract + "/deposit-refunds", input)).StatusCode);
