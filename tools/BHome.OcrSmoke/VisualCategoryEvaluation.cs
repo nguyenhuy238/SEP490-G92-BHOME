@@ -18,8 +18,10 @@ internal static class VisualCategoryEvaluation
             throw new InvalidDataException("Exactly four trained classes required.");
         var options = new OcrOptions { VisualClassifier = new() { Enabled = true,
             ModelPath = Path.Combine(export, "body.onnx"), Sha256 = metadata.RootElement.GetProperty("onnxSha256").GetString()! } };
+        var coldLoad = Stopwatch.StartNew();
         using var classifier = new YoloMeterCategoryClassifier(options, development: true);
         classifier.Warmup(default);
+        coldLoad.Stop();
         var rows = new List<Row>();
         // Both thresholds are the existing adapter defaults, fixed before this
         // benchmark. Do not optimize them on the held-out test rows below.
@@ -37,6 +39,21 @@ internal static class VisualCategoryEvaluation
                     (decision.Candidates ?? []).Select(OcrCategories.Name).ToArray(), decision.Warnings ?? [], timer.Elapsed.TotalMilliseconds));
             }
         }
+        var reference = rows.First(r => r.Split == "val");
+        var seed = audit.RootElement.GetProperty("samples").EnumerateArray().First(s => s.GetProperty("id").GetString() == reference.Id);
+        var seedPath = PublicMeterEvaluation.ImagePath(dataset, seed);
+        var concurrent = new OcrCategoryDecision?[4];
+        var concurrentTime = Stopwatch.StartNew();
+        Parallel.For(0, concurrent.Length, i =>
+        {
+            using var frame = Cv2.ImRead(seedPath);
+            concurrent[i] = classifier.Classify(frame, default);
+        });
+        concurrentTime.Stop();
+        var consistent = concurrent.All(d => d is not null && d.Status == reference.Status &&
+            (d.Kind is { } k ? OcrCategories.Name(k) : "unknown") == reference.Predicted && d.Confidence == reference.Confidence &&
+            (d.Candidates ?? []).Select(OcrCategories.Name).SequenceEqual(reference.Candidates));
+        if (!consistent) throw new InvalidDataException("Concurrent candidate inference changed its decision.");
         object Summary(string split)
         {
             var selected = rows.Where(r => r.Split == split).ToArray();
@@ -53,6 +70,9 @@ internal static class VisualCategoryEvaluation
                     p95 = timings[(int)Math.Ceiling(timings.Length * .95) - 1], max = timings[^1] } };
         }
         File.WriteAllText(report, JsonSerializer.Serialize(new { modelSha256 = options.VisualClassifier.Sha256,
+            coldModelLoadMs = coldLoad.Elapsed.TotalMilliseconds,
+            concurrentChecks = new { runs = concurrent.Length, consistent, elapsedMs = concurrentTime.Elapsed.TotalMilliseconds,
+                limitation = "Same validation image on one model/session; checks thread safety, not classification correctness or HTTP load." },
             options.VisualClassifier.CandidateThreshold, options.VisualClassifier.NmsThreshold, options.AutomaticClassificationMinConfidence,
             validation = Summary("val"), test = Summary("test"), rows,
             activationDecision = "not_activated",
