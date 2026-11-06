@@ -92,6 +92,8 @@ public interface IPropertyRepository
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity;
     Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token);
+    // The source-schema regression database still requires a single legacy Chain FK. Compact24 returns null.
+    Task<Guid?> LegacySystemChainIdAsync(CancellationToken token);
     Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token);
     Task<bool> HasResidentsAsync(Guid roomId, CancellationToken token);
     Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomId, DateOnly today,

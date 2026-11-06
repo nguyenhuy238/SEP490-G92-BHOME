@@ -25,8 +25,10 @@ internal static class LegacyPersistenceRegistration
     {
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
-        // Operations is a Compact24-only module. Legacy source-schema tests do not expose those endpoints;
-        // remove its concrete graph so ValidateOnBuild does not require a Compact24DbContext.
+        // AddInfrastructure registers the Compact24 recurring handler first. Legacy source-schema tests
+        // retain the remaining job handlers, but must not resolve this Compact24-only dependency graph.
+        RemoveFirst<IBackgroundJobHandler>(services);
+        RemoveFirst<IJobScheduleContributor>(services);
         services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
         services.RemoveAll<RecurringOperationsJob>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
@@ -43,5 +45,11 @@ internal static class LegacyPersistenceRegistration
         services.Replace(ServiceDescriptor.Scoped<IStaffLocationAccess>(p => p.GetRequiredService<PostgresLocationAssignments>()));
         services.Replace(ServiceDescriptor.Scoped<INotificationRepository, BHome.Infrastructure.Modules.Notifications.NotificationRepository>());
         return services;
+    }
+
+    private static void RemoveFirst<T>(IServiceCollection services)
+    {
+        var descriptor = services.FirstOrDefault(x => x.ServiceType == typeof(T));
+        if (descriptor is not null) services.Remove(descriptor);
     }
 }

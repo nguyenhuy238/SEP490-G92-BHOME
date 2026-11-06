@@ -6,6 +6,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -13,6 +14,12 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
+    public async Task<Guid?> LegacySystemChainIdAsync(CancellationToken token)
+    {
+        if (db is Compact24DbContext) return null;
+        return await db.Set<Chain>().Select(x => (Guid?)x.Id).SingleOrDefaultAsync(token);
+    }
+
     public async Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomId, DateOnly today,
         CancellationToken token)
     {

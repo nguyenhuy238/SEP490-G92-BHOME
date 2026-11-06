@@ -147,6 +147,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         return await repository.WithLocationLockAsync(key, async () =>
         {
             var x = id.HasValue ? await LocationAsync(id.Value, true, t) : new Location(Text(input.Name));
+            if (!id.HasValue) x.ChainId = await repository.LegacySystemChainIdAsync(t);
             var before = id.HasValue ? Snapshot(x) : null;
             if (id.HasValue)
             {
@@ -157,7 +158,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                     throw Error(409, "location_has_operational_rooms");
                 x.Version++;
             }
-            x.Name = Text(input.Name); x.Address = Text(input.Address); x.ChainId = null; x.IsActive = input.IsActive;
+            x.Name = Text(input.Name); x.Address = Text(input.Address); x.IsActive = input.IsActive;
             if (!id.HasValue) repository.Add(x);
             Audit(x.Id, x, id.HasValue ? "Updated" : "Created", input.Reason, before); return Map(x);
         }, t);
