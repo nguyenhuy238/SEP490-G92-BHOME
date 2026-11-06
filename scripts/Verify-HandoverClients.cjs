@@ -29,6 +29,7 @@ module.exports = async function verify({ actors, contractId, room, today, page }
     condition: 'Tốt',
   });
   const readings = [];
+  const meters = [];
   for (const utilityType of [0, 1]) {
     const meter = await post(owner, '/api/v1/capture/meters', {
       roomId: room.id,
@@ -43,6 +44,7 @@ module.exports = async function verify({ actors, contractId, room, today, page }
       purpose: 0,
       readingDate: today,
     });
+    meters.push(meter);
     const evidence = await staff.api.request(`/api/v1/capture/meter-tasks/${task.id}/evidence`, {
       method: 'PUT',
       headers: { 'Content-Type': 'image/png' },
@@ -132,4 +134,5 @@ module.exports = async function verify({ actors, contractId, room, today, page }
   console.log(
     'PASS: Staff/Tenant Mobile transports record evidence, meter baselines and same-version handover confirmations; disputes/stale/cross-Tenant cases are rejected; Owner browser sees the confirmed inventory and private evidence.',
   );
+  return { meters, photo };
 };

@@ -26,6 +26,9 @@ module.exports = async function verify(settings, page) {
   const { MobileApi } = sourceModule('src/mobile/src/lib/api.ts');
   const { contractClient, businessToday } = sourceModule('packages/client-core/src/contracts.ts');
   const { mainDraftClient } = sourceModule('packages/client-core/src/mainDrafts.ts');
+  const { invoiceClient } = sourceModule('packages/client-core/src/invoices.ts');
+  const { paymentClient } = sourceModule('packages/client-core/src/payments.ts');
+  const { adjustmentClient } = sourceModule('packages/client-core/src/adjustments.ts');
   const actors = {};
   for (const [name, credentials] of Object.entries(settings.actors)) {
     const auth = new SessionClient(settings.baseUrl, 'mobile');
@@ -40,12 +43,18 @@ module.exports = async function verify(settings, page) {
       api: transport,
       contracts: contractClient((...args) => transport.request(...args)),
       drafts: mainDraftClient((...args) => transport.request(...args)),
+      invoices: invoiceClient((...args) => transport.request(...args)),
+      payments: paymentClient((...args) => transport.request(...args)),
+      adjustments: adjustmentClient((...args) => transport.request(...args)),
     };
   }
   const { owner, staff, tenant, otherTenant } = actors;
   const post = (actor, route, body) =>
     actor.api.request(route, { method: 'POST', body: JSON.stringify(body) });
   const today = businessToday();
+  const start = new Date(today + 'T00:00:00Z');
+  start.setUTCDate(start.getUTCDate() - 1);
+  const startDate = start.toISOString().slice(0, 10);
   const endDate = new Date(today + 'T00:00:00Z');
   endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
   const rooms = await owner.api.request('/api/v1/rooms?locationId=' + settings.locationId);
@@ -54,23 +63,33 @@ module.exports = async function verify(settings, page) {
   await post(owner, '/api/v1/staff-location-assignments', {
     locationId: settings.locationId,
     staffUserId: settings.actors.staff.id,
-    startDate: today,
+    startDate,
     endDate: endDate.toISOString().slice(0, 10),
   });
-  for (const [chargeCode, category, method, rate] of [
-    ['RENT', 0, 0, '3000000'],
-    ['ELECTRICITY', 1, 1, '3500'],
-    ['WATER', 2, 1, '18000'],
-  ])
-    await post(owner, '/api/v1/billing-policies', {
+  const policies = await owner.invoices.policies(settings.locationId, 1);
+  for (const [code, rate] of [
+    ['RENT', '3000000'],
+    ['ELECTRICITY', '3500'],
+    ['WATER', '18000'],
+  ]) {
+    const policy = policies.items.find((p) => p.chargeCode === code);
+    assert.match(String(policy.rate), new RegExp('^' + rate + '(?:\\.0+)?$'));
+    assert.equal(policy.effectiveFrom, startDate);
+  }
+  // Historical configuration comes from the clearly labeled disposable fixture.
+  // Keep the real API's no-backdating guard intact rather than changing it for this test.
+  await assert.rejects(
+    post(owner, '/api/v1/billing-policies', {
       locationId: settings.locationId,
-      category,
-      chargeCode,
-      name: chargeCode,
-      method,
-      rate,
-      effectiveFrom: today,
-    });
+      category: 0,
+      chargeCode: 'RENT',
+      name: 'RENT',
+      method: 0,
+      rate: '3000000',
+      effectiveFrom: startDate,
+    }),
+    (e) => e.status === 400 && e.code === 'invalid_policy',
+  );
   const resident = await post(staff, '/api/v1/capture/residents', {
     roomId: room.id,
     displayLabel: 'SYNTHETIC DRAFT REPRESENTATIVE',
@@ -84,13 +103,35 @@ module.exports = async function verify(settings, page) {
     residentialAddress: 'Địa chỉ tổng hợp',
     dateOfIssue: '2021-01-01',
   });
+  const residentIds = [resident.id];
+  for (const [index, name] of ['coTenant1', 'coTenant2'].entries()) {
+    const person = await post(staff, '/api/v1/capture/residents', {
+      roomId: room.id,
+      displayLabel: 'SYNTHETIC CO-OCCUPANT ' + (index + 1),
+      residentType: 1,
+    });
+    await post(staff, `/api/v1/capture/residents/${person.id}/confirm`, {
+      humanConfirmed: true,
+      citizenIdentityNumber: '00000000012' + (index + 4),
+      fullName: 'NGƯỜI Ở CÙNG TỔNG HỢP ' + (index + 1),
+      dateOfBirth: '2000-01-01',
+      residentialAddress: 'Địa chỉ tổng hợp',
+      dateOfIssue: '2021-01-01',
+    });
+    await assert.rejects(
+      staff.contracts.linkTenant(person.id, settings.actors[name].id),
+      (e) => e.status === 403,
+    );
+    await owner.contracts.linkTenant(person.id, settings.actors[name].id);
+    residentIds.push(person.id);
+  }
   const draft = await staff.drafts.save(
     null,
     {
       roomId: room.id,
       representativeResidentId: resident.id,
-      residentIds: [resident.id],
-      startDate: today,
+      residentIds,
+      startDate,
       endDate: endDate.toISOString().slice(0, 10),
       notes: 'Điều khoản browser tổng hợp',
       tenantPhone: '0000000000',
@@ -197,6 +238,21 @@ module.exports = async function verify(settings, page) {
   console.log(
     'PASS: browser and Mobile complete explicitly simulated signatures, verified synthetic deposit and Owner activation; persisted Tenant state and Room occupancy agree. Actual MySign acceptance is BLOCKED.',
   );
-  await require('./Verify-HandoverClients.cjs')({ actors, contractId: draft.id, room, today, page });
+  const baseline = await require('./Verify-HandoverClients.cjs')({
+    actors,
+    contractId: draft.id,
+    room,
+    today: startDate,
+    page,
+  });
+  await require('./Verify-SharedBillingClients.cjs')({
+    actors,
+    contractId: draft.id,
+    room,
+    today,
+    page,
+    settings,
+    baseline,
+  });
   await require('./Verify-HistoricalOccupancyClients.cjs')({ owner, room, today, page, settings });
 };

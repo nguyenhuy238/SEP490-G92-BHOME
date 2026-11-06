@@ -5,12 +5,15 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using BHome.Domain.Locations;
+using BHome.Domain.Billing;
+using BHome.Domain.PaymentsDebt;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.IntegrationTests.Compact24;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Minio;
@@ -43,19 +46,28 @@ internal static class FinanceVerificationCli
                 var result=await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user,password);
                 if(!result.Succeeded)throw new InvalidOperationException("Synthetic account creation failed.");
                 actors["owner"]=new{id=user.Id,email,password};
-                if(mainDraft)foreach(var role in new[]{"Staff","Tenant","Tenant"})
+                if(mainDraft)foreach(var (name,role) in new[]{("staff","Staff"),("tenant","Tenant"),("coTenant1","Tenant"),("coTenant2","Tenant"),("otherTenant","Tenant")})
                 {
                     var account=new ApplicationUser{Id=Guid.NewGuid(),Email=$"draft-{Guid.NewGuid():N}@example.invalid",IsActive=true};account.UserName=account.Email;
                     db.PrepareUserRole(account,role);
                     if(!(await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(account,password)).Succeeded)throw new InvalidOperationException("Synthetic account creation failed.");
-                    var name=role=="Staff"?"staff":actors.ContainsKey("tenant")?"otherTenant":"tenant";
                     actors[name]=new{id=account.Id,email=account.Email,password};
                 }
                 var chain=new Chain{Name="Synthetic Finance Chain"};db.Add(chain);await db.SaveChangesAsync();
                 var location=new Location("Cơ sở kiểm thử tài chính"){ChainId=chain.Id,Address="Địa chỉ tổng hợp"};locationId=location.Id;
-                var type=new RoomType{LocationId=location.Id,Name="Synthetic",DefaultCapacity=2};
-                var room=new Room{LocationId=location.Id,RoomTypeId=type.Id,RoomNumber="FIN-01",Capacity=2,Status=RoomStatus.Available};db.AddRange(location,type,room);
+                var type=new RoomType{LocationId=location.Id,Name="Synthetic",DefaultCapacity=3};
+                var room=new Room{LocationId=location.Id,RoomTypeId=type.Id,RoomNumber="FIN-01",Capacity=3,Status=RoomStatus.Available};db.AddRange(location,type,room);
                 if(mainDraft)db.Add(new Asset{LocationId=location.Id,RoomId=room.Id,Name="SYNTHETIC EXPENSE ASSET",Category="Furniture",Condition="Tốt"});
+                // Pre-existing synthetic rate configuration is the only dated business fixture.
+                // Live policy APIs correctly forbid backdating. Readings, contracts, invoices,
+                // approvals and payments below must still be created through actual client APIs.
+                if(mainDraft)
+                {
+                    var priorDay=DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow,"Asia/Ho_Chi_Minh").DateTime).AddDays(-1);
+                    foreach(var (code,category,rate) in new[]{("RENT",ChargeCategory.Rent,3000000m),("ELECTRICITY",ChargeCategory.Electricity,3500m),("WATER",ChargeCategory.Water,18000m)})
+                        db.Add(new BillingPolicy{LocationId=location.Id,ChargeCode=code,Category=category,Name=code,
+                            Method=category==ChargeCategory.Rent?ChargingMethod.FixedPerRoomPerMonth:ChargingMethod.Metered,Rate=rate,EffectiveFrom=priorDay});
+                }
                 await db.SaveChangesAsync();
             }
             using var key=RSA.Create(2048);var request=new CertificateRequest("CN=localhost",key,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1);
@@ -94,6 +106,22 @@ internal static class FinanceVerificationCli
             nodeStart.ArgumentList.Add(Path.Combine(root,"scripts/Verify-FinanceClients.cjs"));nodeStart.Environment.Remove("NODE_TLS_REJECT_UNAUTHORIZED");nodeStart.Environment.Remove("NODE_OPTIONS");nodeStart.Environment["NODE_EXTRA_CA_CERTS"]=caPath;
             using var node=Process.Start(nodeStart)!;stage="browser workflows";
             await node.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new{baseUrl,origin,webPort,pfxPath,pfxPassword,temporary=temporary.FullName,email,password,locationId,mainDraft,actors}));node.StandardInput.Close();await node.WaitForExitAsync();
+            if(node.ExitCode==0 && mainDraft)
+            {
+                stage="shared invoice ledger assertions";
+                await using var scope=fixture.Factory!.Services.CreateAsyncScope();
+                var db=scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var invoice=await db.Set<Invoice>().AsNoTracking().Include(i=>i.Recipients).Include(i=>i.Lines).AsSplitQuery().SingleAsync();
+                if(invoice.Status!=InvoiceStatus.Final || invoice.Total!=3430000 || invoice.Recipients.Count!=3 || invoice.Lines.Count!=3)
+                    throw new InvalidOperationException("Shared invoice/recipient invariant failed.");
+                var allocations=await db.Set<PaymentAllocation>().AsNoTracking().ToArrayAsync();
+                if(allocations.Length!=2 || allocations.Sum(a=>a.Amount)!=3410000 || allocations.Select(a=>a.PaidByUserId).Distinct().Count()!=2)
+                    throw new InvalidOperationException("Shared invoice allocation invariant failed.");
+                if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests").SingleAsync()!=0)
+                    throw new InvalidOperationException("Unexpected automatic refund in disposable database.");
+                if(!await db.IsSchemaReadyAsync())throw new InvalidOperationException("Compact24 schema changed.");
+                Console.WriteLine("PASS: disposable database retains one immutable Final invoice, three recipients, two distinct payer allocations, no automatic refund and the unchanged Compact24 schema.");
+            }
             return node.ExitCode;
         }
         catch(Exception e){Console.Error.WriteLine($"Finance verification failed at {stage}: {e.GetType().Name}. No credentials printed.");return 1;}

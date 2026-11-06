@@ -132,7 +132,12 @@ async function main(settings) {
       ['Nơi cấp', 'Cơ quan tổng hợp'],
       ['Địa chỉ thường trú', 'Địa chỉ tổng hợp'],
       ['Điện thoại', '0000000000'],
-      ['Hiệu lực từ', '2026-11-01'],
+      [
+        'Hiệu lực từ',
+        new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
+          Date.now() - 86400000,
+        ),
+      ],
       ['Tiền cọc đảm bảo (VND)', '3000000'],
       ['Hình thức / chính sách thanh toán', 'Chuyển khoản theo thỏa thuận tổng hợp'],
     ])
@@ -169,7 +174,14 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (part) => (input += part));
 process.stdin.on('end', () =>
   main(JSON.parse(input)).catch((e) => {
-    console.error('Finance browser verification failed:', e.message);
+    // Safe failure metadata only: never dump a response, request body, auth headers or accounts.
+    console.error(
+      'Finance browser verification failed:',
+      e.message,
+      e.status ?? '',
+      e.code ?? e.problem?.code ?? '',
+      e.requestPath ?? '',
+    );
     process.exitCode = 1;
   }),
 );
