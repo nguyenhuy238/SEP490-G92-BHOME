@@ -1308,7 +1308,7 @@
       "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/8/82/Water_meter_register.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
       "license": "CC BY-SA 3.0",
       "licenseUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
-      "author": "",
+      "author": "Utilitysupplies",
       "credit": "",
       "originalSha1": "cc9fec088ca82526ce3c52fc488274f4d67278da",
       "description": "",
@@ -1319,7 +1319,8 @@
         510
       ],
       "bytes": 65064,
-      "changes": "Publisher thumbnail <=1280 px, or original when smaller; no model labels inferred"
+      "changes": "Publisher thumbnail <=1280 px, or original when smaller; no model labels inferred",
+      "authorEvidence": "Original uploader and attribution line on the linked Commons file page; Artist missing from API metadata"
     },
     {
       "id": "commons_32669792",

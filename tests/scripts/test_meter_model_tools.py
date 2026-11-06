@@ -17,9 +17,46 @@ from train_meter_yolo import verify_training_audit
 from lcd_preview_training import digit_boxes
 from download_lcd_preview import fetch as fetch_preview
 from download_meter_previews import fetch as fetch_meter_preview
+from prepare_meter_challenges import prepare as prepare_challenges
 
 
 class DatasetSafety(unittest.TestCase):
+    def test_reading_controls_reject_training_authors_and_fabricated_numeric_gt(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalog = root / 'docs/datasets/meter'
+            catalog.mkdir(parents=True)
+            image_root = root / 'source'
+            image_root.mkdir()
+            assets = []
+            for i, name in enumerate(['train', 'challenge']):
+                path = image_root / (name + '.jpg')
+                Image.fromarray(np.random.default_rng(i+10).integers(0, 256, (64, 64, 3), dtype=np.uint8)).save(path)
+                assets.append({'id': name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'author': 'Training author'})
+            (catalog / 'public-sources.json').write_text(json.dumps({'assets': assets[:1]}))
+            (catalog / 'public-sources-expanded.json').write_text(json.dumps({'assets': assets[1:]}))
+            (catalog / 'water-lcd-public-previews.json').write_text(json.dumps({'assets': []}))
+            (catalog / 'four-class-development-v2.json').write_text(json.dumps({'samples': [
+                {'id': 'train', 'image': 'source/train.jpg', 'sha256': assets[0]['sha256'], 'split': 'train'}]}))
+            manifest = root / 'controls.json'
+            sample = {'id': 'challenge', 'expectedReading': None, 'review': {'method': 'synthetic'},
+                      'profiles': ['DigitalWater'], 'reason': 'blank'}
+            manifest.write_text(json.dumps({'samples': [sample]}))
+            with self.assertRaisesRegex(ValueError, 'overlapping'):
+                prepare_challenges(manifest, image_root, root, root / 'output')
+            assets[1]['author'] = 'Independent author'
+            (catalog / 'public-sources-expanded.json').write_text(json.dumps({'assets': assets[1:]}))
+            sample['expectedReading'] = '0000'
+            manifest.write_text(json.dumps({'samples': [sample]}))
+            with self.assertRaisesRegex(ValueError, 'numeric GT'):
+                prepare_challenges(manifest, image_root, root, root / 'output')
+            sample['expectedReading'] = None
+            manifest.write_text(json.dumps({'samples': [sample]}))
+            prepare_challenges(manifest, image_root, root, root / 'output')
+            with self.assertRaisesRegex(ValueError, 'overwrite'):
+                prepare_challenges(manifest, image_root, root, root / 'output')
+
     def test_perceptual_duplicate_cross_split_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "cross-split"):
             audit_pairs([{"id": "a", "split": "train"}, {"id": "b", "split": "test"}], {"a": 1234, "b": 1234})

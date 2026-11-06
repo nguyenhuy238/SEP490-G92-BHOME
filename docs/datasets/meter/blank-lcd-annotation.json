@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "samples": [
+    {
+      "id": "commons_156125142",
+      "image": ".tools/ocr-next-public-images-expanded/commons_156125142.jpg",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "category": "water_digital",
+      "split": "test",
+      "siteGroup": "Boutboul",
+      "meterGroup": "Boutboul",
+      "sourceGroup": "Boutboul",
+      "captureGroup": "Boutboul",
+      "nearDuplicateGroup": "Boutboul",
+      "meterPolygon": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.19,
+          0.31
+        ],
+        [
+          0.8,
+          0.31
+        ],
+        [
+          0.8,
+          0.68
+        ],
+        [
+          0.19,
+          0.68
+        ]
+      ],
+      "reading": {
+        "visibility": "blank",
+        "digits": null,
+        "digitCount": 0,
+        "decimalPlaces": null,
+        "billingRegister": "unknown",
+        "displayState": "single",
+        "unreadablePositions": []
+      },
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:WMBUS_Water_Meter_for_submetering.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "Blank LCD only; window rectangle coarse, not display-IoU GT",
+        "independentHumanReview": false
+      }
+    }
+  ]
+}

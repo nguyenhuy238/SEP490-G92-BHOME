@@ -61,6 +61,24 @@ test('keeps leading zeros and permits known or unverified decimal precision', ()
     assert.equal(validateMeterDataset(m, root).valid, true);
     assert.equal(s.reading.digits, '00123');
   }));
+
+test('blank and status displays have no invented zero digits or precision', () =>
+  fixture((root, m, s) => {
+    s.category = 'water_digital';
+    s.reading = { visibility: 'blank', digits: null, digitCount: 0, decimalPlaces: null,
+      billingRegister: 'unknown', displayState: 'single', unreadablePositions: [] };
+    assert.equal(validateMeterDataset(m, root).valid, true);
+    s.reading.visibility = 'status';
+    assert.equal(validateMeterDataset(m, root).valid, true);
+    s.reading.digits = '000000';
+    assert.ok(validateMeterDataset(m, root).errors.some(e => e.code === 'non_numeric_display_has_reading'));
+    s.reading.digits = null;
+    s.reading.decimalPlaces = 0;
+    assert.equal(validateMeterDataset(m, root).valid, false);
+    s.reading.decimalPlaces = null;
+    s.reading.visibility = 'unverified_model_output';
+    assert.ok(validateMeterDataset(m, root).errors.some(e => e.code === 'invalid_display_visibility'));
+  }));
 test('accepts explicit detection-only annotations without fabricated reading labels', () =>
   fixture((root, m, s) => {
     s.annotationLevel = 'meter';
