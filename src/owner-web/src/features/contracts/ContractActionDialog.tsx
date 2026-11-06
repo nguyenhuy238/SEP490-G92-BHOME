@@ -21,6 +21,9 @@ import {
   type ContractView,
   type mutationKeys,
 } from '../../../../../packages/client-core/src/contracts';
+import { signingPayload } from '../../../../../packages/client-core/src/signing';
+import { useSigningApi } from './useContractsApi';
+import { SignaturePlacementPicker, type PlacementChoice } from './SignaturePlacementPicker';
 
 export function ContractActionDialog({
   api,
@@ -43,6 +46,9 @@ export function ContractActionDialog({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const lock = useRef(false);
+  const signing = useSigningApi(api);
+  const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
+  const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
   const certs = useQuery({
     staleTime: 0,
     queryKey: ['contract-certificates', actorId],
@@ -63,7 +69,9 @@ export function ContractActionDialog({
     }
     let body;
     try {
-      body = actionPayload(action, values, contract);
+      body = remoteSigning
+        ? signingPayload(values.certificateId ?? '', choice.placement, choice.usePicture)
+        : actionPayload(action, values, contract);
     } catch (e) {
       setError((e as Error).message);
       return;
@@ -89,7 +97,12 @@ export function ContractActionDialog({
     }
   }
   return (
-    <Dialog open fullWidth maxWidth="sm" onClose={() => !busy && onClose()}>
+    <Dialog
+      open
+      fullWidth
+      maxWidth={remoteSigning ? 'md' : 'sm'}
+      onClose={() => !busy && onClose()}
+    >
       <DialogTitle>{action.label}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
@@ -164,6 +177,15 @@ export function ContractActionDialog({
             >
               Tải lại chứng thư
             </Button>
+          )}
+          {remoteSigning && (
+            <SignaturePlacementPicker
+              signing={signing}
+              contractId={contract.id}
+              value={choice}
+              onChange={setChoice}
+              disabled={busy}
+            />
           )}
           {!!error && <Alert severity="error">{error}</Alert>}
         </Stack>

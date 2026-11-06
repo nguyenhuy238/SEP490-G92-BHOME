@@ -21,6 +21,38 @@ public static class DependencyInjection
         return services;
     }
 
+    // The Viettel account an Owner saves (merged over configuration) and each signer's picture, for BHOME's main backend.
+    // The host supplies ISigningSettingsStore and ISignatureImageStore over its own database and object storage.
+    // Configuration is read when first needed, not here: in Development the API adds the .env file after registration.
+    public static IServiceCollection AddContractSigningAccounts(this IServiceCollection services, IConfiguration configuration)
+    {
+        static DigitalSigningOptions Read(IServiceProvider provider)
+        {
+            var options = provider.GetRequiredService<IConfiguration>().GetSection(DigitalSigningOptions.Section)
+                .Get<DigitalSigningOptions>() ?? new();
+            if (options.Viettel.TimeoutSeconds is < 1 or > 120)
+                throw new InvalidOperationException("DigitalSigning:Viettel:TimeoutSeconds must be 1-120.");
+            return options;
+        }
+        services.TryAddSingleton(provider =>
+        {
+            var options = Read(provider);
+            var viettel = options.Viettel;
+            return new DigitalSigningPolicy(
+                TimeSpan.FromSeconds(Math.Clamp(options.TransactionTtlSeconds, 60, 900)),
+                options.MaxPdfMegabytes * 1024L * 1024L,
+                new ViettelAccount(viettel.BaseUrl, viettel.ClientId, viettel.ClientSecret, viettel.ProfileId, viettel.LoginPath,
+                    viettel.CredentialsPath, viettel.SignHashPath, viettel.StatusPath, viettel.TimeoutSeconds));
+        });
+        services.TryAddSingleton<ISecretProtector>(provider => new AesGcmSecretProtector(Read(provider).SecretKey));
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<SigningAccountCache>();
+        services.TryAddScoped<SigningAccountService>();
+        services.AddScoped<IViettelAccountSource>(provider => provider.GetRequiredService<SigningAccountService>());
+        services.TryAddScoped<SignatureImageService>();
+        return services;
+    }
+
     // Expects ICurrentUser to be registered by the host (BHome.Api does) and ConnectionStrings:Database to be set.
     public static IServiceCollection AddDigitalSigning(this IServiceCollection services, IConfiguration configuration)
     {

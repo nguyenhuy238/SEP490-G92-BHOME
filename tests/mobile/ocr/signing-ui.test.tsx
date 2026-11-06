@@ -11,6 +11,18 @@ import {
 } from '../../../packages/client-core/src/contracts';
 
 type ButtonProps = { children: React.ReactNode; onPress: () => void; disabled?: boolean };
+vi.mock('react-native', () => ({
+  View: ({
+    children,
+    accessibilityLabel,
+  }: {
+    children?: React.ReactNode;
+    accessibilityLabel?: string;
+  }) => <div aria-label={accessibilityLabel}>{children}</div>,
+  Image: ({ accessibilityLabel }: { accessibilityLabel?: string }) => (
+    <img alt={accessibilityLabel ?? ''} />
+  ),
+}));
 vi.mock('react-native-paper', () => ({
   Button: ({ children, onPress, disabled }: ButtonProps) => (
     <button disabled={disabled} onClick={onPress}>
