@@ -54,7 +54,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         {
             FullName = input.FullName.Trim(),
             Email = input.Email.Trim(),
-            Phone = Clean(input.Phone)
+            Phone = Phone(input.Phone)
         }, Now, t);
     }
 
@@ -78,7 +78,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         {
             Email = input.Email.Trim(),
             FullName = input.FullName.Trim(),
-            Phone = Clean(input.Phone),
+            Phone = Phone(input.Phone),
             Employment = Normalize(input.Employment)
         }, Now, t);
     }
@@ -92,7 +92,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         {
             Email = input.Email.Trim(),
             FullName = input.FullName.Trim(),
-            Phone = Clean(input.Phone),
+            Phone = Phone(input.Phone),
             Employment = Normalize(input.Employment),
             Reason = input.Reason.Trim()
         }, Now, t);
@@ -309,6 +309,11 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? Phone(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return LoginIdentifier.NormalizePhone(value) ?? throw OperationsException.Invalid("invalid_phone_number");
+    }
     private static EmploymentWrite Normalize(EmploymentWrite input) => input with
     {
         ContractNumber = Clean(input.ContractNumber),

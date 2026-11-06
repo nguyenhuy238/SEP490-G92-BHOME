@@ -10976,6 +10976,58 @@
           }
         }
       ]
+    },
+    {
+      "name": "226 — Đăng nhập Owner bằng số điện thoại → 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Chạy sau khi tài khoản Owner đã cập nhật profile với phone trùng {{ownerPhone}}. API chấp nhận đúng một trong hai trường email hoặc phone; request này kiểm tra đăng nhập bằng phone và tự lưu ownerAccessToken.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{ownerPhone}}\",\n  \"password\": \"{{ownerPassword}}\",\n  \"device\": \"Postman phone login\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "protocolProfileBehavior": {
+        "disableCookies": true
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    const validRole = Array.isArray(body.roles) && body.roles.includes('Owner');",
+              "    const validToken = typeof body.accessToken === 'string' && body.accessToken.trim().length > 0;",
+              "    pm.test('Response has valid Owner credentials', function () {",
+              "        pm.expect(validRole && validToken).to.eql(true);",
+              "    });",
+              "    if (validRole && validToken) {",
+              "        const scope = pm.environment.name ? pm.environment : pm.collectionVariables;",
+              "        scope.set('ownerAccessToken', body.accessToken);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
     }
   ],
   "event": [

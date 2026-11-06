@@ -34,7 +34,6 @@ public sealed class LoginServiceTests
     [InlineData("", "password")]
     [InlineData(" ", "password")]
     [InlineData("username-only", "password")]
-    [InlineData("0900000000", "password")]
     [InlineData("invalid@@example.invalid", "password")]
     [InlineData("user@example.invalid", null)]
     [InlineData("user@example.invalid", "")]
@@ -71,6 +70,23 @@ public sealed class LoginServiceTests
         await credentials.Received(1).VerifyAsync("User@example.invalid", " password ", Arg.Any<CancellationToken>());
         await audit.Received(1).LoginFailedAsync(Arg.Any<CancellationToken>());
         await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task PhoneIsNormalizedWithoutChangingThePassword()
+    {
+        await new LoginService(credentials, sessions, audit).LoginAsync(" 090-123 4567 ", " password ");
+        await credentials.Received(1).VerifyAsync("0901234567", " password ", Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("1234567")]
+    [InlineData("09012phone")]
+    [InlineData("+84+")]
+    public async Task InvalidPhoneDoesNotVerifyCredentials(string phone)
+    {
+        Assert.Null(await new LoginService(credentials, sessions, audit).LoginAsync(phone, "password"));
+        await credentials.DidNotReceiveWithAnyArgs().VerifyAsync(default!, default!, default);
     }
 
     [Theory]

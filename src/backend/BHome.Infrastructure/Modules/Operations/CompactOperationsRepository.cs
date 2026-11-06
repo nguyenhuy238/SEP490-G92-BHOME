@@ -32,15 +32,18 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<ProfileView> UpdateProfileAsync(Guid userId, ProfileUpdate input, DateTimeOffset now, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t); await Open(t);
+        await EnsurePhoneAvailable(userId, input.Phone, t);
         var normalized = input.Email.ToUpperInvariant(); var nextVersion = Guid.NewGuid().ToString("N");
         await using var command = Command("""
             UPDATE users SET full_name=@name,phone=@phone,email=@email,normalized_email=@normalized,
                 username=@email,normalized_username=@normalized,
                 email_confirmed=CASE WHEN normalized_email=@normalized THEN email_confirmed ELSE false END,
-                security_stamp=CASE WHEN normalized_email=@normalized THEN security_stamp ELSE @stamp END,
+                phone_confirmed=CASE WHEN phone IS NOT DISTINCT FROM @phone THEN phone_confirmed ELSE false END,
+                security_stamp=CASE WHEN normalized_email=@normalized AND phone IS NOT DISTINCT FROM @phone THEN security_stamp ELSE @stamp END,
                 concurrency_stamp=@next,
                 history=history||jsonb_build_array(jsonb_build_object('action','ProfileUpdated','actorId',id,
-                    'occurredAt',@now,'emailChanged',normalized_email IS DISTINCT FROM @normalized))
+                    'occurredAt',@now,'emailChanged',normalized_email IS DISTINCT FROM @normalized,
+                    'phoneChanged',phone IS DISTINCT FROM @phone))
             WHERE id=@id AND concurrency_stamp=@version
             """);
         command.Parameters.AddWithValue("name", input.FullName); command.Parameters.AddWithValue("phone", (object?)input.Phone ?? DBNull.Value);
@@ -92,6 +95,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<StaffView> CreateStaffAsync(Guid actorId, StaffCreate input, DateTimeOffset now, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
+        await Open(t); await EnsurePhoneAvailable(Guid.Empty, input.Phone, t);
         var user = new ApplicationUser
         {
             Id = Guid.NewGuid(),
@@ -107,7 +111,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         if (!created.Succeeded) throw OperationsException.Invalid("invalid_staff_account");
         var role = await users.AddToRoleAsync(user, Roles.Staff);
         if (!role.Succeeded) throw OperationsException.Invalid("invalid_staff_role");
-        await Open(t); await using (var update = Command("UPDATE users SET full_name=@name WHERE id=@id"))
+        await using (var update = Command("UPDATE users SET full_name=@name WHERE id=@id"))
         { update.Parameters.AddWithValue("name", input.FullName); update.Parameters.AddWithValue("id", user.Id); await update.ExecuteNonQueryAsync(t); }
         await SaveEmployment(user.Id, null, input.Employment, actorId, now, t);
         await Audit(actorId, "StaffCreated", "User", user.Id, now, t); await tx.CommitAsync(t);
@@ -124,12 +128,14 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             if ((bool)current && !input.IsActive && await HasResponsibilities(userId, DateOnly.FromDateTime(now.UtcDateTime), t))
                 throw OperationsException.Conflict("staff_responsibilities_unresolved");
         }
+        await EnsurePhoneAvailable(userId, input.Phone, t);
         var normalized = input.Email.ToUpperInvariant(); var next = Guid.NewGuid().ToString("N");
         await using (var update = Command("""
             UPDATE users SET full_name=@name,phone=@phone,email=@email,normalized_email=@normalized,
                 username=@email,normalized_username=@normalized,is_active=@active,
                 email_confirmed=CASE WHEN normalized_email=@normalized THEN email_confirmed ELSE false END,
-                security_stamp=CASE WHEN normalized_email=@normalized AND is_active=@active THEN security_stamp ELSE @stamp END,
+                phone_confirmed=CASE WHEN phone IS NOT DISTINCT FROM @phone THEN phone_confirmed ELSE false END,
+                security_stamp=CASE WHEN normalized_email=@normalized AND phone IS NOT DISTINCT FROM @phone AND is_active=@active THEN security_stamp ELSE @stamp END,
                 concurrency_stamp=@next,
                 history=history||jsonb_build_array(jsonb_build_object('action','StaffUpdated','actorId',@actor,'occurredAt',@now,'reason',@reason))
             WHERE id=@id AND concurrency_stamp=@version AND 'Staff'=ANY(roles)
@@ -671,6 +677,22 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
                 ((task_type='GENERAL' AND status NOT IN ('2','3')) OR
                  (task_type='WORK_ORDER' AND status NOT IN ('Verified','Cancelled'))))
             """); command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("today", today); return (bool)(await command.ExecuteScalarAsync(t))!;
+    }
+
+    private async Task EnsurePhoneAvailable(Guid userId, string? phone, CancellationToken t)
+    {
+        if (phone is null) return;
+        await using (var phoneLock = Command("SELECT pg_advisory_xact_lock(hashtextextended(@key,0))"))
+        {
+            phoneLock.Parameters.AddWithValue("key", "login-phone:" + phone);
+            await phoneLock.ExecuteNonQueryAsync(t);
+        }
+        await using var duplicate = Command("""
+            SELECT EXISTS(SELECT 1 FROM users WHERE id<>@id AND phone IS NOT NULL AND
+              replace(replace(replace(replace(replace(phone,' ',''),'-',''),'.',''),'(',''),')','')=@phone)
+            """);
+        duplicate.Parameters.AddWithValue("id", userId); duplicate.Parameters.AddWithValue("phone", phone);
+        if ((bool)(await duplicate.ExecuteScalarAsync(t))!) throw OperationsException.Conflict("phone_already_used");
     }
 
     private async Task Audit(Guid actor, string action, string targetType, Guid targetId, DateTimeOffset now, CancellationToken t)

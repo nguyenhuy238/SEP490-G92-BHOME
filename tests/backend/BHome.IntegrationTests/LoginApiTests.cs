@@ -107,6 +107,42 @@ public sealed class LoginApiTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task PhonePayloadReachesCredentialVerification()
+    {
+        using var factory = new ApiFactory(); var credentials = new DeniedCredentials();
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<ICredentialVerifier>(credentials);
+            services.AddSingleton<ISecurityAudit>(new TestSecurityAudit());
+        }));
+        using var client = host.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { phone = "090-123 4567", password = "synthetic-password" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(1, credentials.Calls);
+    }
+
+    [Fact]
+    public async Task EmailAndPhoneTogetherAreRejectedBeforeCredentialVerification()
+    {
+        using var factory = new ApiFactory(); var credentials = new DeniedCredentials();
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<ICredentialVerifier>(credentials);
+            services.AddSingleton<ISecurityAudit>(new TestSecurityAudit());
+        }));
+        using var client = host.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { email = "synthetic@example.invalid", phone = "0901234567", password = "synthetic-password" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, credentials.Calls);
+    }
+
     private sealed class TestSecurityAudit : ISecurityAudit
     {
         public Task LoginFailedAsync(CancellationToken cancellationToken) => Task.CompletedTask;

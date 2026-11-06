@@ -8,13 +8,26 @@ namespace BHome.Infrastructure.IdentityAccess;
 internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn)
     : ICredentialVerifier
 {
-    public async Task<VerifiedIdentity?> VerifyAsync(string email, string password, CancellationToken cancellationToken)
+    public async Task<VerifiedIdentity?> VerifyAsync(string identifier, string password, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var normalizedEmail = users.NormalizeEmail(email.Trim());
-        // Legacy/imported data can bypass Identity's unique-email validator. Never pick an arbitrary account.
-        var matches = await users.Users.Where(user => user.NormalizedEmail == normalizedEmail)
-            .Take(2).ToArrayAsync(cancellationToken);
+        ApplicationUser[] matches;
+        if (LoginIdentifier.IsEmail(identifier))
+        {
+            var normalizedEmail = users.NormalizeEmail(identifier);
+            // Legacy/imported data can bypass Identity's unique-email validator. Never pick an arbitrary account.
+            matches = await users.Users.Where(user => user.NormalizedEmail == normalizedEmail)
+                .Take(2).ToArrayAsync(cancellationToken);
+        }
+        else
+        {
+            var phone = LoginIdentifier.NormalizePhone(identifier);
+            if (phone is null) return null;
+            matches = await users.Users.Where(user => user.PhoneNumber != null &&
+                    user.PhoneNumber.Replace(" ", "").Replace("-", "").Replace(".", "")
+                        .Replace("(", "").Replace(")", "") == phone)
+                .Take(2).ToArrayAsync(cancellationToken);
+        }
         if (matches.Length != 1 || !matches[0].IsActive) return null;
         var user = matches[0];
 
