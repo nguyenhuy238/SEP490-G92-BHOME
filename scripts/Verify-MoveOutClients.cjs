@@ -69,7 +69,7 @@ module.exports = async function verify({
   );
   const photo = Buffer.from(
     await page.evaluate(() => {
-      const canvas = document.createElement('canvas');
+      const canvas = globalThis.document.createElement('canvas');
       canvas.width = 600;
       canvas.height = 160;
       const ctx = canvas.getContext('2d');
@@ -283,7 +283,7 @@ module.exports = async function verify({
   );
   const evidence = Buffer.from(
     await page.evaluate((amount) => {
-      const canvas = document.createElement('canvas');
+      const canvas = globalThis.document.createElement('canvas');
       canvas.width = 600;
       canvas.height = 160;
       const ctx = canvas.getContext('2d');
@@ -419,7 +419,9 @@ module.exports = async function verify({
     ).length,
     charged ? 1 : 0,
   );
-  const noticeTarget = await tenant.api.request(`/api/v1/notifications/${completedNotice[0].id}/target`);
+  const noticeTarget = await tenant.api.request(
+    `/api/v1/notifications/${completedNotice[0].id}/target`,
+  );
   assert.equal(noticeTarget.objectId, contractId);
   await assert.rejects(
     otherTenant.api.request(`/api/v1/notifications/${completedNotice[0].id}/target`),

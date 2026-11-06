@@ -75,7 +75,7 @@ module.exports = async function verify({
   await assert.rejects(tenant.invoices.finalize(draft.id, draft.version), (e) => e.status === 403);
   const photo = Buffer.from(
     await page.evaluate(() => {
-      const canvas = document.createElement('canvas');
+      const canvas = globalThis.document.createElement('canvas');
       canvas.width = 150;
       canvas.height = 50;
       const ctx = canvas.getContext('2d');

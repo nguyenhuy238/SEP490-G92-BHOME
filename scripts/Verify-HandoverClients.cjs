@@ -8,7 +8,7 @@ module.exports = async function verify({ actors, contractId, room, today, page }
     actor.api.request(url, { method: 'POST', body: JSON.stringify(body) });
   const photo = Buffer.from(
     await page.evaluate(() => {
-      const canvas = document.createElement('canvas');
+      const canvas = globalThis.document.createElement('canvas');
       canvas.width = 100;
       canvas.height = 40;
       const context = canvas.getContext('2d');
@@ -20,7 +20,7 @@ module.exports = async function verify({ actors, contractId, room, today, page }
     }),
     'base64',
   );
-  const asset = await post(owner, '/api/v1/assets', {
+  await post(owner, '/api/v1/assets', {
     locationId: room.locationId,
     roomId: room.id,
     code: 'SYNTHETIC-HANDOVER',
