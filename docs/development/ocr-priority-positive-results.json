@@ -1,0 +1,173 @@
+{
+  "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+  "manifestSha256": "2E84E24486DF8862446133DF1F75182A6E038E7DFF644568FA83962A9668719D",
+  "thresholdSelectionPerformed": false,
+  "modelsActivated": false,
+  "independentHumanAcceptance": false,
+  "limitations": [
+    "Two agent-reviewed images; independent human label review pending.",
+    "Oracle-window probes do not measure localization or full-frame reading accuracy.",
+    "Exact digit sequences exclude decimal/register verification; billing accuracy NOT MEASURED.",
+    "Multiple-meter full frame must reject a proposal, even if a selected oracle crop is readable."
+  ],
+  "rows": [
+    {
+      "id": "commons_88598855",
+      "category": "water_mechanical",
+      "sha256": "6268edda29670dbca1491d430230258c43e8e43837fb01e953537e8685bd317f",
+      "sampleReview": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false,
+        "scope": "digit_sequence_in_selected_window_only",
+        "reason": "Five settled wheel digits beside printed m3; precision is deliberately unverified, no billing-value ground truth."
+      },
+      "inputTransform": "mobile-1600-jpeg85",
+      "expectedDigits": "35558",
+      "decimalPlaces": null,
+      "billingAccuracy": null,
+      "fullFrameHasMultipleMeters": false,
+      "observations": [
+        {
+          "mode": "trusted_profile_full_frame",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "expectedMultiMeterRejection": false,
+          "unsafeMultiMeterProposal": false,
+          "fallback": true,
+          "warnings": [
+            "reading_region_not_detected",
+            "reading_not_recognized"
+          ],
+          "elapsedMs": 223
+        },
+        {
+          "mode": "automatic_full_frame",
+          "classificationStatus": "ambiguous",
+          "detectedCategory": "unknown",
+          "classificationCorrect": false,
+          "classificationWrong": false,
+          "proposal": false,
+          "warnings": [
+            "reading_region_not_detected"
+          ],
+          "elapsedMs": 3357,
+          "expectedMultiMeterRejection": false,
+          "rejectedMultiMeter": false
+        },
+        {
+          "mode": "oracle_window_pp_page",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "expectedMultiMeterRejection": false,
+          "unsafeMultiMeterProposal": false,
+          "fallback": true,
+          "warnings": [
+            "ambiguous_reading"
+          ],
+          "elapsedMs": 81
+        },
+        {
+          "mode": "oracle_window_pp_direct",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "expectedMultiMeterRejection": false,
+          "unsafeMultiMeterProposal": false,
+          "fallback": true,
+          "warnings": [
+            "ambiguous_reading"
+          ],
+          "elapsedMs": 60
+        },
+        {
+          "mode": "oracle_window_water_stage2",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "fallback": true,
+          "warnings": [
+            "unclear_digit"
+          ],
+          "elapsedMs": 98
+        }
+      ]
+    },
+    {
+      "id": "commons_52855795",
+      "category": "electricity_digital",
+      "sha256": "e3075e5219ff14ff5a22fd9ddfee532b0898a21012dce924712ef3e467caeeba",
+      "sampleReview": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false,
+        "scope": "digit_sequence_in_selected_window_only",
+        "reason": "Top-right LCD numeric row only. Three meter bodies in full frame; kWh visible but register eligibility/decimal not established. Full frame must not choose a device automatically."
+      },
+      "inputTransform": "mobile-1600-jpeg85",
+      "expectedDigits": "000059",
+      "decimalPlaces": null,
+      "billingAccuracy": null,
+      "fullFrameHasMultipleMeters": true,
+      "observations": [
+        {
+          "mode": "trusted_profile_full_frame",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "expectedMultiMeterRejection": true,
+          "unsafeMultiMeterProposal": false,
+          "fallback": true,
+          "warnings": [
+            "meter_localization_unavailable",
+            "reading_region_unverified",
+            "text_region_limit",
+            "billing_register_unverified"
+          ],
+          "elapsedMs": 3993
+        },
+        {
+          "mode": "automatic_full_frame",
+          "classificationStatus": "unavailable",
+          "detectedCategory": "unknown",
+          "classificationCorrect": false,
+          "classificationWrong": false,
+          "proposal": false,
+          "warnings": [
+            "ocr_timeout"
+          ],
+          "elapsedMs": 8018,
+          "expectedMultiMeterRejection": true,
+          "rejectedMultiMeter": true
+        },
+        {
+          "mode": "oracle_window_pp_page",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "expectedMultiMeterRejection": false,
+          "unsafeMultiMeterProposal": false,
+          "fallback": true,
+          "warnings": [
+            "multiple_reading_regions",
+            "ambiguous_reading"
+          ],
+          "elapsedMs": 1218
+        },
+        {
+          "mode": "oracle_window_pp_direct",
+          "proposed": false,
+          "exactDigits": false,
+          "incorrectDigits": false,
+          "expectedMultiMeterRejection": false,
+          "unsafeMultiMeterProposal": false,
+          "fallback": true,
+          "warnings": [
+            "ambiguous_reading"
+          ],
+          "elapsedMs": 89
+        }
+      ]
+    }
+  ]
+}
