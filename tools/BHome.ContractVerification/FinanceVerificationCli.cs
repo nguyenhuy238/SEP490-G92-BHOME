@@ -117,10 +117,10 @@ internal static class FinanceVerificationCli
                 var allocations=await db.Set<PaymentAllocation>().AsNoTracking().ToArrayAsync();
                 if(allocations.Length!=2 || allocations.Sum(a=>a.Amount)!=3410000 || allocations.Select(a=>a.PaidByUserId).Distinct().Count()!=2)
                     throw new InvalidOperationException("Shared invoice allocation invariant failed.");
-                if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests").SingleAsync()!=0)
-                    throw new InvalidOperationException("Unexpected automatic refund in disposable database.");
+                if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE status='COMPLETED' AND requested_amount=10000 AND execution_evidence_key IS NOT NULL").SingleAsync()!=1)
+                    throw new InvalidOperationException("Expected one explicitly recorded synthetic excess refund.");
                 if(!await db.IsSchemaReadyAsync())throw new InvalidOperationException("Compact24 schema changed.");
-                Console.WriteLine("PASS: disposable database retains one immutable Final invoice, three recipients, two distinct payer allocations, no automatic refund and the unchanged Compact24 schema.");
+                Console.WriteLine("PASS: disposable database retains one immutable Final invoice, three recipients, two distinct payer allocations, one explicitly recorded synthetic excess refund and the unchanged Compact24 schema.");
             }
             return node.ExitCode;
         }

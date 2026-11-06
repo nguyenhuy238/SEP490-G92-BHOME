@@ -311,4 +311,12 @@ module.exports = async function verify({
   console.log(
     'PASS: Owner browser allocates only the remaining balance, retains 10,000 VND unallocated excess for review, records the co-occupant payer, suppresses paid-invoice QR and parallel retries do not double-credit any of the three Tenants. No real bank transfer or automatic refund is claimed.',
   );
+  await require('./Verify-ExcessRefundClients.cjs')({
+    owner,
+    tenants,
+    excess,
+    invoiceId: draft.id,
+    settings,
+    page,
+  });
 };

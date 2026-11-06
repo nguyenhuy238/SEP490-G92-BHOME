@@ -57,10 +57,24 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
     public Task<BHome.Application.Billing.InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t) => db.FinancialsAsync(invoiceId, t);
     public Task<bool> ReferenceClaimedAsync(string reference, CancellationToken t) => db.Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == reference, t);
     public Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t) => db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == payerId, t);
-    public Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t) => db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId == invoiceId &&
+    public async Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t)
+    {
+        if (AmountMismatchSupported)
+            return await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
+                  WHERE a.target_invoice_id={invoiceId} AND p.amount-a.amount <>
+                    (SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'))
+                  OR EXISTS(SELECT 1 FROM (
+                    SELECT p.id,(SELECT h->'state' FROM jsonb_array_elements(p.history) WITH ORDINALITY e(h,n)
+                      WHERE h->>'recordType'='PaymentReconciliation' ORDER BY n DESC LIMIT 1) state
+                    FROM payments p WHERE NOT EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=p.id)) latest
+                    WHERE latest.state->>'invoiceId'={invoiceId.ToString()} AND latest.state->>'decision'='PendingReview') AS "Value"
+                """).SingleAsync(t);
+        return await db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId == invoiceId &&
         !db.Set<PaymentReconciliation>().Any(newer => newer.TransferId == r.TransferId && newer.Sequence > r.Sequence) &&
         (r.Decision == "PendingReview" && !db.Set<PaymentAllocation>().Any(a => a.TransferId == r.TransferId) ||
          r.Decision == "Allocated" && r.Reason == "verified_excess_payment_pending_review"), t);
+    }
     public Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t) => db.Set<PaymentCommand>().AsNoTracking().SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key && c.Operation == operation, t);
     public Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId, CancellationToken t) => db.Set<ReceivingBankAccount>().AsNoTracking().Where(a => a.LocationId == locationId).OrderByDescending(a => a.Version).FirstOrDefaultAsync(t);
     public Task<bool> ActiveLocationAsync(Guid locationId, CancellationToken t) => db.Locations.AnyAsync(l => l.Id == locationId && l.IsActive, t);
