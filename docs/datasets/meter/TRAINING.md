@@ -39,6 +39,24 @@ independent human annotation review. Quality flags chỉ là ghi nhận thô.
 
 ## Dataset chữ số LCD
 
+Tiếp nối 06/11, preview LCD có giấy phép CC-BY-NC-4.0 chỉ phục vụ nghiên cứu
+phi thương mại offline, không triển khai/phân phối model thương mại. Nguồn,
+revision, exclusions và leakage audit ở [metadata](lcd-preview-preparation.json).
+Không dùng tên dataset làm nhãn bốn loại. Toàn nguồn mới giữ trong TRAIN:
+
+```powershell
+& $py tools/BHome.OcrSmoke/model_tools/download_lcd_preview.py .tools/ocr-20261106-lcd-preview
+& $py tools/BHome.OcrSmoke/model_tools/prepare_lcd_digits.py .tools/master-dataset docs/datasets/meter/public-sources.json .tools/master-dataset/commons docs/datasets/meter/lcd-evaluation.json .tools/reproduced-lcd-preview --crop-training-rows --preview .tools/ocr-20261106-lcd-preview
+```
+
+Preparer giữ nguyên guard output rỗng; dùng thư mục mới cho mỗi revision. Kiểm
+checksum của 151 asset, kích thước XML/ảnh, display containment, digit row và
+serial namespace. Quarantine nhãn không nhất quán thay vì sửa/cắt box. Ba ảnh
+blank/segment-test đã duyệt bị loại riêng. Kết quả thực thi: 163+43 train,
+2 val, 4 development test; pHash trên ảnh nguồn trước crop. Val/test giữ nguyên
+manifest cũ, không gọi chúng là independent acceptance mới. Fine-tune dùng
+script/config/seed/base-weight guard hiện có; Python không chạy trong backend.
+
 Tải đúng hai asset của Mendeley v1 (không dùng URL Labelbox trong COCO):
 
 ```powershell

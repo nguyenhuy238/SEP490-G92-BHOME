@@ -14,6 +14,8 @@ from prepare_meter_training import audit_pairs, perceptual_hash, prepare
 from evaluate_finetuned_yolo import decode, digit_score, letterbox
 from download_public_meter_assets import fetch
 from train_meter_yolo import verify_training_audit
+from lcd_preview_training import digit_boxes
+from download_lcd_preview import fetch as fetch_preview
 
 
 class DatasetSafety(unittest.TestCase):
@@ -104,6 +106,37 @@ class InferenceSafety(unittest.TestCase):
         result = digit_score(samples, predictions, .5)
         self.assertEqual(result["falseProposals"], 1)
         self.assertEqual(result["exact"], 0)
+
+
+class LcdPreviewSafety(unittest.TestCase):
+    @staticmethod
+    def xml(extra="", outside=False):
+        digits = ''.join(f'<object><name>{i}</name><bndbox><xmin>{10+i*15}</xmin><ymin>10</ymin><xmax>{20+i*15}</xmax><ymax>30</ymax></bndbox></object>' for i in range(3))
+        zone = '<object><name>scoreboard</name><bndbox><xmin>0</xmin><ymin>0</ymin><xmax>90</xmax><ymax>90</ymax></bndbox></object>'
+        if outside:
+            zone = zone.replace('<xmax>90', '<xmax>20')
+        return ('<annotation><size><width>100</width><height>100</height></size>' + digits + zone + extra + '</annotation>').encode()
+
+    def test_serials_cannot_become_reading_digits(self):
+        serial = '<object><name>s9</name><bndbox><xmin>0</xmin><ymin>0</ymin><xmax>5</xmax><ymax>5</ymax></bndbox></object>'
+        self.assertEqual([b[0] for b in digit_boxes(self.xml(serial), (100, 100))], [0, 1, 2])
+
+    def test_wrong_dimensions_or_digits_outside_display_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'dimensions'):
+            digit_boxes(self.xml(), (200, 100))
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            digit_boxes(self.xml(outside=True), (100, 100))
+
+    def test_multiple_displays_and_xml_entities_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'One display'):
+            digit_boxes(self.xml('<object><name>scoreboard</name><bndbox><xmin>0</xmin><ymin>0</ymin><xmax>90</xmax><ymax>90</ymax></bndbox></object>'), (100, 100))
+        with self.assertRaisesRegex(ValueError, 'Unsupported'):
+            digit_boxes(b'<!DOCTYPE malicious>' + self.xml(), (100, 100))
+
+    def test_unreviewed_preview_paths_are_rejected_before_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, 'Unreviewed'):
+                fetch_preview('../private.jpg', Path(directory))
 
 
 if __name__ == "__main__":
