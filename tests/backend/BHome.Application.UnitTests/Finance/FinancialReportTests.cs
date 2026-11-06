@@ -1,10 +1,30 @@
 using BHome.Application.Finance;
+using BHome.Application.PropertyManagement;
+using System.Text.Json;
 
 namespace BHome.Application.UnitTests.Finance;
 
 public sealed class FinancialReportTests
 {
     private static readonly ReportFilter Period=new(new(2026,10,1),new(2026,10,31));
+    [Fact]
+    public void PreservesHistoricalEvidenceWithoutUsingCurrentRoomCountsOrChangingMoney()
+    {
+        var row = new FinanceBasis(Guid.NewGuid(), "Test", Collected: 600, Operating: 200, Rooms: 10, Occupied: 9);
+        var history = new HistoricalOccupancy("Complete", Period.From, Period.To, 7, 28, 25m, []);
+        var report = FinancialReportService.Calculate(Period, new([row], false, history), DateTimeOffset.UtcNow);
+        Assert.Equal(history, report.HistoricalOccupancy);
+        Assert.Equal(9, report.Total.OccupiedRooms);
+        Assert.Equal("400", report.Total.NetOperatingCashFlow);
+        var missing = FinancialReportService.Calculate(Period, new([row], false), DateTimeOffset.UtcNow);
+        Assert.Null(missing.HistoricalOccupancy);
+        Assert.Equal(report.Total, missing.Total);
+        Assert.Equal(report.Capital, missing.Capital);
+        // Existing saved What-if baselines predate this optional field and remain readable.
+        var oldJson = JsonSerializer.Serialize(missing);
+        oldJson = oldJson.Replace(",\"HistoricalOccupancy\":null", "", StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<FinancialReport>(oldJson)!.HistoricalOccupancy);
+    }
     [Fact]
     public void SeparatesIssuedAdjustedCollectedDebtAndOperatingCostsAndUsesCumulativeCashForCapital()
     {

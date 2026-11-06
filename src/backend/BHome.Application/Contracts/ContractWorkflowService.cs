@@ -48,6 +48,13 @@ public sealed partial class ContractService
             if (!Intact(c)) throw ContractException.Conflict("signed_terms_changed");
             if (await Replay(key, "preview", id, t) is { } prior)
                 return DocumentView(await Workflow.FileAsync(id, prior, t) ?? throw ContractException.Missing());
+            if (c.DraftMetadata != "{}")
+            {
+                var reviewed = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).SingleOrDefault(f => f.SnapshotHash == c.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1")
+                    ?? throw ContractException.Conflict("signing_source_document_required");
+                await CopyVerifiedFile(reviewed, Stream.Null, t);
+                Remember(key, "preview", id, reviewed.Id); return DocumentView(reviewed);
+            }
             var template = await Renderer.ConfigurationAsync(t);
             await Renderer.ValidateAsync(Document(c), t);
             var existing = await Workflow.PreviewAsync(id, c.SnapshotHash, template.Id, template.Version, t);

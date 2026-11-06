@@ -20,7 +20,7 @@ namespace BHome.IntegrationTests.PropertyManagement;
 [Trait("Category", "Docker")]
 public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IClassFixture<AuthenticationDatabaseFixture>
 {
-    private const string Password = "Synthetic-Property!493";
+    private const string Password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
     private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
 
     private async Task<(HttpClient Client, Guid UserId)> Client(string role)

@@ -283,6 +283,10 @@ function LiveContractsPage() {
               key={selected}
               id={selected}
               onChanged={() => void list.refetch()}
+              onReleased={() => {
+                setMainDraft(false);
+                void list.refetch();
+              }}
             />
           ) : (
             selected && (

@@ -37,7 +37,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task<Actor> User(string role)
     {
         var id = Guid.NewGuid(); var name = id.ToString("N") + "@example.invalid";
-        const string password = "Synthetic-Contract!537";
+        const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

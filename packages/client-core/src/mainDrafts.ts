@@ -48,6 +48,12 @@ export interface MainDraftFiles {
   pdf: ContractDocumentView | null;
   previewError: string | null;
 }
+export interface MainDraftReleaseInput {
+  tenantUserId: string;
+  expectedVersion: number;
+  reviewedFileId: string;
+  humanReviewed: boolean;
+}
 export interface MainContractSettings {
   ownerSignerId: string;
   effectiveFrom: string;
@@ -99,6 +105,14 @@ export function mainDraftClient(request: MainDraftRequest) {
       }),
     generate: (id: string, signal?: AbortSignal) =>
       request<MainDraftFiles>(`${base}/${id}/documents`, { method: 'POST', signal }),
+    signingReview: (id: string, signal?: AbortSignal) =>
+      request<ContractDocumentView>(`${base}/${id}/signing-review`, { method: 'POST', signal }),
+    release: (id: string, input: MainDraftReleaseInput, key: string) =>
+      request<{ id: string }>(`${base}/${id}/release`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(input),
+      }),
     file: (id: string, fileId: string, signal?: AbortSignal) =>
       request<Uint8Array<ArrayBuffer>>(`${base}/${id}/documents/${fileId}`, { signal }, 'bytes'),
     settings: (id: string, signal?: AbortSignal) =>
@@ -115,6 +129,10 @@ export function mainDraftClient(request: MainDraftRequest) {
   };
 }
 export const mainDraftMessages: Record<string, string> = {
+  main_draft_signing_template_not_approved:
+    'Mẫu này chỉ được phép kiểm thử. Chưa có mẫu hợp đồng được duyệt cho production.',
+  main_draft_release_confirmation_required:
+    'Owner cần chọn tài khoản Tenant và xác nhận đã xem đúng PDF trước khi chuyển sang ký.',
   individual_representatives_require_separate_contracts:
     'Chọn đúng người đại diện và thành viên gia đình. Các người thuê đại diện độc lập cần lập hợp đồng riêng.',
   draft_template_changed_save_again: 'Mẫu hợp đồng đã đổi. Lưu lại bản nháp rồi tạo tài liệu mới.',

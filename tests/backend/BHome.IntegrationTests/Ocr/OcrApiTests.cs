@@ -57,7 +57,14 @@ public sealed class OcrApiTests
         using var rotatedRequest = Request("diagnostics/auto", Roles.Owner, upsideDown.ImEncode(".png"));
         var rotated = await client.SendAsync(rotatedRequest); Assert.Equal(HttpStatusCode.OK, rotated.StatusCode);
         using var rotatedBody = System.Text.Json.JsonDocument.Parse(await rotated.Content.ReadAsStringAsync());
-        Assert.Equal("electricity_digital", rotatedBody.RootElement.GetProperty("analysis").GetProperty("detectedCategory").GetString());
+        var rotatedAnalysis = rotatedBody.RootElement.GetProperty("analysis");
+        Assert.True(rotatedAnalysis.GetProperty("detectedCategory").GetString() == "electricity_digital",
+            $"Rotated public meter: status={rotatedAnalysis.GetProperty("classificationStatus").GetString()}; " +
+            $"warnings={string.Join(',', rotatedAnalysis.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()))}");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, rotatedAnalysis.GetProperty("classificationConfidence").ValueKind);
+        Assert.True(rotatedAnalysis.GetProperty("requiresReview").GetBoolean());
+        Assert.True(rotatedAnalysis.GetProperty("meterProposal").GetProperty("requiresConfirmation").GetBoolean());
+        Assert.Equal(0, resources.Lookups);
     }
     [Theory]
     [InlineData(null, HttpStatusCode.Unauthorized)]

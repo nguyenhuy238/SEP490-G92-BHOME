@@ -1,5 +1,10 @@
 # Billing automation
 
+Cập nhật **06/11/2026**: JOB-09/10 có implementation Compact24; không mặc định bật cho Location.
+[Trạng thái toàn API](API_IMPLEMENTATION_STATUS.md), [route/input/policy](API_RUNTIME_ROUTES.md).
+Tên entity/event bên dưới là tên logic; runtime lưu plan/settings/history trong cột/JSON Compact24,
+không cần chạy migration EF legacy để tạo thêm bảng. Xem DI và Compact24 mapping khi triển khai.
+
 SRS BF-05/UC-20/21/JOB-09/10, yêu cầu Owner opt-in ngày 02/11/2026.
 Các endpoint `/api/v1/billing-automation` dùng `locations.manage` (Owner), service rechecks
 permission với Location từ server. Không cho Staff/Tenant cấu hình hoặc ủy quyền Final.
@@ -33,8 +38,9 @@ POST `meter-tasks/{id}/assignment` `{staffUserId,expectedVersion}`: Owner chọn
 assignment, không cho sửa task closed/stale. Task không có assignee vẫn tồn tại và chỉ Owner
 xem; generated task chỉ Staff được giao trong Location hiện còn phụ trách mới đọc/confirm.
 Capture DTO bổ sung dueAt, assignedStaffUserId, automationPlanId, version, locationId, roomId.
-Schema mới snapshot Room/type được trigger derive từ Meter cho cả manual/scheduled inserts.
-Migration dừng nếu dữ liệu cũ đã trùng; không xóa lịch sử để ép migration thành công.
+Room/type được snapshot từ Meter cho cả manual/scheduled task; Compact24 giữ uniqueness của
+business source key. Các ghi chú migration legacy ban đầu không phải lệnh triển khai runtime hiện tại;
+import dữ liệu trùng cần review, không xóa lịch sử để ép import thành công.
 
 JOB-10 Draft handler `billing-draft`, phase `Draft`, gọi InvoiceService.Generate với Owner
 delegation từ plan đã lưu; Owner active/role và plan hiệu lực được revalidate trong Location/

@@ -88,7 +88,17 @@ export function ContractDetailPanel({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (c.onboardingDraft) return <MainDraftDetailPanel id={c.id} onChanged={() => onChanged()} />;
+  if (c.onboardingDraft)
+    return (
+      <MainDraftDetailPanel
+        id={c.id}
+        onChanged={() => onChanged()}
+        onReleased={() => {
+          detail.reload();
+          onChanged();
+        }}
+      />
+    );
   const actions = contractActions(c, m, 'Owner', actorId).filter(
     (a) => !['move-out/settlement', 'move-out/schedule'].includes(a.operation),
   );

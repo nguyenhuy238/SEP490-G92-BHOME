@@ -1,5 +1,8 @@
 # BH-25 Payment API
 
+Cập nhật **06/11/2026**, contract runtime Compact24. [Trạng thái toàn API](API_IMPLEMENTATION_STATUS.md),
+[hoàn phần receipt chưa phân bổ](REFUNDS.md), [notification consumers](NOTIFICATIONS.md).
+
 GET/PUT `/api/v1/receiving-bank-accounts/{locationId}` / `/api/v1/receiving-bank-accounts`:
 Owner tạo phiên bản cấu hình với expectedVersion, humanVerified, bankIdentifier BIN 6 số,
 accountNumber 6–19 số, accountHolder ASCII hoa, enabled, isDevelopmentDemo.
@@ -33,8 +36,11 @@ Amounts là decimal strings VND nguyên. Lỗi theo ProblemDetails có code/corr
 Mọi POST cần header GUID `Idempotency-Key`: cùng key/payload replay, đổi payload 409.
 Bank reference chuẩn hóa trim/uppercase; unique provider + reference chống nhập trùng giao dịch.
 Claim normalized reference xuyên cọc/Invoice chống credit hai nghĩa vụ ngay cả khi chạy đồng thời.
-Giao dịch đúng full outstanding + đúng transfer reference mới được phân bổ. Thiếu/thừa, sai memo,
-đã Paid hoặc reference đã được credit giữ PendingReview, không tạo PaymentAllocation.
+Compact24 yêu cầu đúng transfer reference và dư nợ dương, nhưng không bắt buộc receipt bằng đúng
+outstanding: số phân bổ là min(receipt đã xác minh, outstanding hiện tại). Thiếu tiền giữ dư nợ;
+thừa tiền giữ phần chưa phân bổ chờ Owner xử lý. Sai memo, đã Paid hoặc bank claim đã dùng không
+tạo allocation mới. Constraint exact-payment chỉ còn ở regression persistence legacy offline;
+không áp quy tắc cũ đó cho runtime Compact24. Chi tiết chính sách ở cuối tài liệu.
 Một bank transfer chỉ có một allocation. Paid không cấm xem lịch sử.
 List giao dịch theo Location/Room/kỳ dùng hóa đơn đã allocate, rồi target của quyết định
 đối soát mới nhất, rồi proposedInvoiceId; giao dịch ban đầu unmatched không biến mất sau match.
@@ -45,9 +51,10 @@ Provider production hiện Unconfigured. `OwnerBankStatement` chỉ là Owner x�
 không phải xác minh callback ngân hàng hay receipt Tenant. Không có endpoint fake bank success.
 Event `payment.confirmed.v1` lưu trong PaymentConfirmedEvents cùng allocation, key allocationId,
 payload contract `{allocationId, invoiceId, occurredAt}`; recipient lấy từ InvoiceRecipients và Owner.
-Notification module chưa consume/deliver; PendingIntegration, không sửa worker dùng chung.
-Consumer cần delivery/inbox ledger riêng với unique allocationId+recipient+channel; không cập nhật
-event gốc bất biến. Chỉ acknowledge sau durable receipt; lỗi delivery không thay đổi allocation.
+`notification-publish` đã consume event sau commit, tạo inbox bền vững và dedup theo recipient/event;
+không cập nhật event tài chính gốc bất biến. JOB-04 delivery/retry/lease đã có implementation,
+nhưng provider email/push mặc định Unconfigured. Xem [NOTIFICATIONS.md](NOTIFICATIONS.md).
+Không báo đã gửi ra ngoài chỉ vì inbox đã tạo; lỗi delivery không thay đổi allocation.
 
 `GET /invoices/{id}/payment` dành cho Owner/Tenant có entitlement, Staff 403, ngoài snapshot 404.
 Tenant thấy cùng Paid/Unpaid và các payment amount/date, với payer “Bạn”/“Khách thuê khác trong hóa đơn”/
@@ -74,4 +81,6 @@ Trong phiên triển khai, người dùng yêu cầu chọn hướng xử lý kh
 
 Status contract hiện hữu giữ `Paid/Unpaid`, hiển thị paidAmount/outstandingAmount để nhận biết đã trả một phần. Reason mới `verified_partial_payment` và `verified_excess_payment_pending_review`; TransferView bổ sung `allocatedAmount,unallocatedAmount` dạng chuỗi VND. GET receipt/list và replay giữ đúng reason/số tiền, không đổi partial thành full. Payment history và notification chỉ ghi số thực phân bổ; PendingReview của invoice bật khi receipt còn thừa. Owner Web giải thích quy tắc trước xác nhận và tách số đã/chưa phân bổ. Tenant Mobile đọc số đã trả/còn nợ từ backend như contract hiện hữu; không suy luận đã thanh toán từ số transfer.
 
-Một receipt chỉ có một allocation hiện hữu; số dư thừa giữ chờ Owner và chưa có API giải ngân refund/credit trong slice này. Không tuyên bố refund hoàn tất. Offline legacy regression vẫn giữ constraint exact cũ qua capability của repository; production DI luôn Compact24, không dò schema hoặc fallback legacy. Compact writer kiểm min(receipt,outstanding), source/claim/race theo chính sách mới. Không thay schema legacy hoặc database làm việc.
+Một receipt chỉ có một allocation hiện hữu. Số dư thừa giữ chờ Owner; bổ sung [hoàn tiền thủ công](REFUNDS.md): Owner lập yêu cầu/duyệt, tự chuyển khoản bên ngoài rồi đối chiếu sao kê và ghi chứng từ private. Không tự giải ngân hoặc tạo credit. TransferView.unallocatedAmount vẫn là phần receipt chưa phân bổ vào Invoice, không trừ trực tiếp bằng refund; RefundSource tách excess/refunded/reserved/available để không dùng lại số đã hoàn. PendingReview của Invoice chỉ tắt khi phần thừa đã Completed đủ (các lý do khác vẫn giữ). Không sửa Payment/Allocation/Final Invoice hoặc dùng lại bank claim.
+
+Offline legacy regression giữ constraint exact cũ qua capability repository; production DI luôn Compact24, không dò schema/fallback legacy. Refunds chỉ dùng schema Compact24 hiện hữu. Không thay schema legacy hoặc database làm việc. Browser đã kiểm đúng payer/3 Tenant/Completed/evidence MinIO với dữ liệu tổng hợp; đây không phải bank provider acceptance. Chứng từ hoàn chỉ Owner xem, không đưa cho Staff hoặc Tenant khác cùng hóa đơn.

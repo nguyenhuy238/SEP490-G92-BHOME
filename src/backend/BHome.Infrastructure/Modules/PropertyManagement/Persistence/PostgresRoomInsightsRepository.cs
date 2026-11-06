@@ -207,7 +207,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
     private static bool InRange(DateTimeOffset value, DateTimeOffset? from, DateTimeOffset? to) =>
         (!from.HasValue || value >= from) && (!to.HasValue || value < to);
     private static DateTimeOffset BusinessInstant(DateOnly date) =>
-        new(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7));
+        new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
     private static DateOnly VietnamDate(DateTimeOffset instant) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(instant, "Asia/Ho_Chi_Minh").DateTime);
     private static Guid StableId(Guid id, string kind) => StableId(id, Guid.Empty, kind);

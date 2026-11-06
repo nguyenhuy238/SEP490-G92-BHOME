@@ -8,11 +8,27 @@ export interface ExpenseInput {
   amount: string;
   occurredOn: string;
   note: string;
+  assetId?: string | null;
+  taskId?: string | null;
 }
 export interface Expense extends ExpenseInput {
   id: string;
   version: number;
   canEdit: boolean;
+  assetName?: string | null;
+  taskTitle?: string | null;
+}
+export interface ExpenseReference {
+  id: string;
+  label: string;
+  roomId: string | null;
+  assetId: string | null;
+}
+export interface ExpenseReferences {
+  rooms: ExpenseReference[];
+  assets: ExpenseReference[];
+  workOrders: ExpenseReference[];
+  truncated: boolean;
 }
 export interface ExpenseFilter {
   locationId?: string;
@@ -27,6 +43,15 @@ export interface ExpensePage {
   total: number;
   page: number;
   pageSize: number;
+}
+export interface ExpenseEvidence {
+  id: string;
+  operationKey: string;
+  contentType: string;
+  length: number;
+  sha256: string;
+  status: 'PendingUpload' | 'Uploaded';
+  recordedAt: string;
 }
 export interface ReportFilter {
   from: string;
@@ -60,6 +85,15 @@ export interface FinancialReport {
     unavailableReason: string | null;
   };
   hasUnclassifiedRefunds: boolean;
+  historicalOccupancy?: {
+    status: string;
+    from: string | null;
+    to: string | null;
+    occupiedRoomDays: number | null;
+    rentableRoomDays: number | null;
+    occupancyRate: number | null;
+    limitations: string[];
+  } | null;
 }
 export interface ScenarioInput {
   name: string;
@@ -139,6 +173,26 @@ export function financeClient(request: ContractRequest) {
     },
     expense: (id: string, signal?: AbortSignal) =>
       request<Expense>(`/api/v1/expenses/${id}`, { signal }),
+    expenseReferences: (locationId: string, roomId?: string | null, signal?: AbortSignal) =>
+      request<ExpenseReferences>(
+        `/api/v1/expenses/reference-choices?${new URLSearchParams({ locationId, ...(roomId ? { roomId } : {}) })}`,
+        { signal },
+      ),
+    expenseEvidence: (id: string, signal?: AbortSignal) =>
+      request<ExpenseEvidence[]>(`/api/v1/expenses/${id}/evidence`, { signal }),
+    uploadExpenseEvidence: (
+      id: string,
+      bytes: Uint8Array<ArrayBuffer>,
+      type: string,
+      key: string,
+    ) =>
+      request<ExpenseEvidence>(`/api/v1/expenses/${id}/evidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': type, 'Idempotency-Key': key },
+        body: bytes,
+      }),
+    expenseEvidenceFile: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Blob>(`/api/v1/expenses/${id}/evidence/${fileId}`, { signal }, 'blob'),
     createExpense: (input: ExpenseInput, key: string) =>
       request<Expense>('/api/v1/expenses', {
         method: 'POST',
@@ -159,5 +213,6 @@ export function financeError(error: unknown) {
   if (status === 409) return 'Dữ liệu hoặc yêu cầu đã thay đổi. Tải lại để kiểm tra trước khi lưu.';
   if (status === 400)
     return 'Thông tin chưa hợp lệ. Kiểm tra số tiền, ngày và các trường bắt buộc.';
+  if (status === 413) return 'Ảnh chứng từ vượt quá 5 MB.';
   return 'Không thể tải hoặc lưu dữ liệu tài chính. Vui lòng thử lại.';
 }

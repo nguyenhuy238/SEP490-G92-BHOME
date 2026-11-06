@@ -187,6 +187,7 @@ public sealed class Compact24ContractRegressionTests(Compact24WorkflowFixture fi
     [CompactPostgresFact] public Task FailedSigningRetry() => Run(t => t.FailedSignatureCanBeRetriedWhileRetainingTheFailedAttempt());
     [CompactPostgresFact] public Task FailedUpload() => Run(t => t.UploadFailureLeavesDurableCleanupIntentAndNoDanglingSignatureReference());
     [CompactPostgresFact] public Task RemoteSigningAdapter() => Run(t => t.ProductionAdapterAndPdfSignerCompleteTwoPartyContractThroughApiWithSyntheticRemoteCa());
+    [CompactPostgresFact] public Task SignedDocumentIntegrity() => Run(t => t.SignedDocumentDownloadRejectsTamperedBytesAndPreservesSignerScope());
 }
 
 [Trait("Category", "CompactPostgres")]
@@ -205,4 +206,6 @@ public sealed class Compact24MainDraftRegressionTests
     [CompactPostgresFact] public Task ConcurrentDraft() => Run(t => t.RejectsUnavailableRoomAndConcurrentCreationReplaysOneDraft());
     [CompactPostgresFact] public Task IncompleteIdentity() => Run(t => t.VerifiedFlagWithoutConfirmedIdentityDoesNotGenerateAnIncompleteContract());
     [CompactPostgresFact] public Task OccupantModels() => Run(t => t.FamilyMembersShareOneDraftButIndependentRepresentativesGetSeparateContracts());
+    [CompactPostgresFact] public Task ReviewReleaseAndActivation() => Run(t => t.ReviewedMainDraftReleasesOnceAndBothPartiesUseTheSamePdfThroughSimulatedActivation());
+    [CompactPostgresFact] public Task RejectInvalidRelease() => Run(t => t.ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate());
 }
