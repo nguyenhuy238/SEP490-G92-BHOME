@@ -255,4 +255,13 @@ module.exports = async function verify(settings, page) {
     baseline,
   });
   await require('./Verify-HistoricalOccupancyClients.cjs')({ owner, room, today, page, settings });
+  await require('./Verify-MoveOutClients.cjs')({
+    actors,
+    contractId: draft.id,
+    room,
+    today,
+    baseline,
+    settings,
+    page,
+  });
 };

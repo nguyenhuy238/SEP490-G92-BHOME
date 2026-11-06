@@ -85,6 +85,7 @@ export interface FinancialReport {
     unavailableReason: string | null;
   };
   hasUnclassifiedRefunds: boolean;
+  verifiedDepositReturns?: string | null;
   historicalOccupancy?: {
     status: string;
     from: string | null;

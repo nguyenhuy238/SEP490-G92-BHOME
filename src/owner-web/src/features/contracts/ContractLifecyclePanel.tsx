@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Button,
@@ -32,6 +32,8 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { ChartCard } from '../../components/common/PortalUI';
+import { RefundPanel } from '../payments/RefundPanel';
+import { DepositDeductionsPanel } from './DepositDeductionsPanel';
 
 export function ContractLifecyclePanel({
   api,
@@ -45,6 +47,15 @@ export function ContractLifecyclePanel({
   onChanged: () => void;
 }) {
   const q = useContractLifecycle(api, contract.id, 'Owner');
+  const cache = useQueryClient();
+  async function reload() {
+    await cache.invalidateQueries({
+      queryKey: ['refund-source'],
+      predicate: (query) =>
+        query.queryKey[2] === 'SecurityDeposit' && query.queryKey[3] === contract.id,
+    });
+    q.reload();
+  }
   const staff = useQuery({
     queryKey: ['inspection-staff', contract.locationId],
     queryFn: ({ signal }) => api.inspectionStaff(contract.locationId, signal),
@@ -53,8 +64,8 @@ export function ContractLifecyclePanel({
   const [reason, setReason] = useState(''),
     [schedule, setSchedule] = useState(''),
     [assignee, setAssignee] = useState('');
-  const [noCharges, setNoCharges] = useState(false),
-    [checked, setChecked] = useState(false);
+  const [reviewedReference, setReviewedReference] = useState<string | null>(null),
+    [noChargesInspection, setNoChargesInspection] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
@@ -69,11 +80,11 @@ export function ContractLifecyclePanel({
     try {
       await api.mutate(contract.id, operation, body, keys.get(operation, body));
       keys.confirmed(operation, body);
-      setChecked(false);
-      setNoCharges(false);
+      setReviewedReference(null);
+      setNoChargesInspection(null);
       setReason('');
       setNotice('Đã lưu tại máy chủ.');
-      q.reload();
+      await reload();
       onChanged();
     } catch (e) {
       setError(contractError(e));
@@ -84,11 +95,14 @@ export function ContractLifecyclePanel({
   }
   const inspection = q.inspections[0],
     summary = q.summary;
+  const inspectionKey = inspection ? `${contract.id}:${inspection.id}:${inspection.version}` : null;
+  const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
+  const checked = !!summary && reviewedReference === summary.reference;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
   return (
     <ChartCard title="Kiểm tra & quyết toán trả phòng">
       <Stack spacing={2}>
-        <Button disabled={busy || q.loading} onClick={q.reload}>
+        <Button disabled={busy || q.loading} onClick={() => void reload()}>
           Tải lại dữ liệu quyết toán
         </Button>
         {q.loading && <Typography>Đang đối chiếu dữ liệu…</Typography>}
@@ -222,6 +236,21 @@ export function ContractLifecyclePanel({
               Khấu trừ đã duyệt: {money(summary.approvedDeductions)} · Hoàn tiền:{' '}
               {money(summary.refundAmount)}
             </Typography>
+            {summary.calculation && (
+              <>
+                <Typography>
+                  Đã phát hành: {money(summary.calculation.issuedTotal)} · Phải thu hiệu lực:{' '}
+                  {money(summary.calculation.payableTotal)} · Đã phân bổ hóa đơn:{' '}
+                  {money(summary.calculation.verifiedInvoicePayments)}
+                </Typography>
+                <Typography>
+                  Cọc đã dùng: {money(summary.calculation.depositAllocated)} · Đã hoàn cọc:{' '}
+                  {money(summary.calculation.depositRefunded)} · Cọc giữ chỗ hoàn:{' '}
+                  {money(summary.calculation.depositReserved)} · Cọc khả dụng:{' '}
+                  {money(summary.calculation.availableSecurityDeposit)}
+                </Typography>
+              </>
+            )}
             <Typography>
               {summary.otherActiveContracts
                 ? 'Phòng còn hợp đồng đang thuê khác; hoàn tất người này vẫn giữ phòng Đang thuê.'
@@ -247,6 +276,35 @@ export function ContractLifecyclePanel({
                 {settlementBlocker(b)}
               </Alert>
             ))}
+            {!/^0(?:\.0+)?$/.test(summary.verifiedSecurityDeposit) && (
+              <>
+                {inspection?.ownerDecision === 'Confirmed' &&
+                  (summary.depositDeductions ||
+                    summary.unresolvedItems.includes(
+                      'final_charges_and_damage_policy_pending',
+                    )) && (
+                    <DepositDeductionsPanel
+                      key={`deductions:${summary.reference}`}
+                      api={api}
+                      id={contract.id}
+                      summary={summary}
+                      inspection={inspection}
+                      saved={async () => {
+                        await reload();
+                        onChanged();
+                      }}
+                    />
+                  )}
+                <RefundPanel
+                  sourceId={contract.id}
+                  sourceKind="SecurityDeposit"
+                  onChanged={() => {
+                    q.reload();
+                    onChanged();
+                  }}
+                />
+              </>
+            )}
             {summary.resolved && (
               <Alert severity="success">Các nguồn hiện tại đủ điều kiện xem xét hoàn tất.</Alert>
             )}
@@ -270,7 +328,9 @@ export function ContractLifecyclePanel({
                   control={
                     <Checkbox
                       checked={noCharges}
-                      onChange={(e) => setNoCharges(e.target.checked)}
+                      onChange={(e) =>
+                        setNoChargesInspection(e.target.checked ? inspectionKey : null)
+                      }
                     />
                   }
                   label="Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu"
@@ -306,7 +366,12 @@ export function ContractLifecyclePanel({
               <>
                 <FormControlLabel
                   control={
-                    <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+                    <Checkbox
+                      checked={checked}
+                      onChange={(e) =>
+                        setReviewedReference(e.target.checked ? summary.reference : null)
+                      }
+                    />
                   }
                   label="Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý"
                 />

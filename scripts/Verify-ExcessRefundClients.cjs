@@ -68,7 +68,12 @@ module.exports = async function verify({ owner, tenants, excess, invoiceId, sett
   await page
     .getByLabel('Tham chiếu giao dịch hoàn trên sao kê', { exact: true })
     .fill('SYNTHETIC-REFUND-' + refund.id);
-  const localTime = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 23);
+  const localTime = new Date(Date.now() + 7 * 3600000)
+    .toISOString()
+    .slice(0, 23)
+    .replace(/(\.\d*?)0+$/, '$1')
+    .replace(/\.$/, '')
+    .replace(/:00$/, '');
   await page.getByLabel('Thời gian hoàn thực tế (giờ Việt Nam)', { exact: true }).fill(localTime);
   await page
     .getByLabel('Chứng từ giao dịch hoàn', { exact: true })

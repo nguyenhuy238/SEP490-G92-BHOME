@@ -10,26 +10,29 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
 
-internal sealed class RefundRepository(BHomePersistenceContext db) : IRefundRepository
+internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome.Application.Contracts.IContractSettlementLedger ledger,
+    BHome.Application.Contracts.IDepositDeductionEvidence? deductionEvidence = null) : IRefundRepository
 {
     private const string Kind = "ExcessReceiptRefundV1";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private IQueryable<RefundRecord> Rows => db.Database.SqlQuery<RefundRecord>($"""
-        SELECT r.id AS "Id", r.source_payment_id AS "SourcePaymentId", r.beneficiary_resident_id AS "BeneficiaryResidentId",
+        SELECT r.id AS "Id", r.source_payment_id AS "SourcePaymentId", r.source_deposit_contract_id AS "SourceDepositContractId", r.beneficiary_resident_id AS "BeneficiaryResidentId",
           resident.display_label AS "BeneficiaryLabel", r.requested_amount AS "Amount", r.requested_by_user_id AS "RequestedBy",
           r.requested_at AS "RequestedAt", r.reason AS "Reason", r.status AS "Status", r.version AS "Version",
           r.operation_key AS "OperationKey", r.decided_by_user_id AS "DecidedBy", r.decided_at AS "DecidedAt",
           r.decision_reason AS "DecisionReason", r.executed_at AS "ExecutedAt", r.external_refund_reference AS "ExternalReference",
           r.execution_evidence_key AS "EvidenceKey", r.history::text AS "HistoryJson",
-          COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')='true' AS "IsDevelopmentDemo"
+          (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')='true' OR
+            EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType'='SecurityDepositRefundV1'
+              AND h->'state'->>'isDevelopmentDemo'='true')) AS "IsDevelopmentDemo"
         FROM refund_requests r JOIN residents resident ON resident.id=r.beneficiary_resident_id
-          JOIN payments p ON p.id=r.source_payment_id
-        WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType'={Kind})
+          LEFT JOIN payments p ON p.id=r.source_payment_id
+        WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1'))
         """);
     private static RefundRecord Decode(RefundRecord row)
     {
         using var json = JsonDocument.Parse(row.HistoryJson);
-        row.State = json.RootElement.EnumerateArray().Last(n => n.TryGetProperty("recordType", out var kind) && kind.GetString() == Kind)
+        row.State = json.RootElement.EnumerateArray().Last(n => n.TryGetProperty("recordType", out var kind) && kind.GetString() is Kind or "SecurityDepositRefundV1")
             .GetProperty("state").Deserialize<RefundState>(Json) ?? throw new FinanceException(409, "refund_history_invalid");
         return row;
     }
@@ -76,18 +79,18 @@ internal sealed class RefundRepository(BHomePersistenceContext db) : IRefundRepo
         SELECT EXISTS(SELECT 1 FROM refund_requests r WHERE id<>{exceptId} AND (
           upper(external_refund_reference)={reference} OR EXISTS(
             SELECT 1 FROM jsonb_array_elements(r.history) h
-            WHERE h->>'recordType'={Kind} AND h->'state'->'upload'->>'externalReference'={reference}))) AS "Value"
+            WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1') AND h->'state'->'upload'->>'externalReference'={reference}))) AS "Value"
         """).SingleAsync(t);
     public async Task SaveAsync(RefundRecord row, bool create, Guid actor, string action, DateTimeOffset now, CancellationToken t)
     {
         var history = JsonNode.Parse(row.HistoryJson) as JsonArray ?? throw new FinanceException(409, "refund_history_invalid");
-        history.Add(new JsonObject { ["recordType"] = Kind, ["state"] = JsonSerializer.SerializeToNode(row.State, Json) });
+        history.Add(new JsonObject { ["recordType"] = row.State.Classification, ["state"] = JsonSerializer.SerializeToNode(row.State, Json) });
         var json = history.ToJsonString();
         if (create)
             await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO refund_requests(id,source_payment_id,beneficiary_resident_id,requested_by_user_id,
+                INSERT INTO refund_requests(id,source_payment_id,source_deposit_contract_id,beneficiary_resident_id,requested_by_user_id,
                   requested_at,requested_amount,reason,status,operation_key,version,history)
-                VALUES({row.Id},{row.SourcePaymentId},{row.BeneficiaryResidentId},{row.RequestedBy},{row.RequestedAt},
+                VALUES({row.Id},{row.SourcePaymentId},{row.SourceDepositContractId},{row.BeneficiaryResidentId},{row.RequestedBy},{row.RequestedAt},
                   {row.Amount},{row.Reason},{row.Status},{row.OperationKey},{row.Version},{json}::jsonb)
                 """, t);
         else

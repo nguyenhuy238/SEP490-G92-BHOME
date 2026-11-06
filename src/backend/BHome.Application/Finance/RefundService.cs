@@ -14,6 +14,8 @@ public sealed record RefundInput(Guid BeneficiaryResidentId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
     string Reason, bool HumanConfirmed);
 public sealed record RefundDecision(int ExpectedVersion, bool Approve, string Reason, bool HumanConfirmed);
+public sealed record DepositRefundInput(RefundInput Refund, string ExpectedFinancialReference,
+    bool BeneficiaryVerified, bool NoDeductionsConfirmed, Guid? ExpectedDeductionPlanId = null, bool DeductionsConfirmed = false);
 public sealed record RefundExecution(int ExpectedVersion, DateTimeOffset ExecutedAt, string ExternalReference, string Reason, bool HumanConfirmed);
 public sealed record RefundPerson(Guid Id, string Label);
 public sealed record RefundEvent(string Action, Guid Actor, DateTimeOffset At, string Reason, int Version,
@@ -23,7 +25,8 @@ public sealed record RefundUpload(Guid Key, string Fingerprint, string ObjectKey
 public sealed class RefundRecord
 {
     public Guid Id { get; set; }
-    public Guid SourcePaymentId { get; set; }
+    public Guid? SourcePaymentId { get; set; }
+    public Guid? SourceDepositContractId { get; set; }
     public Guid BeneficiaryResidentId { get; set; }
     public string BeneficiaryLabel { get; set; } = "";
     public decimal Amount { get; set; }
@@ -48,26 +51,39 @@ public sealed class RefundState
     public string Classification { get; set; } = "ExcessReceiptRefundV1";
     public List<RefundEvent> Events { get; set; } = [];
     public RefundUpload? Upload { get; set; }
+    public Guid? SettlementContractId { get; set; }
+    public string? SourceReference { get; set; }
+    public bool BeneficiaryVerified { get; set; }
+    public bool NoDeductionsConfirmed { get; set; }
+    public bool DeductionsConfirmed { get; set; }
+    public Guid? DeductionPlanId { get; set; }
+    public bool IsDevelopmentDemo { get; set; }
 }
-public sealed record RefundView(Guid Id, Guid SourcePaymentId, Guid BeneficiaryResidentId, string BeneficiaryLabel,
+public sealed record RefundView(Guid Id, Guid? SourcePaymentId, Guid BeneficiaryResidentId, string BeneficiaryLabel,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, string Reason, string Status,
     int Version, DateTimeOffset RequestedAt, string? DecisionReason, DateTimeOffset? DecidedAt,
     DateTimeOffset? ExecutedAt, string? ExternalReference, bool IsDevelopmentDemo,
-    IReadOnlyList<RefundEvent> History, RefundUploadView? ExecutionIntent);
+    IReadOnlyList<RefundEvent> History, RefundUploadView? ExecutionIntent, Guid? SourceDepositContractId = null);
 public sealed record RefundUploadView(Guid Key, string ContentType, long Length, string Sha256,
     DateTimeOffset ExecutedAt, string ExternalReference, string Reason);
-public sealed record RefundSource(Guid SourcePaymentId,
+public sealed record RefundSource(Guid? SourcePaymentId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal ExcessAmount,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RefundedAmount,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal ReservedAmount,
-    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AvailableAmount,
-    bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries, IReadOnlyList<RefundView> Requests);
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal? AvailableAmount,
+    bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries, IReadOnlyList<RefundView> Requests,
+    Guid? SourceDepositContractId = null, string? FinancialReference = null, IReadOnlyList<string>? Blockers = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal? VerifiedDepositAmount = null,
+    DepositDeductionPlan? DepositDeductions = null);
 public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries,
-    IReadOnlyList<RefundRecord> Requests);
+    IReadOnlyList<RefundRecord> Requests, Guid? DepositContractId = null, string? FinancialReference = null,
+    IReadOnlyList<string>? Blockers = null, decimal? AvailableDeposit = null, decimal? VerifiedDeposit = null,
+    DepositDeductionPlan? DepositDeductions = null);
 public interface IRefundRepository
 {
     Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t);
     Task<RefundSourceData> SourceAsync(Guid id, CancellationToken t);
+    Task<RefundSourceData> DepositSourceAsync(Guid contractId, CancellationToken t);
     Task<RefundRecord> GetAsync(Guid id, CancellationToken t);
     Task<RefundRecord?> OperationAsync(Guid key, CancellationToken t);
     Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken t);
@@ -91,46 +107,79 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
     private static RefundView View(RefundRecord row) => new(row.Id, row.SourcePaymentId, row.BeneficiaryResidentId,
         row.BeneficiaryLabel, row.Amount, row.Reason, row.Status, row.Version, row.RequestedAt, row.DecisionReason,
         row.DecidedAt, row.ExecutedAt, row.ExternalReference, row.IsDevelopmentDemo, row.State.Events,
-        row.State.Upload is { } u && row.Status != "COMPLETED" ? new(u.Key, u.ContentType, u.Length, u.Sha256, u.ExecutedAt, u.ExternalReference, u.Reason) : null);
+        row.State.Upload is { } u && row.Status != "COMPLETED" ? new(u.Key, u.ContentType, u.Length, u.Sha256, u.ExecutedAt, u.ExternalReference, u.Reason) : null, row.SourceDepositContractId);
     private static decimal Reserved(RefundSourceData source) => source.Requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount);
     public async Task<RefundSource> SourceAsync(Guid id, CancellationToken t)
+        => await ReadSourceAsync(id, false, t);
+    public async Task<RefundSource> DepositSourceAsync(Guid contractId, CancellationToken t)
+        => await ReadSourceAsync(contractId, true, t);
+    private async Task<RefundSource> ReadSourceAsync(Guid id, bool deposit, CancellationToken t)
     {
         _ = Owner();
         return await repository.TransactionAsync(async () => {
-            var source = await repository.SourceAsync(id, t);
+            var source = deposit ? await repository.DepositSourceAsync(id, t) : await repository.SourceAsync(id, t);
             var paid = source.Requests.Where(r => r.Status == "COMPLETED").Sum(r => r.Amount);
             var held = Reserved(source) - paid;
-            return new RefundSource(id, source.Excess, paid, held, Math.Max(0, source.Excess - paid - held),
-                source.IsDevelopmentDemo, source.Beneficiaries, source.Requests.Select(View).ToArray());
+            return new RefundSource(deposit ? null : id, deposit ? 0 : source.Excess, paid, held,
+                deposit ? source.AvailableDeposit : Math.Max(0, source.Excess - paid - held),
+                source.IsDevelopmentDemo, source.Beneficiaries, source.Requests.Select(View).ToArray(),
+                source.DepositContractId, source.FinancialReference, source.Blockers,
+                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions);
         }, t);
     }
     public Task<RefundView> CreateAsync(Guid sourceId, RefundInput input, Guid key, CancellationToken t)
+        => CreateCoreAsync(sourceId, input, key, null, t);
+    public Task<RefundView> CreateDepositAsync(Guid contractId, DepositRefundInput input, Guid key, CancellationToken t)
+    {
+        _ = Owner();
+        if (!input.BeneficiaryVerified || (!input.NoDeductionsConfirmed && !input.DeductionsConfirmed) || string.IsNullOrWhiteSpace(input.ExpectedFinancialReference))
+            throw new FinanceException(400, "deposit_refund_confirmation_required");
+        return CreateCoreAsync(contractId, input.Refund, key, input, t);
+    }
+    private Task<RefundView> CreateCoreAsync(Guid sourceId, RefundInput input, Guid key, DepositRefundInput? deposit, CancellationToken t)
     {
         var actor = Owner(); Key(key);
         var x = input with { Reason = Reason(input.Reason) };
         if (!x.HumanConfirmed || x.BeneficiaryResidentId == Guid.Empty || x.Amount <= 0 ||
             x.Amount >= 1_000_000_000_000_000_000m || decimal.Truncate(x.Amount) != x.Amount)
             throw new FinanceException(400, "invalid_refund_request");
-        var fingerprint = Hash(new { sourceId, input = x });
+        var fingerprint = deposit is null ? Hash(new { sourceId, input = x }) : Hash(new { sourceId, input = x,
+            deposit.ExpectedFinancialReference, deposit.BeneficiaryVerified, deposit.NoDeductionsConfirmed });
+        if (deposit?.ExpectedDeductionPlanId is not null || deposit?.DeductionsConfirmed == true)
+            fingerprint = Hash(new { sourceId, input = x, deposit.ExpectedFinancialReference, deposit.BeneficiaryVerified,
+                deposit.NoDeductionsConfirmed, deposit.ExpectedDeductionPlanId, deposit.DeductionsConfirmed });
         return repository.TransactionAsync(async () => {
             if (await repository.OperationAsync(key, t) is { } previous)
             {
+                ValidateMode(previous.IsDevelopmentDemo);
                 if (previous.RequestedBy != actor || previous.State.Events.FirstOrDefault()?.Fingerprint != fingerprint)
                     throw new FinanceException(409, "refund_idempotency_conflict");
                 return View(previous);
             }
-            var source = await repository.SourceAsync(sourceId, t);
+            var source = deposit is null ? await repository.SourceAsync(sourceId, t) : await repository.DepositSourceAsync(sourceId, t);
             ValidateMode(source.IsDevelopmentDemo);
+            if (source.Blockers?.Count > 0) throw new FinanceException(409, "deposit_refund_not_ready");
+            if (deposit is not null && source.FinancialReference != deposit.ExpectedFinancialReference)
+                throw new FinanceException(409, "refund_source_changed");
+            if (deposit is not null && (source.DepositDeductions is { } plan
+                ? deposit.ExpectedDeductionPlanId != plan.Id || !deposit.DeductionsConfirmed || deposit.NoDeductionsConfirmed
+                : !deposit.NoDeductionsConfirmed || deposit.ExpectedDeductionPlanId is not null || deposit.DeductionsConfirmed))
+                throw new FinanceException(409, "deposit_deduction_review_required");
             var person = source.Beneficiaries.SingleOrDefault(p => p.Id == x.BeneficiaryResidentId)
                 ?? throw new FinanceException(409, "refund_verified_payer_required");
             if (source.Requests.Count >= 100 || x.Amount > source.Excess - Reserved(source))
                 throw new FinanceException(409, "refund_amount_unavailable");
             var now = Now;
-            var row = new RefundRecord { Id = Guid.NewGuid(), SourcePaymentId = sourceId, BeneficiaryResidentId = person.Id,
+            var row = new RefundRecord { Id = Guid.NewGuid(), SourcePaymentId = deposit is null ? sourceId : null,
+                SourceDepositContractId = source.DepositContractId, BeneficiaryResidentId = person.Id,
                 BeneficiaryLabel = person.Label, Amount = x.Amount, Reason = x.Reason, RequestedBy = actor,
                 RequestedAt = now, OperationKey = key, IsDevelopmentDemo = source.IsDevelopmentDemo };
+            if (deposit is not null) row.State = new() { Classification = "SecurityDepositRefundV1", SettlementContractId = sourceId,
+                SourceReference = source.FinancialReference, BeneficiaryVerified = true, NoDeductionsConfirmed = deposit.NoDeductionsConfirmed,
+                DeductionsConfirmed = deposit.DeductionsConfirmed, DeductionPlanId = deposit.ExpectedDeductionPlanId,
+                IsDevelopmentDemo = source.IsDevelopmentDemo };
             row.State.Events.Add(new("Requested", actor, now, x.Reason, row.Version, key, fingerprint));
-            await repository.SaveAsync(row, true, actor, "ExcessRefundRequested", now, t); return View(row);
+            await repository.SaveAsync(row, true, actor, deposit is null ? "ExcessRefundRequested" : "DepositRefundRequested", now, t); return View(row);
         }, t);
     }
     public Task<RefundView> DecideAsync(Guid id, RefundDecision input, Guid key, CancellationToken t)
@@ -147,7 +196,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
             row.Status = x.Approve ? "APPROVED" : "REJECTED"; row.Version++;
             row.DecidedBy = actor; row.DecidedAt = Now; row.DecisionReason = x.Reason;
             row.State.Events.Add(new(row.Status, actor, row.DecidedAt.Value, x.Reason, row.Version, key, fingerprint));
-            await repository.SaveAsync(row, false, actor, "ExcessRefund" + row.Status, row.DecidedAt.Value, t); return View(row);
+            await repository.SaveAsync(row, false, actor, AuditPrefix(row) + row.Status, row.DecidedAt.Value, t); return View(row);
         }, t);
     }
     private static bool Replay(RefundRecord row, Guid actor, Guid key, string fingerprint)
@@ -158,10 +207,14 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
     }
     private async Task ValidateSourceAsync(RefundRecord row, CancellationToken t)
     {
-        var source = await repository.SourceAsync(row.SourcePaymentId, t);
-        if (!source.Beneficiaries.Any(p => p.Id == row.BeneficiaryResidentId) || Reserved(source) > source.Excess)
+        var source = row.SourcePaymentId is { } payment ? await repository.SourceAsync(payment, t) :
+            await repository.DepositSourceAsync(row.State.SettlementContractId ?? throw new FinanceException(409, "refund_source_changed"), t);
+        if (source.Blockers?.Count > 0 || source.DepositContractId != row.SourceDepositContractId ||
+            (row.SourceDepositContractId is not null && source.FinancialReference != row.State.SourceReference) ||
+            !source.Beneficiaries.Any(p => p.Id == row.BeneficiaryResidentId) || Reserved(source) > source.Excess)
             throw new FinanceException(409, "refund_source_changed");
     }
+    private static string AuditPrefix(RefundRecord row) => row.SourceDepositContractId is null ? "ExcessRefund" : "DepositRefund";
     public async Task<RefundView> ExecuteAsync(Guid id, RefundExecution input, Guid key, Stream image, CancellationToken t)
     {
         var actor = Owner(); Key(key);
@@ -194,7 +247,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 if (current.State.Upload is null) {
                     current.State.Upload = new(key, fingerprint, $"refunds/{id:N}/{key:N}", type, bytes.Length, hash,
                         x.ExecutedAt, x.ExternalReference, x.Reason);
-                    await repository.SaveAsync(current, false, actor, "ExcessRefundExecutionPending", Now, t);
+                    await repository.SaveAsync(current, false, actor, AuditPrefix(current) + "ExecutionPending", Now, t);
                 }
                 return current;
             }, t);
@@ -213,7 +266,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 current.Status = "COMPLETED"; current.Version++; current.ExecutedAt = intent.ExecutedAt;
                 current.ExternalReference = intent.ExternalReference; current.EvidenceKey = intent.ObjectKey;
                 current.State.Events.Add(new("Completed", actor, Now, x.Reason, current.Version, key, fingerprint));
-                await repository.SaveAsync(current, false, actor, "ExcessRefundCompleted", Now, t); return View(current);
+                await repository.SaveAsync(current, false, actor, AuditPrefix(current) + "Completed", Now, t); return View(current);
             }, t);
         } finally { CryptographicOperations.ZeroMemory(bytes); }
     }

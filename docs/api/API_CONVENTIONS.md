@@ -1,7 +1,7 @@
 # API conventions
 
 Cập nhật trạng thái **06/11/2026**. Runtime chính là `BHome.Api` + Compact24; xem
-[mục lục](README.md), [bàn giao](API_IMPLEMENTATION_STATUS.md) và [213 routes thực tế](API_RUNTIME_ROUTES.md).
+[mục lục](README.md), [bàn giao](API_IMPLEMENTATION_STATUS.md) và [216 routes thực tế](API_RUNTIME_ROUTES.md).
 Các quy ước chung dưới đây không thay schema/DTO riêng của từng endpoint.
 
 Operational Task create/assign/update, Staff execution, Owner verification, private evidence and in-app
