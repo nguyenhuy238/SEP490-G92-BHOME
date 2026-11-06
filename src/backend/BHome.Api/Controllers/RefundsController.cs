@@ -14,6 +14,10 @@ public sealed class RefundsController(RefundService service) : ControllerBase
     public Task<RefundSource> Source(Guid id, CancellationToken t) => service.SourceAsync(id, t);
     [HttpPost("payment-transactions/{id:guid}/refunds")]
     public Task<RefundView> Create(Guid id, RefundInput input, CancellationToken t) => service.CreateAsync(id, input, Key(), t);
+    [HttpGet("contracts/{id:guid}/deposit-refunds")]
+    public Task<RefundSource> DepositSource(Guid id, CancellationToken t) => service.DepositSourceAsync(id, t);
+    [HttpPost("contracts/{id:guid}/deposit-refunds")]
+    public Task<RefundView> CreateDeposit(Guid id, DepositRefundInput input, CancellationToken t) => service.CreateDepositAsync(id, input, Key(), t);
     [HttpPost("refund-requests/{id:guid}/decision")]
     public Task<RefundView> Decision(Guid id, RefundDecision input, CancellationToken t) => service.DecideAsync(id, input, Key(), t);
     [HttpPost("refund-requests/{id:guid}/execution"), Consumes("multipart/form-data"), RequestSizeLimit(5 * 1024 * 1024 + 32768)]

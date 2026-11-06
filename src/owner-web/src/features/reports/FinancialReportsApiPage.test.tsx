@@ -26,6 +26,7 @@ function request() {
   fireEvent.submit(screen.getByRole('button', { name: 'Xem báo cáo' }).closest('form')!);
 }
 const backendReport = {
+  verifiedDepositReturns: '2900000',
   total: {
     issued: '1000',
     approvedAdjustments: '-100',
@@ -59,6 +60,19 @@ it('displays backend figures and unavailable payback without calculating or subs
     { from: '2026-11-01', to: '2026-11-30', locationId: undefined },
     expect.any(AbortSignal),
   );
+});
+it('shows verified deposit principal separately and explains excluded retained damages', async () => {
+  mock.report.mockResolvedValue(backendReport);
+  mount();
+  request();
+  await screen.findByText('Hoàn gốc cọc đã xác minh trong kỳ: 2.900.000 ₫');
+  expect(screen.getByText(/khoản giữ cọc bồi thường thiệt hại chưa được cộng/)).toBeInTheDocument();
+});
+it('keeps a missing deposit classification distinct from a verified zero', async () => {
+  mock.report.mockResolvedValue({ ...backendReport, verifiedDepositReturns: null });
+  mount();
+  request();
+  await screen.findByText('Hoàn gốc cọc đã xác minh trong kỳ: Chưa có dữ liệu phân loại');
 });
 it('displays server historical room-days separately from current occupancy', async () => {
   mock.report.mockResolvedValue({

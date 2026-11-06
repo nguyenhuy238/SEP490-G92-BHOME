@@ -15,6 +15,9 @@ namespace BHome.IntegrationTests.Compact24;
 // Storage is an explicit test substitute. Real MinIO remains a separate integration gate.
 public sealed class Compact24WorkflowFixture : IAsyncLifetime
 {
+    private readonly IObjectStorage? storageOverride;
+    public Compact24WorkflowFixture() { }
+    internal Compact24WorkflowFixture(IObjectStorage storageOverride) { this.storageOverride = storageOverride; }
     internal static ConcurrentQueue<string> Diagnostics { get; } = new();
     private readonly Compact24Fixture database = new();
     private WebApplicationFactory<Program>? host;
@@ -23,7 +26,7 @@ public sealed class Compact24WorkflowFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await database.InitializeAsync(); if (database.Factory is null) return;
-        var storage = new TestObjectStorage();
+        var storage = storageOverride ?? new TestObjectStorage();
         var encryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var hmacKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         host = database.Factory.WithWebHostBuilder(b =>
@@ -87,6 +90,14 @@ public sealed class Compact24InvoiceRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24PaymentRegressionTests
 {
+    [CompactPostgresFact] public Task DamageDeductionAndRemainder() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(100000));
+    [CompactPostgresFact] public Task FullDamageDeduction() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(400000));
+    [CompactPostgresFact] public Task DamageDeductionHistoryAndEvidence() => Run(t => t.DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle());
+    [CompactPostgresFact] public Task DepositReturnAndClosure() => Run(t => t.UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure());
+    [CompactPostgresFact] public Task DepositReturnChangedSource() => Run(t => t.ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased());
+    [CompactPostgresFact] public Task DepositReturnUnknownHistory() => Run(t => t.UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn());
+    [CompactPostgresFact] public Task SettlementCalculation() => Run(t => t.SettlementReadsActualSharedDebtAdjustmentsAndDepositsWithoutAssigningRoomDebtToTenant());
+    [CompactPostgresFact] public Task DepositPositions() => Run(t => t.SettlementSubtractsDepositUsesCompletedAndReservedRefundsWithoutDoubleCounting());
     [CompactPostgresFact] public Task RecipientInbox() => Run(t => t.InboxIsRecipientScopedPaginatedAndReadStatePersistsWithoutCrossTenantMutation());
     [CompactPostgresFact] public Task RevalidateTarget() => Run(t => t.NotificationTargetRechecksInvoiceEntitlementInsteadOfTrustingSavedLink());
     [CompactPostgresFact] public Task StaffReadMirror() => Run(t => t.StaffInboxMirrorsTaskReadStateAndLosesAccessWhenAssignmentEnds());

@@ -21,7 +21,8 @@ internal static class ContractVerificationCli
 {
     public static async Task<int> Main(string[] args)
     {
-        if (args.Contains("--finance", StringComparer.Ordinal)) return await FinanceVerificationCli.RunAsync(args.Contains("--main-draft", StringComparer.Ordinal));
+        if (args.Contains("--finance", StringComparer.Ordinal)) return await FinanceVerificationCli.RunAsync(
+            args.Contains("--main-draft", StringComparer.Ordinal), args.Contains("--damage-settlement", StringComparer.Ordinal));
         if (!args.Contains("--allow-temporary-test-root", StringComparer.Ordinal))
         {
             Console.Error.WriteLine("Full browser verification requires temporary CurrentUser CA trust. Run interactively with --allow-temporary-test-root and accept Windows add/remove prompts. No trust store was modified.");

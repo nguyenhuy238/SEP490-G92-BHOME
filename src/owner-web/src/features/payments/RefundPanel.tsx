@@ -17,25 +17,61 @@ import { formatContractMoney, vnd } from '../../../../../packages/client-core/sr
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { refundError, type Refund } from '../../../../../packages/client-core/src/refunds';
 import { useRefundApi } from './useRefundApi';
-export function RefundPanel({ sourceId }: { sourceId: string }) {
+import { settlementBlocker } from '../../../../../packages/client-core/src/useContractLifecycle';
+type RefundPanelProps = {
+  sourceId: string;
+  sourceKind?: 'Receipt' | 'SecurityDeposit';
+  onChanged?: () => void;
+};
+export function RefundPanel(props: RefundPanelProps) {
+  return (
+    <RefundPanelContent key={`${props.sourceKind ?? 'Receipt'}:${props.sourceId}`} {...props} />
+  );
+}
+function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: RefundPanelProps) {
   const api = useRefundApi(),
     { session } = useAuth(),
     cache = useQueryClient();
   const source = useQuery({
-    queryKey: ['refund-source', session?.userId, sourceId],
-    queryFn: ({ signal }) => api.source(sourceId, signal),
+    queryKey: ['refund-source', session?.userId, sourceKind, sourceId],
+    queryFn: ({ signal }) =>
+      sourceKind === 'SecurityDeposit'
+        ? api.depositSource(sourceId, signal)
+        : api.source(sourceId, signal),
   });
   const [person, setPerson] = useState(''),
     [amount, setAmount] = useState(''),
     [reason, setReason] = useState('');
-  const [checked, setChecked] = useState(false),
+  const [reviewedSource, setReviewedSource] = useState<string | null>(null),
+    [beneficiarySource, setBeneficiarySource] = useState<string | null>(null),
+    [zeroDeductionSource, setZeroDeductionSource] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const key = useRef(crypto.randomUUID()),
+  const signature = source.data
+    ? JSON.stringify([
+        sourceId,
+        sourceKind,
+        source.data.financialReference,
+        source.data.availableAmount,
+        source.data.refundedAmount,
+        source.data.reservedAmount,
+        source.data.depositDeductions?.id,
+        source.data.beneficiaries.map((p) => p.id),
+        source.data.requests.map((r) => [r.id, r.version, r.executionIntent?.key]),
+      ])
+    : '';
+  const checked = !!signature && reviewedSource === signature;
+  const depositConfirmed =
+    sourceKind !== 'SecurityDeposit' ||
+    (beneficiarySource === signature && zeroDeductionSource === signature);
+  const blocked = (source.data?.blockers?.length ?? 0) > 0;
+  const key = useRef({ signature: '', value: crypto.randomUUID() }),
     lock = useRef(false);
   const changed = () => {
-    key.current = crypto.randomUUID();
-    setChecked(false);
+    key.current = { signature, value: crypto.randomUUID() };
+    setReviewedSource(null);
+    setBeneficiarySource(null);
+    setZeroDeductionSource(null);
   };
   async function reload() {
     await Promise.all(
@@ -43,9 +79,10 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
         cache.invalidateQueries({ queryKey }),
       ),
     );
+    onChanged?.();
   }
   async function create() {
-    if (lock.current || !checked) return;
+    if (lock.current || !checked || !depositConfirmed || blocked || source.isFetching) return;
     let value: string;
     try {
       value = vnd(amount, true);
@@ -57,13 +94,35 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
     setBusy(true);
     setError('');
     try {
-      await api.create(
-        sourceId,
-        { beneficiaryResidentId: person, amount: value, reason, humanConfirmed: checked },
-        key.current,
-      );
-      key.current = crypto.randomUUID();
-      setChecked(false);
+      if (key.current.signature !== signature)
+        key.current = { signature, value: crypto.randomUUID() };
+      const body = {
+        beneficiaryResidentId: person,
+        amount: value,
+        reason,
+        humanConfirmed: checked,
+      };
+      if (sourceKind === 'SecurityDeposit') {
+        if (!source.data?.financialReference) throw { code: 'refund_source_changed' };
+        await api.createDeposit(
+          sourceId,
+          {
+            refund: body,
+            expectedFinancialReference: source.data.financialReference,
+            beneficiaryVerified: beneficiarySource === signature,
+            noDeductionsConfirmed:
+              !source.data.depositDeductions && zeroDeductionSource === signature,
+            ...(source.data.depositDeductions
+              ? {
+                  expectedDeductionPlanId: source.data.depositDeductions.id,
+                  deductionsConfirmed: zeroDeductionSource === signature,
+                }
+              : {}),
+          },
+          key.current.value,
+        );
+      } else await api.create(sourceId, body, key.current.value);
+      changed();
       setAmount('');
       setReason('');
       await reload();
@@ -76,10 +135,16 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
   }
   return (
     <Stack spacing={2}>
-      <Typography variant="h6">Hoàn tiền thừa từ giao dịch</Typography>
+      <Typography variant="h6">
+        {sourceKind === 'SecurityDeposit'
+          ? source.data?.depositDeductions
+            ? 'Hoàn cọc theo quyết định khấu trừ'
+            : 'Hoàn cọc không khấu trừ'
+          : 'Hoàn tiền thừa từ giao dịch'}
+      </Typography>
       <Alert severity="info">
         Owner tự thực hiện chuyển khoản hoàn bên ngoài. BHOME chỉ ghi nhận sau khi Owner đối chiếu
-        sao kê; không tự chuyển tiền hoặc khấu trừ cọc.
+        sao kê; không tự chuyển tiền.
       </Alert>
       {source.isFetching && <LinearProgress />}
       {(error || source.error) && (
@@ -94,13 +159,45 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
             </Alert>
           )}
           <Typography>
-            Tiền thừa ban đầu: {formatContractMoney(source.data.excessAmount)} · Đã hoàn:{' '}
-            {formatContractMoney(source.data.refundedAmount)} · Đang giữ chỗ:{' '}
+            {sourceKind === 'SecurityDeposit' ? 'Cọc đã xác minh' : 'Tiền thừa ban đầu'}:{' '}
+            {sourceKind === 'SecurityDeposit'
+              ? source.data.verifiedDepositAmount == null
+                ? 'Chờ đối chiếu'
+                : formatContractMoney(source.data.verifiedDepositAmount)
+              : formatContractMoney(source.data.excessAmount)}{' '}
+            · Đã hoàn: {formatContractMoney(source.data.refundedAmount)} · Đang giữ chỗ:{' '}
             {formatContractMoney(source.data.reservedAmount)}
           </Typography>
           <Typography>
-            Còn có thể lập yêu cầu: {formatContractMoney(source.data.availableAmount)}
+            Còn có thể lập yêu cầu:{' '}
+            {source.data.availableAmount === null
+              ? 'Chờ đối chiếu'
+              : formatContractMoney(source.data.availableAmount)}
           </Typography>
+          {source.data.blockers?.map((b) => (
+            <Alert severity="warning" key={b}>
+              {settlementBlocker(b)}
+            </Alert>
+          ))}
+          {source.data.depositDeductions && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography>
+                Khấu trừ đã duyệt phiên bản {source.data.depositDeductions.version}:{' '}
+                {formatContractMoney(source.data.depositDeductions.total)}
+              </Typography>
+              {source.data.depositDeductions.items.map((item, index) => (
+                <Typography key={index}>
+                  {item.description}: {formatContractMoney(item.amount)}
+                </Typography>
+              ))}
+            </Paper>
+          )}
+          {sourceKind === 'SecurityDeposit' && (
+            <Alert severity="info">
+              Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu
+              bằng chứng nộp cọc trước khi chọn người nhận.
+            </Alert>
+          )}
           {source.data.beneficiaries.length === 0 ? (
             <Alert severity="warning">
               Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.
@@ -147,19 +244,52 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
                   <Checkbox
                     checked={checked}
                     disabled={busy}
-                    onChange={(e) => setChecked(e.target.checked)}
+                    onChange={(e) => setReviewedSource(e.target.checked ? signature : null)}
                   />
                 }
                 label="Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn"
               />
+              {sourceKind === 'SecurityDeposit' && (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={beneficiarySource === signature}
+                        disabled={busy}
+                        onChange={(e) => setBeneficiarySource(e.target.checked ? signature : null)}
+                      />
+                    }
+                    label="Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={zeroDeductionSource === signature}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setZeroDeductionSource(e.target.checked ? signature : null)
+                        }
+                      />
+                    }
+                    label={
+                      source.data.depositDeductions
+                        ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
+                        : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'
+                    }
+                  />
+                </>
+              )}
               <Button
                 disabled={
                   busy ||
                   source.isFetching ||
                   !checked ||
-                  !person ||
+                  !depositConfirmed ||
+                  blocked ||
+                  !source.data.beneficiaries.some((p) => p.id === person) ||
                   !amount ||
                   !reason.trim() ||
+                  source.data.availableAmount === null ||
                   /^0(?:\.0+)?$/.test(source.data.availableAmount)
                 }
                 onClick={() => void create()}
@@ -170,9 +300,10 @@ export function RefundPanel({ sourceId }: { sourceId: string }) {
           )}
           {source.data.requests.map((row) => (
             <RefundItem
-              key={`${row.id}:${row.version}:${row.executionIntent?.key ?? ''}`}
+              key={`${row.id}:${row.version}:${row.executionIntent?.key ?? ''}:${source.data.financialReference ?? ''}`}
               row={row}
               saved={reload}
+              blocked={blocked}
             />
           ))}
         </>
@@ -186,7 +317,15 @@ const status: Record<string, string> = {
   REJECTED: 'Đã từ chối',
   COMPLETED: 'Đã ghi nhận hoàn',
 };
-function RefundItem({ row, saved }: { row: Refund; saved: () => Promise<void> }) {
+function RefundItem({
+  row,
+  saved,
+  blocked,
+}: {
+  row: Refund;
+  saved: () => Promise<void>;
+  blocked: boolean;
+}) {
   const api = useRefundApi();
   const [reason, setReason] = useState(row.executionIntent?.reason ?? ''),
     [checked, setChecked] = useState(false);
@@ -202,7 +341,7 @@ function RefundItem({ row, saved }: { row: Refund; saved: () => Promise<void> })
     setChecked(false);
   };
   async function perform(approve?: boolean) {
-    if (lock.current || !checked) return;
+    if (lock.current || !checked || (blocked && approve !== false)) return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -385,7 +524,7 @@ function RefundItem({ row, saved }: { row: Refund; saved: () => Promise<void> })
             {row.status === 'REQUESTED' ? (
               <Stack direction="row" spacing={1}>
                 <Button
-                  disabled={busy || !checked || !reason.trim()}
+                  disabled={busy || blocked || !checked || !reason.trim()}
                   onClick={() => void perform(true)}
                 >
                   Duyệt yêu cầu hoàn
@@ -401,6 +540,7 @@ function RefundItem({ row, saved }: { row: Refund; saved: () => Promise<void> })
               <Button
                 disabled={
                   busy ||
+                  blocked ||
                   !checked ||
                   !reason.trim() ||
                   !reference ||

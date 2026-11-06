@@ -1,4 +1,4 @@
-import type { ContractRequest } from './contracts';
+import type { ContractRequest, DepositDeductionPlan } from './contracts';
 export interface RefundEvent {
   action: string;
   actor: string;
@@ -8,7 +8,8 @@ export interface RefundEvent {
 }
 export interface Refund {
   id: string;
-  sourcePaymentId: string;
+  sourcePaymentId: string | null;
+  sourceDepositContractId?: string | null;
   beneficiaryResidentId: string;
   beneficiaryLabel: string;
   amount: string;
@@ -33,11 +34,16 @@ export interface Refund {
   } | null;
 }
 export interface RefundSource {
-  sourcePaymentId: string;
+  sourcePaymentId: string | null;
+  sourceDepositContractId?: string | null;
+  verifiedDepositAmount?: string | null;
+  financialReference?: string | null;
+  blockers?: string[] | null;
+  depositDeductions?: DepositDeductionPlan | null;
   excessAmount: string;
   refundedAmount: string;
   reservedAmount: string;
-  availableAmount: string;
+  availableAmount: string | null;
   isDevelopmentDemo: boolean;
   beneficiaries: { id: string; label: string }[];
   requests: Refund[];
@@ -59,6 +65,25 @@ export function refundClient(request: ContractRequest) {
   return {
     source: (id: string, signal?: AbortSignal) =>
       request<RefundSource>(`/api/v1/payment-transactions/${id}/refunds`, { signal }),
+    depositSource: (id: string, signal?: AbortSignal) =>
+      request<RefundSource>(`/api/v1/contracts/${id}/deposit-refunds`, { signal }),
+    createDeposit: (
+      id: string,
+      body: {
+        refund: RefundInput;
+        expectedFinancialReference: string;
+        beneficiaryVerified: boolean;
+        noDeductionsConfirmed: boolean;
+        expectedDeductionPlanId?: string;
+        deductionsConfirmed?: boolean;
+      },
+      key: string,
+    ) =>
+      request<Refund>(`/api/v1/contracts/${id}/deposit-refunds`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
     create: (id: string, body: RefundInput, key: string) =>
       request<Refund>(`/api/v1/payment-transactions/${id}/refunds`, {
         method: 'POST',
@@ -91,7 +116,15 @@ export function refundClient(request: ContractRequest) {
 export function refundError(error: unknown): string {
   const e = error as { status?: number; code?: string; problem?: { code?: string } };
   const messages: Record<string, string> = {
-    refund_amount_unavailable: 'Tiền thừa đã được giữ chỗ hoặc hoàn. Hãy tải lại nguồn.',
+    deposit_deduction_review_required:
+      'Cần xem đúng quyết định khấu trừ đã duyệt trước khi yêu cầu hoàn phần còn lại.',
+    deduction_evidence_integrity_failed:
+      'Chứng từ thiệt hại không khớp quyết định. Cần Owner đối chiếu lại.',
+    refund_amount_unavailable: 'Nguồn tiền đã được giữ chỗ hoặc hoàn. Hãy tải lại nguồn.',
+    deposit_refund_confirmation_required:
+      'Cần xác minh người nộp cọc và xác nhận không khấu trừ trước khi lập yêu cầu.',
+    deposit_refund_not_ready:
+      'Cọc chưa đủ điều kiện hoàn. Hãy đọc các nghĩa vụ đang chờ và tải lại nguồn.',
     refund_verified_payer_required:
       'Cần xác định đúng người thực trả và hồ sơ đã liên kết trước khi hoàn.',
     refund_changed: 'Yêu cầu đã thay đổi hoặc chưa ở bước phù hợp. Hãy tải lại.',

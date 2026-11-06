@@ -8,6 +8,20 @@ public sealed class FinancialReportTests
 {
     private static readonly ReportFilter Period=new(new(2026,10,1),new(2026,10,31));
     [Fact]
+    public void ReportsDepositPrincipalSeparatelyWithoutChangingInvoiceProfitCashOrRecovery()
+    {
+        var row = new FinanceBasis(Guid.NewGuid(), "Test", Issued: 1000, Collected: 600, Operating: 200,
+            Investment: 2000, CumulativeCollected: 1600, CumulativeOperating: 400);
+        var original = FinancialReportService.Calculate(Period, new([row], false), DateTimeOffset.UtcNow);
+        var returned = FinancialReportService.Calculate(Period, new([row], false, VerifiedDepositReturns: 9007199254740993), DateTimeOffset.UtcNow);
+        Assert.Equal("9007199254740993", returned.VerifiedDepositReturns);
+        Assert.Equal(original.Total, returned.Total); Assert.Equal(original.Capital, returned.Capital);
+        Assert.Null(original.VerifiedDepositReturns);
+        var old = JsonSerializer.Serialize(original).Replace(",\"VerifiedDepositReturns\":null", "", StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<FinancialReport>(old)!.VerifiedDepositReturns);
+    }
+
+    [Fact]
     public void PreservesHistoricalEvidenceWithoutUsingCurrentRoomCountsOrChangingMoney()
     {
         var row = new FinanceBasis(Guid.NewGuid(), "Test", Collected: 600, Operating: 200, Rooms: 10, Occupied: 9);

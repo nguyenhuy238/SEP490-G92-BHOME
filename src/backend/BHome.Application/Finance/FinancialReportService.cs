@@ -14,12 +14,12 @@ public sealed record CapitalRecovery(string InitialInvestment, string? NetRecove
     string? RecoveryPercent, string? EstimatedRemainingMonths, string? UnavailableReason);
 public sealed record FinancialReport(ReportFilter Filter, DateTimeOffset SnapshotAt, FinanceTotals Total,
     IReadOnlyList<LocationFinance> Locations, CapitalRecovery Capital, bool HasUnclassifiedRefunds,
-    HistoricalOccupancy? HistoricalOccupancy = null);
+    HistoricalOccupancy? HistoricalOccupancy = null, string? VerifiedDepositReturns = null);
 public sealed record FinanceBasis(Guid LocationId, string LocationName, decimal Issued = 0, decimal Adjustments = 0,
     decimal Collected = 0, decimal Operating = 0, decimal Debt = 0, decimal Investment = 0,
     decimal CumulativeCollected = 0, decimal CumulativeOperating = 0, int Rooms = 0, int Occupied = 0);
 public sealed record ReportBasis(IReadOnlyList<FinanceBasis> Locations, bool HasUnclassifiedRefunds,
-    HistoricalOccupancy? HistoricalOccupancy = null);
+    HistoricalOccupancy? HistoricalOccupancy = null, decimal? VerifiedDepositReturns = null);
 public interface IFinancialReportRepository
 {
     Task<ReportBasis> ReadAsync(ReportFilter filter, CancellationToken token);
@@ -60,6 +60,7 @@ public sealed class FinancialReportService(IFinancialReportRepository repository
         var capital=new CapitalRecovery(Number(total.Investment),basis.HasUnclassifiedRefunds ? null : Number(recovered),
             basis.HasUnclassifiedRefunds ? null : Number(remaining),basis.HasUnclassifiedRefunds || total.Investment<=0 ? null : Number(recovered/total.Investment*100),
             reason is not null ? null : Number(remaining==0 ? 0 : remaining/monthly),reason);
-        return new(filter,now,Totals(total),values.Select(v=>new LocationFinance(v.LocationId,v.LocationName,Totals(v))).ToArray(),capital,basis.HasUnclassifiedRefunds,basis.HistoricalOccupancy);
+        return new(filter,now,Totals(total),values.Select(v=>new LocationFinance(v.LocationId,v.LocationName,Totals(v))).ToArray(),capital,basis.HasUnclassifiedRefunds,basis.HistoricalOccupancy,
+            basis.VerifiedDepositReturns is {} returned ? Number(returned) : null);
     }
 }
