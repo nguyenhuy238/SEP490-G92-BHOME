@@ -171,6 +171,18 @@ public sealed class YoloMeterCategoryClassifierTests
     }
 
     [Fact]
+    public void InvalidArtifactPathAndThresholdCannotCrashOrCreateAClassification()
+    {
+        var options = new OcrOptions { VisualClassifier = new() { Enabled = true,
+            ModelPath = "invalid\0path.onnx", Sha256 = new('0', 64) } };
+        using var classifier = new YoloMeterCategoryClassifier(options, true);
+        using var image = new Mat(100, 200, MatType.CV_8UC3, Scalar.Black);
+        classifier.Warmup(default);
+        Assert.Equal("unavailable", classifier.Classify(image, default)!.Status);
+        Assert.Throws<InvalidDataException>(() => YoloMeterCategoryClassifier.Decide([], float.NaN));
+    }
+
+    [Fact]
     public void VisualEvidenceNeverOverridesTrustedTaskMetadata()
     {
         var mismatch = new OcrCategoryDecision("classified", OcrDocumentKind.DigitalWater, "visual_model", .99f);

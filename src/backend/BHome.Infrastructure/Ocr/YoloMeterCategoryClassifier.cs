@@ -160,7 +160,7 @@ public sealed class YoloMeterCategoryClassifier : IImageCategoryClassifier, IDis
         return new("classified", found.Category, "visual_model", found.Confidence);
     }
 
-    private static bool Unavailable(Exception error) => error is IOException or InvalidDataException or UnauthorizedAccessException or
+    private static bool Unavailable(Exception error) => error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or
         OnnxRuntimeException or DllNotFoundException or TypeInitializationException or BadImageFormatException;
     private static OcrCategoryDecision Missing() => new("unavailable", null, "visual_model", Warnings: ["visual_classifier_unavailable"]);
     public void Dispose() { if (session.IsValueCreated) session.Value.Dispose(); }
