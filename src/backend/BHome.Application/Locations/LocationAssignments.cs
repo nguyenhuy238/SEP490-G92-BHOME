@@ -13,6 +13,8 @@ public enum CreateAssignmentStatus
 }
 
 public sealed record CreateAssignmentResult(CreateAssignmentStatus Status, StaffAssignmentSummary? Assignment = null);
+public enum ChangeAssignmentStatus { Changed, Invalid, LocationNotFound, StaffUnavailable, StaleVersion, NoCurrentAssignment }
+public sealed record ChangeAssignmentResult(ChangeAssignmentStatus Status, StaffAssignmentSummary? Assignment = null, int? LocationVersion = null);
 
 public interface ILocationAssignments
 {
@@ -21,4 +23,8 @@ public interface ILocationAssignments
     Task<CreateAssignmentResult> CreateAssignmentAsync(Guid createdByUserId, Guid locationId, Guid staffUserId,
         DateOnly startDate, DateOnly endDate, CancellationToken cancellationToken);
     Task<IReadOnlyList<StaffAssignmentSummary>?> ListAssignmentsAsync(Guid locationId, CancellationToken cancellationToken);
+    Task<ChangeAssignmentResult> ReplaceAssignmentAsync(Guid actorId, Guid locationId, Guid staffUserId,
+        DateOnly effectiveFrom, int expectedLocationVersion, string reason, CancellationToken cancellationToken);
+    Task<ChangeAssignmentResult> RemoveAssignmentAsync(Guid actorId, Guid locationId, DateOnly effectiveFrom,
+        int expectedLocationVersion, string reason, CancellationToken cancellationToken);
 }

@@ -3,11 +3,61 @@
   "annotationLicense": "CC-BY-SA-4.0; original asset licenses retained in public-sources.json",
   "review": "Agent visual inspection of full-resolution licensed photos before LCD training. Digit strings only; no billing precision inferred.",
   "samples": [
-    { "id": "commons_136480278", "split": "val", "crop": [535, 300, 746, 400], "expectedDigits": "74590", "digitBoxes": [[7, 560, 320, 593, 375], [4, 595, 320, 627, 375], [5, 629, 319, 662, 375], [9, 665, 319, 697, 375], [0, 698, 319, 727, 375]], "register": "delivered_energy", "reason": "clear main kWh row" },
-    { "id": "commons_136480279", "split": "val", "crop": [485, 385, 747, 473], "expectedDigits": null, "digitBoxes": [], "register": "unknown", "reason": "blank LCD, no reliable consumption digits" },
-    { "id": "commons_141575682", "split": "test", "crop": [580, 416, 770, 473], "expectedDigits": "004046", "register": "energy_row_with_kWh", "reason": "prefix/register code and E21 error line excluded by reviewed crop; crop result is not automatic billing-register detection" },
-    { "id": "commons_26507235", "split": "test", "crop": [610, 432, 743, 488], "expectedDigits": "21594", "register": "unknown", "reason": "visible main digits, register code 39 does not establish billing eligibility" },
-    { "id": "commons_111639614", "split": "test", "crop": [465, 780, 747, 907], "expectedDigits": null, "register": "unknown", "reason": "unpowered/all segment outlines, not a valid billing reading" },
-    { "id": "commons_141189268", "split": "test", "crop": [224, 548, 814, 669], "expectedDigits": "000880578", "register": "accumulated_volume_row_m3", "reason": "total-volume row only; separate flow-rate row excluded; decimal placement not part of digit-sequence metric" }
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "crop": [535, 300, 746, 400],
+      "expectedDigits": "74590",
+      "digitBoxes": [
+        [7, 560, 320, 593, 375],
+        [4, 595, 320, 627, 375],
+        [5, 629, 319, 662, 375],
+        [9, 665, 319, 697, 375],
+        [0, 698, 319, 727, 375]
+      ],
+      "register": "delivered_energy",
+      "reason": "clear main kWh row"
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "crop": [485, 385, 747, 473],
+      "expectedDigits": null,
+      "digitBoxes": [],
+      "register": "unknown",
+      "reason": "blank LCD, no reliable consumption digits"
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "crop": [580, 416, 770, 473],
+      "expectedDigits": "004046",
+      "register": "energy_row_with_kWh",
+      "reason": "prefix/register code and E21 error line excluded by reviewed crop; crop result is not automatic billing-register detection"
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "crop": [610, 432, 743, 488],
+      "expectedDigits": "21594",
+      "register": "unknown",
+      "reason": "visible main digits, register code 39 does not establish billing eligibility"
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "crop": [465, 780, 747, 907],
+      "expectedDigits": null,
+      "register": "unknown",
+      "reason": "unpowered/all segment outlines, not a valid billing reading"
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "crop": [224, 548, 814, 669],
+      "expectedDigits": "000880578",
+      "register": "accumulated_volume_row_m3",
+      "reason": "total-volume row only; separate flow-rate row excluded; decimal placement not part of digit-sequence metric"
+    }
   ]
 }

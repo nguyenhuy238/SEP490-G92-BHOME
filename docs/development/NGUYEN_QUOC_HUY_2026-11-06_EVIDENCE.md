@@ -7,14 +7,14 @@ lỗi đã sửa và SHA đầy đủ: [báo cáo triển khai](NGUYEN_QUOC_HUY_
 
 ## Report 2 — tiến độ, rủi ro và phân công
 
-| Phạm vi | Đã triển khai | Giới hạn bàn giao |
-| --- | --- | --- |
-| BE-19 / BE-X07 | Calculation nguồn thật; Owner inspection review; quyết định TenantDamage có ảnh; hoàn cọc đầy đủ hoặc phần còn lại; private proof/manual verification; review/close/Room release; in-app events | Tổng task PARTIAL: native/provider acceptance chưa có; không bù nợ trực tiếp bằng cọc, thu phí vượt cọc hoặc suy nghĩa vụ thiếu dữ liệu |
-| BE-14 Holding | Giữ boundary/activation/transfer guards đã có | BLOCKED OQ-03/Q-H1: validity, payment deadline, chuyển/hoàn tác Holding deposit chưa có nội dung quyết định; không chọn deadline thay Owner |
-| BE-15/16/X06 | Main canonical PDF, signing adapter/guards và Development simulation được giữ; kiểm unit signing | MySign staging, ownership/trust profile/mẫu Production được duyệt chưa có bằng chứng cấu hình; simulation không phải chữ ký pháp lý; renewal provider/native E2E chưa đạt |
-| BE-17/20/21/22/23/24/25 | Component/shared client, Owner browser + Staff/Tenant MobileApi và ledger regression | Android/iOS native NOT RUN; chưa có adb/device. Không có dataset độc lập >=50 ảnh để kết luận OCR>=90%; bank-provider acceptance chưa có |
-| BE-31/32/33/34/X08 | Invoice/OPEX/report/capital/What-if hiện hữu; thêm phân loại deposit principal và report note | Không tự sinh payroll/Work Order. Retained damage chưa nhập operating profit/recovery; chưa liability/compensation accounting hoặc UI review chính thức |
-| BE-X04/X05 | Runtime Compact24, schema/migration/rollback tests hiện hữu | Không pilot dữ liệu legacy thực/working `bhome`; chỉ disposable synthetic fixtures |
+| Phạm vi                 | Đã triển khai                                                                                                                                                                                   | Giới hạn bàn giao                                                                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BE-19 / BE-X07          | Calculation nguồn thật; Owner inspection review; quyết định TenantDamage có ảnh; hoàn cọc đầy đủ hoặc phần còn lại; private proof/manual verification; review/close/Room release; in-app events | Tổng task PARTIAL: native/provider acceptance chưa có; không bù nợ trực tiếp bằng cọc, thu phí vượt cọc hoặc suy nghĩa vụ thiếu dữ liệu                                   |
+| BE-14 Holding           | Giữ boundary/activation/transfer guards đã có                                                                                                                                                   | BLOCKED OQ-03/Q-H1: validity, payment deadline, chuyển/hoàn tác Holding deposit chưa có nội dung quyết định; không chọn deadline thay Owner                               |
+| BE-15/16/X06            | Main canonical PDF, signing adapter/guards và Development simulation được giữ; kiểm unit signing                                                                                                | MySign staging, ownership/trust profile/mẫu Production được duyệt chưa có bằng chứng cấu hình; simulation không phải chữ ký pháp lý; renewal provider/native E2E chưa đạt |
+| BE-17/20/21/22/23/24/25 | Component/shared client, Owner browser + Staff/Tenant MobileApi và ledger regression                                                                                                            | Android/iOS native NOT RUN; chưa có adb/device. Không có dataset độc lập >=50 ảnh để kết luận OCR>=90%; bank-provider acceptance chưa có                                  |
+| BE-31/32/33/34/X08      | Invoice/OPEX/report/capital/What-if hiện hữu; thêm phân loại deposit principal và report note                                                                                                   | Không tự sinh payroll/Work Order. Retained damage chưa nhập operating profit/recovery; chưa liability/compensation accounting hoặc UI review chính thức                   |
+| BE-X04/X05              | Runtime Compact24, schema/migration/rollback tests hiện hữu                                                                                                                                     | Không pilot dữ liệu legacy thực/working `bhome`; chỉ disposable synthetic fixtures                                                                                        |
 
 Owner Web: **Vũ Xuân Trường** review UX. Mobile: **Bùi Bảo Long** nghiệm thu thiết bị.
 QA: **Nguyễn Quang Huy** chuyển evidence vào test documents và tổ chức ST/AT.
@@ -25,14 +25,14 @@ Không push/merge; không sửa database làm việc hoặc tạo business table
 Baseline có sẵn: `docs/reports/BHome_Report-3_Software Requirement Specification (2).docx`;
 SDS `Report-4_Software Design Specification (5).docx`. Bản gốc được giữ nguyên.
 
-| Nguồn | Hành vi được kiểm | Mã/bằng chứng |
-| --- | --- | --- |
-| UC-19; SRS flow trả phòng p1833–1840; GBR-01/02/18 | Owner xem invoice/readings/inspection/source hiện hành; nghĩa vụ chưa giải quyết không close | ContractSettlementLedger/SettlementCalculator; ContractSettlement/Closure tests; Verify-MoveOutClients |
-| UC-19; OQ-01/05 theo ủy quyền trong phiên | Owner quyết định thiệt hại dựa inspection/proof; giới hạn available; version/key/revision; không auto phí/phạt | DepositDeductionService, repository/evidence; DepositDeductionTests; DEPOSIT_DEDUCTIONS.md |
-| BF-06/UC-22..25; GBR-10/18 | Principal/excess sources riêng; manual external return; Completed sau proof/readback; concurrency/recovery | RefundService/Repository; DepositRefund/Recovery/Compact24Refund tests |
-| DBR-06/07; GBR-10 | Không sửa Final Invoice/allocations khi trả cọc hoặc quyết định thiệt hại | DepositDeduction/Refund PG và browser assertions |
-| FE-08/UC-31..34; GBR-15/16 | Report phân biệt Invoice collections/OPEX/cọc; What-if giữ snapshot, không mutate ledger | FinancialReport/Scenario tests; FinancialReportRefunds; Owner Reports UI |
-| UC-35/36; JOB-04; GBR-01/02/18 | Persistent recipient inbox, no private payload, dedupe, target reauthorization, delivery không rollback finance | SettlementNotificationPublisher; MoveOutNotification/NotificationDelivery/Inbox tests |
+| Nguồn                                              | Hành vi được kiểm                                                                                               | Mã/bằng chứng                                                                                          |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| UC-19; SRS flow trả phòng p1833–1840; GBR-01/02/18 | Owner xem invoice/readings/inspection/source hiện hành; nghĩa vụ chưa giải quyết không close                    | ContractSettlementLedger/SettlementCalculator; ContractSettlement/Closure tests; Verify-MoveOutClients |
+| UC-19; OQ-01/05 theo ủy quyền trong phiên          | Owner quyết định thiệt hại dựa inspection/proof; giới hạn available; version/key/revision; không auto phí/phạt  | DepositDeductionService, repository/evidence; DepositDeductionTests; DEPOSIT_DEDUCTIONS.md             |
+| BF-06/UC-22..25; GBR-10/18                         | Principal/excess sources riêng; manual external return; Completed sau proof/readback; concurrency/recovery      | RefundService/Repository; DepositRefund/Recovery/Compact24Refund tests                                 |
+| DBR-06/07; GBR-10                                  | Không sửa Final Invoice/allocations khi trả cọc hoặc quyết định thiệt hại                                       | DepositDeduction/Refund PG và browser assertions                                                       |
+| FE-08/UC-31..34; GBR-15/16                         | Report phân biệt Invoice collections/OPEX/cọc; What-if giữ snapshot, không mutate ledger                        | FinancialReport/Scenario tests; FinancialReportRefunds; Owner Reports UI                               |
+| UC-35/36; JOB-04; GBR-01/02/18                     | Persistent recipient inbox, no private payload, dedupe, target reauthorization, delivery không rollback finance | SettlementNotificationPublisher; MoveOutNotification/NotificationDelivery/Inbox tests                  |
 
 Người dùng đã ủy quyền: “nếu chưa có hãy triển khai theo hướng của bạn và báo cáo cho tôi” đối
 với OQ-01/02/05. Quyết định ở đây là lựa chọn triển khai được báo cáo, không ghi thành SRS đã sửa:
@@ -81,18 +81,18 @@ Hợp đồng API chi tiết: [deductions](../api/DEPOSIT_DEDUCTIONS.md), [refun
 
 Kết quả final regression trên mã mới, 06/11/2026:
 
-| Gate | Đã chạy | Log local `.tools/` |
-| --- | --- | --- |
-| Domain | 90/90 pass | huy-continue-domain-full.log |
-| Application | 276/276 pass | huy-continue-application-full.log |
-| Integration | 626 pass, 1 optional real-OCR skip, 0 fail / 627 total | huy-continue-integration-rerun.log |
-| Digital Signing unit | 41/41 pass | huy-continue-signing-full.log |
-| Owner Web | 155/155 pass; build/lint pass | huy-continue-owner-{full,build,lint}.log |
-| Mobile | 381/381 pass; typecheck/lint pass | huy-continue-mobile-{full,typecheck,lint}.log |
-| Browser có thiệt hại | 22/22 nhóm pass, exit0 | huy-final-damage-browser.log |
-| Browser không khấu trừ | 21/21 nhóm pass, exit0 | huy-final-undisputed-browser.log |
-| Harness build | 0 warning/error | huy-final-harness-build-rerun.log |
-| Runtime audit, nằm trong integration | 6 pass; 216 routes, 211 protected401, 106 Owner GET, 0 HTTP5xx | continue-final-evidence/api-route-audit.json |
+| Gate                                 | Đã chạy                                                        | Log local `.tools/`                           |
+| ------------------------------------ | -------------------------------------------------------------- | --------------------------------------------- |
+| Domain                               | 90/90 pass                                                     | huy-continue-domain-full.log                  |
+| Application                          | 276/276 pass                                                   | huy-continue-application-full.log             |
+| Integration                          | 626 pass, 1 optional real-OCR skip, 0 fail / 627 total         | huy-continue-integration-rerun.log            |
+| Digital Signing unit                 | 41/41 pass                                                     | huy-continue-signing-full.log                 |
+| Owner Web                            | 155/155 pass; build/lint pass                                  | huy-continue-owner-{full,build,lint}.log      |
+| Mobile                               | 381/381 pass; typecheck/lint pass                              | huy-continue-mobile-{full,typecheck,lint}.log |
+| Browser có thiệt hại                 | 22/22 nhóm pass, exit0                                         | huy-final-damage-browser.log                  |
+| Browser không khấu trừ               | 21/21 nhóm pass, exit0                                         | huy-final-undisputed-browser.log              |
+| Harness build                        | 0 warning/error                                                | huy-final-harness-build-rerun.log             |
+| Runtime audit, nằm trong integration | 6 pass; 216 routes, 211 protected401, 106 Owner GET, 0 HTTP5xx | continue-final-evidence/api-route-audit.json  |
 
 Full integration lần đầu có 603 pass/23 lỗi fixture constructor/1 skip. Đã sửa public parameterless
 constructor cho xUnit, 24 affected/recovery tests pass rồi chạy lại toàn suite như bảng. Một lượt

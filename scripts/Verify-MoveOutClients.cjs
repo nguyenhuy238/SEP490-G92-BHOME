@@ -419,7 +419,9 @@ module.exports = async function verify({
     ).length,
     charged ? 1 : 0,
   );
-  const noticeTarget = await tenant.api.request(`/api/v1/notifications/${completedNotice[0].id}/target`);
+  const noticeTarget = await tenant.api.request(
+    `/api/v1/notifications/${completedNotice[0].id}/target`,
+  );
   assert.equal(noticeTarget.objectId, contractId);
   await assert.rejects(
     otherTenant.api.request(`/api/v1/notifications/${completedNotice[0].id}/target`),

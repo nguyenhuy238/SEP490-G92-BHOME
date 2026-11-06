@@ -68,7 +68,11 @@ public static class ApiFoundation
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
+            // Incident and Finance intentionally expose different ExpenseView DTOs.
+            // Namespace only colliding schema names; keep all established schema IDs stable.
+            options.CustomSchemaIds(SchemaId);
             options.OperationFilter<TaskApiOperationFilter>();
+            options.OperationFilter<IncidentApiOperationFilter>();
             options.SwaggerDoc("v1", new OpenApiInfo { Title = "BHOME API", Version = "v1" });
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
@@ -82,5 +86,13 @@ public static class ApiFoundation
             });
         });
         return services;
+    }
+
+    private static string SchemaId(Type type)
+    {
+        if (type.IsConstructedGenericType)
+            return string.Concat(type.GetGenericArguments().Select(SchemaId)) + type.Name.Split('`')[0];
+        var name = type.Name.Replace("[]", "Array", StringComparison.Ordinal);
+        return name == "ExpenseView" ? type.FullName!.Replace('.', '_').Replace('+', '_') : name;
     }
 }

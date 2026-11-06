@@ -28,7 +28,6 @@ Table billing_policies {
   id "uuid" [pk, not null]
   location_id "uuid" [not null]
   room_id "uuid"
-  room_type_id "uuid"
   charge_code "character varying(80)" [not null]
   category "smallint" [not null]
   calculation_method "character varying(30)" [not null]
@@ -227,7 +226,6 @@ Table locations {
   address "text" [not null]
   is_active "boolean" [not null]
   staff_assignments "jsonb" [not null]
-  room_types "jsonb" [not null]
   operating_settings "jsonb" [not null]
   public_profile "jsonb" [not null]
   published_at "timestamp with time zone"
@@ -418,7 +416,6 @@ Table rooms {
   id "uuid" [pk, not null]
   location_id "uuid" [not null]
   room_number "character varying(50)" [not null]
-  room_type_id "uuid"
   floor "character varying(30)"
   capacity "smallint" [not null]
   status "smallint" [not null]

@@ -1,3 +1,4 @@
+/* global document */
 // Continuation of the real disposable Main Draft client scenario. No synthetic readings are
 // written directly to DB: evidence upload and human confirmation pass through shipped APIs.
 const assert = require('node:assert/strict');
@@ -20,7 +21,7 @@ module.exports = async function verify({ actors, contractId, room, today, page }
     }),
     'base64',
   );
-  const asset = await post(owner, '/api/v1/assets', {
+  await post(owner, '/api/v1/assets', {
     locationId: room.locationId,
     roomId: room.id,
     code: 'SYNTHETIC-HANDOVER',

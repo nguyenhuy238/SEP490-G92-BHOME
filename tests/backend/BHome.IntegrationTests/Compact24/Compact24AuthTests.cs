@@ -54,6 +54,28 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     }
 
     [CompactPostgresFact]
+    public async Task UpdatedProfilePhoneCanSignInAndRevokesThePreviousSession()
+    {
+        var user = await Seed(); using var client = fixture.Factory!.CreateClient();
+        var session = await Login(client, user.Email!); Bearer(client, session);
+        var profile = (await client.GetFromJsonAsync<BHome.Application.Operations.ProfileView>("/api/v1/account/profile"))!;
+        var updated = await client.PutAsJsonAsync("/api/v1/account/profile", new
+        {
+            fullName = "Synthetic Tenant",
+            phone = "090-123 4567",
+            email = user.Email,
+            version = profile.Version
+        });
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = null;
+        var byPhone = await client.PostAsJsonAsync("/api/v1/auth/login", new { phone = "090 123 4567", password = Password });
+        Assert.Equal(HttpStatusCode.OK, byPhone.StatusCode);
+        Assert.Equal(user.Id, (await byPhone.Content.ReadFromJsonAsync<LoginResult>())!.UserId);
+    }
+
+    [CompactPostgresFact]
     public async Task RotationRejectsReplayAndRevokesFamilyIncludingNewAccessToken()
     {
         var user = await Seed();

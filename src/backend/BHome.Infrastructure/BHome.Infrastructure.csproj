@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/UPGRADE_LOCATION_ROOM.sql" LogicalName="BHome.Compact24.PropertyUpgrade.sql" />
     <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/BHOME_24_TABLES.sql" LogicalName="BHome.Compact24.Schema.sql" />
     <EmbeddedResource Include="../../../docs/mau-hop-dong-thue-nha-tro-ngan-gon.docx" LogicalName="BHome.Contracts.main-tenancy-original.docx" />
     <PackageReference Include="PDFtoImage" Version="5.4.0" />

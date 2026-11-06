@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using BHome.Domain.IdentityAccess;
 
 namespace BHome.Application.IdentityAccess;
@@ -12,19 +11,19 @@ public sealed class LoginService(ICredentialVerifier credentials, IAuthenticatio
     public const int MaxEmailLength = 256;
     public const int MaxPasswordLength = 1024;
 
-    public async Task<LoginResult?> LoginAsync(string? email, string? password, CancellationToken cancellationToken = default,
+    public async Task<LoginResult?> LoginAsync(string? identifier, string? password, CancellationToken cancellationToken = default,
         string? device = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(email) || email.Length > MaxEmailLength ||
-            !new EmailAddressAttribute().IsValid(email.Trim()) ||
+        var normalizedIdentifier = Normalize(identifier);
+        if (normalizedIdentifier is null ||
             string.IsNullOrWhiteSpace(password) || password.Length > MaxPasswordLength)
         {
             await audit.LoginFailedAsync(cancellationToken);
             return null;
         }
 
-        var identity = await credentials.VerifyAsync(email.Trim(), password, cancellationToken);
+        var identity = await credentials.VerifyAsync(normalizedIdentifier, password, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (identity is null || identity.UserId == Guid.Empty || identity.Roles.Count == 0 ||
             identity.Roles.Any(role => !Roles.All.Contains(role)))
@@ -34,5 +33,13 @@ public sealed class LoginService(ICredentialVerifier credentials, IAuthenticatio
         }
 
         return await sessions.CreateAsync(identity, device, cancellationToken);
+    }
+
+    private static string? Normalize(string? identifier)
+    {
+        if (string.IsNullOrWhiteSpace(identifier) || identifier.Length > MaxEmailLength) return null;
+        var value = identifier.Trim();
+        if (LoginIdentifier.IsEmail(value)) return value;
+        return LoginIdentifier.NormalizePhone(value);
     }
 }

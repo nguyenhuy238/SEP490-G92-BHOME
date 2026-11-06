@@ -27,19 +27,12 @@ public sealed partial class Compact24DbContext
         if (locations.Length == 0) return;
         if (await Set<Room>().AsNoTracking().Where(r => locations.Contains(r.LocationId))
             .GroupBy(r => new { r.LocationId, Number = r.RoomNumber.Trim().ToUpper() }).AnyAsync(g => g.Count() > 1, token) ||
-            await Set<RoomType>().AsNoTracking().Where(r => locations.Contains(r.LocationId))
-            .GroupBy(r => new { r.LocationId, Name = r.Name.Trim().ToUpper() }).AnyAsync(g => g.Count() > 1, token) ||
             await Set<Asset>().AsNoTracking().Where(a => locations.Contains(a.LocationId) && a.Code != null)
             .GroupBy(a => new { a.LocationId, Code = a.Code!.Trim().ToUpper() }).AnyAsync(g => g.Count() > 1, token))
             throw new PostgresException("Duplicate normalized property key.", "ERROR", "ERROR", "23505");
-        if (await Set<Room>().AnyAsync(r => locations.Contains(r.LocationId) && r.RoomTypeId != null &&
-            !Set<RoomType>().Any(t => t.Id == r.RoomTypeId && t.LocationId == r.LocationId), token) ||
-            await Set<BillingPolicy>().AnyAsync(p => locations.Contains(p.LocationId) && p.RoomTypeId != null &&
-            !Set<RoomType>().Any(t => t.Id == p.RoomTypeId && t.LocationId == p.LocationId), token))
-            throw new PostgresException("Invalid Location catalog reference.", "ERROR", "ERROR", "23503");
         var policies = Set<BillingPolicy>().AsNoTracking().Where(p => locations.Contains(p.LocationId));
         if (await policies.AnyAsync(a => policies.Any(b => b.Id != a.Id && b.LocationId == a.LocationId && b.RoomId == a.RoomId &&
-            b.RoomTypeId == a.RoomTypeId && b.ChargeCode == a.ChargeCode && (b.EffectiveTo == null || a.EffectiveFrom <= b.EffectiveTo) &&
+            b.ChargeCode == a.ChargeCode && (b.EffectiveTo == null || a.EffectiveFrom <= b.EffectiveTo) &&
             (a.EffectiveTo == null || b.EffectiveFrom <= a.EffectiveTo)), token))
             throw new PostgresException("Overlapping effective policy versions.", "ERROR", "ERROR", "23P01");
     }

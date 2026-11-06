@@ -1,3 +1,4 @@
+/* global document */
 // Actual Owner Web + Mobile transport/shared clients against disposable Compact24/MinIO.
 // All identity, bank account and bank statements are synthetic and explicitly labeled.
 const assert = require('node:assert/strict');

@@ -633,6 +633,7 @@ Kiểm chứng thực tế trong lần sửa này:
 Chưa xác minh: Safari/Expo Go trên iPhone thật với mạng mới, cấu hình cách ly thiết bị của Wi-Fi,
 quyền mạng nội bộ/chứng chỉ trên iPhone, E2E OCR. Không build/test lại backend vì không sửa C#;
 không tuyên bố lần kiểm tra này thay thế toàn bộ backend suite hay E2E thiết bị.
+
 ## Cập nhật incremental 05/11/2026
 
 Màn Test OCR cho phép chọn số chữ số thập phân **sau khi** đã nhận diện công tơ,

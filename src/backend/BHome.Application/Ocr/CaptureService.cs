@@ -13,7 +13,6 @@ public sealed class CaptureService(ICaptureRepository repository, ICurrentUser u
         return work();
     }
     private static readonly string[] Operators = [Roles.Owner, Roles.Staff];
-    public Task<IReadOnlyList<NamedResource>> ChainsAsync(CancellationToken t) => Allow([Roles.Owner], () => repository.ChainsAsync(t));
     public Task<IReadOnlyList<NamedResource>> LocationsAsync(CancellationToken t) => Allow(Operators, () => repository.LocationsAsync(t));
     public Task<IReadOnlyList<NamedResource>> RoomsAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.RoomsAsync(id, t));
     public Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t) => Allow([Roles.Owner], () => repository.StaffAsync(t));
@@ -22,7 +21,7 @@ public sealed class CaptureService(ICaptureRepository repository, ICurrentUser u
         new IdResult((await properties.SaveLocationAsync(null, new(x.Name, x.Address), t)).Id));
     public Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t) => Allow([Roles.Owner], async () =>
         new IdResult((await properties.SaveRoomAsync(null,
-            new(x.LocationId, x.RoomTypeId ?? Guid.Empty, x.RoomNumber, null, x.Capacity), t)).Id));
+            new(x.LocationId, x.RoomNumber, null, x.Capacity), t)).Id));
     public Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.AssignStaffAsync(x, t));
     public Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t) => Allow(Operators, () => repository.CreateResidentAsync(x, t));
     public Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.ResidentsAsync(id, t));

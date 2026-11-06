@@ -41,8 +41,8 @@ public sealed record OccupancySummaryDto(Guid LocationId, DateOnly AsOf, Occupan
 public sealed record MoveInContractEvidence(bool Exists, bool BelongsToRoom, bool PendingActivation,
     bool InEffectivePeriod, int ResidentCount, int VerifiedResidentCount, bool RepresentativeVerified,
     bool HasContractConflict, bool HasConfirmedHandover);
-public sealed record RoomReadinessEvidence(bool LocationActive, bool RoomTypeValid, RoomStatus RoomStatus,
-    int Capacity, RoomObligations Obligations, bool HasRentPolicy, int CurrentOccupantCount,
+public sealed record RoomReadinessEvidence(bool LocationActive, RoomStatus RoomStatus, int Capacity,
+    RoomObligations Obligations, bool HasRentPolicy, int CurrentOccupantCount,
     bool HasElectricityMeter, bool HasWaterMeter, bool HasElectricityBaseline, bool HasWaterBaseline,
     bool HasBlockingAsset, MoveInContractEvidence? Contract);
 

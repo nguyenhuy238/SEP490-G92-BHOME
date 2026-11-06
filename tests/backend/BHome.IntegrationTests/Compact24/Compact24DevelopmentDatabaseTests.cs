@@ -88,6 +88,69 @@ public sealed class Compact24DevelopmentDatabaseTests
         Assert.Equal("READY", (await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection, checkOnly: true)).State);
     }
 
+    [CompactPostgresFact]
+    public async Task PropertyUpgradeRemovesRetiredColumnsAtomicallyAndCanBeRepeated()
+    {
+        await using var database = new DevelopmentFixture();
+        await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection);
+        await RestorePreviousPropertyShape(database.Connection);
+        Assert.Equal("PROPERTY_UPGRADE_REQUIRED", (await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection, checkOnly: true)).State);
+        Assert.Equal("UPGRADED", (await Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection)).State);
+        Assert.Equal("READY", (await Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection)).State);
+        await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(database.Connection).Options);
+        Assert.True(await db.IsSchemaReadyAsync());
+    }
+
+    [CompactPostgresFact]
+    public async Task PropertyUpgradeRefusesToDiscardCatalogDataAndRollsBack()
+    {
+        await using var database = new DevelopmentFixture();
+        await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection);
+        await RestorePreviousPropertyShape(database.Connection);
+        await using var connection = new NpgsqlConnection(database.Connection); await connection.OpenAsync();
+        await using (var seed = new NpgsqlCommand("INSERT INTO locations(id,name,address,room_types) VALUES(gen_random_uuid(),'Synthetic upgrade','Synthetic address','[{\"id\":\"synthetic-catalog-marker\"}]')", connection))
+            await seed.ExecuteNonQueryAsync();
+        Assert.Equal("property_upgrade_rejected_23514", (await Assert.ThrowsAsync<DevelopmentDatabaseException>(() =>
+            Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection))).Code);
+        await using var check = new NpgsqlCommand("SELECT room_types->0->>'id' FROM locations", connection);
+        Assert.Equal("synthetic-catalog-marker", await check.ExecuteScalarAsync());
+        Assert.Equal("PROPERTY_UPGRADE_REQUIRED", (await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection, checkOnly: true)).State);
+    }
+
+    [CompactPostgresFact]
+    public async Task Native383ColumnSchemaCanRefreshGuardsWithoutChangingColumns()
+    {
+        await using var database = new DevelopmentFixture();
+        await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection);
+        await using var connection = new NpgsqlConnection(database.Connection); await connection.OpenAsync();
+        await using (var remove = new NpgsqlCommand("DROP TRIGGER work_order_consistent ON operational_tasks; DROP FUNCTION bhome24_work_order_guard()", connection))
+            await remove.ExecuteNonQueryAsync();
+        Assert.Equal("UPGRADED", (await Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection)).State);
+        await using var count = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public'", connection);
+        Assert.Equal(383L, await count.ExecuteScalarAsync());
+        Assert.Equal("READY", (await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection, checkOnly: true)).State);
+    }
+
+    private static async Task RestorePreviousPropertyShape(string connectionString)
+    {
+        // Build only the retired shape on a fresh native fixture. Existing auth,
+        // finance and append-only guards remain enabled throughout this test.
+        await using var connection = new NpgsqlConnection(connectionString); await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("""
+            ALTER TABLE locations ADD COLUMN room_types jsonb NOT NULL DEFAULT '[]';
+            ALTER TABLE rooms ADD COLUMN room_type_id uuid;
+            ALTER TABLE billing_policies ADD COLUMN room_type_id uuid;
+            DROP TRIGGER work_order_consistent ON operational_tasks;
+            DROP FUNCTION bhome24_work_order_guard();
+            CREATE FUNCTION bhome24_location_catalog_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+            CREATE FUNCTION bhome24_property_catalog_reference_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+            CREATE TRIGGER location_catalog_consistent BEFORE INSERT ON locations FOR EACH ROW EXECUTE FUNCTION bhome24_location_catalog_guard();
+            CREATE TRIGGER room_catalog_reference BEFORE INSERT ON rooms FOR EACH ROW EXECUTE FUNCTION bhome24_property_catalog_reference_guard();
+            CREATE TRIGGER policy_catalog_reference BEFORE INSERT ON billing_policies FOR EACH ROW EXECUTE FUNCTION bhome24_property_catalog_reference_guard();
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
     private sealed class DevelopmentFixture : IAsyncDisposable
     {
         private readonly string admin = Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")!;

@@ -33,7 +33,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("Clients");
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture") || context.Request.Path.StartsWithSegments("/api/v1/contracts") || context.Request.Path.StartsWithSegments("/api/v1/digital-signing") || context.Request.Path.StartsWithSegments("/api/v1/operational-tasks"))
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture") || context.Request.Path.StartsWithSegments("/api/v1/contracts") || context.Request.Path.StartsWithSegments("/api/v1/digital-signing") || context.Request.Path.StartsWithSegments("/api/v1/operational-tasks") || context.Request.Path.StartsWithSegments("/api/v1/incidents") || context.Request.Path.StartsWithSegments("/api/v1/work-orders") || context.Request.Path.StartsWithSegments("/api/v1/maintenance-history"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
