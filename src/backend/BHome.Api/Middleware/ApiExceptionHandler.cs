@@ -50,7 +50,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             StatusCodes.Status503ServiceUnavailable => "Service temporarily unavailable.",
             _ => "An unexpected error occurred."
         };
-        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
+        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning, exception,
             "Request {CorrelationId} failed with {ErrorCode}", context.TraceIdentifier, exception.GetType().Name);
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
