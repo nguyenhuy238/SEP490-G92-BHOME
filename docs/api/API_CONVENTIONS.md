@@ -178,6 +178,13 @@ disagreement, multiple regions, wrong utility or unclear digits. The diagnostic
 Mobile screen can re-read the same bounded meter image with user-confirmed
 precision after capture; production task precision remains server-authoritative.
 
+Meter parsing also checks nearby separately detected unit boxes. A bare number
+next to a flow-rate/electrical-parameter/TDS/unsupported volume unit (for example
+`m³/h`, `V`, `Hz`, `ppm` or gallons) is not an accumulated kWh/m³ reading; it
+returns fallback with `billing_register_unverified`. A distant parameter label
+does not suppress a properly associated billing unit. No unit conversion or
+client precision change is introduced.
+
 An experimental four-class YOLO category adapter is available through
 `Ocr:VisualClassifier` but remains disabled by default and refuses inference
 outside Development. No validated four-class weights are bundled. It requires

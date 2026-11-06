@@ -9,6 +9,10 @@ public static class MeterOcrLayout
     private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(100);
 
     public static bool IsUnit(string text) => Match(text, $@"^{UnitPattern}$");
+    // A separate OCR box can contain a rate/electrical parameter rather than
+    // the accumulated quantity. Never silently drop that unit and accept digits.
+    public static bool IsNonBillingUnit(string text) => Match(text,
+        @"^(?:(?:m\s*(?:\^\s*)?[3³]|㎥|l)\s*/\s*(?:s|min|h)|/\s*(?:s|min|h)|(?:m\s*[3³]|l)\s*(?:s|min|h)\s*[-−]\s*1|v|a|hz|w|kw|kva|kvarh?|kva\s*h|°\s*c|ppm|gal(?:lon)?s?|lit(?:er|re)s?)$");
     public static bool IsCorrectUnit(string text, OcrDocumentKind kind) => kind switch
     {
         OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity => Match(text, @"^k\s*w\s*h$"),

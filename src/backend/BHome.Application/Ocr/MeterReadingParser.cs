@@ -33,6 +33,14 @@ internal static class MeterReadingParser
                 (match.Groups["label"].Value.Contains("dien", StringComparison.OrdinalIgnoreCase) && kind is OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater) ||
                 (match.Groups["label"].Value.Contains("nuoc", StringComparison.OrdinalIgnoreCase) && kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity))
             { unmatchedNumbers = true; warnings.Add("meter_type_mismatch"); continue; }
+            if (unit.Length == 0 && prefix.Length == 0 && lines.Any(other =>
+                MeterOcrLayout.IsNonBillingUnit(other.Text) &&
+                (line.Bounds is not { } quantity || other.Bounds is { } parameter && MeterOcrLayout.Nearby(quantity, parameter))))
+            {
+                unmatchedNumbers = true;
+                warnings.Add("billing_register_unverified");
+                continue;
+            }
             var contextual = match.Groups["label"].Success || unit.Length > 0 || prefix.Length > 0;
             var score = line.Confidence;
             // Unit can be a separate text box; only associate it with the same nearby display row.
