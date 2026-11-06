@@ -26,7 +26,7 @@ TESTS:
 
 COMMIT:
 - Message: feat(moveout): [BE-19] integrate Owner deposit return and settlement review
-- SHA ghi sau commit.
+- SHA: `15d8204b42577cf37cd665701d8ff77a6b013ff5` (ghi sau commit, đưa vào slice Mobile).
 
 FRONTEND HANDOFF:
 - Owner Web: Vũ Xuân Trường review UI/UX. Mobile: Bùi Bảo Long; client/DTO tương thích, chưa bổ sung hiển thị Mobile trong slice này.
@@ -492,3 +492,34 @@ Manual receipt-excess refund đã có API/UI/evidence và kiểm thử như slic
 - tests/backend/BHome.IntegrationTests/PaymentsDebt/PaymentLedgerTests.cs
 - tools/BHome.ContractVerification/ContractVerificationCli.cs
 - tools/BHome.ContractVerification/FinanceVerificationCli.cs
+
+TASK: BE-19 / BE-17
+SLICE: Tenant Mobile xem cọc/hoàn tiền; giữ Staff inspection consent độc lập
+
+IMPLEMENTED:
+- Existing ContractLifecyclePanel hiển thị số liệu server: issued/payable/paid, deposit used/refunded/reserved/available và PendingReview/VerifiedManual/NotRequired. Null giữ Chờ xác minh, không tự tính hoặc suy ngân hàng đã chuyển.
+- Tenant chỉ đọc summary của Contract được backend cấp quyền; không có Owner request/approve/execution/private-proof actions. Staff không gọi hoặc hiển thị summary tài chính.
+- Owner consent hiện hữu gắn summary.reference/inspection version. Staff inspection consent riêng gắn Contract/move-out version/baseline/readings/observed fields/evidence; thay input phải xác nhận lại, không khóa nhầm Staff theo financial summary Owner.
+
+CHANGED FILES:
+- src/mobile/src/features/contracts/ContractLifecyclePanel.tsx
+- src/mobile/src/__tests__/moveout-settlement.test.tsx
+- docs/api/REFUNDS.md và báo cáo này.
+
+TESTS:
+- npm.cmd run test --workspace src/mobile -- src/__tests__/moveout-settlement.test.tsx --maxWorkers=1: 5/5 đạt.
+- npm.cmd run typecheck --workspace src/mobile: đạt; npm.cmd run lint --workspace src/mobile: đạt.
+- Typed generic Vitest mock ban đầu không khớp ContractRequest; bọc generic như convention test hiện hữu. Không sửa DTO runtime/permission để che lỗi.
+- Không có adb trên PATH hoặc LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe. Native Android/iOS E2E NOT RUN; mock renderer/component không phải camera/device acceptance. Logs .tools/huy-deposit-mobile-{ui,typecheck,lint}.log.
+
+COMMIT:
+- Message: feat(mobile): [BE-19] show authorized deposit settlement and return status
+- SHA ghi sau commit Mobile.
+
+FRONTEND HANDOFF:
+- Bùi Bảo Long review Mobile UX/device. Vũ Xuân Trường tiếp tục Owner Web; không nhân bản quản trị hoàn cọc Owner lên Mobile.
+
+STATUS: PARTIAL — Mobile visibility component/typecheck/lint đạt; BE-19/BE-17 chưa DONE.
+
+REMAINING:
+- Browser real Web/API/Compact24/MinIO và native acceptance. Repro native: đăng nhập Staff đúng Location → mở inspection, chọn Final readings/ảnh, sửa field kiểm consent reset → Tenant đăng nhập đọc own summary → Owner Web hoàn theo sao kê → Tenant reload thấy VerifiedManual; Staff/cross-Tenant không thấy tài chính. Không có provider/bank thật trong lượt này.

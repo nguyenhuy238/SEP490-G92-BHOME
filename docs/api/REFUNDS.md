@@ -54,6 +54,12 @@ Owner UI slice: focused Refund/Payments/Lifecycle **20/20 đạt**, Owner build/
 typecheck shared DTO/client đạt. Chưa chạy full browser nguồn cọc tại thời điểm commit UI;
 handoff Vũ Xuân Trường, native/provider acceptance vẫn chưa chạy.
 
+Mobile Tenant nay hiển thị calculation cọc đã dùng/đã hoàn/giữ chỗ/khả dụng và trạng thái manual
+verification từ authorized settlement summary. Không gọi Owner deposit-refund routes hoặc tải proof.
+Staff không fetch/hiển thị summary tài chính; confirmation inspection riêng gắn input/reading/version,
+không dùng consent quyết toán Owner. Component **5/5**, Mobile typecheck/lint đạt. ADB không có
+trên PATH/standard SDK path đã kiểm: native device E2E **NOT RUN**, handoff Bùi Bảo Long.
+
 ## Receipt-excess refund hiện hữu
 
 Quyết định triển khai theo ủy quyền người dùng OQ-01/02/05: chỉ hoàn phần chưa phân bổ của receipt VERIFIED đã có allocation và người trả xác định. Không tự phân bổ tiền thừa sang nghĩa vụ khác, tự chuyển tiền, tạo credit hoặc khấu trừ cọc. Source vẫn giữ nguyên Payment/Allocation/Final Invoice. Dùng refund_requests hiện hữu; không thêm bảng/cột. Deposit refund và khoản dư phát sinh từ Adjustment sau khi đã trả đủ nằm ngoài slice này.
