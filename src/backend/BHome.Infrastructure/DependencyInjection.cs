@@ -136,6 +136,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.IExpenseEvidenceRepository, BHome.Infrastructure.Finance.ExpenseEvidenceRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpenseEvidenceService>();
         services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();
         services.AddScoped<BHome.Application.Finance.FinancialReportService>();
         services.AddScoped<BHome.Application.Finance.IFinancialScenarioRepository, BHome.Infrastructure.Finance.FinancialScenarioRepository>();

@@ -25,6 +25,7 @@ import {
 import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
 import { PageHeader } from '../../components/common/PortalUI';
 import { useFinanceApi } from './useFinanceApi';
+import { ExpenseEvidencePanel } from './ExpenseEvidencePanel';
 
 type Editor = { value: ExpenseInput; previous?: Expense; key: string; reason: string };
 export function ExpensesApiPage() {
@@ -336,6 +337,13 @@ export function ExpensesApiPage() {
                     value={editor.reason}
                     slotProps={{ htmlInput: { maxLength: 1000 } }}
                     onChange={(e) => setEditor((v) => v && { ...v, reason: e.target.value })}
+                  />
+                )}
+                {editor.previous && (
+                  <ExpenseEvidencePanel
+                    key={editor.previous.id}
+                    expenseId={editor.previous.id}
+                    disabled={busy}
                   />
                 )}
               </Stack>

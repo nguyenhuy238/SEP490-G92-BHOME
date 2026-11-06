@@ -10,6 +10,7 @@ const mock = vi.hoisted(() => ({
   expense: vi.fn(),
   createExpense: vi.fn(),
   updateExpense: vi.fn(),
+  expenseEvidence: vi.fn(),
 }));
 vi.mock('./useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -32,6 +33,7 @@ beforeEach(() => {
   mock.locations.mockResolvedValue([{ id: 'location', label: 'Cơ sở tổng hợp' }]);
   mock.expenses.mockResolvedValue({ items: [expense], total: 1, page: 1, pageSize: 25 });
   mock.expense.mockResolvedValue(expense);
+  mock.expenseEvidence.mockResolvedValue([]);
 });
 function mount() {
   render(

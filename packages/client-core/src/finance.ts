@@ -28,6 +28,15 @@ export interface ExpensePage {
   page: number;
   pageSize: number;
 }
+export interface ExpenseEvidence {
+  id: string;
+  operationKey: string;
+  contentType: string;
+  length: number;
+  sha256: string;
+  status: 'PendingUpload' | 'Uploaded';
+  recordedAt: string;
+}
 export interface ReportFilter {
   from: string;
   to: string;
@@ -139,6 +148,21 @@ export function financeClient(request: ContractRequest) {
     },
     expense: (id: string, signal?: AbortSignal) =>
       request<Expense>(`/api/v1/expenses/${id}`, { signal }),
+    expenseEvidence: (id: string, signal?: AbortSignal) =>
+      request<ExpenseEvidence[]>(`/api/v1/expenses/${id}/evidence`, { signal }),
+    uploadExpenseEvidence: (
+      id: string,
+      bytes: Uint8Array<ArrayBuffer>,
+      type: string,
+      key: string,
+    ) =>
+      request<ExpenseEvidence>(`/api/v1/expenses/${id}/evidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': type, 'Idempotency-Key': key },
+        body: bytes,
+      }),
+    expenseEvidenceFile: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<Blob>(`/api/v1/expenses/${id}/evidence/${fileId}`, { signal }, 'blob'),
     createExpense: (input: ExpenseInput, key: string) =>
       request<Expense>('/api/v1/expenses', {
         method: 'POST',
@@ -159,5 +183,6 @@ export function financeError(error: unknown) {
   if (status === 409) return 'Dữ liệu hoặc yêu cầu đã thay đổi. Tải lại để kiểm tra trước khi lưu.';
   if (status === 400)
     return 'Thông tin chưa hợp lệ. Kiểm tra số tiền, ngày và các trường bắt buộc.';
+  if (status === 413) return 'Ảnh chứng từ vượt quá 5 MB.';
   return 'Không thể tải hoặc lưu dữ liệu tài chính. Vui lòng thử lại.';
 }

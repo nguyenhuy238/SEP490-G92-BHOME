@@ -46,6 +46,22 @@ Harness hiện hữu `--finance --main-draft` mở rộng `Verify-HandoverClient
 
 Changed files: useContractHandover, ContractHandoverPanel, handover-ui test, Verify-HandoverClients/Verify-MainDraftClients và tài liệu. Handoff Vũ Xuân Trường/Bùi Bảo Long; BE-17 chưa đóng native acceptance.
 
+Commit bàn giao: `1481972ae408da539b0918e34b642ac5baa991fe` — `fix(handover): [BE-17] bind consent to the displayed contract version`. Owner Web build/lint và Mobile typecheck/lint đạt.
+
+### Slice BE-31 — chứng từ khoản chi private, 06/11/2026
+
+UC-31 / GBR-01/02/18, SDS private storage → ExpenseEvidenceService/Repository/Controller, shared finance client, ExpenseEvidencePanel → test upload/download, Owner-only, hash, version/source preservation, failure recovery và browser. Dùng cột evidence của expenses và SecurityAudit hiện hữu; không thêm bảng/cột/dependency. Không sửa Finance formulas hoặc số tiền.
+
+Đã bổ sung GET list/POST ảnh/GET private download; JPEG/PNG thật tối đa 5 MB, giới hạn kỹ thuật 20 evidence. Intent PendingUpload được commit trước storage, chỉ Uploaded sau hash readback; cùng key/file replay không nhân bản, khác file 409. Lỗi sau external write giữ key liên kết expense để retry hoàn tất, không có row Uploaded trỏ object chưa kiểm. Owner Web mở lại có thể dùng lại Pending key bằng đúng ảnh. Server kiểm hash/length trước download, không gửi object key trong DTO. Raw metadata cũ được giữ nguyên; API mới chỉ hiển thị envelope mới. Evidence không đổi version mảng history dùng chỉnh sửa tiền; audit upload được lưu riêng.
+
+`dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24ExpenseTests' --verbosity minimal`: **6/6 đạt**, 0 skip. Storage fault/tamper là test boundary được gắn nhãn; có parallel same-key upload, interruption sau external write, replay/audit một lần, malformed/oversize, Staff/Tenant/cross-expense denial và schema readiness. `npm.cmd run test --workspace src/owner-web -- src/features/expenses --maxWorkers=1`: **7/7 đạt**; Owner Web build/lint và harness build 0 warning/error đạt. Không thêm Node types/dependency khi test crypto cần import runtime.
+
+`dotnet run --project tools/BHome.ContractVerification --no-build -- --finance --main-draft`: **10/10 nhóm đạt**; nhóm mới upload/reload/download chứng từ qua Owner Web build, API, Compact24 và MinIO Docker thật. So sánh length/hash của file người dùng tải xuống với PNG tổng hợp gốc; không coi response body rỗng trong browser network capture là nội dung file. Các nhóm hợp đồng/bàn giao/Finance trước vẫn đạt. Chưa phải staging/production hoặc native acceptance.
+
+Browser dùng PNG tổng hợp >32 KB và <5 MB, xác nhận action upload trên Kestrel thật không bị giới hạn JSON 32 KB của controller. Ảnh đã lưu/download đúng hash. Không thay request-size policy chung.
+
+Changed files: ExpenseEvidenceService/Repository, ExpensesController, DI, finance client, ExpenseEvidencePanel/test, ExpensesApiPage/test, Compact24ExpenseEvidenceTests, browser helper và docs. Handoff Vũ Xuân Trường, INITIAL_API_UI_READY. BE-31 vẫn PARTIAL vì chọn Asset/Work Order và reviewer còn lại. Holding giữ chặn OQ-03/Q-H1 (hạn hiệu lực/payment deadline/thời điểm chuyển và hoàn tác cọc chưa có quyết định); không tự chọn deadline. Refund/settlement giữ explicit Pending theo phạm vi đã ghi.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết

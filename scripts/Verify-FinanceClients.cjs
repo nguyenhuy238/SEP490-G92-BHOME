@@ -59,6 +59,7 @@ async function main(settings) {
     await page.getByRole('button', { name: 'Lưu khoản chi', exact: true }).click();
     await page.getByText('Đã lưu khoản chi.', { exact: true }).waitFor();
     console.log('PASS: browser creates, reloads and corrects an actual Compact24 expense.');
+    if (settings.mainDraft) await require('./Verify-ExpenseEvidenceClients.cjs')(page);
     await page.goto(settings.origin + '/locations/' + settings.locationId + '/investment');
     await page.getByRole('heading', { name: 'Đầu tư ban đầu & Chi phí', exact: true }).waitFor();
     await page.getByText('Vệ sinh tổng hợp — 250.000 ₫', { exact: true }).waitFor();

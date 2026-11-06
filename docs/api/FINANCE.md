@@ -17,6 +17,16 @@ Nguồn: SRS FE-08, UC-31..34, GBR-01/02/15/16/18; yêu cầu triển khai 05/11
 
 Persistence: repository dùng truy vấn có tham số trên bảng `expenses`, projection trên Locations/Rooms Compact24, transaction, advisory lock cho create và row lock cho update. Không thêm bảng/cột, không migration phá hủy, không đăng ký legacy DbContext.
 
+### Chứng từ riêng tư (06/11/2026)
+
+- `GET /api/v1/expenses/{id}/evidence`: Owner-only; metadata `{id,operationKey,contentType,length,sha256,status,recordedAt}`. Không trả object key hoặc URL công khai.
+- `POST .../{id}/evidence`: body ảnh PNG/JPEG, `Content-Type` tương ứng và UUID `Idempotency-Key`. Kiểm nội dung giải mã, tối đa 5 MB; không hỗ trợ PDF/HTML/SVG. Giới hạn kỹ thuật 20 phần tử evidence mỗi khoản chi. Sai nội dung 400, quá dung lượng 413, key trùng khác bytes/type 409.
+- `GET .../{id}/evidence/{fileId}`: Owner-only, file phải thuộc đúng khoản chi và Uploaded. Đọc private storage, kiểm length/SHA-256 trước trả bytes; sai hash 409. Filename do server tạo. Staff/Tenant 403, sai expense/file 404; no-store.
+
+JSON `expenses.evidence` giữ durable intent `PendingUpload` trước khi gửi storage; chỉ chuyển Uploaded sau khi đọc lại kiểm integrity. Lỗi upload không báo thành công/không cho tải file Pending. Retry cùng key/bytes tiếp tục đúng object và không thêm evidence/audit lần hai; Owner Web tải lại metadata và dùng hash để tìm key Pending sau khi mở lại. Intent còn liên kết khoản chi và key storage để phục hồi sau lỗi; không có cleanup xóa chứng từ được công bố tự động. Không đổi amount hoặc phiên bản chỉnh sửa tài chính. Uploaded metadata ghi actor/time và có SecurityAudit `ExpenseEvidenceUploaded`. Metadata evidence cũ khác envelope được giữ nguyên, chưa được giải mã/hiển thị bằng API mới.
+
+Owner Web mở khoản chi đã lưu → chọn ảnh → tải lên → đọc lại danh sách → tải private. Không tự tạo khoản chi từ ảnh. Component tests có failure/retry/double submit/Pending recovery/integrity error; PostgreSQL có replay/race/tamper/role/cross-file/legacy preservation và upload gián đoạn; browser chạy qua MinIO thật, đối chiếu bytes file người dùng tải xuống. Xem [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
+
 Ví dụ tổng hợp (thay UUID bằng cơ sở fixture):
 
 ```json
