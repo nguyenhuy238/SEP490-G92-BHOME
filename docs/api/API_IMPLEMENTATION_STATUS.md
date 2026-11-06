@@ -1,16 +1,18 @@
 # BHOME — danh mục API và trạng thái kết nối Compact24
 
-Ngày rà soát cập nhật: **05/11/2026**. Nguồn: route descriptor của host `BHome.Api` chạy bằng DI mặc định trên database PostgreSQL chỉ có Compact24; đối chiếu mã nguồn frontend, không suy ra từ tên màn hình.
+Ngày rà soát cập nhật: **06/11/2026**. Nguồn: route descriptor của host `BHome.Api` chạy bằng DI mặc định trên database PostgreSQL chỉ có Compact24; đối chiếu mã nguồn frontend, không suy ra từ tên màn hình.
 
-Audit chạy lại ngày 05/11 xác nhận **199 controller routes**: **194 route bảo vệ** đã trả 401 khi không có phiên; 5 route anonymous. Ngoài ra có 2 health endpoints. Toàn bộ **97 GET nghiệp vụ** đã được probe bằng Owner; 0 HTTP 5xx (32 trả 200, 2 trả 204, 9 trả 400, 51 trả 404, 3 trả 403). GET với ID không tồn tại/thiếu query trả 400/403/404 là kiểm tra nhánh lỗi, không chứng minh mọi happy path đã đạt. Số liệu cũ 189/92 thuộc audit ngày 04/11.
+Audit trong full backend run ngày 06/11 xác nhận **208 controller routes**: **203 route bảo vệ** đã trả 401 khi không có phiên; 5 route anonymous. Ngoài ra có 2 health endpoints. Toàn bộ **103 GET nghiệp vụ** đã được probe bằng Owner; 0 HTTP 5xx (32 trả 200, 2 trả 204, 10 trả 400, 56 trả 404, 3 trả 403). GET với ID không tồn tại/thiếu query trả 400/403/404 là kiểm tra nhánh lỗi, không chứng minh mọi happy path đã đạt. Số 199/97 thuộc audit 05/11 và 189/92 thuộc 04/11.
 
 ## Bổ sung Finance ngày 05/11/2026
 
-Bổ sung 06/11: Expense evidence có 3 route Owner-only (GET list/POST image/GET file). Owner Web nối upload/reload/private download; có PendingUpload/retry/hash validation và không đổi schema. Xem [FINANCE.md](FINANCE.md). Chưa tái sinh số đếm route toàn bộ ở phần đầu tài liệu.
+Bổ sung 06/11: Expense evidence có 3 route Owner-only (GET list/POST image/GET file). Owner Web nối upload/reload/private download; có PendingUpload/retry/hash validation và không đổi schema. Xem [FINANCE.md](FINANCE.md). Đã được tính trong inventory 208 route.
 
 Expense `GET reference-choices` Owner-only đọc Room/Asset/Work Order đã tồn tại; POST expense hỗ trợ optional assetId/taskId và giữ incident link. Không có Work Order lifecycle API mới; dữ liệu nguồn và status không được giả trong client. Chi tiết scope/correction/idempotency và giới hạn trong FINANCE.md.
 
-Bổ sung Main Draft ngày 05/11: thêm `POST main-drafts/{id}/signing-review` và `POST main-drafts/{id}/release`, Owner Web dùng shared client; released Draft nối lại signing/deposit/activation hiện hữu trên Web/Mobile. Canonical PDF được kiểm hash và dùng nguyên bytes khi ký. Chỉ mẫu Development/Testing có nhãn; Production bị chặn. Chi tiết quyền/body/lỗi: [CONTRACT_LIFECYCLE.md](CONTRACT_LIFECYCLE.md). Hai route mới chưa nằm trong số liệu audit 199 route ở trên; chưa chạy lại inventory toàn bộ.
+Bổ sung Main Draft ngày 06/11: thêm `POST main-drafts/{id}/signing-review` và `POST main-drafts/{id}/release`, Owner Web dùng shared client; released Draft nối lại signing/deposit/activation hiện hữu trên Web/Mobile. Canonical PDF được kiểm hash và dùng nguyên bytes khi ký. Chỉ mẫu Development/Testing có nhãn; Production bị chặn. Chi tiết quyền/body/lỗi: [CONTRACT_LIFECYCLE.md](CONTRACT_LIFECYCLE.md). Đã được tính trong inventory 208 route.
+
+Chênh lệch 199→208 gồm Main Draft 2 route, Expense evidence 3, Expense reference-choices 1 và Property room readiness/history/occupancy-summary 3 sau merge. Financial report bổ sung historicalOccupancy từ cùng snapshot Property, không thêm route/schema. Chuỗi browser đã đi từ Main Draft với ba Resident riêng tới một Invoice/ba recipients, partial/excess và Adjustment sau Final; xem FINANCE.md. Tất cả ký/bank trong harness là Development/Testing tổng hợp; native/provider acceptance chưa đạt từ bằng chứng này.
 
 Đã thêm 9 routes Owner-only: Expenses GET collection/GET by ID/POST/PUT, GET financial-reports, Financial-scenarios POST analyze/POST save/GET collection/GET by ID. DTO, công thức, quyền, validation, fixture và handoff ở [FINANCE.md](FINANCE.md). Owner Web `/expenses`, `/reports`, `/what-if` và `/locations/:locationId/investment` dùng shared client thật trong API mode, không fallback demo. Browser E2E đã kiểm tạo/sửa/reload expense, route theo cơ sở, report, scenario save/reload và cấu hình hợp đồng. UI cần Owner Web reviewer; không suy rộng kết quả này sang toàn bộ client.
 
@@ -80,7 +82,11 @@ precision sau capture. Xem [báo cáo cuối](../development/METER_OCR_FINAL_DEV
 
 Policy được khai báo trong [RolePermissions](../../src/backend/BHome.Domain/IdentityAccess/RolePermissions.cs): property.view = Owner/Staff; property.manage, locations.manage, staff-assignments.manage = Owner; locations.view-assigned = Staff; task execute = Staff, task manage/verify = Owner; quyền own account/session/notification = Owner/Staff/Tenant. Service còn kiểm tra Location hiện tại và đối tượng sở hữu.
 
-## Bằng chứng đã chạy trong lượt rà soát
+OCR06/11: phát hiện timeout GELEX180° khi bật bài model thật; pipeline cache1 dùng lại recognizer input giống hệt trong cùng ảnh/hướng, giữ deadline 8 giây. Real-model HTTP 1/1, OCR unit 125/125 và OCR integration 119/119 đạt. Không thay model weights, API, confidence thresholds hoặc human confirmation; chưa đạt 50-image/90% benchmark. Xem [hồi quy OCR](../development/OCR_RECOGNITION_CACHE_REGRESSION.md).
+
+## Bằng chứng nền lịch sử trước lượt tiếp tục
+
+Các số ở bảng này thuộc baseline cũ, không phải kết quả hồi quy ngày 06/11. Kết quả mới, lệnh thực thi và giới hạn được ghi tại [báo cáo tiếp tục](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
 
 | Kiểm tra                     | Kết quả / giới hạn                                                                                                                                         |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
