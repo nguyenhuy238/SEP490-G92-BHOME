@@ -70,23 +70,19 @@ public sealed partial class ContractLifecycleApiTests
 
     private async Task SettledBoundary(Workspace w, Guid id)
     {
+        await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), new TerminationInput(Today, "Synthetic reviewed move-out")));
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         var electricity = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Electricity);
         var water = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Water);
         await using var seed = fixture.Factory.Services.CreateAsyncScope();
         var db = seed.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         // Seed the already-reviewed boundary; this is not evidence for the real financial settlement flow.
-        db.Add(new ContractMoveOut
-        {
-            ContractId = id,
-            Status = MoveOutStatus.Settled,
-            ProposedDate = Today,
-            RequestedByUserId = w.Owner.Id,
-            Reason = "Synthetic reviewed move-out",
-            InspectedAt = DateTimeOffset.UtcNow,
-            ElectricityReadingId = electricity,
-            WaterReadingId = water,
-            SettlementLedgerReference = "TEST-ONLY-LEDGER-" + id
-        });
+        var moveOut = await db.Set<ContractMoveOut>().SingleAsync(m => m.ContractId == id);
+        moveOut.Status = MoveOutStatus.Settled;
+        moveOut.InspectedAt = DateTimeOffset.UtcNow;
+        moveOut.ElectricityReadingId = electricity;
+        moveOut.WaterReadingId = water;
+        moveOut.SettlementLedgerReference = "TEST-ONLY-LEDGER-" + id;
         await db.SaveChangesAsync(); fixture.Ledger.Resolved[id] = true;
     }
 

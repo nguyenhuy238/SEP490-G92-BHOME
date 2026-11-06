@@ -1,5 +1,10 @@
 # Notification inbox — UC-35/36
 
+Cập nhật **06/11/2026**: inbox, business-event publisher và JOB-04 delivery engine đã có trong
+runtime Compact24. Provider email/push thật vẫn Unconfigured. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md).
+`UserNotifications`, `OperationalTaskNotifications` và tên event dưới đây là tên logic CLR;
+runtime dùng `notifications`/JSON và technical queue trong `operational_tasks`, không các bảng EF legacy riêng.
+
 `/api/v1/notifications` dùng permission notifications.read-own; không nhận recipientId từ client.
 Scope từ actor hiện hành, audience role đã lưu và current Staff Location assignment.
 Owner chỉ đọc thông báo gửi cho mình; Tenant chỉ của mình; Staff chỉ Task thuộc Location hiện có quyền.
@@ -16,8 +21,8 @@ Target trả objectType/objectId/locationId/billingPeriod, không URL tùy ý ho
 Client vẫn dùng endpoint nghiệp vụ có auth khi tải đối tượng. Không coi saved link là quyền.
 Response không có bank reference, payer details, CCCD, private reason hoặc evidence.
 
-UserNotifications là inbox dùng chung đầu tiên; OperationalTaskNotifications có Task FK bắt buộc
-được giữ làm nguồn nghiệp vụ tương thích. SourceTaskNotificationId cho phép đọc trạng thái cũ;
+UserNotification là inbox dùng chung; OperationalTaskNotification giữ liên kết Task và được
+adapter giữ làm nguồn tương thích. SourceTaskNotificationId cho phép đọc trạng thái cũ;
 đánh dấu inbox cập nhật cả source read-state của đúng recipient. Không nhân đôi UI inbox live.
 Unique recipient/eventKey, publication markers và immutable intent; read/delivery state được cập nhật.
 Mặc định external DeliveryState Unconfigured, không báo push/email thành công khi chưa có provider.
@@ -38,6 +43,10 @@ Batch tối đa 25/source mỗi lượt, backlog tiếp tục các lượt sau, 
 | ContractExpiryNotices JOB-02                 | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                           |
 | OperationalTaskNotifications                 | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                |
 | Automation execution PendingInputs           | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                   |
+
+Receipt-excess refund mới chưa có event consumer riêng; không suy notification hoàn tiền đã tồn tại
+từ payment-confirmed. Browser finance/refund harness tắt worker, nên kết quả browser đó không chứng minh
+publication/delivery. Regression notification có fixture riêng; chưa nghiệm thu email/push thật.
 
 Role/account được kiểm tra từ DB trước publish, nguồn không đủ điều kiện được đánh dấu đã
 xử lý với recipient count phù hợp. Không broadcast đến mọi Owner/Staff. Private adjustment

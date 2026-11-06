@@ -6,28 +6,29 @@ const assert = require('node:assert/strict');
 async function main(settings) {
   const root = path.resolve(__dirname, '..');
   assert.equal(new URL(settings.baseUrl).hostname, 'localhost');
-  const { createServer } = await import(
+  const { build, preview } = await import(
     pathToFileURL(require.resolve('vite', { paths: [path.join(root, 'src/owner-web')] })).href
   );
   const { chromium } = require(path.join(root, '.tools/contract-browser/node_modules/playwright'));
   process.env.VITE_API_MODE = 'api';
   process.env.VITE_API_BASE_URL = settings.baseUrl;
-  const web = await createServer({
+  const config = {
     root: path.join(root, 'src/owner-web'),
     configFile: path.join(root, 'src/owner-web/vite.config.ts'),
     envDir: settings.temporary,
     logLevel: 'error',
-    server: {
+    build: { outDir: path.join(settings.temporary, 'owner-web'), emptyOutDir: false },
+    preview: {
       host: 'localhost',
       port: settings.webPort,
       strictPort: true,
-      hmr: false,
       https: { pfx: readFileSync(settings.pfxPath), passphrase: settings.pfxPassword },
     },
-  });
+  };
+  await build(config);
+  const web = await preview(config);
   let browser;
   try {
-    await web.listen();
     browser = await chromium.launch({ channel: 'msedge', headless: true });
     // This context trusts only synthetic localhost traffic for this test. No OS trust changes.
     // TLS certificate trust itself is not an acceptance claim of this browser test.
@@ -38,12 +39,18 @@ async function main(settings) {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.name));
-    await page.goto(settings.origin + '/expenses');
+    await page.goto(settings.origin + '/expenses', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Email hoặc Số điện thoại', { exact: true }).fill(settings.email);
     await page.getByLabel('Mật khẩu', { exact: true }).fill(settings.password);
     await page.getByRole('button', { name: 'Đăng nhập vào hệ thống', exact: true }).click();
     await page.getByRole('heading', { name: 'Đầu tư ban đầu & Chi phí', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Ghi khoản chi', exact: true }).click();
+    if (settings.mainDraft) {
+      await page.getByRole('combobox', { name: 'Phòng ghi nhận', exact: true }).click();
+      await page.getByRole('option', { name: 'FIN-01', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Tài sản liên quan', exact: true }).click();
+      await page.getByRole('option', { name: 'SYNTHETIC EXPENSE ASSET', exact: true }).click();
+    }
     await page.getByLabel('Danh mục khoản chi').fill('Vệ sinh tổng hợp');
     await page.getByLabel('Số tiền (VND)').fill('200000');
     await page.getByLabel('Ngày phát sinh').fill('2026-11-01');
@@ -53,11 +60,24 @@ async function main(settings) {
     await page.reload();
     await page.getByText('Vệ sinh tổng hợp — 200.000 ₫', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Chi tiết / chỉnh sửa', exact: true }).click();
+    if (settings.mainDraft) {
+      assert.match(
+        await page.getByRole('combobox', { name: 'Tài sản liên quan', exact: true }).innerText(),
+        /SYNTHETIC EXPENSE ASSET/,
+      );
+      assert.equal(
+        await page
+          .getByRole('combobox', { name: 'Phòng ghi nhận', exact: true })
+          .getAttribute('aria-disabled'),
+        'true',
+      );
+    }
     await page.getByLabel('Số tiền (VND)').fill('250000');
     await page.getByLabel('Lý do chỉnh sửa').fill('Đối chiếu lại chứng từ tổng hợp');
     await page.getByRole('button', { name: 'Lưu khoản chi', exact: true }).click();
     await page.getByText('Đã lưu khoản chi.', { exact: true }).waitFor();
     console.log('PASS: browser creates, reloads and corrects an actual Compact24 expense.');
+    if (settings.mainDraft) await require('./Verify-ExpenseEvidenceClients.cjs')(page);
     await page.goto(settings.origin + '/locations/' + settings.locationId + '/investment');
     await page.getByRole('heading', { name: 'Đầu tư ban đầu & Chi phí', exact: true }).waitFor();
     await page.getByText('Vệ sinh tổng hợp — 250.000 ₫', { exact: true }).waitFor();
@@ -112,7 +132,12 @@ async function main(settings) {
       ['Nơi cấp', 'Cơ quan tổng hợp'],
       ['Địa chỉ thường trú', 'Địa chỉ tổng hợp'],
       ['Điện thoại', '0000000000'],
-      ['Hiệu lực từ', '2026-11-01'],
+      [
+        'Hiệu lực từ',
+        new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
+          Date.now() - 86400000,
+        ),
+      ],
       ['Tiền cọc đảm bảo (VND)', '3000000'],
       ['Hình thức / chính sách thanh toán', 'Chuyển khoản theo thỏa thuận tổng hợp'],
     ])
@@ -133,11 +158,15 @@ async function main(settings) {
     console.log(
       'PASS: browser saves and reloads encrypted Owner contract settings from Compact24.',
     );
+    await dialog.getByRole('button', { name: 'Đóng', exact: true }).click();
+    if (settings.mainDraft) await require('./Verify-MainDraftClients.cjs')(settings, page);
     assert.deepEqual(errors, []);
     await context.close();
   } finally {
     if (browser) await browser.close();
-    await web.close();
+    await new Promise((resolve, reject) =>
+      web.httpServer.close((error) => (error ? reject(error) : resolve())),
+    );
   }
 }
 let input = '';
@@ -145,7 +174,14 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (part) => (input += part));
 process.stdin.on('end', () =>
   main(JSON.parse(input)).catch((e) => {
-    console.error('Finance browser verification failed:', e.message);
+    // Safe failure metadata only: never dump a response, request body, auth headers or accounts.
+    console.error(
+      'Finance browser verification failed:',
+      e.message,
+      e.status ?? '',
+      e.code ?? e.problem?.code ?? '',
+      e.requestPath ?? '',
+    );
     process.exitCode = 1;
   }),
 );

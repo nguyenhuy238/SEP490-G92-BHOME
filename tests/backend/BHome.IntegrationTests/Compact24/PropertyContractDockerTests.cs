@@ -83,4 +83,5 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     [Fact] public Task ResidentAndCapture() => new PropertyApiTests(fixture.Properties).ExistingResidentsBlockClosureAndCaptureCannotBypassUnavailableRoom();
     [Fact] public Task AuditRollback() => new PropertyApiTests(fixture.Properties).DuplicateRoomAndPolicyRacesHaveOneWinnerAndNoOrphanAudit();
     [Fact] public Task InvoiceSnapshot() => new Billing.InvoiceApiTests(fixture.Capture).SharedRoomDraftIsPersistedIdempotentScopedAndExplicitlyMissingReadings();
+    [Fact] public Task RoomInsights() => new PropertyApiTests(fixture.Properties).RoomInsightsAreReadOnlyScopedAndUseCompact24AuditDates();
 }

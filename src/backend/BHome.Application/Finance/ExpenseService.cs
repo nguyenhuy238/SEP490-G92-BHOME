@@ -11,14 +11,20 @@ public sealed class FinanceException(int status, string code) : Exception(code)
 }
 public sealed record ExpenseInput(Guid LocationId, Guid? RoomId, string ExpenseType, string Category,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
-    DateOnly OccurredOn, string Note);
+    DateOnly OccurredOn, string Note,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? AssetId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? TaskId = null);
 public sealed record ExpenseUpdate(ExpenseInput Expense, int ExpectedVersion, string Reason);
 public sealed record ExpenseFilter(Guid? LocationId = null, DateOnly? From = null, DateOnly? To = null,
     string? ExpenseType = null, string? Category = null, int Page = 1, int PageSize = 25);
 public sealed record ExpenseView(Guid Id, Guid LocationId, Guid? RoomId, string ExpenseType, string Category,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
-    DateOnly OccurredOn, string Note, int Version, bool CanEdit);
+    DateOnly OccurredOn, string Note, int Version, bool CanEdit, Guid? AssetId = null, Guid? TaskId = null,
+    string? AssetName = null, string? TaskTitle = null);
 public sealed record ExpensePage(IReadOnlyList<ExpenseView> Items, long Total, int Page, int PageSize);
+public sealed record ExpenseReference(Guid Id, string Label, Guid? RoomId = null, Guid? AssetId = null);
+public sealed record ExpenseReferences(IReadOnlyList<ExpenseReference> Rooms, IReadOnlyList<ExpenseReference> Assets,
+    IReadOnlyList<ExpenseReference> WorkOrders, bool Truncated);
 public interface IExpenseRepository
 {
     Task<bool> ValidScopeAsync(Guid locationId, Guid? roomId, CancellationToken token);
@@ -26,6 +32,7 @@ public interface IExpenseRepository
     Task<ExpenseView?> GetAsync(Guid id, CancellationToken token);
     Task<ExpenseView> CreateAsync(ExpenseInput input, Guid actor, Guid key, DateTimeOffset now, CancellationToken token);
     Task<ExpenseView> UpdateAsync(Guid id, ExpenseUpdate input, Guid actor, DateTimeOffset now, CancellationToken token);
+    Task<ExpenseReferences> ReferencesAsync(Guid locationId, Guid? roomId, CancellationToken token);
 }
 public sealed class ExpenseService(IExpenseRepository repository, ICurrentUser user, TimeProvider clock)
 {
@@ -37,7 +44,8 @@ public sealed class ExpenseService(IExpenseRepository repository, ICurrentUser u
     }
     private async Task ValidateAsync(ExpenseInput input, CancellationToken token)
     {
-        if (input.LocationId == Guid.Empty || input.RoomId == Guid.Empty || input.ExpenseType is not ("INITIAL_INVESTMENT" or "OPERATING") ||
+        if (input.LocationId == Guid.Empty || input.RoomId == Guid.Empty || input.AssetId == Guid.Empty || input.TaskId == Guid.Empty ||
+            input.TaskId is not null && input.ExpenseType != "OPERATING" || input.ExpenseType is not ("INITIAL_INVESTMENT" or "OPERATING") ||
             string.IsNullOrWhiteSpace(input.Category) || input.Category.Length > 60 || input.Amount <= 0 ||
             input.Amount >= 1_000_000_000_000_000_000m || decimal.Truncate(input.Amount) != input.Amount || input.OccurredOn == default ||
             string.IsNullOrWhiteSpace(input.Note) || input.Note.Length > 4000)
@@ -54,6 +62,12 @@ public sealed class ExpenseService(IExpenseRepository repository, ICurrentUser u
     }
     public async Task<ExpenseView> GetAsync(Guid id, CancellationToken token)
     { _ = Owner(); return await repository.GetAsync(id, token) ?? throw new FinanceException(404, "expense_not_found"); }
+    public async Task<ExpenseReferences> ReferencesAsync(Guid locationId, Guid? roomId, CancellationToken token)
+    {
+        _ = Owner(); if (locationId == Guid.Empty || roomId == Guid.Empty) throw new FinanceException(400, "invalid_finance_filter");
+        if (!await repository.ValidScopeAsync(locationId, roomId, token)) throw new FinanceException(404, "expense_scope_not_found");
+        return await repository.ReferencesAsync(locationId, roomId, token);
+    }
     public async Task<ExpenseView> CreateAsync(ExpenseInput input, Guid key, CancellationToken token)
     {
         var actor = Owner(); if (key == Guid.Empty) throw new FinanceException(400, "idempotency_key_required");

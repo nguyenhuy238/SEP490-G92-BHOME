@@ -226,3 +226,52 @@ it('does not show success when declaring fails and allows retry without losing i
   await screen.findByText('Đã truy vấn và lưu chứng thư từ nhà cung cấp.');
   expect((screen.getByLabelText('Mã thuê bao MySign của bạn') as HTMLInputElement).value).toBe('');
 });
+
+it('requires Tenant consent for a released demo and confirms only the server result without duplicate submissions', async () => {
+  const api = setup();
+  const released = {
+    ...contract,
+    status: 'PendingSigning',
+    onboardingDraft: false,
+    isDevelopmentDemo: true,
+  };
+  const signing = contractActions(released, null, 'Tenant', 'tenant').find(
+    (a) => a.operation === 'signing',
+  )!;
+  let complete!: (value: { id: string }) => void;
+  vi.mocked(api.mutate).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve as typeof complete;
+      }),
+  );
+  const success = vi.fn();
+  render(
+    <ContractActionForm
+      api={api}
+      action={signing}
+      contract={released}
+      keys={mutationKeys(() => id)}
+      evidenceIds={[]}
+      onCancel={vi.fn()}
+      onSuccess={success}
+    />,
+  );
+  expect(screen.getByText(/SIMULATED SIGNING: chỉ thử nghiệm/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  expect(api.mutate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đang xử lý…' }));
+  expect(api.certificates).not.toHaveBeenCalled();
+  expect(api.mutate).toHaveBeenCalledTimes(1);
+  expect(api.mutate).toHaveBeenCalledWith(
+    id,
+    'signing',
+    { certificateId: '00000000-0000-0000-0000-000000000000' },
+    id,
+  );
+  expect(success).not.toHaveBeenCalled();
+  complete({ id });
+  await waitFor(() => expect(success).toHaveBeenCalledTimes(1));
+});

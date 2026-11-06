@@ -17,6 +17,7 @@ import {
   type ReportFilter,
 } from '../../../../../packages/client-core/src/finance';
 import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
+import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
 import { PageHeader } from '../../components/common/PortalUI';
 import { useFinanceApi } from '../expenses/useFinanceApi';
 
@@ -37,6 +38,13 @@ export function FinancialReportsApiPage() {
     queryFn: ({ signal }) => api.report(filter!, signal),
   });
   const value = report.data;
+  const occupancyReasons: Record<string, string> = {
+    LocationRequired: 'Chọn một cơ sở để xem tỷ lệ lấp đầy theo kỳ.',
+    RoomFilterUnsupported: 'Bỏ bộ lọc phòng để xem tỷ lệ lấp đầy của cơ sở.',
+    PeriodUnsupported: 'Chọn kỳ có chênh lệch ngày không quá 366 ngày để xem lịch sử lấp đầy.',
+    FuturePeriod: 'Kỳ có ngày tương lai; chưa thể xác định tỷ lệ lấp đầy lịch sử.',
+    InsufficientData: 'Chưa đủ lịch sử trạng thái cơ sở/phòng để tính tỷ lệ lấp đầy trong kỳ.',
+  };
   const reasons: Record<string, string> = {
     refund_classification_required:
       'Có khoản hoàn tiền cần phân loại trước khi tính dòng tiền và hoàn vốn.',
@@ -118,6 +126,36 @@ export function FinancialReportsApiPage() {
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Toàn bộ phạm vi đã chọn</Typography>
             <Totals value={value.total} />
+          </Paper>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6">Lấp đầy theo kỳ</Typography>
+            {value.historicalOccupancy?.from && value.historicalOccupancy.to && (
+              <Typography>
+                Kỳ lịch sử: {displayContractDate(value.historicalOccupancy.from)} –{' '}
+                {displayContractDate(value.historicalOccupancy.to)}
+              </Typography>
+            )}
+            {value.historicalOccupancy?.status === 'Complete' ? (
+              <>
+                <Typography>
+                  Ngày-phòng có người ở: {value.historicalOccupancy.occupiedRoomDays}
+                </Typography>
+                <Typography>
+                  Ngày-phòng có thể cho thuê: {value.historicalOccupancy.rentableRoomDays}
+                </Typography>
+                <Typography>
+                  Tỷ lệ lấp đầy trong kỳ:{' '}
+                  {value.historicalOccupancy.occupancyRate === null
+                    ? 'Chưa xác định (không có ngày-phòng có thể cho thuê)'
+                    : `${value.historicalOccupancy.occupancyRate.toLocaleString('vi-VN')}%`}
+                </Typography>
+              </>
+            ) : (
+              <Alert severity="info">
+                {occupancyReasons[value.historicalOccupancy?.status ?? ''] ??
+                  'Chưa có dữ liệu lấp đầy lịch sử từ máy chủ.'}
+              </Alert>
+            )}
           </Paper>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Vốn & Thu hồi</Typography>

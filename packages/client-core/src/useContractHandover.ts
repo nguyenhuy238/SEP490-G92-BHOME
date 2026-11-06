@@ -9,6 +9,10 @@ import {
 
 export function useContractHandover(api: ContractClient, id: string, staff: boolean) {
   const [data, setData] = useState<{
+    api: ContractClient;
+    id: string;
+    staff: boolean;
+    revision: number;
     record: HandoverView | null;
     history: HandoverHistory[];
     choices: HandoverChoices | null;
@@ -31,7 +35,8 @@ export function useContractHandover(api: ContractClient, id: string, staff: bool
           api.handoverHistory(id, c.signal),
           staff ? api.handoverChoices(id, c.signal) : Promise.resolve(null),
         ]);
-        if (!c.signal.aborted) setData({ record: recordValue, history, choices });
+        if (!c.signal.aborted)
+          setData({ api, id, staff, revision, record: recordValue, history, choices });
       } catch (e) {
         if (!c.signal.aborted) setError(contractError(e));
       } finally {
@@ -41,5 +46,9 @@ export function useContractHandover(api: ContractClient, id: string, staff: bool
     void load();
     return () => c.abort();
   }, [api, id, staff, revision]);
-  return { data, loading, error, reload: () => setRevision((v) => v + 1) };
+  const current =
+    data?.api === api && data.id === id && data.staff === staff && data.revision === revision
+      ? data
+      : null;
+  return { data: current, loading, error, reload: () => setRevision((v) => v + 1) };
 }
