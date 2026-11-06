@@ -145,16 +145,25 @@ public static class AutomaticOcrRouter
                 candidates.Select(OcrCategories.Name).ToArray(), warnings, PartialCategory: Utility(candidates));
         }
         var kind = decision.Kind.Value;
-        var proposal = OcrFieldParser.Parse(analysis.Text, kind);
+        var meter = kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack);
+        var selectedRegion = meter ? analysis.MeterRegion : null;
+        var validRegion = selectedRegion is not null && float.IsFinite(selectedRegion.DetectionConfidence) && selectedRegion.DetectionConfidence is > 0 and <= 1;
+        var unsafeRegion = selectedRegion is not null && selectedRegion.Text.Warnings.Concat(analysis.Text.Warnings)
+            .Any(w => w is "unclear_digit" or "text_region_limit" or "conflicting_reading" or "recognizer_conflict" or "blur_or_low_detail" or "orientation_uncertain");
+        var proposal = selectedRegion is not null && (!validRegion || unsafeRegion)
+            ? new OcrProposal(new Dictionary<string, string>(), analysis.Text.EngineVersion) { IsFallback = true, MissingFields = ["reading"],
+                Warnings = [.. selectedRegion.Text.Warnings, .. analysis.Text.Warnings, "reading_region_uncertain"] }
+            : OcrFieldParser.Parse(validRegion ? selectedRegion!.Text : analysis.Text, kind);
         if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
         {
             proposal = MeterReadingPrecision.Apply(proposal, null);
-            proposal = proposal with { Warnings = [.. proposal.Warnings, "reading_region_unverified",
+            proposal = proposal with { Warnings = [.. proposal.Warnings, .. validRegion ? Array.Empty<string>() : new[] { "reading_region_unverified" },
                 .. kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater ? new[] { "billing_register_unverified" } : []] };
         }
         return new("classified", OcrCategories.Name(kind), decision.Confidence, decision.Source, [], warnings,
             kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? proposal : null,
-            kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack) ? proposal : null);
+            meter ? proposal : null, DetectionConfidence: validRegion ? selectedRegion!.DetectionConfidence : null,
+            CropPreviewDataUri: validRegion ? selectedRegion!.CropPreviewDataUri : null);
     }
 
     public static AutomaticOcrResult Unavailable(string warning) => new("unavailable", "unknown", null, "none", [], [warning]);

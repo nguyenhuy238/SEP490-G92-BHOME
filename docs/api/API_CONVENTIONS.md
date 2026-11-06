@@ -197,6 +197,13 @@ tasks, confident visual mismatch suppresses the reading with `meter_type_mismatc
 visual evidence never changes server Meter kind, ownership or precision. No new
 endpoint or response fields. See [architecture and activation gates](../development/OCR_MODEL_ARCHITECTURE.md).
 
+When an evaluated visual adapter identifies mechanical water and Stage1 verifies
+one reading display, automatic OCR now uses the existing PP/Stage2 fusion and
+returns the same optional crop preview/detection confidence as other localized
+results. Category confidence remains separate. Unsafe crop evidence suppresses
+the reading; a body-only crop does not authorize Stage2. Other profiles retain
+their existing readers. This wiring does not enable the rejected four-class model.
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được

@@ -48,6 +48,19 @@ Hợp đồng được kiểm trước inference:
 meter classes không được chặn CCCD khi không phát hiện meter nhưng PP-OCR có
 bằng chứng identity mạnh. Trường hợp nhiều meter vẫn fallback bảo thủ.
 
+Sau83317cb, nhánh visual classified mechanical-water có **một display đã qua
+SceneSelection** dùng cùng PP + Stage2 + fusion như typed-water, thay vì chỉ PP.
+Body-only/unverified display không được đưa vào Stage2. Crop đã đọc, detection
+confidence và preview transient đi qua `OcrImageAnalysis.MeterRegion`; router
+parse crop này, không lấy số serial từ toàn trang. Category confidence và display
+confidence vẫn riêng. Invalid confidence/unclear/blur/conflict không phát reading;
+precision và Staff confirmation vẫn áp như cũ. Ba profile khác không dùng water
+Stage2. Engine version category2 truy vết nhánh nối mới, không đổi weights.
+
+Real-model regression trên ảnh public wm_clean_000058 đọc cùng00431469 ở typed
+và classified-water route; classifier ở ca này là labelled test boundary, còn
+Stage1/PP/Stage2 là ONNX thật. Không coi ca đó là accuracy của classifier.
+
 Trong tác vụ Staff, `MeterCategoryValidation` chỉ kiểm ảnh so với kind đã lấy từ
 Meter: mismatch đủ confidence hoặc multiple meters → không phát reading;
 unknown/low confidence/unavailable → giữ kind server và warning. Không cập nhật

@@ -81,6 +81,40 @@ public sealed class YoloMeterCategoryClassifierTests
         public OcrCategoryDecision Classify(Mat image, CancellationToken token) => Decision;
     }
 
+    [LocalMeterModelsFact]
+    public async Task ClassifiedWaterUsesRealStage2DisplayReaderAndReturnsReviewCrop()
+    {
+        // Classification is a labelled orchestration boundary; detection/PP/
+        // stage2 below use actual pinned ONNX weights, not classifier accuracy.
+        var root = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
+        var options = new OcrOptions { Enabled = true, ModelDirectory = Path.Combine(root, ".tools/ocr-models"),
+            MeterDetectionMinConfidence = .7f, MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true,
+                ModelDirectory = Path.Combine(root, ".tools/meter-detection-models") } };
+        using var detector = new YoloMeterSceneDetector(options);
+        using var digits = new YoloWaterDigitRecognizer(options); digits.Warmup(default);
+        var classifier = new BoundaryClassifier(new("classified", OcrDocumentKind.MechanicalWater, "visual_model", .99f));
+        using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, classifier, digits);
+        using var original = Cv2.ImRead(Path.Combine(root, ".tools/meter-detection-all-test/wm_clean_000058.jpg"));
+        using var resized = new Mat(); var scale = Math.Min(1d, 1600d / Math.Max(original.Width, original.Height));
+        Cv2.Resize(original, resized, new((int)(original.Width * scale), (int)(original.Height * scale)), 0, 0, InterpolationFlags.Area);
+        var image = resized.ImEncode(".jpg", new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
+        var analysis = await engine.AnalyzeAsync(image, default);
+        var automatic = AutomaticOcrRouter.Route(analysis, .9f);
+        var typed = OcrFieldParser.Parse(await engine.RecognizeAsync(image, OcrDocumentKind.MechanicalWater, default), OcrDocumentKind.MechanicalWater);
+        Assert.Equal("00431469", typed.ProposedFields["reading"]);
+        Assert.Equal(typed.ProposedFields["reading"], automatic.MeterProposal!.ProposedFields["reading"]);
+        Assert.Equal("water_mechanical", automatic.DetectedCategory);
+        Assert.NotNull(automatic.CropPreviewDataUri); Assert.NotNull(automatic.DetectionConfidence);
+        Assert.DoesNotContain("reading_region_unverified", automatic.MeterProposal.Warnings);
+        Assert.True(automatic.MeterProposal.RequiresConfirmation); Assert.True(automatic.RequiresReview);
+
+        classifier.Decision = new("classified", OcrDocumentKind.DigitalWater, "visual_model", .99f);
+        var unsupported = AutomaticOcrRouter.Route(await engine.AnalyzeAsync(image, default), .9f);
+        Assert.Null(unsupported.CropPreviewDataUri); Assert.Null(unsupported.DetectionConfidence);
+        Assert.Contains("billing_register_unverified", unsupported.MeterProposal!.Warnings);
+        Assert.Contains("reading_region_unverified", unsupported.MeterProposal.Warnings);
+    }
+
     private static DenseTensor<float> Tensor() => new(new[] { 1, 8, 3549 });
     private static void Box(DenseTensor<float> tensor, int index, int category, float score, float x = 208)
     {
