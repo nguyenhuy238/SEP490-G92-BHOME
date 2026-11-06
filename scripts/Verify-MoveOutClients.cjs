@@ -14,6 +14,9 @@ module.exports = async function verify({
   page,
 }) {
   const { owner, staff, otherStaff, tenant, otherTenant, coTenant1 } = actors;
+  const charged = settings.damageSettlement === true;
+  const deductionAmount = charged ? '100000' : '0';
+  const returnAmount = charged ? '2900000' : '3000000';
   const route = `/api/v1/contracts/${contractId}`;
   async function clickPost(button, suffix) {
     const [response] = await Promise.all([
@@ -116,7 +119,9 @@ module.exports = async function verify({
     {
       electricityReadingId: readings[0],
       waterReadingId: readings[1],
-      notes: 'SYNTHETIC inspection, no damage or additional consumption',
+      notes: charged
+        ? 'SYNTHETIC room damage, no additional consumption; compare image and baseline'
+        : 'SYNTHETIC inspection, no damage or additional consumption',
       roomCondition: preparation.baseline.snapshot.roomCondition,
       keysAndAccess: 'Synthetic keys returned',
       assets: preparation.baseline.snapshot.assets.map((a) => ({
@@ -133,35 +138,78 @@ module.exports = async function verify({
   await page.getByRole('button', { name: 'Tải lại dữ liệu quyết toán', exact: true }).waitFor();
   await page
     .getByLabel('Lý do / căn cứ của Owner', { exact: true })
-    .fill('Đã đối chiếu kiểm kê tổng hợp, không hư hỏng hoặc phí bổ sung');
-  await page
-    .getByLabel('Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu', { exact: true })
-    .check();
-  const depositReady = page.waitForResponse(
-    async (r) =>
-      r.url().endsWith(route + '/deposit-refunds') &&
-      r.request().method() === 'GET' &&
-      r.status() === 200 &&
-      (await r.json()).blockers.length === 0,
-  );
+    .fill(
+      charged
+        ? 'Đã đối chiếu thiệt hại tổng hợp với ảnh, chưa tính trên hóa đơn'
+        : 'Đã đối chiếu kiểm kê tổng hợp, không hư hỏng hoặc phí bổ sung',
+    );
+  if (!charged)
+    await page
+      .getByLabel('Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu', {
+        exact: true,
+      })
+      .check();
+  const waitForReadyDeposit = () =>
+    page.waitForResponse(
+      async (r) =>
+        r.url().endsWith(route + '/deposit-refunds') &&
+        r.request().method() === 'GET' &&
+        r.status() === 200 &&
+        (await r.json()).blockers.length === 0,
+    );
+  const noChargeReady = charged ? null : waitForReadyDeposit();
   await clickPost(
     page.getByRole('button', { name: 'Xác nhận biên bản kiểm tra', exact: true }),
     '/move-out/inspection-review',
   );
-  await depositReady;
+  if (noChargeReady) await noChargeReady;
   await page
     .getByText('Chờ Owner xác nhận biên bản kiểm tra.', { exact: true })
     .first()
     .waitFor({ state: 'hidden' });
+  if (charged) {
+    await page.getByRole('button', { name: 'Thêm khoản thiệt hại', exact: true }).click();
+    await page.getByLabel('Số tiền khấu trừ 1 (VND)', { exact: true }).fill(deductionAmount);
+    await page
+      .getByLabel('Mô tả thiệt hại 1', { exact: true })
+      .fill('Thiệt hại phòng tổng hợp theo ảnh inspection; chưa tính invoice');
+    await page.getByLabel('Khoản 1: dùng ảnh biên bản 1', { exact: true }).check();
+    await page
+      .getByLabel('Căn cứ quyết định khấu trừ', { exact: true })
+      .fill('Owner đối chiếu baseline, biên bản, ảnh và hóa đơn tổng hợp');
+    const approveDamage = page.getByRole('button', {
+      name: 'Duyệt quyết định khấu trừ',
+      exact: true,
+    });
+    assert.equal(await approveDamage.isEnabled(), false);
+    await page
+      .getByLabel(
+        'Tôi đã đối chiếu thiệt hại, chứng từ và xác nhận khoản này chưa tính trên hóa đơn trước khi duyệt khấu trừ',
+        { exact: true },
+      )
+      .check();
+    const depositReady = waitForReadyDeposit();
+    const decision = await (await clickPost(approveDamage, '/deposit-deductions')).json();
+    assert.equal(decision.total, deductionAmount);
+    assert.deepEqual(decision.items[0].evidenceIds, [proof.id]);
+    assert.equal(decision.inspectionVersion, 1);
+    assert.equal(decision.evidence[0].sha256.length, 64);
+    await depositReady;
+    console.log(
+      'PASS: Owner browser records an evidenced, explicitly reviewed TenantDamage plan; server binds its inspection version and private proof hash, and subtracts it exactly once without editing the Final invoice.',
+    );
+  }
   await page
     .getByText('Chờ xác minh phí cuối kỳ / thiệt hại và chính sách tính phí.', { exact: true })
     .first()
     .waitFor({ state: 'hidden' });
-  await page.getByText('Còn có thể lập yêu cầu: 3.000.000 ₫', { exact: true }).waitFor();
+  await page
+    .getByText(`Còn có thể lập yêu cầu: ${charged ? '2.900.000' : '3.000.000'} ₫`, { exact: true })
+    .waitFor();
   const before = await tenant.contracts.settlementSummary(contractId);
   assert.equal(before.resolved, false);
   assert.equal(before.calculation.roomOutstanding, '0');
-  assert.equal(before.calculation.availableSecurityDeposit, '3000000');
+  assert.equal(before.calculation.availableSecurityDeposit, returnAmount);
   assert.ok(before.unresolvedItems.includes('deposit_deduction_refund_policy_required'));
   console.log(
     'PASS: Tenant requests move-out, Owner browser approves/reviews inspection, assigned Staff confirms matching Final readings and baseline assets through Mobile transport; out-of-Location Staff/cross-Tenant access is denied and the unpaid deposit return still blocks closure.',
@@ -177,16 +225,22 @@ module.exports = async function verify({
   assert.ok(depositor); // Synthetic statement explicitly identifies this depositor; never infer in the product.
   await page.getByRole('combobox', { name: 'Người nhận hoàn đã xác minh', exact: true }).click();
   await page.getByRole('option', { name: depositor.label, exact: true }).click();
-  await page.getByLabel('Số tiền yêu cầu hoàn (VND)', { exact: true }).fill('3000000');
+  await page.getByLabel('Số tiền yêu cầu hoàn (VND)', { exact: true }).fill(returnAmount);
   await page
     .getByLabel('Lý do yêu cầu hoàn', { exact: true })
-    .fill('Xác minh người nộp cọc theo sao kê tổng hợp, hoàn đủ không khấu trừ');
+    .fill(
+      charged
+        ? 'Đối chiếu người nộp theo sao kê tổng hợp, hoàn phần còn lại sau quyết định thiệt hại'
+        : 'Xác minh người nộp cọc theo sao kê tổng hợp, hoàn đủ không khấu trừ',
+    );
   const create = page.getByRole('button', { name: 'Lập yêu cầu hoàn tiền', exact: true });
   assert.equal(await create.isEnabled(), false);
   for (const label of [
     'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn',
     'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
-    'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý',
+    charged
+      ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
+      : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý',
   ])
     await page.getByLabel(label, { exact: true }).check();
   assert.equal(
@@ -202,7 +256,7 @@ module.exports = async function verify({
   await page.getByText('Chờ duyệt ·', { exact: false }).waitFor();
   await page
     .getByLabel('Lý do quyết định / xác minh hoàn', { exact: true })
-    .fill('Đã xác minh sao kê nộp cọc tổng hợp và nghĩa vụ, không khấu trừ');
+    .fill('Đã xác minh sao kê nộp cọc tổng hợp và quyết định nghĩa vụ hiện tại');
   await page
     .getByLabel('Tôi đã kiểm tra nguồn, số tiền và người nhận trước khi quyết định', {
       exact: true,
@@ -219,14 +273,14 @@ module.exports = async function verify({
   assert.equal(approved.status, 'APPROVED');
   await page.getByText('Đã duyệt, chờ ghi nhận hoàn', { exact: false }).waitFor();
   const pending = await tenant.contracts.settlementSummary(contractId);
-  assert.equal(pending.calculation.depositReserved, '3000000');
+  assert.equal(pending.calculation.depositReserved, returnAmount);
   assert.equal(pending.resolved, false);
   await assert.rejects(
     owner.contracts.mutate(contractId, 'move-out/complete', { actualEndDate: today }, randomUUID()),
     (e) => e.status === 409,
   );
   const evidence = Buffer.from(
-    await page.evaluate(() => {
+    await page.evaluate((amount) => {
       const canvas = document.createElement('canvas');
       canvas.width = 600;
       canvas.height = 160;
@@ -234,9 +288,9 @@ module.exports = async function verify({
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, 600, 160);
       ctx.fillStyle = 'black';
-      ctx.fillText('SYNTHETIC DEPOSIT RETURN 3,000,000 VND - NO REAL BANK TRANSFER', 10, 70);
+      ctx.fillText(`SYNTHETIC DEPOSIT RETURN ${amount} VND - NO REAL BANK TRANSFER`, 10, 70);
       return canvas.toDataURL('image/png').split(',')[1];
-    }),
+    }, returnAmount),
     'base64',
   );
   await page
@@ -282,8 +336,8 @@ module.exports = async function verify({
   await assert.rejects(coTenant1.contracts.settlementSummary(contractId), (e) => e.status === 404);
   const returned = await tenant.contracts.settlementSummary(contractId);
   assert.equal(returned.resolved, true);
-  assert.equal(returned.refundAmount, '3000000');
-  assert.equal(returned.approvedDeductions, '0');
+  assert.equal(returned.refundAmount, returnAmount);
+  assert.equal(returned.approvedDeductions, deductionAmount);
   assert.equal(returned.calculation.availableSecurityDeposit, '0');
   assert.equal(returned.transferVerificationStatus, 'VerifiedManual');
   assert.equal(returned.financialReference, before.financialReference);
@@ -327,6 +381,6 @@ module.exports = async function verify({
   assert.equal((await owner.api.request(sourceRoute)).requests.length, 1);
   assert.equal((await owner.api.request(sourceRoute)).availableAmount, '0');
   console.log(
-    'PASS: Owner browser reviews the final source snapshot and closes the Contract; the Room is released once, the shared Final invoice/allocations remain immutable, and source-specific refund/history survives reload. Charged deductions, bank-provider and native-device acceptance remain unverified.',
+    'PASS: Owner browser reviews the final source snapshot and closes the Contract; the Room is released once, the shared Final invoice/allocations remain immutable, and source-specific refund/history survives reload. Bank-provider and native-device acceptance remain unverified.',
   );
 };

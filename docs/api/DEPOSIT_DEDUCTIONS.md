@@ -89,3 +89,10 @@ reservation/nguồn chưa đủ điều kiện, editor chỉ đọc. RefundPanel
 review đúng plan trước khi yêu cầu phần còn lại. Focused Owner UI **26/26 đạt**, build/lint và
 Mobile typecheck đạt. Browser có khấu trừ, native và Finance classification chưa nghiệm thu trong
 slice UI này. Handoff Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long.
+
+Harness có phí chạy bằng `dotnet run --project tools/BHome.ContractVerification --no-build --
+--finance --main-draft --damage-settlement`: browser Owner duyệt inspection có thiệt hại, quyết định
+100.000 từ cọc 3.000.000, rồi yêu cầu/duyệt/ghi nhận hoàn 2.900.000 với ảnh private MinIO. Tenant đọc
+approvedDeductions/refund/status thực, pending return chặn complete, cuối cùng Owner review/close và
+Room Available; issued invoice và hai allocations giữ nguyên. Dữ liệu/sao kê/signing là synthetic;
+Staff/Tenant dùng shipped MobileApi, không native UI. Bank-provider/MySign acceptance chưa có.

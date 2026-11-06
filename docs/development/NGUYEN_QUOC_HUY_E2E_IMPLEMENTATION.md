@@ -614,9 +614,32 @@ TESTS:
 - Logs .tools/huy-damage-owner-{ui,build,lint}.log, huy-damage-mobile-typecheck.log. Chưa chạy browser có khấu trừ/native/provider ở slice này.
 COMMIT:
 - Message: feat(moveout): [BE-19] review evidenced deposit deductions in Owner Web
-- SHA ghi sau commit deduction UI.
+- SHA: `03fc9be8ccad333bd0c7db553908c34ff7d8692f`.
 FRONTEND HANDOFF:
 - Owner Web Vũ Xuân Trường review UX; Mobile Bùi Bảo Long giữ role-scoped read-only.
 STATUS: PARTIAL — UI được kiểm component/build/lint, toàn BE-19/BE-X07 chưa DONE.
 REMAINING:
 - Real browser có khấu trừ/private proof/closure, Finance deposit source classification và notification. Debt offset/over-deposit fees chưa hỗ trợ; MySign/bank thật và native acceptance vẫn blocked/NOT RUN.
+
+TASK: BE-19 / BE-X07
+SLICE: Real browser khấu trừ có chứng từ, hoàn phần còn lại và regression không khấu trừ
+IMPLEMENTED:
+- Harness hiện hữu có --damage-settlement; vẫn dùng shipped Owner production build, HTTPS API, disposable Compact24 và MinIO thật.
+- Owner duyệt inspection có thiệt hại, nhập TenantDamage100.000/ảnh/căn cứ/human review từ cọc3.000.000. Backend chốt inspection version/hash; chỉ hoàn2.900.000, trừ đúng một lần. Không seed quyết định/refund/closure.
+- Owner browser lập/duyệt/ghi nhận manual execution với proof private, Tenant đọc approved deductions/refund/status, pending chặn closure; Owner review/complete mới RoomAvailable. Invoice Final/allocations/payer và history giữ nguyên.
+CHANGED FILES:
+- scripts/Verify-MoveOutClients.cjs; tools/BHome.ContractVerification/{ContractVerificationCli,FinanceVerificationCli}.cs
+- docs/api/DEPOSIT_DEDUCTIONS.md và báo cáo này.
+TESTS:
+- dotnet build tools/BHome.ContractVerification --no-restore: đạt, 0 warning/error.
+- dotnet run --project tools/BHome.ContractVerification --no-build -- --finance --main-draft --damage-settlement: exit0, 20/20 nhóm PASS.
+- Cùng lệnh bỏ --damage-settlement: exit0, 19/19 nhóm PASS. Logs huy-damage-moveout-browser.log và huy-undisputed-moveout-browser.log.
+- node --check, git diff --check đạt. API/browser fixture cleanup hoàn tất. Sao kê/bank/signing synthetic, không payout thật; Staff/Tenant là shipped MobileApi/shared transport, không native UI. Notification worker tắt.
+COMMIT:
+- Message: test(moveout): [BE-19] verify evidenced deductions and remainder return E2E
+- SHA ghi sau commit damage E2E.
+FRONTEND HANDOFF:
+- Vũ Xuân Trường review Owner UX; Bùi Bảo Long thực hiện native acceptance khi có thiết bị.
+STATUS: DONE cho hai nhánh browser nêu trên; tổng BE-19/BE-X07 PARTIAL.
+REMAINING:
+- Finance classification/retained compensation và notification; unsupported debt offset/fees vượt cọc. Native/MySign/bank-provider acceptance chưa có; không suy rộng kết quả fixture.

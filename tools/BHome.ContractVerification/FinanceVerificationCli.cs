@@ -24,7 +24,7 @@ namespace BHome.ContractVerification;
 // Real browser -> production HTTP pipeline -> disposable Compact24. No route mocks or test API.
 internal static class FinanceVerificationCli
 {
-    public static async Task<int> RunAsync(bool mainDraft = false)
+    public static async Task<int> RunAsync(bool mainDraft = false, bool damageSettlement = false)
     {
         if(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")))
             throw new InvalidOperationException("Set loopback disposable PostgreSQL admin configuration.");
@@ -105,7 +105,7 @@ internal static class FinanceVerificationCli
             var nodeStart=new ProcessStartInfo(Path.Combine(root,".tools/node-v22.23.4-win-x64/node.exe")){WorkingDirectory=root,UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,RedirectStandardInput=true};
             nodeStart.ArgumentList.Add(Path.Combine(root,"scripts/Verify-FinanceClients.cjs"));nodeStart.Environment.Remove("NODE_TLS_REJECT_UNAUTHORIZED");nodeStart.Environment.Remove("NODE_OPTIONS");nodeStart.Environment["NODE_EXTRA_CA_CERTS"]=caPath;
             using var node=Process.Start(nodeStart)!;stage="browser workflows";
-            await node.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new{baseUrl,origin,webPort,pfxPath,pfxPassword,temporary=temporary.FullName,email,password,locationId,mainDraft,actors}));node.StandardInput.Close();await node.WaitForExitAsync();
+            await node.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new{baseUrl,origin,webPort,pfxPath,pfxPassword,temporary=temporary.FullName,email,password,locationId,mainDraft,damageSettlement,actors}));node.StandardInput.Close();await node.WaitForExitAsync();
             if(node.ExitCode==0 && mainDraft)
             {
                 stage="shared invoice ledger assertions";
@@ -119,7 +119,8 @@ internal static class FinanceVerificationCli
                     throw new InvalidOperationException("Shared invoice allocation invariant failed.");
                 if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE status='COMPLETED' AND requested_amount=10000 AND execution_evidence_key IS NOT NULL").SingleAsync()!=1)
                     throw new InvalidOperationException("Expected one explicitly recorded synthetic excess refund.");
-                if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={invoice.RepresentativeContractId} AND source_payment_id IS NULL AND status='COMPLETED' AND requested_amount=3000000 AND execution_evidence_key IS NOT NULL").SingleAsync()!=1)
+                var expectedDepositReturn = damageSettlement ? 2900000m : 3000000m;
+                if(await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={invoice.RepresentativeContractId} AND source_payment_id IS NULL AND status='COMPLETED' AND requested_amount={expectedDepositReturn} AND execution_evidence_key IS NOT NULL").SingleAsync()!=1)
                     throw new InvalidOperationException("Expected one source-specific verified manual deposit return.");
                 var closed=await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c=>c.Id==invoice.RepresentativeContractId);
                 if(closed.Status!=BHome.Domain.TenantContracts.ContractStatus.Terminated || closed.ActualEndDate is null ||
