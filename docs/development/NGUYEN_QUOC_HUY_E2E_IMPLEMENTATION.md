@@ -1,5 +1,42 @@
 # Triển khai và kiểm chứng các nhiệm vụ Nguyễn Quốc Huy
 
+## Tiếp tục yêu cầu remaining E2E — 06/11/2026
+
+TASK: BE-19 / BE-X07
+SLICE: Tổng hợp nghĩa vụ và vị thế nguồn cọc trước quyết định Owner
+
+IMPLEMENTED:
+- UC-19 (SRS p1812–1851), GBR-01/02/18, OQ-01/05 và ủy quyền người dùng → existing SettlementSummary/ledger → calculator + Compact24 source-position reader; không tự quyết định phí/deduction/deadline.
+- Tổng hợp issued/approved Final delta/payable/verified allocations/room outstanding/excess riêng; shared debt chưa chia không gán hết cho Tenant. Không cộng cọc vào doanh thu hoặc cộng rent theo số người.
+- Cọc khả dụng trừ net deposit allocations, Completed refunds và Requested/Approved reservations. Rejected không giữ chỗ; unknown/mismatch/âm không thay bằng 0. Root verifications không cộng lặp theo renewal; position đọc các ID trong chain.
+- Source position nằm trong reference snapshot hiện hữu; thay source làm đổi reference. API Owner/Tenant vẫn qua role/object scope và payment-ledger/Location/Room lock; Staff/cross-Tenant không mở quyền tài chính.
+- Giữ blocker cọc và mọi guard inspection/readings/invoices/settlement/closure. Số dư khả dụng chưa phải approved refund hoặc authorization chi tiền.
+
+CHANGED FILES:
+- src/backend/BHome.Application/Contracts/{ContractContracts.cs,SettlementCalculation.cs}
+- src/backend/BHome.Infrastructure/Contracts/{ContractSettlementLedger.cs,ContractDepositPosition.cs}; DependencyInjection.cs
+- tests/backend/BHome.Application.UnitTests/Contracts/SettlementCalculationTests.cs
+- tests/backend/BHome.IntegrationTests/PaymentsDebt/ContractSettlementTests.cs; Compact24/Compact24WorkflowRegressionTests.cs
+- docs/api/CONTRACT_LIFECYCLE.md và báo cáo này.
+
+TESTS:
+- `dotnet test tests/backend/BHome.Application.UnitTests --no-restore --filter FullyQualifiedName~SettlementCalculationTests --verbosity minimal`: **9/9 đạt**.
+- `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24PaymentRegressionTests.SettlementCalculation|FullyQualifiedName~Compact24PaymentRegressionTests.DepositPositions|FullyQualifiedName~RealLedgerRequiresReviewedSnapshot|FullyQualifiedName~NewAdjustmentAfterSettlement' --verbosity minimal`: **5/5 đạt, 0 skip**, Compact24 thật + legacy closure regression; PG riêng port 55440.
+- Có tiền chính xác 18 chữ số, shared/exclusive debt, approved Adjustment/paid totals, overdraw/mismatch/unknown, source transfer/refund/reservation, private scope và snapshot đổi. SQL refund/transfer trong fixture là synthetic preconditions để kiểm read model, không phải nghiệm thu workflow tạo/duyệt/chi cọc.
+- Lượt đầu compile fail CS8361 do conditional interpolation trong fixture; đã thêm parentheses, không nới guard/assertion. Logs .tools/huy-settlement-calculation-{unit,pg}.log.
+
+COMMIT:
+- Message: feat(moveout): [BE-19] calculate settlement obligations and available deposit
+- SHA ghi ngay sau commit; không amend để đưa self-referential hash vào commit.
+
+FRONTEND HANDOFF:
+- Owner Web: Vũ Xuân Trường; Mobile: Bùi Bảo Long. Optional calculation DTO chưa hiển thị ở client trong slice này; nối sau bằng số server, không tính lại bằng Number.
+
+STATUS: PARTIAL — calculation slice đã kiểm chứng; toàn bộ BE-19/BE-X07 chưa DONE.
+
+REMAINING:
+- Owner-supported deductions/final-charge decisions, source-specific deposit refund/beneficiary verification, Owner/Mobile UI, notification và full move-out browser/native E2E. Không coi existing receipt-excess refund là deposit refund; không fake Resolved/Completed hoặc bank payout.
+
 ## Tiếp tục sau merge af97676 ngày 05/11/2026
 
 ### Kết quả hồi quy đã chốt ngày 06/11/2026

@@ -87,6 +87,8 @@ public sealed class Compact24InvoiceRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24PaymentRegressionTests
 {
+    [CompactPostgresFact] public Task SettlementCalculation() => Run(t => t.SettlementReadsActualSharedDebtAdjustmentsAndDepositsWithoutAssigningRoomDebtToTenant());
+    [CompactPostgresFact] public Task DepositPositions() => Run(t => t.SettlementSubtractsDepositUsesCompletedAndReservedRefundsWithoutDoubleCounting());
     [CompactPostgresFact] public Task RecipientInbox() => Run(t => t.InboxIsRecipientScopedPaginatedAndReadStatePersistsWithoutCrossTenantMutation());
     [CompactPostgresFact] public Task RevalidateTarget() => Run(t => t.NotificationTargetRechecksInvoiceEntitlementInsteadOfTrustingSavedLink());
     [CompactPostgresFact] public Task StaffReadMirror() => Run(t => t.StaffInboxMirrorsTaskReadStateAndLosesAccessWhenAssignmentEnds());

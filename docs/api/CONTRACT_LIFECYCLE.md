@@ -129,3 +129,23 @@ vẫn Unconfigured, chưa nghiệm thu gửi thật.
 Hoàn xong khoản dư đó không tự bỏ blocker `deposit_deduction_refund_policy_required` hoặc giải phóng Room.
 Không có journal deposit deduction/refund/settlement đầy đủ; nullable deductions/refund trong summary
 không được thay bằng 0 ở client để giả resolved. Chưa có MySign staging thật hoặc mẫu Production được duyệt.
+
+## Settlement calculation — BE-19, 06/11/2026
+
+GET `move-out/settlement-summary` bổ sung optional `calculation`; không thêm route/schema.
+Tiền là chuỗi decimal nguyên: `issuedTotal`, `approvedAdjustmentTotal`, `payableTotal`,
+`verifiedInvoicePayments`, `roomOutstanding`, nullable `contractSpecificOutstanding`,
+`potentialInvoiceExcess`, nullable `depositAllocated`, `depositRefunded`, `depositReserved`,
+`availableSecurityDeposit`; `depositPositionConsistent` là boolean.
+
+Không cộng cọc vào tiền thu hóa đơn hoặc cộng Adjustment hai lần. Hóa đơn chung còn nợ giữ
+nghĩa vụ cá nhân null. Available = received − net outgoing deposit allocations − Completed
+deposit refunds − Requested/Approved deposit refunds, đọc ledger Compact24 cùng transaction/lock
+của summary. Rejected/Cancelled không giữ chỗ. Chuỗi renewal đọc một lần theo ID, không cộng lặp
+cọc root theo số phiên bản. Received phải khớp deposit verifications; position âm/sai nguồn trả
+available null và blocker `deposit_ledger_reconciliation_required`.
+
+Đây là số dư nguồn trước quyết định Owner, **không phải lệnh khấu trừ hoặc số hoàn đã duyệt**.
+`refundAmount`/`approvedDeductions` vẫn null khi thiếu workflow quyết định; blocker cọc hiện hữu
+vẫn giữ. Mọi thay đổi source position làm đổi reference. Reader không hỗ trợ ledger persistence
+legacy offline trả unknown, không truy cập database khác.

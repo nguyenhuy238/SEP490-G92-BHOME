@@ -9,7 +9,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractSettlementLedger(BHomePersistenceContext db) : IContractSettlementLedger, IContractSettlementDetails
+internal sealed class ContractSettlementLedger(BHomePersistenceContext db, IContractDepositPosition? positions = null) : IContractSettlementLedger, IContractSettlementDetails
 {
     public async Task<SettlementLedgerState?> ReadAsync(Guid id, Guid electricity, Guid water, CancellationToken t)
     {
@@ -75,10 +75,13 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db) : ICo
         }
         else blockers.Add("final_meter_readings_required");
         var other = await db.Set<Contract>().AnyAsync(o => o.RoomId == c.RoomId && o.Id != id && o.Status == ContractStatus.Active, t);
+        var position = positions is null ? null : await positions.ReadAsync(chain.Select(v => v.Id).ToArray(), t);
+        var calculation = SettlementCalculator.Calculate(invoices, deposit, position);
+        if (position is not null && !calculation.DepositPositionConsistent) blockers.Add("deposit_ledger_reconciliation_required");
         var resolved = blockers.Count == 0;
         var value = new ContractSettlementSummary(id, root.Id, c.RoomId, c.Room.RoomNumber, c.TenantUserId ?? throw ContractException.Conflict("active_tenant_account_required"), deposit, root.AppliedHoldingDeposit,
-            resolved ? 0 : null, inspection?.NoAdditionalCharges == true ? 0 : null, deposit == 0 ? 0 : null, deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
-            invoices, blockers.Distinct().Order().ToArray(), other, resolved, "", deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview");
+            calculation.ContractSpecificOutstanding, inspection?.NoAdditionalCharges == true ? 0 : null, deposit == 0 ? 0 : null, deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
+            invoices, blockers.Distinct().Order().ToArray(), other, resolved, "", deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview", calculation);
         // Snapshot identity includes sources and their revisions, no user supplied financial totals.
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { value, Root = root.Id, root.RequiredDeposit, deposits, Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges }, Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId } })));
         return value with { Reference = "BH40-" + fingerprint };
