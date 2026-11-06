@@ -1,8 +1,14 @@
 # BHOME — danh mục API và trạng thái kết nối Compact24
 
-Ngày rà soát: **04/11/2026**. Nguồn: route descriptor của host `BHome.Api` chạy bằng DI mặc định trên database PostgreSQL chỉ có Compact24; đối chiếu mã nguồn frontend, không suy ra từ tên màn hình.
+Ngày rà soát cập nhật: **05/11/2026**. Nguồn: route descriptor của host `BHome.Api` chạy bằng DI mặc định trên database PostgreSQL chỉ có Compact24; đối chiếu mã nguồn frontend, không suy ra từ tên màn hình.
 
-Host đăng ký **189 controller routes**: **184 route bảo vệ** đã trả 401 khi không có phiên; 5 route anonymous. Ngoài ra có 2 health endpoints. Toàn bộ **92 GET nghiệp vụ** đã được probe bằng Owner; 0 HTTP 5xx. GET với ID không tồn tại/thiếu query trả 400/403/404 là kiểm tra nhánh lỗi, không chứng minh mọi happy path đã đạt.
+Audit chạy lại ngày 05/11 xác nhận **199 controller routes**: **194 route bảo vệ** đã trả 401 khi không có phiên; 5 route anonymous. Ngoài ra có 2 health endpoints. Toàn bộ **97 GET nghiệp vụ** đã được probe bằng Owner; 0 HTTP 5xx (32 trả 200, 2 trả 204, 9 trả 400, 51 trả 404, 3 trả 403). GET với ID không tồn tại/thiếu query trả 400/403/404 là kiểm tra nhánh lỗi, không chứng minh mọi happy path đã đạt. Số liệu cũ 189/92 thuộc audit ngày 04/11.
+
+## Bổ sung Finance ngày 05/11/2026
+
+Đã thêm 9 routes Owner-only: Expenses GET collection/GET by ID/POST/PUT, GET financial-reports, Financial-scenarios POST analyze/POST save/GET collection/GET by ID. DTO, công thức, quyền, validation, fixture và handoff ở [FINANCE.md](FINANCE.md). Owner Web `/expenses`, `/reports`, `/what-if` và `/locations/:locationId/investment` dùng shared client thật trong API mode, không fallback demo. Browser E2E đã kiểm tạo/sửa/reload expense, route theo cơ sở, report, scenario save/reload và cấu hình hợp đồng. UI cần Owner Web reviewer; không suy rộng kết quả này sang toàn bộ client.
+
+Allocation route hiện hữu hỗ trợ thiếu/thừa tiền trên Compact24 theo ủy quyền người dùng: min(receipt,dư nợ), tiền thừa giữ riêng, không tự refund. Xem [PAYMENTS.md](PAYMENTS.md). Danh sách route chi tiết cũ bên dưới chưa được tái sinh để thêm 9 route Finance; inventory runtime hiện tại và nguồn kiểm chứng mới được ghi tại [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
 
 ## Cách đọc trạng thái
 
@@ -26,9 +32,13 @@ Yêu cầu người dùng → BF-01/UC-04..07 (chuỗi/phòng/biểu phí), BF-0
 
 Ghi chú Meter OCR ngày 04/11/2026: đã bổ sung chặn nhiều vùng chỉ số (kể cả cùng
 giá trị), cảnh báo sai utility/baseline và hướng dẫn review trên Mobile. Điểm tích hợp
-crop Meter/Display đã có kiểm thử; **chưa có model detector/classifier đồng hồ hoạt
-động**. Mặc định vẫn dùng DBNet + recognition hiện có và Staff xác nhận riêng.
-Không đổi endpoint/DTO/schema. Xem [audit và kiểm chứng OCR](../development/METER_OCR_AUDIT_2026-11-04.md).
+crop Meter/Display đã có kiểm thử. Lượt bổ sung pretrained đã tích hợp YOLOv8n-OBB
+ONNX thật để định vị analog-water body/window, opt-in qua `Ocr:MeterDetector:Enabled`.
+PP-OCR tiếp tục đọc crop, Staff xác nhận riêng; chưa có classifier bốn loại hoạt động.
+Không đổi endpoint/schema nghiệp vụ; diagnostic auto thêm partial category, window
+confidence và crop preview tạm. Định vị 10/10 ảnh public nhưng exact reading chỉ1/7
+ảnh có nhãn đầy đủ, nên chưa đạt acceptance OCR. Xem [triển khai pretrained và số liệu](../development/PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md)
+và [audit trước đó](../development/METER_OCR_AUDIT_2026-11-04.md).
 Các số liệu bên dưới thuộc lượt rà soát API trước đó, không phải kết quả chạy OCR mới.
 
 Màn thử OCR đã có `POST /api/v1/ocr/diagnostics/auto`: chụp trước, tự xét dấu hiệu
@@ -36,22 +46,31 @@ CCCD bằng chữ/nhãn rồi định tuyến, chỉ hỏi loại sau khi chưa 
 classifier thị giác sáu lớp; ảnh công tơ chưa rõ cơ/điện tử vẫn cần chọn loại.
 Chi tiết: [OCR tự động một nút](../development/AUTOMATIC_OCR_2026-11-04.md).
 
+Cập nhật OCR05/11: đã tích hợp stage2 digit ONNX thật cho nước cơ và chặn mâu thuẫn
+với PP; thêm resolver từ nhãn thiết bị rõ ràng. Chưa đạt four-type/90% acceptance:
+final typed3/33 exact,0 false trên52 ảnh public (49fallback). Không suy số liệu này
+thành production readiness. Xem [completion report](../development/METER_OCR_COMPLETION_REPORT.md).
+
 ## Tổng quan các chức năng đã có và còn thiếu
 
-| Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth / phiên / mật khẩu                          | Compact24 users + refresh_tokens; native Identity stores                                 | Owner Web login/refresh/logout/forgot; Mobile login/refresh/logout/change-password. Logout-all/reset có backend, chưa tìm thấy màn riêng.                |
-| Chain / Location / RoomType / Room / Asset / giá | Có API thật và lưu Compact24                                                             | Owner Web quản lý Property còn mock/chưa có repository API; Mobile có setup cơ bản, loại phòng lấy API. Chưa có UI Mobile tạo RoomType/Asset.            |
-| Staff / phân công / công việc                    | Có tạo Staff qua capture, assignment có hiệu lực, workflow Task có history/evidence      | Owner Web Task API mode đọc list/detail; Mobile có workflow theo role. Màn Staff/ca/lịch Owner Web còn mock; chưa có API shift/schedule nghiệp vụ riêng. |
-| Người ở / OCR / Main Draft                       | Có capture, human-confirmation, hồ sơ mã hóa, chuẩn bị/lưu/tạo DOCX/PDF nháp             | Mobile onboarding và Main Draft; Owner Web Main Draft có client. Người ở mẫu vẫn Pending, không tự xác minh.                                             |
-| Hợp đồng / ký / bàn giao / gia hạn / trả phòng   | Có lifecycle, quyền, kiểm tra tài chính và native evidence                               | Owner Web quản lý/xem/duyệt; Mobile Owner/Staff/Tenant theo quyền. Holding ledger chưa cấu hình; không có bộ Holding API hoàn chỉnh.                     |
-| Tạm trú                                          | Có mốc residence trong occupant data; chưa có API residence workflow riêng               | Màn Owner Web còn mock. VNeID thực hiện ngoài BHOME; không thêm quyền Staff hoặc gọi government API.                                                     |
-| Đồng hồ / hóa đơn / điều chỉnh / JOB-09/10       | Có API thật, OCR là proposal, xác nhận riêng, draft/final bất biến, adjustment approval  | Owner Web và Mobile gọi theo vai trò. Automation cấu hình trên Owner Web.                                                                                |
-| Thanh toán / nợ                                  | Có manual bank verification, allocation/idempotency/history, transfer instructions, debt | Owner Web quản lý; Tenant Mobile xem hóa đơn/hướng dẫn/lịch sử. Bank tự động chưa cấu hình; partial/excess giữ review theo policy hiện có.               |
-| Thông báo                                        | Inbox bền vững, event publish, đọc, target authorization, retry/delivery status          | Owner Web/Mobile có inbox; delivery email/push thật chưa cấu hình.                                                                                       |
-| Incident / Emergency / Work Order                | Chưa có controller/API nghiệp vụ BF-07                                                   | Màn incident/maintenance Owner Web còn mock; có bảng thiết kế không đồng nghĩa đã implement.                                                             |
-| Đầu tư / OPEX / báo cáo / What-if                | Chưa có API đầy đủ các nghiệp vụ này                                                     | Owner Web expenses/dashboard/reports/what-if còn mock. Mobile ownerOverview chỉ tổng hợp số đếm từ Location/Room/Contract API đã có.                     |
-| Public Website                                   | Chưa có controller public-content                                                        | Chưa nối nội dung từ backend; giữ ranh giới chỉ thông tin.                                                                                               |
+Incremental OCR05/11: typed nước cơ hiện10/33 exact,0false,42/52 fallback trên
+cùng tập public cũ; automatic vẫn thiếu classifier4 loại. Màn Test OCR cho chọn
+precision sau capture. Xem [báo cáo cuối](../development/METER_OCR_FINAL_DEVELOPMENT_REPORT.md).
+
+| Chức năng                                        | Backend hiện có                                                                          | Frontend / phần còn thiếu                                                                                                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth / phiên / mật khẩu                          | Compact24 users + refresh_tokens; native Identity stores                                 | Owner Web login/refresh/logout/forgot; Mobile login/refresh/logout/change-password. Logout-all/reset có backend, chưa tìm thấy màn riêng.                               |
+| Chain / Location / RoomType / Room / Asset / giá | Có API thật và lưu Compact24                                                             | Owner Web quản lý Property còn mock/chưa có repository API; Mobile có setup cơ bản, loại phòng lấy API. Chưa có UI Mobile tạo RoomType/Asset.                           |
+| Staff / phân công / công việc                    | Có tạo Staff qua capture, assignment có hiệu lực, workflow Task có history/evidence      | Owner Web Task API mode đọc list/detail; Mobile có workflow theo role. Màn Staff/ca/lịch Owner Web còn mock; chưa có API shift/schedule nghiệp vụ riêng.                |
+| Người ở / OCR / Main Draft                       | Có capture, human-confirmation, hồ sơ mã hóa, chuẩn bị/lưu/tạo DOCX/PDF nháp             | Mobile onboarding và Main Draft; Owner Web Main Draft có client. Người ở mẫu vẫn Pending, không tự xác minh.                                                            |
+| Hợp đồng / ký / bàn giao / gia hạn / trả phòng   | Có lifecycle, quyền, kiểm tra tài chính và native evidence                               | Owner Web quản lý/xem/duyệt; Mobile Owner/Staff/Tenant theo quyền. Holding ledger chưa cấu hình; không có bộ Holding API hoàn chỉnh.                                    |
+| Tạm trú                                          | Có mốc residence trong occupant data; chưa có API residence workflow riêng               | Màn Owner Web còn mock. VNeID thực hiện ngoài BHOME; không thêm quyền Staff hoặc gọi government API.                                                                    |
+| Đồng hồ / hóa đơn / điều chỉnh / JOB-09/10       | Có API thật, OCR là proposal, xác nhận riêng, draft/final bất biến, adjustment approval  | Owner Web và Mobile gọi theo vai trò. Automation cấu hình trên Owner Web.                                                                                               |
+| Thanh toán / nợ                                  | Có manual bank verification, allocation/idempotency/history, transfer instructions, debt | Owner Web quản lý; Tenant Mobile xem hóa đơn/hướng dẫn/lịch sử. Bank tự động chưa cấu hình; partial/excess giữ review theo policy hiện có.                              |
+| Thông báo                                        | Inbox bền vững, event publish, đọc, target authorization, retry/delivery status          | Owner Web/Mobile có inbox; delivery email/push thật chưa cấu hình.                                                                                                      |
+| Incident / Emergency / Work Order                | Chưa có controller/API nghiệp vụ BF-07                                                   | Màn incident/maintenance Owner Web còn mock; có bảng thiết kế không đồng nghĩa đã implement.                                                                            |
+| Đầu tư / OPEX / báo cáo / What-if                | Có Expenses, reports/capital recovery và What-if trên Compact24; không thêm bảng         | Owner Web expenses/reports/what-if đã nối API và có browser E2E. Dashboard tổng thể/Staff-cost/refund classification và chứng từ Expenses còn giới hạn; xem FINANCE.md. |
+| Public Website                                   | Chưa có controller public-content                                                        | Chưa nối nội dung từ backend; giữ ranh giới chỉ thông tin.                                                                                                              |
 
 Policy được khai báo trong [RolePermissions](../../src/backend/BHome.Domain/IdentityAccess/RolePermissions.cs): property.view = Owner/Staff; property.manage, locations.manage, staff-assignments.manage = Owner; locations.view-assigned = Staff; task execute = Staff, task manage/verify = Owner; quyền own account/session/notification = Owner/Staff/Tenant. Service còn kiểm tra Location hiện tại và đối tượng sở hữu.
 
@@ -325,8 +344,8 @@ Policy được khai báo trong [RolePermissions](../../src/backend/BHome.Domain
 | Method / route                           | Backend / database                            | Input / action                                                                                                                                                        | Quyền       | Owner Web                       | Mobile                                                            |
 | ---------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------- | ----------------------------------------------------------------- |
 | `GET /api/v1/ocr/diagnostics`            | Development có điều kiện; không lưu nghiệp vụ | [OcrDiagnosticsController.cs](../../src/backend/BHome.Api/Controllers/Ocr/OcrDiagnosticsController.cs).Availability: Không có DTO                                     | Owner,Staff | Chưa tìm thấy lời gọi tương ứng | Có lời gọi: [ocr-test.tsx](../../src/mobile/src/app/ocr-test.tsx) |
-| `POST /api/v1/ocr/diagnostics/auto` | Development có điều kiện; không lưu nghiệp vụ | `OcrDiagnosticsController.Automatic`: body JPEG/PNG không yêu cầu profile; trả analysis + elapsedMilliseconds | Owner,Staff | Chưa có | `ocr-test.tsx`: luồng mặc định sau chụp |
-| `POST /api/v1/ocr/diagnostics/{profile}` | Development có điều kiện; không lưu nghiệp vụ | [OcrDiagnosticsController.cs](../../src/backend/BHome.Api/Controllers/Ocr/OcrDiagnosticsController.cs).Extract: profile: String (Path); decimalPlaces: String (Query) | Owner,Staff | Chưa tìm thấy lời gọi tương ứng | `ocr-test.tsx`: chọn loại sau khi auto cần kiểm tra |
+| `POST /api/v1/ocr/diagnostics/auto`      | Development có điều kiện; không lưu nghiệp vụ | `OcrDiagnosticsController.Automatic`: body JPEG/PNG không yêu cầu profile; trả analysis + elapsedMilliseconds                                                         | Owner,Staff | Chưa có                         | `ocr-test.tsx`: luồng mặc định sau chụp                           |
+| `POST /api/v1/ocr/diagnostics/{profile}` | Development có điều kiện; không lưu nghiệp vụ | [OcrDiagnosticsController.cs](../../src/backend/BHome.Api/Controllers/Ocr/OcrDiagnosticsController.cs).Extract: profile: String (Path); decimalPlaces: String (Query) | Owner,Staff | Chưa tìm thấy lời gọi tương ứng | `ocr-test.tsx`: chọn loại sau khi auto cần kiểm tra               |
 
 ### OperationalTasks
 

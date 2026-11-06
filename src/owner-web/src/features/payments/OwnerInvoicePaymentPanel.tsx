@@ -392,6 +392,12 @@ export function ReconcileTransfer({
           {data.bankReference} · {formatContractMoney(data.amount)} · {paymentText(data.status)}
         </Typography>
         <Typography>{paymentText(data.reason)}</Typography>
+        {data.allocatedAmount !== undefined && (
+          <Typography>
+            Đã phân bổ: {formatContractMoney(data.allocatedAmount)} · Chưa phân bổ:{' '}
+            {formatContractMoney(data.unallocatedAmount ?? '0')}
+          </Typography>
+        )}
         {notice && <Alert severity="info">{notice}</Alert>}
         {(latest.error || history.error) && (
           <Alert
@@ -477,7 +483,8 @@ export function ReconcileTransfer({
           <DialogTitle>Xác nhận đối soát giao dịch?</DialogTitle>
           <DialogContent>
             Ghi nhận {formatContractMoney(data.amount)} từ sao kê cho hóa đơn đã chọn. Hệ thống sẽ
-            kiểm tra số dư và chống ghi có trùng.
+            kiểm tra số dư và chống ghi có trùng. Nếu thiếu tiền, chỉ ghi nhận số đã nhận và giữ dư
+            nợ. Nếu thừa tiền, chỉ phân bổ tối đa dư nợ; phần thừa chờ Owner xử lý, chưa tự hoàn.
           </DialogContent>
           <DialogActions>
             <Button disabled={busy} onClick={() => setConfirm(false)}>

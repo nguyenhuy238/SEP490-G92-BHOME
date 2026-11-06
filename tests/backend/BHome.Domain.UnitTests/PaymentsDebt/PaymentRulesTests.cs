@@ -5,14 +5,14 @@ namespace BHome.Domain.UnitTests.PaymentsDebt;
 public sealed class PaymentRulesTests
 {
     [Theory]
-    [InlineData(99, 100, "CODE", false, "partial_payment_policy_required")]
-    [InlineData(101, 100, "CODE", false, "excess_payment_policy_required")]
+    [InlineData(99, 100, "CODE", false, null)]
+    [InlineData(101, 100, "CODE", false, null)]
     [InlineData(100, 0, "CODE", false, "invoice_already_settled")]
     [InlineData(100, 100, "OTHER", false, "invoice_transfer_reference_mismatch")]
     [InlineData(100, 100, "CODE", true, "bank_reference_already_credited")]
     [InlineData(100, 100, "code", false, null)]
-    public void OnlyExactVerifiedObligationCanAllocate(decimal amount, decimal balance, string memo, bool claimed, string? expected) =>
-        Assert.Equal(expected, PaymentRules.ReviewReason(amount, balance, memo, "CODE", claimed));
+    public void VerifiedReferenceCanAllocateAgainstPositiveDebtWithOwnerConfirmedAmountPolicy(decimal amount, decimal balance, string memo, bool claimed, string? expected) =>
+        Assert.Equal(expected, PaymentRules.ReviewReason(amount, balance, memo, "CODE", claimed, true));
     [Fact]
     public void VietnamDateBoundaryAndSettledBillsDoNotCreateFalseOverdueDebt()
     {

@@ -4,7 +4,23 @@ import {
   ocrPreview,
   categoryLabel,
   reviewWarning,
+  meterUnit,
 } from '../../../src/mobile/src/lib/automaticOcr';
+
+it('shows units only for a resolved utility and never infers technology from units', () => {
+  expect(meterUnit('water_mechanical')).toBe('m³');
+  expect(meterUnit('water_digital')).toBe('m³');
+  expect(meterUnit('electricity_mechanical')).toBe('kWh');
+  expect(meterUnit('electricity_digital')).toBe('kWh');
+  expect(meterUnit('unknown')).toBeUndefined();
+  expect(meterUnit('cccd_front')).toBeUndefined();
+});
+
+it('explains recognizer conflict and profile confirmation without exposing internal codes', () => {
+  expect(reviewWarning('recognizer_conflict')).toContain('không khớp');
+  expect(reviewWarning('recognizer_profile_required')).toContain('xác nhận loại');
+  expect(reviewWarning('digit_model_unavailable')).toContain('chưa khả dụng');
+});
 
 it('keeps an owned image copy and zeroes it on replacement and disposal', () => {
   const image = new TemporaryOcrImage();

@@ -29,7 +29,7 @@ using Npgsql;
 namespace BHome.IntegrationTests.Contracts;
 
 [Trait("Category", "Docker")]
-public sealed class ContractLifecycleApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
+public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) : IClassFixture<ContractFixture>
 {
     private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
     private sealed record Actor(HttpClient Client, Guid Id);
