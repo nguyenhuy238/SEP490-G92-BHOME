@@ -89,3 +89,45 @@ chưa đủ hai người để nghiệm thu theo quy tắc dataset của dự á
 model hashes và false proposals. [Báo cáo cuối](OCR_FINAL_COMPLETION_REPORT.md)
 ghi các gate đã qua/chưa đạt. Không chấp nhận model mới chỉ vì nguồn có license
 hoặc export/parity chạy được.
+
+## Tiếp tục nghiên cứu ngày 06/11/2026
+
+HEAD đầu phiên `8f5c751`, nhánh `member/QHuy`. Hai file tài liệu đang sửa bởi
+người dùng được giữ nguyên: API_IMPLEMENTATION_STATUS và evidence ngày 06/11.
+Không tạo lại các commit nghiên cứu/huấn luyện ngày 05/11.
+
+Nguồn mới kiểm tra trực tiếp bằng Hugging Face API và tải qua revision cố định:
+[LCD preview của 2005JIAZHI](https://huggingface.co/datasets/2005JIAZHI/Annotated-Digital-LCD-Utility-Meter-And-Serial-Numbers-Dataset/tree/4b0837a012d2062ac702d7f400e991cedfd6f64d).
+Đã tải **50 JPEG, 50 YOLO TXT, 50 VOC XML và README** vào
+`.tools/ocr-20261106-lcd-preview`; receipt SHA256 nằm cùng thư mục. Card ghi
+CC-BY-NC-4.0 và cho phép thử training preview; chỉ dùng nghiên cứu offline phi
+thương mại. Đoạn quảng cáo quyền thương mại của bản đầy đủ không được coi là
+quyền thương mại của preview. Không phân phối ảnh/weights từ nguồn này.
+
+Xem contact sheet toàn bộ 50 ảnh: đều là điện tử, nhiều ảnh cùng công tơ/góc
+chụp; **không bổ sung được lớp nước điện tử**. Không coi 50 ảnh là 50 thiết bị.
+VOC phân biệt digit màn hình, serial và scoreboard; không có box thân hoặc GT
+precision/register đủ để tính billing accuracy. Ảnh 00008 và 00037 không thấy
+chỉ số nhưng nguồn gán tám số 0; ảnh 00048 hiển thị segment test toàn số 8.
+Loại ba ảnh này khỏi supervised digit training, không dùng nhãn nguồn như GT
+nghiệm thu. Nhãn còn lại vẫn là publisher labels sau kiểm tra cấu trúc và audit
+bằng ảnh, chưa có independent human review. Giữ toàn nguồn ở train, kiểm pHash
+trước crop với các nguồn hiện có, không random split ảnh cùng thiết bị.
+
+`utilitimetersai/Utility-Meters-LCD-Electricity-v1`: API trả HTTP 401.
+`utilitimetersai/Annotated-Mechanical-And-LCD-Utility-Meter-Dials-Dataset`:
+API xác nhận gated=manual tại revision `a2f544860f20b3c2098adeb091759ed30df5ff1c`.
+Không tải hoặc vượt quyền. [MR-AMR](https://data.mendeley.com/datasets/8xjhrrk9rx/1)
+ghi 140.000 ảnh digit, CC BY-NC 3.0; đó không phải 140.000 ảnh thân công tơ
+bốn lớp, chưa đưa vào train. Nguồn nước LCD đại diện tiếp tục thiếu.
+
+Truy vết công việc tiếp: BF-05 / UC-20 / GBR-07 → dataset guards và recognizer
+offline → parity, false-proposal/blank controls; GBR-01/02 → kiểm quyền task
+trước OCR; UC-21 / GBR-09 → regression xác nhận/hóa đơn. Không thay policy,
+schema, API, precision hoặc quyền. Model chỉ có thể bật khi qua gate dữ liệu và
+đánh giá; mọi model bị loại vẫn tắt.
+
+Build baseline Release đã chạy: 0 warning/error. Application OCR: 125/125 PASS.
+Chạy lại automatic baseline trên đúng 15 ảnh public development holdout; đây
+không phải tập độc lập mới hoặc số liệu production. Báo cáo tiếp nối sẽ ghi
+metrics thực tế, kết quả huấn luyện và các commit mới.
