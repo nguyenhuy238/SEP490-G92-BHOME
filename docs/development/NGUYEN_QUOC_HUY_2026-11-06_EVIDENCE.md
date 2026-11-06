@@ -5,6 +5,14 @@ Report 2/3/4/5/7, không thay yêu cầu SRS hoặc kết quả nghiệm thu ch�
 lỗi đã sửa và SHA đầy đủ: [báo cáo triển khai](NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
 [API status](../api/API_IMPLEMENTATION_STATUS.md), [inventory runtime](../api/API_RUNTIME_ROUTES.md).
 
+**Bổ sung kiểm tra khi cập nhật báo cáo tiến độ, HEAD `8f5c751`:** đã chạy lại Domain 90,
+Application 276, Integration 626 pass/1 OCR skip, Digital Signing 41 và Mobile 381. Owner Web full suite
+mới có 154 pass/1 timeout 15 giây; riêng file router chạy lại 37/37 pass, không sửa code/timeout.
+Owner build/lint và Mobile typecheck/lint đạt. Đây là lượt khác với final regression phía dưới;
+không đổi kết quả lịch sử thành kết quả mới hoặc cộng dồn hai lượt. Log mới nằm tại
+`.tools/progress-review-20261106/`, có TRX và manifest audit 216 routes; cluster test riêng đã dừng.
+Xem [báo cáo tiến độ nhóm/cá nhân và phụ lục kiểm chứng](../reports/BHOME_PROGRESS_REPORT_NGUYEN_QUOC_HUY_2026-11-06.md).
+
 ## Report 2 — tiến độ, rủi ro và phân công
 
 | Phạm vi | Đã triển khai | Giới hạn bàn giao |
