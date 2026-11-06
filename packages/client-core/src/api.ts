@@ -1,6 +1,7 @@
 export interface ApiProblem {
   code?: string;
   title?: string;
+  detail?: string;
   status?: number;
   correlationId?: string;
   errors?: Record<string, string[]>;

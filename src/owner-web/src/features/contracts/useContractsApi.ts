@@ -2,8 +2,12 @@ import { useMemo } from 'react';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../packages/client-core/src/api';
 import { getApiBaseUrl } from '../../../../../packages/client-core/src/config';
-import { contractClient } from '../../../../../packages/client-core/src/contracts';
+import {
+  contractClient,
+  type ContractClient,
+} from '../../../../../packages/client-core/src/contracts';
 import { mainDraftClient } from '../../../../../packages/client-core/src/mainDrafts';
+import { signingClient } from '../../../../../packages/client-core/src/signing';
 
 export function useContractsApi() {
   const { client } = useAuth();
@@ -19,6 +23,11 @@ export function useContractsApi() {
       ),
     [client],
   );
+}
+
+// Digital signing over the same authenticated transport as the contract client it is given.
+export function useSigningApi(api: ContractClient) {
+  return useMemo(() => signingClient(api.transport), [api]);
 }
 
 export function useMainDraftApi() {
