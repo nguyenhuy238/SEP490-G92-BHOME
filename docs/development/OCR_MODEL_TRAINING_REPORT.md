@@ -135,3 +135,32 @@ CPU ORT2 threads p50/p95 forward-only khoảng29.64/41.62ms,25.23/31.42ms,
 
 Kết quả chưa đạt acceptance bốn loại hoặc ≥90% trên bộ ảnh đại diện. Các model
 mới giữ ngoài ứng dụng; không thay thế PP/Stage1/Stage2 hiện hành.
+
+## Lượt tiếp nối LCD ngày 06/11/2026
+
+Đã chạy GPU thật trên RTX 3070 Laptop, cùng base YOLOv8n/hash, môi trường,
+seed42 và config ở trên. Dataset: 206 train (163 Mendeley +43 LCD preview),
+2 val, 4 test; source mới giữ toàn bộ train. Giấy phép preview CC-BY-NC-4.0
+chỉ dùng nghiên cứu offline phi thương mại; không phân phối weights/ảnh.
+Dataset audit SHA256 `28049194dd1a8641e53c6f12719903eab5ca19a70f96fd3c0fa3231931c33570`.
+
+49 epoch thực tế, best fitness epoch29, early stopping patience20, thời gian
+229.062s. [CSV](ocr-20261106-lcd-training.csv) và
+[kết quả/provenance](ocr-20261106-lcd-results.json) được lưu trong Git.
+Checkpoint/ONNX/log/crop ở `.tools/ocr-20261106-lcd-*`, không commit.
+
+- PT SHA256: `0f686ac3f5d55b0f011fd792afe92efdcc3c46e848c4d60bd04dffd57fe109a2`.
+- ONNX SHA256: `a4c655bf7b5bd78fdb7200c0a0a177542e1f4fcd9b2628d93f5d29a3618976fc`.
+- FP32/opset17/input `[1,3,416,416]`, output `[1,14,3549]`, digit classes0..9.
+- Validation chọn threshold.25: exact0/1 readable, false0/2, fallback2/2.
+- Development test: exact2/3 readable, false2/4 inputs, fallback0/4; correct
+  proposal/all inputs2/4, conditional correct proposals2/4. Không suy đây là
+  kết quả billing vì chưa đánh giá precision/register/full-frame localization.
+- Native PyTorch/ORT parity6/6; .NET preprocessing/tensor parity6/6.
+- CPU forward-only p50=25.38ms, p95=27.62ms, max=27.76ms; không phải latency E2E.
+
+**REJECTED**: không cải thiện false proposals so với candidate hàng số trước,
+không qua validation và không phải four-class model. Không dùng test để tune
+thêm hoặc bật runtime. Đây là cùng development holdout đã dùng ngày05/11,
+không phải nghiệm thu độc lập mới. Chưa thể train detector bốn lớp vì nước
+điện tử vẫn không có train/val; không tạo head giả để điền checklist.
