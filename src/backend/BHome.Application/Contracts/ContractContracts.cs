@@ -20,7 +20,26 @@ public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, stri
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent, bool OnboardingDraft = false);
 public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page, int PageSize, int TotalCount);
 public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
-public sealed record SigningInput(Guid CertificateId);
+// Placement null puts the signature in the signer's own box of the contract's signature block. UsePicture null/true
+// shows the signer's saved signature picture (when there is one) above "Ký bởi / Ngày ký"; false shows the text only.
+public sealed record SigningInput(Guid CertificateId, SignaturePlacementInput? Placement = null, bool? UsePicture = null);
+// Page is 1-based; X, Y and Width are fractions of the page measured from its top-left corner.
+public sealed record SignaturePlacementInput(int Page, double X, double Y, double Width)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsValid => Page is >= 1 and <= 500 && X is >= 0 and < 1 && Y is >= 0 and < 1 && Width is >= 0.08 and <= 0.6 && X + Width <= 1.0001;
+}
+public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture);
+// What a signer sees before choosing where to sign: the pages of the PDF they will sign, and their suggested box.
+public sealed record SigningPageSize(double Width, double Height);
+public sealed record SigningLayout(int PageCount, IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested,
+    string Party, bool HasPicture, string SignerName);
+public interface IContractSigningPages
+{
+    SigningLayoutInfo Inspect(byte[] pdf, bool owner);
+    byte[] RenderPage(byte[] pdf, int page, int maxWidth);
+}
+public sealed record SigningLayoutInfo(IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested);
 public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1)] string BankTransactionReference,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, [Required, StringLength(2000, MinimumLength = 1)] string VerificationReason);
 public sealed record TerminationInput(DateOnly ProposedDate,
@@ -77,7 +96,13 @@ public sealed record SigningPreparation(byte[] SourcePdf, byte[] PreparedPdf, st
 public sealed record SigningOutcome(string State, byte[]? SignedPdf = null);
 public interface IContractSigningProvider
 {
+    // Signs in the signer's box of the signature block with their picture when they have one.
     Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t);
+    // A placement or picture choice made on the signing screen. Providers that draw nothing may ignore it.
+    Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf,
+        SigningAppearance appearance, CancellationToken t) => PrepareAsync(document, certificateId, previousPdf, t);
+    // Signer display data for the layout screen: whether a picture is saved, and the name the box will show.
+    Task<(bool HasPicture, string SignerName)> SignerAsync(CancellationToken t) => Task.FromResult((false, ""));
     Task<string> RequestAsync(ContractSignature signature, CancellationToken t);
     Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t);
 }
