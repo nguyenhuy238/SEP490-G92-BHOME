@@ -3,6 +3,42 @@
 ## Tiếp tục yêu cầu remaining E2E — 06/11/2026
 
 TASK: BE-19 / BE-X07
+SLICE: Hoàn cọc không khấu trừ bằng xác minh thủ công, giữ source riêng và chặn closure sớm
+
+IMPLEMENTED:
+- UC-19/GBR-01/02/18, OQ-01/05 và ủy quyền triển khai → GET/POST contracts/{id}/deposit-refunds; reuse decision/execution/evidence hiện hữu nhưng source_deposit_contract_id riêng, source_payment_id null.
+- Chỉ nhánh Owner xác nhận inspection không phát sinh phí, invoice Final/paid, Final readings billed/khớp, không Adjustment/bank/excess/holding/allocation chưa xử lý. Không tự đặt damage fee hoặc chia nợ phòng.
+- Owner phải xác nhận đã kiểm người nộp/người nhận và không khấu trừ; choices chỉ là occupant Verified/liên kết tài khoản, không suy representative là depositor. Ghi attestation và obligation fingerprint trong history SecurityDepositRefundV1.
+- Reservation/approval/execution dùng ledger lock/version/key; external refund thực hiện ngoài BHOME, Owner đối chiếu sao kê và upload ảnh private. Intent bền vững trước Put, kiểm readback/hash trước Completed; mất kết nối vẫn Approved, đúng key/bytes phục hồi. Demo nguồn chặn Production, kể cả replay.
+- Root deposit không đếm lặp renewal; hai nguồn refund loại trừ nhau. FinancialReference không tự stale vì reservation/return của chính workflow, nhưng nghĩa vụ đổi chặn approve/execute. Reject giải phóng reservation.
+- Chỉ toàn bộ cọc đã hoàn được phân loại, không reservation, không phí và mọi guard đạt mới xác nhận 0 deductions/VerifiedManual; Owner vẫn review settlement rồi complete. Unknown/legacy Completed không release dù bằng đủ cọc. Receipt excess PendingReview cũng được kiểm trước settlement.
+
+CHANGED FILES:
+- RefundsController.cs; Application/Finance/RefundService.cs; Application/Contracts/{ContractContracts,SettlementCalculation}.cs
+- Infrastructure/Finance/{RefundRepository,DepositRefundSource}.cs; Infrastructure/Contracts/{ContractDepositPosition,ContractSettlementLedger}.cs
+- RefundModeTests.cs; PaymentsDebt/{DepositRefundTests,ContractClosureTests}.cs; Compact24/{Compact24WorkflowRegressionTests,Compact24DepositRecoveryTests}.cs
+- API module/status/index/runtime docs, inventory generator và báo cáo này.
+
+TESTS:
+- `dotnet test tests/backend/BHome.Application.UnitTests --no-restore --filter 'FullyQualifiedName~SettlementCalculationTests|FullyQualifiedName~RefundModeTests' --verbosity minimal`: **13/13 đạt**.
+- `dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24PaymentRegressionTests.DepositReturn|FullyQualifiedName~Compact24PaymentRegressionTests.DepositPositions|FullyQualifiedName~Compact24PaymentRegressionTests.SettlementCalculation|FullyQualifiedName~Compact24RefundTests|FullyQualifiedName~Compact24DepositRecoveryTests|FullyQualifiedName~RealLedgerRequiresReviewedSnapshot|FullyQualifiedName~NewAdjustmentAfterSettlement|FullyQualifiedName~Compact24ApiAuditTests' --verbosity minimal`: **18/18 đạt, 0 skip**; 12 workflow/refund/closure + 6 audit. PG disposable riêng 55440; storage test boundary.
+- Audit: **215 routes, 210 protected trả 401, 5 anonymous, 106 Owner GET probes, 0 HTTP5xx**: 200=32, 204=2, 400=10, 403=3, 404=59. Generator tái sinh từ manifest mới; không thêm schema.
+- Có duplicate requests/parallel approval/parallel execution replay, stale obligation/reject release, private proof, unknown full refund, source identity, tenant/staff denial, loss after Put/recovery/changed image conflict, manual-return→settlement→closure. Fixtures inspection/invoices là persisted synthetic preconditions, không phải full onboarding/browser acceptance.
+- Lỗi đã sửa: chạy build đồng thời gây CS2012 nên tách build tuần tự; fixture ExecuteUpdate không dùng được với Compact24 SQL projection nên dùng tracked fixture updates; regex hash trong interpolated SQL bị coi {64} là parameter, sửa thành parameter regex đầy đủ, không bỏ integrity guard. Logs .tools/huy-deposit-refund-{unit,pg,build}.log.
+
+COMMIT:
+- Message: feat(deposit): [BE-X07] return undisputed security deposits with verified evidence
+- SHA ghi ngay sau commit.
+
+FRONTEND HANDOFF:
+- Owner Web Vũ Xuân Trường; Mobile Bùi Bảo Long. Chưa nối hai deposit routes trong slice backend này; Tenant hiện xem settlement summary, không evidence/Owner actions.
+
+STATUS: PARTIAL — nhánh backend không khấu trừ đã kiểm chứng; chưa đánh dấu BE-19/BE-X07 DONE.
+
+REMAINING:
+- Khấu trừ có phí/damage/debt journal, Owner/Mobile UI, actual Web/API/MinIO E2E, refund notification và Finance classification. Bank/provider/native acceptance chưa chạy; không auto payout, không hợp thức hóa simulation/signature.
+
+TASK: BE-19 / BE-X07
 SLICE: Tổng hợp nghĩa vụ và vị thế nguồn cọc trước quyết định Owner
 
 IMPLEMENTED:
@@ -27,7 +63,7 @@ TESTS:
 
 COMMIT:
 - Message: feat(moveout): [BE-19] calculate settlement obligations and available deposit
-- SHA ghi ngay sau commit; không amend để đưa self-referential hash vào commit.
+- SHA: `f4e0f70ba433c159f504d32f696807e7db548f75` (ghi sau commit, được đưa vào slice tiếp theo).
 
 FRONTEND HANDOFF:
 - Owner Web: Vũ Xuân Trường; Mobile: Bùi Bảo Long. Optional calculation DTO chưa hiển thị ở client trong slice này; nối sau bằng số server, không tính lại bằng Number.

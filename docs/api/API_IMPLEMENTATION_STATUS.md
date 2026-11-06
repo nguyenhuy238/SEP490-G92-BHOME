@@ -1,10 +1,10 @@
 # BHOME — trạng thái API và bàn giao phát triển
 
-Rà soát **06/11/2026**, nhánh `member/QHuy`, backend tại commit `d75fea5` (gồm refund `12043f0` và sửa UI `17c4228`). Lượt này cập nhật tài liệu/công cụ sinh danh mục; không thay API, schema hoặc dữ liệu làm việc.
+Rà soát **06/11/2026**, nhánh `member/QHuy`, backend tại commit `d75fea5` (gồm refund `12043f0` và sửa UI `17c4228`). Bổ sung tiếp BE-19/BE-X07: calculation và hoàn cọc không khấu trừ; không đổi schema hoặc dữ liệu làm việc.
 
-**213 controller routes đang được BHome.Api nạp**, gồm **208 protected** và **5 anonymous**, cộng 2 health endpoints. Danh sách đầy đủ, input/action, policy và source callsite: [API_RUNTIME_ROUTES.md](API_RUNTIME_ROUTES.md). [Mục lục module](README.md) và [quy ước tích hợp](API_CONVENTIONS.md) là điểm bắt đầu cho team.
+**215 controller routes đang được BHome.Api nạp**, gồm **210 protected** và **5 anonymous**, cộng 2 health endpoints. Danh sách đầy đủ, input/action, policy và source callsite: [API_RUNTIME_ROUTES.md](API_RUNTIME_ROUTES.md). [Mục lục module](README.md) và [quy ước tích hợp](API_CONVENTIONS.md) là điểm bắt đầu cho team.
 
-Đã chạy lại `Compact24ApiAuditTests` trong lượt tài liệu này: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 208 protected routes trả 401 khi không có phiên. **105 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=58; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
+Đã chạy lại `Compact24ApiAuditTests` sau slice hoàn cọc không khấu trừ: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 210 protected routes trả 401 khi không có phiên. **106 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=59; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
 
 ## Cách đọc và dùng tài liệu
 
@@ -28,7 +28,7 @@ Rà soát **06/11/2026**, nhánh `member/QHuy`, backend tại commit `d75fea5` (
 | Residence — UC-18/GBR-06 | Có metadata residence trong dữ liệu người ở | Chưa có residence workflow API riêng; Tenant đăng ký ngoài BHOME qua VNeID, Owner xác nhận; Staff không đăng ký/duyệt thay |
 | Meter/billing/adjustment — BF-05/UC-20..21/24, JOB-09/10 | Confirmed reading → Draft/Final; Owner opt-in automation; Tenant request/private evidence → Owner decision; Final giữ bất biến | Browser tổng hợp một Invoice/ba Tenant đã chạy; native xuyên chu kỳ, delivery thực tế và reviewer còn thiếu |
 | Payment/debt — BF-06/UC-22..25 | Owner sao kê thủ công, allocation=min(receipt,outstanding), partial/excess, payer privacy, QR/debt/history từ backend | Chưa nghiệm thu bank callback/provider tự động; ảnh hoặc frontend không chứng minh tiền đã đến |
-| Receipt-excess refund — BE-X07 | 5 API Owner-only, request/approve/reject/execution/private download; Owner Web đã nối; upload recovery, replay/race guard | Owner chuyển tiền bên ngoài rồi xác minh; không tự giải ngân. Chưa có credit, refund cọc/quyết toán, refund dư do Adjustment sau Paid hoặc Tenant refund self-service |
+| Refund receipt/cọc — BE-X07 | 7 API Owner-only: receipt và nguồn cọc riêng, request/approve/reject/execution/private download; receipt Owner Web đã nối, cọc mới backend | Owner chuyển tiền bên ngoài rồi xác minh; không tự giải ngân. Cọc chỉ nhánh Owner xác nhận không khấu trừ, mọi hóa đơn đã xử lý; UI cọc/native và finance classification còn thiếu. Chưa credit, deduction có phí hoặc refund dư do Adjustment sau Paid |
 | Finance — FE-08/UC-31..34, GBR-15/16 | 8 Expenses routes (CRUD, scoped refs, private evidence), report/capital recovery, 4 What-if routes; Owner Web API mode + browser đã chạy | Staff cost chưa tự sinh; Work Order chỉ tham chiếu nguồn có sẵn; historical occupancy chỉ một Location, không Room/toàn chuỗi; refund chưa phân loại giữ unavailable guard |
 | Notification — FE-07/UC-35..36, JOB-04 | Inbox, event publisher, delivery/retry/lease/monitoring có implementation và client; delivery lỗi không rollback nghiệp vụ | Email/push mặc định Unconfigured; chưa có delivery thật. Refund mới không có notification consumer riêng |
 | Incident/Emergency/Work Order — BF-07/UC-26..30 | Chưa có controller/service lifecycle BF-07 đầy đủ trong host | Owner Web còn mock; bảng/expense reference có sẵn không chứng minh review/plan/repair/verify đã triển khai |
@@ -40,8 +40,8 @@ Chính sách thiếu/thừa tiền và receipt-excess refund được triển kh
 
 | Bằng chứng | Kết quả thực tế | Thời điểm / giới hạn |
 | --- | --- | --- |
-| Audit API vừa chạy | 6/6, 213 routes, 208 protected trả 401, 105 Owner GET không 5xx | Lượt tài liệu 06/11; synthetic Compact24 test DB, không dùng working bhome |
-| Kiểm tra tài liệu vừa chạy | Khớp 213 route + 2 health, 213 liên kết controller, 580 liên kết nội bộ không gãy; UTF-8/code fences hợp lệ | Generator tái sinh cùng nội dung, giữ nguyên bản bàn giao; 4 trường hợp manifest sai bị từ chối trước khi ghi; node syntax và git diff --check đạt |
+| Audit API vừa chạy | 6/6, 215 routes, 210 protected trả 401, 106 Owner GET không 5xx | Chạy lại sau deposit-refund slice 06/11; synthetic Compact24 DB, không dùng working bhome |
+| Kiểm tra tài liệu vừa chạy | Lượt tài liệu trước: 213 route + 2 health, 213 controller links, 580 liên kết nội bộ hợp lệ | Generator tái sinh cùng nội dung, giữ nguyên bản bàn giao; 4 trường hợp manifest sai bị từ chối trước khi ghi; node syntax và git diff --check đạt |
 | Full backend regression | Domain 90 + Application 253 + Integration 615 đạt; 1 optional real-OCR integration skip, 0 fail | Lượt triển khai trước, cùng mã backend; không chạy lại full suite trong lượt tài liệu |
 | Full frontend regression | Owner Web 144/144, Mobile 376/376 | Lượt triển khai trước; component/transport không thay thế native acceptance |
 | Focused refund/payment/finance | PostgreSQL 32/32; Finance unit 11/11; Owner focused UI sau fix 13/13 | Lượt trước; payer, race, private file/hash, upload recovery và Production demo guard |
@@ -49,12 +49,12 @@ Chính sách thiếu/thừa tiền và receipt-excess refund được triển kh
 | Digital-signing solution riêng | 41/41 | Lượt trước; không chứng minh sandbox controllers đã mount hoặc MySign thật hoạt động |
 | Real OCR riêng | HTTP model smoke 1/1; OCR unit 125/125, integration focused 119/119 | Lượt trước; không phải benchmark >=50 ảnh/90% và không tính integration skip thành pass |
 
-Commands, kết quả và commit triển khai: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Log audit lượt này ở `.tools/huy-api-docs-audit.log`, manifest ở `.tools/api-docs-20261106/evidence/api-route-audit.json` (local, ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
+Commands, kết quả và commit triển khai: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Log audit mới ở `.tools/huy-deposit-refund-pg.log`, manifest ở `.tools/deposit-refund-evidence/api-route-audit.json` (audit mới, local/ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
 
 ## Điểm bắt đầu cho người phát triển tiếp
 
 1. Nối các màn Property/Staff/Residence còn mock theo endpoint hiện hữu và quyền server; không thêm API trùng chỉ để khớp mock.
-2. Hoàn thiện deposit settlement/deduction/refund với người nộp được xác minh, journal/approval/evidence và room-release guards. Giữ riêng receipt-excess refund; không dùng Completed của luồng này để bỏ blocker cọc.
+2. Hoàn thiện nhánh khấu trừ có phí và UI cọc; backend hoàn cọc không khấu trừ đã có manual verification/evidence/closure guards. Giữ riêng receipt-excess refund; không dùng Completed của luồng này để bỏ blocker cọc.
 3. Hoàn thiện Holding sau khi có nội dung quyết định OQ-03/Q-H1. Tích hợp bank/MySign/notification qua adapter và cấu hình test/staging, kiểm idempotency và failure path.
 4. Triển khai BF-07 Work Order lifecycle rồi nối maintenance cost; Expense reference hiện chỉ đọc nguồn đã tồn tại. Reviewer UI và acceptance thiết bị vẫn là việc riêng.
 
@@ -72,7 +72,7 @@ Các dòng này bổ sung cho kết quả dò tĩnh bảo thủ phía trên; ngu
 
 ## Module có controller source nhưng không được host BHome.Api nạp
 
-`src/digital-signing/BHome.DigitalSigning.Api` là thư viện controllers, không có Program/host riêng. BHome.Api không tham chiếu project này và không gọi AddDigitalSigning. Các route sau **không nằm trong runtime 213 routes**, không được coi là đã chuyển/đã nối. Không tự bật module vì sẽ thêm DigitalSigningDbContext/bảng ngoài Compact24 và có endpoint chứng thư trùng với controller native.
+`src/digital-signing/BHome.DigitalSigning.Api` là thư viện controllers, không có Program/host riêng. BHome.Api không tham chiếu project này và không gọi AddDigitalSigning. Các route sau **không nằm trong runtime 215 routes**, không được coi là đã chuyển/đã nối. Không tự bật module vì sẽ thêm DigitalSigningDbContext/bảng ngoài Compact24 và có endpoint chứng thư trùng với controller native.
 
 | Source                                                                                                                              | Route khai báo                                                | Trạng thái                                        |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- |

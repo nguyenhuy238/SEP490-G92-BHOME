@@ -3,10 +3,10 @@ using System.Text.Json.Serialization;
 namespace BHome.Application.Contracts;
 
 // Source positions, not authorization to spend a deposit or proof of a bank transfer.
-public sealed record DepositLedgerPosition(decimal Received, decimal Allocated, decimal Refunded, decimal Reserved);
+public sealed record DepositLedgerPosition(decimal Received, decimal Allocated, decimal Refunded, decimal Reserved, int UnclassifiedRefunds = 0);
 public interface IContractDepositPosition
 {
-    Task<DepositLedgerPosition?> ReadAsync(Guid[] contractIds, CancellationToken token);
+    Task<DepositLedgerPosition?> ReadAsync(Guid[] contractIds, CancellationToken token, string financialReference = "");
 }
 
 [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]

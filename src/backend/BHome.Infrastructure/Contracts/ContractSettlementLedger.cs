@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using BHome.Application.Contracts;
+using BHome.Application.PaymentsDebt;
 using BHome.Domain.Billing;
 using BHome.Domain.PaymentsDebt;
 using BHome.Domain.TenantContracts;
@@ -9,7 +10,8 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractSettlementLedger(BHomePersistenceContext db, IContractDepositPosition? positions = null) : IContractSettlementLedger, IContractSettlementDetails
+internal sealed class ContractSettlementLedger(BHomePersistenceContext db, IContractDepositPosition? positions = null,
+    IPaymentRepository? payments = null) : IContractSettlementLedger, IContractSettlementDetails
 {
     public async Task<SettlementLedgerState?> ReadAsync(Guid id, Guid electricity, Guid water, CancellationToken t)
     {
@@ -56,6 +58,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             invoices.Add(new(invoice.Id, invoice.BillingPeriod, shared, finances));
             if (finances.OutstandingAmount > 0) blockers.Add(shared ? "shared_liability_allocation_pending" : "invoice_outstanding");
             if (finances.PotentialExcessAmount > 0) blockers.Add("invoice_excess_pending_review");
+            if (payments is not null && await payments.PendingReviewAsync(invoice.Id, t)) blockers.Add("bank_transfer_pending_review");
         }
         if (await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.Decision == null, t)) blockers.Add("invoice_adjustment_pending");
         if (await db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId != null && ids.Contains(r.InvoiceId.Value) && r.Decision == "PendingReview" &&
@@ -75,13 +78,25 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         }
         else blockers.Add("final_meter_readings_required");
         var other = await db.Set<Contract>().AnyAsync(o => o.RoomId == c.RoomId && o.Id != id && o.Status == ContractStatus.Active, t);
-        var position = positions is null ? null : await positions.ReadAsync(chain.Select(v => v.Id).ToArray(), t);
+        // Obligation reference excludes this workflow's refund reservations/completions: reserving the
+        // approved return must not invalidate its own approval. All charge/payment/inspection inputs remain bound.
+        var financialReference = "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
+            Contract = id, Root = root.Id, root.RequiredDeposit, root.AppliedHoldingDeposit, deposits, Invoices = invoices,
+            Blockers = blockers.Where(b => b != "deposit_deduction_refund_policy_required").Distinct().Order().ToArray(),
+            Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges },
+            Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId }
+        })));
+        var position = positions is null ? null : await positions.ReadAsync(chain.Select(v => v.Id).ToArray(), t, financialReference);
         var calculation = SettlementCalculator.Calculate(invoices, deposit, position);
         if (position is not null && !calculation.DepositPositionConsistent) blockers.Add("deposit_ledger_reconciliation_required");
+        if (position?.UnclassifiedRefunds > 0) blockers.Add("deposit_refund_manual_review_required");
+        var returned = deposit > 0 && position is { Allocated: 0, Reserved: 0, UnclassifiedRefunds: 0 } &&
+            position.Refunded == deposit && calculation.DepositPositionConsistent && inspection?.NoAdditionalCharges == true;
+        if (returned) blockers.Remove("deposit_deduction_refund_policy_required");
         var resolved = blockers.Count == 0;
         var value = new ContractSettlementSummary(id, root.Id, c.RoomId, c.Room.RoomNumber, c.TenantUserId ?? throw ContractException.Conflict("active_tenant_account_required"), deposit, root.AppliedHoldingDeposit,
-            calculation.ContractSpecificOutstanding, inspection?.NoAdditionalCharges == true ? 0 : null, deposit == 0 ? 0 : null, deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
-            invoices, blockers.Distinct().Order().ToArray(), other, resolved, "", deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview", calculation);
+            calculation.ContractSpecificOutstanding, inspection?.NoAdditionalCharges == true ? 0 : null, deposit == 0 || returned ? 0 : null, returned ? deposit : deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
+            invoices, blockers.Distinct().Order().ToArray(), other, resolved, "", returned ? "VerifiedManual" : deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview", calculation, financialReference);
         // Snapshot identity includes sources and their revisions, no user supplied financial totals.
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { value, Root = root.Id, root.RequiredDeposit, deposits, Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges }, Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId } })));
         return value with { Reference = "BH40-" + fingerprint };

@@ -4,7 +4,7 @@ Ngày xác minh audit: **2026-11-06**. Schema: compact24-2026-11-04.
 
 Sinh từ action descriptors của BHome.Api và dò callsite client; không sửa bảng này bằng tay. Xem [trạng thái bàn giao và giới hạn](API_IMPLEMENTATION_STATUS.md), [quy ước](API_CONVENTIONS.md) và [mục lục module](README.md).
 
-**213 controller routes**, 208 protected (anonymous request trả 401), 5 anonymous; thêm 2 health endpoints. Owner GET probes: **105**, phân bố HTTP: 200=32, 204=2, 400=10, 403=3, 404=58.
+**215 controller routes**, 210 protected (anonymous request trả 401), 5 anonymous; thêm 2 health endpoints. Owner GET probes: **106**, phân bố HTTP: 200=32, 204=2, 400=10, 403=3, 404=59.
 
 Probe GET dùng ID không tồn tại hoặc thiếu query kiểm nhánh lỗi/không phụ thuộc legacy; không chứng minh mọi happy path. Route Development vẫn xuất hiện trong descriptor nhưng có environment/configuration gate. Có lời gọi nghĩa là có source callsite, chưa phải E2E; client dùng chung chưa chứng minh màn hình đã dùng. Wrapper action động có thể không được dò ra; xem phần đối chiếu thủ công trong trạng thái bàn giao.
 
@@ -358,6 +358,8 @@ Policy ở nhiều attribute áp dụng kết hợp; các role trong cùng attri
 
 | Method / route | Backend / database | Input / action | Quyền | Owner Web | Mobile |
 | --- | --- | --- | --- | --- | --- |
+| `GET /api/v1/contracts/{id:guid}/deposit-refunds` | Compact24 | [RefundsController.cs](../../src/backend/BHome.Api/Controllers/RefundsController.cs).DepositSource: id: Guid (Path) | Owner | Chưa tìm thấy lời gọi tương ứng | Chưa tìm thấy lời gọi tương ứng |
+| `POST /api/v1/contracts/{id:guid}/deposit-refunds` | Compact24 | [RefundsController.cs](../../src/backend/BHome.Api/Controllers/RefundsController.cs).CreateDeposit: id: Guid (Path); input: DepositRefundInput (Body) | Owner | Chưa tìm thấy lời gọi tương ứng | Chưa tìm thấy lời gọi tương ứng |
 | `GET /api/v1/payment-transactions/{id:guid}/refunds` | Compact24 | [RefundsController.cs](../../src/backend/BHome.Api/Controllers/RefundsController.cs).Source: id: Guid (Path) | Owner | Có lời gọi: [RefundPanel.tsx](../../src/owner-web/src/features/payments/RefundPanel.tsx) | Có client; chưa xác nhận UI: [refunds.ts:61](../../packages/client-core/src/refunds.ts#L61) |
 | `POST /api/v1/payment-transactions/{id:guid}/refunds` | Compact24 | [RefundsController.cs](../../src/backend/BHome.Api/Controllers/RefundsController.cs).Create: id: Guid (Path); input: RefundInput (Body) | Owner | Có lời gọi: [RefundPanel.tsx](../../src/owner-web/src/features/payments/RefundPanel.tsx) | Có client; chưa xác nhận UI: [refunds.ts:63](../../packages/client-core/src/refunds.ts#L63) |
 | `POST /api/v1/refund-requests/{id:guid}/decision` | Compact24 | [RefundsController.cs](../../src/backend/BHome.Api/Controllers/RefundsController.cs).Decision: id: Guid (Path); input: RefundDecision (Body) | Owner | Có lời gọi: [RefundPanel.tsx](../../src/owner-web/src/features/payments/RefundPanel.tsx) | Có client; chưa xác nhận UI: [refunds.ts:73](../../packages/client-core/src/refunds.ts#L73) |

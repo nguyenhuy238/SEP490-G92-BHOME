@@ -1,7 +1,51 @@
-# Hoàn tiền thừa thủ công — UC-22/25, BE-X07
+# Hoàn tiền thủ công — receipt thừa và cọc không khấu trừ
 
 Cập nhật **06/11/2026**, triển khai `12043f0`, UI recovery `17c4228`. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md),
 [Payment](PAYMENTS.md), [Finance](FINANCE.md). Đây là API đã triển khai trên Compact24, không phải đề xuất.
+
+## Bổ sung hoàn cọc không khấu trừ — BE-19/BE-X07
+
+GET/POST `/api/v1/contracts/{id}/deposit-refunds`, Owner-only. Dùng Security Deposit root của
+renewal chain, không dùng source_payment_id receipt. Không thêm bảng/cột. Chỉ khả dụng khi Contract
+Active, Owner đã duyệt termination/inspection và xác nhận NoAdditionalCharges, mọi kỳ invoice
+Final/paid, final readings đã billed/khớp, không dispute/bank/excess review, không holding hoặc
+deposit allocation chưa phân loại. GET vẫn trả balances và `blockers` khi chưa đủ điều kiện;
+mutation trả 409. Hư hỏng/khấu trừ có phí vẫn pending, không tự đặt phí bằng 0.
+
+GET dùng RefundSource chung với `sourcePaymentId:null`, `sourceDepositContractId` là root,
+`verifiedDepositAmount` chuỗi VND (không gọi cọc là excess: `excessAmount="0"`), `refundedAmount`,
+`reservedAmount`, `availableAmount`, `financialReference`, `blockers`, `beneficiaries`, `requests`.
+Beneficiaries là occupants Verified/liên kết tài khoản trong Contract, chưa phải bằng chứng ai
+đã nộp cọc. Owner bắt buộc đối chiếu khoản nộp/người nhận; không tự chọn representative.
+
+POST body `{refund:{beneficiaryResidentId,amount,reason,humanConfirmed:true},expectedFinancialReference,
+beneficiaryVerified:true,noDeductionsConfirmed:true}` + UUID Idempotency-Key. Owner xác nhận người
+nhận chính là người nộp theo bằng chứng đã kiểm và không khấu trừ; attestation/reference giữ trong
+append-only history `SecurityDepositRefundV1`. Cho phép partial return trong giới hạn khả dụng.
+Quyết định/execution/evidence dùng ba route `/refund-requests/{id}/...` hiện hữu, cùng
+version/key/hash/private storage/recovery guards. RefundView có `sourcePaymentId:null`,
+`sourceDepositContractId` khác null. Hai nguồn là loại trừ nhau, không tự chuyển khoản.
+
+`financialReference` giữ invoice/payment/inspection/deposit inputs, tách khỏi reservation/Completed
+của chính refund để không tự làm stale approval. Nghĩa vụ đổi thì approve/execute bị chặn; Reject
+vẫn giải phóng reservation. `summary.reference` đầy đủ vẫn đổi khi reserve/execute, được Owner xem
+xét trước settlement/complete. Chỉ khi hoàn toàn bộ cọc bằng workflow được phân loại, không còn
+reservation, tổng nguồn khớp và mọi guard khác đạt, summary trả `approvedDeductions="0"`,
+`refundAmount` đúng tổng, `transferVerificationStatus="VerifiedManual"`. Owner còn phải review
+settlement rồi complete; ngân hàng không được gọi tự động.
+
+Completed cũ/khác workflow hoặc thiếu marker/reference/evidence không bỏ blocker dù tiền bằng
+đúng cọc. Finance hiện giữ unclassified-refund guard cho deposit; không coi hoàn cọc là OPEX.
+UI Owner chưa nối hai route mới trong slice backend này; Tenant xem authorized summary,
+không có quyền duyệt/execution/tải private proof. Native/provider acceptance chưa chạy.
+
+Slice mới: Unit **13/13**, PostgreSQL **18/18** (12 workflow/refund/source/closure + 6 API audit),
+0 skip. Có duplicate/parallel approval, stale source, reject reservation, gián đoạn sau Put/recovery,
+đổi bytes bị chặn, Completed replay, unknown full refund không release, Tenant/Staff denial và
+Contract closure. Data/storage là fixtures tổng hợp; chưa phải browser/MinIO/native acceptance
+cho nguồn cọc mới.
+
+## Receipt-excess refund hiện hữu
 
 Quyết định triển khai theo ủy quyền người dùng OQ-01/02/05: chỉ hoàn phần chưa phân bổ của receipt VERIFIED đã có allocation và người trả xác định. Không tự phân bổ tiền thừa sang nghĩa vụ khác, tự chuyển tiền, tạo credit hoặc khấu trừ cọc. Source vẫn giữ nguyên Payment/Allocation/Final Invoice. Dùng refund_requests hiện hữu; không thêm bảng/cột. Deposit refund và khoản dư phát sinh từ Adjustment sau khi đã trả đủ nằm ngoài slice này.
 
@@ -96,5 +140,5 @@ không chạy lại các suite trên; xem [trạng thái](API_IMPLEMENTATION_STA
 
 Browser dùng dữ liệu/chứng từ tổng hợp, không gọi bank hoặc chứng minh tiền thật đã chuyển.
 Chưa có bank payout integration, Tenant refund self-service/history riêng, notification refund,
-credit, deposit refund/deduction/settlement hoặc refund dư phát sinh từ Adjustment sau Paid.
+credit, deposit deduction có phí hoặc refund dư phát sinh từ Adjustment sau Paid.
 Các nguồn cũ không phân loại tiếp tục manual review; không migration/đổi schema trong slice này.

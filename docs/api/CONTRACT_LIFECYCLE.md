@@ -127,8 +127,10 @@ vẫn Unconfigured, chưa nghiệm thu gửi thật.
 
 [Receipt-excess refund](REFUNDS.md) chỉ hoàn phần receipt chưa phân bổ, không phải refund cọc.
 Hoàn xong khoản dư đó không tự bỏ blocker `deposit_deduction_refund_policy_required` hoặc giải phóng Room.
-Không có journal deposit deduction/refund/settlement đầy đủ; nullable deductions/refund trong summary
-không được thay bằng 0 ở client để giả resolved. Chưa có MySign staging thật hoặc mẫu Production được duyệt.
+Slice mới [hoàn cọc không khấu trừ](REFUNDS.md) đã có nguồn deposit riêng và manual execution/evidence;
+chỉ hoàn đầy đủ, không reservation, source hợp lệ và mọi guard khác đạt mới bỏ blocker cọc. Nhánh
+khấu trừ có phí/journal đầy đủ còn thiếu; nullable không được đổi thành 0 để giả resolved.
+Chưa có MySign staging thật hoặc mẫu Production được duyệt.
 
 ## Settlement calculation — BE-19, 06/11/2026
 
@@ -146,6 +148,7 @@ cọc root theo số phiên bản. Received phải khớp deposit verifications;
 available null và blocker `deposit_ledger_reconciliation_required`.
 
 Đây là số dư nguồn trước quyết định Owner, **không phải lệnh khấu trừ hoặc số hoàn đã duyệt**.
-`refundAmount`/`approvedDeductions` vẫn null khi thiếu workflow quyết định; blocker cọc hiện hữu
-vẫn giữ. Mọi thay đổi source position làm đổi reference. Reader không hỗ trợ ledger persistence
-legacy offline trả unknown, không truy cập database khác.
+`refundAmount`/`approvedDeductions` vẫn null khi thiếu quyết định/verified completion; nhánh hoàn cọc
+không khấu trừ có thể xác nhận 0 deduction sau khi trả đủ. Mọi thay đổi position đổi reference;
+`financialReference` riêng giữ source obligations khi reservation/return thay đổi. Reader legacy
+offline trả unknown, không truy cập database khác.
