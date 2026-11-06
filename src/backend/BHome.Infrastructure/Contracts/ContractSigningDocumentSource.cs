@@ -9,7 +9,7 @@ using Microsoft.Extensions.Hosting;
 namespace BHome.Infrastructure.Contracts;
 
 // Retrieves an immutable, reviewed PDF. The pure template renderer remains independent of persistence.
-internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage, IHostEnvironment environment)
+internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage, IHostEnvironment environment) : IContractSigningDocumentSource
 {
     public async Task<byte[]?> ReadAsync(ContractDocument document, CancellationToken t)
     {

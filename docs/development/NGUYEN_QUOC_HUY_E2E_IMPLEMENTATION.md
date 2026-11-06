@@ -74,6 +74,16 @@ Thêm Owner-only reference-choices và optional assetId/taskId. UI lấy Rooms/A
 
 Browser `--finance --main-draft`: **10/10 nhóm đạt** với fixture Asset thật tại Room. Owner chọn Room/Asset khi ghi chi, mở correction thấy đúng liên kết bất biến; upload chứng từ và các nhóm Finance/contract/handover vẫn đạt. Handover kiểm toàn inventory kể cả Asset có sẵn. Không có production Work Order API để chạy browser tạo Work Order; UI không điền mock. Handoff Vũ Xuân Trường: INITIAL_API_UI_READY; reviewer và nghiệm thu upstream Work Order còn lại.
 
+Commit tham chiếu: `d628680426666109a46679b85df9cfa247c26144` — `feat(finance): [BE-31] link expenses to scoped assets and existing Work Orders`.
+
+### Regression BE-15/BE-X06 — dependency nguồn PDF, 06/11/2026
+
+Full regression lần đầu sau các slice: Domain **90/90**, Application **249/249**; Integration **600 đạt / 9 lỗi / 1 optional skip**, 610 tổng; Mobile **376/376**. Owner Web **130/132**, hai timeout router khi chạy đồng thời backend/Mobile. Đây là kết quả thất bại đã thực thi, không công bố full suite đạt. Không tăng timeout hoặc giảm assertions; chạy lại lần lượt sau khi sửa nguyên nhân.
+
+Hai lỗi PDF simulation do adapter mới phụ thuộc concrete source repository trong bài kiểm thử PDF thuần không cấu hình database. Đã đưa `IContractSigningDocumentSource` vào Application và inject qua interface; DI production vẫn dùng concrete kiểm database/hash. Bài PDF/mode thuần cấp explicit source boundary trả generic renderer; không mock chữ ký hoặc domain outcome. MainDraftReleaseTests tiếp tục dùng source thật. Không thêm fallback database hoặc bỏ integrity check.
+
+`dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~ContractWorkflowGuardTests|FullyQualifiedName~PropertyContractDockerTests|FullyQualifiedName~ReviewReleaseAndActivation|FullyQualifiedName~ReviewedMainDraftReleasesOnce' --verbosity minimal`: sau sửa các nguyên nhân dưới đây **21/21 đạt**, gồm guard môi trường simulation, PDF không có chữ ký điện tử, Main Draft source thật và Compact24 Property/Contract. Task BE-X06 vẫn chờ MySign staging/production template.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết

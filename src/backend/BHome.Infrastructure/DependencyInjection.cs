@@ -148,7 +148,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
-        services.AddScoped<BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningProvider>(p => p.GetRequiredService<BHome.Application.Contracts.IContractWorkflowMode>().SimulatedSigningEnabled
             ? p.GetRequiredService<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>()

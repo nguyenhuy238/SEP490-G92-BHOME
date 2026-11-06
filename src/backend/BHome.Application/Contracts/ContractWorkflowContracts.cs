@@ -5,6 +5,11 @@ using BHome.Domain.TenantContracts;
 namespace BHome.Application.Contracts;
 
 public interface IContractWorkflowMode { bool SimulatedSigningEnabled { get; } }
+public interface IContractSigningDocumentSource
+{
+    // Null selects the existing sealed-template renderer for contracts without a reviewed source.
+    Task<byte[]?> ReadAsync(ContractDocument document, CancellationToken t);
+}
 public sealed record ContractTemplateView(string Id, int Version, string Title, string Notice,
     bool Available, bool DevelopmentOnly, string? Blocker, IReadOnlyList<string> Fields);
 public sealed record ContractWorkflowConfiguration(ContractTemplateView Template, string SigningMode,

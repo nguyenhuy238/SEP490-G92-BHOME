@@ -29,7 +29,7 @@ internal sealed class ContractWorkflowMode(IOptions<ContractWorkflowOptions> opt
 
 // No CA, certificate or private signing key is created. This is an explicitly labelled simulation.
 internal sealed class DevelopmentContractSigningAdapter(IContractDocumentRenderer renderer, IContractWorkflowMode mode,
-    ICurrentUser user, ContractSigningDocumentSource documents) : IContractSigningProvider
+    ICurrentUser user, IContractSigningDocumentSource documents) : IContractSigningProvider
 {
     private void RequireDemo()
     {
