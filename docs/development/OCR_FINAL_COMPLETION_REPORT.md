@@ -1,10 +1,14 @@
-# BHOME OCR — kết quả thực hiện master task 05/11/2026
+# BHOME OCR — kết quả thực hiện master task 05–06/11/2026
 
 **Chưa hoàn tất OCR tự động bốn loại; không đủ bằng chứng để bật model mới.**
 Đã nghiên cứu/tải dữ liệu, gán nhãn, fine-tune GPU thật, export ONNX, kiểm tra
 trong .NET và chạy regression với MinIO thật. Điểm thiếu chính là dữ liệu nước
 điện tử và độ tin cậy nhận dạng ngoài tập nhỏ; không coi các test kỹ thuật qua
 là nghiệm thu độ chính xác OCR.
+
+Cập nhật 06/11: đã thêm adapter ONNX bốn lớp mặc định tắt, kiểm visual mismatch
+với Meter server và huấn luyện thêm LCD thật. Model LCD mới vẫn bị loại. Phần
+tiếp nối ở cuối tài liệu ghi kết quả mới; các bảng ngày05/11 dưới đây là lịch sử.
 
 ## Baseline và phạm vi
 
@@ -147,3 +151,144 @@ và `git log -4`. Các nhóm file chính: `scripts/Validate-MeterDataset.cjs`,
 `docs/datasets/meter/*`, `tools/BHome.OcrSmoke/{Program,PublicMeterEvaluation,TrainedYoloParity}.cs`,
 `tools/BHome.OcrSmoke/model_tools/*`, ba report OCR và CSV/JSON evidence.
 Không có thay đổi production service, controller, schema, auth hay Mobile source.
+
+## Tiếp nối master task — 06/11/2026
+
+**PARTIAL, chưa đạt nghiệm thu bốn loại hoặc production readiness.** Bắt đầu tại
+`8f5c751` trên `member/QHuy`; các commit ngày05/11 đã tồn tại nên không làm lại.
+Giữ nguyên hai tài liệu người dùng đang sửa. Không push/merge/deploy, không đưa
+ảnh, weights, secrets, crops, environment hoặc build output vào Git.
+
+### Công việc mới đã hoàn tất
+
+- Kiểm code/model/documentation, Release build và baseline thật. Năm artifact
+  đang dùng được đọc/ghi SHA256 trong [evidence mới](ocr-20261106-verification.json).
+- Nghiên cứu thêm public sources; tải pinned LCD preview50 JPEG +100 labels.
+  Card CC-BY-NC-4.0 chỉ cho nghiên cứu offline phi thương mại. Xem đủ50 ảnh,
+  quarantine7 ảnh, giữ43 train; không có ảnh nước điện tử mới phù hợp. Các nguồn
+  HTTP401/manual-gated không bị vượt quyền. [Nghiên cứu](OCR_DATASET_RESEARCH.md).
+- Tooling mới tải/receipt/hash, tách serial khỏi digits, kiểm VOC dimensions,
+  display containment, row geometry, quarantine; source mới cùng TRAIN. Dataset
+  206 train /2 val /4 development test; toàn ảnh nguồn được kiểm pHash trước
+  crop. Nhóm cùng nguồn không chứng minh đã biết physical meter IDs.
+- Fine-tune YOLOv8n LCD trên GPU49 epoch, export FP32 ONNX thật, native/ORT và
+  .NET parity6/6 mỗi loại. **Loại model** vì val0/1 exact và test còn2 false/4.
+  Không train lại để tune theo test. [Training report](OCR_MODEL_TRAINING_REPORT.md)
+  có config, source, checkpoint/hash, CSV và từng kết quả.
+- `YoloMeterCategoryClassifier` thực thi in-process ONNX với checksum, exact
+  four-class metadata/tensor, letterbox/NMS, cancellation, lazy singleton,
+  candidate ambiguity và bounds/score limits. Mặc định tắt; Production không
+  chạy. Chưa có trained four-class weights đủ điều kiện cấp cho adapter.
+- DI/engine đã nối adapter; outage giữ OCR cũ với warning, meter-only unknown
+  không chặn bằng chứng CCCD mạnh. Tác vụ dùng kind từ Meter server: visual
+  mismatch đủ confidence/nhiều meter không phát reading. Không override metadata.
+  Không thay API/schema, permission, precision, invoice hoặc confirmation policy.
+- 13 adapter tests gồm loader/ORT/concurrency bằng **Constant ONNX test graph**,
+  bốn class mappings, checksum/path/shape/NaN/NMS, Production/disabled/rollback,
+  rejected three-class artifact và PP thật khi adapter outage. Constant graph
+  kiểm kỹ thuật, hoàn toàn không phải accuracy/model huấn luyện bốn loại.
+
+[Kiến trúc](OCR_MODEL_ARCHITECTURE.md) phân biệt body detection, display detector,
+mechanical/digital readers, PP-OCR, parser và Staff confirmation. Mobile giữ
+nguyên một nút chụp, crop, correction, retake/cancel và selector sau capture;
+không cần sửa UI cho một model đang tắt.
+
+### Đo lại pipeline hiện hành
+
+52 ảnh analog water của author,33 ảnh có đầy đủ digit labels, resize1600/JPEG85,
+cùng weights và deadline. Đây là corpus đã dùng nhiều lần, có repeated meters
+và annotation/license gaps; chỉ đánh giá lịch sử, không đưa vào fine-tune mới.
+Chưa có decimal/register GT để gọi là billing accuracy độc lập.
+
+| Pipeline | Exact trên33 full labels | False trên full labels | Fallback /52 | Correct /mọi input | Correct /proposals |
+| --- | --- | --- | --- | --- | --- |
+| Typed nước cơ hiện hành | 10/33 | 0 | 42/52 | 10/52 (19.23%) | 10/10 |
+| Automatic hiện hành | 1/33 | 0 | 51/52 | 1/52 (1.92%) | 1/1 |
+
+Kết quả giữ nguyên baseline trong yêu cầu, **chưa giảm fallback**. Conditional
+accuracy100% trên ít proposal không chứng minh hệ thống tốt. Typed p50/p95/max
+282/892.45/1220ms; automatic4390/7034.3/8020ms,52/52 kết thúc≤10s. Không gồm
+upload, HTTP, startup, evidence storage hay load/SLA production.
+
+Automatic category baseline trên15 ảnh public development holdout: 9 meter
+(3 điện cơ,3 điện tử,2 nước cơ,1 nước điện tử) và6 negatives;0/9 đúng category,
+0 gán sai,15/15 unknown/ambiguous/unavailable. Không có GT số nên không tính
+exact reading ở tập này. Adapter mới tắt, không diễn giải đây là quality của
+model bốn lớp mới.
+
+| Loại | Body/display detection mới | Visual classification mới | Exact reading full-frame mới | False reading /fallback |
+| --- | --- | --- | --- | --- |
+| Điện cơ | NOT MEASURED | NOT MEASURED | NOT MEASURED | Chưa đủ GT để đo |
+| Điện tử | NOT MEASURED | NOT MEASURED | NOT MEASURED | LCD crops mới2 false/4 tổng, không phải full-frame |
+| Nước cơ | Giữ detector cũ, không đo lại P/R ở phiên này | NOT MEASURED | Typed10/33; auto1/33 trên corpus lặp | 0 false trên33; fallback42/52 typed,51/52 auto |
+| Nước điện tử | NOT MEASURED | NOT MEASURED | NOT MEASURED | Chỉ1 source body test, thiếu train/val/reading GT đại diện |
+
+LCD development crop test mới:2/3 readable exact digit strings,2 false/4 inputs,
+0 fallback; correct/all inputs2/4 và conditional2/4. Không suy digit accuracy,
+register eligibility hoặc decimal từ exact sequence. Kết quả test đã quan sát
+không còn là test nghiệm thu độc lập cho các quyết định tiếp theo.
+
+### Kiểm tra thực thi
+
+| Check | Kết quả |
+| --- | --- |
+| Backend Release và OcrSmoke build cuối | PASS,0 warning/error |
+| Application UnitTests toàn project | 276 PASS |
+| Domain UnitTests toàn project | 90 PASS |
+| OCR integration namespace, local-model opt-in, không CompactPostgres | 127 PASS,0 skip; gồm8 PostgreSQL/MinIO thật |
+| Adapter suite sau fix invalid-path | 13 PASS,0 skip;12 ca trùng suite127, không cộng thành test độc lập |
+| Compact24 meter confirmation + legacy invoice finalization | 6 PASS,0 skip; PostgreSQL disposable, MinIO riêng cho legacy finalization |
+| Compact24 invoice finalization trên schema hiện hành | 1 PASS,0 skip; database disposable riêng |
+| Mobile Vitest / typecheck / ESLint | 381 PASS / PASS / PASS |
+| Dataset Node validator / Python model tools | 28 PASS /14 PASS |
+| LCD mới native/ORT và .NET tensor parity | 6/6 mỗi phép đối chiếu |
+| Physical Android/iOS camera E2E | NOT RUN: không có camera/device automation session hoặc adb khả dụng |
+| Independent representative4-class acceptance/calibration | NOT RUN: dữ liệu/GT và model chưa đủ |
+
+Build đầu đã qua, một lượt build cuối bị MSB3021/MSB3027 vì benchmark của chính
+phiên này đang giữ DLL; đã đợi benchmark kết thúc và chạy lại cả hai build thành
+công. Lượt bootstrap PostgreSQL đầu dùng API RNG không có trên PowerShell5;
+đã sửa runner tạm sang RNG instance, chạy6/6 và xóa container do runner tạo.
+Test CCCD mới ban đầu chọn fixture thiếu title cần cho classification; chuyển
+sang fixture automatic có sẵn đúng hợp đồng, không nới assertion/rules. Một
+lệnh Mobile ban đầu bị npm.ps1 execution policy; chạy npm.cmd cùng Node22,
+không sửa policy máy. Không còn failure chưa xử lý ở các gate trên.
+
+Capture integration dùng OCR stub/synthetic để cố định nhánh workflow; đó là
+bằng chứng authorization/evidence/transaction/confirmation, không phải camera
+thật→model thật→billing E2E. HTTP model thật/parity đo riêng. Không cộng lại
+những suite/scenario có dùng chung test.
+
+Raw reports/logs: `.tools/ocr-20261106-*`; TRX nằm trong IntegrationTests/TestResults.
+[JSON tổng hợp](ocr-20261106-verification.json) và training CSV/results có hash
+nguồn để đối chiếu; raw ảnh/model vẫn ngoài Git.
+
+### Chưa thể nghiệm thu
+
+Thiếu dữ liệu nước LCD được phép dùng, independent GT bốn loại (body/display,
+digits/precision/register, multiple meters, unreadable/status/segment-test),
+model vượt false-proposal/open-set/calibration gates và camera E2E. Điện cơ,
+điện tử, nước điện tử vẫn giữ PP/manual, chưa có specialized reader mới được
+chứng minh để bật. Không có ≥90% accuracy hoặc ≥95% classification claim.
+Những phần này không được đánh dấu completed chỉ vì adapter/test/build qua.
+
+### Commit tiếp nối và file thay đổi
+
+| Commit | Message | Mô tả | Kiểm tra |
+| --- | --- | --- | --- |
+| `63d1995` | `docs(ocr): audit additional public LCD datasets` | Source/license/gaps | API/download151 assets, review50 ảnh, baseline build/unit |
+| `0e8f18f` | `chore(ocr): prepare audited LCD preview training data` | Downloader, quarantine, train isolation | Python14, Node28, prepare206/2/4 thật |
+| `9903527` | `test(ocr): benchmark expanded LCD fine-tuning` | GPU train/export/parity, model rejected |49 epoch, native6/.NET6, exact/false metrics |
+| `a29833e` | `feat(ocr): add guarded four-class ONNX classification` | Adapter/DI/task mismatch/CCCD fallback | Build, OCR127, adapter12, Application276, Domain90 |
+| `7c0aacb` | `fix(ocr): fall back on invalid classifier artifact paths` | Bảo toàn fallback khi path lỗi | Adapter13, Release/tool builds |
+| `HEAD` (commit báo cáo này) | `docs(ocr): record verification results and remaining model gates` | Tổng hợp evidence/giới hạn | Kiểm JSON, links, diff, history |
+
+Hash đầy đủ của mọi commit, kể cả commit báo cáo, được tạo sau commit cuối tại
+`.tools/ocr-20261106-git-history.md`; tái tạo bằng `git log --reverse 8f5c751..HEAD`.
+Không thể nhúng hash của một commit vào chính nội dung commit đó.
+
+File source chính: Infrastructure/Ocr `YoloMeterCategoryClassifier`,
+`MeterCategoryValidation`, `OnnxOcrEngine`, `OcrOptions`, interface/warmup và DI;
+test `YoloMeterCategoryClassifierTests`; model tools `download_lcd_preview`,
+`lcd_preview_training`, `prepare_lcd_digits`; Python tests; dataset TRAINING/
+preparation metadata; API conventions và các report/results OCR được link ở đây.
