@@ -23,6 +23,7 @@ internal static class MeterReadingParser
             var match = Match(text, $@"^(?<label>{Label})?(?:(?<prefix>{Unit})\s*:?\s*)?(?<value>{Number})\s*(?<unit>{Unit})?$");
             if (!match.Success)
             {
+                if (MeterOcrLayout.IsNonBillingQuantity(text)) warnings.Add("billing_register_unverified");
                 unmatchedNumbers |= text.Any(char.IsDigit);
                 continue; // serials, voltage/current, dates, OBIS and malformed decimals
             }

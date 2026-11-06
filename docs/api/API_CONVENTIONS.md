@@ -184,6 +184,8 @@ next to a flow-rate/electrical-parameter/TDS/unsupported volume unit (for exampl
 returns fallback with `billing_register_unverified`. A distant parameter label
 does not suppress a properly associated billing unit. No unit conversion or
 client precision change is introduced.
+Stage2 fusion also retains this rejection for a single PP line with an explicit
+non-billing quantity; it cannot treat that line as malformed text to bypass the veto.
 
 An experimental four-class YOLO category adapter is available through
 `Ocr:VisualClassifier` but remains disabled by default and refuses inference
