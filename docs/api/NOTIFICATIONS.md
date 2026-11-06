@@ -42,6 +42,11 @@ xử lý trong transaction riêng, advisory lock theo key và publication marker
 recipient/eventKey. Nguồn chỉ đọc sau commit; không chạy provider trong transaction tài chính.
 Batch tối đa 25/source mỗi lượt, backlog tiếp tục các lượt sau, không có cursor in-memory.
 
+Harness move-out hiện đã explicit gọi Testing-only `process-events`, đọc Tenant inbox, kiểm quyền
+Staff/Tenant khác và Owner browser mở đúng Contract từ thông báo closure. Hai chế độ đạt
+22 nhóm có phí/21 nhóm không phí; no duplicate publication. Worker vẫn tắt, DeliveryState giữ
+Unconfigured; không suy kết quả này thành kiểm chứng lịch worker, email/push hoặc native UI.
+
 | Source                                       | Recipients / safe links                                                                             |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | InvoiceIssuedEvents                          | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                              |

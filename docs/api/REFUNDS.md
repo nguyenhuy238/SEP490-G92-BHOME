@@ -76,6 +76,12 @@ Terminated/Room Available. Kiểm bytes chứng từ, invoice/allocations bất 
 nguồn khác nhau trong DB; Staff ngoài assignment/cross-Tenant bị chặn. Signing/bank vẫn synthetic,
 Mobile là transport/API, notification worker tắt; không suy thành native/provider/notification acceptance.
 
+Hồi quy sau khấu trừ/Finance/inbox: cùng harness đạt **21/21 nhóm** không phí và thêm
+`--damage-settlement` đạt **22/22 nhóm**, Owner duyệt thiệt hại100.000/hoàn2.900.000 từ cọc3.000.000.
+Report giữ Invoice/OPEX/capital totals, loại demo return; Owner browser inbox mở Contract qua target
+reauthorization và Tenant thấy đúng event một lần. Có explicit Testing-only event pump, worker vẫn
+tắt; chỉ chứng minh in-app publication, external delivery vẫn Unconfigured. Không có payout thật.
+
 ## Receipt-excess refund hiện hữu
 
 Quyết định triển khai theo ủy quyền người dùng OQ-01/02/05: chỉ hoàn phần chưa phân bổ của receipt VERIFIED đã có allocation và người trả xác định. Không tự phân bổ tiền thừa sang nghĩa vụ khác, tự chuyển tiền, tạo credit hoặc khấu trừ cọc. Source vẫn giữ nguyên Payment/Allocation/Final Invoice. Dùng refund_requests hiện hữu; không thêm bảng/cột. Deposit refund và khoản dư phát sinh từ Adjustment sau khi đã trả đủ nằm ngoài slice này.

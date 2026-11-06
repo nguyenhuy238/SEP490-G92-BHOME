@@ -730,9 +730,32 @@ TESTS:
 - Domain90, Application276, DigitalSigning41 pass và Owner155/Mobile381 pass ở lượt regression vừa chạy; full integration cần chạy lại sau fix.
 COMMIT:
 - Message: fix(test): [BE-X08] initialize Compact24 workflow fixtures through xUnit
-- SHA ghi sau commit fixture constructor.
+- SHA: `d7fec61e7c1ce42547a68dd4b9486c956ffbfb1e`.
 FRONTEND HANDOFF:
 - Không thay frontend/business behavior; QA Nguyễn Quang Huy tiếp tục dùng cùng regression commands.
 STATUS: DONE cho fixture defect; final integration regression còn chờ chạy lại.
 REMAINING:
 - Full integration, browser report/inbox E2E, cập nhật evidence package và docs/audit links.
+
+TASK: BE-19 / BE-X07 / BE-X08 / JOB-04
+SLICE: Browser kiểm report classification và persistent settlement inbox
+IMPLEMENTED:
+- Extend real move-out harness sau manual return/closure; API report so với trước return giữ totals/capital và loại isDevelopmentDemo principal returns.
+- Explicit Testing-only process-events pump khi worker tắt. Owner browser mở closure notice → reauthorized Contract target; Tenant nhận đúng deduction/refund/closure, chạy lại không trùng. Staff/unassigned Staff/cross-Tenant/co-occupant không entitlement không nhận finance notice.
+- Owner report hiện verifiedDepositReturns và note retained damage chưa nằm trong Invoice/OPEX model; không fallback mock.
+CHANGED FILES:
+- scripts/Verify-MoveOutClients.cjs; docs/api/{CONTRACT_LIFECYCLE,REFUNDS,NOTIFICATIONS}.md và báo cáo này.
+TESTS:
+- dotnet build tools/BHome.ContractVerification --no-restore sau full testhost kết thúc: đạt, 0 warning/error.
+- --finance --main-draft --damage-settlement: exit0, 22/22 nhóm PASS; --finance --main-draft: exit0, 21/21 nhóm PASS.
+- Logs huy-final-{damage,undisputed}-browser.log, huy-final-harness-build-rerun.log. MinIO/API/browser/disposable DB cleanup hoàn tất; node --check và diff check đạt.
+- Build ban đầu chạy cùng testhost bị Windows khóa DLL (18 copy errors); tách tuần tự và build lại đạt. Script từng trùng local const target, node syntax check phát hiện và sửa trước chạy browser. Không tăng timeout/giảm assertions hoặc sửa production để che lỗi.
+- Manual pump chỉ nghiệm thu persistent inbox/deep-link, không JOB scheduling/email/push. Signing/bank synthetic; Mobile transport, không native UI.
+COMMIT:
+- Message: test(moveout): [BE-19] verify settlement inbox and finance reporting in browser
+- SHA ghi sau commit final settlement browser.
+FRONTEND HANDOFF:
+- Owner Vũ Xuân Trường review UX; Mobile Bùi Bảo Long chạy native; QA Nguyễn Quang Huy chuyển evidence sang Report5.
+STATUS: DONE cho các browser paths nêu trên; external/native acceptance còn PARTIAL/BLOCKED.
+REMAINING:
+- Chốt current status/evidence package và cleanup test cluster. Không có Holding policy, staging MySign, bank/email/push hoặc device mới trong lượt này.

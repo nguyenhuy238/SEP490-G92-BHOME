@@ -36,6 +36,8 @@ module.exports = async function verify({
   const invoice = invoicePage.items.find((i) => i.roomId === room.id);
   assert.ok(invoice);
   const issued = await tenant.invoices.get(invoice.id);
+  const reportRoute = `/api/v1/financial-reports?from=${today}&to=${today}&locationId=${room.locationId}`;
+  const reportBefore = await owner.api.request(reportRoute);
   await assert.rejects(
     otherTenant.contracts.settlementSummary(contractId),
     (e) => e.status === 404,
@@ -340,6 +342,15 @@ module.exports = async function verify({
   assert.equal(returned.approvedDeductions, deductionAmount);
   assert.equal(returned.calculation.availableSecurityDeposit, '0');
   assert.equal(returned.transferVerificationStatus, 'VerifiedManual');
+  const reportReturned = await owner.api.request(reportRoute);
+  assert.equal(reportReturned.hasUnclassifiedRefunds, false);
+  assert.equal(
+    reportReturned.verifiedDepositReturns,
+    '0',
+    'Explicitly simulated Contract returns are excluded from actual finance totals',
+  );
+  assert.deepEqual(reportReturned.total, reportBefore.total);
+  assert.deepEqual(reportReturned.capital, reportBefore.capital);
   assert.equal(returned.financialReference, before.financialReference);
   assert.notEqual(returned.reference, before.reference);
   const download = page.waitForEvent('download');
@@ -382,5 +393,69 @@ module.exports = async function verify({
   assert.equal((await owner.api.request(sourceRoute)).availableAmount, '0');
   console.log(
     'PASS: Owner browser reviews the final source snapshot and closes the Contract; the Room is released once, the shared Final invoice/allocations remain immutable, and source-specific refund/history survives reload. Bank-provider and native-device acceptance remain unverified.',
+  );
+
+  // Worker remains disabled: explicitly run the existing Testing-only publisher endpoint.
+  for (let i = 0; i < 5; i++) await post(owner, '/api/v1/notifications/process-events', {});
+  const inboxRoute = '/api/v1/notifications?category=Contract&pageSize=100';
+  const tenantNotices = (await tenant.api.request(inboxRoute)).items;
+  const completedNotice = tenantNotices.filter(
+    (n) => n.relatedObjectId === contractId && n.title === 'Hợp đồng đã hoàn tất trả phòng',
+  );
+  assert.equal(completedNotice.length, 1);
+  assert.equal(completedNotice[0].deliveryState, 'Unconfigured');
+  assert.equal(
+    tenantNotices.filter(
+      (n) =>
+        n.relatedObjectId === contractId &&
+        n.title === 'Giao dịch hoàn cọc đã được xác minh thủ công',
+    ).length,
+    1,
+  );
+  assert.equal(
+    tenantNotices.filter(
+      (n) =>
+        n.relatedObjectId === contractId && n.title === 'Owner đã ghi nhận quyết định khấu trừ cọc',
+    ).length,
+    charged ? 1 : 0,
+  );
+  const noticeTarget = await tenant.api.request(`/api/v1/notifications/${completedNotice[0].id}/target`);
+  assert.equal(noticeTarget.objectId, contractId);
+  await assert.rejects(
+    otherTenant.api.request(`/api/v1/notifications/${completedNotice[0].id}/target`),
+    (e) => e.status === 404,
+  );
+  for (const actor of [staff, otherStaff, coTenant1, otherTenant])
+    assert.equal(
+      (await actor.api.request(inboxRoute)).items.filter((n) => n.relatedObjectId === contractId)
+        .length,
+      0,
+    );
+  const count = tenantNotices.length;
+  await post(owner, '/api/v1/notifications/process-events', {});
+  assert.equal((await tenant.api.request(inboxRoute)).items.length, count);
+  await page.goto(settings.origin + '/notifications');
+  await page.getByRole('combobox', { name: 'Nhóm thông báo', exact: true }).click();
+  await page.getByRole('option', { name: 'Hợp đồng', exact: true }).click();
+  const closedTitle = page.getByRole('heading', {
+    name: 'Hợp đồng đã hoàn tất trả phòng',
+    exact: true,
+  });
+  await closedTitle.waitFor();
+  const card = closedTitle.locator('xpath=ancestor::*[contains(@class,"MuiPaper-root")][1]');
+  await card.getByRole('button', { name: 'Mở hồ sơ liên quan', exact: true }).click();
+  await page.waitForURL(`**/contracts?contractId=${contractId}`);
+  console.log(
+    'PASS: explicitly pumped committed move-out/deposit events reach the real Owner inbox and entitled Tenant transport once; browser deep-link reauthorizes the Contract, other Tenants/Staff receive no finance notice, and external delivery remains Unconfigured.',
+  );
+
+  await page.goto(settings.origin + '/reports');
+  await page.getByLabel('Từ ngày').fill(today);
+  await page.getByLabel('Đến ngày').fill(today);
+  await page.getByRole('button', { name: 'Xem báo cáo', exact: true }).click();
+  await page.getByText('Hoàn gốc cọc đã xác minh trong kỳ: 0 ₫', { exact: true }).waitFor();
+  await page.getByText(/khoản giữ cọc bồi thường thiệt hại chưa được cộng/).waitFor();
+  console.log(
+    'PASS: real Finance API and Owner report classify the completed deposit principal separately, exclude explicit demo returns, keep invoice/OPEX/capital totals unchanged and explain excluded retained damage.',
   );
 };

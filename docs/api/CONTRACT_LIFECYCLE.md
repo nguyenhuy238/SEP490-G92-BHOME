@@ -130,7 +130,9 @@ Hoàn xong khoản dư đó không tự bỏ blocker `deposit_deduction_refund_p
 Slice mới [hoàn cọc không khấu trừ](REFUNDS.md) đã có nguồn deposit riêng và manual execution/evidence;
 chỉ hoàn đầy đủ, không reservation, source hợp lệ và mọi guard khác đạt mới bỏ blocker cọc. Nhánh
 khấu trừ `TenantDamage` nay có [backend plan/evidence/remainder journal](DEPOSIT_DEDUCTIONS.md),
-Owner UI/E2E có phí đang tiếp tục; nullable không được đổi thành 0 để giả resolved.
+Owner Web editor/refund review và browser có phí đã chạy; nullable không được đổi thành 0 để giả
+resolved. Final harness đạt 22 nhóm có phí và 21 nhóm không phí, gồm inbox explicit pump và Finance
+report. Không suy thành native, bank-provider/MySign hoặc notification scheduling/delivery acceptance.
 Chưa có MySign staging thật hoặc mẫu Production được duyệt.
 
 ## Settlement calculation — BE-19, 06/11/2026
