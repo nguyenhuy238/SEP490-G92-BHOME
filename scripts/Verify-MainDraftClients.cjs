@@ -197,4 +197,5 @@ module.exports = async function verify(settings, page) {
   console.log(
     'PASS: browser and Mobile complete explicitly simulated signatures, verified synthetic deposit and Owner activation; persisted Tenant state and Room occupancy agree. Actual MySign acceptance is BLOCKED.',
   );
+  await require('./Verify-HandoverClients.cjs')({ actors, contractId: draft.id, room, today, page });
 };

@@ -14,6 +14,8 @@ Owner Web yêu cầu lưu hết thay đổi, chọn tài khoản, tải PDF và 
 
 Kiểm chứng 06/11: `BHome.ContractVerification --finance --main-draft` dùng API thật, Compact24/MinIO tạm, Owner Web build thật và Staff/Tenant Mobile transport thật. Đạt review/release từ danh sách, bytes PDF giống nhau, scope âm, ký simulation/cọc tổng hợp/Owner activation. UI sau release chuyển khỏi editor; native device và MySign staging chưa nghiệm thu. Bằng chứng chi tiết ở [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
 
+UC-17 regression tiếp theo: evidence/meter baseline → Staff record → Tenant dispute/correction → same-version Tenant/Staff confirmation → Owner Web monitor/download đã đạt qua API/Compact24/MinIO thật. Shared hook không giữ record từ context cũ; Mobile consent gắn Contract/version và reset khi server trả version mới. Không đổi endpoint/DTO; native camera/device vẫn chưa chạy.
+
 Truy vết: BF-03B/BF-04A, FE-03, UC-15/16/19, GBR-01/02/04/18, DBR-02/03.
 Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 [bàn giao backend](../development/CONTRACT_LIFECYCLE_DELIVERY.md).

@@ -34,6 +34,18 @@ Changed files: ContractsPage, FinanceVerificationCli/ContractVerificationCli, Ve
 
 Validation slice: harness .NET build **0 warning/error**; Owner Web build/lint đạt; Mobile typecheck/lint đạt với Node 22. Các lệnh/kết quả chỉ áp dụng các thay đổi đã nêu, chưa thay cho full regression cuối đợt.
 
+Commit kiểm chứng client: `51c0d3f7065c6b46fda4c82258335fb21f543fd0` — `fix(contract): [BE-15] leave draft editor after release and verify real clients`.
+
+### Slice BE-17 — xác nhận đúng phiên bản bàn giao, 06/11/2026
+
+UC-17 / GBR-01/02/18 → shared useContractHandover, Mobile ContractHandoverPanel, API hiện hữu → test đổi Contract, phiên bản server thay đổi, quyền Staff/Tenant và bàn giao với evidence thật. Lỗi tìm được: Mobile giữ checkbox từ phiên bản trước khi server trả phiên bản mới; shared hook cũng giữ record cũ khi đổi context/tải lại lỗi. Đã gắn dữ liệu với client/Contract/role/revision và xác nhận với Contract/version. UI phải hiển thị đúng record trước khi cho xác nhận; backend vẫn kiểm version và quyền như cũ. Không đổi schema, API hay quy tắc xác nhận.
+
+`npm.cmd run test --workspace src/mobile -- handover-ui.test.tsx signing-ui.test.tsx --maxWorkers=1`: **8/8 đạt**. Test mới kiểm consent của phiên bản mới, ẩn nội dung cũ khi đổi Contract/read bị từ chối, Staff bị khóa trước Tenant confirmation và lỗi server không báo thành công. Mobile typecheck/lint đạt. `npm.cmd run test --workspace src/owner-web -- src/features/contracts/Contracts.test.tsx src/features/contracts/ContractLifecyclePanel.test.tsx --maxWorkers=1`: **13/13 đạt**.
+
+Harness hiện hữu `--finance --main-draft` mở rộng `Verify-HandoverClients.cjs`: **9/9 nhóm đạt**. Hai Initial tasks/ảnh PNG tổng hợp thật được upload MinIO và Staff human-confirm qua MobileApi; test thiếu human confirmation, sai utility, duplicate reading replay. Tạo Asset qua API, upload ảnh bàn giao riêng tư, Staff save/replay, Tenant dispute, Staff sửa, stale confirmation 409, Tenant xác nhận v2 rồi Staff hoàn tất. Owner browser đọc đúng inventory/confirmed v2 và tải ảnh private; Tenant tải đúng ảnh bàn giao/điện, cross-Tenant 404. History có đủ 5 event, không cho sửa bản Confirmed. Không seed reading/Active trực tiếp vào DB. Đây là Mobile transport + component evidence; native camera/device E2E vẫn NOT RUN.
+
+Changed files: useContractHandover, ContractHandoverPanel, handover-ui test, Verify-HandoverClients/Verify-MainDraftClients và tài liệu. Handoff Vũ Xuân Trường/Bùi Bảo Long; BE-17 chưa đóng native acceptance.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết
