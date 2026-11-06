@@ -8,11 +8,27 @@ export interface ExpenseInput {
   amount: string;
   occurredOn: string;
   note: string;
+  assetId?: string | null;
+  taskId?: string | null;
 }
 export interface Expense extends ExpenseInput {
   id: string;
   version: number;
   canEdit: boolean;
+  assetName?: string | null;
+  taskTitle?: string | null;
+}
+export interface ExpenseReference {
+  id: string;
+  label: string;
+  roomId: string | null;
+  assetId: string | null;
+}
+export interface ExpenseReferences {
+  rooms: ExpenseReference[];
+  assets: ExpenseReference[];
+  workOrders: ExpenseReference[];
+  truncated: boolean;
 }
 export interface ExpenseFilter {
   locationId?: string;
@@ -148,6 +164,11 @@ export function financeClient(request: ContractRequest) {
     },
     expense: (id: string, signal?: AbortSignal) =>
       request<Expense>(`/api/v1/expenses/${id}`, { signal }),
+    expenseReferences: (locationId: string, roomId?: string | null, signal?: AbortSignal) =>
+      request<ExpenseReferences>(
+        `/api/v1/expenses/reference-choices?${new URLSearchParams({ locationId, ...(roomId ? { roomId } : {}) })}`,
+        { signal },
+      ),
     expenseEvidence: (id: string, signal?: AbortSignal) =>
       request<ExpenseEvidence[]>(`/api/v1/expenses/${id}/evidence`, { signal }),
     uploadExpenseEvidence: (

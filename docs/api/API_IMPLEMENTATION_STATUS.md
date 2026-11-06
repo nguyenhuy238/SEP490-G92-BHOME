@@ -8,6 +8,8 @@ Audit chạy lại ngày 05/11 xác nhận **199 controller routes**: **194 rout
 
 Bổ sung 06/11: Expense evidence có 3 route Owner-only (GET list/POST image/GET file). Owner Web nối upload/reload/private download; có PendingUpload/retry/hash validation và không đổi schema. Xem [FINANCE.md](FINANCE.md). Chưa tái sinh số đếm route toàn bộ ở phần đầu tài liệu.
 
+Expense `GET reference-choices` Owner-only đọc Room/Asset/Work Order đã tồn tại; POST expense hỗ trợ optional assetId/taskId và giữ incident link. Không có Work Order lifecycle API mới; dữ liệu nguồn và status không được giả trong client. Chi tiết scope/correction/idempotency và giới hạn trong FINANCE.md.
+
 Bổ sung Main Draft ngày 05/11: thêm `POST main-drafts/{id}/signing-review` và `POST main-drafts/{id}/release`, Owner Web dùng shared client; released Draft nối lại signing/deposit/activation hiện hữu trên Web/Mobile. Canonical PDF được kiểm hash và dùng nguyên bytes khi ký. Chỉ mẫu Development/Testing có nhãn; Production bị chặn. Chi tiết quyền/body/lỗi: [CONTRACT_LIFECYCLE.md](CONTRACT_LIFECYCLE.md). Hai route mới chưa nằm trong số liệu audit 199 route ở trên; chưa chạy lại inventory toàn bộ.
 
 Đã thêm 9 routes Owner-only: Expenses GET collection/GET by ID/POST/PUT, GET financial-reports, Financial-scenarios POST analyze/POST save/GET collection/GET by ID. DTO, công thức, quyền, validation, fixture và handoff ở [FINANCE.md](FINANCE.md). Owner Web `/expenses`, `/reports`, `/what-if` và `/locations/:locationId/investment` dùng shared client thật trong API mode, không fallback demo. Browser E2E đã kiểm tạo/sửa/reload expense, route theo cơ sở, report, scenario save/reload và cấu hình hợp đồng. UI cần Owner Web reviewer; không suy rộng kết quả này sang toàn bộ client.

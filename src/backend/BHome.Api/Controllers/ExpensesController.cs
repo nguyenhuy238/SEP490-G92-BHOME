@@ -10,6 +10,8 @@ namespace BHome.Api.Controllers;
 public sealed class ExpensesController(ExpenseService service, ExpenseEvidenceService evidence) : ControllerBase
 {
     [HttpGet] public Task<ExpensePage> List([FromQuery] ExpenseFilter filter, CancellationToken token) => service.ListAsync(filter, token);
+    [HttpGet("reference-choices")]
+    public Task<ExpenseReferences> References([FromQuery] Guid locationId, [FromQuery] Guid? roomId, CancellationToken token) => service.ReferencesAsync(locationId, roomId, token);
     [HttpGet("{id:guid}")] public Task<ExpenseView> Get(Guid id, CancellationToken token) => service.GetAsync(id, token);
     [HttpPost] public Task<ExpenseView> Create(ExpenseInput input, CancellationToken token) => service.CreateAsync(input,
         Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty, token);

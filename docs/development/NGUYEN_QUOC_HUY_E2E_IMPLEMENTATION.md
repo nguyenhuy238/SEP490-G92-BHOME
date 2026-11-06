@@ -62,6 +62,18 @@ Browser dùng PNG tổng hợp >32 KB và <5 MB, xác nhận action upload trên
 
 Changed files: ExpenseEvidenceService/Repository, ExpensesController, DI, finance client, ExpenseEvidencePanel/test, ExpensesApiPage/test, Compact24ExpenseEvidenceTests, browser helper và docs. Handoff Vũ Xuân Trường, INITIAL_API_UI_READY. BE-31 vẫn PARTIAL vì chọn Asset/Work Order và reviewer còn lại. Holding giữ chặn OQ-03/Q-H1 (hạn hiệu lực/payment deadline/thời điểm chuyển và hoàn tác cọc chưa có quyết định); không tự chọn deadline. Refund/settlement giữ explicit Pending theo phạm vi đã ghi.
 
+Commit chứng từ: `b7ac7fb034288fc481601678729bbdcee264c1c7` — `feat(finance): [BE-31] store private expense evidence with recoverable uploads`.
+
+### Slice BE-31 — tham chiếu tài sản/công việc nguồn, 06/11/2026
+
+UC-31 / FE-08 / GBR-01/02/18 và liên kết OperatingExpense với Work Order trong BF-07 → ExpenseService/Repository/Controller và ExpensesApiPage → acceptance nguồn cùng Location/Room/Asset, task type, immutable links, key replay và old fingerprint. Đã kiểm schema thực: expenses có asset_id/task_id/incident_report_id; operational_tasks phân biệt WORK_ORDER với các loại khác. Không thêm bảng/cột hoặc backend Work Order trùng module của nhóm.
+
+Thêm Owner-only reference-choices và optional assetId/taskId. UI lấy Rooms/Assets/Work Orders thật theo scope, auto chọn Asset khi Work Order có nguồn cụ thể. Tạo expense khóa Location và kiểm lại scope; ghi incident link từ Work Order; chỉ OPERATING liên kết Work Order. Correction giữ nguyên source links. Null optional fields không thay hash của request cũ. Không tự hạch toán lại khoản chi hoặc tự approve plan/cost theo Work Order status.
+
+`dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter 'FullyQualifiedName~Compact24ExpenseTests' --verbosity minimal`: **8/8 đạt**, 0 skip. Có wrong Room/Location Asset, General task, inconsistent Incident source, missing Asset cho Work Order, Owner/Staff quyền, source preservation/correction và tương thích fingerprint cũ. Work Order fixtures là dữ liệu nguồn tổng hợp có sẵn bằng SQL trên schema test, không phải chứng minh workflow BF-07 đã có. `npm.cmd run test --workspace src/owner-web -- src/features/expenses --maxWorkers=1`: **8/8 đạt**, có UI chọn đúng IDs; Owner Web build/lint và harness build 0 warning/error đạt.
+
+Browser `--finance --main-draft`: **10/10 nhóm đạt** với fixture Asset thật tại Room. Owner chọn Room/Asset khi ghi chi, mở correction thấy đúng liên kết bất biến; upload chứng từ và các nhóm Finance/contract/handover vẫn đạt. Handover kiểm toàn inventory kể cả Asset có sẵn. Không có production Work Order API để chạy browser tạo Work Order; UI không điền mock. Handoff Vũ Xuân Trường: INITIAL_API_UI_READY; reviewer và nghiệm thu upstream Work Order còn lại.
+
 Ngày bắt đầu: 05/11/2026. Nhánh `member/QHuy`; baseline `5357b39`. Working tree ban đầu sạch. Đây là báo cáo tiến độ thực thi; không phải xác nhận hoàn tất 22 nhiệm vụ. Không push/merge, không ghi vào database làm việc `bhome`.
 
 ## Nguồn và truy vết

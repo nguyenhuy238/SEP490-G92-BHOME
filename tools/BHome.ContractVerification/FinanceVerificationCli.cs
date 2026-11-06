@@ -54,7 +54,9 @@ internal static class FinanceVerificationCli
                 var chain=new Chain{Name="Synthetic Finance Chain"};db.Add(chain);await db.SaveChangesAsync();
                 var location=new Location("Cơ sở kiểm thử tài chính"){ChainId=chain.Id,Address="Địa chỉ tổng hợp"};locationId=location.Id;
                 var type=new RoomType{LocationId=location.Id,Name="Synthetic",DefaultCapacity=2};
-                db.AddRange(location,type,new Room{LocationId=location.Id,RoomTypeId=type.Id,RoomNumber="FIN-01",Capacity=2,Status=RoomStatus.Available});await db.SaveChangesAsync();
+                var room=new Room{LocationId=location.Id,RoomTypeId=type.Id,RoomNumber="FIN-01",Capacity=2,Status=RoomStatus.Available};db.AddRange(location,type,room);
+                if(mainDraft)db.Add(new Asset{LocationId=location.Id,RoomId=room.Id,Name="SYNTHETIC EXPENSE ASSET",Category="Furniture",Condition="Tốt"});
+                await db.SaveChangesAsync();
             }
             using var key=RSA.Create(2048);var request=new CertificateRequest("CN=localhost",key,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1);
             var san=new SubjectAlternativeNameBuilder();san.AddDnsName("localhost");request.CertificateExtensions.Add(san.Build());

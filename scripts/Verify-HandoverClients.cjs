@@ -62,13 +62,14 @@ module.exports = async function verify({ actors, contractId, room, today, page }
     readings.push(reading.id);
   }
   const evidence = await staff.contracts.uploadHandover(contractId, photo, 'image/png');
+  const inventory = await staff.contracts.handoverChoices(contractId);
   const input = {
     version: 0,
     date: today,
     roomCondition: 'Phòng tổng hợp sạch, cần xác nhận',
     keysAndAccess: 'Hai chìa khóa tổng hợp',
     notes: 'Biên bản kiểm thử',
-    assets: [{ id: asset.id, condition: 'Tốt, đủ kiểm kê' }],
+    assets: inventory.assets.map((a) => ({ id: a.id, condition: 'Tốt, đủ kiểm kê' })),
     electricityReadingId: readings[0],
     waterReadingId: readings[1],
     evidenceIds: [evidence.id],

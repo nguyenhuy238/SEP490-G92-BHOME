@@ -45,6 +45,12 @@ async function main(settings) {
     await page.getByRole('button', { name: 'Đăng nhập vào hệ thống', exact: true }).click();
     await page.getByRole('heading', { name: 'Đầu tư ban đầu & Chi phí', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Ghi khoản chi', exact: true }).click();
+    if (settings.mainDraft) {
+      await page.getByRole('combobox', { name: 'Phòng ghi nhận', exact: true }).click();
+      await page.getByRole('option', { name: 'FIN-01', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Tài sản liên quan', exact: true }).click();
+      await page.getByRole('option', { name: 'SYNTHETIC EXPENSE ASSET', exact: true }).click();
+    }
     await page.getByLabel('Danh mục khoản chi').fill('Vệ sinh tổng hợp');
     await page.getByLabel('Số tiền (VND)').fill('200000');
     await page.getByLabel('Ngày phát sinh').fill('2026-11-01');
@@ -54,6 +60,18 @@ async function main(settings) {
     await page.reload();
     await page.getByText('Vệ sinh tổng hợp — 200.000 ₫', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Chi tiết / chỉnh sửa', exact: true }).click();
+    if (settings.mainDraft) {
+      assert.match(
+        await page.getByRole('combobox', { name: 'Tài sản liên quan', exact: true }).innerText(),
+        /SYNTHETIC EXPENSE ASSET/,
+      );
+      assert.equal(
+        await page
+          .getByRole('combobox', { name: 'Phòng ghi nhận', exact: true })
+          .getAttribute('aria-disabled'),
+        'true',
+      );
+    }
     await page.getByLabel('Số tiền (VND)').fill('250000');
     await page.getByLabel('Lý do chỉnh sửa').fill('Đối chiếu lại chứng từ tổng hợp');
     await page.getByRole('button', { name: 'Lưu khoản chi', exact: true }).click();

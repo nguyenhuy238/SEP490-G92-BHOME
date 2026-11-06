@@ -49,6 +49,12 @@ export function ExpensesApiPage() {
     queryKey: ['expenses', actor, scopedFilter],
     queryFn: ({ signal }) => api.expenses(scopedFilter, signal),
   });
+  const references = useQuery({
+    queryKey: ['expense-references', actor, editor?.value.locationId, editor?.value.roomId],
+    queryFn: ({ signal }) =>
+      api.expenseReferences(editor!.value.locationId, editor!.value.roomId, signal),
+    enabled: !!editor,
+  });
   function editField<K extends keyof ExpenseInput>(key: K, value: ExpenseInput[K]) {
     setEditor((e) => e && { ...e, value: { ...e.value, [key]: value } });
   }
@@ -214,6 +220,9 @@ export function ExpensesApiPage() {
               {types.find((t) => t.id === e.expenseType)?.name}
             </Typography>
             <Typography>{e.note}</Typography>
+            {(e.assetName || e.taskTitle) && (
+              <Typography>{[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}</Typography>
+            )}
             <Button disabled={busy} onClick={() => void view(e.id)}>
               Chi tiết / chỉnh sửa
             </Button>
@@ -269,7 +278,21 @@ export function ExpensesApiPage() {
                   label="Cơ sở ghi nhận"
                   disabled={busy || !!editor.previous}
                   value={editor.value.locationId}
-                  onChange={(e) => editField('locationId', e.target.value)}
+                  onChange={(e) =>
+                    setEditor(
+                      (v) =>
+                        v && {
+                          ...v,
+                          value: {
+                            ...v.value,
+                            locationId: e.target.value,
+                            roomId: null,
+                            assetId: null,
+                            taskId: null,
+                          },
+                        },
+                    )
+                  }
                 >
                   {locations.data?.map((l) => (
                     <MenuItem key={l.id} value={l.id}>
@@ -277,6 +300,124 @@ export function ExpensesApiPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+                {references.error && (
+                  <Alert severity="error">
+                    Không tải được lựa chọn phòng/tài sản/Work Order.{' '}
+                    <Button type="button" onClick={() => void references.refetch()}>
+                      Thử lại lựa chọn
+                    </Button>
+                  </Alert>
+                )}
+                {references.data?.truncated && (
+                  <Alert severity="warning">
+                    Danh sách lựa chọn vượt giới hạn 500 mục. Cần thu hẹp dữ liệu nguồn trước khi
+                    chọn tham chiếu chưa hiển thị.
+                  </Alert>
+                )}
+                <TextField
+                  select
+                  label="Phòng ghi nhận"
+                  value={editor.value.roomId || ''}
+                  disabled={busy || !!editor.previous || references.isPending || !!references.error}
+                  onChange={(e) =>
+                    setEditor(
+                      (v) =>
+                        v && {
+                          ...v,
+                          value: {
+                            ...v.value,
+                            roomId: e.target.value || null,
+                            assetId: null,
+                            taskId: null,
+                          },
+                        },
+                    )
+                  }
+                >
+                  <MenuItem value="">Toàn cơ sở / khu chung</MenuItem>
+                  {references.data?.rooms.map((r) => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.label}
+                    </MenuItem>
+                  ))}
+                  {editor.previous?.roomId &&
+                    !references.data?.rooms.some((r) => r.id === editor.previous!.roomId) && (
+                      <MenuItem value={editor.previous.roomId}>Phòng đã liên kết</MenuItem>
+                    )}
+                </TextField>
+                <TextField
+                  select
+                  label="Tài sản liên quan"
+                  value={editor.value.assetId || ''}
+                  disabled={
+                    busy ||
+                    !!editor.previous ||
+                    !!references.data?.workOrders.find((t) => t.id === editor.value.taskId)
+                      ?.assetId ||
+                    references.isPending ||
+                    !!references.error
+                  }
+                  onChange={(e) => editField('assetId', e.target.value || null)}
+                >
+                  <MenuItem value="">Không gắn tài sản</MenuItem>
+                  {references.data?.assets.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>
+                      {a.label}
+                    </MenuItem>
+                  ))}
+                  {editor.previous?.assetId &&
+                    !references.data?.assets.some((a) => a.id === editor.previous!.assetId) && (
+                      <MenuItem value={editor.previous.assetId}>
+                        {editor.previous.assetName || 'Tài sản đã liên kết'}
+                      </MenuItem>
+                    )}
+                </TextField>
+                <TextField
+                  select
+                  label="Work Order liên quan"
+                  value={editor.value.taskId || ''}
+                  disabled={
+                    busy ||
+                    !!editor.previous ||
+                    editor.value.expenseType !== 'OPERATING' ||
+                    references.isPending ||
+                    !!references.error
+                  }
+                  onChange={(e) => {
+                    const task = references.data?.workOrders.find((t) => t.id === e.target.value);
+                    setEditor(
+                      (v) =>
+                        v && {
+                          ...v,
+                          value: {
+                            ...v.value,
+                            taskId: task?.id || null,
+                            assetId: task?.assetId ?? null,
+                          },
+                        },
+                    );
+                  }}
+                >
+                  <MenuItem value="">Không gắn Work Order</MenuItem>
+                  {references.data?.workOrders.map((t) => (
+                    <MenuItem key={t.id} value={t.id}>
+                      {t.label}
+                    </MenuItem>
+                  ))}
+                  {editor.previous?.taskId &&
+                    !references.data?.workOrders.some((t) => t.id === editor.previous!.taskId) && (
+                      <MenuItem value={editor.previous.taskId}>
+                        {editor.previous.taskTitle || 'Công việc đã liên kết'}
+                      </MenuItem>
+                    )}
+                </TextField>
+                {!references.isPending &&
+                  !references.error &&
+                  references.data?.workOrders.length === 0 && (
+                    <Typography variant="body2">
+                      Chưa có Work Order được ghi nhận trong phạm vi này.
+                    </Typography>
+                  )}
                 <TextField
                   select
                   required
@@ -284,7 +425,17 @@ export function ExpensesApiPage() {
                   disabled={busy || !!editor.previous}
                   value={editor.value.expenseType}
                   onChange={(e) =>
-                    editField('expenseType', e.target.value as ExpenseInput['expenseType'])
+                    setEditor(
+                      (v) =>
+                        v && {
+                          ...v,
+                          value: {
+                            ...v.value,
+                            expenseType: e.target.value as ExpenseInput['expenseType'],
+                            taskId: null,
+                          },
+                        },
+                    )
                   }
                 >
                   {types.map((t) => (

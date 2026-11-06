@@ -17,6 +17,16 @@ Nguồn: SRS FE-08, UC-31..34, GBR-01/02/15/16/18; yêu cầu triển khai 05/11
 
 Persistence: repository dùng truy vấn có tham số trên bảng `expenses`, projection trên Locations/Rooms Compact24, transaction, advisory lock cho create và row lock cho update. Không thêm bảng/cột, không migration phá hủy, không đăng ký legacy DbContext.
 
+### Tham chiếu Room / Asset / Work Order (06/11/2026)
+
+ExpenseInput bổ sung nullable `assetId,taskId`; ExpenseView bổ sung các ID và `assetName,taskTitle`. Request không dùng tham chiếu giữ nguyên định dạng fingerprint idempotency cũ (không serialize các trường mới khi null). `taskId` ở chức năng này phải là Work Order thật trong `operational_tasks`, không phải Meter/General/System task.
+
+Owner-only `GET /api/v1/expenses/reference-choices?locationId={uuid}&roomId={uuid?}` trả `{rooms,assets,workOrders,truncated}`. Mỗi choice `{id,label,roomId,assetId}`; assets/Work Orders đúng Room hoặc khu chung khi roomId null, giới hạn 500 mỗi nhóm và báo truncated. UUID rỗng 400, Location/Room không hợp lệ 404, Staff/Tenant 403. Không tạo Work Order hoặc thay lifecycle/approval/cost của nó.
+
+Tạo khoản chi kiểm lại trong transaction dưới Location lock: Asset phải cùng Location và Room; Work Order/Incident phải cùng phạm vi, Asset của Work Order nếu có phải khớp Asset đã chọn; Work Order chỉ gắn OPERATING. Server tự giữ incident_report_id từ Work Order. Nguồn sai scope, không tồn tại hoặc sai task type trả 404; không cho đổi các liên kết đã ghi khi correction tiền/nội dung (409). UI chọn phòng, Asset, Work Order từ API thật; chọn Work Order có Asset sẽ điền đúng Asset; không có dữ liệu nguồn thì hiển thị rỗng. Tham chiếu không tự sinh thêm chi phí, phê duyệt plan hoặc tạo bút toán từ status Work Order.
+
+Backend hiện chưa có Work Order controller/service hoàn chỉnh. Integration fixture kiểm tham chiếu trên bản ghi nguồn tổng hợp đã có trong schema; đây không phải nghiệm thu quy trình Work Order. Browser đã kiểm Room/Asset thật từ Compact24, correction/reload giữ liên kết; dữ liệu nguồn Work Order không bị giả trong UI.
+
 ### Chứng từ riêng tư (06/11/2026)
 
 - `GET /api/v1/expenses/{id}/evidence`: Owner-only; metadata `{id,operationKey,contentType,length,sha256,status,recordedAt}`. Không trả object key hoặc URL công khai.
