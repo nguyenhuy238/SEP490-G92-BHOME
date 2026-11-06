@@ -26,8 +26,7 @@ public sealed partial class Compact24ExpenseTests
     {
         using var owner = await User("Owner");
         var location = await CreateProperty<LocationDto>(owner, "locations", new LocationWrite("Synthetic history", "Synthetic address"));
-        var type = await CreateProperty<RoomTypeDto>(owner, "room-types", new RoomTypeWrite(location.Id, "History type", null, 2, 20m, []));
-        var room = await CreateProperty<RoomDto>(owner, "rooms", new RoomWrite(location.Id, type.Id, "HISTORY-01", "1", 2));
+        var room = await CreateProperty<RoomDto>(owner, "rooms", new RoomWrite(location.Id, "HISTORY-01", "1", 2));
         var today = FinanceToday;
         var route = $"/api/v1/financial-reports?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}&locationId={location.Id}";
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
@@ -53,7 +52,7 @@ public sealed partial class Compact24ExpenseTests
 
         // Unavailable is an actual Owner API decision, not a direct status seed.
         var update = await owner.PutAsJsonAsync($"/api/v1/rooms/{room.Id}",
-            new RoomWrite(location.Id, type.Id, room.RoomNumber, room.Floor, room.Capacity,
+            new RoomWrite(location.Id, room.RoomNumber, room.Floor, room.Capacity,
                 RoomStatus.Unavailable, room.Version, "Synthetic maintenance closure"));
         Assert.True(update.IsSuccessStatusCode, await update.Content.ReadAsStringAsync());
         var closed = (await owner.GetFromJsonAsync<FinancialReport>(route))!;

@@ -1,3 +1,4 @@
+/* global document */
 // Manual refund evidence is synthetic; the harness never instructs a bank to send money.
 const assert = require('node:assert/strict');
 const { readFile } = require('node:fs/promises');
