@@ -1,5 +1,6 @@
 using System.Data;
 using BHome.Application.Finance;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.Locations;
 using BHome.Domain.PropertyManagement;
@@ -9,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
 
-public sealed class FinancialReportRepository(BHomePersistenceContext db) : IFinancialReportRepository
+public sealed class FinancialReportRepository(BHomePersistenceContext db, IRoomInsightsRepository insights,
+    TimeProvider clock) : IFinancialReportRepository
 {
     public async Task<ReportBasis> ReadAsync(ReportFilter filter, CancellationToken token)
     {
@@ -59,7 +61,31 @@ public sealed class FinancialReportRepository(BHomePersistenceContext db) : IFin
             return new FinanceBasis(l.Id,l.Name,i?.Issued??0,i?.Adjustments??0,c?.Collected??0,e?.Operating??0,i?.Debt??0,
                 e?.Investment??0,c?.CumulativeCollected??0,e?.CumulativeOperating??0,r?.Total??0,r?.Occupied??0);
         }).ToArray();
-        await transaction.CommitAsync(token); return new(result,refunds);
+        var historical = await HistoricalAsync(filter, token);
+        await transaction.CommitAsync(token); return new(result,refunds,historical);
+    }
+
+    private async Task<HistoricalOccupancy> HistoricalAsync(ReportFilter filter, CancellationToken token)
+    {
+        HistoricalOccupancy Unavailable(string status, string reason) =>
+            new(status, filter.From, filter.To, null, null, null, [reason]);
+        if (filter.RoomId is not null)
+            return Unavailable("RoomFilterUnsupported", "Historical occupancy requires a Location without a Room filter.");
+        if (filter.LocationId is not { } locationId)
+            return Unavailable("LocationRequired", "Select one Location to calculate historical occupancy.");
+        // Reuse the existing Property insight boundary and its supported period limit.
+        // A financial report may cover a longer/future period; keep its existing figures available.
+        if (filter.To.DayNumber - filter.From.DayNumber > 366)
+            return Unavailable("PeriodUnsupported", "Historical occupancy supports a date difference of at most 366 days.");
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        if (filter.To > today)
+            return Unavailable("FuturePeriod", "Future dates cannot be reported as historical occupancy.");
+        // The injected insight repository shares this DbContext/RepeatableRead transaction.
+        var model = await insights.OccupancyAsync(locationId, today, filter.From, filter.To, token);
+        return model.CompleteAvailabilityEvidence
+            ? PropertyService.CalculateHistorical(filter.From, filter.To, locationId, model)
+            : Unavailable("InsufficientData", "Complete Location/Room availability audit is not available for the requested period.");
     }
 }
 public sealed class ExpenseAggregate

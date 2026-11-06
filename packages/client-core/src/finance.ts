@@ -85,6 +85,15 @@ export interface FinancialReport {
     unavailableReason: string | null;
   };
   hasUnclassifiedRefunds: boolean;
+  historicalOccupancy?: {
+    status: string;
+    from: string | null;
+    to: string | null;
+    occupiedRoomDays: number | null;
+    rentableRoomDays: number | null;
+    occupancyRate: number | null;
+    limitations: string[];
+  } | null;
 }
 export interface ScenarioInput {
   name: string;

@@ -73,7 +73,24 @@ Hoàn vốn là mô hình quản trị phiên bản đầu, không phải chính
 
 Bảng refund chưa có phân loại khoản hoàn vào cashflow quản trị được duyệt. Nếu tồn tại bất kỳ COMPLETED refund trước cuối kỳ trên chuỗi, cashflow/recovery net và ước tính trả null với `refund_classification_required`, thay vì bỏ qua hoặc tự phân bổ số tiền đó. Guard này bảo thủ ngay cả báo cáo từng Location; cần quyết định allocation/refund cụ thể trước khi thu hẹp guard. Không tạo/sửa refund trong reporting.
 
-Owner Web `/reports` dùng `FinancialReportsApiPage` trong API mode: chọn khoảng/cơ sở, xem tổng, theo Location và hoàn vốn. Hiển thị unavailable reason; không fallback demo khi lỗi. Room filter hỗ trợ ở API, chưa có selector trên UI. Chi phí Staff/maintenance cần được ghi trong expenses để tính vào báo cáo; chưa tự sinh payroll hoặc hợp nhất module chưa có. Không tuyên bố đã có báo cáo kế toán/thuế hoặc biểu đồ lịch sử occupancy. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường.
+Owner Web `/reports` dùng `FinancialReportsApiPage` trong API mode: chọn khoảng/cơ sở, xem tổng, theo Location và hoàn vốn. Hiển thị unavailable reason; không fallback demo khi lỗi. Room filter hỗ trợ ở API, chưa có selector trên UI. Chi phí Staff/maintenance cần được ghi trong expenses để tính vào báo cáo; chưa tự sinh payroll hoặc hợp nhất module chưa có. Không tuyên bố đã có báo cáo kế toán/thuế. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường.
+
+### Lấp đầy theo kỳ (06/11/2026)
+
+Truy vết UC-07/UC-32, FE-08 và GBR-01/02/16: response bổ sung nullable `historicalOccupancy` `{status,from,to,occupiedRoomDays,rentableRoomDays,occupancyRate,limitations}`. Tái sử dụng `IRoomInsightsRepository`/`PropertyService.CalculateHistorical` từ module Property, đọc bằng cùng DbContext trong transaction RepeatableRead của báo cáo. Không gọi API riêng ở frontend rồi ghép hai snapshot. Giữ nguyên `totalRooms,occupiedRooms` hiện tại và toàn bộ công thức tiền/hoàn vốn.
+
+Kỳ đóng gồm from..to theo ngày Việt Nam. Mỗi Room/ngày được tính tối đa một lần dù có nhiều Resident; chỉ tính ngày Location hoạt động và Room có thể cho thuê (không Unavailable), dùng audit trạng thái và khoảng residence của Contract đã kích hoạt. `occupancyRate = round(occupiedRoomDays * 100 / rentableRoomDays, 2)` theo bộ tính Property hiện hữu. Nếu mẫu số 0 thì tỷ lệ null, không phải 0%. Không dùng Room.Status hiện tại để dựng quá khứ, không tự ước tính ngày chưa có evidence.
+
+| status | Điều kiện và kết quả |
+| --- | --- |
+| Complete | Đủ creation/status audit Location/Rooms cho kỳ; trả ngày-phòng và tỷ lệ, có thể null khi mẫu số 0 |
+| InsufficientData | Thiếu audit theo điều kiện completeness của Property; cả số ngày-phòng và tỷ lệ null |
+| LocationRequired | Chưa chọn đúng một Location; chưa tổng hợp lịch sử toàn chuỗi |
+| RoomFilterUnsupported | Có Room filter; lịch sử hiện chỉ hỗ trợ phạm vi Location |
+| PeriodUnsupported | Chênh lệch to/from vượt 366 ngày, cùng giới hạn kỹ thuật API occupancy-summary |
+| FuturePeriod | to sau ngày hiện tại Asia/Ho_Chi_Minh; không gọi dự báo là lịch sử |
+
+Các trạng thái unavailable không làm mất chỉ tiêu tài chính hợp lệ của cùng báo cáo. UI hiển thị kỳ dd/MM/yyyy, số liệu server hoặc lý do tiếng Việt, giữ tách biệt với occupancy hiện tại. Field optional cho client và saved What-if baseline cũ; thiếu field hiển thị chưa có dữ liệu, không tính bù. Snapshot What-if mới giữ lịch sử đã đọc, nhưng thuật toán giả định `management-constant-v1` không đổi và không dùng lịch sử này để sửa ledger thật.
 
 ## What-if UC-34
 
