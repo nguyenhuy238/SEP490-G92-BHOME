@@ -8,6 +8,7 @@ import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type MeterTask, type Proposal } from '../lib/api';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 import { meterService } from '../services/meterService';
+import { meterOcrFeedback } from '../services/meterOcrFeedback';
 export default function MeterScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   return <MeterTaskScreen key={taskId} taskId={taskId} />;
@@ -21,6 +22,7 @@ function MeterTaskScreen({ taskId }: { taskId: string }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
   const [saved, setSaved] = useState<ConfirmedReading | null>(null);
   const lock = useRef(false);
   const abort = useRef<AbortController | null>(null);
@@ -117,6 +119,8 @@ function MeterTaskScreen({ taskId }: { taskId: string }) {
           lock.current = true;
           setBusy(true);
           setEvidence('');
+          setReading('');
+          setNotice('');
           setChecked(false);
           setError('');
           const controller = new AbortController();
@@ -124,27 +128,28 @@ function MeterTaskScreen({ taskId }: { taskId: string }) {
           const timeout = setTimeout(() => controller.abort(), 45000);
           try {
             try {
+              setProgress('Đang đọc chỉ số từ ảnh…');
               const proposal = await api.image<Proposal>(
                 `/api/v1/ocr/meter-tasks/${taskId}`,
                 bytes,
                 controller.signal,
               );
+              if (controller.signal.aborted) return;
               setReading(proposal.proposedFields.reading || '');
-              setNotice(
-                proposal.isFallback
-                  ? 'OCR chưa đọc được. Hãy nhập chỉ số thủ công.'
-                  : 'Chỉ số OCR đề xuất: hãy đối chiếu ảnh và sửa nếu cần.',
-              );
+              setNotice(meterOcrFeedback(proposal));
             } catch (e) {
               if (controller.signal.aborted) throw e;
               setNotice('OCR không khả dụng. Hãy nhập chỉ số thủ công.');
             }
+            if (controller.signal.aborted) return;
+            setProgress('Đang tải ảnh minh chứng…');
             const file = await api.image<{ id: string }>(
               `/api/v1/capture/meter-tasks/${taskId}/evidence`,
               bytes,
               controller.signal,
               'PUT',
             );
+            if (controller.signal.aborted) return;
             setEvidence(file.id);
           } catch (e) {
             setError(errorMessage(e));
@@ -152,9 +157,11 @@ function MeterTaskScreen({ taskId }: { taskId: string }) {
             clearTimeout(timeout);
             lock.current = false;
             setBusy(false);
+            setProgress('');
           }
         }}
       />
+      {!!progress && <Text>{progress}</Text>}
       {!!notice && <Text>{notice}</Text>}
       <Field
         label="Chỉ số cuối cùng sau kiểm tra"

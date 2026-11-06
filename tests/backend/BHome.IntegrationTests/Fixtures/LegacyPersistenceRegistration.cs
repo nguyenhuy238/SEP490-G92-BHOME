@@ -2,9 +2,11 @@ using BHome.Application.IdentityAccess;
 using BHome.Application.Jobs;
 using BHome.Application.Locations;
 using BHome.Application.Notifications;
+using BHome.Application.Operations;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Jobs;
 using BHome.Infrastructure.Locations;
+using BHome.Infrastructure.Modules.Operations;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Identity;
@@ -23,6 +25,10 @@ internal static class LegacyPersistenceRegistration
     {
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
+        // Operations is a Compact24-only module. Legacy source-schema tests do not expose those endpoints;
+        // remove its concrete graph so ValidateOnBuild does not require a Compact24DbContext.
+        services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
+        services.RemoveAll<RecurringOperationsJob>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.Replace(ServiceDescriptor.Scoped<BHomePersistenceContext>(p => p.GetRequiredService<BHomeDbContext>()));
         services.RemoveAll<IUserStore<ApplicationUser>>(); services.RemoveAll<IRoleStore<IdentityRole<Guid>>>();

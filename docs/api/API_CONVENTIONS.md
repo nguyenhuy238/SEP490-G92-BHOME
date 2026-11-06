@@ -143,6 +143,34 @@ Business meter OCR always uses the server-loaded `Meter.DecimalPlaces`; a caller
 override it. Values retain their full fractional part and still require human confirmation.
 See [accuracy evaluation and limitations](../development/OCR_ACCURACY_DELIVERY.md).
 
+`POST /api/v1/ocr/diagnostics/auto` accepts the same untyped image and diagnostic
+authorization/gates; returns `{ analysis, elapsedMilliseconds }` with no-store.
+`analysis` has `classificationStatus`, `detectedCategory`, nullable
+`classificationConfidence`, `classificationSource`, `candidateCategories`,
+`warnings`, nullable `identityProposal`/`meterProposal`, and `requiresReview=true`.
+Optional `partialCategory` (`meter`, `water`, `electricity`), `detectionConfidence`
+and `cropPreviewDataUri` describe a localized provisional meter reading. A window
+score is not a category score. With the opt-in pretrained window detector, category
+remains ambiguous until the user chooses it after capture; the crop/proposal does
+not confirm a business reading. The data URI is transient review content and must
+not be logged/cached/persisted. Missing/uncertain detection uses manual fallback.
+See [verified pretrained capabilities and limits](../development/PRETRAINED_YOLO_METER_OCR_IMPLEMENTATION.md).
+
+With opt-in `Ocr:MeterDetector:WaterDigitsEnabled`, typed mechanical-water crops
+also run the pinned stage2 digit model. Conflicting recognizers, unclear/overlapping/
+missing digits require manual entry; digits never determine billing precision or
+meter ownership. Automatic input without a supported profile retains its crop and
+asks for type after capture. Explicit high-confidence device labels can resolve
+technology as `text_rules` evidence (classification confidence remains null).
+Units alone do not resolve technology. No business endpoint/schema changes;
+see [actual stage2 accuracy and gaps](../development/METER_OCR_COMPLETION_REPORT.md).
+
+The incremental water policy may return a stage2-only review proposal when one
+PP line cannot be parsed as a numeric reading. It never overrides a valid numeric
+disagreement, multiple regions, wrong utility or unclear digits. The diagnostic
+Mobile screen can re-read the same bounded meter image with user-confirmed
+precision after capture; production task precision remains server-authoritative.
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được

@@ -113,8 +113,8 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task ReconciliationApi() => Run(t => t.OwnerApiReconcilesPersistedInvoiceAndRejectsUnmatchedTransferWithHistory());
     [CompactPostgresFact] public Task PayerPrivacy() => Run(t => t.SharedTenantStatusAndHistoricalAccessStayScopedWithoutLeakingStatementOrAnotherPayerIdentity());
     [CompactPostgresFact] public Task CompetingPayments() => Run(t => t.ConcurrentTenantsCannotDoubleSettleAndSecondTransferIsPreservedForReview());
-    [CompactPostgresFact] public Task Underpayment() => Run(t => t.AmountMismatchDoesNotInventPartialOrRefundPolicy(99999, "partial_payment_policy_required"));
-    [CompactPostgresFact] public Task Overpayment() => Run(t => t.AmountMismatchDoesNotInventPartialOrRefundPolicy(100001, "excess_payment_policy_required"));
+    [CompactPostgresFact] public Task Underpayment() => Run(t => t.OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(99999, "verified_partial_payment"));
+    [CompactPostgresFact] public Task Overpayment() => Run(t => t.OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(100001, "verified_excess_payment_pending_review"));
     [CompactPostgresFact] public Task InvalidAndUnauthorized() => Run(t => t.UnauthorizedAndInvalidOrConflictingInputsCannotCreatePaidState());
     [CompactPostgresFact] public Task AdjustmentSubmission() => Run(t => t.AdjustmentSubmissionIsPersistedIdempotentAndPrivateToRequesterAndOwner());
     [CompactPostgresFact] public Task PrivateEvidence() => Run(t => t.AdjustmentEvidenceIsValidatedPrivateAndCannotBeReusedOrStolen());

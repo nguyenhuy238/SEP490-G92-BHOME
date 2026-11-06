@@ -166,7 +166,7 @@
           "  if (spec.compareFinal) {",
           "    const original = pm.variables.get('originalFinalSnapshot');",
           "    pm.test('Final giữ nguyên tổng/version/lines sau payment/adjustment', () => {",
-          "      pm.expect(original).to.be.a('string').and.not.empty;",
+          "      pm.expect(original).to.be.a('string').and.not.eql('');",
           "      pm.expect({",
           "        id: data.id,",
           "        total: data.total,",

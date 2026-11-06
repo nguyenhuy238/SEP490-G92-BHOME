@@ -96,6 +96,12 @@ configuration still requires the one-time setup; the project does not install/st
 No users, contracts, invoices or shared passwords are automatically seeded. Use
 `scripts/New-LocalTestUsers.ps1` once and choose your own password at its hidden prompt.
 
+For a development dataset beyond Auth, explicitly run `scripts/Seed-LocalDevelopmentData.ps1`
+after preparing Compact24. It creates synthetic Locations/Rooms/meters/rates/pending residents/tasks
+and four sample accounts; reruns preserve edits and passwords. Use `-SetSamplePasswords` to choose
+new passwords for those accounts only. See the [database guide](../database/2026-11-03/README.md)
+and [complete API implementation/integration inventory](../api/API_IMPLEMENTATION_STATUS.md).
+
 ### Existing legacy database: one-time replacement
 
 Normal startup refuses an existing 70-table schema and explains the one-time command:

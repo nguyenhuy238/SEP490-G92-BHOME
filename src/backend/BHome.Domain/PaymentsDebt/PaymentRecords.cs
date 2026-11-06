@@ -72,13 +72,14 @@ public static partial class PaymentRules
     public static string NormalizeReference(string reference) => reference.Trim().ToUpperInvariant();
     public static bool ValidReference(string reference) => BankReferencePattern().IsMatch(reference);
     public static bool ValidMoney(decimal amount) => amount > 0 && amount < 1_000_000_000_000_000_000m && decimal.Truncate(amount) == amount;
-    public static string? ReviewReason(decimal amount, decimal outstanding, string description, string expectedReference, bool referenceClaimed)
+    public static string? ReviewReason(decimal amount, decimal outstanding, string description, string expectedReference, bool referenceClaimed, bool amountMismatchSupported = false)
     {
         if (referenceClaimed) return "bank_reference_already_credited";
         if (outstanding <= 0) return "invoice_already_settled";
         if (!string.Equals(description.Trim(), expectedReference, StringComparison.OrdinalIgnoreCase)) return "invoice_transfer_reference_mismatch";
-        if (amount < outstanding) return "partial_payment_policy_required";
-        if (amount > outstanding) return "excess_payment_policy_required";
+        if (!ValidMoney(amount)) return "invalid_payment_amount";
+        if (!amountMismatchSupported && amount < outstanding) return "partial_payment_policy_required";
+        if (!amountMismatchSupported && amount > outstanding) return "excess_payment_policy_required";
         return null;
     }
     public static int OverdueDays(DateOnly dueDate, DateOnly today, decimal outstanding) => outstanding > 0 && dueDate < today ? today.DayNumber - dueDate.DayNumber : 0;

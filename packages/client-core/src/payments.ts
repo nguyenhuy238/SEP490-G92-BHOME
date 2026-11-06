@@ -68,6 +68,8 @@ export interface BankTransfer {
   reason: string;
   allocatedInvoiceId: string | null;
   isDevelopmentDemo: boolean;
+  allocatedAmount?: string;
+  unallocatedAmount?: string;
 }
 export interface TransferInput {
   providerIdentity: string;
@@ -194,6 +196,9 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
 }
 const labels: Record<string, string> = {
   Paid: 'Đã thanh toán',
+  verified_partial_payment: 'Đã ghi nhận thanh toán một phần; tiếp tục theo dõi dư nợ.',
+  verified_excess_payment_pending_review:
+    'Đã thanh toán đủ hóa đơn; tiền thừa giữ chờ Owner xử lý.',
   Unpaid: 'Chưa thanh toán',
   NotIssued: 'Chưa phát hành',
   PendingReview: 'Chờ đối soát',

@@ -13,6 +13,25 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
+    public async Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomId, DateOnly today,
+        CancellationToken token)
+    {
+        var rooms = db.Set<Room>().Where(r => r.LocationId == locationId &&
+            (!roomId.HasValue || r.Id == roomId)).Select(r => r.Id);
+        var contracts = db.Set<Contract>().Where(c => rooms.Contains(c.RoomId));
+        var residents = await db.Set<Resident>().AnyAsync(r => rooms.Contains(r.RoomId), token);
+        var occupancy = await contracts.AnyAsync(c => c.Status == ContractStatus.Active &&
+            c.Residents.Any(r => r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
+        var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
+        // Status alone is not a reservation. Protect signed evidence or verified money;
+        // do not infer a Holding Contract or replace activation's stricter readiness checks.
+        var pending = await contracts.AnyAsync(c =>
+            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation) &&
+            (c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
+                s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
+             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0)), token);
+        return new(residents, occupancy, active, pending);
+    }
     public async Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity
     {
         var tracked = db.ChangeTracker.Entries<T>().SingleOrDefault(x => x.Entity.Id == id);

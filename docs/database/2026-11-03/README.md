@@ -26,7 +26,32 @@ F5 hoặc `dotnet run --project src/backend/BHome.Api` trong Development cũng d
 
 `scripts/Update-LocalDatabase.ps1 -Check` chỉ kiểm tra; chạy script không có switch để khởi tạo trước khi mở IDE. Tài khoản PostgreSQL cần quyền tạo database nếu thiếu và quyền tạo `btree_gist` trên database do mình sở hữu. Khi không có quyền, nhờ người quản lý PostgreSQL tạo database trống với quyền phù hợp.
 
-Schema mới không tự tạo tài khoản hoặc hợp đồng/hóa đơn demo. Chạy `scripts/New-LocalTestUsers.ps1` một lần để đặt mật khẩu test ở prompt ẩn; không dùng credential chung trong Git. MinIO/bucket và provider thật được cấu hình riêng. Nếu cần mang dữ liệu cũ sang thay vì môi trường trống, dùng quy trình import có đối soát bên dưới trên bản sao.
+Schema mới không tự tạo tài khoản hoặc hợp đồng/hóa đơn demo. Chỉ cần ba tài khoản Auth thì chạy `scripts/New-LocalTestUsers.ps1`; muốn bộ dữ liệu phát triển có cơ sở/phòng/công việc thì dùng lệnh seed bên dưới. MinIO/bucket và provider thật được cấu hình riêng. Nếu cần mang dữ liệu cũ sang thay vì môi trường trống, dùng quy trình import có đối soát bên dưới trên bản sao.
+
+## Dữ liệu mẫu và trạng thái API sau chuyển đổi
+
+Đã seed trực tiếp vào `bhome` local ngày 04/11/2026: **4 tài khoản, 2 cơ sở, 2 loại phòng, 6 phòng, 6 tài sản, 12 đồng hồ, 8 biểu phí mẫu, 3 người ở Pending, 1 phân công Staff và 4 công việc**. Database vẫn 24 bảng/386 cột/83 FK. Chạy lại không tạo trùng, không reset dữ liệu đã sửa.
+
+Máy khác sau khi pull cần chuẩn bị Compact24 rồi chạy seed rõ ràng; dữ liệu trên máy hiện tại không đi theo Git:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Seed-LocalDevelopmentData.ps1
+```
+
+Seed yêu cầu mật khẩu bằng prompt ẩn cho account mới. Email đăng nhập: `owner.sample@example.invalid`, `staff.sample@example.invalid`, `tenant.sample@example.invalid`, `tenant.other.sample@example.invalid`. Staff chỉ được phân công cơ sở mẫu đầu; cơ sở thứ hai dùng kiểm tra giới hạn truy cập.
+
+Chọn bộ sample hoặc bộ `New-LocalTestUsers`, không chạy cả hai bộ. Sample seed từ chối nếu đã có Owner khác để không tạo thêm Owner/container Chain ngoài mô hình hiện tại; không tiếp quản account cũ. Dữ liệu đã có được giữ nguyên khi bị từ chối.
+
+**Trên máy hiện tại**, seed đã chạy bằng mật khẩu ngẫu nhiên không in/không lưu. Chọn mật khẩu riêng trước khi đăng nhập:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Seed-LocalDevelopmentData.ps1 -SetSamplePasswords
+```
+
+Switch này chỉ đặt lại mật khẩu bốn tài khoản mẫu và thu hồi phiên cũ; dữ liệu nghiệp vụ giữ nguyên. Không seed chữ ký, thanh toán thành công hoặc chỉ số đã xác nhận. Các màn hợp đồng/hóa đơn/thanh toán cần hoàn thành workflow; có thể còn rỗng sau seed.
+
+[Danh mục toàn bộ API và trạng thái kết nối Owner Web/Mobile](../../api/API_IMPLEMENTATION_STATUS.md) liệt kê 189 route controller đang mount, 2 health endpoint và module có source chưa được mount. Có API backend không đồng nghĩa mọi màn frontend đã nối. Xem kết quả và giới hạn kiểm thử trong [báo cáo triển khai](compact-24/IMPLEMENTATION_REPORT.md).
 
 ## File bàn giao
 

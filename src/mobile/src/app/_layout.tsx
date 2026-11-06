@@ -36,6 +36,7 @@ export default function RootLayout() {
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
               <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+              <Stack.Screen name="ocr-test" options={{ title: 'Thử OCR' }} />
             </Stack>
           </WorkspaceProvider>
         </SessionProvider>

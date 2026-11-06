@@ -59,6 +59,58 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             rate, from ?? Today, to);
 
     [Fact]
+    public async Task RoomInsightsAreReadOnlyScopedAndUseCompact24AuditDates()
+    {
+        var visible = await Workspace(); using var owner = visible.Owner;
+        var hidden = await Workspace(); using var hiddenOwner = hidden.Owner;
+        _ = await Created<PolicyDto>(owner, "billing-policies", Rent(visible.Location.Id, 2_500_000));
+        await using (var beforeScope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = beforeScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var roomState = await db.Set<Room>().AsNoTracking().Where(x => x.Id == visible.Room.Id)
+                .Select(x => new { x.Status, x.Version }).SingleAsync();
+            var changeCount = await db.Set<PropertyChange>().CountAsync(x => x.TargetId == visible.Room.Id);
+
+            var readinessResponse = await owner.GetAsync($"/api/v1/rooms/{visible.Room.Id}/readiness?purpose=Holding");
+            Assert.Equal(HttpStatusCode.OK, readinessResponse.StatusCode);
+            var readiness = (await readinessResponse.Content.ReadFromJsonAsync<RoomReadinessDto>())!;
+            Assert.Equal("Indeterminate", readiness.Status);
+            Assert.Contains(readiness.UnverifiedConditions, x => x.Code == "HOLDING_WORKFLOW_UNSUPPORTED");
+
+            var history = (await owner.GetFromJsonAsync<RoomHistoryPage>(
+                $"/api/v1/rooms/{visible.Room.Id}/history?pageSize=1"))!;
+            Assert.Single(history.Items);
+            Assert.True(history.TotalCount >= 1);
+            Assert.Equal("CompleteForPersistedSources", history.Completeness);
+
+            var summary = (await owner.GetFromJsonAsync<OccupancySummaryDto>(
+                $"/api/v1/locations/{visible.Location.Id}/occupancy-summary?from={Today:yyyy-MM-dd}&to={Today:yyyy-MM-dd}"))!;
+            Assert.Equal(1, summary.Snapshot.TotalRooms);
+            Assert.Equal(1, summary.Snapshot.AvailableRooms);
+            Assert.Equal("Complete", summary.Historical.Status);
+            Assert.Equal(1, summary.Historical.RentableRoomDays);
+
+            db.ChangeTracker.Clear();
+            Assert.Equal(roomState, await db.Set<Room>().AsNoTracking().Where(x => x.Id == visible.Room.Id)
+                .Select(x => new { x.Status, x.Version }).SingleAsync());
+            Assert.Equal(changeCount, await db.Set<PropertyChange>().CountAsync(x => x.TargetId == visible.Room.Id));
+        }
+
+        var staff = await Client(Roles.Staff); using var client = staff.Client;
+        var assignment = await owner.PostAsJsonAsync("/api/v1/staff-location-assignments", new
+        {
+            locationId = visible.Location.Id, staffUserId = staff.UserId, startDate = Today, endDate = Today
+        });
+        Assert.Equal(HttpStatusCode.Created, assignment.StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.GetAsync($"/api/v1/rooms/{visible.Room.Id}/history")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.GetAsync($"/api/v1/locations/{visible.Location.Id}/occupancy-summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/v1/rooms/{hidden.Room.Id}/history")).StatusCode);
+    }
+
+    [Fact]
     public async Task FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots()
     {
         var w = await Workspace(); using var owner = w.Owner;

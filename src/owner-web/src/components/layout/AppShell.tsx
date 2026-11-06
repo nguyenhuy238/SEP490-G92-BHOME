@@ -47,6 +47,8 @@ import {
   Contact,
   House,
   ShieldCheck,
+  Tags,
+  ScrollText,
 } from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
@@ -87,10 +89,23 @@ const iconMap: Record<string, typeof Building2> = {
   reports: ChartColumn,
   'what-if': FlaskConical,
   'public-content': Globe,
+  'configuration/room-types': Shapes,
+  'configuration/assets': Package,
+  'configuration/pricing-fees': Tags,
+  'configuration/policies': ScrollText,
 };
 const navGroups = [
   ['Tổng quan', ['dashboard']],
   ['Cơ sở & Phòng', ['locations']],
+  [
+    'THƯ VIỆN CẤU HÌNH DÙNG CHUNG',
+    [
+      'configuration/room-types',
+      'configuration/assets',
+      'configuration/pricing-fees',
+      'configuration/policies',
+    ],
+  ],
   ['Nhân sự & Vận hành', ['staff', 'schedules', 'tasks']],
   ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'handovers', 'temporary-residence']],
   [
@@ -115,6 +130,10 @@ const navLabels: Record<string, string> = {
   dashboard: 'Tổng quan',
   notifications: 'Thông báo',
   locations: 'Cơ sở',
+  'configuration/room-types': 'Mẫu loại phòng',
+  'configuration/assets': 'Danh mục tài sản',
+  'configuration/pricing-fees': 'Mẫu giá & biểu phí',
+  'configuration/policies': 'Nội quy & chính sách',
   rooms: 'Phòng',
   'room-types': 'Loại phòng',
   assets: 'Tài sản',

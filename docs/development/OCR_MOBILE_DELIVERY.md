@@ -1,5 +1,33 @@
 # OCR dùng thử trên mobile — triển khai tiếp
 
+## Luồng một nút chụp tự động (04/11/2026)
+
+Màn **Thử OCR trực tiếp** hiện mở bằng nút **Test OCR**, sau đó chỉ có hành động
+chính **Chụp ảnh OCR**; không cần chọn sáu profile trước khi chụp. API tự xét loại
+và trả kết quả hoặc yêu cầu người dùng chọn sau khi chụp. Nhận diện hiện dựa trên
+dấu hiệu chữ cho CCCD; chưa có classifier thị giác để tự phân biệt cơ/điện tử của
+mọi công tơ. Kết quả cho sửa tạm, ảnh chỉ preview trong bộ nhớ và tự xóa khi kết
+thúc phiên xem. Xem [thiết kế, kiểm thử và giới hạn](AUTOMATIC_OCR_2026-11-04.md).
+
+Các phần phía dưới lưu lịch sử triển khai; hướng dẫn chọn profile trước chụp và
+hiển thị thông tin model thuộc giao diện cũ.
+
+## Nút mở nhanh khi phát triển (04/11/2026)
+
+Trang chủ Owner/Staff có nút **Test OCR** ở đầu nội dung khi chạy bản Development
+và đã đăng nhập. Nút mở trực tiếp `/ocr-test` với tiêu đề **Thử OCR**, dùng lại màn
+chọn sáu loại ảnh và camera hiện có. Nút ẩn trong bản production, vai trò Tenant
+và chế độ xem mẫu; điều hướng vẫn đi qua kiểm tra rời quy trình đang nhập.
+
+Đây là tiện ích phát triển cho OCR hỗ trợ UC-13/UC-20, GBR-07; không đổi quyền hoặc
+luồng xác nhận nghiệp vụ. API vẫn cần `Development` và
+`MobileDevelopment:Enabled=true`; màn thử hiện hướng dẫn nếu máy chủ chưa bật.
+
+File sửa: `WorkspaceShell.tsx`, `app/_layout.tsx`,
+`__tests__/workspace-navigation.test.tsx` và tài liệu này. Đã chạy 14 test điều hướng/
+diagnostics đạt, mobile workspace typecheck và lint đạt. Chưa thử thao tác trên
+thiết bị thật trong lượt thay đổi nút này.
+
 Cập nhật đủ sáu loại: [OCR_SIX_PROFILES_DELIVERY.md](OCR_SIX_PROFILES_DELIVERY.md),
 engine `-layout4`, cải thiện riêng CCCD, bánh số và LCD, kèm kết quả từng profile.
 
@@ -605,3 +633,11 @@ Kiểm chứng thực tế trong lần sửa này:
 Chưa xác minh: Safari/Expo Go trên iPhone thật với mạng mới, cấu hình cách ly thiết bị của Wi-Fi,
 quyền mạng nội bộ/chứng chỉ trên iPhone, E2E OCR. Không build/test lại backend vì không sửa C#;
 không tuyên bố lần kiểm tra này thay thế toàn bộ backend suite hay E2E thiết bị.
+## Cập nhật incremental 05/11/2026
+
+Màn Test OCR cho phép chọn số chữ số thập phân **sau khi** đã nhận diện công tơ,
+rồi gửi lại cùng ảnh tới diagnostic typed để backend áp precision. Hiển thị đơn
+vị kWh/m³ theo category đã xác định; không tự đặt dấu thập phân trong UI. Meter
+buffer chỉ giữ trong review window60s hiện có và xóa khi background/clear/retake/
+unmount; identity buffer vẫn xóa ngay khi đọc xong. Bước này không gọi xác nhận
+nghiệp vụ. Đã chạy33 tests OCR Mobile + TypeScript/ESLint; chưa có phone E2E.

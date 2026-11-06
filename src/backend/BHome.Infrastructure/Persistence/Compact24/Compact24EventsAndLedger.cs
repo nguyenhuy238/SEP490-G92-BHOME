@@ -113,7 +113,7 @@ public sealed partial class Compact24DbContext
         var invoice = await Set<Invoice>().SingleAsync(i => i.Id == allocation.InvoiceId, token);
         var paid = await Set<PaymentAllocation>().Where(a => a.InvoiceId == allocation.InvoiceId).SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
         var adjustments = await Set<InvoiceAdjustmentDecision>().Where(d => d.InvoiceId == allocation.InvoiceId && d.Outcome == "Approved" && d.InvoiceStatus == InvoiceStatus.Final).SumAsync(d => (decimal?)d.Delta, token) ?? 0m;
-        if (invoice.Status != InvoiceStatus.Final || transfer.Amount != allocation.Amount || allocation.Amount != invoice.Total + adjustments - paid ||
+        if (invoice.Status != InvoiceStatus.Final || allocation.Amount <= 0 || allocation.Amount != Math.Min(transfer.Amount, invoice.Total + adjustments - paid) ||
             await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
     }
 

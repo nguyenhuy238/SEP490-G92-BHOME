@@ -67,3 +67,11 @@ không có bank/payer/history. Không dùng assignment trong JWT để bỏ qua 
 trang Invoice trên Mobile trong một query, vẫn áp entitlement trước filter/count/pagination.
 Mobile dùng expo-clipboard bản SDK 58 để sao chép thông tin theo thao tác người dùng,
 không có nút Tenant tự xác minh hay sửa balance. QR bị ẩn ngay khi trạng thái server Paid.
+
+# Chính sách thiếu/thừa tiền được ủy quyền ngày 05/11/2026
+
+Trong phiên triển khai, người dùng yêu cầu chọn hướng xử lý khi chưa có tài liệu OQ và báo cáo lại. Compact24 áp dụng: chỉ Owner đã đối chiếu sao kê và xác nhận `humanVerified=true` được phân bổ; đúng mã hóa đơn/reference, invoice Final, dư nợ dương và bank claim chưa dùng vẫn là điều kiện bắt buộc. Số phân bổ = min(số nhận đã xác minh, dư nợ hiện tại) trong transaction/lock hiện hữu. Thiếu tiền giữ phần nợ còn lại và cho phép một giao dịch khác thanh toán tiếp; quá hạn vẫn tính trên dư nợ. Thừa tiền chỉ ghi có đủ hóa đơn, phần còn lại vẫn gắn receipt, không trở thành doanh thu/credit/hoàn tiền tự động và không dùng lại bank claim cho nghĩa vụ khác.
+
+Status contract hiện hữu giữ `Paid/Unpaid`, hiển thị paidAmount/outstandingAmount để nhận biết đã trả một phần. Reason mới `verified_partial_payment` và `verified_excess_payment_pending_review`; TransferView bổ sung `allocatedAmount,unallocatedAmount` dạng chuỗi VND. GET receipt/list và replay giữ đúng reason/số tiền, không đổi partial thành full. Payment history và notification chỉ ghi số thực phân bổ; PendingReview của invoice bật khi receipt còn thừa. Owner Web giải thích quy tắc trước xác nhận và tách số đã/chưa phân bổ. Tenant Mobile đọc số đã trả/còn nợ từ backend như contract hiện hữu; không suy luận đã thanh toán từ số transfer.
+
+Một receipt chỉ có một allocation hiện hữu; số dư thừa giữ chờ Owner và chưa có API giải ngân refund/credit trong slice này. Không tuyên bố refund hoàn tất. Offline legacy regression vẫn giữ constraint exact cũ qua capability của repository; production DI luôn Compact24, không dò schema hoặc fallback legacy. Compact writer kiểm min(receipt,outstanding), source/claim/race theo chính sách mới. Không thay schema legacy hoặc database làm việc.

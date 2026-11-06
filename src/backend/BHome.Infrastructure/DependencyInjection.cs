@@ -131,6 +131,8 @@ public static class DependencyInjection
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
         services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
+        services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
@@ -142,7 +144,15 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.IAdministrativeContractReadiness>(provider =>
+            provider.GetRequiredService<BHome.Application.Contracts.ContractService>());
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
+        services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();
+        services.AddScoped<BHome.Application.Finance.FinancialReportService>();
+        services.AddScoped<BHome.Application.Finance.IFinancialScenarioRepository, BHome.Infrastructure.Finance.FinancialScenarioRepository>();
+        services.AddScoped<BHome.Application.Finance.FinancialScenarioService>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
@@ -172,9 +182,13 @@ public static class DependencyInjection
             .Validate(o => o.IsValid(), "OCR limits or profiles are outside supported bounds.").ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
+        services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
+        services.AddSingleton<YoloWaterDigitRecognizer>();
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
-        services.AddSingleton<IOcrService, LocalOcrService>();
+        services.AddSingleton<LocalOcrService>();
+        services.AddSingleton<IOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
+        services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         services.AddHostedService<OcrWarmup>();
         services.AddScoped<IOcrWorkflowResources, CaptureWorkflowResources>();
         services.AddScoped<OcrWorkflowService>();
