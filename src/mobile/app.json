@@ -36,7 +36,15 @@
           "barcodeScannerEnabled": false
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép BHOME chọn ảnh minh chứng sự cố và bảo trì.",
+          "cameraPermission": "Cho phép BHOME chụp ảnh tác nghiệp và minh chứng sự cố.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

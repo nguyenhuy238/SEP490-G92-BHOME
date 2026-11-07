@@ -1,8 +1,19 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 const state = vi.hoisted(() => ({ preview: false, go: vi.fn() }));
+vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
+vi.mock('../../../src/mobile/src/features/workspace/useStaffDashboard', () => ({
+  useStaffDashboard: () => ({
+    locations: { data: null },
+    tasks: { data: null },
+    overdue: { data: null },
+    inspections: { data: null },
+    meters: { data: null },
+    reload: vi.fn(),
+  }),
+}));
 vi.mock('../../../src/mobile/src/features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => state,
 }));
@@ -68,12 +79,17 @@ it.each([
   ['Báo cáo sự cố', 'report-incident'],
   ['Công việc của tôi', 'work-orders'],
   ['Lịch làm việc', 'shifts'],
-  ['Xử lý sự cố', 'work-orders'],
-  ['Theo dõi công nợ', 'debt-follow-up'],
+  ['Xử lý sự cố', 'staff-maintenance'],
+  ['Công nợ', 'debt-follow-up'],
   ['Gửi thông báo', 'send-notification'],
+  ['Phòng trọ', 'rooms'],
+  ['Tài sản', 'staff-assets'],
+  ['Hóa đơn', 'staff-invoices'],
+  ['Sự cố khẩn cấp', 'staff-emergencies'],
 ])('opens %s from the authenticated dashboard', (label, destination) => {
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByRole('button', { name: label }));
+  fireEvent.click(screen.getByText('Xem tất cả chức năng (14)'));
+  fireEvent.click(screen.getAllByRole('button', { name: label }).at(-1)!);
   expect(state.go).toHaveBeenCalledWith(destination);
 });
 it.each([
@@ -83,7 +99,7 @@ it.each([
   render(<StaffDashboard />);
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(screen.getByRole('button', { name: label }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
   expect(state.go).toHaveBeenCalledWith(destination);
   expect(screen.queryByRole('dialog')).toBeNull();
 });
@@ -93,11 +109,12 @@ it('does not present sample identity, shift or counts to a signed-in account', (
   expect(screen.queryByText('Đang trực')).toBeNull();
   expect(screen.queryByText('4/6')).toBeNull();
   expect(screen.getAllByText('—')).toHaveLength(3);
-  expect(screen.getByText('Chưa có dữ liệu tổng quan từ hệ thống.')).toBeTruthy();
+  expect(screen.getByText('Chưa có dữ liệu ca làm')).toBeTruthy();
 });
 
-it('shows all ten feature cards without room or asset management shortcuts', () => {
+it('shows the complete function catalogue including rooms, assets and Staff invoices', () => {
   render(<StaffDashboard />);
+  fireEvent.click(screen.getByText('Xem tất cả chức năng (14)'));
   for (const title of [
     'Tiếp nhận người thuê',
     'Hợp đồng',
@@ -107,11 +124,14 @@ it('shows all ten feature cards without room or asset management shortcuts', () 
     'Bàn giao / Trả phòng',
     'Báo cáo sự cố',
     'Xử lý sự cố',
-    'Theo dõi công nợ',
+    'Công nợ',
     'Gửi thông báo',
+    'Phòng trọ',
+    'Tài sản',
+    'Hóa đơn',
+    'Sự cố khẩn cấp',
   ])
-    expect(screen.getByRole('button', { name: title })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: /Danh sách phòng|Quản lý tài sản/ })).toBeNull();
+    expect(screen.getAllByRole('button', { name: title }).length).toBeGreaterThan(0);
 });
 it('allows closing handover selection without navigating', () => {
   render(<StaffDashboard />);

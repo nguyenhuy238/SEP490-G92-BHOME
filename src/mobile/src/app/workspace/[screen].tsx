@@ -1,3 +1,9 @@
+import {
+  IncidentListScreen,
+  IncidentDetailScreen,
+  MaintenanceListScreen,
+  MaintenanceDetailScreen,
+} from '../../features/incidents/IncidentScreens';
 import React from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
@@ -13,12 +19,17 @@ import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreen
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
+import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
+import {
+  StaffIncidentReportScreen,
+  StaffMaintenanceScreen,
+  StaffEmergencyScreen,
+} from '../../screens/StaffIncidentScreens';
 import {
   TenantHome,
   TenantInvoice,
   TenantContract,
   MoveInChecklist,
-  TenantIncidents,
 } from '../../screens/TenantScreens';
 import {
   Profile,
@@ -40,14 +51,21 @@ import {
   UnavailableWorkspaceScreen,
 } from '../../screens/LiveWorkspaceScreens';
 import { AccountSecurityScreen } from '../../screens/AccountSecurityScreen';
+import { TenantRoomScreen } from '../../screens/TenantRoomScreen';
+import { TenantMeterHistoryScreen } from '../../screens/TenantMeterHistoryScreen';
+import {
+  TenantIncidentScreen,
+  TenantRequestsScreen,
+  TenantResidenceScreen,
+} from '../../screens/TenantServiceScreens';
+import { TenantProfileScreen } from '../../screens/TenantProfileScreen';
+import { useSession } from '../../lib/SessionProvider';
 import {
   ContractPreparation,
   Inspection,
-  StaffSchedule,
   RoomOverview,
   DebtFollowUp,
   TaskDetail,
-  StaffIncidentReport,
 } from '../../screens/StaffWorkflowScreens';
 import {
   ResidenceTracking,
@@ -59,18 +77,40 @@ import {
 function MoveIn() {
   return <Inspection moveIn />;
 }
+function StaffAssets() {
+  return <UnavailableWorkspaceScreen screen="staff-assets" />;
+}
+function StaffInvoices() {
+  return <UnavailableWorkspaceScreen screen="staff-invoices" />;
+}
+function EmergencyIncidents() {
+  return <IncidentListScreen emergency />;
+}
 const screens = {
+  'incident-detail': IncidentDetailScreen,
+  'maintenance-detail': MaintenanceDetailScreen,
+  'staff-incidents': IncidentListScreen,
+  'owner-incidents': IncidentListScreen,
+  'owner-maintenance': MaintenanceListScreen,
+  'owner-emergencies': EmergencyIncidents,
+  'tenant-room': TenantRoomScreen,
+  'tenant-requests': TenantRequestsScreen,
+  'tenant-meters': TenantMeterHistoryScreen,
+  'staff-assets': StaffAssets,
+  'staff-maintenance': StaffMaintenanceScreen,
+  'staff-emergencies': StaffEmergencyScreen,
+  'staff-invoices': StaffInvoices,
   onboarding: OnboardingScreen,
   'prepare-contract': ContractPreparation,
   'move-out': Inspection,
-  'report-incident': StaffIncidentReport,
+  'report-incident': StaffIncidentReportScreen,
   'move-in': MoveIn,
   residence: ResidenceTracking,
   adjustment: InvoiceAdjustment,
   'contract-request': ContractRequest,
   signing: SigningStatus,
   'billing-history': BillingHistory,
-  shifts: StaffSchedule,
+  shifts: StaffScheduleScreen,
   rooms: RoomOverview,
   'debt-follow-up': DebtFollowUp,
   'task-detail': TaskDetail,
@@ -84,7 +124,7 @@ const screens = {
   invoice: TenantInvoice,
   contract: TenantContract,
   checklist: MoveInChecklist,
-  incidents: TenantIncidents,
+  incidents: TenantIncidentScreen,
   profile: Profile,
   notifications: Notifications,
   'send-notification': StaffNotificationScreen,
@@ -94,6 +134,7 @@ const screens = {
 export default function WorkspaceRoute() {
   const { screen } = useLocalSearchParams<{ screen: string }>();
   const { role, preview, go } = useWorkspace();
+  const { session } = useSession();
   if (!role) return <Redirect href="/" />;
   if (!isWorkspaceScreen(screen) || !canOpenScreen(role, screen))
     return (
@@ -131,6 +172,20 @@ export default function WorkspaceRoute() {
         case 'invoice':
           content = <TenantInvoicesScreen />;
           break;
+        case 'adjustment':
+          content = <TenantInvoicesScreen intent="adjustment" />;
+          break;
+        case 'incidents':
+          content = <TenantIncidentScreen />;
+          break;
+        case 'residence':
+          content = <TenantResidenceScreen />;
+          break;
+        case 'tenant-room':
+        case 'tenant-requests':
+        case 'tenant-meters':
+          content = <Screen />;
+          break;
         case 'billing-history':
           content = <TenantPaymentHistoryScreen />;
           break;
@@ -165,7 +220,19 @@ export default function WorkspaceRoute() {
           content = <AccountSecurityScreen />;
           break;
         case 'profile':
+          content = role === 'Tenant' ? <TenantProfileScreen /> : <Profile />;
+          break;
+        case 'incident-detail':
+        case 'maintenance-detail':
+        case 'staff-incidents':
+        case 'owner-incidents':
+        case 'owner-maintenance':
+        case 'owner-emergencies':
         case 'onboarding':
+        case 'shifts':
+        case 'report-incident':
+        case 'staff-maintenance':
+        case 'staff-emergencies':
         case 'rooms':
         case 'send-notification':
           content = <Screen />;
@@ -175,28 +242,29 @@ export default function WorkspaceRoute() {
       }
     return (
       <WorkspaceShell screen={screen}>
-        <React.Fragment key={screen}>{content}</React.Fragment>
+        <React.Fragment key={`${session?.userId}:${role}:${screen}`}>{content}</React.Fragment>
       </WorkspaceShell>
     );
   }
   return (
     <WorkspaceShell screen={screen}>
       <Screen />
-      {preview && (
-        <RequestHistory
-          kind={
-            screen === 'prepare-contract'
-              ? 'contract'
-              : screen === 'task-detail'
-                ? 'task'
-                : screen === 'debt-follow-up'
-                  ? 'debt'
-                  : screen === 'report-incident'
-                    ? 'incident'
-                    : screen
-          }
-        />
-      )}
+      {preview &&
+        !['report-incident', 'staff-maintenance', 'staff-emergencies'].includes(screen) && (
+          <RequestHistory
+            kind={
+              screen === 'prepare-contract'
+                ? 'contract'
+                : screen === 'task-detail'
+                  ? 'task'
+                  : screen === 'debt-follow-up'
+                    ? 'debt'
+                    : screen === 'report-incident'
+                      ? 'incident'
+                      : screen
+            }
+          />
+        )}
     </WorkspaceShell>
   );
 }

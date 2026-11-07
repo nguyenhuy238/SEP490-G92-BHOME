@@ -34,6 +34,10 @@ public static class DependencyInjection
             .Validate(options => !string.IsNullOrWhiteSpace(options.Database),
                 "Configure ConnectionStrings:Database using user-secrets or environment variables.")
             .ValidateOnStart();
+        services.AddScoped(provider => Compact24Compatibility.Resolve(
+            provider.GetService<IHostEnvironment>()?.EnvironmentName,
+            provider.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentDatabase:AllowPreviousPropertySchema"),
+            provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddDbContext<Compact24DbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddScoped<BHomePersistenceContext>(p => p.GetRequiredService<Compact24DbContext>());

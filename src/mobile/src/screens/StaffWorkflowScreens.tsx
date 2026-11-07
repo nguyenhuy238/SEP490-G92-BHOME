@@ -9,7 +9,7 @@ import {
   Searchbar,
   Text,
 } from 'react-native-paper';
-import { Action, Box, Filters, Heading, InfoRow, Pill, Row, ui } from '../components/WorkspaceKit';
+import { Action, Box, Heading, InfoRow, Pill, Row, ui } from '../components/WorkspaceKit';
 import {
   ChoiceField,
   EvidenceInput,
@@ -306,42 +306,6 @@ export function Inspection({ moveIn = false }: { moveIn?: boolean }) {
     </>
   );
 }
-export function StaffSchedule() {
-  const [filter, setFilter] = useState('Tất cả');
-  return (
-    <>
-      <Heading title="Lịch ca của tôi" detail="UC-09 • Lịch do Owner phân công • Dữ liệu mẫu" />
-      <Filters
-        options={['Tất cả', 'Đã phân công', 'Đã điều chỉnh', 'Nghỉ']}
-        selected={filter}
-        onChange={setFilter}
-      />
-      {f.shifts
-        .filter((shift) => filter === 'Tất cả' || shift.status === filter)
-        .map((shift) => (
-          <Box key={shift.date}>
-            <Row spread>
-              <Text variant="titleLarge">
-                {shift.day} • {shift.date}
-              </Text>
-              <Pill tone={shift.status === 'Đã điều chỉnh' ? 'amber' : 'blue'}>{shift.status}</Pill>
-            </Row>
-            <Text variant="headlineSmall">{shift.hours}</Text>
-            <Text variant="bodyMedium">{shift.location}</Text>
-            <Text variant="bodySmall" style={ui.muted}>
-              {shift.detail}
-            </Text>
-          </Box>
-        ))}
-      <Box>
-        <Text variant="bodySmall">
-          Staff có quyền xem ca của mình và lịch sử thay đổi. Không hỗ trợ đổi ca, xin chuyển ca
-          hoặc giao ca giữa Staff.
-        </Text>
-      </Box>
-    </>
-  );
-}
 export function RoomOverview() {
   const { preview, go } = useWorkspace();
   const scope = useCaptureScope();
@@ -613,68 +577,6 @@ export function TaskDetail() {
       <Action icon="send-outline" onPress={() => void form.submit()}>
         Gửi cập nhật bản mẫu
       </Action>
-    </>
-  );
-}
-export function StaffIncidentReport() {
-  const form = useWorkflowDraft('incident', { room: '', severity: 'normal', description: '' });
-  if (form.submitted)
-    return (
-      <SubmissionResult
-        title="Đã ghi nhận báo cáo trên bản mẫu"
-        status={
-          form.data.severity === 'emergency'
-            ? 'Emergency • Cần Owner/Staff tại cơ sở phản hồi'
-            : 'Normal • Chờ Owner xem xét'
-        }
-        onEdit={() => form.setSubmitted(false)}
-      />
-    );
-  return (
-    <>
-      <Heading
-        title="Báo sự cố tại cơ sở"
-        detail="UC-26 / UC-27 • Chỉ cơ sở Staff được phân công"
-      />
-      <Box>
-        <ChoiceField
-          label="Phòng / Khu vực *"
-          value={form.data.room}
-          options={[...f.rooms, { id: 'common', label: 'Khu vực chung • Tòa B Đống Đa' }]}
-          onChange={(value) => form.change('room', value)}
-        />
-        <ChoiceField
-          label="Mức độ *"
-          value={form.data.severity}
-          options={[
-            { id: 'normal', label: 'Normal • Bình thường' },
-            { id: 'emergency', label: 'Emergency • Khẩn cấp' },
-          ]}
-          onChange={(value) => form.change('severity', value)}
-        />
-        {form.data.severity === 'emergency' && (
-          <Text style={ui.red}>
-            Nếu có nguy hiểm trực tiếp, liên hệ dịch vụ khẩn cấp công cộng trước; ghi nhận hành động
-            an toàn trong khả năng của bạn. Không chờ phản hồi từ app.
-          </Text>
-        )}
-        <Input
-          label="Mô tả sự cố / Thiết bị liên quan *"
-          multiline
-          value={form.data.description}
-          onChange={(value) => form.change('description', value)}
-        />
-        <EvidenceInput count={form.evidence} onChange={form.setEvidence} />
-        <Text variant="bodySmall" style={ui.muted}>
-          Staff chọn mức độ, không tự phân loại bằng AI hoặc tự duyệt chi phí sửa chữa.
-        </Text>
-      </Box>
-      {form.errors.map((error) => (
-        <Text key={error} style={ui.red}>
-          {error}
-        </Text>
-      ))}
-      <Action onPress={() => void form.submit()}>Gửi báo cáo bản mẫu</Action>
     </>
   );
 }

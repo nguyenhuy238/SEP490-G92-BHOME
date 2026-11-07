@@ -41,7 +41,7 @@ export function MeterCameraView({
       {camera ? (
         <>
           <View
-            style={{ height: 260, borderRadius: 12, overflow: 'hidden', backgroundColor: c.ink }}
+            style={{ height: 320, borderRadius: 12, overflow: 'hidden', backgroundColor: c.ink }}
           >
             {camera}
           </View>

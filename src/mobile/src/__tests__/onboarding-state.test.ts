@@ -38,3 +38,14 @@ it('offers four authorized Staff tabs and maps nested screens to the correct tab
   expect(tabs.Owner).toHaveLength(4);
   expect(tabs.Tenant).toHaveLength(4);
 });
+it('keeps Tenant feature routes isolated and selects the matching bottom tab', () => {
+  for (const route of ['tenant-room', 'tenant-meters', 'tenant-requests'] as const) {
+    expect(canOpenScreen('Tenant', route)).toBe(true);
+    expect(canOpenScreen('Staff', route)).toBe(false);
+    expect(canOpenScreen('Owner', route)).toBe(false);
+  }
+  expect(activeWorkspaceTab('Tenant', 'incidents')).toBe('tenant-requests');
+  expect(activeWorkspaceTab('Tenant', 'tenant-meters')).toBe('invoice');
+  expect(activeWorkspaceTab('Tenant', 'checklist')).toBe('tenant-home');
+  expect(activeWorkspaceTab('Tenant', 'security')).toBe('profile');
+});

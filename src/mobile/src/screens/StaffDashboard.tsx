@@ -1,178 +1,145 @@
-import { dashboardStyles } from '../components/DashboardKit';
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Chip, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
-import { StaffFeatureCard } from '../components/StaffFeatureCard';
+import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
+import { router } from 'expo-router';
+import { DashboardHeading, DashboardStatus, dashboardStyles } from '../components/DashboardKit';
+import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
 import { colors as c, staffColors as s } from '../theme/theme';
 
-const groups = [
-  {
-    title: 'TIẾP NHẬN & HỢP ĐỒNG',
-    items: [
-      {
-        title: 'Tiếp nhận người thuê',
-        detail: 'Quét CCCD & lập hồ sơ',
-        icon: 'account-plus-outline',
-        color: s.blue,
-        background: s.blueSoft,
-        screen: 'onboarding',
-      },
-      {
-        title: 'Hợp đồng',
-        detail: 'Chuẩn bị & theo dõi ký',
-        icon: 'file-document-edit-outline',
-        color: s.purple,
-        background: s.purpleSoft,
-        screen: 'signing',
-      },
-    ],
-  },
-  {
-    title: 'CÔNG VIỆC & LỊCH LÀM',
-    items: [
-      {
-        title: 'Công việc của tôi',
-        detail: 'Theo dõi & cập nhật tiến độ',
-        icon: 'clipboard-check-outline',
-        color: s.green,
-        background: s.greenSoft,
-        screen: 'work-orders',
-      },
-      {
-        title: 'Lịch làm việc',
-        detail: 'Xem ca được phân công',
-        icon: 'calendar-month-outline',
-        color: s.blue,
-        background: s.blueSoft,
-        screen: 'shifts',
-      },
-    ],
-  },
-  {
-    title: 'ĐIỆN NƯỚC & BÀN GIAO',
-    items: [
-      {
-        title: 'Ghi điện nước',
-        detail: 'Chụp công tơ & OCR',
-        icon: 'gauge',
-        color: s.purple,
-        background: s.purpleSoft,
-        screen: 'meter-reading',
-      },
-      {
-        title: 'Bàn giao / Trả phòng',
-        detail: 'Kiểm tra & xác nhận',
-        icon: 'key-outline',
-        color: s.orange,
-        background: s.orangeSoft,
-        screen: 'move-in',
-      },
-    ],
-  },
-  {
-    title: 'SỰ CỐ & BẢO TRÌ',
-    items: [
-      {
-        title: 'Báo cáo sự cố',
-        detail: 'Báo hỏng hóc, sự cố',
-        icon: 'alert-outline',
-        color: s.red,
-        background: s.redSoft,
-        screen: 'report-incident',
-      },
-      {
-        title: 'Xử lý sự cố',
-        detail: 'Kiểm tra & sửa chữa',
-        icon: 'tools',
-        color: s.orange,
-        background: s.orangeSoft,
-        screen: 'work-orders',
-      },
-    ],
-  },
-  {
-    title: 'CÔNG NỢ & THÔNG BÁO',
-    items: [
-      {
-        title: 'Theo dõi công nợ',
-        detail: 'Kiểm tra & nhắc nợ',
-        icon: 'wallet-outline',
-        color: s.green,
-        background: s.greenSoft,
-        screen: 'debt-follow-up',
-      },
-      {
-        title: 'Gửi thông báo',
-        detail: 'Thông báo đến người thuê',
-        icon: 'bullhorn-outline',
-        color: s.purple,
-        background: s.purpleSoft,
-        screen: 'send-notification',
-      },
-    ],
-  },
-] satisfies {
-  title: string;
-  items: {
-    title: string;
-    detail: string;
-    icon: string;
-    color: string;
-    background: string;
-    screen: WorkspaceScreen;
-  }[];
-}[];
-
 export function StaffDashboard() {
   const { go, preview } = useWorkspace();
+  const data = useStaffDashboard();
   const [handover, setHandover] = useState(false);
+  const priorities = preview
+    ? [
+        {
+          id: 'sample-meter',
+          title: 'Ghi chỉ số điện',
+          detail: 'Phòng 301 · Dữ liệu mẫu',
+          status: 'Cần ghi số',
+          open: () => go('meter-reading'),
+        },
+      ]
+    : [
+        ...(data.overdue.data?.items ?? [])
+          .filter((task) => ['Assigned', 'InProgress'].includes(task.status))
+          .map((task) => ({
+            id: task.id,
+            title: task.title,
+            detail:
+              data.locations.data?.find((location) => location.id === task.locationId)?.label ??
+              'Cơ sở được phân công',
+            status: 'Quá hạn',
+            open: () => go('task-detail', { taskId: task.id }),
+          })),
+        ...(data.inspections.data ?? [])
+          .filter((item) => item.status === 'Approved')
+          .slice(0, 2)
+          .map((item) => ({
+            id: item.contractId,
+            title: 'Kiểm tra trả phòng',
+            detail: `Phòng ${item.roomNumber} · ${item.locationName}`,
+            status: 'Được phân công',
+            open: () => go('move-out', { contractId: item.contractId }),
+          })),
+        ...(data.meters.data ?? [])
+          .filter((item) => item.status === 0)
+          .slice(0, 2)
+          .map((item) => ({
+            id: item.id,
+            title: `Ghi chỉ số ${item.utilityType === 0 ? 'điện' : 'nước'}`,
+            detail: `Phòng ${item.room} · ${item.location}`,
+            status: 'Cần ghi số',
+            open: () => router.push({ pathname: '/meter', params: { taskId: item.id } }),
+          })),
+      ];
+  const priorityError = [data.overdue, data.inspections, data.meters].some(
+    (query) => !!query.error,
+  );
+  const locationLabel = preview
+    ? 'BHOME Đống Đa - Tòa B · Mẫu'
+    : data.locations.loading
+      ? 'Đang tải cơ sở…'
+      : data.locations.error
+        ? 'Chưa tải được cơ sở'
+        : data.locations.data?.map((item) => item.label).join(' · ') ||
+          'Chưa có cơ sở được phân công';
+  const taskValue = preview ? '6' : data.tasks.data ? String(data.tasks.data.totalCount) : '—';
+  const pendingInspections = data.inspections.data?.filter((item) => item.status === 'Approved');
+  function open(screen: WorkspaceScreen) {
+    if (screen === 'move-in') setHandover(true);
+    else go(screen);
+  }
   return (
     <>
       <View style={styles.summary}>
         <View style={styles.greetingRow}>
           <View style={styles.greeting}>
             <Text variant="headlineSmall" style={styles.title}>
-              {preview ? 'Xin chào, Long!' : 'Xin chào bạn!'}
+              {preview ? 'Xin chào, Long!' : 'Chào bạn, bắt đầu ngày mới!'}
             </Text>
-            <TouchableRipple
-              onPress={() => go('shifts')}
-              accessibilityRole="button"
-              accessibilityLabel="Xem lịch ca"
-            >
-              <Text variant="bodySmall" style={styles.muted}>
-                {preview ? 'Ca sáng (07:30 – 16:30)' : 'Xem lịch ca được phân công ›'}
-              </Text>
-            </TouchableRipple>
+            <Text variant="bodySmall" style={styles.muted}>
+              {locationLabel}
+            </Text>
           </View>
-          <Chip
-            icon={preview ? 'circle-small' : 'clock-outline'}
-            style={[styles.status, !preview && styles.statusPending]}
-            textStyle={preview ? styles.statusText : styles.muted}
+          <Button
+            compact
+            icon="refresh"
+            onPress={data.reload}
+            accessibilityLabel="Làm mới tổng quan"
           >
-            {preview ? 'Đang trực' : 'Chưa có dữ liệu ca'}
-          </Chip>
+            Làm mới
+          </Button>
         </View>
+        <TouchableRipple
+          onPress={() => go('shifts')}
+          accessibilityRole="button"
+          accessibilityLabel="Xem lịch ca"
+        >
+          <View style={styles.shift}>
+            <DashboardStatus tone="neutral">
+              {preview ? 'Ca sáng · 07:30–16:30 · Mẫu' : 'Chưa có dữ liệu ca làm'}
+            </DashboardStatus>
+            <Text variant="labelSmall" style={styles.muted}>
+              Xem lịch ca ›
+            </Text>
+          </View>
+        </TouchableRipple>
         <View style={styles.metrics}>
           {[
-            { value: '4/6', label: 'Công việc hôm nay', screen: 'work-orders', danger: false },
-            { value: '1', label: 'Sự cố cần xử lý', screen: 'work-orders', danger: true },
-            { value: '2', label: 'Phòng sắp bàn giao', screen: 'move-in', danger: false },
+            { label: 'Hạn hôm nay', value: taskValue, screen: 'work-orders' as const },
+            {
+              label: 'Sự cố chờ xử lý',
+              value: preview
+                ? '1'
+                : data.incidents?.total != null
+                  ? String(data.incidents.total)
+                  : '—',
+              screen: 'staff-incidents' as const,
+            },
+            {
+              label: 'Kiểm tra trả phòng',
+              value: preview
+                ? '2'
+                : pendingInspections
+                  ? `${data.inspections.data!.length >= 100 ? '≥' : ''}${pendingInspections.length}`
+                  : '—',
+              screen: 'move-out' as const,
+            },
           ].map((metric, index) => (
             <TouchableRipple
               key={metric.label}
               style={[styles.metric, index > 0 && styles.divider]}
+              onPress={() => go(metric.screen)}
               accessibilityRole="button"
               accessibilityLabel={metric.label}
-              onPress={() => (metric.screen === 'move-in' ? setHandover(true) : go('work-orders'))}
             >
               <View style={styles.metricContent}>
-                <Text
-                  variant="headlineMedium"
-                  style={[styles.title, metric.danger && preview && styles.danger]}
-                >
-                  {preview ? metric.value : '—'}
+                <Text variant="headlineMedium" style={styles.title}>
+                  {metric.value}
                 </Text>
                 <Text style={styles.metricLabel}>{metric.label}</Text>
               </View>
@@ -181,38 +148,57 @@ export function StaffDashboard() {
         </View>
         {!preview && (
           <Text variant="labelSmall" style={styles.muted}>
-            Chưa có dữ liệu tổng quan từ hệ thống.
+            Lịch bàn giao nhận phòng chưa có dữ liệu tổng hợp. Dấu — nghĩa là chưa có dữ liệu hoặc
+            chưa tải được dữ liệu.
+          </Text>
+        )}
+        {!preview && !!data.incidents?.error && (
+          <Text style={styles.muted}>Chưa tải đủ số sự cố mở. Chạm Làm mới để thử lại.</Text>
+        )}
+        {!preview && !!data.tasks.error && (
+          <Text style={styles.muted}>
+            Chưa tải được công việc hôm nay. Chạm Làm mới để thử lại.
           </Text>
         )}
       </View>
-      {groups.map((group) => (
-        <View key={group.title} style={styles.section}>
-          <View style={styles.sectionHeading}>
-            <View style={styles.accent} />
-            <Text variant="titleMedium" style={styles.title}>
-              {group.title}
-            </Text>
-          </View>
-          <View style={styles.grid}>
-            {group.items.map((item) => (
-              <StaffFeatureCard
-                key={item.title}
-                title={item.title}
-                description={item.detail}
-                icon={item.icon}
-                color={item.color}
-                background={item.background}
-                onPress={() => (item.screen === 'move-in' ? setHandover(true) : go(item.screen))}
-              />
+      {priorities.length > 0 && (
+        <View style={styles.section}>
+          <DashboardHeading title="Cần xử lý" detail="Các tác vụ ưu tiên trong phạm vi được giao" />
+          <View style={styles.priorityList}>
+            {priorities.slice(0, 5).map((item) => (
+              <TouchableRipple
+                key={item.id}
+                onPress={item.open}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.title}, ${item.detail}`}
+              >
+                <View style={styles.priority}>
+                  <View style={styles.greeting}>
+                    <Text variant="titleSmall" style={styles.title}>
+                      {item.title}
+                    </Text>
+                    <Text variant="labelSmall" style={styles.muted}>
+                      {item.detail}
+                    </Text>
+                  </View>
+                  <Text variant="labelSmall" style={styles.priorityStatus}>
+                    {item.status} ›
+                  </Text>
+                </View>
+              </TouchableRipple>
             ))}
           </View>
         </View>
-      ))}
+      )}
+      {!preview && priorityError && (
+        <Button onPress={data.reload}>Chưa tải đủ tác vụ ưu tiên · Thử lại</Button>
+      )}
+      <StaffFeatureDirectory onOpen={open} />
       <Portal>
         <Dialog visible={handover} onDismiss={() => setHandover(false)}>
           <Dialog.Title>Bàn giao / Trả phòng</Dialog.Title>
           <Dialog.Content>
-            <Text>Chọn nghiệp vụ cần thực hiện.</Text>
+            <Text>Chọn nghiệp vụ cần thực hiện theo hồ sơ hợp đồng.</Text>
           </Dialog.Content>
           <Dialog.Actions style={styles.dialogActions}>
             <Button
@@ -238,28 +224,28 @@ export function StaffDashboard() {
     </>
   );
 }
-
 const styles = StyleSheet.create({
-  summary: dashboardStyles.summary,
+  summary: { ...dashboardStyles.summary, borderRadius: 18, gap: 12 },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  greeting: { flex: 1, minWidth: 165, gap: 4 },
+  greeting: { flex: 1, minWidth: 100, gap: 4 },
   title: { color: s.navy },
   muted: { color: c.muted },
-  status: {
-    backgroundColor: s.greenSoft,
-    borderRadius: 20,
-  },
-  statusText: { color: s.green },
-  danger: { color: s.red },
-  statusPending: { backgroundColor: c.soft },
+  shift: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   metrics: { flexDirection: 'row' },
   metric: { flex: 1 },
-  metricContent: { alignItems: 'center', paddingHorizontal: 4, gap: 5 },
+  metricContent: { alignItems: 'center', paddingHorizontal: 4, paddingVertical: 8, gap: 5 },
   metricLabel: { fontSize: 11, lineHeight: 16, textAlign: 'center', color: c.muted },
   divider: { borderLeftWidth: 1, borderLeftColor: c.border },
   section: dashboardStyles.section,
-  sectionHeading: dashboardStyles.sectionHeading,
-  accent: dashboardStyles.accent,
-  grid: { flexDirection: 'row', gap: 12 },
+  priorityList: { backgroundColor: c.white, borderRadius: 16, overflow: 'hidden' },
+  priority: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.border,
+  },
+  priorityStatus: { color: s.orange, flexShrink: 1 },
   dialogActions: { flexDirection: 'column', alignItems: 'stretch' },
 });

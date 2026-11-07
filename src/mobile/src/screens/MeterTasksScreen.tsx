@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
-import { MeterFlowHeader } from '../components/MeterFlowHeader';
+import { groupRoomMeterTasks, meterRoundLabel } from '../features/workspace/roomMeterTasks';
 import { ChoiceField, Input } from '../components/WorkflowControls';
 import { QueryState } from '../components/WorkspaceQueryState';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
@@ -40,7 +40,6 @@ export function MeterTasksScreen() {
   const params = new URLSearchParams();
   if (location) params.set('locationId', location);
   if (room) params.set('roomId', room);
-  if (status) params.set('status', status);
   if (due && validDue) params.set('dueDate', due);
   const scope = params.toString();
   const key = scope + ':' + revision;
@@ -82,7 +81,10 @@ export function MeterTasksScreen() {
   ]
     .sort()
     .reverse();
-  const filtered = all.filter((task) => !period || task.billingPeriod === period);
+  // Filter status after grouping, so a completed meter is not hidden beside its pending counterpart.
+  const filtered = groupRoomMeterTasks(
+    all.filter((task) => !period || task.billingPeriod === period),
+  ).filter((group) => !status || group.some((task) => String(task.status) === status));
   const visiblePage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 20)));
   const items = filtered.slice((visiblePage - 1) * 20, visiblePage * 20);
   const change = (setter: (v: string) => void, v: string) => {
@@ -92,7 +94,7 @@ export function MeterTasksScreen() {
   if (!staff) return <Text>Chỉ Staff được phép ghi chỉ số điện nước.</Text>;
   return (
     <>
-      <MeterFlowHeader step={0} />
+      <Heading title="Ghi chỉ số điện nước" detail="Chọn phòng cần ghi chỉ số." />
       <Box style={{ padding: 14, gap: 10 }}>
         <ChoiceField
           label="Cơ sở"
@@ -173,59 +175,51 @@ export function MeterTasksScreen() {
         )}
       </Box>
       <Heading
-        title="Tác vụ được phân công"
+        title="Phòng được phân công"
         detail={
           current && !current.error
-            ? `${filtered.length} tác vụ phù hợp`
+            ? `${filtered.length} phòng / kỳ ghi phù hợp`
             : 'Dữ liệu theo quyền truy cập hiện tại'
         }
       />
       <QueryState loading={loading} error={current?.error ?? ''} reload={reload} />
-      {items.map((task) => (
-        <Box key={task.id} style={{ padding: 14, gap: 8 }}>
-          <Row spread>
-            <Text variant="titleLarge">Phòng {task.room}</Text>
-            <Pill tone={task.utilityType === 0 ? 'amber' : 'blue'}>
-              {task.utilityType === 0 ? 'Điện · kWh' : 'Nước · m³'}
-            </Pill>
-          </Row>
-          <Text style={ui.muted}>
-            {task.location} · {task.meterCode}
-          </Text>
-          <Pill tone={task.status === 2 ? 'green' : 'blue'}>
-            {['Được giao', 'Đang xử lý', 'Đã xác nhận', 'Đã hủy'][task.status] ?? 'Không xác định'}
-          </Pill>
-          <Text>
-            Kỳ ghi:{' '}
-            {task.purpose === 0
-              ? 'Chỉ số ban đầu'
-              : task.purpose === 2
-                ? 'Chốt trả phòng'
-                : displayContractDate(task.billingPeriod ?? task.readingDate)}
-          </Text>
-          <Text>
-            Chỉ số trước: {task.previousValue ?? 'Chưa có'}{' '}
-            {task.previousValue !== null ? (task.utilityType === 0 ? 'kWh' : 'm³') : ''}
-          </Text>
-          {task.dueAt && <Text style={ui.muted}>Hạn ghi: {formatInstant(task.dueAt)}</Text>}
-          {task.status < 2 && (
+      {items.map((group) => {
+        const task = group.find((item) => item.status < 2) ?? group[0]!;
+        return (
+          <Box key={group.map((item) => item.id).join(':')} style={{ padding: 14, gap: 10 }}>
+            <Row spread>
+              <Text variant="titleLarge">Phòng {task.room}</Text>
+            </Row>
+            <Text style={ui.muted}>
+              {task.location} · {meterRoundLabel(task)}
+            </Text>
+            {group.map((meter) => (
+              <Row key={meter.id} spread>
+                <Text>
+                  {meter.utilityType === 0 ? 'Điện' : 'Nước'}
+                  {group.filter((item) => item.utilityType === meter.utilityType).length > 1
+                    ? ` · ${meter.meterCode}`
+                    : ''}
+                </Text>
+                <Pill
+                  tone={meter.status === 2 ? 'green' : meter.status === 3 ? 'neutral' : 'amber'}
+                >
+                  {meter.status === 2 ? 'Đã ghi' : meter.status === 3 ? 'Đã hủy' : 'Chưa ghi'}
+                </Pill>
+              </Row>
+            ))}
+            {task.dueAt && <Text style={ui.muted}>Hạn ghi: {formatInstant(task.dueAt)}</Text>}
             <Action
-              icon="camera-outline"
+              secondary={task.status === 2}
+              disabled={task.status === 3}
+              icon="door-open"
               onPress={() => router.push({ pathname: '/meter', params: { taskId: task.id } })}
             >
-              Ghi chỉ số
+              Mở phòng
             </Action>
-          )}
-          {task.status === 2 && (
-            <Action
-              secondary
-              onPress={() => router.push({ pathname: '/meter', params: { taskId: task.id } })}
-            >
-              Xem kết quả đã xác nhận
-            </Action>
-          )}
-        </Box>
-      ))}
+          </Box>
+        );
+      })}
       {current && !current.error && !items.length && (
         <Box>
           <Heading title="Chưa có tác vụ phù hợp" />

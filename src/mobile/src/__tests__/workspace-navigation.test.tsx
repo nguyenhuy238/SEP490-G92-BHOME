@@ -4,12 +4,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 const state = vi.hoisted(() => ({
   push: vi.fn(),
-  replace: vi.fn(),
   leave: vi.fn(),
   roles: ['Staff'],
   signedIn: true,
+  back: vi.fn(),
+  replace: vi.fn(),
+  canGoBack: vi.fn(),
 }));
-vi.mock('expo-router', () => ({ router: { push: state.push, replace: state.replace } }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
+  router: {
+    push: state.push,
+    back: state.back,
+    replace: state.replace,
+    canGoBack: state.canGoBack,
+  },
+}));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: state.signedIn ? { roles: state.roles } : null }),
 }));
@@ -108,11 +118,13 @@ vi.mock('react-native-paper', () => {
 vi.mock('../components/WorkspaceKit', () => ({ ui: {} }));
 import { WorkspaceProvider, useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { WorkspaceShell } from '../components/WorkspaceShell';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
   state.roles = ['Staff'];
   state.signedIn = true;
   vi.clearAllMocks();
+  state.canGoBack.mockReturnValue(false);
 });
 afterEach(cleanup);
 it.each(['Owner', 'Staff'])('opens the OCR test directly from the %s development home', (role) => {
@@ -169,6 +181,33 @@ function Draft() {
   useEffect(() => registerExitGuard(() => true, state.leave), [registerExitGuard]);
   return <button onClick={() => go('staff-home')}>Đổi màn hình</button>;
 }
+function ContractHeaderProbe({ refresh }: { refresh: () => void }) {
+  useWorkspaceHeaderRefresh(refresh, false);
+  return <span>Danh sách hợp đồng</span>;
+}
+it('places contract refresh beside the compact Staff title and clears it when opening details', () => {
+  const refresh = vi.fn();
+  const view = render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="signing">
+        <ContractHeaderProbe refresh={refresh} />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.getByText('Hợp đồng')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại hợp đồng' }));
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  view.rerender(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="signing">
+        <span>Chi tiết hợp đồng</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.queryByRole('button', { name: 'Tải lại hợp đồng' })).toBeNull();
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+});
 it('lets meter steps use the Staff shell back action without navigating home', () => {
   const back = vi.fn();
   render(
@@ -178,7 +217,7 @@ it('lets meter steps use the Staff shell back action without navigating home', (
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
-  expect(screen.getByText('BHOME Staff')).toBeTruthy();
+  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect(back).toHaveBeenCalledOnce();
@@ -238,7 +277,7 @@ it('renders four labeled Staff tabs at 60dp and applies Android bottom inset exa
 it.each([
   ['Owner', 'owner-home', ['Tổng quan', 'Phê duyệt', 'Vận hành', 'Tài khoản']],
   ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Thông báo', 'Cá nhân']],
-  ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Báo sự cố', 'Tài khoản']],
+  ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Yêu cầu', 'Cá nhân']],
 ] as const)('keeps %s destinations in the shared Staff shell', (role, home, labels) => {
   state.roles = [role];
   const view = render(
@@ -266,4 +305,51 @@ it.each([
       screen: role === 'Owner' ? 'approvals' : role === 'Staff' ? 'work-orders' : 'invoice',
     },
   });
+});
+it('returns to the preceding Staff screen when navigation history exists', () => {
+  state.canGoBack.mockReturnValue(true);
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="staff-maintenance">
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.back).toHaveBeenCalledOnce();
+  expect(state.replace).not.toHaveBeenCalled();
+  expect(state.push).not.toHaveBeenCalled();
+});
+it('uses a valid Staff fallback when a detail screen is opened directly', () => {
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="task-detail">
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.replace).toHaveBeenCalledWith({
+    pathname: '/workspace/[screen]',
+    params: { screen: 'work-orders' },
+  });
+  expect(state.back).not.toHaveBeenCalled();
+});
+it('protects an onboarding draft before going back in Staff history', () => {
+  state.canGoBack.mockReturnValue(true);
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="onboarding">
+        <Draft />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.back).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục nhập' }));
+  expect(state.back).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
+  expect(state.leave).toHaveBeenCalledOnce();
+  expect(state.back).toHaveBeenCalledOnce();
 });

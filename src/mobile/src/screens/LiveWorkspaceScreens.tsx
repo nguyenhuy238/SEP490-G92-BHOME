@@ -131,10 +131,21 @@ export function StaffHomeScreen() {
 
 export { MeterTasksScreen } from './MeterTasksScreen';
 
+function OwnerIncidentLinks() {
+  const { go } = useWorkspace();
+  return (
+    <Box>
+      <Action onPress={() => go('owner-incidents')}>Quản lý báo cáo sự cố</Action>
+      <Action onPress={() => go('owner-maintenance')}>Phê duyệt và nghiệm thu bảo trì</Action>
+      <Action onPress={() => go('owner-emergencies')}>Sự cố khẩn cấp</Action>
+    </Box>
+  );
+}
 export function OwnerOperationsScreen() {
   return (
     <>
       <Heading title="Vận hành cơ sở" />
+      <OwnerIncidentLinks />
       <Box>
         <Action icon="office-building-outline" onPress={() => router.push('/setup')}>
           Thiết lập cơ sở, phòng & phân công
@@ -220,6 +231,26 @@ export function TaskNotificationsScreen() {
 }
 
 const unavailableFeatures: Record<string, { title: string; detail: string }> = {
+  'staff-assets': {
+    title: 'Tài sản cơ sở',
+    detail:
+      'Danh sách và cập nhật tài sản chưa khả dụng. Bạn có thể đối chiếu tài sản trong biên bản bàn giao hoặc kiểm tra trả phòng của hợp đồng được giao.',
+  },
+  'staff-maintenance': {
+    title: 'Xử lý sự cố & Bảo trì',
+    detail:
+      'Danh sách sửa chữa, đề xuất phương án và chi phí, thực hiện sau phê duyệt chưa khả dụng. Công việc vận hành được giao được theo dõi riêng tại mục Công việc.',
+  },
+  'staff-emergencies': {
+    title: 'Sự cố khẩn cấp',
+    detail:
+      'Tiếp nhận cảnh báo và ghi nhận xử lý tức thời chưa khả dụng. Nếu có nguy hiểm đến người, liên hệ lực lượng khẩn cấp tại địa phương và báo ngay cho chủ cơ sở.',
+  },
+  'staff-invoices': {
+    title: 'Hóa đơn theo cơ sở',
+    detail:
+      'Xem hóa đơn dành cho nhân viên chưa khả dụng. Liên hệ chủ cơ sở khi cần kiểm tra trạng thái hóa đơn phục vụ vận hành.',
+  },
   invoice: {
     title: 'Hóa đơn & Thanh toán',
     detail:

@@ -37,6 +37,24 @@ internal static class LocalDevelopmentCli
                 return 1;
             }
         }
+        if (args.SequenceEqual(new[] { "seed-mobile-contract-overview" }))
+        {
+            try
+            {
+                var settings = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var setup = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(settings);
+                setup.AddInfrastructure(settings);
+                await using var seedProvider = setup.BuildServiceProvider();
+                await MobileContractOverviewSeed.RunAsync(seedProvider);
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error is LocalTestAccountException ? error.Message
+                    : $"Không thể tạo dữ liệu hợp đồng minh họa ({error.GetType().Name}); transaction rollback, không in credential.");
+                return 1;
+            }
+        }
         if (args.SequenceEqual(new[] { "seed-main-draft-settings" }))
         {
             try
@@ -77,6 +95,7 @@ internal static class LocalDevelopmentCli
                 services.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
             }
             await using var provider = services.BuildServiceProvider();
+            if (args.SequenceEqual(new[] { "seed-mobile-test" })) { await MobileTestSeed.RunAsync(provider, password); return 0; }
             if (args.SequenceEqual(new[] { "seed-billing-automation-demo" })) { await BillingAutomationDemoSeed.PrepareAsync(provider); return 0; }
             if (args.SequenceEqual(new[] { "demo-billing-retry" })) { await BillingAutomationDemoSeed.RetryAsync(provider); return 0; }
             if (args.SequenceEqual(new[] { "seed-contract-demo" }))

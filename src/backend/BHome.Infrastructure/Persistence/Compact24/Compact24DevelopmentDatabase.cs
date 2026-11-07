@@ -17,7 +17,8 @@ public sealed class DevelopmentDatabaseException(string code) : InvalidOperation
 public static class Compact24DevelopmentDatabase
 {
     public static async Task<DevelopmentDatabaseResult> PrepareAsync(string? environment, string connectionString,
-        bool archiveLegacy = false, bool checkOnly = false, CancellationToken token = default)
+        bool archiveLegacy = false, bool checkOnly = false, CancellationToken token = default,
+        bool allowPreviousPropertySchema = false)
     {
         var settings = ValidateTarget(environment, connectionString);
         if (archiveLegacy && checkOnly) throw new DevelopmentDatabaseException("incompatible_modes");
@@ -46,6 +47,12 @@ public static class Compact24DevelopmentDatabase
                 return new("INITIALIZED");
             }
             if (await ReadyAsync(target, token)) return new("READY");
+            if (allowPreviousPropertySchema)
+            {
+                await using var compatible = new Compact24DbContext(
+                    new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(target).Options, new(true));
+                if (await Compact24Schema.VerifyPreviousPropertyAsync(compatible, token)) return new("READY_PREVIOUS_PROPERTY_COMPATIBILITY");
+            }
             if (tables.Length == 24 && tables.Contains("locations") && tables.Contains("billing_policies"))
             {
                 await using var previous = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='locations' AND column_name='room_types'", target);

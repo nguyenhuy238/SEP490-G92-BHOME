@@ -34,6 +34,7 @@ export function CameraCapture({
   onPhotoCaptured,
   onPhotoCleared,
   meterStep = 1,
+  autoOpen = false,
 }: {
   label: string;
   buttonMode?: 'outlined' | 'contained';
@@ -46,6 +47,7 @@ export function CameraCapture({
   documentSide?: 'front' | 'back';
   presentation?: 'inline' | 'document' | 'meter';
   meterStep?: number;
+  autoOpen?: boolean;
   onManual?: () => void;
   onPhotoCaptured?: () => void;
   onPhotoCleared?: () => void;
@@ -153,11 +155,11 @@ export function CameraCapture({
     };
   }, [clearFiles]);
   useEffect(() => {
-    if (presentation !== 'document') return;
+    if (presentation !== 'document' && !(presentation === 'meter' && autoOpen)) return;
     // Let the modal mount before requesting the native camera permission/view.
     const start = setTimeout(() => void openCamera(), 0);
     return () => clearTimeout(start);
-  }, [presentation, openCamera]);
+  }, [presentation, openCamera, autoOpen]);
   const take = async () => {
     if (!camera.current || workingLock.current || disabled || !ready) return;
     workingLock.current = true;

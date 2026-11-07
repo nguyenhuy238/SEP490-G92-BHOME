@@ -34,10 +34,19 @@ import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { ContractExpiryPanel } from './ContractExpiryPanel';
 import { ContractProgress } from './ContractProgress';
+import {
+  contractSections,
+  contractActionSection,
+  groupContracts,
+  type ContractSection,
+} from './contractSections';
+import { StaffContractsList } from './StaffContractsList';
+import { defaultStaffContractListView } from './staffContractList';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
   const { role } = useWorkspace();
+  const [staffListView, setStaffListView] = useState({ ...defaultStaffContractListView });
   const params = useLocalSearchParams<{
     contractId?: string;
     mainDraftId?: string;
@@ -51,16 +60,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const [page, setPage] = useState(1),
     [filter, setFilter] = useState(''),
     [revision, setRevision] = useState(0);
-  const [assignments, setAssignments] = useState<
-    {
-      contractId: string;
-      roomNumber: string;
-      locationName: string;
-      scheduledAt: string;
-      status: string;
-    }[]
-  >([]);
-  const [assignmentError, setAssignmentError] = useFeedbackState();
   const [listing, setListing] = useState<{
     data: ContractPage | null;
     error: string;
@@ -72,23 +71,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     [transport],
   );
   useEffect(() => {
-    if (!client || role !== 'Staff') return;
-    const c = new AbortController();
-    async function loadAssignments() {
-      setAssignmentError('');
-      setAssignments([]);
-      try {
-        const items = await client!.moveOutAssignments(c.signal);
-        if (!c.signal.aborted) setAssignments(items);
-      } catch (e) {
-        if (!c.signal.aborted) setAssignmentError(contractError(e));
-      }
-    }
-    void loadAssignments();
-    return () => c.abort();
-  }, [client, role, revision, setAssignmentError]);
-  useEffect(() => {
-    if (!client) return;
+    if (!client || role === 'Staff') return;
     const controller = new AbortController();
     async function load() {
       setListing({ data: null, error: '', loading: true });
@@ -105,7 +88,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     }
     void load();
     return () => controller.abort();
-  }, [client, page, filter, revision]);
+  }, [client, page, filter, revision, role]);
   let deepId = '';
   if (params.contractId) {
     try {
@@ -209,6 +192,19 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         />
       </>
     );
+  if (role === 'Staff')
+    return (
+      <StaffContractsList
+        api={client}
+        viewState={staffListView}
+        onViewStateChange={setStaffListView}
+        onCreate={() => setCreate(true)}
+        onOpen={(contract) =>
+          contract.onboardingDraft ? setMainDraftId(contract.id) : setSelected(contract.id)
+        }
+        onInspection={setSelected}
+      />
+    );
   return (
     <>
       <Heading
@@ -217,26 +213,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       />
       {['Owner', 'Tenant'].includes(role) && (
         <ContractExpiryPanel api={client} onOpen={setSelected} />
-      )}
-      {role === 'Staff' && (
-        <Box>
-          <Heading title="Lịch kiểm tra trả phòng được giao" />
-          {!!assignmentError && <Text style={ui.red}>{assignmentError}</Text>}
-          {!assignments.length && !assignmentError && (
-            <Text>Chưa có lịch được giao trong Location đang phụ trách.</Text>
-          )}
-          {assignments.map((a) => (
-            <Box key={a.contractId}>
-              <Text>
-                Phòng {a.roomNumber} · {a.locationName} · {formatInstant(a.scheduledAt)}
-              </Text>
-              <Text>{text(a.status)}</Text>
-              <Action onPress={() => setSelected(a.contractId)}>
-                Mở kiểm tra phòng {a.roomNumber}
-              </Action>
-            </Box>
-          ))}
-        </Box>
       )}
       <ChoiceField
         label="Trạng thái hợp đồng"
@@ -265,18 +241,26 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           <Text>Chưa có hợp đồng phù hợp trong phạm vi tài khoản.</Text>
         </Box>
       )}
-      {(listing.data?.items ?? []).map((c) => (
-        <Box key={c.id}>
-          <Heading title={`Phòng ${c.roomNumber}`} detail={c.locationName} />
-          <Pill>{text(c.status)}</Pill>
-          <Text>
-            {text(c.kind)} · {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
-          </Text>
-          <Text style={ui.money}>{formatContractMoney(c.monthlyRent)} / tháng</Text>
-          <Action onPress={() => (c.onboardingDraft ? setMainDraftId(c.id) : setSelected(c.id))}>
-            Xem hợp đồng
-          </Action>
-        </Box>
+      {groupContracts(listing.data?.items ?? []).map((group) => (
+        <View key={group.id} style={{ gap: 12 }}>
+          <Heading title={group.title} detail={`${group.items.length} hợp đồng trên trang`} />
+          {group.items.map((c) => (
+            <Box key={c.id}>
+              <Heading title={`Phòng ${c.roomNumber}`} detail={c.locationName} />
+              <Pill>{text(c.status)}</Pill>
+              <Text>
+                {text(c.kind)} · {displayContractDate(c.startDate)} –{' '}
+                {displayContractDate(c.endDate)}
+              </Text>
+              <Text style={ui.money}>{formatContractMoney(c.monthlyRent)} / tháng</Text>
+              <Action
+                onPress={() => (c.onboardingDraft ? setMainDraftId(c.id) : setSelected(c.id))}
+              >
+                Xem hợp đồng
+              </Action>
+            </Box>
+          ))}
+        </View>
       ))}
       {!!listing.data && (
         <Row spread>
@@ -313,6 +297,7 @@ function LiveContractDetail({
 }) {
   const detail = useContractDetail(api, id, role);
   const [selectedAction, setSelectedAction] = useState('');
+  const [section, setSection] = useState<ContractSection>('overview');
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),
@@ -356,12 +341,32 @@ function LiveContractDetail({
     ['Owner', 'Tenant'].includes(role) && [c.ownerSignerId, c.tenantUserId].includes(actorId);
   return (
     <>
-      <Heading title={text(c.kind)} detail={c.id} />
+      <Heading
+        title={`Phòng ${c.roomNumber || c.roomId}`}
+        detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
+      />
       {c.isDevelopmentDemo && (
-        <Text style={ui.red}>HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.</Text>
+        <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
-      <ContractProgress contract={c} readiness={r} />
+      <View style={ui.wrap}>
+        {contractSections.map((item) => (
+          <Button
+            key={item.id}
+            mode={section === item.id ? 'contained' : 'outlined'}
+            contentStyle={{ minHeight: 44 }}
+            disabled={uploading}
+            accessibilityState={{ selected: section === item.id }}
+            onPress={() => {
+              setSection(item.id);
+              setSelectedAction('');
+            }}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </View>
+      {section === 'overview' && <ContractProgress contract={c} readiness={r} />}
       <Button
         disabled={uploading}
         onPress={() => {
@@ -372,67 +377,94 @@ function LiveContractDetail({
         Tải lại trạng thái
       </Button>
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
-      <Box>
-        <Heading title="Kỳ thuê & Người ở" />
-        <Text>
-          Phòng {c.roomNumber || c.roomId}
-          {c.locationName ? ` · ${c.locationName}` : ''}
-        </Text>
-        <Text>
-          {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
-        </Text>
-        <Text>Tiền thuê: {formatContractMoney(c.monthlyRent)} / tháng</Text>
-        {c.actualEndDate && (
-          <Text>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Text>
-        )}
-        <Text>Cọc yêu cầu: {formatContractMoney(c.requiredDeposit)}</Text>
-        <Text>Cọc giữ chỗ áp dụng: {formatContractMoney(c.appliedHoldingDeposit)}</Text>
-        <Text>
-          {c.residentIds.length} người ở · Đại diện:{' '}
-          {c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId}
-        </Text>
-        {!!c.occupants?.length && <Text>{c.occupants.map((o) => o.label).join(', ')}</Text>}
-        {c.previousContractId && (
-          <Button onPress={() => onNext(c.previousContractId!)}>Xem hợp đồng trước</Button>
-        )}
-      </Box>
-      <Box>
-        <Heading title="Điều khoản đưa đi ký" />
-        <Text selectable>{c.terms}</Text>
-      </Box>
-      <Box>
-        <Heading title="Chữ ký và bằng chứng" />
-        {[
-          { id: c.ownerSignerId, label: 'Owner' },
-          { id: c.tenantUserId, label: 'Tenant' },
-        ].map((s) => (
-          <View key={s.id} style={ui.soft}>
-            <Text variant="titleSmall">
-              {s.label}
-              {s.id === actorId ? ' (bạn)' : ''}
+      {section === 'overview' && (
+        <>
+          <Box>
+            <Heading title="Kỳ thuê & Người ở" />
+            <Text>
+              Phòng {c.roomNumber || c.roomId}
+              {c.locationName ? ` · ${c.locationName}` : ''}
             </Text>
-            {c.signatures
-              .filter((x) => x.signerUserId === s.id)
-              .map((s) => (
-                <Text key={s.id}>
-                  {text(s.status)}
-                  {s.signedAt ? ` · ${formatInstant(s.signedAt)}` : ''}
-                </Text>
-              ))}
-            {!c.signatures.some((x) => x.signerUserId === s.id) && <Text>Chưa có yêu cầu ký</Text>}
-          </View>
-        ))}
-        {['Owner', 'Tenant'].includes(role) &&
-          c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
-            <ContractEvidence api={api} contractId={id} pdf />
-          )}
-        {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
-      </Box>
-      <ContractWorkflowPanel api={api} contract={c} role={role} />
-      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+            <Text>
+              {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
+            </Text>
+            <Text>Tiền thuê: {formatContractMoney(c.monthlyRent)} / tháng</Text>
+            {c.actualEndDate && (
+              <Text>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Text>
+            )}
+            <Text>Cọc yêu cầu: {formatContractMoney(c.requiredDeposit)}</Text>
+            <Text>Cọc giữ chỗ áp dụng: {formatContractMoney(c.appliedHoldingDeposit)}</Text>
+            <Text>
+              {c.residentIds.length} người ở · Đại diện:{' '}
+              {c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId}
+            </Text>
+            {!!c.occupants?.length && <Text>{c.occupants.map((o) => o.label).join(', ')}</Text>}
+            {c.previousContractId && (
+              <Button onPress={() => onNext(c.previousContractId!)}>Xem hợp đồng trước</Button>
+            )}
+          </Box>
+          <Box>
+            <Heading title="Điều khoản đưa đi ký" />
+            <Text selectable>{c.terms}</Text>
+          </Box>
+        </>
+      )}
+      {section === 'signing' && (
+        <Box>
+          <Heading title="Chữ ký và bằng chứng" />
+          {[
+            { id: c.ownerSignerId, label: 'Owner' },
+            { id: c.tenantUserId, label: 'Tenant' },
+          ].map((s) => (
+            <View key={s.id} style={ui.soft}>
+              <Text variant="titleSmall">
+                {s.label}
+                {s.id === actorId ? ' (bạn)' : ''}
+              </Text>
+              {c.signatures
+                .filter((x) => x.signerUserId === s.id)
+                .map((s) => (
+                  <Text key={s.id}>
+                    {text(s.status)}
+                    {s.signedAt ? ` · ${formatInstant(s.signedAt)}` : ''}
+                  </Text>
+                ))}
+              {!c.signatures.some((x) => x.signerUserId === s.id) && (
+                <Text>Chưa có yêu cầu ký</Text>
+              )}
+            </View>
+          ))}
+          {['Owner', 'Tenant'].includes(role) &&
+            c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
+              <ContractEvidence api={api} contractId={id} pdf />
+            )}
+          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
+        </Box>
+      )}
+      {(section === 'signing' || section === 'history') && (
+        <ContractWorkflowPanel
+          api={api}
+          contract={c}
+          role={role}
+          section={section === 'history' ? 'history' : 'documents'}
+        />
+      )}
+      {section === 'handover' && ['Active', 'Terminated', 'Superseded'].includes(c.status) && (
         <ContractHandoverPanel api={api} contract={c} role={role} />
       )}
-      {r && (
+      {section === 'handover' && !['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+        <Box>
+          <Heading title="Bàn giao nhận phòng" />
+          <Text>Chỉ thực hiện bàn giao sau khi hợp đồng được kích hoạt.</Text>
+        </Box>
+      )}
+      {section === 'signing' && role === 'Staff' && (
+        <Text style={ui.muted}>
+          Staff chuẩn bị và theo dõi hồ sơ. Owner/Tenant thực hiện ký; Owner xác minh cọc và kích
+          hoạt.
+        </Text>
+      )}
+      {section === 'signing' && r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />
           <Text>Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)}</Text>
@@ -448,7 +480,16 @@ function LiveContractDetail({
           )}
         </Box>
       )}
-      {m && (
+      {section === 'lifecycle' && !m && (
+        <Box>
+          <Heading title="Gia hạn & trả phòng" />
+          <Text>
+            Chưa có yêu cầu trả phòng. Các thao tác khả dụng hiển thị theo trạng thái và quyền tài
+            khoản.
+          </Text>
+        </Box>
+      )}
+      {section === 'lifecycle' && m && (
         <Box>
           <Heading title="Trả phòng" detail={text(m.status)} />
           <Text>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Text>
@@ -468,7 +509,7 @@ function LiveContractDetail({
           ))}
         </Box>
       )}
-      {role === 'Staff' && m?.status === 'Approved' && (
+      {section === 'lifecycle' && role === 'Staff' && m?.status === 'Approved' && (
         <Box>
           <Heading
             title="Ảnh hiện trạng trả phòng"
@@ -527,7 +568,7 @@ function LiveContractDetail({
           </Text>
         </Box>
       )}
-      {!!history.length && (
+      {section === 'lifecycle' && !!history.length && (
         <Box>
           <Heading title="Lịch sử xem xét quyết toán" />
           {history.map((h) => (
@@ -540,7 +581,7 @@ function LiveContractDetail({
           ))}
         </Box>
       )}
-      {m && (
+      {section === 'lifecycle' && m && (
         <ContractLifecyclePanel
           api={api}
           id={id}
@@ -553,23 +594,26 @@ function LiveContractDetail({
           }}
         />
       )}
-      <Box>
-        <Heading title="Thao tác theo trạng thái" />
-        {actions.map((a) => (
-          <Action
-            key={a.operation}
-            disabled={uploading || (a.operation === 'activate' && !r?.ready)}
-            secondary={a.operation !== 'activate'}
-            onPress={() => {
-              setSelectedAction(a.operation);
-              setNotice('');
-            }}
-          >
-            {a.label}
-          </Action>
-        ))}
-        {!actions.length && <Text>Không có thao tác phù hợp với trạng thái hiện tại.</Text>}
-      </Box>
+      {actions.some((a) => contractActionSection(a.operation) === section) && (
+        <Box>
+          <Heading title="Thao tác theo trạng thái" />
+          {actions
+            .filter((a) => contractActionSection(a.operation) === section)
+            .map((a) => (
+              <Action
+                key={a.operation}
+                disabled={uploading || (a.operation === 'activate' && !r?.ready)}
+                secondary={a.operation !== 'activate'}
+                onPress={() => {
+                  setSelectedAction(a.operation);
+                  setNotice('');
+                }}
+              >
+                {a.label}
+              </Action>
+            ))}
+        </Box>
+      )}
       {action && (
         <ContractActionForm
           key={action.operation}

@@ -109,6 +109,9 @@ export function OwnerOverviewScreen() {
           </View>
         )}
       </DashboardSection>
+      <Action icon="tools" onPress={() => go('owner-incidents')}>
+        Sự cố và bảo trì
+      </Action>
       <Action icon="file-document-outline" onPress={() => go('signing')}>
         Hợp đồng & Vòng đời
       </Action>

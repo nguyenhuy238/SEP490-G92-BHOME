@@ -23,10 +23,12 @@ export function ContractWorkflowPanel({
   api,
   contract,
   role,
+  section = 'all',
 }: {
   api: ContractClient;
   contract: ContractView;
   role: string;
+  section?: 'all' | 'documents' | 'history';
 }) {
   const [data, setData] = useState<{
     previews: PreviewDocument[];
@@ -40,8 +42,10 @@ export function ContractWorkflowPanel({
   const [keys] = useState(() => mutationKeys(randomUUID)),
     lock = useRef(false);
   const privileged = ['Owner', 'Tenant'].includes(role);
+  const documents = section !== 'history';
+  const history = section !== 'documents';
   const versions = useWorkspaceQuery<Awaited<ReturnType<ContractClient['versions']>>>(
-    `/api/v1/contracts/${contract.id}/versions`,
+    history ? `/api/v1/contracts/${contract.id}/versions` : null,
   );
   useEffect(() => {
     const c = new AbortController();
@@ -50,9 +54,9 @@ export function ContractWorkflowPanel({
       setError('');
       try {
         const [previews, deposits, audit] = await Promise.all([
-          privileged ? api.previews(contract.id, c.signal) : Promise.resolve([]),
-          privileged ? api.deposits(contract.id, c.signal) : Promise.resolve([]),
-          api.audit(contract.id, c.signal),
+          privileged && documents ? api.previews(contract.id, c.signal) : Promise.resolve([]),
+          privileged && documents ? api.deposits(contract.id, c.signal) : Promise.resolve([]),
+          history ? api.audit(contract.id, c.signal) : Promise.resolve([]),
         ]);
         if (!c.signal.aborted) setData({ previews, deposits, audit });
       } catch (e) {
@@ -63,7 +67,7 @@ export function ContractWorkflowPanel({
     }
     void load();
     return () => c.abort();
-  }, [api, contract, privileged, revision, setError]);
+  }, [api, contract, privileged, documents, history, revision, setError]);
   async function preview() {
     if (lock.current) return;
     lock.current = true;
@@ -82,23 +86,25 @@ export function ContractWorkflowPanel({
   }
   return (
     <>
-      <Box>
-        <Heading title="Các phiên bản hợp đồng" />
-        {!!versions.error && <Text style={ui.red}>{conciseMessage(versions.error)}</Text>}
-        {versions.data?.map((v) => (
-          <Text key={v.id}>
-            {text(v.kind)} · {text(v.status)} · {v.startDate} → {v.endDate}
-            {v.monthlyRent !== null ? ' · ' + formatContractMoney(v.monthlyRent) : ''}
-            {v.terms ? '\n' + v.terms : ''}
-          </Text>
-        ))}
-        <Action secondary onPress={versions.reload}>
-          Tải lại phiên bản
-        </Action>
-      </Box>
+      {history && (
+        <Box>
+          <Heading title="Các phiên bản hợp đồng" />
+          {!!versions.error && <Text style={ui.red}>{conciseMessage(versions.error)}</Text>}
+          {versions.data?.map((v) => (
+            <Text key={v.id}>
+              {text(v.kind)} · {text(v.status)} · {v.startDate} → {v.endDate}
+              {v.monthlyRent !== null ? ' · ' + formatContractMoney(v.monthlyRent) : ''}
+              {v.terms ? '\n' + v.terms : ''}
+            </Text>
+          ))}
+          <Action secondary onPress={versions.reload}>
+            Tải lại phiên bản
+          </Action>
+        </Box>
+      )}
       {loading && <Text>Đang tải tài liệu và lịch sử…</Text>}
       {!!error && <Text style={ui.red}>{error}</Text>}
-      {privileged && (
+      {documents && privileged && (
         <Box>
           <Heading title="PDF xem trước" detail="Tạo từ bản nội dung đã niêm phong tại máy chủ" />
           <Action disabled={busy} onPress={() => void preview()}>
@@ -117,7 +123,7 @@ export function ContractWorkflowPanel({
           ))}
         </Box>
       )}
-      {privileged && (
+      {documents && privileged && (
         <Box>
           <Heading title="Cọc đã xác minh" />
           {!data?.deposits.length && <Text>Chưa có khoản cọc được xác minh.</Text>}
@@ -132,17 +138,22 @@ export function ContractWorkflowPanel({
           ))}
         </Box>
       )}
-      <Box>
-        <Heading title="Lịch sử hợp đồng" />
-        {data?.audit.map((a, i) => (
-          <Text key={i}>
-            {formatInstant(a.occurredAt)} · {text(a.action)}
-          </Text>
-        ))}
-        <Action secondary disabled={loading || busy} onPress={() => setRevision((v) => v + 1)}>
-          Tải lại tài liệu và lịch sử
-        </Action>
-      </Box>
+      {history && (
+        <Box>
+          <Heading title="Lịch sử hợp đồng" />
+          {data?.audit.map((a, i) => (
+            <Text key={i}>
+              {formatInstant(a.occurredAt)} ·{' '}
+              {a.action === 'ContractOverviewFixtureCreated'
+                ? 'Tạo dữ liệu minh họa để kiểm tra giao diện'
+                : text(a.action)}
+            </Text>
+          ))}
+          <Action secondary disabled={loading || busy} onPress={() => setRevision((v) => v + 1)}>
+            Tải lại tài liệu và lịch sử
+          </Action>
+        </Box>
+      )}
     </>
   );
 }

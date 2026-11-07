@@ -1,5 +1,74 @@
 # Luồng OCR điện nước Mobile — 03/11/2026
 
+## Thiết kế hiện hành 04/11/2026: tổng quan theo phòng, ghi độc lập
+
+Theo yêu cầu redesign Staff Meter Reading, phần này thay thế luồng năm bước và bốn bước
+trong các phần lịch sử bên dưới. Phạm vi BF-05 / UC-20, GBR-07..09: giữ OCR là đề xuất,
+Staff xác nhận riêng từng đồng hồ trong cơ sở được phân công. Không đổi BE, DTO, schema,
+invoice generation hoặc chính sách quyền.
+
+Luồng: chọn phòng/kỳ ghi → tổng quan điện/nước → chọn một đồng hồ → chụp/OCR/sửa tay
+→ “Xác nhận chỉ số” → tự trở về tổng quan. Không mở camera của đồng hồ còn lại.
+
+- `MeterTasksScreen` nhóm task thành phòng/lần ghi sau khi tải đủ các trang. Lọc trạng thái
+  trên nhóm phòng để không giấu chỉ số đã ghi bên cạnh đồng hồ còn chờ.
+- `MeterRoomOverview` tái sử dụng Staff WorkspaceShell, màu/chữ/Box/Pill/Button hiện có;
+  mỗi loại đồng hồ có thẻ riêng, chỉ số trước/sau, trạng thái và nút Chụp ảnh/Xem chi tiết.
+  Không dùng stepper. Tiến độ n/N tính từ tác vụ chưa hủy cùng phòng/lần ghi và reading đã tải từ BE.
+- Ghép bằng locationId + roomId + purpose + readingDate + billingPeriod + contractId;
+  không ghép bằng tên phòng. Hiển thị từng task nếu phòng có nhiều công tơ cùng loại.
+  Không tự tạo task hoặc giả định đồng hồ chưa có task là đã ghi.
+- Route `meter` giữ lại logic CameraCapture, OCR, evidence, validator số và phép tính fixed-point;
+  chỉ mở camera được chọn. Nút xác nhận yêu cầu ảnh đã upload, chỉ số hợp lệ và Staff đã đối chiếu.
+- Chặn nhấn lặp, giữ ảnh/chỉ số khi lỗi lưu. Trước gửi lại, đọc task/reading từ BE để phục hồi
+  trường hợp lần trước đã lưu nhưng mất phản hồi. Không lưu lại đồng hồ đã hoàn tất.
+- Sau lưu, quay lại/mở lại phòng, focus hoặc trở về app, đọc lại task/reading từ BE.
+  Không dựa vào fixture/local state để khẳng định đã hoàn tất; lỗi tải reading có retry rõ ràng.
+- API dùng lại: GET capture/meter-tasks (scope/phân trang), GET task/readings,
+  POST ocr/meter-tasks/{id}, PUT task evidence và POST task confirm.
+- Đã bỏ PairedMeterFlow, helper ghép cặp và các component stepper không còn dùng.
+
+Tiêu chí kiểm chứng: ghi điện trước/nước trước; 0/2→1/2→2/2; rời phòng rồi quay lại;
+chi tiết chỉ số đã lưu chỉ đọc; chụp lại xóa evidence/OCR cũ; manual fallback; chỉ số giảm/sai;
+upload/save lỗi; nhấn lặp; mất phản hồi; phân trang; từ chối Tenant/ngoài phạm vi; thiếu task thật.
+
+Kiểm chứng lượt redesign: Mobile suite 42 files / 415 tests đạt; các kiểm thử luồng meter
+được chạy lại sau chỉnh refresh theo focus, 22/22 đạt; typecheck và lint đạt.
+Expo export Web/iOS/Android đạt (bundle JavaScript/Hermes, không phải APK/IPA đã cài trên thiết bị).
+Helper nhóm phòng chạy với API HTTPS thật: GET tasks/readings HTTP 200, M101 có đúng 1/2 đã ghi;
+không ghi/reset dữ liệu đồng hồ trong lượt kiểm tra live.
+
+Công cụ Computer Use/browser của phiên không kết nối được; chưa kiểm chứng trực quan trên
+emulator hoặc camera vật lý. Kiểm thử component sử dụng mock native camera/transport,
+không thay thế E2E ghi chỉ số trên thiết bị và backend/storage thật.
+
+## Bổ sung 04/11/2026: chụp điện và nước trong cùng luồng
+
+Theo yêu cầu người dùng, phần này thay thế quy tắc UI không ghép hai công tơ bên dưới.
+Phạm vi BF-05 / UC-20, GBR-07..09 theo AGENTS.md và API Capture hiện có: Staff được phân công
+chụp ảnh, kiểm tra OCR và xác nhận; server tiếp tục kiểm tra quyền, bằng chứng và chỉ số.
+
+- Nếu xác định duy nhất tác vụ điện/nước cùng `locationId`, `roomId`, mục đích, ngày ghi,
+  kỳ hóa đơn và hợp đồng, route `meter` mở luồng năm bước: Chọn tác vụ → Chụp loại đang chọn
+  → Chụp loại còn lại → Kiểm tra OCR → Xác nhận. Không ghép bằng tên phòng/cơ sở.
+- Dùng lại WorkspaceShell, CameraCapture, MeterFlowHeader và validator chỉ số hiện có.
+  Mỗi ảnh gọi OCR/upload bằng đúng task ID; chỉ gửi `confirm` khi Staff đồng ý sau review.
+- Tác vụ đối ứng đã hoàn tất được tải chỉ số từ BE và hiển thị “Đã lưu”; không yêu cầu chụp/lưu lại.
+  Khi không có cặp duy nhất (ví dụ nhiều đồng hồ đối ứng), giữ luồng một tác vụ cũ.
+- Dùng các API GET meter-tasks (lọc room/location, đủ phân trang), GET readings,
+  POST OCR, PUT evidence và POST confirm hiện có; không thêm endpoint, schema hoặc đổi quyền.
+- Hai chỉ số lưu độc lập: nếu chỉ một bên thành công, giữ kết quả đó và thử lại bên còn lại.
+  Trước thử lại, đọc task/reading từ BE để xác định kết quả khi lần trước mất phản hồi.
+- Tiêu chí kiểm thử: ghép đúng phạm vi/kỳ; không lưu khi ảnh chưa upload hoặc chỉ số sai;
+  sửa tay và xác nhận rõ ràng; chống nhấn lặp; khôi phục lưu một phần/mất phản hồi;
+  đọc đồng hồ đã lưu; giữ bảo vệ Staff và luồng đơn cũ.
+
+Đối chiếu live M101: tác vụ điện đã hoàn tất, tác vụ nước còn mở; không reset dữ liệu.
+Helper ghép tác vụ thật đã chạy với API HTTPS và đọc chỉ số điện đã lưu thành công (HTTP 200).
+Kiểm tra: Mobile suite 42 files / 414 tests đạt; 34 kiểm thử meter/ghép cặp đạt;
+typecheck, lint, định dạng và Expo export Web đạt.
+Kiểm chứng camera vật lý và toàn bộ mutation trên thiết bị thật vẫn cần thực hiện thủ công.
+
 ## Cập nhật UI mới nhất: đồng bộ bốn bước
 
 Phần này thay thế các mô tả giao diện Page riêng của lượt triển khai ban đầu bên dưới.

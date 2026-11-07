@@ -120,6 +120,49 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('opens only the selected meter camera automatically and still waits for photo review before upload', async () => {
+  const capture = vi.fn();
+  render(
+    <CameraCapture
+      label="Chụp đồng hồ nước"
+      disabled={false}
+      presentation="meter"
+      autoOpen
+      retainPreview
+      reviewBeforeSubmit
+      onCapture={capture}
+    />,
+  );
+  await screen.findByTestId('native-camera');
+  expect(native.take).not.toHaveBeenCalled();
+  expect(capture).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  await screen.findByAltText('Ảnh công tơ đã chụp');
+  expect(capture).not.toHaveBeenCalled();
+});
+it('handles denied permission when opening the selected meter camera automatically', async () => {
+  native.granted = false;
+  const capture = vi.fn();
+  render(
+    <CameraCapture
+      label="Chụp công tơ điện"
+      disabled={false}
+      presentation="meter"
+      autoOpen
+      retainPreview
+      reviewBeforeSubmit
+      onCapture={capture}
+    />,
+  );
+  await screen.findByText(/Cần cấp quyền camera/);
+  expect(native.take).not.toHaveBeenCalled();
+  expect(capture).not.toHaveBeenCalled();
+});
 it('uses only capture/close then use/retake controls for meters and keeps a compact preview during review', async () => {
   const capture = vi.fn().mockResolvedValue(undefined);
   const clear = vi.fn();

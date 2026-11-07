@@ -1,5 +1,6 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
@@ -14,11 +15,19 @@ import {
   type InvoicePayment,
   type TransferInstructions,
   type PaymentHistory,
+  type DebtInvoice,
 } from '../../../../packages/client-core/src/payments';
 import type { Page } from '../../../../packages/client-core/src/invoices';
 import { Action, Box, Heading, Pill, ui } from '../components/WorkspaceKit';
 import { QueryState, Pagination } from '../components/WorkspaceQueryState';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { ChoiceField } from '../components/WorkflowControls';
+import {
+  positiveAmount,
+  sameAmount,
+  tenantPaymentLabel,
+} from '../features/tenant/paymentPresentation';
 
 export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   const payment = useWorkspaceQuery<InvoicePayment>(
@@ -28,6 +37,19 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
     `/api/v1/invoices/${encodeURIComponent(invoiceId)}/transfer-instructions`,
   );
   const [notice, setNotice] = useFeedbackState('info');
+  const reloadPayment = payment.reload,
+    reloadInstructions = instructions.reload;
+  const refresh = useCallback(() => {
+    reloadPayment();
+    reloadInstructions();
+  }, [reloadPayment, reloadInstructions]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+      const timer = setInterval(refresh, 30000);
+      return () => clearInterval(timer);
+    }, [refresh]),
+  );
   async function copy(value: string) {
     try {
       await Clipboard.setStringAsync(value, { android: { isSensitive: true } });
@@ -38,6 +60,11 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   }
   const state = payment.data;
   const transfer = instructions.data;
+  const canTransfer =
+    state?.paymentStatus === 'Unpaid' &&
+    positiveAmount(state.outstandingAmount) &&
+    !!transfer &&
+    sameAmount(state.outstandingAmount, transfer.outstandingAmount);
   return (
     <>
       <Box>
@@ -53,7 +80,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
         {state && (
           <>
             <Pill tone={state.paymentStatus === 'Paid' ? 'green' : 'blue'}>
-              {paymentText(state.paymentStatus)}
+              {tenantPaymentLabel(state)}
             </Pill>
             <Text>Còn phải trả: {formatContractMoney(state.outstandingAmount)}</Text>
             <Text>Đã ghi nhận: {formatContractMoney(state.paidAmount)}</Text>
@@ -93,7 +120,17 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
           </>
         )}
       </Box>
-      {state && state.paymentStatus === 'Unpaid' && transfer?.accountNumber && (
+      <Action secondary onPress={refresh}>
+        Cập nhật trạng thái thanh toán
+      </Action>
+      {state?.paymentStatus === 'Unpaid' &&
+        transfer &&
+        !sameAmount(state.outstandingAmount, transfer.outstandingAmount) && (
+          <Text>
+            Thông tin chuyển khoản đang thay đổi. Hãy cập nhật trạng thái trước khi chuyển tiền.
+          </Text>
+        )}
+      {canTransfer && transfer?.accountNumber && (
         <Box>
           <Heading title="Chuyển khoản ngân hàng" />
           {transfer.isDevelopmentDemo && (
@@ -124,7 +161,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
           </Text>
         </Box>
       )}
-      {state?.paymentStatus === 'Unpaid' && transfer && !transfer.accountNumber && (
+      {canTransfer && transfer && !transfer.accountNumber && (
         <Box>
           <Text>
             {paymentText(
@@ -139,39 +176,94 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   );
 }
 export function TenantPaymentHistoryScreen() {
+  const { go } = useWorkspace();
   const [page, setPage] = useState(1);
+  const [view, setView] = useState('verified');
   const history = useWorkspaceQuery<Page<PaymentHistory>>(
-    `/api/v1/payment-history?page=${page}&pageSize=20`,
+    view === 'verified' ? `/api/v1/payment-history?page=${page}&pageSize=20` : null,
+  );
+  const debts = useWorkspaceQuery<Page<DebtInvoice>>(
+    view === 'outstanding' ? `/api/v1/debts?page=${page}&pageSize=20` : null,
+  );
+  const query = view === 'verified' ? history : debts;
+  const reloadHistory = history.reload,
+    reloadDebts = debts.reload;
+  useFocusEffect(
+    useCallback(() => {
+      reloadHistory();
+      reloadDebts();
+    }, [reloadHistory, reloadDebts]),
   );
   return (
     <>
       <Heading
         title="Lịch sử thanh toán"
-        detail="Các khoản đã được xác minh trên hóa đơn bạn có quyền xem"
+        detail="Khoản đã xác minh và số tiền còn nợ theo hóa đơn được cấp quyền"
       />
-      <QueryState {...history} />
-      {history.data?.items.length === 0 && (
+      <ChoiceField
+        label="Thông tin thanh toán"
+        value={view}
+        options={[
+          { id: 'verified', label: 'Khoản đã xác minh' },
+          { id: 'outstanding', label: 'Hóa đơn còn nợ' },
+        ]}
+        onChange={(value) => {
+          setView(value);
+          setPage(1);
+        }}
+      />
+      <QueryState {...query} />
+      {view === 'verified' && history.data?.items.length === 0 && (
         <Box>
           <Text>Chưa có thanh toán đã xác minh.</Text>
         </Box>
       )}
-      {history.data?.items.map((item) => (
-        <Box key={item.id}>
-          <Heading
-            title={`Phòng ${item.roomNumber} · ${item.billingPeriod.slice(0, 7)}`}
-            detail={item.locationName}
-          />
-          <Text style={ui.money}>{formatContractMoney(item.amount)}</Text>
-          <Text>
-            {formatInstant(item.paidAt)} · Người trả: {item.paidBy}
-          </Text>
+      {view === 'verified' &&
+        history.data?.items.map((item) => (
+          <Box key={item.id}>
+            <Heading
+              title={`Phòng ${item.roomNumber} · ${item.billingPeriod.slice(0, 7)}`}
+              detail={item.locationName}
+            />
+            <Text style={ui.money}>{formatContractMoney(item.amount)}</Text>
+            <Text>
+              {formatInstant(item.paidAt)} · Người trả: {item.paidBy}
+            </Text>
+            {item.bankReference && <Text>Mã giao dịch: {item.bankReference}</Text>}
+            <Action secondary onPress={() => go('invoice', { invoiceId: item.invoiceId })}>
+              Xem hóa đơn liên quan
+            </Action>
+          </Box>
+        ))}
+      {view === 'outstanding' && debts.data?.items.length === 0 && (
+        <Box>
+          <Text>Không có hóa đơn còn nợ trong dữ liệu máy chủ trả về.</Text>
         </Box>
-      ))}
-      {history.data && (
+      )}
+      {view === 'outstanding' &&
+        debts.data?.items.map((item) => (
+          <Box key={item.invoiceId}>
+            <Heading
+              title={`Phòng ${item.roomNumber} · ${item.billingPeriod.slice(0, 7)}`}
+              detail={item.locationName}
+            />
+            <Text>Còn phải trả: {formatContractMoney(item.outstandingAmount)}</Text>
+            {item.paidAmount !== null && (
+              <Text>Đã ghi nhận: {formatContractMoney(item.paidAmount)}</Text>
+            )}
+            <Text>
+              Hạn: {displayContractDate(item.dueDate)} · Quá hạn: {item.overdueDays} ngày
+            </Text>
+            <Action onPress={() => go('invoice', { invoiceId: item.invoiceId })}>
+              Mở hóa đơn và thanh toán
+            </Action>
+          </Box>
+        ))}
+      {query.data && (
         <Pagination
           page={page}
-          total={history.data.totalCount}
-          loading={history.loading}
+          total={query.data.totalCount}
+          loading={query.loading}
           onChange={setPage}
         />
       )}
