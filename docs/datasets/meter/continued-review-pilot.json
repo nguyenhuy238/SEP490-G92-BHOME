@@ -1,0 +1,54 @@
+{
+  "scope": "small_blinded_priority_review_not_acceptance",
+  "humanReviewsReceived": 0,
+  "samples": [
+    {
+      "id": "commons_105770219",
+      "image": ".tools/master-dataset/commons/commons_105770219.jpg",
+      "sha256": "b91a58dfde67d4c8f0909f06c24757de5c2f7c82bb45885d5bc0817527a18b61",
+      "sourceGroup": "author_1a03fe5564c6086ae3d3"
+    },
+    {
+      "id": "commons_54903199",
+      "image": ".tools/ocr-continued/commons_54903199.jpg",
+      "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
+      "sourceGroup": "author_f7fe9bd796075719dbb7"
+    },
+    {
+      "id": "commons_33635608",
+      "image": ".tools/ocr-continued/commons_33635608.jpg",
+      "sha256": "4898d4fde07145a933dcda85d5918f9ce5d12759028c33337803d1d179545aca",
+      "sourceGroup": "author_96e7c8c0ea3d8b8a7af4"
+    },
+    {
+      "id": "commons_11930077",
+      "image": ".tools/ocr-continued/commons_11930077.jpg",
+      "sha256": "59f119b49c2d45d8763f3ad4eb8291178db22ed1d49f45acf8031a6b84cfa209",
+      "sourceGroup": "author_a61595592fa259aa9cbf"
+    },
+    {
+      "id": "commons_334307",
+      "image": ".tools/ocr-continued/commons_334307.jpg",
+      "sha256": "f295f8aef7ba621193328041ff6b06e7323b96fc2405418dc749558360bf4dc2",
+      "sourceGroup": "author_64eab1405ce5e3b7a66c"
+    },
+    {
+      "id": "commons_38382735",
+      "image": ".tools/ocr-next-public-images-expanded/commons_38382735.jpg",
+      "sha256": "b6b70684d97c758b69dcbe04c086bc11699fe73db5c7b89ffa9056338a3dd059",
+      "sourceGroup": "author_5f9dd77c634657bd7e0f"
+    },
+    {
+      "id": "commons_48039403",
+      "image": ".tools/master-dataset/commons/commons_48039403.jpg",
+      "sha256": "e0155e59019088ec412a3e67bdb6ff496f70b0fdbb293686308dc89f296ba451",
+      "sourceGroup": "author_e3b9c4bf566505344467"
+    },
+    {
+      "id": "commons_15920280",
+      "image": ".tools/master-dataset/commons/commons_15920280.jpg",
+      "sha256": "454695db48b29e74b35e0379e8211c0298fc287e2abda78a6aa357c8810ffd33",
+      "sourceGroup": "author_439103ee8a3f6c365ed2"
+    }
+  ]
+}

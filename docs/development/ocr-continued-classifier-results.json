@@ -1,0 +1,4235 @@
+{
+  "scope": "provisional_source_disjoint_research_not_independent_acceptance",
+  "modelSha256": "a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f",
+  "runtimeEnabled": false,
+  "status": "EXPERIMENTAL",
+  "selection": {
+    "selectedOnNewValidation": {
+      "frozen_hierarchy": [
+        0.85,
+        0.65
+      ],
+      "physical_prompts": null,
+      "letterbox_physical": null,
+      "tta_physical": null,
+      "fewshot_025": null,
+      "fewshot_050": null,
+      "fewshot_075": null
+    },
+    "winner": null,
+    "manifestSha256": "6fe26ec3f4e65675787fa9bd6449680a435df17bc9be0257ce151a380b8bdb9c",
+    "utilityPrompts": [
+      [
+        "a photograph of a utility electricity meter measuring kilowatt hours",
+        "an electrical energy meter in a switchboard or an electric meter box"
+      ],
+      [
+        "a photograph of a utility water volume meter connected to plumbing pipes",
+        "a water consumption meter with a round brass or plastic housing and inlet and outlet pipes"
+      ],
+      [
+        "a photograph without a visible electricity or water consumption meter",
+        "a closed lid, plumbing valve, bottle, sign or industrial timer instead of a visible utility consumption meter"
+      ]
+    ],
+    "technologyPrompts": [
+      [
+        "a mechanical counter with rotating number wheels like an odometer",
+        "a utility meter showing white printed digits on black rotating drums and a red last wheel",
+        "an analog utility meter with circular pointer dials or mechanical digit wheels"
+      ],
+      [
+        "a utility meter showing electronic seven segment numbers on a liquid crystal LCD screen",
+        "a digital meter with an electronic LCD or LED numeric display",
+        "an electronic utility meter with a rectangular screen with seven segment numerals"
+      ]
+    ]
+  },
+  "selectionSha256": "a083931c2dbb90f9e3fad80016a2f9ad0f585e608be4dae4ebb1005b1c7cb9a4",
+  "humanReviewsReceived": 0,
+  "historicalTestInference": false,
+  "prototypeTrainingSamples": 36,
+  "validationGrid": {
+    "frozen_hierarchy:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "frozen_hierarchy:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "frozen_hierarchy:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "physical_prompts:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "physical_prompts:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "physical_prompts:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "physical_prompts:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "physical_prompts:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "physical_prompts:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "physical_prompts:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "physical_prompts:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "physical_prompts:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "physical_prompts:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "physical_prompts:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "physical_prompts:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "letterbox_physical:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "letterbox_physical:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "letterbox_physical:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "letterbox_physical:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "letterbox_physical:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "letterbox_physical:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "tta_physical:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "tta_physical:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "tta_physical:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "tta_physical:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "tta_physical:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "tta_physical:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_025:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_025:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_025:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_025:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_025:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_025:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_050:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_050:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_050:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_050:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_050:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_050:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_050:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 1
+    },
+    "fewshot_050:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_050:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 0,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "fewshot_075:(0.65, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 2,
+      "incorrectlyAccepted": 4,
+      "unknown": 1,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.65, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 2,
+      "incorrectlyAccepted": 3,
+      "unknown": 2,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.65, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 1,
+      "incorrectlyAccepted": 3,
+      "unknown": 3,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.65, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 1,
+      "incorrectlyAccepted": 3,
+      "unknown": 3,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.65, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.75, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 1,
+      "incorrectlyAccepted": 4,
+      "unknown": 2,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.75, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 1,
+      "incorrectlyAccepted": 3,
+      "unknown": 3,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.75, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.75, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 3,
+      "unknown": 4,
+      "negativeFalseAccepted": 3
+    },
+    "fewshot_075:(0.75, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.85, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.85, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.85, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.85, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.85, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.9, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.9, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.9, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.9, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.9, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.95, 0.55)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.95, 0.65)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.95, 0.75)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.95, 0.85)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    },
+    "fewshot_075:(0.95, 0.95)": {
+      "inputs": 7,
+      "positiveMeters": 3,
+      "correctlyAccepted": 0,
+      "incorrectlyAccepted": 2,
+      "unknown": 5,
+      "negativeFalseAccepted": 2
+    }
+  },
+  "metrics": {
+    "validation": {
+      "frozen_hierarchy": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 1,
+          "unknown": 6,
+          "negativeFalseAccepted": 1
+        },
+        "acceptedPrecision": 0.0,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 3,
+          "not_meter->water_mechanical": 1
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": 0.0
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 38.76348999947367
+      },
+      "physical_prompts": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 4
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 38.76348999947367
+      },
+      "letterbox_physical": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 4
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 26.9580499993026
+      },
+      "tta_physical": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 4
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 279.86884000092687
+      },
+      "fewshot_025": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 4
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 26.9580499993026
+      },
+      "fewshot_050": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 4
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 26.9580499993026
+      },
+      "fewshot_075": {
+        "counts": {
+          "inputs": 7,
+          "positiveMeters": 3,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "not_meter->unknown": 4
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correct": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 26.9580499993026
+      }
+    },
+    "test": {
+      "frozen_hierarchy": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 1,
+          "incorrectlyAccepted": 2,
+          "unknown": 6,
+          "negativeFalseAccepted": 1
+        },
+        "acceptedPrecision": 0.3333333333333333,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->electricity_mechanical": 1,
+          "water_mechanical->water_mechanical": 1,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 1,
+          "not_meter->water_mechanical": 1
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": 0.0
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 1,
+            "recall": 0.5,
+            "acceptedPrecision": 0.5
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 30.329859999619657
+      },
+      "physical_prompts": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 30.329859999619657
+      },
+      "letterbox_physical": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 23.602820000087377
+      },
+      "tta_physical": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 275.5299399999785
+      },
+      "fewshot_025": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 23.602820000087377
+      },
+      "fewshot_050": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 23.602820000087377
+      },
+      "fewshot_075": {
+        "counts": {
+          "inputs": 9,
+          "positiveMeters": 7,
+          "correctlyAccepted": 0,
+          "incorrectlyAccepted": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "acceptedPrecision": null,
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correct": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        },
+        "p95PipelineMs": 23.602820000087377
+      }
+    }
+  },
+  "multipleMeterBehavior": "Unsupported: whole-image classifier has no counting/localization evidence; raw scores only",
+  "hardware": "cuda",
+  "rows": [
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.3456878364086151,
+        "water": 0.5047256946563721,
+        "not_meter": 0.14958643913269043
+      },
+      "technology": {
+        "mechanical": 0.6923686265945435,
+        "digital": 0.30763137340545654
+      },
+      "pipelineMs": 27.499200001329882,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.5809158682823181,
+        "water": 0.07811498641967773,
+        "not_meter": 0.34096911549568176
+      },
+      "technology": {
+        "mechanical": 0.7759869694709778,
+        "digital": 0.22401300072669983
+      },
+      "pipelineMs": 27.499200001329882,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.41715511679649353,
+        "water": 0.11461760848760605,
+        "not_meter": 0.4682272672653198
+      },
+      "technology": {
+        "mechanical": 0.8797606825828552,
+        "digital": 0.12023933976888657
+      },
+      "pipelineMs": 24.564399998780573,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.43478745222091675,
+        "water": 0.1348065286874771,
+        "not_meter": 0.4304061233997345
+      },
+      "technology": {
+        "mechanical": 0.6939151287078857,
+        "digital": 0.30608487129211426
+      },
+      "pipelineMs": 187.98850000166567,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.45286309719085693,
+        "water": 0.11056814342737198,
+        "not_meter": 0.4365687668323517
+      },
+      "technology": {
+        "mechanical": 0.867435872554779,
+        "digital": 0.13256411254405975
+      },
+      "pipelineMs": 24.564399998780573,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.5263878703117371,
+        "water": 0.12345272302627563,
+        "not_meter": 0.3501593768596649
+      },
+      "technology": {
+        "mechanical": 0.8251785039901733,
+        "digital": 0.17482154071331024
+      },
+      "pipelineMs": 24.564399998780573,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15315072",
+      "expected": "electricity_mechanical",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.7670194506645203,
+        "water": 0.15313638746738434,
+        "not_meter": 0.07984412461519241
+      },
+      "technology": {
+        "mechanical": 0.7297033667564392,
+        "digital": 0.2702966034412384
+      },
+      "pipelineMs": 24.564399998780573,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.02700718119740486,
+        "water": 0.08855313807725906,
+        "not_meter": 0.8844397068023682
+      },
+      "technology": {
+        "mechanical": 0.2965810298919678,
+        "digital": 0.7034189701080322
+      },
+      "pipelineMs": 21.77109999684035,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.46972164511680603,
+        "water": 0.050807885825634,
+        "not_meter": 0.47947052121162415
+      },
+      "technology": {
+        "mechanical": 0.7044417858123779,
+        "digital": 0.29555824398994446
+      },
+      "pipelineMs": 21.77109999684035,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.1304536908864975,
+        "water": 0.12802593410015106,
+        "not_meter": 0.741520345211029
+      },
+      "technology": {
+        "mechanical": 0.5980008840560913,
+        "digital": 0.4019991159439087
+      },
+      "pipelineMs": 17.91090000187978,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.10728888213634491,
+        "water": 0.11228884756565094,
+        "not_meter": 0.7804223299026489
+      },
+      "technology": {
+        "mechanical": 0.562572717666626,
+        "digital": 0.4374273419380188
+      },
+      "pipelineMs": 146.76200000030803,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.2390921711921692,
+        "water": 0.1648535132408142,
+        "not_meter": 0.5960543155670166
+      },
+      "technology": {
+        "mechanical": 0.5996233820915222,
+        "digital": 0.400376558303833
+      },
+      "pipelineMs": 17.91090000187978,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.4516761004924774,
+        "water": 0.2077903151512146,
+        "not_meter": 0.340533584356308
+      },
+      "technology": {
+        "mechanical": 0.5920937061309814,
+        "digital": 0.40790635347366333
+      },
+      "pipelineMs": 17.91090000187978,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_48039403",
+      "expected": "electricity_digital",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.7688508629798889,
+        "water": 0.19326022267341614,
+        "not_meter": 0.03788890689611435
+      },
+      "technology": {
+        "mechanical": 0.5590135455131531,
+        "digital": 0.44098642468452454
+      },
+      "pipelineMs": 17.91090000187978,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.6195328831672668,
+        "water": 0.2224186211824417,
+        "not_meter": 0.15804848074913025
+      },
+      "technology": {
+        "mechanical": 0.995205283164978,
+        "digital": 0.004794791806489229
+      },
+      "pipelineMs": 21.638599999278085,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.28684213757514954,
+        "water": 0.07568719238042831,
+        "not_meter": 0.6374707221984863
+      },
+      "technology": {
+        "mechanical": 0.9859355688095093,
+        "digital": 0.014064447954297066
+      },
+      "pipelineMs": 21.638599999278085,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.4001964032649994,
+        "water": 0.05579335242509842,
+        "not_meter": 0.5440102219581604
+      },
+      "technology": {
+        "mechanical": 0.9980804920196533,
+        "digital": 0.0019195408094674349
+      },
+      "pipelineMs": 18.360899997787783,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.503362238407135,
+        "water": 0.04048926383256912,
+        "not_meter": 0.45614850521087646
+      },
+      "technology": {
+        "mechanical": 0.9973912239074707,
+        "digital": 0.002608780050650239
+      },
+      "pipelineMs": 163.53779999917606,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.6713920831680298,
+        "water": 0.20785273611545563,
+        "not_meter": 0.12075524032115936
+      },
+      "technology": {
+        "mechanical": 0.9965478777885437,
+        "digital": 0.0034521420020610094
+      },
+      "pipelineMs": 18.360899997787783,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.5244280695915222,
+        "water": 0.46757611632347107,
+        "not_meter": 0.007995801977813244
+      },
+      "technology": {
+        "mechanical": 0.9875841736793518,
+        "digital": 0.012415878474712372
+      },
+      "pipelineMs": 18.360899997787783,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_42461220",
+      "expected": "water_mechanical",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.3318481743335724,
+        "water": 0.6679726839065552,
+        "not_meter": 0.00017915433272719383
+      },
+      "technology": {
+        "mechanical": 0.9271945357322693,
+        "digital": 0.07280544936656952
+      },
+      "pipelineMs": 18.360899997787783,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.018677903339266777,
+        "water": 0.5760548114776611,
+        "not_meter": 0.40526729822158813
+      },
+      "technology": {
+        "mechanical": 0.8041852712631226,
+        "digital": 0.19581475853919983
+      },
+      "pipelineMs": 42.01839999950607,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.08837717026472092,
+        "water": 0.31956928968429565,
+        "not_meter": 0.5920534729957581
+      },
+      "technology": {
+        "mechanical": 0.9393228888511658,
+        "digital": 0.06067705899477005
+      },
+      "pipelineMs": 42.01839999950607,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.10411202907562256,
+        "water": 0.31544795632362366,
+        "not_meter": 0.5804399847984314
+      },
+      "technology": {
+        "mechanical": 0.9475412368774414,
+        "digital": 0.05245877802371979
+      },
+      "pipelineMs": 24.469300002238015,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.054279476404190063,
+        "water": 0.2597988545894623,
+        "not_meter": 0.6859216690063477
+      },
+      "technology": {
+        "mechanical": 0.9173523187637329,
+        "digital": 0.08264773339033127
+      },
+      "pipelineMs": 277.0204000007652,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.23747090995311737,
+        "water": 0.5498222708702087,
+        "not_meter": 0.2127068191766739
+      },
+      "technology": {
+        "mechanical": 0.9694116711616516,
+        "digital": 0.030588354915380478
+      },
+      "pipelineMs": 24.469300002238015,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.3799736797809601,
+        "water": 0.5845722556114197,
+        "not_meter": 0.035454053431749344
+      },
+      "technology": {
+        "mechanical": 0.97802734375,
+        "digital": 0.021972673013806343
+      },
+      "pipelineMs": 24.469300002238015,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_195597533",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.5806119441986084,
+        "water": 0.417956680059433,
+        "not_meter": 0.001431374461390078
+      },
+      "technology": {
+        "mechanical": 0.9745824337005615,
+        "digital": 0.025417571887373924
+      },
+      "pipelineMs": 24.469300002238015,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0029093052726238966,
+        "water": 0.9881356954574585,
+        "not_meter": 0.008955037221312523
+      },
+      "technology": {
+        "mechanical": 0.9837120175361633,
+        "digital": 0.0162880327552557
+      },
+      "pipelineMs": 25.34160000141128,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.017165016382932663,
+        "water": 0.7464755177497864,
+        "not_meter": 0.23635943233966827
+      },
+      "technology": {
+        "mechanical": 0.9935803413391113,
+        "digital": 0.006419620011001825
+      },
+      "pipelineMs": 25.34160000141128,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.06368456035852432,
+        "water": 0.1892792135477066,
+        "not_meter": 0.7470362186431885
+      },
+      "technology": {
+        "mechanical": 0.9962136149406433,
+        "digital": 0.0037863135803490877
+      },
+      "pipelineMs": 19.494899999699555,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.03649566322565079,
+        "water": 0.1425551325082779,
+        "not_meter": 0.8209492564201355
+      },
+      "technology": {
+        "mechanical": 0.996274471282959,
+        "digital": 0.0037254937924444675
+      },
+      "pipelineMs": 162.78439999950933,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.056922491639852524,
+        "water": 0.4517997205257416,
+        "not_meter": 0.491277813911438
+      },
+      "technology": {
+        "mechanical": 0.9968792200088501,
+        "digital": 0.0031208230648189783
+      },
+      "pipelineMs": 19.494899999699555,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.037064943462610245,
+        "water": 0.7903972864151001,
+        "not_meter": 0.17253781855106354
+      },
+      "technology": {
+        "mechanical": 0.9956246018409729,
+        "digital": 0.004375385120511055
+      },
+      "pipelineMs": 19.494899999699555,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_134293571",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.029950900003314018,
+        "water": 0.954860270023346,
+        "not_meter": 0.01518880296498537
+      },
+      "technology": {
+        "mechanical": 0.9882252216339111,
+        "digital": 0.011774824932217598
+      },
+      "pipelineMs": 19.494899999699555,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.829889714717865,
+        "water": 0.1258651465177536,
+        "not_meter": 0.04424522444605827
+      },
+      "technology": {
+        "mechanical": 0.9931818842887878,
+        "digital": 0.006818126887083054
+      },
+      "pipelineMs": 31.168699999398086,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.7819063067436218,
+        "water": 0.05375779792666435,
+        "not_meter": 0.1643359512090683
+      },
+      "technology": {
+        "mechanical": 0.9771098494529724,
+        "digital": 0.022890180349349976
+      },
+      "pipelineMs": 31.168699999398086,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.7247241139411926,
+        "water": 0.03672259300947189,
+        "not_meter": 0.2385532706975937
+      },
+      "technology": {
+        "mechanical": 0.9882459044456482,
+        "digital": 0.011754090897738934
+      },
+      "pipelineMs": 27.98389999952633,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.6874539256095886,
+        "water": 0.04126923158764839,
+        "not_meter": 0.2712767720222473
+      },
+      "technology": {
+        "mechanical": 0.9898476004600525,
+        "digital": 0.010152353905141354
+      },
+      "pipelineMs": 281.08960000099614,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.9222169518470764,
+        "water": 0.06861256808042526,
+        "not_meter": 0.00917052011936903
+      },
+      "technology": {
+        "mechanical": 0.9866524338722229,
+        "digital": 0.013347535394132137
+      },
+      "pipelineMs": 27.98389999952633,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.8708254098892212,
+        "water": 0.1290195882320404,
+        "not_meter": 0.00015498547872994095
+      },
+      "technology": {
+        "mechanical": 0.9761231541633606,
+        "digital": 0.02387687936425209
+      },
+      "pipelineMs": 27.98389999952633,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_151445788",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.7929183840751648,
+        "water": 0.2070803940296173,
+        "not_meter": 1.2486602827266324e-06
+      },
+      "technology": {
+        "mechanical": 0.9330219626426697,
+        "digital": 0.06697805225849152
+      },
+      "pipelineMs": 27.98389999952633,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0006698453216813505,
+        "water": 0.5620438456535339,
+        "not_meter": 0.43728628754615784
+      },
+      "technology": {
+        "mechanical": 0.5541092753410339,
+        "digital": 0.4458906948566437
+      },
+      "pipelineMs": 29.049500000837725,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.0016798118595033884,
+        "water": 0.13256143033504486,
+        "not_meter": 0.8657587766647339
+      },
+      "technology": {
+        "mechanical": 0.34747546911239624,
+        "digital": 0.6525245308876038
+      },
+      "pipelineMs": 29.049500000837725,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.0025413897819817066,
+        "water": 0.09267678111791611,
+        "not_meter": 0.9047818779945374
+      },
+      "technology": {
+        "mechanical": 0.3652839660644531,
+        "digital": 0.6347160339355469
+      },
+      "pipelineMs": 24.041299999225885,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.0018715834012255073,
+        "water": 0.041892748326063156,
+        "not_meter": 0.9562355875968933
+      },
+      "technology": {
+        "mechanical": 0.3853502571582794,
+        "digital": 0.6146497130393982
+      },
+      "pipelineMs": 163.8560999999754,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.002153292065486312,
+        "water": 0.32381919026374817,
+        "not_meter": 0.6740275025367737
+      },
+      "technology": {
+        "mechanical": 0.7245978116989136,
+        "digital": 0.27540215849876404
+      },
+      "pipelineMs": 24.041299999225885,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.0014530089683830738,
+        "water": 0.7642094492912292,
+        "not_meter": 0.23433755338191986
+      },
+      "technology": {
+        "mechanical": 0.9387470483779907,
+        "digital": 0.06125294789671898
+      },
+      "pipelineMs": 24.041299999225885,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_19089918",
+      "expected": "not_meter",
+      "split": "validation",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.001328502781689167,
+        "water": 0.9826207756996155,
+        "not_meter": 0.016050690785050392
+      },
+      "technology": {
+        "mechanical": 0.984269380569458,
+        "digital": 0.015730664134025574
+      },
+      "pipelineMs": 24.041299999225885,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.7968462705612183,
+        "water": 0.11043059825897217,
+        "not_meter": 0.09272303432226181
+      },
+      "technology": {
+        "mechanical": 0.9211467504501343,
+        "digital": 0.07885325700044632
+      },
+      "pipelineMs": 22.794799999246607,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.9491438269615173,
+        "water": 0.008584707975387573,
+        "not_meter": 0.042271535843610764
+      },
+      "technology": {
+        "mechanical": 0.8451855182647705,
+        "digital": 0.1548144817352295
+      },
+      "pipelineMs": 22.794799999246607,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.9388115406036377,
+        "water": 0.013588621281087399,
+        "not_meter": 0.04759986698627472
+      },
+      "technology": {
+        "mechanical": 0.7784664630889893,
+        "digital": 0.22153350710868835
+      },
+      "pipelineMs": 19.176099998730933,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.9338609576225281,
+        "water": 0.012421383522450924,
+        "not_meter": 0.05371759459376335
+      },
+      "technology": {
+        "mechanical": 0.6216333508491516,
+        "digital": 0.3783666789531708
+      },
+      "pipelineMs": 207.5226000015391,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.9920406937599182,
+        "water": 0.006911960896104574,
+        "not_meter": 0.0010472626890987158
+      },
+      "technology": {
+        "mechanical": 0.9053748846054077,
+        "digital": 0.0946250706911087
+      },
+      "pipelineMs": 19.176099998730933,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.9954620003700256,
+        "water": 0.00452239578589797,
+        "not_meter": 1.5556399375782348e-05
+      },
+      "technology": {
+        "mechanical": 0.9626984000205994,
+        "digital": 0.0373016782104969
+      },
+      "pipelineMs": 19.176099998730933,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.9962192177772522,
+        "water": 0.0037806984037160873,
+        "not_meter": 1.4856769325888308e-07
+      },
+      "technology": {
+        "mechanical": 0.978346049785614,
+        "digital": 0.021653927862644196
+      },
+      "pipelineMs": 19.176099998730933,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.9494397640228271,
+        "water": 0.03351791575551033,
+        "not_meter": 0.017042294144630432
+      },
+      "technology": {
+        "mechanical": 0.5360652804374695,
+        "digital": 0.4639347195625305
+      },
+      "pipelineMs": 23.01869999791961,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.836601972579956,
+        "water": 0.08455433696508408,
+        "not_meter": 0.07884367555379868
+      },
+      "technology": {
+        "mechanical": 0.28544819355010986,
+        "digital": 0.7145518064498901
+      },
+      "pipelineMs": 23.01869999791961,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.7208321690559387,
+        "water": 0.10037733614444733,
+        "not_meter": 0.17879047989845276
+      },
+      "technology": {
+        "mechanical": 0.24014754593372345,
+        "digital": 0.759852409362793
+      },
+      "pipelineMs": 18.78049999868381,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.8503798842430115,
+        "water": 0.046516675502061844,
+        "not_meter": 0.10310337692499161
+      },
+      "technology": {
+        "mechanical": 0.15123970806598663,
+        "digital": 0.8487603068351746
+      },
+      "pipelineMs": 210.66979999886826,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.9491243958473206,
+        "water": 0.05057593062520027,
+        "not_meter": 0.0002997448027599603
+      },
+      "technology": {
+        "mechanical": 0.3445976674556732,
+        "digital": 0.6554023623466492
+      },
+      "pipelineMs": 18.78049999868381,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.9788627624511719,
+        "water": 0.021137183532118797,
+        "not_meter": 1.6158433879809309e-07
+      },
+      "technology": {
+        "mechanical": 0.5089292526245117,
+        "digital": 0.4910707473754883
+      },
+      "pipelineMs": 18.78049999868381,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.9905527830123901,
+        "water": 0.00944722443819046,
+        "not_meter": 1.0338171291257581e-10
+      },
+      "technology": {
+        "mechanical": 0.6537472009658813,
+        "digital": 0.3462528586387634
+      },
+      "pipelineMs": 18.78049999868381,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.8456394672393799,
+        "water": 0.1435794085264206,
+        "not_meter": 0.010781136341392994
+      },
+      "technology": {
+        "mechanical": 0.09432711452245712,
+        "digital": 0.9056729078292847
+      },
+      "pipelineMs": 23.990699999558274,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.8763229250907898,
+        "water": 0.0371202677488327,
+        "not_meter": 0.0865567997097969
+      },
+      "technology": {
+        "mechanical": 0.12547022104263306,
+        "digital": 0.8745298385620117
+      },
+      "pipelineMs": 23.990699999558274,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.8920813798904419,
+        "water": 0.04228900372982025,
+        "not_meter": 0.06562954187393188
+      },
+      "technology": {
+        "mechanical": 0.1840093731880188,
+        "digital": 0.8159906268119812
+      },
+      "pipelineMs": 19.431500000791857,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.7457740306854248,
+        "water": 0.062402110546827316,
+        "not_meter": 0.1918238252401352
+      },
+      "technology": {
+        "mechanical": 0.09396876394748688,
+        "digital": 0.9060312509536743
+      },
+      "pipelineMs": 198.3379999983299,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.9741108417510986,
+        "water": 0.025705428794026375,
+        "not_meter": 0.00018375027866568416
+      },
+      "technology": {
+        "mechanical": 0.2626386284828186,
+        "digital": 0.7373613715171814
+      },
+      "pipelineMs": 19.431500000791857,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.9822942018508911,
+        "water": 0.0177055262029171,
+        "not_meter": 2.4439040657853184e-07
+      },
+      "technology": {
+        "mechanical": 0.40741443634033203,
+        "digital": 0.592585563659668
+      },
+      "pipelineMs": 19.431500000791857,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.9866123199462891,
+        "water": 0.013387683779001236,
+        "not_meter": 3.545246318736872e-10
+      },
+      "technology": {
+        "mechanical": 0.5620807409286499,
+        "digital": 0.4379192590713501
+      },
+      "pipelineMs": 19.431500000791857,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.5468407273292542,
+        "water": 0.4175471365451813,
+        "not_meter": 0.03561210632324219
+      },
+      "technology": {
+        "mechanical": 0.13579091429710388,
+        "digital": 0.8642091155052185
+      },
+      "pipelineMs": 24.21169999797712,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.7334046959877014,
+        "water": 0.12513138353824615,
+        "not_meter": 0.14146393537521362
+      },
+      "technology": {
+        "mechanical": 0.41298922896385193,
+        "digital": 0.5870107412338257
+      },
+      "pipelineMs": 24.21169999797712,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.3079582154750824,
+        "water": 0.2388666272163391,
+        "not_meter": 0.4531750977039337
+      },
+      "technology": {
+        "mechanical": 0.7540150284767151,
+        "digital": 0.24598494172096252
+      },
+      "pipelineMs": 15.45579999947222,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.18359263241291046,
+        "water": 0.2504555583000183,
+        "not_meter": 0.5659518241882324
+      },
+      "technology": {
+        "mechanical": 0.680935800075531,
+        "digital": 0.319064199924469
+      },
+      "pipelineMs": 98.24659999867436,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.7565352320671082,
+        "water": 0.21576350927352905,
+        "not_meter": 0.02770129218697548
+      },
+      "technology": {
+        "mechanical": 0.7245734930038452,
+        "digital": 0.2754265069961548
+      },
+      "pipelineMs": 15.45579999947222,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.913755476474762,
+        "water": 0.08581019937992096,
+        "not_meter": 0.0004342776373960078
+      },
+      "technology": {
+        "mechanical": 0.6642221808433533,
+        "digital": 0.33577778935432434
+      },
+      "pipelineMs": 15.45579999947222,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.9720342755317688,
+        "water": 0.027963031083345413,
+        "not_meter": 2.6148411507165292e-06
+      },
+      "technology": {
+        "mechanical": 0.5617257356643677,
+        "digital": 0.43827423453330994
+      },
+      "pipelineMs": 15.45579999947222,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.8638469576835632,
+        "water": 0.13442853093147278,
+        "not_meter": 0.0017244360642507672
+      },
+      "technology": {
+        "mechanical": 0.8250909447669983,
+        "digital": 0.17490904033184052
+      },
+      "pipelineMs": 12.627500000235159,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.5965086817741394,
+        "water": 0.17459675669670105,
+        "not_meter": 0.22889456152915955
+      },
+      "technology": {
+        "mechanical": 0.8343567848205566,
+        "digital": 0.16564318537712097
+      },
+      "pipelineMs": 12.627500000235159,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.4025341868400574,
+        "water": 0.43234238028526306,
+        "not_meter": 0.16512347757816315
+      },
+      "technology": {
+        "mechanical": 0.5461094379425049,
+        "digital": 0.4538905918598175
+      },
+      "pipelineMs": 12.039900000672787,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.300107479095459,
+        "water": 0.47775718569755554,
+        "not_meter": 0.22213535010814667
+      },
+      "technology": {
+        "mechanical": 0.6511196494102478,
+        "digital": 0.3488803803920746
+      },
+      "pipelineMs": 35.70449999824632,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.45435887575149536,
+        "water": 0.54544597864151,
+        "not_meter": 0.0001951674639713019
+      },
+      "technology": {
+        "mechanical": 0.7282480597496033,
+        "digital": 0.27175194025039673
+      },
+      "pipelineMs": 12.039900000672787,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.43068039417266846,
+        "water": 0.5693195462226868,
+        "not_meter": 7.556342751513512e-08
+      },
+      "technology": {
+        "mechanical": 0.8652819395065308,
+        "digital": 0.13471810519695282
+      },
+      "pipelineMs": 12.039900000672787,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.4959660768508911,
+        "water": 0.5040339827537537,
+        "not_meter": 4.302255773858121e-11
+      },
+      "technology": {
+        "mechanical": 0.9208475351333618,
+        "digital": 0.07915247231721878
+      },
+      "pipelineMs": 12.039900000672787,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0002879794919863343,
+        "water": 0.9850175976753235,
+        "not_meter": 0.014694406650960445
+      },
+      "technology": {
+        "mechanical": 0.805656373500824,
+        "digital": 0.19434362649917603
+      },
+      "pipelineMs": 30.43029999753344,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.004814548417925835,
+        "water": 0.7696687579154968,
+        "not_meter": 0.22551673650741577
+      },
+      "technology": {
+        "mechanical": 0.6201854348182678,
+        "digital": 0.3798145353794098
+      },
+      "pipelineMs": 30.43029999753344,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.0019987619016319513,
+        "water": 0.5888301134109497,
+        "not_meter": 0.4091711640357971
+      },
+      "technology": {
+        "mechanical": 0.7473700642585754,
+        "digital": 0.25262993574142456
+      },
+      "pipelineMs": 22.983499999099877,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.003559674136340618,
+        "water": 0.40757066011428833,
+        "not_meter": 0.5888696312904358
+      },
+      "technology": {
+        "mechanical": 0.6648714542388916,
+        "digital": 0.3351285457611084
+      },
+      "pipelineMs": 277.1114999995916,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.0007862330530770123,
+        "water": 0.7314935922622681,
+        "not_meter": 0.26772019267082214
+      },
+      "technology": {
+        "mechanical": 0.8759773373603821,
+        "digital": 0.12402266263961792
+      },
+      "pipelineMs": 22.983499999099877,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.0004482230870053172,
+        "water": 0.8538692593574524,
+        "not_meter": 0.1456824690103531
+      },
+      "technology": {
+        "mechanical": 0.943793773651123,
+        "digital": 0.05620618537068367
+      },
+      "pipelineMs": 22.983499999099877,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.0007425834774039686,
+        "water": 0.9745128750801086,
+        "not_meter": 0.024744557216763496
+      },
+      "technology": {
+        "mechanical": 0.9648709297180176,
+        "digital": 0.03512906655669212
+      },
+      "pipelineMs": 22.983499999099877,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0885944813489914,
+        "water": 0.7354753017425537,
+        "not_meter": 0.17593024671077728
+      },
+      "technology": {
+        "mechanical": 0.9112115502357483,
+        "digital": 0.08878850191831589
+      },
+      "pipelineMs": 13.137099998857593,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.004259277600795031,
+        "water": 0.6382887959480286,
+        "not_meter": 0.3574518859386444
+      },
+      "technology": {
+        "mechanical": 0.955637514591217,
+        "digital": 0.04436248913407326
+      },
+      "pipelineMs": 13.137099998857593,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.0029865154065191746,
+        "water": 0.5144271850585938,
+        "not_meter": 0.4825862944126129
+      },
+      "technology": {
+        "mechanical": 0.9753751754760742,
+        "digital": 0.024624766781926155
+      },
+      "pipelineMs": 12.822200002119644,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.0019198304507881403,
+        "water": 0.49838948249816895,
+        "not_meter": 0.4996906518936157
+      },
+      "technology": {
+        "mechanical": 0.9717459678649902,
+        "digital": 0.028254013508558273
+      },
+      "pipelineMs": 45.35830000168062,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.007171470206230879,
+        "water": 0.9558281898498535,
+        "not_meter": 0.03700031340122223
+      },
+      "technology": {
+        "mechanical": 0.9855140447616577,
+        "digital": 0.014485924504697323
+      },
+      "pipelineMs": 12.822200002119644,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.016190674155950546,
+        "water": 0.9828358292579651,
+        "not_meter": 0.0009734686464071274
+      },
+      "technology": {
+        "mechanical": 0.9885216951370239,
+        "digital": 0.011478331871330738
+      },
+      "pipelineMs": 12.822200002119644,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.06859535723924637,
+        "water": 0.9313886761665344,
+        "not_meter": 1.599059578438755e-05
+      },
+      "technology": {
+        "mechanical": 0.9842685461044312,
+        "digital": 0.015731431543827057
+      },
+      "pipelineMs": 12.822200002119644,
+      "isProductIllustration": true
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0018699467182159424,
+        "water": 0.9615216255187988,
+        "not_meter": 0.03660845011472702
+      },
+      "technology": {
+        "mechanical": 0.5649200081825256,
+        "digital": 0.43508002161979675
+      },
+      "pipelineMs": 30.179200002748985,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.008886362425982952,
+        "water": 0.4127638638019562,
+        "not_meter": 0.578349769115448
+      },
+      "technology": {
+        "mechanical": 0.6451631188392639,
+        "digital": 0.3548368513584137
+      },
+      "pipelineMs": 30.179200002748985,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.010679430328309536,
+        "water": 0.24178192019462585,
+        "not_meter": 0.7475386261940002
+      },
+      "technology": {
+        "mechanical": 0.5043576955795288,
+        "digital": 0.4956423044204712
+      },
+      "pipelineMs": 24.01570000074571,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.002130074193701148,
+        "water": 0.1944887489080429,
+        "not_meter": 0.8033812642097473
+      },
+      "technology": {
+        "mechanical": 0.5550734996795654,
+        "digital": 0.44492650032043457
+      },
+      "pipelineMs": 273.1576000005589,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.0067390999756753445,
+        "water": 0.27723997831344604,
+        "not_meter": 0.7160208225250244
+      },
+      "technology": {
+        "mechanical": 0.6505929827690125,
+        "digital": 0.34940698742866516
+      },
+      "pipelineMs": 24.01570000074571,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.006030210759490728,
+        "water": 0.3548932373523712,
+        "not_meter": 0.6390765905380249
+      },
+      "technology": {
+        "mechanical": 0.7855516076087952,
+        "digital": 0.21444840729236603
+      },
+      "pipelineMs": 24.01570000074571,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.017769820988178253,
+        "water": 0.7396445274353027,
+        "not_meter": 0.2425856590270996
+      },
+      "technology": {
+        "mechanical": 0.8546895384788513,
+        "digital": 0.1453104466199875
+      },
+      "pipelineMs": 24.01570000074571,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.00105352106038481,
+        "water": 0.8670587539672852,
+        "not_meter": 0.13188770413398743
+      },
+      "technology": {
+        "mechanical": 0.9963321089744568,
+        "digital": 0.0036678919568657875
+      },
+      "pipelineMs": 20.35509999768692,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.004840133711695671,
+        "water": 0.6626660227775574,
+        "not_meter": 0.3324938714504242
+      },
+      "technology": {
+        "mechanical": 0.9976651668548584,
+        "digital": 0.002334822667762637
+      },
+      "pipelineMs": 20.35509999768692,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.02347692847251892,
+        "water": 0.3876330256462097,
+        "not_meter": 0.5888900756835938
+      },
+      "technology": {
+        "mechanical": 0.9788336157798767,
+        "digital": 0.02116641029715538
+      },
+      "pipelineMs": 17.27509999909671,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.03898238763213158,
+        "water": 0.2653663158416748,
+        "not_meter": 0.6956513524055481
+      },
+      "technology": {
+        "mechanical": 0.9616116881370544,
+        "digital": 0.038388315588235855
+      },
+      "pipelineMs": 146.04699999836157,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.027601052075624466,
+        "water": 0.8219780921936035,
+        "not_meter": 0.1504208743572235
+      },
+      "technology": {
+        "mechanical": 0.9830958843231201,
+        "digital": 0.016904069110751152
+      },
+      "pipelineMs": 17.27509999909671,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.02238576114177704,
+        "water": 0.9636198878288269,
+        "not_meter": 0.01399428304284811
+      },
+      "technology": {
+        "mechanical": 0.9807865023612976,
+        "digital": 0.019213544204831123
+      },
+      "pipelineMs": 17.27509999909671,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.030318165197968483,
+        "water": 0.9691238403320312,
+        "not_meter": 0.000557952793315053
+      },
+      "technology": {
+        "mechanical": 0.9646813869476318,
+        "digital": 0.03531859070062637
+      },
+      "pipelineMs": 17.27509999909671,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.6438758969306946,
+        "water": 0.2910318970680237,
+        "not_meter": 0.06509225815534592
+      },
+      "technology": {
+        "mechanical": 0.6445236206054688,
+        "digital": 0.35547640919685364
+      },
+      "pipelineMs": 20.915499997499865,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.9460317492485046,
+        "water": 0.008424047380685806,
+        "not_meter": 0.045544225722551346
+      },
+      "technology": {
+        "mechanical": 0.6066686511039734,
+        "digital": 0.3933313190937042
+      },
+      "pipelineMs": 20.915499997499865,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.8829706311225891,
+        "water": 0.004351767711341381,
+        "not_meter": 0.11267756670713425
+      },
+      "technology": {
+        "mechanical": 0.7941368222236633,
+        "digital": 0.2058631330728531
+      },
+      "pipelineMs": 17.86050000009709,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.8941380381584167,
+        "water": 0.003692884463816881,
+        "not_meter": 0.10216904431581497
+      },
+      "technology": {
+        "mechanical": 0.6541352272033691,
+        "digital": 0.34586480259895325
+      },
+      "pipelineMs": 142.25399999850197,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.9454461336135864,
+        "water": 0.004132408648729324,
+        "not_meter": 0.05042145773768425
+      },
+      "technology": {
+        "mechanical": 0.8071942329406738,
+        "digital": 0.19280578196048737
+      },
+      "pipelineMs": 17.86050000009709,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.9729670882225037,
+        "water": 0.006095196586102247,
+        "not_meter": 0.020937707275152206
+      },
+      "technology": {
+        "mechanical": 0.8001947402954102,
+        "digital": 0.19980520009994507
+      },
+      "pipelineMs": 17.86050000009709,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_4948052",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.9860317707061768,
+        "water": 0.011338932439684868,
+        "not_meter": 0.0026293988339602947
+      },
+      "technology": {
+        "mechanical": 0.7548048496246338,
+        "digital": 0.24519512057304382
+      },
+      "pipelineMs": 17.86050000009709,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.42601796984672546,
+        "water": 0.5365931391716003,
+        "not_meter": 0.03738890960812569
+      },
+      "technology": {
+        "mechanical": 0.7768736481666565,
+        "digital": 0.2231263667345047
+      },
+      "pipelineMs": 15.468500001588836,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "physical_prompts",
+      "utility": {
+        "electricity": 0.815903902053833,
+        "water": 0.08358767628669739,
+        "not_meter": 0.10050839930772781
+      },
+      "technology": {
+        "mechanical": 0.8009387254714966,
+        "digital": 0.19906125962734222
+      },
+      "pipelineMs": 15.468500001588836,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "letterbox_physical",
+      "utility": {
+        "electricity": 0.8480647802352905,
+        "water": 0.03467323258519173,
+        "not_meter": 0.11726200580596924
+      },
+      "technology": {
+        "mechanical": 0.8785879015922546,
+        "digital": 0.12141203880310059
+      },
+      "pipelineMs": 14.220299999578856,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "tta_physical",
+      "utility": {
+        "electricity": 0.7656340003013611,
+        "water": 0.04274067282676697,
+        "not_meter": 0.19162529706954956
+      },
+      "technology": {
+        "mechanical": 0.8028298020362854,
+        "digital": 0.1971701681613922
+      },
+      "pipelineMs": 74.45189999998547,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "fewshot_025",
+      "utility": {
+        "electricity": 0.9526286721229553,
+        "water": 0.03958999365568161,
+        "not_meter": 0.007781381253153086
+      },
+      "technology": {
+        "mechanical": 0.9061833620071411,
+        "digital": 0.09381671994924545
+      },
+      "pipelineMs": 14.220299999578856,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "fewshot_050",
+      "utility": {
+        "electricity": 0.9454911947250366,
+        "water": 0.054142117500305176,
+        "not_meter": 0.0003666888806037605
+      },
+      "technology": {
+        "mechanical": 0.916390061378479,
+        "digital": 0.08360996097326279
+      },
+      "pipelineMs": 14.220299999578856,
+      "isProductIllustration": false
+    },
+    {
+      "id": "commons_33635609",
+      "expected": "multiple_meters",
+      "split": "multiple_meter_challenge",
+      "method": "fewshot_075",
+      "utility": {
+        "electricity": 0.9274882078170776,
+        "water": 0.07250363379716873,
+        "not_meter": 8.043180969252717e-06
+      },
+      "technology": {
+        "mechanical": 0.8989447355270386,
+        "digital": 0.10105521231889725
+      },
+      "pipelineMs": 14.220299999578856,
+      "isProductIllustration": false
+    }
+  ],
+  "rawReportSha256": "324dc27dfde3207e791f85228935052df5401256837d2f1c14eb7f49d6de9994",
+  "activationDecision": "REJECTED",
+  "reason": "No candidate retained any correctly accepted validation positive while rejecting every wrong/non-meter acceptance; no post-test retuning."
+}

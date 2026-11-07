@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 import {
   incidentClient,
   incidentMultipart,

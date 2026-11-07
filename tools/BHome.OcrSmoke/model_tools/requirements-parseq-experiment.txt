@@ -1,0 +1,2 @@
+# Isolated offline inference only; reuse the existing Torch/torchvision stack.
+timm==0.9.16

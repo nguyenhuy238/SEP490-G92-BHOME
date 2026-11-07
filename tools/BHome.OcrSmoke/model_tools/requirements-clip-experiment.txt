@@ -1,0 +1,9 @@
+# Offline CLIP baseline only. Existing requirements-export.txt supplies PyTorch,
+# NumPy, Pillow, requests and common dependencies. Install into an isolated target;
+# these packages are not backend/mobile runtime dependencies.
+transformers==4.46.3
+tokenizers==0.20.3
+huggingface-hub==0.26.2
+safetensors==0.4.5
+regex==2024.11.6
+tqdm==4.67.1

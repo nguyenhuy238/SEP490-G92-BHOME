@@ -1,0 +1,2167 @@
+{
+  "scope": "historical_development_geometry_and_component_recognition",
+  "groundingRevision": "a2bb814dd30d776dcf7e30523b00659f4f141c71",
+  "groundingSha256": "1a2412ef99bd74bcd3c2a246fa1e48581f8889a1300c9051974741314fc042f3",
+  "groundingLicense": "Apache-2.0",
+  "yoloSha256": "a6e4bc8e9b40ad3151039b889e12f830a2993cf8e690f557bfecb1a1d519de37",
+  "validationGrid": {
+    "full_frame": {
+      "lcd screen.:640": {
+        "prompt": "lcd screen.",
+        "size": 640,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  336.6344909667969,
+                  185.93080139160156,
+                  915.8367919921875,
+                  775.8001098632812
+                ],
+                "score": 0.4136347472667694,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  521.0156860351562,
+                  307.88885498046875,
+                  733.3969116210938,
+                  427.2712097167969
+                ],
+                "score": 0.36504411697387695,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  178.7706756591797,
+                  2.1601743698120117,
+                  1072.379638671875,
+                  956.4927368164062
+                ],
+                "score": 0.341237872838974,
+                "phrase": "lcd screen"
+              }
+            ],
+            "elapsedMs": 585.7757999983733
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  480.33599853515625,
+                  378.4037170410156,
+                  754.3387451171875,
+                  472.2243957519531
+                ],
+                "score": 0.4164581894874573,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  316.8088073730469,
+                  142.03497314453125,
+                  997.1326904296875,
+                  759.1392822265625
+                ],
+                "score": 0.3099777400493622,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  395.1126708984375,
+                  177.14828491210938,
+                  833.1792602539062,
+                  551.8585205078125
+                ],
+                "score": 0.2032167613506317,
+                "phrase": ""
+              },
+              {
+                "box": [
+                  268.2025146484375,
+                  3.0263636112213135,
+                  1274.969482421875,
+                  955.607666015625
+                ],
+                "score": 0.18805068731307983,
+                "phrase": ""
+              },
+              {
+                "box": [
+                  454.1224670410156,
+                  342.3138732910156,
+                  785.8615112304688,
+                  511.1357116699219
+                ],
+                "score": 0.18177568912506104,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 182.9424999996263
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 2,
+            "proxyNonmatchingBoxes": 3
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 1,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 1
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 2,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 2,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          }
+        }
+      },
+      "lcd screen.:800": {
+        "prompt": "lcd screen.",
+        "size": 800,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  336.2813720703125,
+                  185.7729949951172,
+                  915.9551391601562,
+                  775.1250610351562
+                ],
+                "score": 0.4236307740211487,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  179.34634399414062,
+                  2.27994704246521,
+                  1072.4765625,
+                  957.1561889648438
+                ],
+                "score": 0.38714849948883057,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  521.797119140625,
+                  308.1083068847656,
+                  734.8228759765625,
+                  426.12322998046875
+                ],
+                "score": 0.34855780005455017,
+                "phrase": "lcd screen"
+              }
+            ],
+            "elapsedMs": 298.65330000029644
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  480.106201171875,
+                  379.2283020019531,
+                  752.9979248046875,
+                  471.2523193359375
+                ],
+                "score": 0.46773186326026917,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  325.75677490234375,
+                  142.871826171875,
+                  1000.9847412109375,
+                  774.5807495117188
+                ],
+                "score": 0.31063300371170044,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  426.5172119140625,
+                  182.12088012695312,
+                  821.6923828125,
+                  548.2059936523438
+                ],
+                "score": 0.202026829123497,
+                "phrase": ""
+              },
+              {
+                "box": [
+                  267.1853332519531,
+                  2.435004234313965,
+                  1274.50732421875,
+                  957.243896484375
+                ],
+                "score": 0.19862857460975647,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 255.25330000164104
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 2,
+            "proxyNonmatchingBoxes": 3
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 1,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 1,
+            "missing": 1,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 2,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          }
+        }
+      },
+      "digital meter reading display.:640": {
+        "prompt": "digital meter reading display.",
+        "size": 640,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  337.5236511230469,
+                  188.5749053955078,
+                  914.7095947265625,
+                  776.9781494140625
+                ],
+                "score": 0.45245733857154846,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  522.3189697265625,
+                  309.8538818359375,
+                  731.2808227539062,
+                  425.89990234375
+                ],
+                "score": 0.3529733121395111,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  179.88003540039062,
+                  1.7733335494995117,
+                  1072.27392578125,
+                  958.1173706054688
+                ],
+                "score": 0.3096536695957184,
+                "phrase": "digital meter reading display"
+              }
+            ],
+            "elapsedMs": 182.09900000147172
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  320.2392272949219,
+                  139.6759796142578,
+                  1001.814697265625,
+                  768.8558349609375
+                ],
+                "score": 0.5342945456504822,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  480.4713439941406,
+                  379.156005859375,
+                  753.389404296875,
+                  471.6419982910156
+                ],
+                "score": 0.2240176945924759,
+                "phrase": ""
+              },
+              {
+                "box": [
+                  439.81451416015625,
+                  185.72842407226562,
+                  796.3601684570312,
+                  545.28515625
+                ],
+                "score": 0.16605164110660553,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 181.7832000015187
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 3
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 2,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          }
+        }
+      },
+      "digital meter reading display.:800": {
+        "prompt": "digital meter reading display.",
+        "size": 800,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  337.015869140625,
+                  187.61744689941406,
+                  914.8411865234375,
+                  775.83349609375
+                ],
+                "score": 0.516689121723175,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  523.0706176757812,
+                  310.25933837890625,
+                  732.3822021484375,
+                  424.0050354003906
+                ],
+                "score": 0.33773207664489746,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  179.82723999023438,
+                  2.4730381965637207,
+                  1072.763671875,
+                  957.7005615234375
+                ],
+                "score": 0.32437482476234436,
+                "phrase": "digital meter reading display"
+              }
+            ],
+            "elapsedMs": 258.3976999994775
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  327.95318603515625,
+                  140.51693725585938,
+                  1007.14111328125,
+                  783.1237182617188
+                ],
+                "score": 0.5925698280334473,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  480.5194396972656,
+                  380.2188720703125,
+                  752.0423583984375,
+                  470.81365966796875
+                ],
+                "score": 0.26982811093330383,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  442.76458740234375,
+                  185.6964569091797,
+                  794.8391723632812,
+                  544.9528198242188
+                ],
+                "score": 0.15959906578063965,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 258.6574000015389
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 2,
+            "proxyNonmatchingBoxes": 3
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 1,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 1
+          }
+        }
+      }
+    },
+    "oracle_meter_body": {
+      "lcd screen.:640": {
+        "prompt": "lcd screen.",
+        "size": 640,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  520.3743591308594,
+                  307.1961212158203,
+                  734.97900390625,
+                  428.72308349609375
+                ],
+                "score": 0.49350908398628235,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  338.2028350830078,
+                  192.5791530609131,
+                  893.6788940429688,
+                  773.42333984375
+                ],
+                "score": 0.3638949990272522,
+                "phrase": "lcd screen"
+              }
+            ],
+            "elapsedMs": 154.99500000078115
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  480.31944274902344,
+                  378.7789306640625,
+                  753.3052062988281,
+                  470.65252685546875
+                ],
+                "score": 0.4889814555644989,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  333.03673553466797,
+                  142.44566345214844,
+                  892.9923095703125,
+                  754.3978271484375
+                ],
+                "score": 0.30526524782180786,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  400.43223571777344,
+                  177.07220458984375,
+                  828.234619140625,
+                  549.1231994628906
+                ],
+                "score": 0.2004924714565277,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 182.251999998698
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 2,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 1,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 1
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 2,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 2,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          }
+        }
+      },
+      "lcd screen.:800": {
+        "prompt": "lcd screen.",
+        "size": 800,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  337.99989318847656,
+                  189.2482032775879,
+                  893.8394165039062,
+                  771.3861083984375
+                ],
+                "score": 0.4321141541004181,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  522.0208435058594,
+                  307.8572692871094,
+                  734.404052734375,
+                  427.00634765625
+                ],
+                "score": 0.4180123805999756,
+                "phrase": "lcd screen"
+              }
+            ],
+            "elapsedMs": 209.28679999997257
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  480.78375244140625,
+                  378.4939880371094,
+                  752.076171875,
+                  470.6776428222656
+                ],
+                "score": 0.48637324571609497,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  332.2695617675781,
+                  143.8097152709961,
+                  893.2866821289062,
+                  754.1285400390625
+                ],
+                "score": 0.3339793384075165,
+                "phrase": "lcd screen"
+              },
+              {
+                "box": [
+                  396.6272201538086,
+                  176.42845916748047,
+                  830.8736572265625,
+                  551.8532409667969
+                ],
+                "score": 0.18857552111148834,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 258.555600001273
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 2,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 2,
+            "correctUniqueSelection": 1,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 1
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 1,
+            "missing": 1,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 2,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 0
+          }
+        }
+      },
+      "digital meter reading display.:640": {
+        "prompt": "digital meter reading display.",
+        "size": 640,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  337.70396423339844,
+                  189.99065589904785,
+                  894.2069091796875,
+                  777.3289794921875
+                ],
+                "score": 0.6165463328361511,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  521.5441284179688,
+                  309.7602844238281,
+                  733.2932434082031,
+                  426.08587646484375
+                ],
+                "score": 0.3470306098461151,
+                "phrase": "digital meter reading display"
+              }
+            ],
+            "elapsedMs": 219.48199999678764
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  333.72254943847656,
+                  141.26524353027344,
+                  893.8533935546875,
+                  760.6792602539062
+                ],
+                "score": 0.628805935382843,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  480.76026916503906,
+                  380.1341247558594,
+                  751.7073974609375,
+                  469.969482421875
+                ],
+                "score": 0.24617303907871246,
+                "phrase": ""
+              },
+              {
+                "box": [
+                  439.21319580078125,
+                  183.03661346435547,
+                  795.4576416015625,
+                  545.4503173828125
+                ],
+                "score": 0.16766458749771118,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 234.22669999854406
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          }
+        }
+      },
+      "digital meter reading display.:800": {
+        "prompt": "digital meter reading display.",
+        "size": 800,
+        "observations": [
+          {
+            "boxes": [
+              {
+                "box": [
+                  337.7873229980469,
+                  187.60729789733887,
+                  894.0913696289062,
+                  775.0073852539062
+                ],
+                "score": 0.6683176755905151,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  523.5932006835938,
+                  310.2946014404297,
+                  732.3103942871094,
+                  424.0797119140625
+                ],
+                "score": 0.2985873222351074,
+                "phrase": "digital meter reading display"
+              }
+            ],
+            "elapsedMs": 206.99430000240682
+          },
+          {
+            "boxes": [
+              {
+                "box": [
+                  329.44911193847656,
+                  141.50283813476562,
+                  893.9293212890625,
+                  765.7213745117188
+                ],
+                "score": 0.6349900960922241,
+                "phrase": "digital meter reading display"
+              },
+              {
+                "box": [
+                  480.81561279296875,
+                  379.1231994628906,
+                  751.2959289550781,
+                  469.9269104003906
+                ],
+                "score": 0.21336610615253448,
+                "phrase": ""
+              },
+              {
+                "box": [
+                  442.58802795410156,
+                  182.61835479736328,
+                  793.278564453125,
+                  545.7616882324219
+                ],
+                "score": 0.15358053147792816,
+                "phrase": ""
+              }
+            ],
+            "elapsedMs": 255.33079999877373
+          }
+        ],
+        "thresholds": {
+          "0.25": {
+            "inputs": 2,
+            "localizedAny": 1,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 1,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.35": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.45": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          },
+          "0.55": {
+            "inputs": 2,
+            "localizedAny": 0,
+            "correctUniqueSelection": 0,
+            "missing": 0,
+            "multipleRegions": 0,
+            "proxyNonmatchingBoxes": 2
+          }
+        }
+      }
+    }
+  },
+  "selected": {
+    "full_frame": {
+      "prompt": "lcd screen.",
+      "size": 800,
+      "threshold": 0.45,
+      "validationPolicyFound": true
+    },
+    "oracle_meter_body": {
+      "prompt": "lcd screen.",
+      "size": 640,
+      "threshold": 0.45,
+      "validationPolicyFound": true
+    }
+  },
+  "rows": [
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "scope": "full_frame",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        535,
+        300,
+        746,
+        400
+      ],
+      "expectedDigits": "74590",
+      "boxes": [],
+      "elapsedMs": 253.1315000014729,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "scope": "full_frame",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        535,
+        300,
+        746,
+        400
+      ],
+      "expectedDigits": "74590",
+      "boxes": [
+        {
+          "box": [
+            520.7466947115385,
+            307.7404550405649,
+            742.8264911358173,
+            420.7115055964543
+          ],
+          "score": 0.6894652843475342,
+          "phrase": "reading_region"
+        }
+      ],
+      "elapsedMs": 33.04990000106045,
+      "bestProxyIoU": 0.7097632434497274,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          520,
+          307,
+          743,
+          421
+        ],
+        "recognition": {
+          "english": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.8669467568397522,
+            "meanCharacterScore": 0.9602985620498657,
+            "forwardMs": 14.02790000065579
+          },
+          "server": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.627851665019989,
+            "meanCharacterScore": 0.8105461597442627,
+            "forwardMs": 53.51710000104504
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "scope": "full_frame",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        485,
+        385,
+        747,
+        473
+      ],
+      "expectedDigits": null,
+      "boxes": [
+        {
+          "box": [
+            480.106201171875,
+            379.2283020019531,
+            752.9979248046875,
+            471.2523193359375
+          ],
+          "score": 0.46773186326026917,
+          "phrase": "lcd screen"
+        }
+      ],
+      "elapsedMs": 255.2523000013025,
+      "bestProxyIoU": 0.883757489573591,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          480,
+          379,
+          753,
+          472
+        ],
+        "recognition": {
+          "english": {
+            "raw": "R",
+            "digits": null,
+            "minimumCharacterScore": 0.16231824457645416,
+            "meanCharacterScore": 0.16231824457645416,
+            "forwardMs": 13.397799997619586
+          },
+          "server": {
+            "raw": "\u5e7f",
+            "digits": null,
+            "minimumCharacterScore": 0.24723556637763977,
+            "meanCharacterScore": 0.24723556637763977,
+            "forwardMs": 54.509900000994094
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "scope": "full_frame",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        485,
+        385,
+        747,
+        473
+      ],
+      "expectedDigits": null,
+      "boxes": [
+        {
+          "box": [
+            486.304203913762,
+            383.5587486853966,
+            763.1808471679688,
+            473.2854520357572
+          ],
+          "score": 0.7315162420272827,
+          "phrase": "reading_region"
+        }
+      ],
+      "elapsedMs": 32.38649999912013,
+      "bestProxyIoU": 0.9191935069405471,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          486,
+          383,
+          764,
+          474
+        ],
+        "recognition": {
+          "english": {
+            "raw": "A",
+            "digits": null,
+            "minimumCharacterScore": 0.13737627863883972,
+            "meanCharacterScore": 0.13737627863883972,
+            "forwardMs": 13.345200000912882
+          },
+          "server": {
+            "raw": "\u95e8",
+            "digits": null,
+            "minimumCharacterScore": 0.15794827044010162,
+            "meanCharacterScore": 0.15794827044010162,
+            "forwardMs": 53.43139999968116
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        580,
+        416,
+        770,
+        473
+      ],
+      "expectedDigits": "004046",
+      "boxes": [],
+      "elapsedMs": 334.5798999980616,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        580,
+        416,
+        770,
+        473
+      ],
+      "expectedDigits": "004046",
+      "boxes": [],
+      "elapsedMs": 31.525099999271333,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        610,
+        432,
+        743,
+        488
+      ],
+      "expectedDigits": "21594",
+      "boxes": [],
+      "elapsedMs": 242.2160000023723,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        610,
+        432,
+        743,
+        488
+      ],
+      "expectedDigits": "21594",
+      "boxes": [
+        {
+          "box": [
+            541.2790151742788,
+            423.7406334510216,
+            760.7773061899038,
+            508.789790226863
+          ],
+          "score": 0.3259212374687195,
+          "phrase": "reading_region"
+        }
+      ],
+      "elapsedMs": 31.82790000209934,
+      "bestProxyIoU": 0.39896841243219433,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          541,
+          423,
+          761,
+          509
+        ],
+        "recognition": {
+          "english": {
+            "raw": "221594",
+            "digits": "221594",
+            "minimumCharacterScore": 0.6523396968841553,
+            "meanCharacterScore": 0.9120581746101379,
+            "forwardMs": 13.138800000888295
+          },
+          "server": {
+            "raw": "3221594",
+            "digits": "3221594",
+            "minimumCharacterScore": 0.3292030394077301,
+            "meanCharacterScore": 0.8439817386014121,
+            "forwardMs": 54.05859999882523
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        465,
+        780,
+        747,
+        907
+      ],
+      "expectedDigits": null,
+      "boxes": [],
+      "elapsedMs": 258.2939999992959,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        465,
+        780,
+        747,
+        907
+      ],
+      "expectedDigits": null,
+      "boxes": [
+        {
+          "box": [
+            464.44979469592755,
+            773.8741058019492,
+            745.1962238458487,
+            901.6075700062972
+          ],
+          "score": 0.5087098479270935,
+          "phrase": "reading_region"
+        }
+      ],
+      "elapsedMs": 33.09520000038901,
+      "bestProxyIoU": 0.9062052797317209,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          464,
+          773,
+          746,
+          902
+        ],
+        "recognition": {
+          "english": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.997632622718811,
+            "meanCharacterScore": 0.9985134124755859,
+            "forwardMs": 13.310899998032255
+          },
+          "server": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.9699797630310059,
+            "meanCharacterScore": 0.9875728607177734,
+            "forwardMs": 54.243200000200886
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        224,
+        548,
+        814,
+        669
+      ],
+      "expectedDigits": "000880578",
+      "boxes": [],
+      "elapsedMs": 204.784199999267,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        224,
+        548,
+        814,
+        669
+      ],
+      "expectedDigits": "000880578",
+      "boxes": [],
+      "elapsedMs": 31.631000001652865,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "scope": "full_frame",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "74590",
+      "cropSha256": "c3da57fbc633a7560a357f772fbd126ab39426a20e15a88e2a884332173ec609",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.9951109290122986,
+            "meanCharacterScore": 0.9981391906738282,
+            "forwardMs": 12.935299997479888
+          },
+          "server": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.5977588295936584,
+            "meanCharacterScore": 0.8718731164932251,
+            "forwardMs": 52.65270000018063
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "scope": "full_frame",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": null,
+      "cropSha256": "d34a832120591074d39dd9ed687df3653b07ab276943f09d13a19409e95182c6",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "F",
+            "digits": null,
+            "minimumCharacterScore": 0.13175813853740692,
+            "meanCharacterScore": 0.13175813853740692,
+            "forwardMs": 13.283300002512988
+          },
+          "server": {
+            "raw": "\u95e8",
+            "digits": null,
+            "minimumCharacterScore": 0.21313144266605377,
+            "meanCharacterScore": 0.21313144266605377,
+            "forwardMs": 53.364900002634386
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "004046",
+      "cropSha256": "a275e7db1c00e6ce76df48a22f5177af8cae5ead33d01f9d10d8c469b1e4880b",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "004046",
+            "digits": "004046",
+            "minimumCharacterScore": 0.5900585651397705,
+            "meanCharacterScore": 0.8330611189206442,
+            "forwardMs": 13.033399998676032
+          },
+          "server": {
+            "raw": "004046",
+            "digits": "004046",
+            "minimumCharacterScore": 0.7646772265434265,
+            "meanCharacterScore": 0.9492034514745077,
+            "forwardMs": 53.64729999928386
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "21594",
+      "cropSha256": "ef67645c2bc46d8fbdb8689dec4e0f45b95d77539630d29494f5fcba2d9c3916",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "21594",
+            "digits": "21594",
+            "minimumCharacterScore": 0.9980098605155945,
+            "meanCharacterScore": 0.9991522431373596,
+            "forwardMs": 13.550100000429666
+          },
+          "server": {
+            "raw": "21594",
+            "digits": "21594",
+            "minimumCharacterScore": 0.9689104557037354,
+            "meanCharacterScore": 0.9766300082206726,
+            "forwardMs": 53.64769999869168
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": null,
+      "cropSha256": "984dfeb153c21d2b1930a058f6986077d0569b54fcb8065c6f2afa64e1fe9c06",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.9204443693161011,
+            "meanCharacterScore": 0.9773115873336792,
+            "forwardMs": 13.250500000140164
+          },
+          "server": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.8786580562591553,
+            "meanCharacterScore": 0.9470785856246948,
+            "forwardMs": 53.488499997911276
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "scope": "full_frame",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "000880578",
+      "cropSha256": "0c20ce83fb692963312f29256ae10bda14c7546abc9d4cc332307d715716258f",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "000880518",
+            "digits": "000880518",
+            "minimumCharacterScore": 0.7409048676490784,
+            "meanCharacterScore": 0.9703493979242113,
+            "forwardMs": 14.028500001586508
+          },
+          "server": {
+            "raw": "00088058",
+            "digits": "00088058",
+            "minimumCharacterScore": 0.9591178894042969,
+            "meanCharacterScore": 0.9813720211386681,
+            "forwardMs": 52.73329999909038
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "scope": "oracle_meter_body",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        535,
+        300,
+        746,
+        400
+      ],
+      "expectedDigits": "74590",
+      "boxes": [
+        {
+          "box": [
+            520.3743591308594,
+            307.1961212158203,
+            734.97900390625,
+            428.72308349609375
+          ],
+          "score": 0.49350908398628235,
+          "phrase": "lcd screen"
+        }
+      ],
+      "elapsedMs": 152.36209999784478,
+      "bestProxyIoU": 0.6484243296372865,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          520,
+          307,
+          735,
+          429
+        ],
+        "recognition": {
+          "english": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.974369466304779,
+            "meanCharacterScore": 0.9841820001602173,
+            "forwardMs": 13.235000002168817
+          },
+          "server": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.8010175228118896,
+            "meanCharacterScore": 0.9117374539375305,
+            "forwardMs": 53.512599999521626
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "scope": "oracle_meter_body",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        535,
+        300,
+        746,
+        400
+      ],
+      "expectedDigits": "74590",
+      "boxes": [
+        {
+          "box": [
+            521.3018486316388,
+            310.4676458010307,
+            738.7562376169058,
+            422.79704995338733
+          ],
+          "score": 0.5298703908920288,
+          "phrase": "reading_region"
+        }
+      ],
+      "elapsedMs": 31.9180000005872,
+      "bestProxyIoU": 0.668631625229087,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          521,
+          310,
+          739,
+          423
+        ],
+        "recognition": {
+          "english": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.851484477519989,
+            "meanCharacterScore": 0.9616975069046021,
+            "forwardMs": 13.204300001234515
+          },
+          "server": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.5003393888473511,
+            "meanCharacterScore": 0.8345602631568909,
+            "forwardMs": 53.50700000053621
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "scope": "oracle_meter_body",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        485,
+        385,
+        747,
+        473
+      ],
+      "expectedDigits": null,
+      "boxes": [
+        {
+          "box": [
+            480.31944274902344,
+            378.7789306640625,
+            753.3052062988281,
+            470.65252685546875
+          ],
+          "score": 0.4889814555644989,
+          "phrase": "lcd screen"
+        }
+      ],
+      "elapsedMs": 179.61339999965276,
+      "bestProxyIoU": 0.8733515607216783,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          480,
+          378,
+          754,
+          471
+        ],
+        "recognition": {
+          "english": {
+            "raw": "R",
+            "digits": null,
+            "minimumCharacterScore": 0.18294526636600494,
+            "meanCharacterScore": 0.18294526636600494,
+            "forwardMs": 13.211699999374105
+          },
+          "server": {
+            "raw": "\u95e8",
+            "digits": null,
+            "minimumCharacterScore": 0.26720115542411804,
+            "meanCharacterScore": 0.26720115542411804,
+            "forwardMs": 53.817699998035096
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "scope": "oracle_meter_body",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        485,
+        385,
+        747,
+        473
+      ],
+      "expectedDigits": null,
+      "boxes": [],
+      "elapsedMs": 32.11799999917275,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        580,
+        416,
+        770,
+        473
+      ],
+      "expectedDigits": "004046",
+      "boxes": [],
+      "elapsedMs": 236.6803999975673,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        580,
+        416,
+        770,
+        473
+      ],
+      "expectedDigits": "004046",
+      "boxes": [],
+      "elapsedMs": 32.58479999931296,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        610,
+        432,
+        743,
+        488
+      ],
+      "expectedDigits": "21594",
+      "boxes": [],
+      "elapsedMs": 194.0273000000161,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        610,
+        432,
+        743,
+        488
+      ],
+      "expectedDigits": "21594",
+      "boxes": [],
+      "elapsedMs": 32.64390000185813,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        465,
+        780,
+        747,
+        907
+      ],
+      "expectedDigits": null,
+      "boxes": [
+        {
+          "box": [
+            295.24219512939453,
+            599.6063385009766,
+            855.4973754882812,
+            1232.3450927734375
+          ],
+          "score": 0.46102175116539,
+          "phrase": "lcd screen"
+        }
+      ],
+      "elapsedMs": 180.65220000062254,
+      "bestProxyIoU": 0.10102817625343492,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          295,
+          599,
+          856,
+          1233
+        ],
+        "recognition": {
+          "english": {
+            "raw": "",
+            "digits": null,
+            "minimumCharacterScore": 0.406491756439209,
+            "meanCharacterScore": 0.406491756439209,
+            "forwardMs": 13.110899999446701
+          },
+          "server": {
+            "raw": "",
+            "digits": null,
+            "minimumCharacterScore": 0,
+            "meanCharacterScore": 0,
+            "forwardMs": 53.78019999989192
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        465,
+        780,
+        747,
+        907
+      ],
+      "expectedDigits": null,
+      "boxes": [
+        {
+          "box": [
+            466.8052001733046,
+            782.3644670339731,
+            745.5393805503845,
+            885.8150272369385
+          ],
+          "score": 0.7929581999778748,
+          "phrase": "reading_region"
+        }
+      ],
+      "elapsedMs": 32.29780000037863,
+      "bestProxyIoU": 0.8051378541275284,
+      "localizedAtIoU50": true,
+      "uniqueCorrectSelection": true,
+      "numeric": {
+        "reason": "one_predicted_region_not_register_verified",
+        "bounds": [
+          466,
+          782,
+          746,
+          886
+        ],
+        "recognition": {
+          "english": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.9975554347038269,
+            "meanCharacterScore": 0.9979902505874634,
+            "forwardMs": 13.395199999649776
+          },
+          "server": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.9927334785461426,
+            "meanCharacterScore": 0.9948565721511841,
+            "forwardMs": 68.44129999808501
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "grounding",
+      "expectedNumericRegion": [
+        224,
+        548,
+        814,
+        669
+      ],
+      "expectedDigits": "000880578",
+      "boxes": [],
+      "elapsedMs": 152.4779999999737,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "previous_yolo",
+      "expectedNumericRegion": [
+        224,
+        548,
+        814,
+        669
+      ],
+      "expectedDigits": "000880578",
+      "boxes": [],
+      "elapsedMs": 32.06119999958901,
+      "bestProxyIoU": 0,
+      "localizedAtIoU50": false,
+      "uniqueCorrectSelection": false,
+      "numeric": {
+        "reason": "missing_or_multiple_regions",
+        "recognition": {}
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "scope": "oracle_meter_body",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "74590",
+      "cropSha256": "c3da57fbc633a7560a357f772fbd126ab39426a20e15a88e2a884332173ec609",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.9951109290122986,
+            "meanCharacterScore": 0.9981391906738282,
+            "forwardMs": 13.122299998940434
+          },
+          "server": {
+            "raw": "74590",
+            "digits": "74590",
+            "minimumCharacterScore": 0.5977588295936584,
+            "meanCharacterScore": 0.8718731164932251,
+            "forwardMs": 54.19819999951869
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "scope": "oracle_meter_body",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": null,
+      "cropSha256": "d34a832120591074d39dd9ed687df3653b07ab276943f09d13a19409e95182c6",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "F",
+            "digits": null,
+            "minimumCharacterScore": 0.13175813853740692,
+            "meanCharacterScore": 0.13175813853740692,
+            "forwardMs": 13.475199997628806
+          },
+          "server": {
+            "raw": "\u95e8",
+            "digits": null,
+            "minimumCharacterScore": 0.21313144266605377,
+            "meanCharacterScore": 0.21313144266605377,
+            "forwardMs": 53.686800001742085
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "004046",
+      "cropSha256": "a275e7db1c00e6ce76df48a22f5177af8cae5ead33d01f9d10d8c469b1e4880b",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "004046",
+            "digits": "004046",
+            "minimumCharacterScore": 0.5900585651397705,
+            "meanCharacterScore": 0.8330611189206442,
+            "forwardMs": 13.221299999713665
+          },
+          "server": {
+            "raw": "004046",
+            "digits": "004046",
+            "minimumCharacterScore": 0.7646772265434265,
+            "meanCharacterScore": 0.9492034514745077,
+            "forwardMs": 54.21629999909783
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "21594",
+      "cropSha256": "ef67645c2bc46d8fbdb8689dec4e0f45b95d77539630d29494f5fcba2d9c3916",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "21594",
+            "digits": "21594",
+            "minimumCharacterScore": 0.9980098605155945,
+            "meanCharacterScore": 0.9991522431373596,
+            "forwardMs": 13.306200002261903
+          },
+          "server": {
+            "raw": "21594",
+            "digits": "21594",
+            "minimumCharacterScore": 0.9689104557037354,
+            "meanCharacterScore": 0.9766300082206726,
+            "forwardMs": 53.84259999846108
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": null,
+      "cropSha256": "984dfeb153c21d2b1930a058f6986077d0569b54fcb8065c6f2afa64e1fe9c06",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.9204443693161011,
+            "meanCharacterScore": 0.9773115873336792,
+            "forwardMs": 13.134299999364885
+          },
+          "server": {
+            "raw": "88888",
+            "digits": "88888",
+            "minimumCharacterScore": 0.8786580562591553,
+            "meanCharacterScore": 0.9470785856246948,
+            "forwardMs": 54.35280000165221
+          }
+        }
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "method": "oracle_numeric_crop",
+      "expectedDigits": "000880578",
+      "cropSha256": "0c20ce83fb692963312f29256ae10bda14c7546abc9d4cc332307d715716258f",
+      "numeric": {
+        "recognition": {
+          "english": {
+            "raw": "000880518",
+            "digits": "000880518",
+            "minimumCharacterScore": 0.7409048676490784,
+            "meanCharacterScore": 0.9703493979242113,
+            "forwardMs": 13.492699999915203
+          },
+          "server": {
+            "raw": "00088058",
+            "digits": "00088058",
+            "minimumCharacterScore": 0.9591178894042969,
+            "meanCharacterScore": 0.9813720211386681,
+            "forwardMs": 53.85470000328496
+          }
+        }
+      }
+    }
+  ],
+  "runtimeEnabled": false,
+  "independentAcceptance": false,
+  "limitations": [
+    "Oracle-body inputs are not production crops",
+    "Numeric proxies differ from whole LCD screen boxes",
+    "Readability, register and precision remain unverified; numeric outputs are not API proposals"
+  ],
+  "rawReportSha256": "dccdaca937977f0577125e985235112abf66fa434bcf8bdf12ffad4a867333d3",
+  "sourceDomainAnalysis": {
+    "KaggleReadingBoxes": 314,
+    "relativeAreaPercentiles": {
+      "p10": 0.01820954126958304,
+      "median": 0.04478169644065444,
+      "p90": 0.09009524888955082
+    },
+    "heightAt416Percentiles": {
+      "p10": 24.17763053428437,
+      "median": 38.6031676530838,
+      "p90": 53.70675773717738
+    },
+    "Commons": [
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "relativeNumericRegionArea": 0.017153355879292405,
+        "heightAt416": 32.5
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "relativeNumericRegionArea": 0.018743496357960458,
+        "heightAt416": 28.6
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "relativeNumericRegionArea": 0.011221402519893899,
+        "heightAt416": 18.525
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "relativeNumericRegionArea": 0.005671296296296297,
+        "heightAt416": 18.2
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "relativeNumericRegionArea": 0.016391146748681897,
+        "heightAt416": 30.9502050380785
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "relativeNumericRegionArea": 0.043572998046875,
+        "heightAt416": 39.325
+      }
+    ]
+  },
+  "groundingProvenance": {
+    "repository": "IDEA-Research/grounding-dino-tiny",
+    "revision": "a2bb814dd30d776dcf7e30523b00659f4f141c71",
+    "license": "Apache-2.0",
+    "files": {
+      "README.md": {
+        "bytes": 2580,
+        "sha256": "cf46f74c7b6850f1d5cbe406028324d8798148726016d46a69a365b4a2d3e89f"
+      },
+      "config.json": {
+        "bytes": 1644,
+        "sha256": "eec82c5ab66e16df12a9a212e68ac011779927c2536cf9078658e35d85f0c67a"
+      },
+      "preprocessor_config.json": {
+        "bytes": 457,
+        "sha256": "8454179ba95e2ad22947835aad7b45862a601fc0055ab88bf1ee70892d3aea60"
+      },
+      "tokenizer.json": {
+        "bytes": 711396,
+        "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+      },
+      "tokenizer_config.json": {
+        "bytes": 1237,
+        "sha256": "d40ab645b68211910b9170d22433d43186a6ec8ee6fd10ba170524b25bf4fb56"
+      },
+      "special_tokens_map.json": {
+        "bytes": 125,
+        "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+      },
+      "added_tokens.json": {
+        "bytes": 82,
+        "sha256": "909e96cb32d92ce728a01bc99850cbba26196d74115c17ebeb019275412588f2"
+      },
+      "vocab.txt": {
+        "bytes": 231508,
+        "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+      },
+      "model.safetensors": {
+        "bytes": 689359096,
+        "sha256": "1a2412ef99bd74bcd3c2a246fa1e48581f8889a1300c9051974741314fc042f3"
+      }
+    }
+  },
+  "activationDecision": "REJECTED_no_readable_test_proxy_localization_gain_and_no_register_readability_validation",
+  "inputManifestSha256": {
+    "docs/datasets/meter/four-class-development-v2.json": "3592bc6d3d4e3ce7b05f01d06b7130aac8f01de01b9a24034b25e9b85c183197",
+    "docs/datasets/meter/lcd-evaluation.json": "0718769b7d431d4cfdfb6ff3c458d1019ab17f38c942b82839e82d3404ff3a59",
+    "docs/datasets/meter/public-sources.json": "6ab39cdbc9c4b33f41636c6b28f97f28ea8c608448eab8e37a65674a8b883e52"
+  }
+}

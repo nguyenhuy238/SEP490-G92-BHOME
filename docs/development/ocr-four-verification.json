@@ -1,0 +1,206 @@
+{
+  "startingHead": "ab70009156b65b3bc95b77a6400cead9f12d9874",
+  "backendReleaseBuild": "PASS_0_warnings_0_errors",
+  "application": {
+    "passed": 325,
+    "skipped": 0
+  },
+  "domain": {
+    "passed": 106,
+    "skipped": 0
+  },
+  "ocrIntegration": {
+    "passed": 125,
+    "skipped": 0
+  },
+  "postgresOnnxWorkflow": {
+    "passed": 7,
+    "skipped": 0,
+    "evidenceStorage": "in_memory_substitute_NOT_MinIO",
+    "serverStopped": true
+  },
+  "mobile": {
+    "suitesPassed": 56,
+    "testsPassed": 576,
+    "failed": 0
+  },
+  "typeScript": "PASS",
+  "eslint": "PASS",
+  "pythonToolingTests": {
+    "passed": 40
+  },
+  "datasetNodeTests": {
+    "passed": 29
+  },
+  "parity": {
+    "stage2NativeDotnet": {
+      "passed": true,
+      "rows": [
+        {
+          "file": "wm_clean_000013-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000014-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000016-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000017-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000072-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000080-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000082-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000111-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000112-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 8,
+          "dotnetDetections": 8
+        },
+        {
+          "file": "wm_clean_000113-legacy.png",
+          "inputMaxDelta": 0,
+          "nativeDetectionParity": true,
+          "nativeDetections": 7,
+          "dotnetDetections": 7
+        }
+      ]
+    },
+    "englishPythonDotnet": {
+      "passed": true,
+      "rows": [
+        {
+          "file": "wm_clean_000023-predicted_window.png",
+          "passed": true,
+          "meanDelta": 0,
+          "minimumDelta": 0
+        },
+        {
+          "file": "wm_clean_000177-predicted_window.png",
+          "passed": true,
+          "meanDelta": 0,
+          "minimumDelta": 0
+        },
+        {
+          "file": "wm_clean_000317-predicted_window.png",
+          "passed": true,
+          "meanDelta": 1.1920929e-07,
+          "minimumDelta": 0
+        },
+        {
+          "file": "wm_clean_000502-predicted_window.png",
+          "passed": true,
+          "meanDelta": 0,
+          "minimumDelta": 0
+        }
+      ]
+    },
+    "newDisplayDotnet": {
+      "passed": true,
+      "inputShape": [
+        1,
+        3,
+        416,
+        416
+      ],
+      "outputShape": [
+        1,
+        6,
+        3549
+      ],
+      "classes": [
+        "reading_region",
+        "serial_region"
+      ],
+      "rows": [
+        {
+          "id": "commons_136480278",
+          "inputMaxDelta": 0,
+          "outputMaxDelta": 0.0022735596,
+          "passed": true
+        },
+        {
+          "id": "commons_136480279",
+          "inputMaxDelta": 0,
+          "outputMaxDelta": 0.0010528564,
+          "passed": true
+        }
+      ],
+      "limitation": "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim."
+    }
+  },
+  "physicalCamera": "NOT_RUN_no_adb_device",
+  "realMinio": "NOT_RUN_no_listener_Docker_daemon; official Windows binary archive HTTP410",
+  "logSha256": {
+    "ocr-four-application.log": "8a5b62a1f851914d78e63f3ecfa161a5768f2f7bab42ba16ebf77255dc398332",
+    "ocr-four-build.log": "87b1e54e17d6b97c3655565f5165d3cec9109ebb5e253b747d41dd9ac8005804",
+    "ocr-four-category-baseline.log": "34c256cbff670f7d06ecc5f6e1b414a07f145eb18173e2489da96e822234acec",
+    "ocr-four-clip-install.log": "6ad9a69998167ef4634392b3341a72782a167d572fb227c562c6a784fafc3c4d",
+    "ocr-four-clip.log": "5f8df3bf5ed466839bb5ce7a76bb143f612982b2cf22f9631e0bb2efa98f04a9",
+    "ocr-four-crnn.log": "d495ea54496de945377477bd005891bd3e1ddb2e40e4ee2351434b69849371af",
+    "ocr-four-dataset-tests.log": "3bc53dbf4f16c079b33d32e268cea80dd978f7940e58441247b26fa9c627f25c",
+    "ocr-four-display.log": "cd1a22937df6da68072130846bffd6b1844f77e702b4dd2101deb91919271cd2",
+    "ocr-four-docker.log": "1e3e080a8bd0375c969b2e42357c1321cf865388686d893ff2e2a34bf86c022b",
+    "ocr-four-domain.log": "f2883ee07d3a7ba2ca6f5fd206ef4a2301a06c7810dde5e174f78ff84ebc177c",
+    "ocr-four-initial-build.log": "99a1c2693d9b51574a78395f8f55291e61c29103587633bc9abe4a715b89b62e",
+    "ocr-four-initial-mobile.log": "d3a34853c26c5982f774ce7b098124d583ba793d2dc8b3d061f34936ef03a32f",
+    "ocr-four-initial-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ocr-four-integration.log": "f35c7989cb807b40309fc80002c8745309743c9b17fb098b0130e215fcaf8ddf",
+    "ocr-four-lint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ocr-four-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ocr-four-mobile-final.log": "0713a26eb81b43e4c68ce3e2736630c32064edec869021eb72cb436e0ebae572",
+    "ocr-four-mobile.log": "f344bd6756e96785d3491f118ff146e00dd66f0ca662c3e8db2632515de873d0",
+    "ocr-four-npm-install.log": "cf25d6bccfa1a437bad89ad6eae0c6a37efe1123fecabf79c789a3a0f122bd42",
+    "ocr-four-postgres.log": "b6aaa75f6bd57446a6544cac7c646c5b883145f68f4fd391105d6954a77744ba",
+    "ocr-four-python-tests.log": "65cf2b5161ca8d3c74d4dfd3d6dccdb303051e7ac297d4df068aa28b2908d08e",
+    "ocr-four-screen.log": "5a1842cd730b3fcafff28303235690f13d7fef76f0bb1b337419825d29edff03",
+    "ocr-four-server-comparison.log": "5ed34e6332d85d13389b18e7af53eadcac7b7e3d705be871ce2b4447fa09c1e1",
+    "ocr-four-tool-build.log": "6ce2d2163613b37956c2421b1b73b3065af265a0d44e3761489533fd77c2627e",
+    "ocr-four-types-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ocr-four-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ocr-four-workflow.log": "a6c2e61bbb93d86cc8f227a4eb93288319901b0428dd2f1e1c9b07ad5bad691f"
+  },
+  "testTotalsAreNotAdditive": true
+}

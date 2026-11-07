@@ -53,7 +53,7 @@ public sealed class ContractServiceTests
             Repo.DepositTotalAsync(default, default).ReturnsForAnyArgs(c => Deposits.Where(d => d.ContractId == c.Arg<Guid>()).Sum(d => d.Amount));
             Repo.BankReferenceAsync(default!, default).ReturnsForAnyArgs(c => Deposits.SingleOrDefault(d => d.BankTransactionReference == c.Arg<string>()));
             Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(Room.Id, Today,
-                [new PolicyDto(Guid.NewGuid(), Room.LocationId, null, Room.Id, ChargeCategory.Rent, "RENT", "Rent",
+                [new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.Rent, "RENT", "Rent",
                     ChargingMethod.FixedPerRoomPerMonth, 3000000, Today.AddMonths(-1), null, 1)], []));
             Repo.MainForHoldingAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.HoldingContractId == c.Arg<Guid>()));
             Repo.OperationAsync(default, default, default!, default).ReturnsForAnyArgs(c => Operations.SingleOrDefault(o => o.ActorId == c.ArgAt<Guid>(0) && o.Key == c.ArgAt<Guid>(1) && o.Operation == c.Arg<string>()));
@@ -123,7 +123,7 @@ public sealed class ContractServiceTests
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-ONE", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
         var holding = r.Contracts.Single(); var locked = holding.AgreedPriceSnapshot; var lockedAt = holding.PriceLockedAt;
         r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today,
-            [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, null, r.Room.Id, ChargeCategory.Rent, "RENT", "Changed",
+            [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, r.Room.Id, ChargeCategory.Rent, "RENT", "Changed",
                 ChargingMethod.FixedPerRoomPerMonth, 9000000, Today, null, 2)], []));
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
         Assert.Equal("VerifiedDeposit", holding.PriceLockTrigger);

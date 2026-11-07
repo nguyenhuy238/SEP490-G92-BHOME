@@ -1,0 +1,538 @@
+{
+  "scope": "new_provisional_wheel_components_not_billing_or_independent_acceptance",
+  "runtimeEnabled": false,
+  "manifestSha256": "019e39d961bfe898f5b5fb2e5fc0b66d2638129ab1a81360f8e17032cf46a56f",
+  "rows": [
+    {
+      "id": "commons_11930077",
+      "category": "electricity_mechanical",
+      "expectedDigits": "12615",
+      "uncertainPositions": [],
+      "nativeRegions": [
+        {
+          "box": [
+            655.0195922851562,
+            163.0196075439453,
+            813.9804077148438,
+            232.9803924560547
+          ],
+          "score": 0.7975812554359436,
+          "recognition": {
+            "raw": "151",
+            "digits": "151",
+            "minimumCharacterScore": 0.9921261072158813,
+            "meanCharacterScore": 0.9967270692189535,
+            "forwardMs": 12.609299999894574
+          }
+        },
+        {
+          "box": [
+            638.833984375,
+            427.833984375,
+            772.166015625,
+            475.166015625
+          ],
+          "score": 0.9784902334213257,
+          "recognition": {
+            "raw": "10.30",
+            "digits": "1030",
+            "minimumCharacterScore": 0.9425562024116516,
+            "meanCharacterScore": 0.9882639288902283,
+            "forwardMs": 12.849200000346173
+          }
+        },
+        {
+          "box": [
+            379.625,
+            428.625,
+            470.375,
+            475.375
+          ],
+          "score": 0.9605066776275635,
+          "recognition": {
+            "raw": "220",
+            "digits": "220",
+            "minimumCharacterScore": 0.9996746778488159,
+            "meanCharacterScore": 0.9998282988866171,
+            "forwardMs": 13.204099999711616
+          }
+        },
+        {
+          "box": [
+            584.41845703125,
+            175.41847229003906,
+            614.58154296875,
+            221.58152770996094
+          ],
+          "score": 0.8662052154541016,
+          "recognition": {
+            "raw": "6",
+            "digits": "6",
+            "minimumCharacterScore": 0.9998055100440979,
+            "meanCharacterScore": 0.9998055100440979,
+            "forwardMs": 12.943899997480912
+          }
+        },
+        {
+          "box": [
+            732.1761474609375,
+            617.1761474609375,
+            764.8238525390625,
+            659.8238525390625
+          ],
+          "score": 0.9367597699165344,
+          "recognition": {
+            "raw": "2",
+            "digits": "2",
+            "minimumCharacterScore": 0.9997496008872986,
+            "meanCharacterScore": 0.9997496008872986,
+            "forwardMs": 12.890199999674223
+          }
+        }
+      ],
+      "groupedRows": [
+        {
+          "raw": "6151",
+          "box": [
+            584.41845703125,
+            163.0196075439453,
+            813.9804077148438,
+            232.9803924560547
+          ],
+          "observedRegions": 2,
+          "minimumCharacterScore": 0.9921261072158813
+        },
+        {
+          "raw": "220",
+          "box": [
+            379.625,
+            428.625,
+            470.375,
+            475.375
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.9996746778488159
+        },
+        {
+          "raw": "2",
+          "box": [
+            732.1761474609375,
+            617.1761474609375,
+            764.8238525390625,
+            659.8238525390625
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.9997496008872986
+        }
+      ],
+      "largestNative": "151",
+      "largestObservedRow": "6151",
+      "oracle": {
+        "english": {
+          "raw": "1261 51",
+          "digits": null,
+          "minimumCharacterScore": 0.6706451773643494,
+          "meanCharacterScore": 0.9465552994183132,
+          "forwardMs": 12.913700000353856
+        },
+        "server": {
+          "raw": "126151",
+          "digits": "126151",
+          "minimumCharacterScore": 0.32787835597991943,
+          "meanCharacterScore": 0.8379967411359152,
+          "forwardMs": 55.225500000233296
+        },
+        "parseq": {
+          "raw": "126151",
+          "digits": "126151",
+          "minimumCharacterScore": 0.7366599440574646,
+          "meanCharacterScore": 0.9466302054268974,
+          "forwardMs": 268.23159999912605
+        }
+      },
+      "pipelineMs": 2036.6792999993777
+    },
+    {
+      "id": "commons_334307",
+      "category": "electricity_mechanical",
+      "expectedDigits": null,
+      "uncertainPositions": [
+        6
+      ],
+      "nativeRegions": [
+        {
+          "box": [
+            201.84812927246094,
+            5.405826568603516,
+            265.7261962890625,
+            100.44883728027344
+          ],
+          "score": 0.764087438583374,
+          "recognition": {
+            "raw": "6",
+            "digits": "6",
+            "minimumCharacterScore": 0.9819137454032898,
+            "meanCharacterScore": 0.9819137454032898,
+            "forwardMs": 12.974700002814643
+          }
+        },
+        {
+          "box": [
+            267.9554443359375,
+            13.622077941894531,
+            314.3677978515625,
+            92.90479278564453
+          ],
+          "score": 0.7422924041748047,
+          "recognition": {
+            "raw": "3",
+            "digits": "3",
+            "minimumCharacterScore": 0.9998495578765869,
+            "meanCharacterScore": 0.9998495578765869,
+            "forwardMs": 12.452099999791244
+          }
+        },
+        {
+          "box": [
+            320.02996826171875,
+            21.292247772216797,
+            376.82940673828125,
+            100.25909423828125
+          ],
+          "score": 0.8513939380645752,
+          "recognition": {
+            "raw": "4",
+            "digits": "4",
+            "minimumCharacterScore": 0.9993002414703369,
+            "meanCharacterScore": 0.9993002414703369,
+            "forwardMs": 12.75280000118073
+          }
+        },
+        {
+          "box": [
+            387.6827697753906,
+            13.13278579711914,
+            433.1005554199219,
+            87.70054626464844
+          ],
+          "score": 0.8783363103866577,
+          "recognition": {
+            "raw": "7",
+            "digits": "7",
+            "minimumCharacterScore": 0.6072101593017578,
+            "meanCharacterScore": 0.6072101593017578,
+            "forwardMs": 12.64449999871431
+          }
+        },
+        {
+          "box": [
+            24.95614242553711,
+            19.14202308654785,
+            69.22709655761719,
+            84.31147766113281
+          ],
+          "score": 0.8090319037437439,
+          "recognition": {
+            "raw": "0",
+            "digits": "0",
+            "minimumCharacterScore": 0.8948090672492981,
+            "meanCharacterScore": 0.8948090672492981,
+            "forwardMs": 12.816599999496248
+          }
+        },
+        {
+          "box": [
+            142.0448760986328,
+            26.361560821533203,
+            187.6800994873047,
+            90.97177124023438
+          ],
+          "score": 0.867648720741272,
+          "recognition": {
+            "raw": "9",
+            "digits": "9",
+            "minimumCharacterScore": 0.9959944486618042,
+            "meanCharacterScore": 0.9959944486618042,
+            "forwardMs": 12.61289999820292
+          }
+        }
+      ],
+      "groupedRows": [
+        {
+          "raw": "096347",
+          "box": [
+            24.95614242553711,
+            5.405826568603516,
+            433.1005554199219,
+            100.44883728027344
+          ],
+          "observedRegions": 6,
+          "minimumCharacterScore": 0.6072101593017578
+        }
+      ],
+      "largestNative": "6",
+      "largestObservedRow": "096347",
+      "oracle": {
+        "english": {
+          "raw": "019634",
+          "digits": "019634",
+          "minimumCharacterScore": 0.7357528805732727,
+          "meanCharacterScore": 0.9219847718874613,
+          "forwardMs": 13.104999998176936
+        },
+        "server": {
+          "raw": "0196347",
+          "digits": "0196347",
+          "minimumCharacterScore": 0.8206008076667786,
+          "meanCharacterScore": 0.9341322353907994,
+          "forwardMs": 54.19850000180304
+        },
+        "parseq": {
+          "raw": "0198347",
+          "digits": "0198347",
+          "minimumCharacterScore": 0.5314196348190308,
+          "meanCharacterScore": 0.8854408264160156,
+          "forwardMs": 23.638899998331908
+        }
+      },
+      "pipelineMs": 303.77450000014505
+    },
+    {
+      "id": "commons_38382735",
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "uncertainPositions": [
+        7
+      ],
+      "nativeRegions": [
+        {
+          "box": [
+            160.38174438476562,
+            209.5269317626953,
+            346.1447448730469,
+            266.1474609375
+          ],
+          "score": 0.9391953349113464,
+          "recognition": {
+            "raw": "100000064",
+            "digits": "100000064",
+            "minimumCharacterScore": 0.637998104095459,
+            "meanCharacterScore": 0.9255542423990037,
+            "forwardMs": 12.679700001172023
+          }
+        },
+        {
+          "box": [
+            156.859375,
+            139.7625732421875,
+            202.36651611328125,
+            168.38070678710938
+          ],
+          "score": 0.9535564184188843,
+          "recognition": {
+            "raw": "2010",
+            "digits": "2010",
+            "minimumCharacterScore": 0.9992449283599854,
+            "meanCharacterScore": 0.999649167060852,
+            "forwardMs": 12.684500001341803
+          }
+        },
+        {
+          "box": [
+            146.80020141601562,
+            110.88999938964844,
+            196.31411743164062,
+            137.9833526611328
+          ],
+          "score": 0.9485056400299072,
+          "recognition": {
+            "raw": "335.08",
+            "digits": "33508",
+            "minimumCharacterScore": 0.8508945107460022,
+            "meanCharacterScore": 0.9729350606600443,
+            "forwardMs": 12.563799999043113
+          }
+        },
+        {
+          "box": [
+            286.3584899902344,
+            110.33930206298828,
+            305.4856872558594,
+            130.22760009765625
+          ],
+          "score": 0.8754023313522339,
+          "recognition": {
+            "raw": "9",
+            "digits": "9",
+            "minimumCharacterScore": 0.996641993522644,
+            "meanCharacterScore": 0.996641993522644,
+            "forwardMs": 12.516699996922398
+          }
+        },
+        {
+          "box": [
+            300.16387939453125,
+            185.34567260742188,
+            311.83612060546875,
+            201.24520874023438
+          ],
+          "score": 0.8746018409729004,
+          "recognition": {
+            "raw": "6",
+            "digits": "6",
+            "minimumCharacterScore": 0.9999701976776123,
+            "meanCharacterScore": 0.9999701976776123,
+            "forwardMs": 13.538999999582302
+          }
+        },
+        {
+          "box": [
+            328.01788330078125,
+            188.2678680419922,
+            340.98211669921875,
+            203.43666076660156
+          ],
+          "score": 0.907315194606781,
+          "recognition": {
+            "raw": "5",
+            "digits": "5",
+            "minimumCharacterScore": 0.9999140501022339,
+            "meanCharacterScore": 0.9999140501022339,
+            "forwardMs": 12.609699999302393
+          }
+        },
+        {
+          "box": [
+            366.0753479003906,
+            152.5071563720703,
+            373.9246520996094,
+            163.5155487060547
+          ],
+          "score": 0.6798402070999146,
+          "recognition": {
+            "raw": "3",
+            "digits": "3",
+            "minimumCharacterScore": 0.9993807077407837,
+            "meanCharacterScore": 0.9993807077407837,
+            "forwardMs": 12.725999997201143
+          }
+        },
+        {
+          "box": [
+            196.3125,
+            167.0625,
+            204.6875,
+            174.52841186523438
+          ],
+          "score": 0.6645952463150024,
+          "recognition": {
+            "raw": "3",
+            "digits": "3",
+            "minimumCharacterScore": 0.9934083223342896,
+            "meanCharacterScore": 0.9934083223342896,
+            "forwardMs": 12.615700001333607
+          }
+        }
+      ],
+      "groupedRows": [
+        {
+          "raw": "100000064",
+          "box": [
+            160.38174438476562,
+            209.5269317626953,
+            346.1447448730469,
+            266.1474609375
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.637998104095459
+        },
+        {
+          "raw": "2010",
+          "box": [
+            156.859375,
+            139.7625732421875,
+            202.36651611328125,
+            168.38070678710938
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.9992449283599854
+        },
+        {
+          "raw": "9",
+          "box": [
+            286.3584899902344,
+            110.33930206298828,
+            305.4856872558594,
+            130.22760009765625
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.996641993522644
+        },
+        {
+          "raw": "65",
+          "box": [
+            300.16387939453125,
+            185.34567260742188,
+            340.98211669921875,
+            203.43666076660156
+          ],
+          "observedRegions": 2,
+          "minimumCharacterScore": 0.9999140501022339
+        },
+        {
+          "raw": "3",
+          "box": [
+            366.0753479003906,
+            152.5071563720703,
+            373.9246520996094,
+            163.5155487060547
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.9993807077407837
+        },
+        {
+          "raw": "3",
+          "box": [
+            196.3125,
+            167.0625,
+            204.6875,
+            174.52841186523438
+          ],
+          "observedRegions": 1,
+          "minimumCharacterScore": 0.9934083223342896
+        }
+      ],
+      "largestNative": "100000064",
+      "largestObservedRow": "100000064",
+      "oracle": {
+        "english": {
+          "raw": "100000064",
+          "digits": "100000064",
+          "minimumCharacterScore": 0.7441788911819458,
+          "meanCharacterScore": 0.8860631055302091,
+          "forwardMs": 12.889400000858586
+        },
+        "server": {
+          "raw": "00000062",
+          "digits": "00000062",
+          "minimumCharacterScore": 0.5089474320411682,
+          "meanCharacterScore": 0.8703097552061081,
+          "forwardMs": 53.30160000085016
+        },
+        "parseq": {
+          "raw": "00000064",
+          "digits": "00000064",
+          "minimumCharacterScore": 0.8911592960357666,
+          "meanCharacterScore": 0.9835150705443488,
+          "forwardMs": 34.77070000008098
+        }
+      },
+      "pipelineMs": 517.0281999999133
+    }
+  ],
+  "limitation": "Text-row assembly cannot establish complete wheel coverage, category, register or rolling digit correctness",
+  "rawReportSha256": "9e0cfe661efa16466709058248c7b96977078129293c3be0e6831752e3e14bae",
+  "previousAttemptSha256": "40b1b17e999e22d51fde91153c55c1faad50aa5017da9c9d58a6c4b2961a67e0",
+  "activationDecision": "REJECTED",
+  "reason": "Fresh clear-wheel provisional sequence was not recovered; grouping returned incomplete rows; rolling-digit labels remain unresolved."
+}

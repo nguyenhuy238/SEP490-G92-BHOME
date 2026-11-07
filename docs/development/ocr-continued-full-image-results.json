@@ -1,0 +1,452 @@
+{
+  "scope": "exploratory_provisional_full_image_to_numeric_not_full_BHOME_OCR",
+  "activationDecision": "REJECTED",
+  "runtimeEnabled": false,
+  "summary": {
+    "yolo416": {
+      "inputs": 5,
+      "positives": 2,
+      "exact": 0,
+      "incorrectPositiveNumeric": 0,
+      "invalidControlNumeric": 0,
+      "fallback": 5,
+      "p95FullImagePipelineMs": 55.426879998412915
+    },
+    "native_text": {
+      "inputs": 5,
+      "positives": 2,
+      "exact": 1,
+      "incorrectPositiveNumeric": 1,
+      "invalidControlNumeric": 1,
+      "fallback": 2,
+      "p95FullImagePipelineMs": 2049.381739999808
+    },
+    "native_text_row_margin": {
+      "inputs": 5,
+      "positives": 2,
+      "exact": 2,
+      "incorrectPositiveNumeric": 0,
+      "invalidControlNumeric": 1,
+      "fallback": 2,
+      "p95FullImagePipelineMs": 2108.1129200007126
+    }
+  },
+  "rows": [
+    {
+      "id": "commons_105770219",
+      "method": "yolo416",
+      "positive": true,
+      "expectedDigits": "16254",
+      "category": "electricity_digital",
+      "expectedState": "readable_consumption",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "class": 0,
+        "score": 0.34384870529174805,
+        "box": [
+          510.95226485912616,
+          488.25702777275677,
+          766.6929346231315,
+          594.5738624426035
+        ]
+      },
+      "raw": "R",
+      "digits": null,
+      "minimumCharacterScore": 0.15891899168491364,
+      "meanCharacterScore": 0.15891899168491364,
+      "forwardMs": 14.217300002201227,
+      "fullImagePipelineMs": 57.67369999739458
+    },
+    {
+      "id": "commons_105770219",
+      "method": "native_text",
+      "positive": true,
+      "expectedDigits": "16254",
+      "category": "electricity_digital",
+      "expectedState": "readable_consumption",
+      "exact": true,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": false,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          600.159423828125,
+          507.748779296875,
+          725.147216796875,
+          555.564208984375
+        ],
+        "score": 0.9075860381126404,
+        "recognition": {
+          "raw": "16254",
+          "digits": "16254",
+          "minimumCharacterScore": 0.8283141851425171,
+          "meanCharacterScore": 0.9486059784889221,
+          "forwardMs": 12.02220000050147
+        }
+      },
+      "raw": "16254",
+      "digits": "16254",
+      "minimumCharacterScore": 0.8283141851425171,
+      "meanCharacterScore": 0.9486059784889221,
+      "forwardMs": 12.75299999906565,
+      "fullImagePipelineMs": 1541.8306999999913
+    },
+    {
+      "id": "commons_105770219",
+      "method": "native_text_row_margin",
+      "positive": true,
+      "expectedDigits": "16254",
+      "category": "electricity_digital",
+      "expectedState": "readable_consumption",
+      "exact": true,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": false,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          600.159423828125,
+          507.748779296875,
+          725.147216796875,
+          555.564208984375
+        ],
+        "score": 0.9075860381126404,
+        "recognition": {
+          "raw": "16254",
+          "digits": "16254",
+          "minimumCharacterScore": 0.8283141851425171,
+          "meanCharacterScore": 0.9486059784889221,
+          "forwardMs": 13.366400002269074
+        }
+      },
+      "raw": "16254",
+      "digits": "16254",
+      "minimumCharacterScore": 0.7109131813049316,
+      "meanCharacterScore": 0.8919748783111572,
+      "forwardMs": 13.531799999327632,
+      "fullImagePipelineMs": 1658.982400000241
+    },
+    {
+      "id": "commons_195597533",
+      "method": "yolo416",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "not_meter",
+      "expectedState": "not_meter",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": null,
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 46.43960000248626
+    },
+    {
+      "id": "commons_195597533",
+      "method": "native_text",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "not_meter",
+      "expectedState": "not_meter",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": null,
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 1438.5597000000416
+    },
+    {
+      "id": "commons_195597533",
+      "method": "native_text_row_margin",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "not_meter",
+      "expectedState": "not_meter",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": null,
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 1319.7947000007844
+    },
+    {
+      "id": "commons_54903199",
+      "method": "yolo416",
+      "positive": true,
+      "expectedDigits": "000501",
+      "category": "electricity_digital",
+      "expectedState": "readable_consumption",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "class": 0,
+        "score": 0.22370955348014832,
+        "box": [
+          340.0798169649564,
+          162.7358423792399,
+          730.4851455688477,
+          304.721674657785
+        ]
+      },
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 40.04059999715537
+    },
+    {
+      "id": "commons_54903199",
+      "method": "native_text",
+      "positive": true,
+      "expectedDigits": "000501",
+      "category": "electricity_digital",
+      "expectedState": "readable_consumption",
+      "exact": false,
+      "incorrectPositiveNumeric": true,
+      "invalidControlNumeric": false,
+      "fallback": false,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          500.1932678222656,
+          169.88558959960938,
+          678.8067626953125,
+          242.10238647460938
+        ],
+        "score": 0.9712691307067871,
+        "recognition": {
+          "raw": "00050",
+          "digits": "00050",
+          "minimumCharacterScore": 0.7573839426040649,
+          "meanCharacterScore": 0.9435527920722961,
+          "forwardMs": 12.663299999985611
+        }
+      },
+      "raw": "00050",
+      "digits": "00050",
+      "minimumCharacterScore": 0.7573839426040649,
+      "meanCharacterScore": 0.9435527920722961,
+      "forwardMs": 12.587900000653462,
+      "fullImagePipelineMs": 1975.240699997812
+    },
+    {
+      "id": "commons_54903199",
+      "method": "native_text_row_margin",
+      "positive": true,
+      "expectedDigits": "000501",
+      "category": "electricity_digital",
+      "expectedState": "readable_consumption",
+      "exact": true,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": false,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          500.1932678222656,
+          169.88558959960938,
+          678.8067626953125,
+          242.10238647460938
+        ],
+        "score": 0.9712691307067871,
+        "recognition": {
+          "raw": "00050",
+          "digits": "00050",
+          "minimumCharacterScore": 0.7573839426040649,
+          "meanCharacterScore": 0.9435527920722961,
+          "forwardMs": 12.65129999956116
+        }
+      },
+      "raw": "000501",
+      "digits": "000501",
+      "minimumCharacterScore": 0.5874859094619751,
+      "meanCharacterScore": 0.9010243813196818,
+      "forwardMs": 12.68789999812725,
+      "fullImagePipelineMs": 1976.340600002004
+    },
+    {
+      "id": "commons_33635608",
+      "method": "yolo416",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "electricity_digital",
+      "expectedState": "blurred_or_obscured",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": null,
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 41.698999997606734
+    },
+    {
+      "id": "commons_33635608",
+      "method": "native_text",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "electricity_digital",
+      "expectedState": "blurred_or_obscured",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          282.7085876464844,
+          573.36767578125,
+          316.6095886230469,
+          582.63232421875
+        ],
+        "score": 0.5925212502479553,
+        "recognition": {
+          "raw": "2.791",
+          "digits": "2791",
+          "minimumCharacterScore": 0.512513279914856,
+          "meanCharacterScore": 0.8097976565361023,
+          "forwardMs": 13.054099999862956
+        }
+      },
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 833.5408999992069
+    },
+    {
+      "id": "commons_33635608",
+      "method": "native_text_row_margin",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "electricity_digital",
+      "expectedState": "blurred_or_obscured",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          282.7085876464844,
+          573.36767578125,
+          316.6095886230469,
+          582.63232421875
+        ],
+        "score": 0.5925212502479553,
+        "recognition": {
+          "raw": "2.791",
+          "digits": "2791",
+          "minimumCharacterScore": 0.512513279914856,
+          "meanCharacterScore": 0.8097976565361023,
+          "forwardMs": 12.992900003155228
+        }
+      },
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 821.0195999999996
+    },
+    {
+      "id": "commons_151445788",
+      "method": "yolo416",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "not_meter",
+      "expectedState": "status_only_non_consumption_counter",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": false,
+      "fallback": true,
+      "applicationProposalEmitted": false,
+      "selected": null,
+      "raw": "",
+      "digits": null,
+      "fullImagePipelineMs": 41.838700002699625
+    },
+    {
+      "id": "commons_151445788",
+      "method": "native_text",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "not_meter",
+      "expectedState": "status_only_non_consumption_counter",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": true,
+      "fallback": false,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          426.5653381347656,
+          721.9653930664062,
+          488.4598083496094,
+          795.4031372070312
+        ],
+        "score": 0.9549832344055176,
+        "recognition": {
+          "raw": "4",
+          "digits": "4",
+          "minimumCharacterScore": 0.9964002370834351,
+          "meanCharacterScore": 0.9964002370834351,
+          "forwardMs": 12.51599999886821
+        }
+      },
+      "raw": "4",
+      "digits": "4",
+      "minimumCharacterScore": 0.9964002370834351,
+      "meanCharacterScore": 0.9964002370834351,
+      "forwardMs": 12.379499999951804,
+      "fullImagePipelineMs": 2067.917000000307
+    },
+    {
+      "id": "commons_151445788",
+      "method": "native_text_row_margin",
+      "positive": false,
+      "expectedDigits": null,
+      "category": "not_meter",
+      "expectedState": "status_only_non_consumption_counter",
+      "exact": false,
+      "incorrectPositiveNumeric": false,
+      "invalidControlNumeric": true,
+      "fallback": false,
+      "applicationProposalEmitted": false,
+      "selected": {
+        "box": [
+          426.5653381347656,
+          721.9653930664062,
+          488.4598083496094,
+          795.4031372070312
+        ],
+        "score": 0.9549832344055176,
+        "recognition": {
+          "raw": "4",
+          "digits": "4",
+          "minimumCharacterScore": 0.9964002370834351,
+          "meanCharacterScore": 0.9964002370834351,
+          "forwardMs": 12.584799998876406
+        }
+      },
+      "raw": "4",
+      "digits": "4",
+      "minimumCharacterScore": 0.9957452416419983,
+      "meanCharacterScore": 0.9957452416419983,
+      "forwardMs": 12.973900000361027,
+      "fullImagePipelineMs": 2141.0560000003898
+    }
+  ],
+  "manifestSha256": "e1b9e3b6a1c6750cd1c73f4a9d2d9079bc77f0590a02fb9400603ff84324fe0b",
+  "reason": "Margin recovers a true visible thin digit but incorrect non-billing/obscured control outputs remain; no type/register/precision safety validation"
+}

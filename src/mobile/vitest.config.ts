@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 export default defineConfig({
   // DOM-based component checks use the workspace renderer and the same React instance.
   resolve: {

@@ -8,6 +8,77 @@ namespace BHome.Application.UnitTests.Ocr;
 public sealed class OcrWorkflowTests
 {
     [Theory]
+    [InlineData(OcrDocumentKind.MechanicalWater)]
+    [InlineData(OcrDocumentKind.DigitalWater)]
+    [InlineData(OcrDocumentKind.MechanicalElectricity)]
+    [InlineData(OcrDocumentKind.DigitalElectricity)]
+    public async Task AssignedMeterSelectsOnlyTheTrustedServerProfile(OcrDocumentKind kind)
+    {
+        var (service, resources, ocr, id) = MeterWorkflow(kind, 2, null);
+        using var input = new MemoryStream();
+        ocr.ExtractAsync(input, kind, Arg.Any<CancellationToken>()).Returns(
+            new OcrProposal(new Dictionary<string, string> { ["reading"] = "00012345" }, "synthetic"));
+        var result = await service.MeterAsync(id, input, default);
+        Assert.Equal("000123.45", result.ProposedFields["reading"]);
+        Assert.True(result.RequiresConfirmation);
+        await ocr.Received(1).ExtractAsync(input, kind, Arg.Any<CancellationToken>());
+        await resources.Received(1).RecordMeterProposalAsync(id, result, Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(null, 2, null, "meter_profile_unavailable")]
+    [InlineData(-1, 2, null, "meter_profile_unavailable")]
+    [InlineData((int)OcrDocumentKind.MechanicalWater, -1, null, "invalid_meter_precision")]
+    [InlineData((int)OcrDocumentKind.MechanicalWater, 5, null, "invalid_meter_precision")]
+    [InlineData((int)OcrDocumentKind.MechanicalWater, 2, -1, "invalid_previous_reading")]
+    public async Task InvalidServerMetadataReturnsReviewWithoutReadingAnImage(int? kind, int precision, int? previous, string warning)
+    {
+        var (service, resources, ocr, id) = MeterWorkflow((OcrDocumentKind?)kind, precision, previous);
+        using var input = new MemoryStream([1, 2, 3]);
+        var result = await service.MeterAsync(id, input, default);
+        Assert.True(result.IsFallback);
+        Assert.True(result.RequiresConfirmation);
+        Assert.True(result.ManualEntryAvailable);
+        Assert.Empty(result.ProposedFields);
+        Assert.Contains("reading", result.MissingFields);
+        Assert.Equal(new[] { warning }, result.Warnings);
+        Assert.Null(result.SourceImageHash);
+        Assert.Equal(0, input.Position);
+        await ocr.DidNotReceive().ExtractAsync(Arg.Any<Stream>(), Arg.Any<OcrDocumentKind>(), Arg.Any<CancellationToken>());
+        await resources.Received(1).RecordMeterProposalAsync(id, result, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AuthorizationPrecedesMetadataReviewAndNeverClearsAnotherLocationsProposal()
+    {
+        var user = Substitute.For<ICurrentUser>(); user.UserId.Returns(Guid.NewGuid()); user.IsInRole(Roles.Staff).Returns(true);
+        var resources = Substitute.For<IOcrWorkflowResources>();
+        var id = Guid.NewGuid();
+        resources.FindMeterTaskAsync(id, Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(
+            new ResourceScope(Guid.NewGuid(), null), true, null));
+        var ocr = Substitute.For<IOcrService>();
+        var service = new OcrWorkflowService(resources, new ResourceAccess(user, Substitute.For<IStaffLocationAccess>()), ocr);
+        using var input = new MemoryStream([1, 2, 3]);
+        await Assert.ThrowsAsync<OcrAccessException>(() => service.MeterAsync(id, input, default));
+        Assert.Equal(0, input.Position);
+        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(), Arg.Any<OcrProposal>(), Arg.Any<CancellationToken>());
+    }
+
+    private static (OcrWorkflowService Service, IOcrWorkflowResources Resources, IOcrService Ocr, Guid Id)
+        MeterWorkflow(OcrDocumentKind? kind, int precision, decimal? previous)
+    {
+        var user = Substitute.For<ICurrentUser>(); user.UserId.Returns(Guid.NewGuid()); user.IsInRole(Roles.Staff).Returns(true);
+        var assignments = Substitute.For<IStaffLocationAccess>();
+        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        var resources = Substitute.For<IOcrWorkflowResources>();
+        var id = Guid.NewGuid();
+        resources.FindMeterTaskAsync(id, Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(
+            new ResourceScope(Guid.NewGuid(), null), true, kind, precision, previous));
+        var ocr = Substitute.For<IOcrService>();
+        return (new OcrWorkflowService(resources, new ResourceAccess(user, assignments), ocr), resources, ocr, id);
+    }
+
+    [Theory]
     [InlineData("00999", true)]
     [InlineData("01000", false)]
     [InlineData("01001", false)]

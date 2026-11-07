@@ -1,5 +1,7 @@
 # BHOME OCR — kết quả thực hiện master task 05–06/11/2026
 
+**Lượt accuracy recovery 07/11/2026: xem [kết quả và giới hạn mới nhất](OCR_ACCURACY_IMPROVEMENT_REPORT.md). Chưa có cải thiện production được chấp nhận; các số test dưới đây thuộc lượt trước.**
+
 **Lượt tiếp nối từ `83317cb`: xem [kết quả mới nhất](#tiếp-nối-master-implementation-task-từ-83317cb).**
 Đã train YOLO bốn lớp thật nhưng model bị loại; baseline đọc số chưa cải thiện.
 Các kết quả cũ bên dưới được giữ làm lịch sử, không thay thế số đo mới nhất.
@@ -466,3 +468,175 @@ reader chuyên biệt điện cơ/điện tử/nước LCD và camera E2E. Ba pr
 không giải quyết thiếu hụt này. Chưa đạt mục tiêu95% classification hoặc90% reading;
 không đăng ký model bị loại thành tính năng hoạt động. Tiếp tục cần dữ liệu được cấp
 phép với nhãn được kiểm chứng; các gate này không thể hoàn tất bằng cách giảm ngưỡng.
+
+## Tiếp nối ưu tiên Staff từ HEAD9932bdd — 06/11/2026
+
+**Trạng thái: triển khai một phần, chưa production-ready; accuracy nước cơ chưa
+tăng.** Điểm bắt đầu thực tế `9932bdd607fc9e7812c931aa39ca68b3cb3e5d9a`, nhánh
+`member/QHuy`, working tree sạch. Commit `4d9fa22` đã nằm trong history; không
+tái tạo các thay đổi cũ. SRS thực tế BF-05A/B, UC-20/21 và manual/confirmation
+requirements đã được đọc. [Traceability](OCR_PRIORITY_TRACEABILITY.md).
+
+### Thay đổi runtime đã chấp nhận
+
+`CaptureWorkflowResources` chỉ resolve khi UtilityType và Display khớp một trong
+bốn tổ hợp enum. Không còn mặc định enum sai thành điện/digital. Kiểu nullable
+chỉ thuộc kết quả resolve nội bộ; không thêm metadata/schema/endpoint giả.
+`OcrWorkflowService` kiểm quyền Staff/Location trước; metadata chưa xác định,
+precision ngoài0..4 hoặc previous reading âm trả review/manual trước khi đọc ảnh
+hoặc gọi model. Proposal cũ được xóa khi retake không đủ metadata. UI tiếng Việt
+giải thích cần Owner kiểm cấu hình. Bốn profile hợp lệ vẫn chọn từ server;
+classifier không đổi Meter identity. Không có field billing-register được xác minh
+trong Meter hiện tại; nhận diện serial của thiết bị vẫn chưa được thực hiện.
+
+Không thay precision/billing policy hoặc điều kiện xác nhận. Thấp hơn previous
+vẫn giữ cảnh báo và confirmation guard hiện có; model unavailable/multiple-meter/
+wrong category và unconfirmed proposals giữ fallback/rejection hiện hữu.
+
+Test HTTP mới sử dụng Staff/session thật của test host, PostgreSQL tạm UTF-8,
+Stage1/PP/Stage2 ONNX thật và ảnh public pinned `wm_clean_000058.jpg`: server có
+precision2 **giả lập cho test** → proposal `004314.69` → chưa có MeterReading →
+Staff sửa4314.70 → lưu Corrected với proposal4314.69 riêng → replay cùng ID.
+Evidence upload/download có SHA256 trùng bytes; storage trong test là substitute
+in-memory, **không phải MinIO thật**. Ca này xác minh orchestration, không chứng
+minh billing precision GT của ảnh nguồn hoặc accuracy đại diện.
+
+### Failure audit và thí nghiệm bị loại
+
+[Taxonomy theo52 ảnh](ocr-priority-failure-taxonomy.json) ghép stage evidence
+public có hash với runtime mới; không lấy `fusedValue` cũ làm outcome mới. Các
+observations không loại trừ nhau:51 unresolved automatic category,26 digit assembly
+uncertainty,18 fusion veto/disagreement,13 Stage2 đúng nhưng proposal bị từ chối.
+13 ca này chỉ là recovery candidates, không đủ điều kiện bỏ veto. Box/display/
+register/decimal GT so sánh và readability review còn thiếu; không biến annotation
+`u` thành bằng chứng “đã từ chối đúng ảnh không đọc được”.
+
+Thử nghiệm mới căn PP theo union polygon chữ số Stage2, khác các crop-margin/
+CLAHE probe cũ. Validation100 sau loại SHA trùng test;69 digit labels đầy đủ.
+Baseline12 đúng/0 sai; permissive13/0 nhưng có thể xóa original numeric disagreement
+bằng PP mới malformed; strict yêu cầu PP mới khớp Stage2 chỉ7/0. **REJECTED**, không
+chạy candidate trên test, không giảm threshold, không thay runtime reader. Code,
+hash guard, kết quả và lệnh tái lập ở [study](OCR_ALIGNMENT_AND_POSITIVE_STUDY.md),
+[JSON](ocr-priority-alignment-results.json). Không train lại62 ảnh yếu.
+
+### Dữ liệu và positive inference mới
+
+Đã tìm nguồn mới bằng English/Vietnamese và tải [Badger55 CC BY4.0](https://huggingface.co/datasets/S3CUR/badger-55-watermeter/tree/b49bf7505cf1212de4e4e803bc39e8ce70c6d37e):
+4.548 digit crops,4.546 SHA riêng, **một physical meter**; labels còn cần review.
+Quarantine, không thêm supervised train/test hoặc suy wheel-transition thành chỉ
+số billing. Tool acquisition pin revision/SHA/size và kiểm duplicates/group.
+[Audit nguồn](OCR_LICENSED_SOURCE_AUDIT.md), [manifest](../datasets/meter/licensed-meter-source-audit-badger.json).
+Nguồn Dryad CC0 mới có detection/segmentation/reading nhưng file403 chưa tải;
+mirror có nghi vấn license và nguồn gated không bị vượt truy cập. Vẫn thiếu nước
+LCD representative có giấy phép/annotation đủ để train/validate bốn loại.
+
+Duyệt106 ảnh Commons ngoài các author/ID tham chiếu tìm được hai ứng viên digits-only
+được freeze trước inference, có source/hash/window/license/group; human annotation
+review độc lập thứ hai còn thiếu. Đã chạy model thật, không chỉ validator:
+
+| Category | Automatic classification mới | Display detection | Exact digits mới | Incorrect proposals | Fallback |
+| --- | --- | --- | --- | --- | --- |
+| Điện cơ | NOT MEASURED positive | NOT MEASURED | NOT MEASURED | NOT MEASURED positive | NOT MEASURED positive |
+| Điện LCD | 1 unknown/1 frame, không accepted class | Chỉ có oracle window, không đo localization accuracy | 0/1 selected window mỗi PP mode | 0; full-frame ba meter không proposal | 1/1 mỗi PP oracle mode; full-frame rejection1/1 |
+| Nước cơ | 1 unknown/1 frame, không accepted class | Một ảnh clear nhưng Stage1 không thấy display | 0/1 full-frame và0/1 từng oracle mode | 0 | 1/1 từng mode |
+| Nước LCD | NOT MEASURED positive | NOT MEASURED | NOT MEASURED | NOT MEASURED positive | NOT MEASURED positive |
+
+Hai positive candidates **không được nhận dạng đúng**, không gọi là hoàn tất
+positive acceptance. Điện LCD có ba meter: full-frame chỉ dùng cho rejection,
+không đưa selected-window GT vào mẫu số full-frame positive. Oracle crop không
+đo localization. Decimal/register billing accuracy=null. [Evidence](ocr-priority-positive-results.json).
+Các model điện cơ/điện tử/nước LCD chuyên biệt và four-class classifier vẫn chưa
+đạt gate; checkpoint cũ giữ disabled. Không activate model hoặc đổi appsettings.
+
+Frozen historical water benchmark chạy lại, tách khỏi hai ảnh mới:
+
+| Mode | Exact /33 full labels | Incorrect /33 | Fallback /52 | Correct/all inputs | Correct/emitted | p50/p95/max ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| Trusted mechanical-water | 10 | 0 | 42 | 10/52 | 10/10 | 203/779.8/866 |
+| Automatic | 1 | 0 | 51 | 1/52 | 1/1 | 2873.5/5940.5/7494 |
+
+Đây là digit sequence trên corpus tác giả cũ, chưa có billing-decimal GT và chưa
+independent acceptance. Không quảng bá precision10/10 thành accuracy100% đại diện.
+Negative controls chạy lại17/17 reject,0 proposals; [JSON](ocr-priority-negative-results.json).
+Không dùng negative-only score để tuyên bố reader đọc được positive.
+
+### Kiểm chứng thực thi trong lượt này
+
+| Check | Kết quả mới |
+| --- | --- |
+| Backend solution Release build cuối | PASS,0 warning/error |
+| Application / Domain | 321 /102 PASS |
+| OCR integration không Docker/CompactPostgres, có opt-in model thật | 125 PASS,0 skip |
+| PostgreSQL metadata/confirmation + invoice finalization/meter job | 6 PASS,0 skip; storage substitute |
+| HTTP task + ONNX thật + correction/evidence/replay | 1 PASS,0 skip; PostgreSQL thật, storage substitute |
+| Mobile Vitest với Node22 của repository | 389 PASS; typecheck/lint PASS |
+| Node dataset / Python meter tools / alignment summary | 29 /29 /3 PASS |
+| Manifest positive mới | valid=true,2 samples; đây chỉ là cấu trúc/hash |
+| Stage2 .NET với native reference pinned | 10/10; input max delta0; không chạy lại PyTorch native |
+| Validation/test overlap guard | Từ chối manifest có SHA trùng test, không tạo output |
+| MinIO thật | NOT RUN: không có service MinIO local/Docker daemon dùng được |
+| Camera Android/iOS vật lý | NOT RUN: không có camera session được điều khiển/adb |
+| Representative positive four-category/billing acceptance | NOT RUN: thiếu verified independent data |
+
+Các lỗi đầu lượt đã xử lý và chạy lại: build cùng lúc OcrSmoke gây2 file-copy retry
+warnings (build cuối0); npm.ps1 bị execution policy (dùng npm.cmd); Node toàn cục
+không thuộc22 gây12 startup-test failure (Node22 qua389); cluster test ban đầu
+WIN1252 gây JSON Unicode error (cluster UTF8 riêng qua6); fixture tạo hai active
+water meters cùng Room bị409 (tách Rooms); token từ test host có signing key khác
+bị401 (đăng nhập đúng target host). Không sửa production safeguards để làm test qua.
+
+TRX `ocr-priority-{metadata,real-ocr,workflow,real-workflow}.trx` trong test project
+tương ứng; log `.tools/ocr-priority-*.log`. [Verification JSON](ocr-priority-verification.json)
+ghi hash evidence, số kiểm chứng, test chưa chạy và các blocker.
+
+### Files, lệnh tái lập và Git
+
+Source: Application `OcrWorkflowService`; Infrastructure `CaptureWorkflowResources`;
+Mobile `meterOcrFeedback`; unit/UI tests tương ứng; `CaptureWorkflowTests` và
+`CompactMeterOcrWorkflowTests`; OcrSmoke `ReviewedPositiveEvaluation`,
+`WaterDigitAlignmentStudy`, Program; Python taxonomy/acquisition/summary tools;
+manifests/results/docs liên kết. Không sửa financial calculation/schema.
+
+```powershell
+dotnet build src/backend/BHome.sln -c Release --no-restore
+dotnet test tests/backend/BHome.Application.UnitTests -c Release
+dotnet test tests/backend/BHome.Domain.UnitTests -c Release
+$env:BHOME_OCR_LOCAL_EVALUATION_ROOT=(Get-Location).Path
+dotnet test tests/backend/BHome.IntegrationTests -c Release --filter 'FullyQualifiedName~Ocr&Category!=Docker&Category!=CompactPostgres'
+# Set BHOME_COMPACT24_TEST_ADMIN to an isolated authorized UTF8 loopback admin only.
+dotnet test tests/backend/BHome.IntegrationTests -c Release --filter 'FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation'
+Push-Location src/mobile
+& ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/vitest/vitest.mjs run --config vitest.config.ts
+npm.cmd run typecheck
+npm.cmd run lint
+Pop-Location
+node.exe --test tests/scripts/MeterDataset.test.cjs
+.tools/yolo-python/python.exe -m unittest discover -s tests/scripts -p 'test_*meter*.py'
+.tools/yolo-python/python.exe tests/scripts/test_water_alignment_summary.py
+```
+
+Acquisition, alignment, positive evaluator và parity reproduce commands nằm trong
+hai study/source report; baseline CLI giữ `--meter-completion-evaluate` với corpus52.
+Model binaries, crop tạm, parquet và ảnh public ngoài Git. Không ảnh CCCD thật,
+secrets, real Tenant data hoặc weights mới được commit.
+
+| Commit | Work unit đã kiểm chứng |
+| --- | --- |
+| c2027d2 | Metadata-guided Staff review/validation + UI/tests |
+| 5d921ce | Per-image failure taxonomy và frozen baseline |
+| 2db6232 | PostgreSQL profile/scope/proposal/confirmation regressions |
+| a1abcef | Licensed source acquisition/audit, quarantine và positive candidates |
+| cd8fb3b | Real ONNX HTTP task → Staff correction/evidence/replay |
+| f061811 | Rejected alignment study và positive/negative inference evidence |
+| HEAD của commit báo cáo | Báo cáo trạng thái có bằng chứng |
+
+Final HEAD và working-tree status được ghi sau commit tại
+`.tools/ocr-priority-final-state.json`; history đầy đủ tái tạo vào tệp IDE đang mở
+`.tools/ocr-next-git-history.md` (`git log --reverse 9932bdd..HEAD`). Các commit là
+local; không push/merge/rebase/deploy. Process PostgreSQL riêng cho lượt test được
+dừng sau kiểm chứng; không dùng database thật của người dùng.
+
+Còn thiếu: cải thiện accuracy/fallback thực tế được xác minh; positive data đại diện
+và human-reviewed GT đủ bốn loại; precision/register/location ground truth; reader
+và classifier qua gate; MinIO transport và physical camera E2E. Không đánh dấu các
+phase bị chặn dữ liệu/môi trường là đã hoàn tất.

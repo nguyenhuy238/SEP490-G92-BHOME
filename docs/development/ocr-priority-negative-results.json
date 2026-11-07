@@ -1,0 +1,311 @@
+{
+  "dataset": "meter-evaluation",
+  "engineVersions": [
+    "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2"
+  ],
+  "sourceCount": 8,
+  "total": 17,
+  "exactMatches": 17,
+  "expectedRejections": 17,
+  "falseProposals": 0,
+  "incorrectExpectedFields": 0,
+  "missingExpectedFields": 0,
+  "fallbacks": 17,
+  "meterProposalMetrics": {
+    "positiveCases": 0,
+    "exactReadings": 0,
+    "emittedReadings": 0,
+    "falseReadings": 0,
+    "exactReadingAccuracyPercent": null,
+    "falseReadingRatePercent": null
+  },
+  "proposalOrFallbackWithin10Seconds": 17,
+  "maxMilliseconds": 4275,
+  "profiles": {
+    "DigitalWater": {
+      "total": 7,
+      "exactMatches": 7,
+      "expectedRejections": 7,
+      "sourceCount": 7,
+      "p95Milliseconds": 4275
+    },
+    "MechanicalWater": {
+      "total": 6,
+      "exactMatches": 6,
+      "expectedRejections": 6,
+      "sourceCount": 6,
+      "p95Milliseconds": 256
+    },
+    "MechanicalElectricity": {
+      "total": 2,
+      "exactMatches": 2,
+      "expectedRejections": 2,
+      "sourceCount": 2,
+      "p95Milliseconds": 726
+    },
+    "DigitalElectricity": {
+      "total": 2,
+      "exactMatches": 2,
+      "expectedRejections": 2,
+      "sourceCount": 2,
+      "p95Milliseconds": 735
+    }
+  },
+  "fieldAccuracy": {},
+  "p50Milliseconds": 256,
+  "p95Milliseconds": 4275,
+  "results": [
+    {
+      "index": 0,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 2457,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "multiple_reading_regions",
+        "ambiguous_reading"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 1,
+      "profile": "MechanicalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 165,
+      "isFallback": true,
+      "warnings": [
+        "meter_not_detected",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 2,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 1900,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "orientation_corrected",
+        "ambiguous_reading"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 3,
+      "profile": "MechanicalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 84,
+      "isFallback": true,
+      "warnings": [
+        "meter_detection_uncertain",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 4,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 2121,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 5,
+      "profile": "MechanicalElectricity",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 726,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "no_text",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 6,
+      "profile": "DigitalElectricity",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 735,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "no_text",
+        "billing_register_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 7,
+      "profile": "MechanicalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 93,
+      "isFallback": true,
+      "warnings": [
+        "meter_not_detected",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 8,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 717,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "no_text",
+        "billing_register_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 9,
+      "profile": "MechanicalElectricity",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 159,
+      "isFallback": true,
+      "warnings": [
+        "possible_glare",
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 10,
+      "profile": "DigitalElectricity",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 146,
+      "isFallback": true,
+      "warnings": [
+        "possible_glare",
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 11,
+      "profile": "MechanicalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 69,
+      "isFallback": true,
+      "warnings": [
+        "possible_glare",
+        "meter_not_detected",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 12,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 153,
+      "isFallback": true,
+      "warnings": [
+        "possible_glare",
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 13,
+      "profile": "MechanicalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 84,
+      "isFallback": true,
+      "warnings": [
+        "meter_not_detected",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 14,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 1570,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 15,
+      "profile": "MechanicalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 256,
+      "isFallback": true,
+      "warnings": [
+        "meter_category_unverified",
+        "unclear_digit",
+        "reading_not_recognized"
+      ],
+      "expectedRejection": true
+    },
+    {
+      "index": 16,
+      "profile": "DigitalWater",
+      "passed": true,
+      "fields": {},
+      "elapsedMilliseconds": 4275,
+      "isFallback": true,
+      "warnings": [
+        "meter_localization_unavailable",
+        "reading_region_unverified",
+        "billing_register_unverified",
+        "orientation_corrected",
+        "ambiguous_reading"
+      ],
+      "expectedRejection": true
+    }
+  ]
+}
