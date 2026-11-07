@@ -3,9 +3,8 @@ from pathlib import Path
 import sys
 import unittest
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'.tools/ocr-four-clip-packages'))
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'tools/BHome.OcrSmoke/model_tools'))
-from evaluate_lcd_readability import accept
+from lcd_readability_policy import accept
 
 
 class ReadabilityDecisionTests(unittest.TestCase):

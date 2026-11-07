@@ -22,6 +22,7 @@ from transformers import CLIPModel, CLIPProcessor
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from compare_paddle_meter_models import PaddleCtcReader
 from evaluate_clip_meter_categories import WEIGHTS_SHA
+from lcd_readability_policy import accept,metrics
 
 STATES=['readable_candidate','blank_or_unpowered','segment_test','blurred_or_obscured','unknown']
 PROMPTS=[
@@ -99,29 +100,6 @@ def state_prediction(image,visual):
     order=scores.argsort()[::-1]
     return {'prediction':STATES[int(order[0])],'scores':dict(zip(STATES,map(float,scores))),
             'score':float(scores[order[0]]),'margin':float(scores[order[0]]-scores[order[1]]),'forwardMs':(time.perf_counter()-started)*1000}
-
-
-def accept(row,method,threshold):
-    if threshold is None:return False
-    if method=='pixel_contrast':return row['pixel']['localContrast95']>=threshold
-    visual=row['visual'];readable=visual['prediction']=='readable_candidate' and visual['score']>=threshold and visual['margin']>=.1
-    if method=='shape_primary':
-        active=row['pixel']['localContrast95']>=.025 and row['pixel']['foregroundSupportComponents']>=1 and row['pixel']['smallHolesPerEstimatedGlyph']<3
-        nonreadable_veto=visual['prediction']!='readable_candidate' and visual['score']>=threshold and visual['margin']>=.1
-        return active and not nonreadable_veto
-    if method=='shape_combined':
-        return readable and row['pixel']['localContrast95']>=.025 and row['pixel']['foregroundSupportComponents']>=1 and row['pixel']['smallHolesPerEstimatedGlyph']<3
-    return readable and (method!='combined' or row['pixel']['localContrast95']>=.025)
-
-
-def metrics(rows,method,threshold):
-    count=Counter()
-    for row in rows:
-        accepted=accept(row,method,threshold);positive=row['expectedReadable']
-        count.update(inputs=1,readablePositives=positive,negativeControls=not positive,
-                     correctlyAcceptedReadable=accepted and positive,incorrectReadableRejection=not accepted and positive,
-                     correctlyRejectedNegative=not accepted and not positive,falseReadableAcceptance=accepted and not positive)
-    return count
 
 
 def prepare_cases(root,output,pilot):
