@@ -1,0 +1,88 @@
+{
+  "runtimeSourceHead": "5104901c1da4b1dee0fd5670b1d51ea2d5d3af8d",
+  "checks": [
+    {
+      "name": "backend_build",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "localLog": ".tools/ocr-staff-focus/build.log",
+      "sha256": "830d88378e427a1e7e010dd275634c400f4a927a9ca18c359d5b81adccb69c8a"
+    },
+    {
+      "name": "application",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 343,
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "localLog": ".tools/ocr-staff-focus/application.log",
+      "sha256": "8e79a0eecded89d3be5819c881abfacb14b08913f3687a6cc49b80a059611e0f"
+    },
+    {
+      "name": "ocr_integration",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 150,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~Ocr&Category!=Docker&Category!=CompactPostgres",
+      "localLog": ".tools/ocr-staff-focus/ocr-integration.log",
+      "sha256": "42d361ff36d5ff89f21a8c5db3690c4f5313ed529a0f2fd3592eeb85766d7ad6"
+    },
+    {
+      "name": "postgres_workflows",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 7,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; BHOME_COMPACT24_TEST_ADMIN=<owned disposable loopback15493>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "localLog": ".tools/ocr-staff-focus/postgres-workflows.log",
+      "sha256": "41701370de95bd7be7a2b3a85a3ac4b6c21a6c93acc4e32d97edde12a7caf694"
+    },
+    {
+      "name": "mobile_ocr",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 50,
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/vitest/vitest.mjs run --config vitest.config.ts src/__tests__/document-camera.test.tsx src/__tests__/capture-scope.test.tsx src/__tests__/meter-flow.test.tsx src/__tests__/meter-reading.test.ts src/__tests__/room-meter-tasks.test.ts",
+      "localLog": ".tools/ocr-staff-focus/mobile-ocr.log",
+      "sha256": "032be498b52100d11e6f912ff1eea6f5dca0aace66293a5414590c3337d0fe30"
+    },
+    {
+      "name": "english_parity",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 4,
+      "command": "BHome.OcrSmoke --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json <report>",
+      "localLog": ".tools/ocr-staff-focus/english-parity.log",
+      "sha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79"
+    },
+    {
+      "name": "stage2_parity",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 10,
+      "command": "BHome.OcrSmoke --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops <report>",
+      "localLog": ".tools/ocr-staff-focus/stage2-parity.log",
+      "sha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd"
+    }
+  ],
+  "classifierDotnetParity": {
+    "images": 9,
+    "maxInputDelta": 0,
+    "maxLogitDelta": 2.2947788e-06
+  },
+  "ownedPostgresStopped": true,
+  "physicalCamera": "NOT_RUN: no accessible phone/adb session",
+  "realMinio": "NOT_RUN: no loopback9000/9001 listener; PostgreSQL tests use in-memory storage",
+  "mobileTypecheckLint": "NOT_RUN: no Mobile source change; existing OCR workflow tests executed",
+  "humanReviews": 0,
+  "independentAcceptance": false,
+  "postmanAssertions": "NOT_RUN: no workspace initialization or authenticated Postman session; ASP.NET TestServer used",
+  "postmanStatus": {
+    "command": "postman status --json",
+    "exitCode": 0,
+    "initialized": false,
+    "auth": "unauthenticated",
+    "workspaceModified": false,
+    "sha256": "222866f7731083c75931df247434b05b8fee4165a37596f832a1042eb40b2a0b"
+  }
+}
