@@ -40,4 +40,22 @@ public sealed class ExperimentalRegisterTests
 
     [Fact] public void TwoAccumulatedCandidatesRemainAmbiguous() => Assert.Null(ExperimentalRegisterSelection.Select(
         OcrDocumentKind.DigitalElectricity, [Line("12", 0, 0), Line("kWh", 45, 0), Line("13", 0, 100), Line("kWh", 45, 100)]).Candidate);
+
+    [Fact]
+    public void PhaseStatusRowCannotCompeteWithTheConsumptionRow()
+    {
+        var result=ExperimentalRegisterSelection.Select(OcrDocumentKind.DigitalElectricity,
+            [Line("000501",80,0,180,60),Line("1.180",80,65,80,40),Line("L1",175,70,25,20),Line("kWh",225,70,50,20)]);
+        Assert.Equal("000501",result.Candidate?.Text);
+    }
+    [Theory]
+    [InlineData("L1")]
+    [InlineData("L2")]
+    [InlineData("L3")]
+    [InlineData("status")]
+    public void PhaseOrStatusOnlyScreenWithUnitStillRequiresReview(string label) => Assert.Null(ExperimentalRegisterSelection.Select(
+        OcrDocumentKind.DigitalElectricity,[Line("1.180",0,0),Line(label,45,0),Line("kWh",70,0)]).Candidate);
+
+    [Fact] public void DecimalValueIsNotSilentlyTreatedAsAnObisCode() => Assert.Equal("1.180",ExperimentalRegisterSelection.Select(
+        OcrDocumentKind.DigitalElectricity,[Line("1.180",0,0),Line("kWh",45,0)]).Candidate?.Text);
 }

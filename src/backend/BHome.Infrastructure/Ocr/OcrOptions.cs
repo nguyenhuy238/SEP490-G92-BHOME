@@ -46,6 +46,7 @@ public sealed class ExperimentalMeterOptions
     public string EnglishModelDirectory { get; set; } = "";
     public float UtilityThreshold { get; set; } = .55f;
     public float TechnologyThreshold { get; set; } = .75f;
+    public bool RefineUnitCrops { get; set; } = true;
     public OcrDocumentKind[] Categories { get; set; } = [];
     public bool IsValid() => float.IsFinite(UtilityThreshold) && UtilityThreshold is > 0 and <= 1 &&
         float.IsFinite(TechnologyThreshold) && TechnologyThreshold is > 0 and <= 1 &&

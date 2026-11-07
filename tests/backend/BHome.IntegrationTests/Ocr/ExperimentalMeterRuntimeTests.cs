@@ -17,6 +17,40 @@ namespace BHome.IntegrationTests.Ocr;
 public sealed class ExperimentalMeterRuntimeTests
 {
     [ExperimentalModelsFact]
+    public async Task UnitRefinementRecoversConsumptionWithoutAcceptingInvalidFullFrames()
+    {
+        var directory=Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
+        using var manifest=JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory,"docs/datasets/meter/runtime-diagnostic-evaluation.json")));
+        var samples=manifest.RootElement.GetProperty("samples").EnumerateArray().Select(s=>s.Clone()).ToArray();
+        var observations=samples.ToDictionary(s=>s.GetProperty("id").GetString()!,_=>new Dictionary<string,JsonElement>());
+        foreach(var (mode,enabled) in new[] { ("baseline",false),("candidate",true) })
+        {
+            using var root=new ApiFactory();using var factory=Configure(root,directory,refineUnits:enabled);using var client=factory.CreateClient();
+            foreach(var sample in samples)
+            {
+                var bytes=await File.ReadAllBytesAsync(Path.Combine(directory,sample.GetProperty("image").GetString()!));
+                Assert.Equal(sample.GetProperty("sha256").GetString(),Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+                using var request=Request("?experimental=true",Roles.Staff,bytes);
+                using var response=await client.SendAsync(request);Assert.Equal(HttpStatusCode.OK,response.StatusCode);
+                using var document=JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                var id=sample.GetProperty("id").GetString()!;observations[id][mode]=document.RootElement.Clone();
+                var analysis=document.RootElement.GetProperty("analysis");
+                Assert.True(analysis.GetProperty("experimental").GetBoolean());Assert.False(analysis.GetProperty("businessProposalEnabled").GetBoolean());
+                Assert.False(analysis.TryGetProperty("meterProposal",out _));
+                var digits=analysis.GetProperty("readingCandidate").GetString();
+                if(digits is not null) Assert.Equal(sample.GetProperty("expectedDigits").GetString(),digits);
+                if(sample.GetProperty("expectedDigits").ValueKind==JsonValueKind.Null) Assert.Null(digits);
+                if(id=="commons_136480278") Assert.Equal("74590",digits);
+            }
+        }
+        Assert.Null(observations["commons_54903199"]["baseline"].GetProperty("analysis").GetProperty("readingCandidate").GetString());
+        Assert.Equal("000501",observations["commons_54903199"]["candidate"].GetProperty("analysis").GetProperty("readingCandidate").GetString());
+        Assert.Null(observations["commons_105770219"]["candidate"].GetProperty("analysis").GetProperty("readingCandidate").GetString());
+        await File.WriteAllTextAsync(Path.Combine(directory,".tools/ocr-staff-focus/http-before-after.json"),
+            JsonSerializer.Serialize(samples.Select(s=>new { sample=s,results=observations[s.GetProperty("id").GetString()!] }),new JsonSerializerOptions { WriteIndented=true }));
+    }
+
+    [ExperimentalModelsFact]
     public async Task NativePreprocessingAndRealOnnxLogitsMatchPythonReferences()
     {
         var directory = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
@@ -105,7 +139,8 @@ public sealed class ExperimentalMeterRuntimeTests
         }
     }
     private static WebApplicationFactory<Program> Configure(ApiFactory root, string directory,
-        string environment = "Development", bool mobile = true, bool experimental = true, string? modelPath = null, string? hash = null)
+        string environment = "Development", bool mobile = true, bool experimental = true, string? modelPath = null, string? hash = null,
+        bool refineUnits = true)
     {
         var receiptPath=Path.Combine(directory,".tools/ocr-runtime-focus/classifier-cv2/report.json");
         var sha=hash ?? (File.Exists(receiptPath)?JsonDocument.Parse(File.ReadAllText(receiptPath)).RootElement.GetProperty("modelSha256").GetString():new string('0',64));
@@ -119,6 +154,7 @@ public sealed class ExperimentalMeterRuntimeTests
                 ["Ocr:ExperimentalMeter:ClassifierSha256"]=sha,
                 ["Ocr:ExperimentalMeter:EnglishModelDirectory"]=Path.Combine(directory,".tools/ocr-recovery-english"),
                 ["Ocr:ExperimentalMeter:UtilityThreshold"]="0.55",["Ocr:ExperimentalMeter:TechnologyThreshold"]="0.75",
+                ["Ocr:ExperimentalMeter:RefineUnitCrops"]=refineUnits.ToString(),
                 ["Ocr:ExperimentalMeter:Categories:0"]="DigitalElectricity"
             })).ConfigureTestServices(OcrApiTests.AddTestAuthentication));
     }
@@ -163,8 +199,8 @@ public sealed class ExperimentalMeterRuntimeTests
             actual[name]=analysis;observations.Add(new { name,analysis,elapsedMilliseconds=document.RootElement.GetProperty("elapsedMilliseconds").GetInt64() });
         }
         await File.WriteAllTextAsync(Path.Combine(directory,".tools/ocr-runtime-focus/http-runtime-results.json"),JsonSerializer.Serialize(observations,new JsonSerializerOptions { WriteIndented=true }));
-        Assert.Contains(new[] { ("historical_positive_74590","74590"),("historical_positive_004046","004046"),("historical_positive_21594","21594") },
-            pair=>actual[pair.Item1].GetProperty("readingCandidate").GetString()==pair.Item2);
+        Assert.Equal("74590",actual["historical_positive_74590"].GetProperty("readingCandidate").GetString());
+        Assert.Equal("000501",actual["positive"].GetProperty("readingCandidate").GetString());
         Assert.Null(actual["historical_inactive"].GetProperty("readingCandidate").GetString());
         Assert.Null(actual["non_consumption"].GetProperty("readingCandidate").GetString());
         Assert.Equal("unknown",actual["uncertain_category"].GetProperty("classification").GetProperty("status").GetString());

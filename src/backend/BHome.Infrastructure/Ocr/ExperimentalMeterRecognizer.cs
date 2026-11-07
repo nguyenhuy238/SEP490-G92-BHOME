@@ -25,11 +25,16 @@ public sealed class ExperimentalMeterRecognizer : IDisposable
         if(!options.ExperimentalMeter.Categories.Contains(kind)) return Fallback("experimental_category_disabled");
         if(kind is not (OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater)) return Fallback("experimental_reader_unsupported_for_category");
         var lines=new List<OcrLine>();var activeNumeric=false;
-        var regions=detector.InspectTextRegions(image,1280,token).Take(options.MaxTextRegions)
+        var unitRegions=new List<(int Index,RotatedRect Region)>();
+        var detected=detector.InspectTextRegions(image,1280,token).Take(options.MaxTextRegions).ToArray();
+        var regions=detected
             .Select(r=>r.BoundingRect().Intersect(new Rect(0,0,image.Width,image.Height))).Where(r=>r.Width>=2 && r.Height>=2).ToArray();
-        foreach(var bounds in regions)
+        var unitRefined=false;
+        foreach(var region in detected)
         {
             token.ThrowIfCancellationRequested();
+            var bounds=region.BoundingRect().Intersect(new Rect(0,0,image.Width,image.Height));
+            if(bounds.Width<2 || bounds.Height<2) continue;
             using var window=new Mat(image,bounds);
             var text=reader.Value.Recognize(window,token).Line;
             if(text.Text.Length==0) continue;
@@ -45,13 +50,48 @@ public sealed class ExperimentalMeterRecognizer : IDisposable
                 activeNumeric=true;
                 line=alternate with { Bounds=new(expanded.X,expanded.Y,expanded.Width,expanded.Height) };
             }
+            else if(options.ExperimentalMeter.RefineUnitCrops && NeedsUnitRefinement(line))
+            {
+                unitRegions.Add((lines.Count,region));
+            }
             lines.Add(line);
         }
+        foreach(var (index,region) in unitRegions)
+        {
+            var original=lines[index];
+            if(!lines.Any(number=>number!=original && number.Bounds is not null && number.Text.Length>0 &&
+                number.Text.All(c=>c is >= '0' and <= '9' or '.' or ',') &&
+                MeterOcrLayout.Nearby(number.Bounds,original.Bounds!))) continue;
+            // Reuse the detector's actual quadrilateral. Axis bounding boxes
+            // include different margins and distort small segmented unit glyphs.
+            using var rectified=OnnxOcrEngine.Crop(image,region,48);
+            var observed=reader.Value.Recognize(rectified,token);
+            using var native=OnnxOcrEngine.Crop(image,region);
+            var corroborating=reader.Value.Recognize(native,token);
+            if(CanUseRefinedUnit(original,observed.Line,observed.MinimumCharacterScore,
+                corroborating.Line,corroborating.MinimumCharacterScore,kind))
+            {
+                lines[index]=observed.Line with { Bounds=original.Bounds };
+                unitRefined=true;
+            }
+        }
         var selected=ExperimentalRegisterSelection.Select(kind,lines);
-        if(selected.Candidate is not {} candidate) return Fallback(selected.Warnings[0],activeNumeric?"readable_candidate":"unreadable_or_unverified",selected.Status);
+        if(selected.Candidate is not {} candidate) return Fallback(selected.Warnings[0],activeNumeric?"numeric_text_present_display_unverified":"unreadable_or_unverified",selected.Status);
         return new("review_required",visual.Decision,category,candidate.Text,"readable_candidate",selected.Status,
-            [..selected.Warnings,"category_requires_human_review"],candidate.Bounds);
+            [..selected.Warnings,"category_requires_human_review",..unitRefined?new[]{"unit_crop_rectified","unit_requires_human_review"}:Array.Empty<string>()],candidate.Bounds);
     }
+    internal static bool NeedsUnitRefinement(OcrLine original) => original.Text.Length is >=1 and <=12 &&
+        original.Text.Any(char.IsLetter) && !original.Text.Any(char.IsDigit) &&
+        !MeterOcrLayout.IsUnit(original.Text) && !MeterOcrLayout.IsNonBillingUnit(original.Text) &&
+        !MeterOcrLayout.IsNonBillingQuantity(original.Text);
+
+    internal static bool CanUseRefinedUnit(OcrLine original,OcrLine refined,float minimumScore,
+        OcrLine corroborating,float corroboratingMinimumScore,OcrDocumentKind kind) =>
+        NeedsUnitRefinement(original) && float.IsFinite(refined.Confidence) && refined.Confidence is >=.8f and <=1 &&
+        float.IsFinite(minimumScore) && minimumScore is >=.5f and <=1 && MeterOcrLayout.IsCorrectUnit(refined.Text,kind) &&
+        float.IsFinite(corroborating.Confidence) && corroborating.Confidence is >=.8f and <=1 &&
+        float.IsFinite(corroboratingMinimumScore) && corroboratingMinimumScore is >=.5f and <=1 &&
+        MeterOcrLayout.IsCorrectUnit(corroborating.Text,kind);
     internal static Rect ExpandNumericRow(Rect row,IReadOnlyList<Rect> regions,Size size)
     {
         var margin=(int)Math.Ceiling(row.Height*.5);var left=Math.Max(0,row.Left-margin);var right=Math.Min(size.Width,row.Right+margin);

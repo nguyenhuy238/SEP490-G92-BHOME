@@ -1,10 +1,36 @@
 using BHome.Infrastructure.Ocr;
+using BHome.Application.Ocr;
 using OpenCvSharp;
 
 namespace BHome.IntegrationTests.Ocr;
 
 public sealed class ExperimentalGeometryTests
 {
+    [Theory]
+    [InlineData("kW")]
+    [InlineData("kVA")]
+    [InlineData("V")]
+    [InlineData("A")]
+    [InlineData("Hz")]
+    [InlineData("m3/h")]
+    [InlineData("L/min")]
+    [InlineData("1000 imp/kWh")]
+    [InlineData("serial42")]
+    public void RectificationCannotOverrideExplicitNonConsumptionEvidence(string original)
+    {
+        Assert.False(ExperimentalMeterRecognizer.CanUseRefinedUnit(new(original,.99f),new("kWh",.99f),.99f,
+            new("kWh",.99f),.99f,OcrDocumentKind.DigitalElectricity));
+    }
+    [Fact]
+    public void RefinedUnitRequiresTwoActualConsistentHighConfidenceReads()
+    {
+        var original=new OcrLine("uncertain",.6f);
+        Assert.True(ExperimentalMeterRecognizer.CanUseRefinedUnit(original,new("kwh",.9f),.7f,new("kWh",.9f),.7f,OcrDocumentKind.DigitalElectricity));
+        Assert.False(ExperimentalMeterRecognizer.CanUseRefinedUnit(original,new("kwh",.9f),.7f,new("KVA",.99f),.99f,OcrDocumentKind.DigitalElectricity));
+        Assert.False(ExperimentalMeterRecognizer.CanUseRefinedUnit(original,new("kwh",.9f),.4f,new("kWh",.9f),.7f,OcrDocumentKind.DigitalElectricity));
+        Assert.False(ExperimentalMeterRecognizer.CanUseRefinedUnit(original,new("kwh",.9f),.7f,new("kWh",float.NaN),.7f,OcrDocumentKind.DigitalElectricity));
+        Assert.False(ExperimentalMeterRecognizer.CanUseRefinedUnit(original,new("kwh",.9f),.7f,new("kWh",.9f),.7f,OcrDocumentKind.DigitalWater));
+    }
     [Fact]
     public void ExperimentalConfigurationRequiresFrozenNeutralPreprocessing()
     {

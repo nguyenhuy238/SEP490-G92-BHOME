@@ -33,6 +33,7 @@ Ví dụ phần cấu hình cho host Development đã có authentication/databas
       "EnglishModelDirectory": "<pinned-English-model-directory>",
       "UtilityThreshold": 0.55,
       "TechnologyThreshold": 0.75,
+      "RefineUnitCrops": true,
       "Categories": ["DigitalElectricity"]
     }
   }
@@ -64,7 +65,7 @@ Experimental `analysis` gồm:
 | `classification` | OcrCategoryDecision hiện có; `classified`, `unknown` hoặc `unavailable` |
 | `candidateCategory` | Argmax từ pixels, có thể sai ngay cả khi `classification.status=unknown`; không phải type đã xác thực |
 | `readingCandidate` | Chuỗi diagnostic có unit cùng vùng và qua gate; null nếu chưa đủ bằng chứng |
-| `displayState` | `readable_candidate`, `unreadable_or_unverified` hoặc `unknown` |
+| `displayState` | `readable_candidate`, `numeric_text_present_display_unverified`, `unreadable_or_unverified` hoặc `unknown` |
 | `registerStatus` | `consumption_candidate`, `unverified`, `ambiguous`, `non_consumption` |
 | `readingBounds` | Nullable x/y/width/height trong ảnh sau cap1600; không phải ảnh gốc nếu đã resize |
 | `warnings` | Bao gồm experimental, category/register review, decimal precision chưa xác minh |
@@ -79,6 +80,20 @@ Pipeline thực: neutral pixels → supervised CLIP ONNX → PP-OCRv6 text regio
 English CTC, margin theo chiều cao hàng và giới hạn vùng cạnh → active-ink gate →
 unit/register selector. OCR không dùng tên file, nhãn dataset hay task metadata.
 Không fuzzy đổi `kvVh` thành `kWh`, không cắt/bổ sung digits để khớp label.
+
+`RefineUnitCrops` mặc định true trong pipeline experimental. Khi một label chưa
+biết nằm gần numeric row, dùng quadrilateral PP detector để re-recognize hai
+crop: native rectified và warp trực tiếp đến chiều cao CTC48. Cả hai phải đọc
+đúng unit đầy đủ, mean confidence ≥.8 và minimum character score ≥.5. Không
+thay các label đã nhận là kW/kVA/V/A/Hz/flow hoặc calibration bằng kWh. Hai view
+cùng ảnh có tương quan, không phải hai xác minh độc lập; thêm warnings
+`unit_crop_rectified`, `unit_requires_human_review`. Đặt false và restart để
+replay bước unit trước thay đổi. Numeric row có label L1/L2/L3/status/phase cạnh
+bên không được dùng thay total consumption; không sửa chuỗi thành OBIS.
+
+`numeric_text_present_display_unverified` chỉ xác nhận có text dạng số; không
+khẳng định đã tìm thấy LCD readable. Nó thay cách báo `readable_candidate` trên
+fallback khi serial text có nét rõ nhưng chưa có consumption register.
 
 ## Model/fallback và replay
 
@@ -100,3 +115,4 @@ Provision các public fixtures/pinned models theo manifests và báo cáo trư�
 chạy. Python reference generator là `verify_runtime_classifier.py`; test đối chiếu
 9 tensor/logits thật. Model binary và ảnh local không nằm trong Git.
 Kết quả và acceptance blockers: [runtime report](../development/OCR_RUNTIME_ACTIVATION_RESULTS.md).
+Kết quả cải thiện unit tiếp theo: [Staff activation progress](../development/OCR_STAFF_ACTIVATION_PROGRESS.md).

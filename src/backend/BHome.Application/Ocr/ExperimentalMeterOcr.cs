@@ -48,7 +48,8 @@ public static class ExperimentalRegisterSelection
             bool SameRow(OcrLine other) => Math.Abs(bounds.Y + bounds.Height / 2 - other.Bounds!.Y - other.Bounds.Height / 2) <= Math.Max(bounds.Height, other.Bounds.Height) * .6 &&
                 Math.Max(bounds.X - other.Bounds.X - other.Bounds.Width, other.Bounds.X - bounds.X - bounds.Width) <= Math.Max(bounds.Height, other.Bounds.Height) * 2;
             if (evidence.Any(other => other != line && SameRow(other) &&
-                (MeterOcrLayout.IsNonBillingUnit(other.Text) || Match(other.Text, @"\b(?:serial|s\.?\s*no\.?|voltage|frequency|temperature|flow[ -]?rate)\b")))) continue;
+                (MeterOcrLayout.IsNonBillingUnit(other.Text) || Match(other.Text, @"\b(?:serial|s\.?\s*no\.?|voltage|frequency|temperature|flow[ -]?rate)\b") ||
+                 Match(other.Text.Trim(), @"^(?:L[123]|status|phase)$")))) continue;
             var unit = evidence.Any(label => label != line && MeterOcrLayout.Nearby(bounds, label.Bounds!) &&
                 MeterOcrLayout.IsCorrectUnit(label.Text.Trim(), kind));
             if (unit) candidates.Add(line);

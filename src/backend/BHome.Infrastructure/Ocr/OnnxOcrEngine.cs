@@ -414,12 +414,18 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         return boxes.OrderBy(b => Math.Round(b.Center.Y / 12)).ThenBy(b => b.Center.X).ToList();
     }
 
-    internal static Mat Crop(Mat source, RotatedRect region)
+    internal static Mat Crop(Mat source, RotatedRect region, int? recognitionHeight = null)
     {
         // Order corners TL/TR/BR/BL, correct local text-line perspective/rotation.
         var src = OcrImageGeometry.Corners(region);
         var width = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[1]), src[2].DistanceTo(src[3])));
         var height = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[3]), src[1].DistanceTo(src[2])));
+        if(recognitionHeight is {} target)
+        {
+            // Small unit labels otherwise undergo perspective sampling followed
+            // by another resize in the CTC adapter, eroding segmented strokes.
+            width=Math.Max(2,(int)Math.Ceiling((double)width*target/height));height=target;
+        }
         Point2f[] dst = [new(0, 0), new(width - 1, 0), new(width - 1, height - 1), new(0, height - 1)];
         using var transform = Cv2.GetPerspectiveTransform(src, dst);
         var result = new Mat();
