@@ -5,6 +5,8 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 6 && args[0] == "--reviewed-window-compare")
+    return await ReviewedWindowComparison.RunAsync(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 5 && args[0] == "--english-meter-parity")
     return await WaterReaderComparison.ParityAsync(args[1], args[2], args[3], args[4]);
 if (args.Length == 7 && args[0] == "--water-reader-compare")

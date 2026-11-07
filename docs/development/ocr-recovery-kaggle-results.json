@@ -1,0 +1,379 @@
+{
+  "source": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data",
+  "metadataApi": "https://www.kaggle.com/api/v1/datasets/list?search=saarthaksrivastav%2Fmeter-data",
+  "downloadUrl": "https://www.kaggle.com/api/v1/datasets/download/saarthaksrivastav/meter-data",
+  "publisherVersion": 1,
+  "publisherLicense": "MIT",
+  "licenseEvidence": "public metadata HTTP200, snapshot in ignored inventory.json; GitHub code AGPL license is separate",
+  "archiveSha256": "f459b1d39ff68cab8e2ee909f9f095bc3244b1efa23ff848ac2bd572c73bd4a4",
+  "archiveBytes": 33039810,
+  "audit": {
+    "images": 327,
+    "exactDuplicateImages": 0,
+    "labelCounts": {
+      "0": 319,
+      "1": 295
+    },
+    "invalidLabelRows": [
+      "kgl_010",
+      "kgl_083",
+      "kgl_136",
+      "kgl_136",
+      "kgl_147",
+      "kgl_211",
+      "kgl_217"
+    ],
+    "perceptualThreshold": 6,
+    "nearDuplicatePairs": [],
+    "physicalIndependence": "unknown_not_training_eligible"
+  },
+  "singleValidReadingBoxImages": 293,
+  "readingBoxesAreNotNumericGT": true,
+  "comparison": {
+    "baseline_direct": {
+      "inputs": 12,
+      "matchesFrozenAgentDraft": 0,
+      "p95ObservedMs": 99.97743
+    },
+    "baseline_page": {
+      "inputs": 12,
+      "matchesFrozenAgentDraft": 0,
+      "p95ObservedMs": 457.33037
+    },
+    "english_direct": {
+      "inputs": 12,
+      "matchesFrozenAgentDraft": 4,
+      "p95ObservedMs": 21.059005
+    }
+  },
+  "rawComparisonSha256": "e4885f09dd15dc92c5ccea1fe14445fdb9067a4f1d3fb3835230a33ef6121180",
+  "manifestSha256": "8b19dd2bb7aaa13802f14a36bd105d5b1c0cf7453355e97320e6b23ceb796324",
+  "status": "exploratory_candidate_only_no_production_activation",
+  "uncertainty": "Leading-zero/last-character ambiguity noticed in kgl_030, kgl_038, kgl_053, kgl_065; retain frozen strings, require blinded second review; no GT correction from model output.",
+  "rows": [
+    {
+      "id": "kgl_008",
+      "mode": "baseline_direct",
+      "expectedDigits": "003475",
+      "raw": "DBA",
+      "confidence": 0.56809694,
+      "exactRaw": false,
+      "observedMs": 75.8678
+    },
+    {
+      "id": "kgl_008",
+      "mode": "baseline_page",
+      "expectedDigits": "003475",
+      "raw": "LAI",
+      "confidence": 0.6709423,
+      "exactRaw": false,
+      "observedMs": 134.6744
+    },
+    {
+      "id": "kgl_008",
+      "mode": "english_direct",
+      "expectedDigits": "003475",
+      "raw": "003475",
+      "confidence": 0.87993675,
+      "exactRaw": true,
+      "observedMs": 21.5039
+    },
+    {
+      "id": "kgl_023",
+      "mode": "baseline_direct",
+      "expectedDigits": "003072",
+      "raw": "oI",
+      "confidence": 0.60820127,
+      "exactRaw": false,
+      "observedMs": 55.3214
+    },
+    {
+      "id": "kgl_023",
+      "mode": "baseline_page",
+      "expectedDigits": "003072",
+      "raw": "kWh T: T 07P B L:",
+      "confidence": 0.73511857,
+      "exactRaw": false,
+      "observedMs": 436.595
+    },
+    {
+      "id": "kgl_023",
+      "mode": "english_direct",
+      "expectedDigits": "003072",
+      "raw": "003012",
+      "confidence": 0.8388038,
+      "exactRaw": false,
+      "observedMs": 13.3941
+    },
+    {
+      "id": "kgl_030",
+      "mode": "baseline_direct",
+      "expectedDigits": "027294",
+      "raw": "",
+      "confidence": 0,
+      "exactRaw": false,
+      "observedMs": 58.4085
+    },
+    {
+      "id": "kgl_030",
+      "mode": "baseline_page",
+      "expectedDigits": "027294",
+      "raw": "H\u1ec4",
+      "confidence": 0.4712131,
+      "exactRaw": false,
+      "observedMs": 78.9032
+    },
+    {
+      "id": "kgl_030",
+      "mode": "english_direct",
+      "expectedDigits": "027294",
+      "raw": "02123T",
+      "confidence": 0.48780885,
+      "exactRaw": false,
+      "observedMs": 12.6594
+    },
+    {
+      "id": "kgl_038",
+      "mode": "baseline_direct",
+      "expectedDigits": "021691",
+      "raw": "002.1541",
+      "confidence": 0.8406459,
+      "exactRaw": false,
+      "observedMs": 56.4892
+    },
+    {
+      "id": "kgl_038",
+      "mode": "baseline_page",
+      "expectedDigits": "021691",
+      "raw": "KNOA 0020591",
+      "confidence": 0.6664321,
+      "exactRaw": false,
+      "observedMs": 185.1699
+    },
+    {
+      "id": "kgl_038",
+      "mode": "english_direct",
+      "expectedDigits": "021691",
+      "raw": "0021691",
+      "confidence": 0.94496065,
+      "exactRaw": false,
+      "observedMs": 12.6894
+    },
+    {
+      "id": "kgl_039",
+      "mode": "baseline_direct",
+      "expectedDigits": "069156",
+      "raw": "",
+      "confidence": 0,
+      "exactRaw": false,
+      "observedMs": 56.6742
+    },
+    {
+      "id": "kgl_039",
+      "mode": "baseline_page",
+      "expectedDigits": "069156",
+      "raw": "kwh 059 155 s#",
+      "confidence": 0.8910249,
+      "exactRaw": false,
+      "observedMs": 302.97
+    },
+    {
+      "id": "kgl_039",
+      "mode": "english_direct",
+      "expectedDigits": "069156",
+      "raw": "069156",
+      "confidence": 0.9848566,
+      "exactRaw": true,
+      "observedMs": 12.5344
+    },
+    {
+      "id": "kgl_043",
+      "mode": "baseline_direct",
+      "expectedDigits": "007696",
+      "raw": "-001595",
+      "confidence": 0.96522266,
+      "exactRaw": false,
+      "observedMs": 54.9889
+    },
+    {
+      "id": "kgl_043",
+      "mode": "baseline_page",
+      "expectedDigits": "007696",
+      "raw": "\u1eda 00159E kwh",
+      "confidence": 0.8074843,
+      "exactRaw": false,
+      "observedMs": 186.0918
+    },
+    {
+      "id": "kgl_043",
+      "mode": "english_direct",
+      "expectedDigits": "007696",
+      "raw": "007696",
+      "confidence": 0.98033756,
+      "exactRaw": true,
+      "observedMs": 12.5935
+    },
+    {
+      "id": "kgl_047",
+      "mode": "baseline_direct",
+      "expectedDigits": "012556",
+      "raw": "I",
+      "confidence": 0.9736061,
+      "exactRaw": false,
+      "observedMs": 54.8041
+    },
+    {
+      "id": "kgl_047",
+      "mode": "baseline_page",
+      "expectedDigits": "012556",
+      "raw": "K102555 2 Knh",
+      "confidence": 0.7364559,
+      "exactRaw": false,
+      "observedMs": 198.6209
+    },
+    {
+      "id": "kgl_047",
+      "mode": "english_direct",
+      "expectedDigits": "012556",
+      "raw": "S412556n",
+      "confidence": 0.65891063,
+      "exactRaw": false,
+      "observedMs": 13.6159
+    },
+    {
+      "id": "kgl_050",
+      "mode": "baseline_direct",
+      "expectedDigits": "020355",
+      "raw": "05",
+      "confidence": 0.6447183,
+      "exactRaw": false,
+      "observedMs": 54.7164
+    },
+    {
+      "id": "kgl_050",
+      "mode": "baseline_page",
+      "expectedDigits": "020355",
+      "raw": "020755",
+      "confidence": 0.72750396,
+      "exactRaw": false,
+      "observedMs": 106.3865
+    },
+    {
+      "id": "kgl_050",
+      "mode": "english_direct",
+      "expectedDigits": "020355",
+      "raw": "2 020355",
+      "confidence": 0.8280016,
+      "exactRaw": false,
+      "observedMs": 12.9305
+    },
+    {
+      "id": "kgl_053",
+      "mode": "baseline_direct",
+      "expectedDigits": "058781",
+      "raw": "05818",
+      "confidence": 0.86990404,
+      "exactRaw": false,
+      "observedMs": 55.4784
+    },
+    {
+      "id": "kgl_053",
+      "mode": "baseline_page",
+      "expectedDigits": "058781",
+      "raw": "E058181",
+      "confidence": 0.85064834,
+      "exactRaw": false,
+      "observedMs": 249.9943
+    },
+    {
+      "id": "kgl_053",
+      "mode": "english_direct",
+      "expectedDigits": "058781",
+      "raw": "805878M",
+      "confidence": 0.8712011,
+      "exactRaw": false,
+      "observedMs": 14.2722
+    },
+    {
+      "id": "kgl_057",
+      "mode": "baseline_direct",
+      "expectedDigits": "053308",
+      "raw": "TFN",
+      "confidence": 0.39243242,
+      "exactRaw": false,
+      "observedMs": 99.7572
+    },
+    {
+      "id": "kgl_057",
+      "mode": "baseline_page",
+      "expectedDigits": "053308",
+      "raw": "PEA",
+      "confidence": 0.5599697,
+      "exactRaw": false,
+      "observedMs": 194.6988
+    },
+    {
+      "id": "kgl_057",
+      "mode": "english_direct",
+      "expectedDigits": "053308",
+      "raw": "053308",
+      "confidence": 0.9051121,
+      "exactRaw": true,
+      "observedMs": 14.5059
+    },
+    {
+      "id": "kgl_065",
+      "mode": "baseline_direct",
+      "expectedDigits": "024692",
+      "raw": "AH",
+      "confidence": 0.6590419,
+      "exactRaw": false,
+      "observedMs": 100.2466
+    },
+    {
+      "id": "kgl_065",
+      "mode": "baseline_page",
+      "expectedDigits": "024692",
+      "raw": "5",
+      "confidence": 0.8343462,
+      "exactRaw": false,
+      "observedMs": 206.6575
+    },
+    {
+      "id": "kgl_065",
+      "mode": "english_direct",
+      "expectedDigits": "024692",
+      "raw": "0024692",
+      "confidence": 0.901034,
+      "exactRaw": false,
+      "observedMs": 20.695
+    },
+    {
+      "id": "kgl_067",
+      "mode": "baseline_direct",
+      "expectedDigits": "014962",
+      "raw": "\u1ea8I",
+      "confidence": 0.564625,
+      "exactRaw": false,
+      "observedMs": 56.7944
+    },
+    {
+      "id": "kgl_067",
+      "mode": "baseline_page",
+      "expectedDigits": "014962",
+      "raw": "- - f kwh",
+      "confidence": 0.8867192,
+      "exactRaw": false,
+      "observedMs": 482.6736
+    },
+    {
+      "id": "kgl_067",
+      "mode": "english_direct",
+      "expectedDigits": "014962",
+      "raw": "7014962",
+      "confidence": 0.90984124,
+      "exactRaw": false,
+      "observedMs": 14.5345
+    }
+  ]
+}
