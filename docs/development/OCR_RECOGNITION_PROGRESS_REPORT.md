@@ -1,5 +1,9 @@
 # Tiến độ nhận dạng công tơ — 07/11/2026
 
+Kết quả lượt tiếp theo ở
+[OCR_NEXT_RECOGNITION_IMPROVEMENT_REPORT.md](OCR_NEXT_RECOGNITION_IMPROVEMENT_REPORT.md).
+Các số dưới đây giữ nguyên làm baseline lịch sử.
+
 **Chưa đạt nhận dạng và đọc số an toàn cho cả bốn loại.** Đã chạy thêm inference
 thật cho readability, localization, classifier phân cấp và đọc bánh số điện.
 Classifier phân cấp nhận đúng thêm 3/9 ảnh meter so với direct CLIP trên cùng bộ

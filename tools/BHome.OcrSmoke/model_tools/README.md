@@ -135,3 +135,55 @@ manifest to improve predictions. It preserves one disputed rolling digit as null
 The two provisional wheel strings are historical classification TRAIN images,
 not independent numeric test data. Output `draftMatch` is never billing accuracy.
 Keep readers' disagreeing strings separate; do not vote them into ground truth.
+
+## Continued accuracy experiments, 2026-11-07
+
+See `docs/development/OCR_NEXT_RECOGNITION_IMPROVEMENT_REPORT.md`. These are local
+experiments, not production features. Never retune the old9-meter test. New
+provisional author-group probes, pixel/CLIP folds and publisher character boxes
+have separate roles; no independent human labels were added.
+
+The existing wrapper can run these argv lists (fresh output paths required):
+
+```python
+['study_continued_hierarchy.py', '.tools/ocr-four-clip', 'docs/datasets/meter/continued-classification-provisional.json', '.', '.tools/continued-classifier-replay']
+['study_high_resolution_displays.py', '.tools/ocr-four-display/run/weights/best.onnx', '.tools/master-body-export/body.onnx', '.tools/ocr-models/detection.onnx', '.tools/ocr-recovery-english', '.tools/ocr-four-server', 'docs/datasets/meter/continued-display-provisional.json', '.', '.tools/continued-localization-replay']
+['study_learned_readability.py', '.tools/ocr-four-clip', '.tools/ocr-recovery-english', '.tools/ocr-four-server', 'docs/development/ocr-progress-readability-results.json', 'docs/datasets/meter/continued-display-provisional.json', '.', '.tools/continued-readability-replay']
+```
+
+PARSeq adds a different autoregressive baseline. Its official Apache-2.0 source
+must be checked out in an **external ignored clone** at the revision in
+`parseq-receipt.json`; its official release checkpoint must match the full SHA.
+Use `requirements-parseq-experiment.txt` with `--no-deps --target` in a separate
+ignored package directory and prepend that directory to sys.path too. Reuse
+existing Torch/torchvision; do not install the old upstream training requirements
+over the project environment. `ParseqReader` verifies clean source/revision and
+weights before import, constructs the official model with full94 charset, and
+loads only its state dictionary via weights_only=True. No cloud image inference.
+
+Additional argv lists using this isolated setup:
+
+```python
+['study_meter_numeric_alternatives.py', '.tools/ocr-continued/parseq-source', '.tools/ocr-continued/parseq-bb5792a6.pt', '.tools/master-lcd-verified-dataset', '.tools/ocr-recovery-english', '.tools/ocr-four-server', 'docs/datasets/meter/continued-display-provisional.json', '.tools/ocr-continued/localization/report.json', '.tools/ocr-recovery-historical-test/diagnostic-public-only.json', '.', '.tools/continued-numeric-replay']
+['study_new_wheel_rows.py', '.tools/ocr-models/detection.onnx', '.tools/ocr-recovery-english', '.tools/ocr-four-server', '.tools/ocr-continued/parseq-source', '.tools/ocr-continued/parseq-bb5792a6.pt', 'docs/datasets/meter/continued-wheel-provisional.json', '.', '.tools/continued-wheels-replay']
+['benchmark_display_pipeline.py', '.tools/ocr-four-display/run/weights/best.onnx', '.tools/ocr-models/detection.onnx', '.tools/ocr-recovery-english', 'docs/datasets/meter/continued-display-provisional.json', '.', '.tools/continued-full-image-replay.json']
+```
+
+The numeric study trains a small character CNN for a fixed20 epochs using only
+Mendeley publisher digit boxes whose label hashes are present in the verified
+audit. It does not retrain the failed CRNN or supervise from provisional strings.
+Raw sequences, unknown rolling digits, oracle crops and predicted crops remain
+separate. Row margin uses observed row height and original pixels, never an
+expected count or a guessed missing digit. Grouping never supplies absent digits.
+Neither method verifies a billing register; rejected models stay out of DI/config.
+
+Blinded priority pilot (eight public full images, no suggestions in package):
+
+```powershell
+.tools/yolo-python/python.exe tools/BHome.OcrSmoke/model_tools/meter_review.py build-manifest docs/datasets/meter/continued-review-pilot.json . .tools/continued-review-replay
+```
+
+All source images must still match manifest hashes. Use the original public
+catalogs for license/attribution, including continued-public-sources.json. Do not
+replace inaccessible assets by guessed high-resolution URLs or relabel held-out
+errors to fit model outputs. Human reviews remain zero until actually received.
