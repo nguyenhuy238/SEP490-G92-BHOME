@@ -78,3 +78,25 @@ dotnet run --project tools/BHome.OcrSmoke -c Release -- --meter-failure-diagnost
 [Summary theo ảnh và hash raw](ocr-recovery-validation-stages.json). Lượt này chưa
 đo lại automatic classifier ở trace trên vì Staff dùng trusted profile; automatic
 baseline lịch sử1/33 được giữ riêng, không tái suy category từ output của typed path.
+
+## Kiểm độc lập localization/digit boxes
+
+Chạy raw Stage1 với pinned ONNX và cùng letterbox/decode/NMS hiện hành trên100
+validation. Giả thuyếtu nằm trong AABB nhưng ngoài polygon display không xuất hiện:
+0 ca AABB-only,0 selection thay đổi;75 allowed ở cả hai cách. Không tích hợp một
+thay đổi geometry không có lợi ích được đo. Threshold không đổi.
+
+Stage2 per-digit được match class-agnostic bằng Hungarian/IoU≥0,3 với digit polygons
+publisher đã warp vào đúng crop. Đây là threshold **đánh giá**, không đổi production.
+Trên predicted crops:571 known annotated digits,6 missing,18 extra boxes,544 matched
+đúng,13 matched sai digit,8u prediction ở vị trí known,0 ordering inversions. Trên
+oracle:739 known,10 missing,22 extra,696 đúng,20 sai,13u ở known,0 inversions.
+Các ca thiếu/malformed annotation vẫn có thể ảnh hưởng metric; không sửa GT từ model.
+Chưa có căn cứ để đổi sortX/NMS hoặc chọn digit giữa các overlapping classes.
+
+[Kết quả localization/digits và hash raw](ocr-recovery-localization-digits.json).
+
+```powershell
+dotnet run --project tools/BHome.OcrSmoke -c Release -- --water-localization-audit .tools/meter-detection-models .tools/meter-detection-validation tools/BHome.OcrSmoke/model_tools/evaluation-validation-deduplicated-manifest.json .tools/ocr-recovery-localization.json
+.tools/yolo-python/python.exe tools/BHome.OcrSmoke/model_tools/audit_meter_digit_boxes.py .tools/ocr-recovery-validation/diagnostic-public-only.json .tools/meter-detection-validation .tools/ocr-recovery-digit-boxes-validation.json
+```

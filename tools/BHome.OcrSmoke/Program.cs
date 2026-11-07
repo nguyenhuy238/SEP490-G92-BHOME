@@ -5,6 +5,8 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 5 && args[0] == "--water-localization-audit")
+    return await WaterLocalizationAudit.RunAsync(args[1], args[2], args[3], args[4]);
 if (args.Length == 6 && args[0] == "--meter-failure-diagnostic")
     return await MeterFailureDiagnostic.RunAsync(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 6 && args[0] == "--reviewed-positive-evaluate")
