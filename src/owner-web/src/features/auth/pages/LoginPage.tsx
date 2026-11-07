@@ -16,11 +16,16 @@ import {
   Typography,
 } from '@mui/material';
 import { Apartment, LockOutlined, PhoneOutlined, VerifiedUserOutlined } from '@mui/icons-material';
+import { useLocation } from 'react-router';
 import { LoginForm } from '../components/LoginForm';
 import { useOwnerLogin } from '../hooks/useOwnerLogin';
 
 export function LoginPage() {
   const auth = useOwnerLogin();
+  const location = useLocation();
+  const passwordChanged = Boolean(
+    (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
+  );
   const [resetOpen, setResetOpen] = useState(false);
   const [resetUserName, setResetUserName] = useState('');
   const supportPhone = import.meta.env.VITE_SUPPORT_PHONE as string | undefined;
@@ -88,6 +93,7 @@ export function LoginPage() {
           </Typography>
           {auth.authenticated ? (
             <Stack spacing={2}>
+              {auth.error && <Alert severity="error">{auth.error}</Alert>}
               <Alert severity="success">Đăng nhập thành công. Phiên Owner đã được xác thực.</Alert>
               <Typography variant="body2" color="text.secondary">
                 Phiên đã sẵn sàng để truy cập không gian quản lý BHOME.
@@ -97,15 +103,22 @@ export function LoginPage() {
               </Button>
             </Stack>
           ) : (
-            <LoginForm
-              busy={auth.busy}
-              error={auth.error}
-              onLogin={auth.login}
-              onForgotPassword={(value) => {
-                setResetUserName(value);
-                setResetOpen(true);
-              }}
-            />
+            <Stack spacing={2}>
+              {passwordChanged && (
+                <Alert severity="success">
+                  Đổi mật khẩu thành công. Tất cả phiên đã được đăng xuất; vui lòng đăng nhập lại.
+                </Alert>
+              )}
+              <LoginForm
+                busy={auth.busy}
+                error={auth.error}
+                onLogin={auth.login}
+                onForgotPassword={(value) => {
+                  setResetUserName(value);
+                  setResetOpen(true);
+                }}
+              />
+            </Stack>
           )}
 
           <Stack

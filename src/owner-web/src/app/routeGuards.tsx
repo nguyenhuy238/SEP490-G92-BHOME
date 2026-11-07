@@ -1,17 +1,29 @@
+import { useEffect } from 'react';
 import { Alert, Box, Typography } from '@mui/material';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../../../../packages/client-core/src/auth';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { DEMO_PASSWORD, DEMO_USER, useDemoSession } from '../services/demoAuth';
 import { isMockMode } from '../services/config';
+import { LoadingState } from '../components/common/PortalUI';
 function useOwnerSession() {
   const demo = useDemoSession();
-  const { session } = useAuth();
-  return isMockMode ? demo : !!session?.roles.includes('Owner');
+  const { session, isRestoring } = useAuth();
+  return {
+    owner: isMockMode ? demo : !!session?.roles.includes('Owner'),
+    restoring: !isMockMode && isRestoring,
+  };
 }
 export function ProtectedRoute() {
-  const owner = useOwnerSession(),
-    location = useLocation();
+  const { owner, restoring } = useOwnerSession();
+  const { session, client } = useAuth();
+  const location = useLocation();
+  useEffect(() => {
+    if (!restoring && session && !session.roles.includes('Owner')) {
+      void client.logout().catch(() => undefined);
+    }
+  }, [client, restoring, session]);
+  if (restoring) return <LoadingState />;
   return owner ? (
     <Outlet />
   ) : (
@@ -23,9 +35,10 @@ export function ProtectedRoute() {
   );
 }
 export function LoginRoute() {
-  const owner = useOwnerSession(),
-    location = useLocation();
+  const { owner, restoring } = useOwnerSession();
+  const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
+  if (restoring) return <LoadingState />;
   return owner ? (
     <Navigate
       to={

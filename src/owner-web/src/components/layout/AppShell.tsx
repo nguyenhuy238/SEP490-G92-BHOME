@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Avatar,
   Badge,
   Box,
@@ -15,6 +16,7 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Snackbar,
   TextField,
   Tooltip,
   Typography,
@@ -61,6 +63,7 @@ import { isMockMode } from '../../services/config';
 import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
+import { ChangePasswordDialog } from '../../features/auth/components/ChangePasswordDialog';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -167,7 +170,9 @@ const navLabels: Record<string, string> = {
 };
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false),
-    [resetOpen, setResetOpen] = useState(false);
+    [resetOpen, setResetOpen] = useState(false),
+    [passwordOpen, setPasswordOpen] = useState(false),
+    [logoutError, setLogoutError] = useState(false);
   const { data } = usePortalData();
   const portal = usePortal();
   const action = usePortalAction();
@@ -402,14 +407,26 @@ export function AppShell() {
               </IconButton>
             </Tooltip>
           )}
+          {!isMockMode && (
+            <Tooltip title="Đổi mật khẩu">
+              <IconButton aria-label="Đổi mật khẩu" onClick={() => setPasswordOpen(true)}>
+                <KeyRound size={18} />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Đăng xuất">
             <IconButton
               aria-label="Đăng xuất"
               onClick={() =>
                 action.mutate(async () => {
-                  if (isMockMode) await demoAuth.logout();
-                  else await client.logout();
-                  navigate('/login');
+                  try {
+                    if (isMockMode) await demoAuth.logout();
+                    else await client.logout();
+                    setLogoutError(false);
+                    navigate('/login', { replace: true });
+                  } catch {
+                    setLogoutError(true);
+                  }
                 })
               }
             >
@@ -455,6 +472,21 @@ export function AppShell() {
       >
         Các thay đổi demo trên trình duyệt này sẽ được thay bằng bộ dữ liệu ban đầu.
       </ConfirmDialog>
+      <ChangePasswordDialog
+        open={passwordOpen}
+        onClose={() => setPasswordOpen(false)}
+        onChanged={() => navigate('/login', { replace: true, state: { passwordChanged: true } })}
+      />
+      <Snackbar
+        open={logoutError}
+        autoHideDuration={8000}
+        onClose={() => setLogoutError(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={() => setLogoutError(false)}>
+          Chưa thể xác nhận đăng xuất trên máy chủ. Phiên vẫn được giữ để bạn thử lại.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
