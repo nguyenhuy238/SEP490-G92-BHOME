@@ -1,5 +1,11 @@
 export type MobileRole = 'Owner' | 'Staff' | 'Tenant';
 export const screenRoles = {
+  'incident-detail': ['Owner', 'Staff', 'Tenant'],
+  'maintenance-detail': ['Owner', 'Staff'],
+  'staff-incidents': ['Staff'],
+  'owner-incidents': ['Owner'],
+  'owner-maintenance': ['Owner'],
+  'owner-emergencies': ['Owner'],
   onboarding: ['Staff'],
   'prepare-contract': ['Staff'],
   'move-out': ['Staff'],
@@ -21,6 +27,9 @@ export const screenRoles = {
   'work-orders': ['Staff'],
   'meter-reading': ['Staff'],
   'tenant-home': ['Tenant'],
+  'tenant-room': ['Tenant'],
+  'tenant-requests': ['Tenant'],
+  'tenant-meters': ['Tenant'],
   invoice: ['Tenant'],
   incidents: ['Tenant'],
   contract: ['Tenant'],
@@ -28,6 +37,10 @@ export const screenRoles = {
   profile: ['Owner', 'Staff', 'Tenant'],
   notifications: ['Owner', 'Staff', 'Tenant'],
   'send-notification': ['Staff'],
+  'staff-assets': ['Staff'],
+  'staff-maintenance': ['Staff'],
+  'staff-emergencies': ['Staff'],
+  'staff-invoices': ['Staff'],
   security: ['Owner', 'Staff', 'Tenant'],
   preferences: ['Owner', 'Staff', 'Tenant'],
 } satisfies Record<string, MobileRole[]>;
@@ -74,19 +87,50 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
     Tenant: [
       { screen: 'tenant-home', title: 'Trang chủ', icon: 'home-outline' },
       { screen: 'invoice', title: 'Hóa đơn', icon: 'receipt-text-outline' },
-      { screen: 'incidents', title: 'Báo sự cố', icon: 'wrench-outline' },
-      { screen: 'profile', title: 'Tài khoản', icon: 'account-outline' },
+      { screen: 'tenant-requests', title: 'Yêu cầu', icon: 'clipboard-text-outline' },
+      { screen: 'profile', title: 'Cá nhân', icon: 'account-outline' },
     ],
   };
 
 export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): WorkspaceScreen {
+  if (role === 'Tenant') {
+    if (['profile', 'security', 'preferences'].includes(screen)) return 'profile';
+    if (['invoice', 'billing-history', 'adjustment', 'tenant-meters'].includes(screen))
+      return 'invoice';
+    if (['incidents', 'tenant-requests', 'incident-detail'].includes(screen))
+      return 'tenant-requests';
+    return 'tenant-home';
+  }
   if (role === 'Staff') {
     if (['profile', 'security', 'preferences'].includes(screen)) return 'profile';
-    if (['work-orders', 'task-detail', 'shifts', 'report-incident'].includes(screen))
+    if (
+      [
+        'work-orders',
+        'task-detail',
+        'shifts',
+        'report-incident',
+        'staff-maintenance',
+        'staff-emergencies',
+        'staff-incidents',
+        'incident-detail',
+        'maintenance-detail',
+      ].includes(screen)
+    )
       return 'work-orders';
     if (['notifications', 'send-notification'].includes(screen)) return 'notifications';
     return 'staff-home';
   }
+  if (
+    role === 'Owner' &&
+    [
+      'owner-incidents',
+      'owner-maintenance',
+      'owner-emergencies',
+      'incident-detail',
+      'maintenance-detail',
+    ].includes(screen)
+  )
+    return 'operations';
   if (['contract', 'checklist', 'residence', 'contract-request'].includes(screen))
     return 'tenant-home';
   if (['security', 'preferences'].includes(screen)) return 'profile';

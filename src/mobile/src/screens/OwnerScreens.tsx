@@ -1,3 +1,10 @@
+import {
+  DashboardCard,
+  DashboardHeading,
+  DashboardMetric,
+  DashboardActions,
+  DashboardSummary,
+} from '../components/DashboardKit';
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Button, Dialog, Icon, Portal, ProgressBar, Text, TextInput } from 'react-native-paper';
@@ -9,7 +16,6 @@ import {
   InfoRow,
   Metric,
   Pill,
-  QuickActions,
   Row,
   ui,
 } from '../components/WorkspaceKit';
@@ -101,37 +107,37 @@ export function OwnerHome() {
   const [month, setMonth] = useState('Tháng 10/2024');
   return (
     <>
-      <Heading
+      <DashboardSummary
         title="Chào anh Tuấn Dũng"
         detail="Hệ thống hoạt động ổn định • Cập nhật lúc 08:30"
       />
       <Filters options={['Tháng 10/2024', 'Tháng 09/2024']} selected={month} onChange={setMonth} />
       {month === 'Tháng 09/2024' ? (
-        <Box>
+        <DashboardCard>
           <Text>Chưa có dữ liệu mẫu cho kỳ đã chọn.</Text>
-        </Box>
+        </DashboardCard>
       ) : (
         <View style={ui.wrap}>
-          <Metric
+          <DashboardMetric
             label="Thực thu tháng 10"
             value="486.500.000đ"
             detail="↗ +8,4% so tháng trước"
             icon="cash-multiple"
           />
-          <Metric
+          <DashboardMetric
             label="Công nợ tồn"
             value="34.200.000đ"
             detail="8 phòng chậm nộp"
             icon="receipt-text-outline"
           />
-          <Metric
+          <DashboardMetric
             label="Tỷ lệ lấp đầy"
             value="94,5%"
             detail="121/128 • Còn 7 phòng trống"
             icon="chart-donut"
             progress={0.945}
           />
-          <Metric
+          <DashboardMetric
             label="Vận hành cần xử lý"
             value="3"
             detail="phê duyệt khẩn • 2 cảnh báo"
@@ -140,9 +146,9 @@ export function OwnerHome() {
           />
         </View>
       )}
-      <Box>
-        <Heading title="THAO TÁC NHANH" detail="Tiện ích quản trị" />
-        <QuickActions
+      <DashboardCard>
+        <DashboardHeading title="THAO TÁC NHANH" detail="Tiện ích quản trị" />
+        <DashboardActions
           items={[
             {
               label: 'Gửi tin tòa',
@@ -162,13 +168,17 @@ export function OwnerHome() {
             },
           ]}
         />
-      </Box>
-      <Heading title="Cần phê duyệt" action="Xem tất cả ›" onPress={() => go('approvals')} />
+      </DashboardCard>
+      <DashboardHeading
+        title="Cần phê duyệt"
+        action="Xem tất cả ›"
+        onPress={() => go('approvals')}
+      />
       {[sampleApprovals[2], sampleApprovals[1], sampleApprovals[0]].map((item) => (
         <ApprovalCard key={item.id} item={item} compact />
       ))}
-      <Heading title="Cảnh báo vận hành" detail="3 nội dung quan trọng" />
-      <Box>
+      <DashboardHeading title="Cảnh báo vận hành" detail="3 nội dung quan trọng" />
+      <DashboardCard>
         <InfoRow
           icon="lightning-bolt-outline"
           title="Quá hạn tiền điện tòa B"
@@ -187,8 +197,8 @@ export function OwnerHome() {
           detail="85% (109/128) • 19 phòng còn lại"
           onPress={() => go('operations')}
         />
-      </Box>
-      <Heading
+      </DashboardCard>
+      <DashboardHeading
         title="Hiệu suất từng cơ sở"
         detail="Doanh thu & tỷ lệ lấp đầy tháng 10"
         action="Chi tiết"
@@ -202,7 +212,7 @@ export function OwnerHome() {
       ].map((line) => {
         const [name, detail, amount] = line.split('|');
         return (
-          <Box key={name}>
+          <DashboardCard key={name}>
             <Row spread>
               <View style={ui.grow}>
                 <Text variant="titleMedium">BHOME {name}</Text>
@@ -212,17 +222,17 @@ export function OwnerHome() {
               </View>
               <Text style={ui.money}>{amount}</Text>
             </Row>
-          </Box>
+          </DashboardCard>
         );
       })}
-      <Box style={{ backgroundColor: c.tint }}>
+      <DashboardCard style={{ backgroundColor: c.tint }}>
         <InfoRow
           icon="shield-check-outline"
           title="An ninh & Phòng cháy chữa cháy"
           detail="5/5 cơ sở đã kiểm tra định kỳ Q3"
           onPress={() => unavailable('Xem biên bản an toàn')}
         />
-      </Box>
+      </DashboardCard>
     </>
   );
 }

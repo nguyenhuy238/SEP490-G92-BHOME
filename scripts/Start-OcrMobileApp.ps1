@@ -125,7 +125,6 @@ try {
         Write-Output "Metro status/iOS manifest OK from this computer. On iPhone Safari, test http://${lanIp}:$Port/status (expected: packager-status:running)."
         Write-Output 'Desktop probes do not confirm phone connectivity. If Safari fails, check Expo Go Local Network permission and router/device isolation.'
         $deviceSeen = $false
-        $deviceDeadline = (Get-Date).AddSeconds(30)
         $networkChanged = $false
         while (-not $metro.WaitForExit(3000)) {
             if (-not $deviceSeen) {
@@ -135,9 +134,6 @@ try {
                 if ($peer) {
                     $deviceSeen = $true
                     Write-Output 'Metro received a TCP connection from another device. Wait for iOS Bundled to confirm JavaScript transfer.'
-                } elseif ((Get-Date) -ge $deviceDeadline) {
-                    Write-Warning "No device TCP connection observed yet. Test http://${lanIp}:$Port/status in iPhone Safari; loading the API is a separate step."
-                    $deviceDeadline = (Get-Date).AddSeconds(60)
                 }
             }
             try { $currentIp = Get-MobileLanIp }

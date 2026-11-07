@@ -48,6 +48,15 @@ export interface MainDraftFiles {
   pdf: ContractDocumentView | null;
   previewError: string | null;
 }
+export interface DraftPreviewPage {
+  number: number;
+  width: number;
+  height: number;
+}
+export interface DraftPreviewInfo {
+  fileId: string;
+  pages: DraftPreviewPage[];
+}
 export interface MainDraftReleaseInput {
   tenantUserId: string;
   expectedVersion: number;
@@ -115,6 +124,14 @@ export function mainDraftClient(request: MainDraftRequest) {
       }),
     file: (id: string, fileId: string, signal?: AbortSignal) =>
       request<Uint8Array<ArrayBuffer>>(`${base}/${id}/documents/${fileId}`, { signal }, 'bytes'),
+    previewInfo: (id: string, fileId: string, signal?: AbortSignal) =>
+      request<DraftPreviewInfo>(`${base}/${id}/documents/${fileId}/preview`, { signal }),
+    previewPage: (id: string, fileId: string, page: number, signal?: AbortSignal) =>
+      request<Uint8Array<ArrayBuffer>>(
+        `${base}/${id}/documents/${fileId}/pages/${page}`,
+        { signal },
+        'bytes',
+      ),
     settings: (id: string, signal?: AbortSignal) =>
       request<MainContractSettings | null>(`${base}/settings/${id}`, { signal }),
     setSettings: (
@@ -129,6 +146,15 @@ export function mainDraftClient(request: MainDraftRequest) {
   };
 }
 export const mainDraftMessages: Record<string, string> = {
+  draft_download_invalid: 'Tệp tải về không hợp lệ. Hãy tạo lại tài liệu rồi thử lại.',
+  draft_preview_pdf_required: 'Chọn bản PDF để xem trước. DOCX vẫn có thể mở bên ngoài.',
+  draft_preview_invalid_pdf: 'Bản PDF không hợp lệ. Hãy tạo lại tài liệu.',
+  draft_preview_page_limit: 'Tài liệu quá dài để xem trong app. Hãy mở bản PDF bên ngoài.',
+  draft_preview_page_invalid: 'Trang tài liệu không còn khả dụng. Hãy tải lại bản xem trước.',
+  draft_preview_renderer_unavailable:
+    'Máy chủ chưa có bộ hiển thị trang PDF. Bạn vẫn có thể tải PDF.',
+  draft_preview_render_failed: 'Chưa hiển thị được trang PDF. Hãy thử lại hoặc mở PDF bên ngoài.',
+  draft_preview_timeout: 'Hiển thị tài liệu mất nhiều thời gian. Hãy thử lại.',
   main_draft_signing_template_not_approved:
     'Mẫu này chỉ được phép kiểm thử. Chưa có mẫu hợp đồng được duyệt cho production.',
   main_draft_release_confirmation_required:

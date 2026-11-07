@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
@@ -23,7 +24,7 @@ export function Profile() {
   const { role, preview, go, unavailable, leavePreview, startPreview } = useWorkspace();
   const { logout } = useSession();
   const [confirm, setConfirm] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [busy, setBusy] = useState(false);
   const name =
     role === 'Owner' ? 'Nguyễn Tuấn Dũng' : role === 'Staff' ? 'Trần Văn Hùng' : 'Hoàng Tuấn Anh';
@@ -318,7 +319,7 @@ export function SecuritySettings() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [visible, setVisible] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const rules = [
     password.length >= 8,
     /[a-z]/.test(password) && /[A-Z]/.test(password),

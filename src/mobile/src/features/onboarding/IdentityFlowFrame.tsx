@@ -1,9 +1,11 @@
+import { KeyboardFormScrollView } from '../../components/KeyboardFormScrollView';
 import React from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { IconButton, Text } from 'react-native-paper';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { staffColors as s } from '../../theme/theme';
+import { ToastHost } from '../../components/ToastHost';
 
 export function IdentityFlowFrame({
   modal,
@@ -58,18 +60,19 @@ export function IdentityFlowFrame({
           ) : (
             <KeyboardAvoidingView
               style={styles.body}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-              <ScrollView
+              <KeyboardFormScrollView
                 contentContainerStyle={styles.form}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
               >
                 {children}
-              </ScrollView>
+              </KeyboardFormScrollView>
             </KeyboardAvoidingView>
           )}
         </SafeAreaView>
+        <ToastHost modal />
       </SafeAreaProvider>
     </Modal>
   );

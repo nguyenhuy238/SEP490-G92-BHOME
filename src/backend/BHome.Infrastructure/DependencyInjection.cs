@@ -34,6 +34,10 @@ public static class DependencyInjection
             .Validate(options => !string.IsNullOrWhiteSpace(options.Database),
                 "Configure ConnectionStrings:Database using user-secrets or environment variables.")
             .ValidateOnStart();
+        services.AddScoped(provider => Compact24Compatibility.Resolve(
+            provider.GetService<IHostEnvironment>()?.EnvironmentName,
+            provider.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentDatabase:AllowPreviousPropertySchema"),
+            provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddDbContext<Compact24DbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddScoped<BHomePersistenceContext>(p => p.GetRequiredService<Compact24DbContext>());
@@ -160,6 +164,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Finance.FinancialScenarioService>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftPreviewRenderer, BHome.Infrastructure.Contracts.MainDraftPreviewRenderer>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
@@ -179,7 +184,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionRepository, BHome.Infrastructure.Contracts.DepositDeductionRepository>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionEvidence, BHome.Infrastructure.Contracts.DepositDeductionEvidence>();
         services.AddScoped<BHome.Application.Contracts.DepositDeductionService>();
-        services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.UnconfiguredContractHoldingLedger>();
+        services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.CompactContractHoldingLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();

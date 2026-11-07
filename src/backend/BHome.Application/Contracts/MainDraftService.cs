@@ -12,7 +12,7 @@ namespace BHome.Application.Contracts;
 
 public sealed class MainDraftService(IContractRepository repository, IMainDraftData data, ICurrentUser user,
     ResourceAccess access, PropertyService prices, IMainDraftRenderer renderer, IContractFileStore files,
-    IObjectStorage storage, TimeProvider clock, IContractWorkflowMode? workflowMode = null)
+    IObjectStorage storage, TimeProvider clock, IMainDraftPreviewRenderer preview, IContractWorkflowMode? workflowMode = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private void Role() { _ = Actor; if (!user.IsInRole(Roles.Staff) && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden"); }
@@ -221,6 +221,35 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         using var buffer = new MemoryStream(); await storage.CopyToAsync(f.ObjectKey, buffer, t);
         if (buffer.Length != f.Length || Convert.ToHexString(SHA256.HashData(buffer.ToArray())) != f.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t); return f.ContentType;
+    }
+    private async Task<byte[]> PreviewPdfAsync(Guid id, Guid fileId, CancellationToken t)
+    {
+        using var buffer = new MemoryStream();
+        try
+        {
+            // Reuse role/location authorization, current snapshot and stored file hash checks.
+            var type = await CopyFileAsync(id, fileId, buffer, t);
+            if (type != "application/pdf") throw ContractException.Invalid("draft_preview_pdf_required");
+            return buffer.ToArray();
+        }
+        finally { CryptographicOperations.ZeroMemory(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)); }
+    }
+    public async Task<DraftPreviewInfo> PreviewInfoAsync(Guid id, Guid fileId, CancellationToken t)
+    {
+        var pdf = await PreviewPdfAsync(id, fileId, t);
+        try { return new(fileId, preview.Inspect(pdf)); }
+        finally { CryptographicOperations.ZeroMemory(pdf); }
+    }
+    public async Task<byte[]> PreviewPageAsync(Guid id, Guid fileId, int page, CancellationToken t)
+    {
+        if (page < 1) throw ContractException.Invalid("draft_preview_page_invalid");
+        var pdf = await PreviewPdfAsync(id, fileId, t);
+        try
+        {
+            if (page > preview.Inspect(pdf).Count) throw ContractException.Invalid("draft_preview_page_invalid");
+            return await preview.PageAsync(pdf, page, t);
+        }
+        finally { CryptographicOperations.ZeroMemory(pdf); }
     }
 
     private async Task<(MainDraftState State, MainContractSettings Settings, MainDraftPreparation Preparation)> ReviewInputs(Contract c, CancellationToken t)

@@ -128,6 +128,9 @@ UID khác chủ workspace 0700 không ghi được; UID trùng tạo PDF thành 
 - Expo Go dùng `expo-sharing` đã có để mở PDF trong trình xem của thiết bị (zoom/cuộn do trình xem hỗ trợ),
   không thêm native PDF library/development build. Tệp tải nằm trong cache riêng và xóa sau thao tác.
   Đây không phải PDF viewer nhúng trong React Native. Web tải tệp có xác thực để xem bằng trình duyệt.
+  Cập nhật theo yêu cầu xem trước trong app: màn Draft hiện có preview trang đầu và fullscreen nhiều trang
+  bằng các trang render từ PDF thật, có JWT và snapshot check. Không cần native PDF module;
+  xem [CONTRACT_INLINE_PREVIEW.md](CONTRACT_INLINE_PREVIEW.md) để biết API, kiểm tra và giới hạn.
 - Owner Web → Hợp đồng → Cấu hình bên cho thuê & tiền cọc. Chọn cơ sở, nhập hồ sơ pháp lý của Owner,
   thời gian hiệu lực, tiền cọc và thanh toán. Giá điện/nước/thuê vẫn cấu hình trong Giá & Biểu phí hiện có.
 - Bản nháp mới mở panel riêng ở mobile/Owner Web, bao gồm khi truy cập deep link; không hiện hành động

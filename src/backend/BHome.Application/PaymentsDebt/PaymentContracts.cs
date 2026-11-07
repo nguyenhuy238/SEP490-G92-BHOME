@@ -12,8 +12,9 @@ public sealed record PaymentTransferInput([Required, StringLength(80)] string Pr
     [Required] string Currency, DateTimeOffset OccurredAt,
     [StringLength(100)] string TransferDescription, [Required, StringLength(500)] string StatementReference,
     [Required, StringLength(2000)] string VerificationReason, Guid? ProposedInvoiceId,
-    [property: JsonRequired] bool HumanVerified, bool IsDevelopmentDemo = false);
+    [property: JsonRequired] bool HumanVerified, bool IsDevelopmentDemo = false, Guid? ProposedDepositContractId = null);
 public sealed record PaymentMatchInput(Guid InvoiceId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified);
+public sealed record PaymentDepositMatchInput(Guid ContractId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified);
 public sealed record PaymentRejectInput([Required, StringLength(2000)] string Reason);
 public sealed record PaymentScope(Guid ActorId, bool Owner, bool Tenant, bool Staff, DateOnly Today);
 public sealed class PaymentQuery
@@ -46,9 +47,10 @@ public sealed record TransferView(Guid Id, string ProviderIdentity, string BankR
     string VerificationReason, Guid VerifiedByUserId, DateTimeOffset VerifiedAt, Guid? ProposedInvoiceId,
     string Status, string Reason, Guid? AllocatedInvoiceId, bool IsDevelopmentDemo,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal AllocatedAmount = 0,
-    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal UnallocatedAmount = 0);
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal UnallocatedAmount = 0,
+    Guid? AllocatedDepositContractId = null);
 public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTransfer Transfer);
-public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId);
+public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId, Guid? DepositContractId = null);
 public sealed record ReconciliationView(long Sequence, Guid? InvoiceId, string Decision, string Reason, Guid ActorId, DateTimeOffset OccurredAt);
 public sealed record PayerChoice(Guid UserId, string DisplayLabel);
 public sealed record DebtInvoiceView(Guid InvoiceId, Guid LocationId, Guid RoomId, string LocationName, string RoomNumber, DateOnly BillingPeriod, DateOnly DueDate,
@@ -71,6 +73,7 @@ public interface IPaymentRepository
 {
     bool AmountMismatchSupported => false;
     Task<T> TransactionAsync<T>(Guid? transferId, Guid? invoiceId, Func<Task<T>> work, CancellationToken t);
+    Task<T> DepositTransactionAsync<T>(Guid transferId, Guid contractId, Func<Task<T>> work, CancellationToken t);
     Task<Invoice?> InvoiceAsync(Guid id, PaymentScope scope, CancellationToken t);
     Task<PaymentTransfer?> TransferAsync(Guid id, CancellationToken t);
     Task<PaymentTransfer?> TransferReferenceAsync(string provider, string reference, CancellationToken t);
@@ -78,6 +81,8 @@ public interface IPaymentRepository
     Task<PaymentReconciliation?> LatestReviewAsync(Guid transferId, CancellationToken t);
     Task<IReadOnlyList<PaymentLedgerEntry>> HistoryAsync(Guid invoiceId, CancellationToken t);
     Task<decimal> AllocatedAsync(Guid invoiceId, CancellationToken t);
+    Task<decimal> DepositAllocatedAsync(Guid contractId, CancellationToken t);
+    Task<BHome.Domain.TenantContracts.Contract?> HoldingAsync(Guid contractId, CancellationToken t);
     Task<BHome.Application.Billing.InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t);
     Task<bool> ReferenceClaimedAsync(string reference, CancellationToken t);
     Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t);

@@ -1,5 +1,8 @@
+import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
+import { useFeedbackState } from '../lib/useFeedbackState';
+import { conciseMessage } from '../lib/toast';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Action, Box, Row, ui } from '../components/WorkspaceKit';
@@ -18,7 +21,7 @@ export function LoginScreen() {
   const [settings, setSettings] = useState(false);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
   const submit = async () => {
@@ -42,10 +45,10 @@ export function LoginScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          contentContainerStyle={[ui.page, { paddingTop: 40 }]}
+        <KeyboardFormScrollView
+          contentContainerStyle={[ui.page, { paddingTop: 40, paddingBottom: 32, flexGrow: 1 }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.brand}>
@@ -114,7 +117,7 @@ export function LoginScreen() {
             </Row>
             {!!(error || restoreError) && (
               <Text accessibilityRole="alert" style={ui.red}>
-                {error || restoreError}
+                {conciseMessage(error || restoreError || '')}
               </Text>
             )}
             <Button
@@ -219,7 +222,7 @@ export function LoginScreen() {
           <Text variant="labelSmall" style={{ textAlign: 'center', color: c.muted }}>
             BHOME • Smart Boarding House Management
           </Text>
-        </ScrollView>
+        </KeyboardFormScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

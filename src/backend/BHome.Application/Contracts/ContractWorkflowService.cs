@@ -19,7 +19,7 @@ public sealed partial class ContractService
     {
         Role(Roles.Owner, Roles.Staff, Roles.Tenant);
         return new(await Renderer.ConfigurationAsync(t), DemoEnabled ? "Simulated" : "External",
-            "holding_policy_and_verified_allocation_required", "financial_ledger_and_deposit_policy");
+            null, "financial_ledger_and_deposit_policy");
     }
 
     public Task<ContractPreparation> PreparationAsync(Guid? locationId, CancellationToken t)

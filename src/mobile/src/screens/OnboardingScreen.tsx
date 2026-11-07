@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-router';
@@ -40,7 +41,7 @@ export function OnboardingScreen() {
   const [identityOpen, setIdentityOpen] = useState(!!residentId);
   const [identityMode, setIdentityMode] = useState<'capture' | 'verify'>('capture');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [finished, setFinished] = useState(false);
   const [discarded, setDiscarded] = useState(false);
   const serial = useRef(1);

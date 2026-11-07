@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Button, Dialog, Icon, Portal, RadioButton, Text, TextInput } from 'react-native-paper';
@@ -112,7 +113,7 @@ export function EvidenceInput({
   onChange: (count: number) => void;
 }) {
   const { preview } = useWorkspace();
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [revision, setRevision] = useState(0);
   return (
     <View style={{ gap: 8 }}>

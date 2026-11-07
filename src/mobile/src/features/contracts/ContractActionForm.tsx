@@ -1,3 +1,5 @@
+import { conciseMessage } from '../../lib/toast';
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
 import {
@@ -45,7 +47,7 @@ export function ContractActionForm({
   onSuccess: (id?: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [error, setError] = useState(''),
+  const [error, setError] = useFeedbackState(),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
   const directory = useSigningCertificates(
@@ -87,7 +89,7 @@ export function ContractActionForm({
         if (!c.signal.aborted) setError(contractError(e));
       });
     return () => c.abort();
-  }, [api, action.operation, contract.id]);
+  }, [api, action.operation, contract.id, setError]);
   async function submit() {
     if (lock.current || !checked || signingBlocked) return;
     if (
@@ -187,7 +189,7 @@ export function ContractActionForm({
       {action.operation === 'signing' && !contract.isDevelopmentDemo && (
         <>
           {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <Text style={ui.red}>{directory.error}</Text>}
+          {!!directory.error && <Text style={ui.red}>{conciseMessage(directory.error)}</Text>}
           {!directory.loading &&
             !directory.error &&
             !directory.certificates.some(canUseCertificate) && (
@@ -252,8 +254,8 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
     [subscriber, setSubscriber] = useState(''),
     [serial, setSerial] = useState(''),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [notice, setNotice] = useState('');
+    [error, setError] = useFeedbackState(),
+    [notice, setNotice] = useFeedbackState('success');
   const lock = useRef(false);
   const directory = useSigningCertificates(api, open);
   const signing = useMemo(() => signingClient(api.transport), [api]);
@@ -296,7 +298,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
             có yêu cầu.
           </Text>
           {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <Text style={ui.red}>{directory.error}</Text>}
+          {!!directory.error && <Text style={ui.red}>{conciseMessage(directory.error)}</Text>}
           {!directory.loading && !directory.error && !directory.certificates.length && (
             <Text>Bạn chưa khai báo chứng thư MySign.</Text>
           )}

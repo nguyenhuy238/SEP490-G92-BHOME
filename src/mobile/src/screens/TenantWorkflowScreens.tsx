@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
@@ -393,7 +394,7 @@ export function BillingHistory() {
 export function SigningStatus() {
   const { role, unavailable } = useWorkspace();
   const [scenario, setScenario] = useState('Pending');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useFeedbackState('info');
   return (
     <>
       <Heading

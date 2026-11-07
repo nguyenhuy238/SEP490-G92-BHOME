@@ -1,13 +1,9 @@
+import { ContractPdfPreview } from './ContractPdfPreview';
+import { ContractPreviewSummary } from './ContractPreviewSummary';
+import { KeyboardFormScrollView } from '../../components/KeyboardFormScrollView';
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, IconButton, Portal, Text, TextInput } from 'react-native-paper';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -34,11 +30,17 @@ import { inputDate } from '../../lib/identity';
 import { Box, Heading, Pill } from '../../components/WorkspaceKit';
 import { staffColors as s } from '../../theme/theme';
 import { ContractDateField } from '../../components/ContractDateField';
+import { ToastHost } from '../../components/ToastHost';
+import { showSuccess, showWarning } from '../../lib/toast';
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 function message(error: unknown) {
   const code = (error as { code?: string }).code;
+  if ((error as { status?: number })?.status === 503 && !mainDraftMessages[code ?? ''])
+    return 'Máy chủ chưa xử lý được hợp đồng. Hãy thử lại sau.';
+  if (error instanceof Error && error.message === 'Thiết bị chưa có trình mở tài liệu.')
+    return 'Thiết bị chưa hỗ trợ mở tài liệu bên ngoài. Bạn vẫn có thể đọc PDF trong ứng dụng.';
   return code && mainDraftMessages[code] ? mainDraftMessages[code] : contractError(error);
 }
 export function MainDraftScreen({
@@ -78,7 +80,7 @@ export function MainDraftScreen({
   const [documents, setDocuments] = useState<MainDraftFiles | null>(null);
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
-    [error, setError] = useState('');
+    [error, setError] = useFeedbackState();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [revision, setRevision] = useState(0);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -143,7 +145,7 @@ export function MainDraftScreen({
     }
     void load();
     return () => controller.abort();
-  }, [client, initialId, revision]);
+  }, [client, initialId, revision, setError]);
   function input(): MainDraftInput | null {
     const errors: Record<string, string> = {};
     let from = '',
@@ -209,11 +211,18 @@ export function MainDraftScreen({
       // Only reference IDs enter navigation state; never identity fields or document URLs.
       if (persistRoute) router.setParams({ mainDraftId: result.id });
       if (result.status !== 'Draft') throw { code: 'draft_version_or_status_changed' };
+      showSuccess('Đã lưu hợp đồng nháp.');
       if (preview) {
         setDocuments(null);
         setMode('preview');
         const resultFiles = await client.generate(result.id, controller.signal);
-        if (alive.current) setDocuments(resultFiles);
+        if (alive.current) {
+          setDocuments(resultFiles);
+          if (resultFiles.previewError)
+            showWarning(
+              mainDraftMessages[resultFiles.previewError] ?? 'Bản nháp đã lưu; chưa tạo được PDF.',
+            );
+        }
       } else setMode('success');
     } catch (e) {
       if (alive.current && !controller.signal.aborted) setError(message(e));
@@ -234,6 +243,12 @@ export function MainDraftScreen({
     try {
       const bytes = await client.file(id, document.id, controller.signal);
       try {
+        const signature = pdf ? [37, 80, 68, 70, 45] : [80, 75, 3, 4];
+        if (
+          bytes.length < signature.length ||
+          signature.some((value, index) => bytes[index] !== value)
+        )
+          throw { code: 'draft_download_invalid' };
         const mime = pdf
           ? 'application/pdf'
           : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -298,7 +313,10 @@ export function MainDraftScreen({
       if (current.version !== saved.version || current.status !== 'Draft')
         throw { code: 'draft_version_or_status_changed' };
       if (confirm) {
-        if (alive.current) setMode('success');
+        if (alive.current) {
+          setMode('success');
+          showSuccess('Đã lưu hợp đồng nháp.');
+        }
       } else {
         const result = await client.generate(id, controller.signal);
         if (alive.current) {
@@ -368,9 +386,9 @@ export function MainDraftScreen({
             </View>
             <KeyboardAvoidingView
               style={styles.grow}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-              <ScrollView
+              <KeyboardFormScrollView
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
               >
@@ -390,52 +408,68 @@ export function MainDraftScreen({
                 )}
                 {preparation && (
                   <>
-                    {id && (
-                      <Box>
-                        <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
-                        <Text selectable>Mã hợp đồng: {id}</Text>
-                      </Box>
+                    {mode === 'edit' ? (
+                      <>
+                        {id && (
+                          <Box>
+                            <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
+                            <Text selectable>Mã hợp đồng: {id}</Text>
+                          </Box>
+                        )}
+                        <Box>
+                          <Heading title="Thông tin phòng" detail="Dữ liệu do máy chủ cung cấp" />
+                          <Text>
+                            {preparation.locationName} · Phòng {preparation.roomNumber}
+                          </Text>
+                          <Text>{preparation.address}</Text>
+                          <Text>
+                            Giá thuê:{' '}
+                            {preparation.charges.some((p) => p.chargeCode === 'RENT')
+                              ? formatDraftMoney(
+                                  preparation.charges.find((p) => p.chargeCode === 'RENT')!.rate,
+                                )
+                              : 'Chưa cấu hình'}{' '}
+                            / tháng
+                          </Text>
+                        </Box>
+                        <Box>
+                          <Heading title="Người thuê đã xác minh" />
+                          <Text>{representative?.fullName} · Đại diện</Text>
+                          <Text>CCCD: {representative?.maskedCitizenNumber}</Text>
+                          <Text>
+                            Ngày cấp:{' '}
+                            {representative?.dateOfIssue
+                              ? displayContractDate(representative.dateOfIssue)
+                              : 'Chưa có dữ liệu'}
+                          </Text>
+                          <Text>
+                            {preparation.residents.length} người ở · Bên cho thuê:{' '}
+                            {preparation.ownerName ?? 'Chưa cấu hình'}
+                          </Text>
+                          <Text>
+                            Thông tin định danh chỉ đọc. Nếu sai, cần xử lý qua quy trình hồ sơ được
+                            phép.
+                          </Text>
+                        </Box>
+                      </>
+                    ) : (
+                      <ContractPreviewSummary
+                        preparation={preparation}
+                        status={saved?.status ?? 'Draft'}
+                        start={start}
+                        end={end}
+                      />
                     )}
-                    <Box>
-                      <Heading title="Thông tin phòng" detail="Dữ liệu do máy chủ cung cấp" />
-                      <Text>
-                        {preparation.locationName} · Phòng {preparation.roomNumber}
-                      </Text>
-                      <Text>{preparation.address}</Text>
-                      <Text>
-                        Giá thuê:{' '}
-                        {preparation.charges.some((p) => p.chargeCode === 'RENT')
-                          ? formatDraftMoney(
-                              preparation.charges.find((p) => p.chargeCode === 'RENT')!.rate,
-                            )
-                          : 'Chưa cấu hình'}{' '}
-                        / tháng
-                      </Text>
-                    </Box>
-                    <Box>
-                      <Heading title="Người thuê đã xác minh" />
-                      <Text>{representative?.fullName} · Đại diện</Text>
-                      <Text>CCCD: {representative?.maskedCitizenNumber}</Text>
-                      <Text>
-                        Ngày cấp:{' '}
-                        {representative?.dateOfIssue
-                          ? displayContractDate(representative.dateOfIssue)
-                          : 'Chưa có dữ liệu'}
-                      </Text>
-                      <Text>
-                        {preparation.residents.length} người ở · Bên cho thuê:{' '}
-                        {preparation.ownerName ?? 'Chưa cấu hình'}
-                      </Text>
-                      <Text>
-                        Thông tin định danh chỉ đọc. Nếu sai, cần xử lý qua quy trình hồ sơ được
-                        phép.
-                      </Text>
-                    </Box>
                     {preparation.blockers.map((code) => (
                       <Text key={code} style={styles.error}>
                         {mainDraftMessages[code] ?? code}
                       </Text>
                     ))}
+                    {mode === 'success' && (
+                      <Text selectable style={{ color: '#475569', fontSize: 12 }}>
+                        Mã hợp đồng: {id}
+                      </Text>
+                    )}
                     {mode === 'edit' ? (
                       <Box>
                         <Heading
@@ -519,48 +553,22 @@ export function MainDraftScreen({
                           disabled={busy || readOnly}
                         />
                       </Box>
-                    ) : (
-                      <Box>
-                        <Heading
-                          title={mode === 'success' ? 'Đã tạo hợp đồng nháp' : 'Tài liệu xem trước'}
-                        />
-                        <Text>
-                          {representative?.fullName} · Phòng {preparation.roomNumber}
-                        </Text>
-                        <Text>
-                          {start} → {end}
-                        </Text>
-                        <Text>Trạng thái: Bản nháp</Text>
-                        <Text>Chưa ký hoặc kích hoạt; trạng thái phòng được giữ nguyên.</Text>
-                        {documents?.previewError && (
-                          <Text style={styles.error}>
-                            {mainDraftMessages[documents.previewError] ?? documents.previewError}
-                          </Text>
-                        )}
-                        {documents?.pdf && (
-                          <Button
-                            contentStyle={{ minHeight: 48 }}
-                            mode="contained"
-                            disabled={busy || readOnly}
-                            onPress={() => void openFile(true)}
-                          >
-                            Mở PDF để xem / phóng to
-                          </Button>
-                        )}
-                        {documents?.docx && (
-                          <Button
-                            contentStyle={{ minHeight: 48 }}
-                            disabled={busy || readOnly}
-                            onPress={() => void openFile(false)}
-                          >
-                            Mở hoặc lưu DOCX
-                          </Button>
-                        )}
-                      </Box>
-                    )}
+                    ) : mode === 'preview' && client ? (
+                      <ContractPdfPreview
+                        client={client}
+                        contractId={id}
+                        document={documents?.pdf ?? null}
+                        busy={busy}
+                        previewErrorCode={documents?.previewError ?? null}
+                        hasDocx={!!documents?.docx}
+                        onRegenerate={() => void reviewSaved(false)}
+                        onOpenPdf={() => void openFile(true)}
+                        onOpenDocx={() => void openFile(false)}
+                      />
+                    ) : null}
                   </>
                 )}
-              </ScrollView>
+              </KeyboardFormScrollView>
               <View style={styles.footer}>
                 {busy && <ActivityIndicator />}
                 {mode === 'edit' ? (
@@ -618,6 +626,7 @@ export function MainDraftScreen({
               </View>
             </KeyboardAvoidingView>
           </SafeAreaView>
+          <ToastHost modal />
         </Portal.Host>
       </SafeAreaProvider>
     </Modal>

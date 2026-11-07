@@ -64,9 +64,9 @@ internal static class Compact24Records
             .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)");
         var policy = Root("BillingPolicy", "billing_policies", "LocationId:location_id RoomId:room_id ChargeCode:charge_code Category:category Rate:rate EffectiveFrom:effective_from EffectiveTo:effective_to FirstUsedAt:first_used_at Version:version");
         policy.Map("Method", "calculation_method", "CASE t.calculation_method WHEN 'METERED' THEN 1 ELSE 0 END", "CASE WHEN (@state::jsonb->>'method')::int=1 THEN 'METERED' ELSE 'FIXED_PER_ROOM_PER_MONTH' END");
-        var contract = Root("Contract", "contracts", "RoomId:room_id RepresentativeResidentId:representative_resident_id TenantUserId:tenant_user_id OwnerSignerId:owner_signer_id PreviousContractId:previous_contract_id HoldingContractId:source_holding_contract_id StartDate:start_date EndDate:end_date MonthlyRent:monthly_rent RequiredDeposit:deposit_required AppliedHoldingDeposit:applied_holding_deposit Terms:terms SnapshotHash:snapshot_hash Status:status ActivatedAt:activated_at ActivatedByUserId:activated_by_user_id ActualEndDate:actual_end_date DraftVersion:version");
-        contract.Where = "t.contract_type IN ('MAIN','RENEWAL')";
-        contract.Map("Kind", "contract_type", "CASE t.contract_type WHEN 'RENEWAL' THEN 1 ELSE 0 END", "CASE WHEN (@state::jsonb->>'kind')::int=1 THEN 'RENEWAL' ELSE 'MAIN' END");
+        var contract = Root("Contract", "contracts", "RoomId:room_id RepresentativeResidentId:representative_resident_id TenantUserId:tenant_user_id OwnerSignerId:owner_signer_id PreviousContractId:previous_contract_id HoldingContractId:source_holding_contract_id HoldingExpiryAt:holding_expiry_at ReservedCapacity:reserved_capacity StartDate:start_date EndDate:end_date MonthlyRent:monthly_rent RequiredDeposit:deposit_required AppliedHoldingDeposit:applied_holding_deposit Terms:terms SnapshotHash:snapshot_hash Status:status ActivatedAt:activated_at ActivatedByUserId:activated_by_user_id ActualEndDate:actual_end_date DraftVersion:version");
+        contract.Where = "t.contract_type IN ('MAIN','RENEWAL','HOLDING')";
+        contract.Map("Kind", "contract_type", "CASE t.contract_type WHEN 'RENEWAL' THEN 1 WHEN 'HOLDING' THEN 2 ELSE 0 END", "CASE (@state::jsonb->>'kind')::int WHEN 1 THEN 'RENEWAL' WHEN 2 THEN 'HOLDING' ELSE 'MAIN' END");
         contract.Map("DraftMetadata", "draft_metadata", write: "(@state::jsonb->>'draftMetadata')::jsonb");
         var signing = Root("ContractSignature", "contract_signings", "ContractId:contract_id SignerUserId:signer_user_id CertificateId:certificate_id ProviderReference:provider_reference Status:signing_status SnapshotHash:snapshot_hash SourceHash:source_hash PreparedHash:prepared_hash PreparedObjectKey:prepared_object_key SignedObjectKey:signed_object_key SignedHash:signed_hash CreatedAt:requested_at ExpiresAt:expires_at SignedAt:signed_at");
         signing.Write["provider_code"] = "COALESCE((SELECT e->>'provider' FROM users u CROSS JOIN LATERAL jsonb_array_elements(u.signing_credentials) e WHERE u.id=(@state::jsonb->>'signerUserId')::uuid AND e->>'id'=@state::jsonb->>'certificateId'),'EVIDENCE_WITHOUT_DIRECTORY')";
@@ -145,14 +145,14 @@ internal static class Compact24Records
         payment.Write["verification_data"] = "jsonb_build_object('schemaVersion',1,'compactState',@state::jsonb)";
         History("PaymentReconciliation", "payments", "TransferId").AppendOnly = true;
         History("BankReferenceClaim", "payments", "AllocationId").AppendOnly = true;
-        var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id InvoiceId:target_invoice_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
+        var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
         allocation.CustomFrom = "payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE";
         allocation.CustomState = "s.data";
-        allocation.Where = "t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL";
+        allocation.Where = "(t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL) OR (t.source_deposit_contract_id IS NOT NULL AND t.target_deposit_contract_id IS NOT NULL)";
         allocation.Read["CreatedAt"] = "COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at)";
         allocation.Read["UpdatedAt"] = "COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at)";
         allocation.Write["operation_key"] = "@state::jsonb->>'id'"; allocation.Write["line_number"] = "1";
-        allocation.Write["reason"] = "'Verified invoice bank receipt'"; allocation.AppendOnly = true;
+        allocation.Write["reason"] = "CASE WHEN @state::jsonb->>'sourceDepositContractId' IS NOT NULL THEN 'Applied verified Holding Deposit to Main Contract' ELSE 'Verified invoice bank receipt' END"; allocation.AppendOnly = true;
         // Deposit receipts use a canonical payment plus an allocation, preserving the original receipt UUID.
         History("DepositVerification", "payments", "Id").AppendOnly = true;
         Technical("PaymentCommand", true).AppendOnly = true; Notification("PaymentConfirmedEvent");

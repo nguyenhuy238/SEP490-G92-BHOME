@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { errorMessage } from '../../lib/api';
 import { useSession } from '../../lib/SessionProvider';
+import { conciseMessage, showError } from '../../lib/toast';
 
 // Query identity changes with the URL or session: never retain another account's data.
 export function useWorkspaceQuery<T>(path: string | null) {
@@ -21,8 +22,11 @@ export function useWorkspaceQuery<T>(path: string | null) {
         if (!controller.signal.aborted) setState({ api, path, revision, data, error: '' });
       },
       (error) => {
-        if (!controller.signal.aborted)
-          setState({ api, path, revision, data: null, error: errorMessage(error) });
+        if (!controller.signal.aborted) {
+          const message = conciseMessage(errorMessage(error));
+          setState({ api, path, revision, data: null, error: message });
+          showError(message);
+        }
       },
     );
     return () => controller.abort();

@@ -1,13 +1,37 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-const state = vi.hoisted(() => ({ request: vi.fn(), params: vi.fn() }));
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { getToastSnapshot } from '../lib/toast';
+const state = vi.hoisted(() => ({
+  request: vi.fn(),
+  params: vi.fn(),
+  share: vi.fn(),
+  available: vi.fn(),
+  deleted: vi.fn(),
+  writes: [] as number[][],
+}));
 vi.mock('expo-router', () => ({ router: { setParams: state.params } }));
-vi.mock('expo-sharing', () => ({ isAvailableAsync: vi.fn(), shareAsync: vi.fn() }));
+vi.mock('expo-sharing', () => ({ isAvailableAsync: state.available, shareAsync: state.share }));
 vi.mock('expo-file-system', () => ({
-  Directory: class {},
-  File: class {},
+  Directory: class {
+    create() {}
+  },
+  File: class {
+    exists = true;
+    uri: string;
+    constructor(_directory: unknown, filename: string) {
+      this.uri = 'cache://test/' + filename;
+    }
+    create() {}
+    write(bytes: Uint8Array) {
+      state.writes.push(Array.from(bytes));
+    }
+    delete() {
+      this.exists = false;
+      state.deleted();
+    }
+  },
   Paths: { cache: { uri: 'cache://' } },
 }));
 vi.mock('../lib/SessionProvider', () => {
@@ -16,6 +40,11 @@ vi.mock('../lib/SessionProvider', () => {
 });
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
+  useWindowDimensions: () => ({ width: 360, height: 780 }),
+  AppState: { addEventListener: () => ({ remove: vi.fn() }) },
+  Keyboard: { dismiss: vi.fn() },
+  Image: () => null,
+  FlatList: () => null,
   Alert: { alert: vi.fn() },
   StyleSheet: { create: (s: unknown) => s },
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
@@ -32,6 +61,7 @@ vi.mock('react-native-paper', () => ({
   MD3LightTheme: { colors: {} },
   configureFonts: () => ({}),
   ActivityIndicator: () => <span>Loading</span>,
+  Icon: () => null,
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
@@ -131,6 +161,9 @@ const view = (input: unknown) => ({
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  state.writes = [];
+  state.available.mockResolvedValue(true);
+  state.share.mockResolvedValue(undefined);
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.includes('/preparation?')) return preparation;
     if (path.endsWith('/documents'))
@@ -202,11 +235,13 @@ it('keeps the form after an API failure and retries with the same idempotency ke
   });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
   await screen.findByText(/Bản nháp đã thay đổi/);
+  expect(getToastSnapshot().toast?.type).toBe('error');
   expect((screen.getByLabelText('Điều khoản bổ sung / ghi chú') as HTMLInputElement).value).toBe(
     'Ghi chú giữ nguyên',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
   await screen.findByText('Mã hợp đồng: draft-id');
+  expect(getToastSnapshot().toast?.type).toBe('success');
   const posts = state.request.mock.calls.filter((call) => call[1]?.method === 'POST');
   expect(posts).toHaveLength(2);
   expect(posts[0][1].headers['Idempotency-Key']).toBe(posts[1][1].headers['Idempotency-Key']);
@@ -218,6 +253,7 @@ it('preserves edits across preview, reports missing PDF honestly and exposes no 
   fill();
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
   await screen.findByText(/Máy chủ chưa cấu hình LibreOffice/);
+  expect(getToastSnapshot().toast?.type).toBe('warning');
   expect(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: /Ký hợp đồng|Kích hoạt|QR/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
@@ -292,4 +328,81 @@ it('does not report a cancelled idempotent replay as a saved draft', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
   await screen.findByText(/Bản nháp đã thay đổi/);
   expect(screen.queryByText('Đã tạo hợp đồng nháp')).toBeNull();
+  expect(getToastSnapshot().toast?.type).toBe('error');
+});
+
+it('waits for backend confirmation before showing success and prevents repeated save requests', async () => {
+  let finish!: (result: unknown) => void;
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (init?.method === 'POST')
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    return original(path, init);
+  });
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  const save = screen.getByRole('button', { name: 'Lưu nháp' });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  await waitFor(() => expect(typeof finish).toBe('function'));
+  const posts = state.request.mock.calls.filter((call) => call[1]?.method === 'POST');
+  expect(posts).toHaveLength(1);
+  expect(getToastSnapshot().toast).toBeNull();
+  await act(async () => finish(view(JSON.parse(posts[0][1].body))));
+  expect(getToastSnapshot().toast?.type).toBe('success');
+  expect(getToastSnapshot().toast?.message).toBe('Đã lưu hợp đồng nháp.');
+});
+
+it('downloads PDF and DOCX through the authenticated client and cleans private cache files after sharing or failure', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path.endsWith('/documents'))
+      return Promise.resolve({ docx: { id: 'docx' }, pdf: { id: 'pdf' }, previewError: null });
+    if (path.endsWith('/pdf/preview'))
+      return Promise.resolve({ fileId: 'pdf', pages: [{ number: 1, width: 595, height: 842 }] });
+    if (path.includes('/pages/'))
+      return Promise.resolve(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+    if (path.endsWith('/documents/pdf'))
+      return Promise.resolve(new Uint8Array([37, 80, 68, 70, 45]));
+    if (path.endsWith('/documents/docx')) return Promise.resolve(new Uint8Array([80, 75, 3, 4]));
+    return original(path, init);
+  });
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  await screen.findByText('Bản hợp đồng PDF');
+  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(1));
+  expect(state.share).toHaveBeenCalledWith(
+    expect.stringMatching(/\.pdf$/),
+    expect.objectContaining({ mimeType: 'application/pdf' }),
+  );
+  expect(state.writes[0]).toEqual([37, 80, 68, 70, 45]);
+  fireEvent.click(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' }));
+  await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(2));
+  expect(state.share).toHaveBeenCalledWith(
+    expect.stringMatching(/\.docx$/),
+    expect.objectContaining({
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }),
+  );
+  expect(state.writes[1]).toEqual([80, 75, 3, 4]);
+  state.share.mockRejectedValueOnce(new Error('Unavailable'));
+  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(3));
+  expect(getToastSnapshot().toast?.type).toBe('error');
+  const valid = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) =>
+    path.endsWith('/documents/pdf')
+      ? Promise.resolve(new Uint8Array([1, 2, 3]))
+      : valid(path, init),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  await screen.findByText('Tệp tải về không hợp lệ. Hãy tạo lại tài liệu rồi thử lại.');
+  expect(state.share).toHaveBeenCalledTimes(3);
+  expect(state.deleted).toHaveBeenCalledTimes(3);
 });

@@ -37,7 +37,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                                select reading.MeterId).Distinct().ToArrayAsync(token);
         var currentOccupants = await (from c in db.Set<Contract>().AsNoTracking()
                                       from cr in c.Residents
-                                      where c.RoomId == roomId && c.Status == ContractStatus.Active && cr.ResidenceFrom <= effectiveOn &&
+                                      where c.RoomId == roomId && c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && cr.ResidenceFrom <= effectiveOn &&
                                             (cr.ResidenceTo == null || cr.ResidenceTo >= effectiveOn)
                                       select cr.ResidentId).Distinct().CountAsync(token);
         var blockingAsset = await db.Set<Asset>().AsNoTracking().AnyAsync(x => x.RoomId == roomId &&
@@ -92,7 +92,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
     {
         var contracts = db.Set<Contract>().Where(c => c.RoomId == roomId);
         var residents = await db.Set<Resident>().AnyAsync(r => r.RoomId == roomId, token);
-        var occupancy = await contracts.AnyAsync(c => c.Status == ContractStatus.Active && c.Residents.Any(r =>
+        var occupancy = await contracts.AnyAsync(c => c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.Residents.Any(r =>
             r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
         var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
         var pending = await contracts.AnyAsync(c =>
@@ -113,7 +113,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
             .Select(x => new RoomHistoryEvent(x.Id, "RoomStatusOrConfiguration", "PropertyAudit", x.OccurredAt,
                 null, x.Action)).ToArrayAsync(token);
         var contracts = await db.Set<Contract>().AsNoTracking().Where(x => x.RoomId == roomId)
-            .Select(x => new { x.Id, x.ActivatedAt, x.ActualEndDate, x.UpdatedAt, x.Status }).ToArrayAsync(token);
+            .Select(x => new { x.Id, x.Kind, x.ActivatedAt, x.ActualEndDate, x.UpdatedAt, x.Status }).ToArrayAsync(token);
         var occupancy = await (from c in db.Set<Contract>().AsNoTracking()
                                from r in c.Residents
                                where c.RoomId == roomId
@@ -122,8 +122,11 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         foreach (var c in contracts)
         {
             if (c.ActivatedAt is { } at && InRange(at, fromInclusive, toExclusive))
-                events.Add(new(StableId(c.Id, "contract-activated"), "ContractActivated", "Contract", at,
-                    c.Id, "A Main Tenancy Contract was activated."));
+                events.Add(new(StableId(c.Id, "contract-activated"), c.Kind == ContractKind.Holding ? "HoldingActivated" : "ContractActivated", "Contract", at,
+                    c.Id, c.Kind == ContractKind.Holding ? "A Holding Contract was activated." : "A Main Tenancy Contract was activated."));
+            if (c.Kind == ContractKind.Holding && c.Status is ContractStatus.Expired or ContractStatus.Cancelled or ContractStatus.Converted && InRange(c.UpdatedAt, fromInclusive, toExclusive))
+                events.Add(new(StableId(c.Id, "holding-" + c.Status), "Holding" + c.Status, "Contract", c.UpdatedAt,
+                    c.Id, $"A Holding Contract became {c.Status}."));
             if (c.Status is ContractStatus.Terminated or ContractStatus.Superseded && c.ActualEndDate.HasValue)
             {
                 var endedAt = BusinessInstant(c.ActualEndDate.Value);
@@ -162,12 +165,12 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         var verifiedRooms = await (from c in db.Set<Contract>().AsNoTracking()
                                    from cr in c.Residents
                                    join resident in db.Set<Resident>().AsNoTracking() on cr.ResidentId equals resident.Id
-                                   where roomIds.Contains(c.RoomId) && c.Status == ContractStatus.Active && cr.ResidenceFrom <= today &&
+                                   where roomIds.Contains(c.RoomId) && c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && cr.ResidenceFrom <= today &&
                                          (cr.ResidenceTo == null || cr.ResidenceTo >= today) &&
                                          resident.VerificationStatus == IdentityVerificationStatus.Verified
                                    select c.RoomId).Distinct().CountAsync(token);
         var activeRooms = await db.Set<Contract>().AsNoTracking().Where(x => roomIds.Contains(x.RoomId) &&
-            x.Status == ContractStatus.Active).Select(x => x.RoomId).Distinct().CountAsync(token);
+            x.Kind != ContractKind.Holding && x.Status == ContractStatus.Active).Select(x => x.RoomId).Distinct().CountAsync(token);
         var snapshot = new OccupancySnapshot(rooms.Length,
             rooms.Count(x => x.Status == RoomStatus.Available), rooms.Count(x => x.Status == RoomStatus.Occupied),
             rooms.Count(x => x.Status == RoomStatus.OnHold), rooms.Count(x => x.Status == RoomStatus.Unavailable),
@@ -187,7 +190,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
             .Where(x => x is not null).Cast<StatusEvidence>().ToArray();
         var intervals = await (from c in db.Set<Contract>().AsNoTracking()
                                from cr in c.Residents
-                               where roomIds.Contains(c.RoomId) && c.ActivatedAt != null &&
+                               where roomIds.Contains(c.RoomId) && c.Kind != ContractKind.Holding && c.ActivatedAt != null &&
                                      c.Status != ContractStatus.Draft && c.Status != ContractStatus.PendingSigning &&
                                      c.Status != ContractStatus.PendingActivation && c.Status != ContractStatus.Cancelled
                                select new OccupancyInterval(c.RoomId,

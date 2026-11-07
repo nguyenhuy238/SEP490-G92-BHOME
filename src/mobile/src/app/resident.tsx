@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { Button, SegmentedButtons, Text } from 'react-native-paper';
@@ -11,7 +12,7 @@ export default function ResidentScreen() {
   const [room, setRoom] = useState('');
   const [label, setLabel] = useState('');
   const [kind, setKind] = useState('1');
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   useEffect(() => {
@@ -20,7 +21,7 @@ export default function ResidentScreen() {
         .request<Named[]>(`/api/v1/capture/locations/${locationId}/rooms`)
         .then(setRooms)
         .catch((e) => setError(errorMessage(e)));
-  }, [api, locationId]);
+  }, [api, locationId, setError]);
   if (!api || !session) return <Redirect href="/" />;
   return (
     <Page>
