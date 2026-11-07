@@ -1,5 +1,7 @@
 # OCR accuracy recovery — 07/11/2026
 
+**Lượt tiếp theo về bốn loại: xem [kết quả model và verification mới nhất](OCR_FOUR_CLASS_RECOGNITION_COMPLETION.md). Các lỗi build/mobile nêu trong báo cáo này đã được sửa ở lượt tiếp theo; các model mới vẫn chưa qua gate runtime.**
+
 **Chưa có cải thiện production được chấp nhận.** Đã chẩn đoán bằng model thật,
 thử recognizer khác và tải nguồn LCD điện mới. Historical typed pipeline vẫn10/33
 exact digit strings,42/52 fallback. Không hạ safeguards để tăng coverage; không

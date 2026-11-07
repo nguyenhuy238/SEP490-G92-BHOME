@@ -306,5 +306,177 @@
       "forwardMs": 53.34859999948094
     }
   ],
-  "activationDecision": "rejected_blank_display_hallucination_wrong_water_digits_and_missing_billing_gt"
+  "activationDecision": "rejected_blank_display_hallucination_wrong_water_digits_and_missing_billing_gt",
+  "currentParserLcdBaseline": {
+    "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+    "rows": [
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "variant": "pp_direct",
+        "expectedDigits": "74590",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 82,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "variant": "pp_page",
+        "expectedDigits": "74590",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 166,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "variant": "pp_direct",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 56,
+        "warnings": [
+          "reading_not_recognized"
+        ]
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "variant": "pp_page",
+        "expectedDigits": null,
+        "actualDigits": "8",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 143,
+        "warnings": [
+          "low_confidence"
+        ]
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "004046",
+        "actualDigits": "004045",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 57,
+        "warnings": []
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "004046",
+        "actualDigits": "004045",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 71,
+        "warnings": []
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "21594",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 57,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "21594",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 67,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 58,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 37,
+        "warnings": [
+          "no_text",
+          "reading_not_recognized"
+        ]
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "000880578",
+        "actualDigits": "000990518",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 54,
+        "warnings": [
+          "low_confidence"
+        ]
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "000880578",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 71,
+        "warnings": [
+          "no_text",
+          "reading_not_recognized"
+        ]
+      }
+    ],
+    "limitation": "Reviewed display crops; digit sequence only, decimal/register eligibility excluded. No full-frame or billing accuracy claim."
+  }
 }
