@@ -1,0 +1,2316 @@
+{
+  "scope": "supervised_feature_heads_only_no_historical_evaluation_training",
+  "humanReviewsReceived": 0,
+  "exclusionIds": [
+    "commons_105770219",
+    "commons_107725262",
+    "commons_109241180",
+    "commons_109241182",
+    "commons_109241190",
+    "commons_111639614",
+    "commons_113793907",
+    "commons_117569252",
+    "commons_11930077",
+    "commons_134293571",
+    "commons_136480278",
+    "commons_136480279",
+    "commons_138131787",
+    "commons_141189268",
+    "commons_141575682",
+    "commons_151445788",
+    "commons_152002068",
+    "commons_15315072",
+    "commons_156125142",
+    "commons_157635897",
+    "commons_157780137",
+    "commons_15920280",
+    "commons_161108186",
+    "commons_161109743",
+    "commons_161110829",
+    "commons_166496308",
+    "commons_167896665",
+    "commons_177890994",
+    "commons_18880869",
+    "commons_19089918",
+    "commons_192931434",
+    "commons_195349404",
+    "commons_195597533",
+    "commons_21978614",
+    "commons_26507235",
+    "commons_31937475",
+    "commons_334307",
+    "commons_33635608",
+    "commons_33635609",
+    "commons_33769214",
+    "commons_38382735",
+    "commons_40388945",
+    "commons_42461220",
+    "commons_4508761",
+    "commons_45290164",
+    "commons_48039403",
+    "commons_4948052",
+    "commons_49855905",
+    "commons_51969773",
+    "commons_54903199",
+    "commons_6780055",
+    "commons_6979762",
+    "commons_77534681",
+    "commons_85653618",
+    "commons_92903699",
+    "commons_98999103"
+  ],
+  "samples": [
+    {
+      "id": "commons_14926242",
+      "image": ".tools/master-dataset/commons/commons_14926242.jpg",
+      "sha256": "8df8cd168fe4c8a1e639f5481456b4b3ad995da7fc7f106897f39b9e6fb74dc2",
+      "siteGroup": "commons_author_cbbdf41b05b42da4011d",
+      "meterGroup": "commons_author_cbbdf41b05b42da4011d",
+      "sourceGroup": "author_a72d54a18f19abc38e75",
+      "captureGroup": "commons_author_cbbdf41b05b42da4011d",
+      "nearDuplicateGroup": "commons_author_cbbdf41b05b42da4011d",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.18,
+          0
+        ],
+        [
+          0.85,
+          0
+        ],
+        [
+          0.85,
+          0.98
+        ],
+        [
+          0.18,
+          0.98
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:2007_Okt_HH_355_k.JPG"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "2cb4a1d8e3434cb7"
+    },
+    {
+      "id": "commons_4624561",
+      "image": ".tools/master-dataset/commons/commons_4624561.jpg",
+      "sha256": "04407a540183be5b8a0ef0e19a665b585c67ba3b386d47ef75869ebe6755156b",
+      "siteGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "meterGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "sourceGroup": "author_e3b0c44298fc1c149afb",
+      "captureGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "nearDuplicateGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.09,
+          0
+        ],
+        [
+          0.87,
+          0
+        ],
+        [
+          0.87,
+          1
+        ],
+        [
+          0.09,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Close_up_shot_of_an_US_electrical_meter_000_0027.JPG"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "78e7ec86701701ea"
+    },
+    {
+      "id": "commons_6262934",
+      "image": ".tools/master-dataset/commons/commons_6262934.jpg",
+      "sha256": "0cb5365612f406ba4bc8adde77543820244fbff4dd973c379af5498d842fe51c",
+      "siteGroup": "commons_author_851db14828bf068389b3",
+      "meterGroup": "commons_author_851db14828bf068389b3",
+      "sourceGroup": "author_851db14828bf068389b3",
+      "captureGroup": "commons_author_851db14828bf068389b3",
+      "nearDuplicateGroup": "commons_author_851db14828bf068389b3",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.03,
+          0.04
+        ],
+        [
+          0.96,
+          0.04
+        ],
+        [
+          0.96,
+          0.99
+        ],
+        [
+          0.03,
+          0.99
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Compteur_HQ.JPG"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "37a596565c5e60a1"
+    },
+    {
+      "id": "commons_4262220",
+      "image": ".tools/master-dataset/commons/commons_4262220.jpg",
+      "sha256": "029d95d685674b4ad8fd8f4923586b2d8a151a246c48e9576cdc653345fbb9df",
+      "siteGroup": "commons_author_ab684e6cb463696ed3b6",
+      "meterGroup": "commons_author_ab684e6cb463696ed3b6",
+      "sourceGroup": "author_ab684e6cb463696ed3b6",
+      "captureGroup": "commons_author_ab684e6cb463696ed3b6",
+      "nearDuplicateGroup": "commons_author_ab684e6cb463696ed3b6",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.1,
+          0.05
+        ],
+        [
+          0.84,
+          0.05
+        ],
+        [
+          0.84,
+          1
+        ],
+        [
+          0.1,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": true,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Contador_dom%C3%A9stico_de_electricidad.JPG"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "69e1a1c88390f67b"
+    },
+    {
+      "id": "commons_322652",
+      "image": ".tools/master-dataset/commons/commons_322652.jpg",
+      "sha256": "80a52f5f4dc3eefc36a72336c811cc01e5aa890a12325d1a7b50e3ee03c500d7",
+      "siteGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "meterGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "sourceGroup": "author_f64cad6a46fd986ca456",
+      "captureGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "nearDuplicateGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.12,
+          0.04
+        ],
+        [
+          0.89,
+          0.04
+        ],
+        [
+          0.89,
+          0.97
+        ],
+        [
+          0.12,
+          0.97
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Czech-electric-meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "434cc34353433dbd"
+    },
+    {
+      "id": "commons_81372",
+      "image": ".tools/master-dataset/commons/commons_81372.jpg",
+      "sha256": "45d5aee7c578cc69b25d32eb95722d4aba0177f5e3671e247c66b60bd3ea3e67",
+      "siteGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "meterGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "sourceGroup": "author_e3b0c44298fc1c149afb",
+      "captureGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "nearDuplicateGroup": "commons_author_edf3dcaabc0f509fdb63",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.01,
+          0.01
+        ],
+        [
+          0.82,
+          0.01
+        ],
+        [
+          0.82,
+          1
+        ],
+        [
+          0.01,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Electrical_meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "69f1a604de1628eb"
+    },
+    {
+      "id": "commons_48290858",
+      "image": ".tools/master-dataset/commons/commons_48290858.jpg",
+      "sha256": "358bd176ad228a47cad9d214f3ac78d5d67a7f4d16799eed16a4751d052b121e",
+      "siteGroup": "commons_author_cbc3d26598c017203f0e",
+      "meterGroup": "commons_author_cbc3d26598c017203f0e",
+      "sourceGroup": "author_cbc3d26598c017203f0e",
+      "captureGroup": "commons_author_cbc3d26598c017203f0e",
+      "nearDuplicateGroup": "commons_author_cbc3d26598c017203f0e",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Electricity_Meter_Closeup.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "2764ee1b13dd908a"
+    },
+    {
+      "id": "commons_96717017",
+      "image": ".tools/master-dataset/commons/commons_96717017.jpg",
+      "sha256": "bc35e03c5de690640cca08dc02e2902f1beeec869d9f0bbbe908056edba1606c",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.2,
+          0.08
+        ],
+        [
+          0.82,
+          0.08
+        ],
+        [
+          0.82,
+          0.86
+        ],
+        [
+          0.2,
+          0.86
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:0067Poblacion_Baliuag,_Bulacan_07.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "2677b3461a1368b9"
+    },
+    {
+      "id": "commons_99723143",
+      "image": ".tools/master-dataset/commons/commons_99723143.jpg",
+      "sha256": "17796205e8dd74c7155d8fd5e90399693a65f764750c7e0d3d7275209dd07d39",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.3,
+          0.03
+        ],
+        [
+          0.7,
+          0.03
+        ],
+        [
+          0.7,
+          0.66
+        ],
+        [
+          0.3,
+          0.66
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:1727Cuisine_of_Bulacan_Baliuag_02.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "64361e5b1cda432d"
+    },
+    {
+      "id": "commons_157008234",
+      "image": ".tools/master-dataset/commons/commons_157008234.jpg",
+      "sha256": "c2b3ca54c93b79e8369ced9b21b31e09ec282db4b2e277cd966e84352faeb28d",
+      "siteGroup": "commons_author_63877f54418d4cb51fc6",
+      "meterGroup": "commons_author_63877f54418d4cb51fc6",
+      "sourceGroup": "author_63877f54418d4cb51fc6",
+      "captureGroup": "commons_author_63877f54418d4cb51fc6",
+      "nearDuplicateGroup": "commons_author_63877f54418d4cb51fc6",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.07,
+          0
+        ],
+        [
+          0.91,
+          0
+        ],
+        [
+          0.91,
+          0.8
+        ],
+        [
+          0.07,
+          0.8
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:2024-SmartMeter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "349cccdcbc3e1d80"
+    },
+    {
+      "id": "commons_159931512",
+      "image": ".tools/master-dataset/commons/commons_159931512.jpg",
+      "sha256": "867fbb1462130f38941ad635aed3376418dc8318f3773d082f4f48b381eb59b3",
+      "siteGroup": "commons_author_a481e4449e0f24a0970a",
+      "meterGroup": "commons_author_a481e4449e0f24a0970a",
+      "sourceGroup": "author_a481e4449e0f24a0970a",
+      "captureGroup": "commons_author_a481e4449e0f24a0970a",
+      "nearDuplicateGroup": "commons_author_a481e4449e0f24a0970a",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.1,
+          0.11
+        ],
+        [
+          0.95,
+          0.11
+        ],
+        [
+          0.95,
+          0.98
+        ],
+        [
+          0.1,
+          0.98
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:20250210_Electronic_electricity_meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "27db087a7a2a2715"
+    },
+    {
+      "id": "commons_90475499",
+      "image": ".tools/master-dataset/commons/commons_90475499.jpg",
+      "sha256": "63e39acc60103073e11954e7b4c907d0e98a55b432eababb59aa0ee8682705db",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.2,
+          0.02
+        ],
+        [
+          0.82,
+          0.02
+        ],
+        [
+          0.82,
+          0.9
+        ],
+        [
+          0.2,
+          0.9
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:5379Baliuag_Bulacan_Landmarks_during_the_2020_coronavirus_pandemic_35.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "660f121e19723de9"
+    },
+    {
+      "id": "commons_92381119",
+      "image": ".tools/master-dataset/commons/commons_92381119.jpg",
+      "sha256": "0c274821813fd891baa7a62d4ff11cf039eed598fda5b168d0dd6c77474ab232",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.1,
+          0.12
+        ],
+        [
+          0.78,
+          0.12
+        ],
+        [
+          0.78,
+          0.93
+        ],
+        [
+          0.1,
+          0.93
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:9865Poblacion_Bustos,_Bulacan_42.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "18e0e322c6d73fa8"
+    },
+    {
+      "id": "commons_124829622",
+      "image": ".tools/master-dataset/commons/commons_124829622.jpg",
+      "sha256": "5daab331ca49a31914058ab7b70ada664b48eb30ad6cebfbb58dfc1973959a55",
+      "siteGroup": "commons_author_82b3c0402ed00f72c6e5",
+      "meterGroup": "commons_author_82b3c0402ed00f72c6e5",
+      "sourceGroup": "author_82b3c0402ed00f72c6e5",
+      "captureGroup": "commons_author_82b3c0402ed00f72c6e5",
+      "nearDuplicateGroup": "commons_author_82b3c0402ed00f72c6e5",
+      "split": "train",
+      "category": "electricity_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.13,
+          0.03
+        ],
+        [
+          0.87,
+          0.03
+        ],
+        [
+          0.87,
+          0.95
+        ],
+        [
+          0.13,
+          0.95
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digital_Economy_7_electricity_meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "167f718e408e3275"
+    },
+    {
+      "id": "commons_50921769",
+      "image": ".tools/master-dataset/commons/commons_50921769.jpg",
+      "sha256": "8ccc4374543a9d44d7f948c05dad24d8ac518ae85b88f340aa221c2b083cc33e",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.16,
+          0.08
+        ],
+        [
+          0.8,
+          0.08
+        ],
+        [
+          0.8,
+          0.98
+        ],
+        [
+          0.16,
+          0.98
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:0940jfBarangays_West_Kamias_Road_Creeks_Bridges_Landmarksfvf_04.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "3235c3534f4b0bac"
+    },
+    {
+      "id": "commons_50921772",
+      "image": ".tools/master-dataset/commons/commons_50921772.jpg",
+      "sha256": "16d6a6f511b80cee89a18d59e46da88a3fdd493c2e1ef9912c187740368adb27",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.15,
+          0.17
+        ],
+        [
+          0.8,
+          0.17
+        ],
+        [
+          0.8,
+          1
+        ],
+        [
+          0.15,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:0940jfBarangays_West_Kamias_Road_Creeks_Bridges_Landmarksfvf_07.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "120ccca5b4d753dc"
+    },
+    {
+      "id": "commons_56487326",
+      "image": ".tools/master-dataset/commons/commons_56487326.jpg",
+      "sha256": "2679e0325cd400d0bb997ebc2d61a8cd56bb243967184dc7fbc40bac1bad9387",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.2,
+          0.1
+        ],
+        [
+          0.83,
+          0.1
+        ],
+        [
+          0.83,
+          0.86
+        ],
+        [
+          0.2,
+          0.86
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:09963jfRodriguez_Street_Bridge_Estero_de_Vitas_Balut_Tondo_Manilafvf_13.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "40acb99384cb1bbd"
+    },
+    {
+      "id": "commons_56487325",
+      "image": ".tools/master-dataset/commons/commons_56487325.jpg",
+      "sha256": "934e920f7a7ac8e6591562c930f3a2d05c2c4e00e9df564d207dcd35eb3d20b5",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.22,
+          0.1
+        ],
+        [
+          0.9,
+          0.1
+        ],
+        [
+          0.9,
+          0.97
+        ],
+        [
+          0.22,
+          0.97
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:09963jfRodriguez_Street_Bridge_Estero_de_Vitas_Balut_Tondo_Manilafvf_14.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "39c0a5f301eb7934"
+    },
+    {
+      "id": "commons_56487327",
+      "image": ".tools/master-dataset/commons/commons_56487327.jpg",
+      "sha256": "40f1d4579617fb4dd4f372a6cf195b1cb9b82dcaacaf386f3cb612bf5170d642",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.22,
+          0.06
+        ],
+        [
+          0.85,
+          0.06
+        ],
+        [
+          0.85,
+          0.94
+        ],
+        [
+          0.22,
+          0.94
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:09963jfRodriguez_Street_Bridge_Estero_de_Vitas_Balut_Tondo_Manilafvf_15.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "24f384d3d6cb0b1c"
+    },
+    {
+      "id": "commons_56487328",
+      "image": ".tools/master-dataset/commons/commons_56487328.jpg",
+      "sha256": "8b7fb2c13d9e68713f78ab1661f19bc2978f4a4ea239f21e8f6d37030c6f769e",
+      "siteGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "meterGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "sourceGroup": "author_f6051cbcdbe1391c1aae",
+      "captureGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "nearDuplicateGroup": "commons_author_f6051cbcdbe1391c1aae",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.13,
+          0.04
+        ],
+        [
+          0.84,
+          0.04
+        ],
+        [
+          0.84,
+          0.98
+        ],
+        [
+          0.13,
+          0.98
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:09963jfRodriguez_Street_Bridge_Estero_de_Vitas_Balut_Tondo_Manilafvf_16.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "321bcd5339e97124"
+    },
+    {
+      "id": "commons_25228750",
+      "image": ".tools/master-dataset/commons/commons_25228750.jpg",
+      "sha256": "b75a8883f5e9ce3fa457742d77767d93448f83c53d36b2a4c3dfa3bc1a3b8c60",
+      "siteGroup": "commons_author_28afea6d3c827b46d2d5",
+      "meterGroup": "commons_author_28afea6d3c827b46d2d5",
+      "sourceGroup": "author_28afea6d3c827b46d2d5",
+      "captureGroup": "commons_author_28afea6d3c827b46d2d5",
+      "nearDuplicateGroup": "commons_author_28afea6d3c827b46d2d5",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.34,
+          0.24
+        ],
+        [
+          0.98,
+          0.24
+        ],
+        [
+          0.98,
+          0.74
+        ],
+        [
+          0.34,
+          0.74
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": true,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Compteur_consommation_eau_Farnier.jpeg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "1f3d64c3624cdb88"
+    },
+    {
+      "id": "commons_32325922",
+      "image": ".tools/master-dataset/commons/commons_32325922.jpg",
+      "sha256": "1579cd8833bfe88a19f40dad163c6c88d49f63999675a3b39c298bf00ecaddf8",
+      "siteGroup": "commons_author_bab0b0e3f3b57e5a7065",
+      "meterGroup": "commons_author_bab0b0e3f3b57e5a7065",
+      "sourceGroup": "author_bab0b0e3f3b57e5a7065",
+      "captureGroup": "commons_author_bab0b0e3f3b57e5a7065",
+      "nearDuplicateGroup": "commons_author_bab0b0e3f3b57e5a7065",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.35,
+          0.18
+        ],
+        [
+          0.77,
+          0.18
+        ],
+        [
+          0.77,
+          0.92
+        ],
+        [
+          0.35,
+          0.92
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Contador_contador.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "53e02939f3c342cd"
+    },
+    {
+      "id": "commons_322704",
+      "image": ".tools/master-dataset/commons/commons_322704.jpg",
+      "sha256": "6b0d67b668c5f6d7858532c4a22f6c3551e2199e7c0b856b6c9e1d2f83c507f7",
+      "siteGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "meterGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "sourceGroup": "author_834bf7328fa743c3c2c4",
+      "captureGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "nearDuplicateGroup": "commons_author_e59c68c0a0f8bfdd2aba",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.12,
+          0.11
+        ],
+        [
+          0.78,
+          0.11
+        ],
+        [
+          0.78,
+          0.96
+        ],
+        [
+          0.12,
+          0.96
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "Public domain",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Czech-multitariff-meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "595b69da49f09e20"
+    },
+    {
+      "id": "commons_15941212",
+      "image": ".tools/master-dataset/commons/commons_15941212.jpg",
+      "sha256": "b8b5f7e80961ff55e2ccba84422600568d488fd45fe338c7a6836182d9199a99",
+      "siteGroup": "commons_author_50554cd6883e1ccbb849",
+      "meterGroup": "commons_author_50554cd6883e1ccbb849",
+      "sourceGroup": "author_50554cd6883e1ccbb849",
+      "captureGroup": "commons_author_50554cd6883e1ccbb849",
+      "nearDuplicateGroup": "commons_author_50554cd6883e1ccbb849",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.07,
+          0.1
+        ],
+        [
+          0.62,
+          0.1
+        ],
+        [
+          0.62,
+          0.98
+        ],
+        [
+          0.07,
+          0.98
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Electricity_meter_with_circuit_breakers.JPG"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "763b89cf196c2611"
+    },
+    {
+      "id": "commons_107120332",
+      "image": ".tools/master-dataset/commons/commons_107120332.jpg",
+      "sha256": "aa0a72be91be1dccda92bc309e7e075670653f1a89878c6c75e07cd9d3ba1268",
+      "siteGroup": "commons_author_ab1adda81175ae4b63eb",
+      "meterGroup": "commons_author_ab1adda81175ae4b63eb",
+      "sourceGroup": "author_ab1adda81175ae4b63eb",
+      "captureGroup": "commons_author_ab1adda81175ae4b63eb",
+      "nearDuplicateGroup": "commons_author_ab1adda81175ae4b63eb",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.28,
+          0.14
+        ],
+        [
+          0.77,
+          0.14
+        ],
+        [
+          0.77,
+          0.65
+        ],
+        [
+          0.28,
+          0.65
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Marignac-en-Diois_-_Compteur_ERDF_anti-Linky_(juin_2021).jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth",
+        "electronic_device_with_mechanical_number_wheel_display"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "4f1374d336164738"
+    },
+    {
+      "id": "commons_86999625",
+      "image": ".tools/master-dataset/commons/commons_86999625.jpg",
+      "sha256": "d173419d27701a027a89f06927a6fc4736740422d3fe0a3703296fa5988f36a2",
+      "siteGroup": "commons_author_a0b0981781df73c02b75",
+      "meterGroup": "commons_author_a0b0981781df73c02b75",
+      "sourceGroup": "author_a0b0981781df73c02b75",
+      "captureGroup": "commons_author_a0b0981781df73c02b75",
+      "nearDuplicateGroup": "commons_author_a0b0981781df73c02b75",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.41,
+          0.16
+        ],
+        [
+          0.91,
+          0.16
+        ],
+        [
+          0.91,
+          0.87
+        ],
+        [
+          0.41,
+          0.87
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Schetchik.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "5b6c9b5a491d31c2"
+    },
+    {
+      "id": "commons_179987587",
+      "image": ".tools/master-dataset/commons/commons_179987587.jpg",
+      "sha256": "fea61703e2a2c7d1e81b9891cd30c316a281300db75885f43446e81a15ed244b",
+      "siteGroup": "commons_author_0d79d735fc0cc303bb94",
+      "meterGroup": "commons_author_0d79d735fc0cc303bb94",
+      "sourceGroup": "author_0d79d735fc0cc303bb94",
+      "captureGroup": "commons_author_0d79d735fc0cc303bb94",
+      "nearDuplicateGroup": "commons_author_0d79d735fc0cc303bb94",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.25,
+          0.08
+        ],
+        [
+          0.55,
+          0.08
+        ],
+        [
+          0.55,
+          0.58
+        ],
+        [
+          0.25,
+          0.58
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digital_Water_Meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "423938dac76714bc"
+    },
+    {
+      "id": "commons_141372353",
+      "image": ".tools/master-dataset/commons/commons_141372353.jpg",
+      "sha256": "29d568268219f562ccbeccdf49d664096758bc6609b43d7d99706e6d335d38c0",
+      "siteGroup": "commons_author_69eb561b648a41c1fe10",
+      "meterGroup": "commons_author_69eb561b648a41c1fe10",
+      "sourceGroup": "author_69eb561b648a41c1fe10",
+      "captureGroup": "commons_author_69eb561b648a41c1fe10",
+      "nearDuplicateGroup": "commons_author_69eb561b648a41c1fe10",
+      "split": "train",
+      "category": "water_mechanical",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0.14,
+          0.25
+        ],
+        [
+          0.83,
+          0.25
+        ],
+        [
+          0.83,
+          0.78
+        ],
+        [
+          0.14,
+          0.78
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Itron_Water_Meter.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "meter_body_box_and_technology_only",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "flags": [
+        "small_development_sample",
+        "body_only_no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "376cca0789db15d0"
+    },
+    {
+      "id": "commons_73857634",
+      "image": ".tools/master-dataset/commons/commons_73857634.jpg",
+      "sha256": "aa4187e4f9b46208cff4c646a53bad2228ceca936b52d60d3cc989df42336817",
+      "siteGroup": "commons_author_a2386b2e30bcab91b84a",
+      "meterGroup": "commons_author_a2386b2e30bcab91b84a",
+      "sourceGroup": "author_a2386b2e30bcab91b84a",
+      "captureGroup": "commons_author_a2386b2e30bcab91b84a",
+      "nearDuplicateGroup": "commons_author_a2386b2e30bcab91b84a",
+      "split": "train",
+      "category": "not_meter",
+      "meterPolygon": null,
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:2018-10-22_(886)_Outdoor_energy_measurement_of_Energieversorgung_Nieder%C3%B6sterreich_(EVN)_from_ERA_Elektrotechnik_Ramsauer_via_transformers_near_Danube_Krems_an_der_Donau,_Austria.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "negative_image",
+        "independentHumanReview": false,
+        "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
+      },
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "198e5cf3e8924c6c"
+    },
+    {
+      "id": "meterocr_089j4CRbYLmnBVWRKauk",
+      "image": ".tools/ocr-next-publisher-previews/meterocr_089j4CRbYLmnBVWRKauk.jpg",
+      "sha256": "525664c38c86c7c9a0987e5fe8323baf8df6dba93deed50cedf4fc0eddbef809",
+      "siteGroup": "meterocr_all_unknown_physical_id",
+      "meterGroup": "meterocr_all_unknown_physical_id",
+      "sourceGroup": "meterocr_all_unknown_physical_id",
+      "captureGroup": "meterocr_all_unknown_physical_id",
+      "nearDuplicateGroup": "meterocr_all_unknown_physical_id",
+      "split": "train",
+      "category": "water_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY 4.0",
+        "sourceUrl": "https://universe.roboflow.com/meterocr-vt9ic/water-digital-meter"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "Visible LCD meter face clipped by source frame; bbox is clipped visible body, not display union",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "partial_body",
+        "low_resolution_publisher_preview",
+        "same_source_train_only",
+        "no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "181718f89380c7ff"
+    },
+    {
+      "id": "meterocr_0MlNSNipRwsqs9DqoiQO",
+      "image": ".tools/ocr-next-publisher-previews/meterocr_0MlNSNipRwsqs9DqoiQO.jpg",
+      "sha256": "4bc0a2f66b193ae5b0a1e67b74264b96acef1bfa7128d91c053dc63e841f083e",
+      "siteGroup": "meterocr_all_unknown_physical_id",
+      "meterGroup": "meterocr_all_unknown_physical_id",
+      "sourceGroup": "meterocr_all_unknown_physical_id",
+      "captureGroup": "meterocr_all_unknown_physical_id",
+      "nearDuplicateGroup": "meterocr_all_unknown_physical_id",
+      "split": "train",
+      "category": "water_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY 4.0",
+        "sourceUrl": "https://universe.roboflow.com/meterocr-vt9ic/water-digital-meter"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "Visible LCD meter face clipped by source frame; bbox is clipped visible body, not display union",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "partial_body",
+        "low_resolution_publisher_preview",
+        "same_source_train_only",
+        "no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "1c9f0cfc9340d0bb"
+    },
+    {
+      "id": "meterocr_0QOVwGDjB9WO5inVcJN0",
+      "image": ".tools/ocr-next-publisher-previews/meterocr_0QOVwGDjB9WO5inVcJN0.jpg",
+      "sha256": "89840cd77ee9a95bfe47b823047ea51efbdb3862ec0de092acd66d90e80523f4",
+      "siteGroup": "meterocr_all_unknown_physical_id",
+      "meterGroup": "meterocr_all_unknown_physical_id",
+      "sourceGroup": "meterocr_all_unknown_physical_id",
+      "captureGroup": "meterocr_all_unknown_physical_id",
+      "nearDuplicateGroup": "meterocr_all_unknown_physical_id",
+      "split": "train",
+      "category": "water_digital",
+      "annotationLevel": "meter",
+      "meterPolygon": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "windowPolygon": null,
+      "reading": null,
+      "quality": {
+        "blur": false,
+        "glare": true
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY 4.0",
+        "sourceUrl": "https://universe.roboflow.com/meterocr-vt9ic/water-digital-meter"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "scope": "Visible LCD meter face clipped by source frame; bbox is clipped visible body, not display union",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "partial_body",
+        "low_resolution_publisher_preview",
+        "same_source_train_only",
+        "no_exact_reading_ground_truth"
+      ],
+      "labelStatus": "historical_agent_provisional",
+      "newHeldOut": false,
+      "pHash63": "1b61ce1e3474e0ab"
+    },
+    {
+      "id": "commons_12427304",
+      "image": ".tools/ocr-continued/commons_12427304.jpg",
+      "sha256": "f15227670be36b659126eea04faa582aef02bf2a8383a9c755c28b4983e71bd1",
+      "sourceGroup": "author_d5c9e4aaae2aaf264c54",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Static_watthour_meter.jpg",
+        "license": "Public domain"
+      },
+      "labelStatus": "provisional_agent_visual_no_human_review"
+    },
+    {
+      "id": "commons_89897213",
+      "image": ".tools/master-dataset/commons/commons_89897213.jpg",
+      "sha256": "915fc9c4b6451bb51b5e89a2debcae8082332dd2adbbd05b510a423d4a80dd65",
+      "sourceGroup": "author_0ab77df5b76965105cd9",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D0%9D%D0%B0%D1%87%D0%B8%D0%BD%D0%BA%D0%B0_%D1%8D%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%BE%D0%BD%D0%BD%D0%BE%D0%B3%D0%BE_%D1%8D%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%BE%D1%81%D1%87%D1%91%D1%82%D1%87%D0%B8%D0%BA%D0%B0.jpg",
+        "license": "CC0"
+      },
+      "labelStatus": "provisional_agent_visual_no_human_review"
+    },
+    {
+      "id": "commons_50005675",
+      "image": ".tools/master-dataset/commons/commons_50005675.jpg",
+      "sha256": "4ee5c9ed89f12ed7dd276147f8ef7f46cf11145a28afa7cf9cbdb0221148706b",
+      "sourceGroup": "author_83d0b9ab9d1a07afbd75",
+      "split": "train",
+      "category": "not_meter",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Smart-meter-gateway.jpg",
+        "license": "CC BY-SA 4.0"
+      },
+      "labelStatus": "provisional_agent_visual_no_human_review"
+    },
+    {
+      "id": "commons_195236166",
+      "image": ".tools/ocr-next-public-images-expanded/commons_195236166.jpg",
+      "sha256": "16410ad1ad6878bc432a29952cfb1af2e625bea96ad7644a3812735200f14c32",
+      "sourceGroup": "author_f34cae095b59ef7d9b54",
+      "split": "train",
+      "category": "not_meter",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Stolen_water_meter_in_%C6%8Flib%C9%99y_H%C3%BCseynzad%C9%99_14,_during_the_destruction_of_Bay%C4%B1r%C5%9F%C9%99h%C9%99r_(10081).jpg",
+        "license": "CC BY-SA 4.0"
+      },
+      "labelStatus": "provisional_agent_visual_no_human_review"
+    },
+    {
+      "id": "commons_136085621",
+      "image": ".tools/ocr-next-public-images-expanded/commons_136085621.jpg",
+      "sha256": "77490fa7767e75667081a418fd88a5fafb281f77d9af33a709b6de3d248c4472",
+      "sourceGroup": "author_efcd0eeab5de0f980979",
+      "split": "train",
+      "category": "not_meter",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wachten_op_hoog_water_(beeld_van_Jan_Ketelaar)_14-08-2023._(d.j.b)_05.jpg",
+        "license": "CC BY-SA 4.0"
+      },
+      "labelStatus": "provisional_agent_visual_no_human_review"
+    },
+    {
+      "id": "commons_28431144",
+      "image": ".tools/ocr-next-public-images-expanded/commons_28431144.jpg",
+      "sha256": "c2ebd45b7864b15a873efdc65321336381724d63693aec81f11510994b6c6cec",
+      "sourceGroup": "author_9355bbece28bd4e63bb3",
+      "split": "train",
+      "category": "not_meter",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_Water_Meter_Room,_entrance,_Chiayi_(Taiwan).jpg",
+        "license": "CC BY-SA 3.0"
+      },
+      "labelStatus": "provisional_agent_visual_no_human_review"
+    },
+    {
+      "id": "commons_15315072",
+      "image": ".tools/master-dataset/commons/commons_15315072.jpg",
+      "sha256": "c98b44b9f398d8055ca9bbecf0f5a99f43aca5c071d3c25c70c431196518bbc5",
+      "split": "validation",
+      "category": "electricity_mechanical",
+      "sourceGroup": "author_12571f09c28cb123e930",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Compteur_%C3%A9lectrique.jpg",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Lionel_Scheepmans\" title=\"User:Lionel Scheepmans\">Lionel Scheepmans</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "3e41e3c49e14e16b"
+    },
+    {
+      "id": "commons_48039403",
+      "image": ".tools/master-dataset/commons/commons_48039403.jpg",
+      "sha256": "e0155e59019088ec412a3e67bdb6ff496f70b0fdbb293686308dc89f296ba451",
+      "split": "validation",
+      "category": "electricity_digital",
+      "sourceGroup": "author_e3b9c4bf566505344467",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Electric_meter_on_wall.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Well-Informed_Optimist\" title=\"User:Well-Informed Optimist\">Well-Informed Optimist</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "0a3984dda26d4ba7"
+    },
+    {
+      "id": "commons_42461220",
+      "image": ".tools/master-dataset/commons/commons_42461220.jpg",
+      "sha256": "ca016514230513a6aa8503eeec8cb311fd8efa332d383838ebcf40fd8b7b5085",
+      "split": "validation",
+      "category": "water_mechanical",
+      "sourceGroup": "author_743d8f13de45bfac0527",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Catalyst_-_2015-08-08_-_Andy_Mabbett_-_17.JPG",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Pigsonthewing\" title=\"User:Pigsonthewing\">Andy Mabbett</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "0f619b678b064a79"
+    },
+    {
+      "id": "commons_195597533",
+      "image": ".tools/ocr-continued/commons_195597533.jpg",
+      "sha256": "85ca26dfbd7539305d13cda797981dd03598b57bbe92bb7fd3e3c8d08e8a9306",
+      "split": "validation",
+      "category": "not_meter",
+      "sourceGroup": "author_2ca2e0e0b67658f24ed7",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:City_water_meter.jpg",
+        "license": "CC0",
+        "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Arlo_Barnes\" title=\"User:Arlo Barnes\">Arlo Barnes</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "648724a1d3d4857f"
+    },
+    {
+      "id": "commons_134293571",
+      "image": ".tools/master-dataset/commons/commons_134293571.jpg",
+      "sha256": "00a84fe1e198d145f79f53f1c584282d326ad56a4100a9a36803ba885e65291c",
+      "split": "validation",
+      "category": "not_meter",
+      "sourceGroup": "author_acd6ba6038b0b7c2713a",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Backflow_preventer_PQ.jpg",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Mds08011\" title=\"User:Mds08011\">Mds08011</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "68ab7a633cc04f38"
+    },
+    {
+      "id": "commons_151445788",
+      "image": ".tools/master-dataset/commons/commons_151445788.jpg",
+      "sha256": "2293c68468505cbf294288991299fdfce942bf1b5941d5ae261f360e57a84f82",
+      "split": "validation",
+      "category": "not_meter",
+      "sourceGroup": "author_66c555f55750ce0ed805",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Compteur_horaire_d%27%C3%A9lectrcit%C3%A9_Soulat-Villon.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Guittonneau\" title=\"User:Guittonneau\">Guittonneau</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "19cea411ae53a4bb"
+    },
+    {
+      "id": "commons_19089918",
+      "image": ".tools/ocr-next-public-images-expanded/commons_19089918.jpg",
+      "sha256": "cca72ca089d8e5b5520a42cd66f1b2917e992abc2516c82a252b6222c59905fa",
+      "split": "validation",
+      "category": "not_meter",
+      "sourceGroup": "author_863dd6364cb8ea1f4e9a",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": false,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Water_in_shaybah.JPG",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Mohammadeid&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Mohammadeid (page does not exist)\">Mohammadeid</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "6e1b710da9c2a4c7"
+    },
+    {
+      "id": "commons_18880869",
+      "image": ".tools/master-dataset/commons/commons_18880869.jpg",
+      "sha256": "78dd168bd9cca783193293f080549d1fad48894bb9bccdcde15d66d21c04dea4",
+      "split": "test",
+      "category": "electricity_mechanical",
+      "sourceGroup": "author_02864d05329e7b557670",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Czech_electricity_meter_and_fuse_box.jpg",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "I would appreciate <a href=\"//commons.wikimedia.org/wiki/Special:EmailUser/Sevela.p\" title=\"Special:EmailUser/Sevela.p\">being notified</a> if you use my work outside Wikimedia.\n<p>Do not copy this image illegally by ignoring the terms of the license below, as it is not in the public domain. If you would like special permission to use, license, or purchase the image please <a href=\"//commons.wikimedia.org/wiki/Special:EmailUser/Sevela.p\" title=\"Special:EmailUser/Sevela.p\">contact me</a> to negotiate terms.\n</p>\nMore of my work can be found in my <a href=\"//commons.wikimedia.org/wiki/Category:Files_by_User:Sevela.p\" title=\"Category:Files by User:Sevela.p\">personal gallery</a>."
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "6b619e1ce1e09c8b"
+    },
+    {
+      "id": "commons_11930077",
+      "image": ".tools/ocr-continued/commons_11930077.jpg",
+      "sha256": "59f119b49c2d45d8763f3ad4eb8291178db22ed1d49f45acf8031a6b84cfa209",
+      "split": "test",
+      "category": "electricity_mechanical",
+      "sourceGroup": "author_a61595592fa259aa9cbf",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Electricity_meter_type_L7C2.jpg",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Echtner\" title=\"User:Echtner\">Echtner</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "26f2698e1e5a2aa5"
+    },
+    {
+      "id": "commons_54903199",
+      "image": ".tools/ocr-continued/commons_54903199.jpg",
+      "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
+      "split": "test",
+      "category": "electricity_digital",
+      "sourceGroup": "author_f7fe9bd796075719dbb7",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Contador-kilovatio-hora.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Carlos_P.&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Carlos P. (page does not exist)\">Carlos P.</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "6ca8e918ec3254b7"
+    },
+    {
+      "id": "commons_33635608",
+      "image": ".tools/ocr-continued/commons_33635608.jpg",
+      "sha256": "4898d4fde07145a933dcda85d5918f9ce5d12759028c33337803d1d179545aca",
+      "split": "test",
+      "category": "electricity_digital",
+      "sourceGroup": "author_96e7c8c0ea3d8b8a7af4",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:14_06_28_Meter_Dunedin_FL_01.JPG",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:ReubenGBrewer&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:ReubenGBrewer (page does not exist)\">ReubenGBrewer</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "689e493c799e0bd0"
+    },
+    {
+      "id": "commons_38382735",
+      "image": ".tools/ocr-next-public-images-expanded/commons_38382735.jpg",
+      "sha256": "b6b70684d97c758b69dcbe04c086bc11699fe73db5c7b89ffa9056338a3dd059",
+      "split": "test",
+      "category": "water_mechanical",
+      "sourceGroup": "author_5f9dd77c634657bd7e0f",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Water-Meter_43101-480x360_(4999891543).jpg",
+        "license": "CC BY 2.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+        "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/28958738@N06\">Emilian Robert Vicol</a> from Com. Balanesti, Romania"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "1be6405347aed986"
+    },
+    {
+      "id": "commons_166496308",
+      "image": ".tools/ocr-next-public-images-expanded/commons_166496308.jpg",
+      "sha256": "5dedeb663fc19e4a44b739fb455debe238865749b171062b4a230bf47dc63c95",
+      "split": "test",
+      "category": "water_mechanical",
+      "sourceGroup": "author_f631384b40c1f812b335",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:20240116_151845_Water_meter.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Gayest_Frogs&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Gayest Frogs (page does not exist)\">Gayest Frogs</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "475b9864dcb98364"
+    },
+    {
+      "id": "commons_15920280",
+      "image": ".tools/master-dataset/commons/commons_15920280.jpg",
+      "sha256": "454695db48b29e74b35e0379e8211c0298fc287e2abda78a6aa357c8810ffd33",
+      "split": "test",
+      "category": "water_digital",
+      "sourceGroup": "author_439103ee8a3f6c365ed2",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": true,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Compteur_Octave.jpg",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Machette30&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Machette30 (page does not exist)\">Machette30</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "4003e3f9d9c19e1e"
+    },
+    {
+      "id": "commons_192931434",
+      "image": ".tools/master-dataset/commons/commons_192931434.jpg",
+      "sha256": "050e961ae0880c1af8d835f5714f79942a2bb02c87725b488f4b7a21f45cb259",
+      "split": "test",
+      "category": "not_meter",
+      "sourceGroup": "author_0a0def3a83a936d114c3",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:2026-05-28_13_46_52_Recently-installed_water_meter_surrounded_by_significant_soil_subsidence_along_Mountain_View_Road_in_the_Mountainview_section_of_Ewing_Township,_Mercer_County,_New_Jersey.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Famartin\" title=\"User:Famartin\">Famartin</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "68fb647740695233"
+    },
+    {
+      "id": "commons_51969773",
+      "image": ".tools/ocr-next-public-images-expanded/commons_51969773.jpg",
+      "sha256": "6718ddf348ea2bd3b4ffef5706ec66e760f7de39ffede1270c8aefeab843c910",
+      "split": "test",
+      "category": "not_meter",
+      "sourceGroup": "author_90e05a6de0e8828d4433",
+      "physicalMeterGroup": null,
+      "labelStatus": "agent_provisional",
+      "humanReviewCount": 0,
+      "newHeldOut": true,
+      "isProductIllustration": false,
+      "meterPolygon": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Water_meter._(14868439929).jpg",
+        "license": "Public domain",
+        "licenseUrl": "",
+        "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/24400159@N05\">USEPA Environmental-Protection-Agency</a>"
+      },
+      "notes": "Visually selected before inference; no numeric or billing ground truth",
+      "pHash63": "4d599268d721eb86"
+    }
+  ]
+}
