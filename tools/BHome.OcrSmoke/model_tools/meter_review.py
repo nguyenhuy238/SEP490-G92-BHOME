@@ -14,7 +14,9 @@ import shutil
 from PIL import Image
 
 CATEGORIES = {'electricity_mechanical', 'electricity_digital', 'water_mechanical', 'water_digital', 'not_meter', 'unknown'}
-FIELDS = ('category','physicalMeterGroup','displayState','readable','digits','decimalPlaces','unit','register','uncertainPositions')
+READABILITY_STATES = {'readable_consumption','blank_or_unpowered','segment_test','status_only','wrong_register','blurred_or_obscured','unknown'}
+NEGATIVE_STATES = READABILITY_STATES-{'readable_consumption','unknown'}
+FIELDS = ('category','physicalMeterGroup','displayState','readable','digits','decimalPlaces','unit','register','uncertainPositions','readabilityState','annotationConfidence')
 
 
 def valid_box(box):
@@ -54,6 +56,10 @@ def validate_review(document, package):
             raise ValueError('Unsupported reviewed unit/register')
         if row.get('displayState') not in ('single','multiple','unknown') or (row.get('readable') is not None and type(row['readable']) is not bool):
             raise ValueError('Unknown display/readability state must be explicit')
+        if row.get('readabilityState','unknown') not in READABILITY_STATES or row.get('annotationConfidence','unknown') not in ('high','medium','low','unknown'):
+            raise ValueError('Unsupported readability state/confidence')
+        if digits is not None and row.get('readabilityState') in ('blank_or_unpowered','segment_test','blurred_or_obscured'):
+            raise ValueError('Unreadable display state cannot supply exact digits')
         rows[identifier]=row
     return reviewer,rows
 
@@ -61,13 +67,13 @@ def validate_review(document, package):
 def reconcile(package,first,second):
     reviewer_a,a=validate_review(first,package);reviewer_b,b=validate_review(second,package)
     if reviewer_a==reviewer_b:raise ValueError('Two different declared reviewers are required')
-    views={'A_classification':[],'B_localization':[],'C_recognition':[]};pending=[]
+    views={'A_classification':[],'B_localization':[],'C_recognition':[],'D_negative_controls':[]};pending=[]
     for source in package['samples']:
         identifier=source['id'];left=a.get(identifier);right=b.get(identifier)
         if left is None or right is None:
             pending.append({'id':identifier,'reason':'two_reviews_missing'});continue
         common={k:left.get(k) for k in FIELDS}
-        item={'id':identifier,'sourceSha256':source['sourceSha256'],'sourceGroup':package['sourceGroup'],
+        item={'id':identifier,'sourceSha256':source['sourceSha256'],'sourceGroup':source.get('sourceGroup',package['sourceGroup']),
               'reviewerIds':[reviewer_a,reviewer_b],'status':'declared_consensus_pending_project_review'}
         agreed=lambda *fields:all(left.get(f)==right.get(f) for f in fields)
         if agreed('category','physicalMeterGroup') and left['category']!='unknown':
@@ -79,11 +85,14 @@ def reconcile(package,first,second):
                 'register':left['register'],'displayState':left['displayState']})
         if (box_agrees(left.get('windowBox'),right.get('windowBox')) and agreed(*FIELDS)
                 and left.get('digits') is not None and left['readable'] is True and left['displayState']=='single'
+                and left.get('readabilityState') not in NEGATIVE_STATES
                 and left['category'] in CATEGORIES-{'unknown','not_meter'}):
             billing=(left.get('decimalPlaces') is not None and
                      ((left['category'].startswith('electricity_') and left['unit']=='kWh' and left['register']=='total_energy') or
                       (left['category'].startswith('water_') and left['unit']=='m3' and left['register']=='total_volume')))
             views['C_recognition'].append({**item,**common,'windowBox':left['windowBox'],'billingMetadataDeclared':billing})
+        if agreed('readabilityState') and left.get('readabilityState') in NEGATIVE_STATES:
+            views['D_negative_controls'].append({**item,'readabilityState':left['readabilityState']})
         if not agreed(*FIELDS):pending.append({'id':identifier,'reason':'annotation_disagreement'})
     return {'views':views,'pending':pending,'independentAcceptanceEstablished':False,
             'splitPolicy':'source group remains unsplit until project review; never split unknown meters randomly'}
@@ -118,13 +127,40 @@ def build(kaggle,output):
     print(json.dumps({'publicImages':len(rows),'humanReviewsReceived':0,'independentExactLabels':0,'output':output.as_posix()}))
 
 
+def build_manifest(manifest,root,output):
+    if output.exists():raise ValueError('Never overwrite a review pack')
+    data=json.loads(manifest.read_text(encoding='utf-8'));rows=[];seen=set()
+    for source in data['samples']:
+        identifier=source['id'];image=(root/source['image']).resolve()
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',identifier) or identifier in seen or not image.is_relative_to(root.resolve()):
+            raise ValueError('Unsafe or duplicate pilot image')
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',source.get('sourceGroup','')):
+            raise ValueError('Pilot source group required')
+        seen.add(identifier)
+        if hashlib.sha256(image.read_bytes()).hexdigest()!=source['sha256']:raise ValueError('Pilot image checksum mismatch')
+        with Image.open(image) as decoded:decoded.verify()
+        rows.append({'id':identifier,'sourceSha256':source['sha256'],'sourceGroup':source['sourceGroup'],
+                     'image':'images/'+identifier+image.suffix.lower()})
+    output.mkdir(parents=True);(output/'images').mkdir()
+    for source,row in zip(data['samples'],rows):shutil.copyfile(root/source['image'],output/row['image'])
+    package={'sourceGroup':'multiple_sources_keep_per_image_groups','samples':rows,'modelSuggestionsIncluded':False,
+             'inputManifestSha256':hashlib.sha256(manifest.read_bytes()).hexdigest()}
+    (output/'package.json').write_text(json.dumps(package,indent=2)+'\n')
+    template=Path(__file__).with_name('meter_review.html').read_text(encoding='utf-8')
+    (output/'index.html').write_text(template.replace('__PACKAGE__',json.dumps(package).replace('<','\\u003c')),encoding='utf-8')
+    print(json.dumps({'pilotImages':len(rows),'humanReviewsReceived':0,'modelSuggestionsIncluded':False}))
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);commands=p.add_subparsers(dest='command',required=True)
     create=commands.add_parser('build');create.add_argument('kaggle',type=Path);create.add_argument('output',type=Path)
+    pilot=commands.add_parser('build-manifest')
+    for name in ['manifest','root','output']:pilot.add_argument(name,type=Path)
     merge=commands.add_parser('merge')
     for name in ['package','first','second','output']:merge.add_argument(name,type=Path)
     a=p.parse_args()
     if a.command=='build':build(a.kaggle,a.output)
+    elif a.command=='build-manifest':build_manifest(a.manifest,a.root,a.output)
     else:
         package=json.loads(a.package.read_text());verify_package_images(package,a.package.parent)
         result=reconcile(package,*[json.loads(getattr(a,n).read_text()) for n in ['first','second']])

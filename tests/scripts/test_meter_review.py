@@ -1,12 +1,15 @@
 """Synthetic annotation reconciliation tests; no real meter GT is asserted."""
 from copy import deepcopy
+import hashlib
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'tools/BHome.OcrSmoke/model_tools'))
-from meter_review import reconcile,verify_package_images
+from meter_review import reconcile,verify_package_images,build_manifest
+from PIL import Image
 
 
 class ReviewTests(unittest.TestCase):
@@ -52,6 +55,33 @@ class ReviewTests(unittest.TestCase):
             package={'samples':[{'image':'../outside.jpg','sourceSha256':'a'*64}]}
             with self.assertRaisesRegex(ValueError,'path/hash'):
                 verify_package_images(package,Path(directory))
+
+    def test_negative_display_state_does_not_supply_recognition_ground_truth(self):
+        for doc in (self.first,self.second):
+            row=doc['rows'][0];row.update(readabilityState='segment_test',digits=None,readable=False)
+        result=reconcile(self.package,self.first,self.second)
+        self.assertEqual([],result['views']['C_recognition'])
+        self.assertEqual(1,len(result['views']['D_negative_controls']))
+        self.second['rows'][0].update(digits='88888',readable=True)
+        with self.assertRaisesRegex(ValueError,'Unreadable display state'):
+            reconcile(self.package,self.first,self.second)
+
+    def test_mixed_pilot_keeps_each_sources_group_after_consensus(self):
+        self.package['samples'][0]['sourceGroup']='synthetic_device_source'
+        result=reconcile(self.package,self.first,self.second)
+        self.assertEqual('synthetic_device_source',result['views']['A_classification'][0]['sourceGroup'])
+
+    def test_blinded_package_does_not_embed_annotation_suggestions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);image=root/'source.png';Image.new('RGB',(8,8),'white').save(image)
+            manifest=root/'manifest.json'
+            manifest.write_text(json.dumps({'samples':[{'id':'synthetic_001','image':'source.png',
+                'sha256':hashlib.sha256(image.read_bytes()).hexdigest(),'sourceGroup':'synthetic_source',
+                'digits':'001234','category':'electricity_digital','modelSuggestion':'do_not_autofill'}]}))
+            build_manifest(manifest,root,root/'review')
+            package=json.loads((root/'review/package.json').read_text())
+            self.assertFalse(package['modelSuggestionsIncluded'])
+            self.assertNotIn('digits',package['samples'][0]);self.assertNotIn('category',package['samples'][0])
 
 
 if __name__=='__main__':unittest.main()
