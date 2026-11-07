@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useEffect } from 'react';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -9,12 +9,16 @@ const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   json: vi.fn(),
   onState: null as ((state: string) => void) | null,
+  success: vi.fn(),
 }));
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ taskId: 'synthetic-task' }),
   Redirect: () => null,
+  useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
+  View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  BackHandler: { addEventListener: () => ({ remove: vi.fn() }) },
   AppState: {
     addEventListener: (_event: string, callback: (state: string) => void) => {
       mocks.onState = callback;
@@ -24,6 +28,7 @@ vi.mock('react-native', () => ({
 }));
 type Children = { children?: React.ReactNode };
 vi.mock('react-native-paper', () => ({
+  ActivityIndicator: () => <span>Đang tải</span>,
   Text: ({ children }: Children) => <span>{children}</span>,
   Button: ({
     children,
@@ -58,6 +63,24 @@ vi.mock('react-native-paper', () => ({
     ),
   },
 }));
+vi.mock('../../../src/mobile/src/components/WorkspaceShell', () => ({
+  WorkspaceShell: ({ children }: Children) => <main>{children}</main>,
+}));
+vi.mock('../../../src/mobile/src/components/WorkspaceKit', () => ({
+  Box: ({ children }: Children) => <div>{children}</div>,
+  Pill: ({ children }: Children) => <span>{children}</span>,
+  Heading: () => null,
+  ui: {},
+}));
+vi.mock('../../../src/mobile/src/screens/MeterRoomOverview', () => ({
+  MeterRoomOverview: ({ tasks, onSelect }: { tasks: { id: string }[]; onSelect: (id: string) => void }) => (
+    <div>{tasks.map((task) => <button key={task.id} onClick={() => onSelect(task.id)}>Chọn đồng hồ</button>)}</div>
+  ),
+}));
+vi.mock('../../../src/mobile/src/lib/toast', async (original) => ({
+  ...await original<typeof import('../../../src/mobile/src/lib/toast')>(),
+  showSuccess: mocks.success,
+}));
 vi.mock('../../../src/mobile/src/components/Controls', () => ({
   Page: ({ children }: Children) => <div>{children}</div>,
   styles: {},
@@ -79,12 +102,14 @@ vi.mock('../../../src/mobile/src/components/Controls', () => ({
 vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({
   CameraCapture: ({
     onCapture,
+    onPhotoCleared,
     disabled,
   }: {
     onCapture: (bytes: Uint8Array) => Promise<void>;
+    onPhotoCleared: () => void;
     disabled?: boolean;
   }) => (
-    <button disabled={disabled} onClick={() => void onCapture(new Uint8Array([1, 2, 3]))}>
+    <button disabled={disabled} onClick={() => { onPhotoCleared(); void onCapture(new Uint8Array([1, 2, 3])); }}>
       Chụp ảnh thử
     </button>
   ),
@@ -99,9 +124,9 @@ const proposal = {
   warnings: ['possible_glare'],
   isFallback: false,
 };
-const confirmLabel = 'Tôi đã đối chiếu ảnh và xác nhận chỉ số';
-const valueLabel = 'Chỉ số cuối cùng sau kiểm tra';
-const saveLabel = 'Xác nhận và lưu chỉ số';
+const confirmLabel = 'Tôi đã đối chiếu ảnh và chỉ số';
+const valueLabel = 'Chỉ số xác nhận (kWh)';
+const saveLabel = 'Xác nhận chỉ số';
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.request.mockResolvedValue({
@@ -118,6 +143,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 async function capture() {
+  const select = screen.queryByText('Chọn đồng hồ');
+  if (select) fireEvent.click(select);
+  else if (!screen.queryByText('Chụp ảnh thử')) fireEvent.click(await screen.findByText('Chọn đồng hồ'));
   fireEvent.click(await screen.findByText('Chụp ảnh thử'));
   await waitFor(() => expect(mocks.image).toHaveBeenCalled());
 }
@@ -139,15 +167,15 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
   );
   render(<MeterScreen />);
   await capture();
-  expect(screen.getByText('Đang đọc chỉ số từ ảnh…')).toBeTruthy();
+  expect(screen.getByText('Đang xử lý…')).toBeTruthy();
   await act(async () => finishOcr(proposal));
   await waitFor(() => expect(screen.getByLabelText(valueLabel)).toHaveValue('00123.4'));
-  expect(screen.getByText(/Ảnh có thể mờ hoặc lóa/)).toBeTruthy();
+  expect(screen.getByText('Kiểm tra lại mặt số và dấu thập phân.')).toBeTruthy();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '123.5' } });
   fireEvent.click(screen.getByLabelText(confirmLabel));
   fireEvent.click(screen.getByText(saveLabel));
   fireEvent.click(screen.getByText(saveLabel));
-  expect(mocks.json).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(mocks.json).toHaveBeenCalledTimes(1));
   expect(mocks.json.mock.calls[0][1]).toEqual({
     humanConfirmed: true,
     confirmedValue: '123.5',
@@ -161,7 +189,8 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
       consumption: '23.5',
     }),
   );
-  expect(await screen.findByText('Đã lưu chỉ số và ảnh minh chứng')).toBeTruthy();
+  await waitFor(() => expect(mocks.success).toHaveBeenCalledWith('Đã lưu chỉ số.'));
+  expect(await screen.findByText('Chọn đồng hồ')).toBeTruthy();
 });
 
 it('clears the old proposal on retake and keeps manual entry when OCR fails', async () => {
@@ -176,12 +205,13 @@ it('clears the old proposal on retake and keeps manual entry when OCR fails', as
   await waitFor(() => expect(screen.getByText('Chụp ảnh thử')).not.toBeDisabled());
   fireEvent.click(screen.getByLabelText(confirmLabel));
   await capture();
-  await screen.findByText('OCR không khả dụng. Hãy nhập chỉ số thủ công.');
+  await screen.findByText('Không nhận diện được chỉ số. Hãy thử lại hoặc nhập tay.');
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '125' } });
   fireEvent.click(screen.getByLabelText(confirmLabel));
   fireEvent.click(screen.getByText(saveLabel));
+  await waitFor(() => expect(mocks.json).toHaveBeenCalledTimes(1));
   expect(mocks.json.mock.calls[0][1].evidenceId).toBe('new-evidence');
 });
 
