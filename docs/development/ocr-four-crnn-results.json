@@ -1,0 +1,310 @@
+{
+  "architecture": "four CNN blocks + bidirectional LSTM128x2 +11-class CTC",
+  "seed": 42,
+  "trainingRows": 163,
+  "validationRows": 2,
+  "testRows": 4,
+  "datasetAuditSha256": "73ef4741ab0548a21077860d55bf6e8313c6cf5f1d598bdb30fc0dc76355cb62",
+  "selectedEpoch": 1,
+  "trainedEpochs": 100,
+  "modelSha256": "ae55ab2417798468ac0712eaa3d38b1e26e512e3749c68457a11e0fded0e7223",
+  "independentHumanAcceptance": false,
+  "runtimeEnabled": false,
+  "hardware": "NVIDIA GeForce RTX 3070 Laptop GPU",
+  "torch": "2.6.0+cu118",
+  "elapsedSeconds": 131.09223210000073,
+  "rows": [
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "expectedDigits": "74590",
+      "raw": "",
+      "exact": false,
+      "blankRejected": false,
+      "incorrectProposal": false,
+      "fallback": true,
+      "forwardMs": 11.650200000076438,
+      "nativeOnnxSameText": true,
+      "maxLogitDelta": 3.814697265625e-06
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "expectedDigits": null,
+      "raw": "",
+      "exact": false,
+      "blankRejected": true,
+      "incorrectProposal": false,
+      "fallback": true,
+      "forwardMs": 8.841600000778271,
+      "nativeOnnxSameText": true,
+      "maxLogitDelta": 4.291534423828125e-06
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "expectedDigits": "004046",
+      "raw": "",
+      "exact": false,
+      "blankRejected": false,
+      "incorrectProposal": false,
+      "fallback": true,
+      "forwardMs": 8.818999999675725,
+      "nativeOnnxSameText": true,
+      "maxLogitDelta": 3.814697265625e-06
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "expectedDigits": "21594",
+      "raw": "",
+      "exact": false,
+      "blankRejected": false,
+      "incorrectProposal": false,
+      "fallback": true,
+      "forwardMs": 8.58429999971122,
+      "nativeOnnxSameText": true,
+      "maxLogitDelta": 3.814697265625e-06
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "expectedDigits": null,
+      "raw": "",
+      "exact": false,
+      "blankRejected": true,
+      "incorrectProposal": false,
+      "fallback": true,
+      "forwardMs": 9.113699999943492,
+      "nativeOnnxSameText": true,
+      "maxLogitDelta": 4.291534423828125e-06
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "expectedDigits": "000880578",
+      "raw": "",
+      "exact": false,
+      "blankRejected": false,
+      "incorrectProposal": false,
+      "fallback": true,
+      "forwardMs": 8.662199999889708,
+      "nativeOnnxSameText": true,
+      "maxLogitDelta": 3.337860107421875e-06
+    }
+  ],
+  "trainingHistory": [
+    {
+      "epoch": 1,
+      "meanTrainLoss": 10.247365192933517,
+      "validationEditDistance": 1.0,
+      "validationRaw": [
+        "",
+        ""
+      ],
+      "elapsedSeconds": 2.117772000000514
+    },
+    {
+      "epoch": 5,
+      "meanTrainLoss": 2.486374941739169,
+      "validationEditDistance": 1.0,
+      "validationRaw": [
+        "",
+        ""
+      ],
+      "elapsedSeconds": 7.143248100000164
+    },
+    {
+      "epoch": 10,
+      "meanTrainLoss": 2.4396215135400947,
+      "validationEditDistance": 1.0,
+      "validationRaw": [
+        "",
+        ""
+      ],
+      "elapsedSeconds": 14.047029300000759
+    },
+    {
+      "epoch": 15,
+      "meanTrainLoss": 2.3976377573880283,
+      "validationEditDistance": 1.0,
+      "validationRaw": [
+        "",
+        ""
+      ],
+      "elapsedSeconds": 21.095330100000865
+    },
+    {
+      "epoch": 20,
+      "meanTrainLoss": 2.41456599669023,
+      "validationEditDistance": 1.0,
+      "validationRaw": [
+        "",
+        ""
+      ],
+      "elapsedSeconds": 27.86168970000017
+    },
+    {
+      "epoch": 25,
+      "meanTrainLoss": 2.4020246375690806,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 34.18509760000052
+    },
+    {
+      "epoch": 30,
+      "meanTrainLoss": 2.3648182695562188,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 40.48162890000003
+    },
+    {
+      "epoch": 35,
+      "meanTrainLoss": 2.284483887932517,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 46.74590320000061
+    },
+    {
+      "epoch": 40,
+      "meanTrainLoss": 2.343965031883933,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 52.962662900000396
+    },
+    {
+      "epoch": 45,
+      "meanTrainLoss": 2.286848371679133,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 59.35771460000069
+    },
+    {
+      "epoch": 50,
+      "meanTrainLoss": 2.18877556107261,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 65.67489370000021
+    },
+    {
+      "epoch": 55,
+      "meanTrainLoss": 1.9419447617097334,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 72.04708320000009
+    },
+    {
+      "epoch": 60,
+      "meanTrainLoss": 1.3710332675413652,
+      "validationEditDistance": 2.0,
+      "validationRaw": [
+        "",
+        "0"
+      ],
+      "elapsedSeconds": 78.40249940000012
+    },
+    {
+      "epoch": 65,
+      "meanTrainLoss": 0.612288084897128,
+      "validationEditDistance": 6.2,
+      "validationRaw": [
+        "74990",
+        "074444"
+      ],
+      "elapsedSeconds": 85.21608390000074
+    },
+    {
+      "epoch": 70,
+      "meanTrainLoss": 0.2948686494068666,
+      "validationEditDistance": 5.2,
+      "validationRaw": [
+        "44590",
+        "07444"
+      ],
+      "elapsedSeconds": 92.09188080000058
+    },
+    {
+      "epoch": 75,
+      "meanTrainLoss": 0.15684243562546643,
+      "validationEditDistance": 4.2,
+      "validationRaw": [
+        "44590",
+        "0444"
+      ],
+      "elapsedSeconds": 98.00885900000048
+    },
+    {
+      "epoch": 80,
+      "meanTrainLoss": 0.1012312766503204,
+      "validationEditDistance": 4.2,
+      "validationRaw": [
+        "44590",
+        "0244"
+      ],
+      "elapsedSeconds": 104.1568453000009
+    },
+    {
+      "epoch": 85,
+      "meanTrainLoss": 0.11800854246724736,
+      "validationEditDistance": 4.2,
+      "validationRaw": [
+        "79590",
+        "0229"
+      ],
+      "elapsedSeconds": 111.02126780000071
+    },
+    {
+      "epoch": 90,
+      "meanTrainLoss": 0.12486978637223894,
+      "validationEditDistance": 3.0,
+      "validationRaw": [
+        "74590",
+        "071"
+      ],
+      "elapsedSeconds": 117.57614100000046
+    },
+    {
+      "epoch": 95,
+      "meanTrainLoss": 0.028068014420568943,
+      "validationEditDistance": 4.2,
+      "validationRaw": [
+        "44590",
+        "0349"
+      ],
+      "elapsedSeconds": 124.07982820000052
+    },
+    {
+      "epoch": 100,
+      "meanTrainLoss": 0.01063415099104697,
+      "validationEditDistance": 6.0,
+      "validationRaw": [
+        "74590",
+        "034449"
+      ],
+      "elapsedSeconds": 130.46480220000012
+    }
+  ],
+  "activationDecision": "rejected_all_blank_selected_checkpoint_no_positive_reading",
+  "license": "New project research implementation; CC0 training images; Commons per-asset evaluation licenses retained"
+}
