@@ -64,14 +64,32 @@ def metrics(rows, threshold):
     return {'counts': counts, 'confusion': matrix}
 
 
+def load_samples(manifest, additional_training=None):
+    base = json.loads(manifest.read_text())
+    samples = base['samples']
+    if additional_training:
+        extra = json.loads(additional_training.read_text())
+        if hashlib.sha256(manifest.read_bytes()).hexdigest() != extra['baseManifestSha256']:
+            raise ValueError('Changed base training manifest')
+        if any(s['split'] != 'train' or s['id'] in base.get('exclusionIds', []) for s in extra['samples']):
+            raise ValueError('Only eligible TRAIN additions are allowed')
+        samples += extra['samples']
+        digest = hashlib.sha256(json.dumps(samples,sort_keys=True,separators=(',', ':')).encode()).hexdigest()
+        if digest != extra['effectiveSamplesSha256']:
+            raise ValueError('Changed composed sample list')
+    assert_isolation(samples)
+    return samples
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ['clip', 'manifest', 'root', 'output']: p.add_argument(name, type=Path)
+    p.add_argument('--additional-training', type=Path)
     a = p.parse_args()
     if a.output.exists(): raise ValueError('Use a fresh run')
     a.output.mkdir(parents=True)
     if hashlib.sha256((a.clip / 'pytorch_model.bin').read_bytes()).hexdigest() != WEIGHTS_SHA: raise ValueError('CLIP changed')
-    samples = json.loads(a.manifest.read_text())['samples']; assert_isolation(samples)
+    samples = load_samples(a.manifest,a.additional_training)
     torch.manual_seed(41); torch.set_num_threads(2); device = 'cuda' if torch.cuda.is_available() else 'cpu'
     clip = CLIPModel.from_pretrained(a.clip, local_files_only=True, attn_implementation='eager').to(device).eval()
     processor = CLIPProcessor.from_pretrained(a.clip, local_files_only=True)
@@ -143,7 +161,9 @@ def main():
         np.save(a.output/(sample['id']+'-input.npy'),tensor.numpy())
         parity.append({'id':sample['id'],'maxLogitDelta':delta,'logits':[v.tolist() for v in observed]})
     result={'scope':'provisional_supervised_diagnostics_not_business_acceptance','clipSha256':WEIGHTS_SHA,'modelSha256':hashlib.sha256((a.output/'classifier.onnx').read_bytes()).hexdigest(),
-        'manifestSha256':hashlib.sha256(a.manifest.read_bytes()).hexdigest(),'selection':chosen,'positiveZeroWrongValidationPolicyFound':bool(eligible),
+        'manifestSha256':hashlib.sha256(a.manifest.read_bytes()).hexdigest(),
+        'additionalTrainingSha256':hashlib.sha256(a.additional_training.read_bytes()).hexdigest() if a.additional_training else None,
+        'selection':chosen,'positiveZeroWrongValidationPolicyFound':bool(eligible),
         'utilityClasses':utility_names,'technologyClasses':technology_names,'preprocessing':{'shape':[1,3,224,224],'color':'RGB','resize':'cap1600_area_then_OpenCV_cubic_letterbox224','paddingRgb':[123,117,104],'mean':[.48145466,.4578275,.40821073],'std':[.26862954,.26130258,.27577711]},
         'test':metrics(rows,chosen['thresholds']),'rows':rows,'parity':parity,'activation':'development_diagnostics_only','humanReviewsReceived':0}
     (a.output/'report.json').write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps({'selection':chosen,'test':result['test'],'sha256':result['modelSha256']}))
