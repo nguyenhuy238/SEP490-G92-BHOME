@@ -100,3 +100,38 @@ directories are required. A successful export/parity does not pass recognition
 or billing gates. Do not train on historical water evaluation or provisional
 numeric reviews. `meter_review.py` builds a blinded review package and reconciles
 declared reviews; see `docs/datasets/meter/INDEPENDENT_REVIEW.md` before using it.
+
+## Recognition-state and domain-transfer studies, 2026-11-07
+
+Decisions and limitations: `docs/development/OCR_RECOGNITION_PROGRESS_REPORT.md`.
+No study changes application inference/config. All new labels are provisional,
+human reviews received zero. Do not train numeric models from these drafts.
+
+Use the runpy wrapper above with both existing isolated package directories for
+the following argv lists. Run from repository root with **fresh** output paths:
+
+```python
+['evaluate_lcd_readability.py', '.tools/ocr-four-clip', '.tools/ocr-recovery-english', '.tools/ocr-four-server', 'docs/datasets/meter/recognition-state-pilot.json', '.', '.tools/ocr-state-replay']
+['prepare_grounding_display.py', '.tools/ocr-next-grounding', 'tools/BHome.OcrSmoke/model_tools/grounding-display-receipt.json']
+['study_lcd_localization.py', '.tools/ocr-next-grounding', '.tools/ocr-four-display/run/weights/best.onnx', '.tools/ocr-recovery-english', '.tools/ocr-four-server', '.', '.tools/ocr-localization-replay']
+['study_meter_hierarchy.py', '.tools/ocr-four-clip', 'docs/datasets/meter/four-class-development-v2.json', '.', '.tools/ocr-hierarchy-replay.json']
+```
+
+Grounding uses the pinned official Apache-2.0 tiny checkpoint, 640/800 short edge,
+max1333, text threshold.25, class-agnostic NMS.5. Receipt hashes are mandatory;
+no external inference or image upload. Numeric-region proxy IoU is not whole-LCD
+ground truth. Validation selects policies before historical test; oracle-body
+crops are diagnostics and must never be reported as full-frame detection.
+
+Mechanical study (actual .NET readers, existing frozen crop manifest):
+
+```powershell
+dotnet run --project tools/BHome.OcrSmoke -c Release --no-restore -- --mechanical-electric-window-study .tools/ocr-models .tools/meter-detection-models .tools/ocr-recovery-english docs/datasets/meter/mechanical-electric-provisional-pilot.json . .tools/ocr-mechanical-replay.json
+```
+
+`prepare_mechanical_electric_pilot.py` can create fresh crops and a fresh manifest
+from original Commons images before inference; do not overwrite the committed
+manifest to improve predictions. It preserves one disputed rolling digit as null.
+The two provisional wheel strings are historical classification TRAIN images,
+not independent numeric test data. Output `draftMatch` is never billing accuracy.
+Keep readers' disagreeing strings separate; do not vote them into ground truth.

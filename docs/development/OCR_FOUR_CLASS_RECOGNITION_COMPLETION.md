@@ -1,5 +1,9 @@
 # Nhận dạng bốn loại công tơ — kết quả 07/11/2026
 
+Lượt nghiên cứu tiếp theo và trạng thái mới nhất ở
+[OCR_RECOGNITION_PROGRESS_REPORT.md](OCR_RECOGNITION_PROGRESS_REPORT.md).
+Các metric bên dưới được giữ làm lịch sử của lượt trước.
+
 **Chưa hoàn tất hệ thống tự động bốn loại.** Lượt này đã sửa verification, chạy
 baseline visual mới, huấn luyện hai model thật, export ONNX và kiểm inference
 .NET. Có thêm positive recognition ở mức component; chưa có candidate đủ điều
