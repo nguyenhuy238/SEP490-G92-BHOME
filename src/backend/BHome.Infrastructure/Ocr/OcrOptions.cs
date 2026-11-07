@@ -19,6 +19,7 @@ public sealed class OcrOptions
     public ImageProfile AutomaticProfile { get; set; } = new();
     public YoloMeterOptions MeterDetector { get; set; } = new();
     public YoloCategoryOptions VisualClassifier { get; set; } = new();
+    public ExperimentalMeterOptions ExperimentalMeter { get; set; } = new();
     public Dictionary<OcrDocumentKind, ImageProfile> Profiles { get; set; } = Enum.GetValues<OcrDocumentKind>()
         .ToDictionary(x => x, _ => new ImageProfile());
 
@@ -28,11 +29,29 @@ public sealed class OcrOptions
         InferenceThreads is >= 1 and <= 4 && MaxTextRegions is >= 1 and <= 64 &&
         float.IsFinite(MeterDetectionMinConfidence) && MeterDetectionMinConfidence is > 0 and <= 1 &&
         float.IsFinite(AutomaticClassificationMinConfidence) && AutomaticClassificationMinConfidence is > 0 and <= 1 &&
-        MeterDetector.IsValid() && VisualClassifier.IsValid() &&
+        MeterDetector.IsValid() && VisualClassifier.IsValid() && ExperimentalMeter.IsValid() &&
+        (!ExperimentalMeter.Enabled || (MaxDimension == 1600 && AutomaticProfile.ClockwiseQuarterTurns == 0 &&
+            !AutomaticProfile.EnhanceContrast && !AutomaticProfile.Denoise && !AutomaticProfile.Threshold)) &&
         (!VisualClassifier.Enabled || VisualClassifier.CandidateThreshold <= AutomaticClassificationMinConfidence) &&
         AutomaticProfile.ClockwiseQuarterTurns is >= 0 and <= 3 && AutomaticProfile.MinLaplacianVariance >= 0 &&
         Enum.GetValues<OcrDocumentKind>().All(x => Profiles.TryGetValue(x, out var p) &&
             p.ClockwiseQuarterTurns is >= 0 and <= 3 && p.MinLaplacianVariance >= 0);
+}
+
+public sealed class ExperimentalMeterOptions
+{
+    public bool Enabled { get; set; }
+    public string ClassifierPath { get; set; } = "";
+    public string ClassifierSha256 { get; set; } = "";
+    public string EnglishModelDirectory { get; set; } = "";
+    public float UtilityThreshold { get; set; } = .55f;
+    public float TechnologyThreshold { get; set; } = .75f;
+    public OcrDocumentKind[] Categories { get; set; } = [];
+    public bool IsValid() => float.IsFinite(UtilityThreshold) && UtilityThreshold is > 0 and <= 1 &&
+        float.IsFinite(TechnologyThreshold) && TechnologyThreshold is > 0 and <= 1 &&
+        Categories.Distinct().Count() == Categories.Length && Categories.All(c => c is OcrDocumentKind.MechanicalElectricity or
+            OcrDocumentKind.DigitalElectricity or OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater) &&
+        (!Enabled || (!string.IsNullOrWhiteSpace(ClassifierPath) && ClassifierSha256.Length == 64 && ClassifierSha256.All(Uri.IsHexDigit) && !string.IsNullOrWhiteSpace(EnglishModelDirectory)));
 }
 
 // Experimental four-class YOLOv8 detect export, FP32/416/no embedded NMS.

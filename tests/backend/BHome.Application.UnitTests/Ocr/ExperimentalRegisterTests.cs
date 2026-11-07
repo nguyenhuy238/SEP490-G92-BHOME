@@ -19,7 +19,7 @@ public sealed class ExperimentalRegisterTests
     }
 
     [Fact] public void TimerFourIsNotAReading() => Assert.Null(ExperimentalRegisterSelection.Select(
-        OcrDocumentKind.DigitalElectricity, [Line("4", 0, 0), Line("COMPTEUR HORAIRE", 0, 30)]).Candidate);
+        OcrDocumentKind.DigitalElectricity, [Line("4", 0, 0), Line("kWh", 45, 0), Line("COMPTEUR HORAIRE", 0, 30)]).Candidate);
 
     [Theory]
     [InlineData("V")]
@@ -27,7 +27,10 @@ public sealed class ExperimentalRegisterTests
     [InlineData("m3/h")]
     [InlineData("Serial")]
     public void NonBillingEvidenceVetoesNumericText(string label) => Assert.Null(ExperimentalRegisterSelection.Select(
-        OcrDocumentKind.DigitalWater, [Line("4", 0, 0), Line(label, 45, 0)]).Candidate);
+        OcrDocumentKind.DigitalWater, [Line("4", 0, 0), Line(label, 45, 0), Line("m3", 65, 0)]).Candidate);
+
+    [Fact] public void CalibrationUnitSubstringDoesNotAuthorizeConsumption() => Assert.Null(ExperimentalRegisterSelection.Select(
+        OcrDocumentKind.DigitalElectricity, [Line("4", 0, 0), Line("1000 imp/kWh", 45, 0)]).Candidate);
 
     [Fact] public void UnitsOnAnUnrelatedRowDoNotAuthorizeASerial() => Assert.Null(ExperimentalRegisterSelection.Select(
         OcrDocumentKind.DigitalElectricity, [Line("123456", 0, 200), Line("kWh", 45, 0)]).Candidate);

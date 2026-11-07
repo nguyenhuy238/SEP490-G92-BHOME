@@ -358,7 +358,7 @@ public sealed class OcrApiTests
             services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         }));
 
-    private static void AddTestAuthentication(IServiceCollection services)
+    internal static void AddTestAuthentication(IServiceCollection services)
     {
         services.AddAuthentication("OcrTest").AddScheme<AuthenticationSchemeOptions, TestAuthentication>("OcrTest", _ => { });
         services.AddSingleton<ISecurityAudit, TestAudit>();

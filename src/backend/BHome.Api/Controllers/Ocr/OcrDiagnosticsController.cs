@@ -11,7 +11,8 @@ namespace BHome.Api.Controllers.Ocr;
 [Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class OcrDiagnosticsController(
-    IWebHostEnvironment environment, IConfiguration configuration, IOcrService ocr, IAutomaticOcrService automaticOcr) : ControllerBase
+    IWebHostEnvironment environment, IConfiguration configuration, IOcrService ocr, IAutomaticOcrService automaticOcr,
+    IExperimentalMeterOcrService experimentalOcr) : ControllerBase
 {
     private bool Enabled => environment.IsDevelopment() && configuration.GetValue<bool>("MobileDevelopment:Enabled");
 
@@ -21,10 +22,17 @@ public sealed class OcrDiagnosticsController(
     [HttpPost("auto")]
     [Consumes("image/jpeg", "image/png")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public async Task<IActionResult> Automatic(CancellationToken token)
+    public async Task<IActionResult> Automatic(CancellationToken token, [FromQuery] bool experimental = false)
     {
         if (!Enabled) return NotFound();
+        if (Request.Query["experimental"].Count > 1) throw new OcrInputException("invalid_experimental_opt_in");
+        if (experimental && !configuration.GetValue<bool>("Ocr:ExperimentalMeter:Enabled")) return NotFound();
         var elapsed = Stopwatch.StartNew();
+        if (experimental)
+        {
+            var result = await experimentalOcr.ExtractExperimentalMeterAsync(Request.Body, token);
+            return Ok(new { analysis = result, elapsedMilliseconds = elapsed.ElapsedMilliseconds });
+        }
         var analysis = await automaticOcr.ExtractAutomaticAsync(Request.Body, token);
         return Ok(new { analysis, elapsedMilliseconds = elapsed.ElapsedMilliseconds });
     }

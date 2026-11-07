@@ -1,0 +1,217 @@
+{
+  "scope": "frozen_provisional_and_historical_cohorts_no_independent_acceptance",
+  "samples": [
+    {
+      "id": "commons_105770219",
+      "image": ".tools/master-dataset/commons/commons_105770219.jpg",
+      "sha256": "b91a58dfde67d4c8f0909f06c24757de5c2f7c82bb45885d5bc0817527a18b61",
+      "split": "validation",
+      "category": "electricity_digital",
+      "meter_body": [
+        390,
+        380,
+        885,
+        1120
+      ],
+      "display_screen": [
+        520,
+        500,
+        755,
+        590
+      ],
+      "numeric_register": [
+        565,
+        508,
+        714,
+        558
+      ],
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": "16254",
+      "readabilityState": "readable_consumption",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null,
+      "evaluationRole": "provisional_development"
+    },
+    {
+      "id": "commons_195597533",
+      "image": ".tools/ocr-continued/commons_195597533.jpg",
+      "sha256": "85ca26dfbd7539305d13cda797981dd03598b57bbe92bb7fd3e3c8d08e8a9306",
+      "split": "validation",
+      "category": "not_meter",
+      "meter_body": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "readabilityState": "not_meter",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null,
+      "evaluationRole": "provisional_development"
+    },
+    {
+      "id": "commons_54903199",
+      "image": ".tools/ocr-continued/commons_54903199.jpg",
+      "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
+      "split": "test",
+      "category": "electricity_digital",
+      "meter_body": [
+        125,
+        80,
+        960,
+        1233
+      ],
+      "display_screen": [
+        350,
+        173,
+        719,
+        300
+      ],
+      "numeric_register": [
+        500,
+        177,
+        701,
+        240
+      ],
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": "000501",
+      "readabilityState": "readable_consumption",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null,
+      "evaluationRole": "provisional_development"
+    },
+    {
+      "id": "commons_33635608",
+      "image": ".tools/ocr-continued/commons_33635608.jpg",
+      "sha256": "4898d4fde07145a933dcda85d5918f9ce5d12759028c33337803d1d179545aca",
+      "split": "test",
+      "category": "electricity_digital",
+      "meter_body": [
+        178,
+        282,
+        550,
+        682
+      ],
+      "display_screen": [
+        296,
+        451,
+        404,
+        504
+      ],
+      "numeric_register": [
+        300,
+        459,
+        399,
+        494
+      ],
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "readabilityState": "blurred_or_obscured",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null,
+      "evaluationRole": "provisional_development"
+    },
+    {
+      "id": "commons_151445788",
+      "image": ".tools/master-dataset/commons/commons_151445788.jpg",
+      "sha256": "2293c68468505cbf294288991299fdfce942bf1b5941d5ae261f360e57a84f82",
+      "split": "test",
+      "category": "not_meter",
+      "meter_body": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "readabilityState": "status_only_non_consumption_counter",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null,
+      "evaluationRole": "provisional_development"
+    },
+    {
+      "id": "commons_136480278",
+      "image": ".tools/master-dataset/commons/commons_136480278.jpg",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "expectedDigits": "74590",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_validation",
+      "readabilityState": "readable_consumption"
+    },
+    {
+      "id": "commons_136480279",
+      "image": ".tools/master-dataset/commons/commons_136480279.jpg",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "expectedDigits": null,
+      "category": "electricity_digital",
+      "evaluationRole": "historical_validation",
+      "readabilityState": "blank_or_unpowered"
+    },
+    {
+      "id": "commons_141575682",
+      "image": ".tools/master-dataset/commons/commons_141575682.jpg",
+      "sha256": "fcf6cfa6830bddcb074895177af34f55dc9b22a6e33051bf9d530565e9006f35",
+      "expectedDigits": "004046",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "readable_consumption"
+    },
+    {
+      "id": "commons_26507235",
+      "image": ".tools/master-dataset/commons/commons_26507235.jpg",
+      "sha256": "f08028545baabada7715eb39724edf45a38602ae56759d995408c149595cd810",
+      "expectedDigits": "21594",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "readable_consumption"
+    },
+    {
+      "id": "commons_111639614",
+      "image": ".tools/master-dataset/commons/commons_111639614.jpg",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "expectedDigits": null,
+      "category": "electricity_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "blank_or_unpowered"
+    },
+    {
+      "id": "commons_141189268",
+      "image": ".tools/master-dataset/commons/commons_141189268.jpg",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "expectedDigits": "000880578",
+      "category": "water_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "readable_consumption"
+    },
+    {
+      "id": "commons_156125142",
+      "image": ".tools/ocr-next-public-images-expanded/commons_156125142.jpg",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "expectedDigits": null,
+      "category": "water_digital",
+      "evaluationRole": "historical_negative_control",
+      "readabilityState": "blank_or_unpowered"
+    },
+    {
+      "id": "commons_51969773",
+      "image": ".tools/ocr-next-public-images-expanded/commons_51969773.jpg",
+      "sha256": "6718ddf348ea2bd3b4ffef5706ec66e760f7de39ffede1270c8aefeab843c910",
+      "expectedDigits": null,
+      "category": "not_meter",
+      "evaluationRole": "historical_negative_control",
+      "readabilityState": "not_meter"
+    }
+  ]
+}

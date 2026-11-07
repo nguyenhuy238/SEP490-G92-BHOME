@@ -50,9 +50,7 @@ public static class ExperimentalRegisterSelection
             if (evidence.Any(other => other != line && SameRow(other) &&
                 (MeterOcrLayout.IsNonBillingUnit(other.Text) || Match(other.Text, @"\b(?:serial|s\.?\s*no\.?|voltage|frequency|temperature|flow[ -]?rate)\b")))) continue;
             var unit = evidence.Any(label => label != line && MeterOcrLayout.Nearby(bounds, label.Bounds!) &&
-                !MeterOcrLayout.IsNonBillingUnit(label.Text) && !MeterOcrLayout.IsNonBillingQuantity(label.Text) &&
-                Regex.Matches(label.Text, MeterOcrLayout.UnitPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, Timeout)
-                    .Any(match => MeterOcrLayout.IsCorrectUnit(match.Value, kind)));
+                MeterOcrLayout.IsCorrectUnit(label.Text.Trim(), kind));
             if (unit) candidates.Add(line);
         }
         var distinct = candidates.Select(c => c.Text).Distinct(StringComparer.Ordinal).ToArray();

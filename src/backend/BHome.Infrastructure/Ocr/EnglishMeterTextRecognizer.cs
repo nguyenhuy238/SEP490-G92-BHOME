@@ -6,10 +6,12 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
 
-// Offline candidate adapter; not registered in application DI/configuration.
+namespace BHome.Infrastructure.Ocr;
+
+// Pinned candidate adapter, used only by explicit experimental diagnostics.
 // Official Paddle English CTC provides stronger digit evidence than the existing
 // Vietnamese recognizer on some water windows. It is not a category classifier.
-internal sealed class EnglishMeterTextRecognizer : IDisposable
+public sealed class EnglishMeterTextRecognizer : IDisposable
 {
     public const string ModelSha256 = "b5f833dfc5d0eb71da397b4efa06ebeee9b431b690a47d6af40d77d8eabc557f";
     public const string DictionarySha256 = "3a3e5abea6e7d403209043c8d67b052414ae59ece49922cc7e3ac205d59060a8";

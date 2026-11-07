@@ -5,7 +5,8 @@ namespace BHome.Infrastructure.Ocr;
 
 // Load/check models before the HTTP listener accepts images, outside the request deadline.
 internal sealed class OcrWarmup(OcrOptions options, Lazy<IOcrEngine> engine, IMeterSceneDetector meterDetector,
-    YoloWaterDigitRecognizer waterDigits, IImageCategoryClassifier classifier) : IHostedService
+    YoloWaterDigitRecognizer waterDigits, IImageCategoryClassifier classifier,
+    ExperimentalMeterRecognizer experimental) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -13,6 +14,7 @@ internal sealed class OcrWarmup(OcrOptions options, Lazy<IOcrEngine> engine, IMe
         if (options.Enabled) { _ = engine.Value; meterDetector.Warmup(cancellationToken); }
         if (options.Enabled && options.MeterDetector.Enabled && options.MeterDetector.WaterDigitsEnabled) waterDigits.Warmup(cancellationToken);
         if (options.Enabled) classifier.Warmup(cancellationToken);
+        if (options.Enabled) experimental.Warmup(cancellationToken);
         return Task.CompletedTask;
     }
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace BHome.Infrastructure.Ocr;
 
 // Singleton: bounds the entire read/preprocess/inference pipeline, including queued requests.
-public sealed class LocalOcrService : IOcrService, IAutomaticOcrService, IDisposable
+public sealed class LocalOcrService : IOcrService, IAutomaticOcrService, IExperimentalMeterOcrService, IDisposable
 {
     private readonly OcrOptions options;
     private readonly Lazy<IOcrEngine> engine;
@@ -49,6 +49,11 @@ public sealed class LocalOcrService : IOcrService, IAutomaticOcrService, IDispos
             return AutomaticOcrRouter.Route(analysis, options.AutomaticClassificationMinConfidence);
         }, AutomaticOcrRouter.Unavailable, token);
 
+    public Task<ExperimentalMeterOcrResult> ExtractExperimentalMeterAsync(Stream input, CancellationToken token) =>
+        ExecuteAsync(input, (readyEngine,bytes,cancellation) => readyEngine is IExperimentalMeterAnalysisEngine experimental
+            ? experimental.AnalyzeExperimentalMeterAsync(bytes,cancellation)
+            : Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable")), ExperimentalMeterOcrResult.Unavailable, token);
+
     private async Task<T> ExecuteAsync<T>(Stream temporaryInput,
         Func<IOcrEngine, ReadOnlyMemory<byte>, CancellationToken, Task<T>> extract,
         Func<string, T> fallback, CancellationToken cancellationToken)
@@ -83,7 +88,7 @@ public sealed class LocalOcrService : IOcrService, IAutomaticOcrService, IDispos
         { return fallback("ocr_timeout"); }
         catch (OcrInputException) { throw; }
         catch (OperationCanceledException) { throw; }
-        catch (Exception exception) when (exception is IOException or InvalidDataException or
+        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
             Microsoft.ML.OnnxRuntime.OnnxRuntimeException or OpenCvSharp.OpenCVException or
             TypeInitializationException or DllNotFoundException or BadImageFormatException)
         {
