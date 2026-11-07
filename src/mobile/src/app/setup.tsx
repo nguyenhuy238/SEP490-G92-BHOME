@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Redirect } from 'expo-router';
 import { Button, SegmentedButtons, Text } from 'react-native-paper';
@@ -8,8 +9,8 @@ import { inputDate } from '../lib/identity';
 
 export default function Setup() {
   const { api, session } = useSession();
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useFeedbackState();
+  const [notice, setNotice] = useFeedbackState('success');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [chains, setChains] = useState<Named[]>([]);
@@ -75,7 +76,7 @@ export default function Setup() {
     return () => {
       current = false;
     };
-  }, [api]);
+  }, [api, setError]);
   useEffect(() => {
     if (!api || !location) return;
     let current = true;
@@ -97,7 +98,7 @@ export default function Setup() {
     return () => {
       current = false;
     };
-  }, [api, location]);
+  }, [api, location, setError]);
   if (!api || !session) return <Redirect href="/" />;
   if (!session.roles.includes('Owner'))
     return (

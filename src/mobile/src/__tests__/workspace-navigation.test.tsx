@@ -4,12 +4,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 const state = vi.hoisted(() => ({
   push: vi.fn(),
-  replace: vi.fn(),
   leave: vi.fn(),
   roles: ['Staff'],
   signedIn: true,
+  back: vi.fn(),
+  replace: vi.fn(),
+  canGoBack: vi.fn(),
 }));
-vi.mock('expo-router', () => ({ router: { push: state.push, replace: state.replace } }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
+  router: {
+    push: state.push,
+    back: state.back,
+    replace: state.replace,
+    canGoBack: state.canGoBack,
+  },
+}));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: state.signedIn ? { roles: state.roles } : null }),
 }));
@@ -38,8 +48,21 @@ vi.mock('react-native', () => {
 });
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 24, left: 0, right: 0 }),
-  SafeAreaView: ({ children, edges }: { children?: React.ReactNode; edges: string[] }) => (
-    <main data-edges={edges.join(',')}>{children}</main>
+  SafeAreaView: ({
+    children,
+    edges,
+    style,
+  }: {
+    children?: React.ReactNode;
+    edges: string[];
+    style?: React.CSSProperties | React.CSSProperties[];
+  }) => (
+    <main
+      data-edges={edges.join(',')}
+      style={Object.assign({}, ...(Array.isArray(style) ? style : [style]))}
+    >
+      {children}
+    </main>
   ),
 }));
 vi.mock('react-native-paper', () => {
@@ -95,11 +118,13 @@ vi.mock('react-native-paper', () => {
 vi.mock('../components/WorkspaceKit', () => ({ ui: {} }));
 import { WorkspaceProvider, useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { WorkspaceShell } from '../components/WorkspaceShell';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
   state.roles = ['Staff'];
   state.signedIn = true;
   vi.clearAllMocks();
+  state.canGoBack.mockReturnValue(false);
 });
 afterEach(cleanup);
 it.each(['Owner', 'Staff'])('opens the OCR test directly from the %s development home', (role) => {
@@ -156,6 +181,48 @@ function Draft() {
   useEffect(() => registerExitGuard(() => true, state.leave), [registerExitGuard]);
   return <button onClick={() => go('staff-home')}>Đổi màn hình</button>;
 }
+function ContractHeaderProbe({ refresh }: { refresh: () => void }) {
+  useWorkspaceHeaderRefresh(refresh, false);
+  return <span>Danh sách hợp đồng</span>;
+}
+it('places contract refresh beside the compact Staff title and clears it when opening details', () => {
+  const refresh = vi.fn();
+  const view = render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="signing">
+        <ContractHeaderProbe refresh={refresh} />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.getByText('Hợp đồng')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại hợp đồng' }));
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  view.rerender(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="signing">
+        <span>Chi tiết hợp đồng</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.queryByRole('button', { name: 'Tải lại hợp đồng' })).toBeNull();
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+});
+it('lets meter steps use the Staff shell back action without navigating home', () => {
+  const back = vi.fn();
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="meter-reading" onBack={back} contentRevision={2}>
+        <span>Kiểm tra chỉ số</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(back).toHaveBeenCalledOnce();
+  expect(state.push).not.toHaveBeenCalled();
+});
 it('keeps the draft exit guard when opening the OCR test', () => {
   render(
     <WorkspaceProvider>
@@ -197,11 +264,92 @@ it('renders four labeled Staff tabs at 60dp and applies Android bottom inset exa
   const tabs = screen.getAllByRole('tab');
   expect(tabs).toHaveLength(4);
   expect(screen.getByRole('tab', { name: 'Thông báo' }).getAttribute('aria-selected')).toBe('true');
-  for (const tab of tabs) expect((tab.firstElementChild as HTMLElement).style.height).toBe('60px');
+  for (const tab of tabs)
+    expect((tab.firstElementChild as HTMLElement).style.minHeight).toBe('60px');
   expect(tabs[0].parentElement?.style.paddingBottom).toBe('24px');
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(
     (screen.getByRole('tab', { name: 'Thông báo' }).querySelector('span') as HTMLElement).style
       .color,
   ).toBe('rgb(37, 99, 235)');
+});
+
+it.each([
+  ['Owner', 'owner-home', ['Tổng quan', 'Phê duyệt', 'Vận hành', 'Tài khoản']],
+  ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Thông báo', 'Cá nhân']],
+  ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Yêu cầu', 'Cá nhân']],
+] as const)('keeps %s destinations in the shared Staff shell', (role, home, labels) => {
+  state.roles = [role];
+  const view = render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen={home}>
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  const tabs = screen.getAllByRole('tab');
+  expect(tabs.map((tab) => tab.getAttribute('aria-label'))).toEqual([...labels]);
+  expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+  expect((tabs[0].firstElementChild as HTMLElement).style.minHeight).toBe('60px');
+  expect(tabs[0].parentElement?.style.paddingBottom).toBe('24px');
+  expect(view.container.querySelector('main')?.style.backgroundColor).toBe('rgb(25, 54, 83)');
+  fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }));
+  expect(state.push).toHaveBeenLastCalledWith({
+    pathname: '/workspace/[screen]',
+    params: { screen: 'notifications' },
+  });
+  fireEvent.click(tabs[1]);
+  expect(state.push).toHaveBeenLastCalledWith({
+    pathname: '/workspace/[screen]',
+    params: {
+      screen: role === 'Owner' ? 'approvals' : role === 'Staff' ? 'work-orders' : 'invoice',
+    },
+  });
+});
+it('returns to the preceding Staff screen when navigation history exists', () => {
+  state.canGoBack.mockReturnValue(true);
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="staff-maintenance">
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.back).toHaveBeenCalledOnce();
+  expect(state.replace).not.toHaveBeenCalled();
+  expect(state.push).not.toHaveBeenCalled();
+});
+it('uses a valid Staff fallback when a detail screen is opened directly', () => {
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="task-detail">
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.replace).toHaveBeenCalledWith({
+    pathname: '/workspace/[screen]',
+    params: { screen: 'work-orders' },
+  });
+  expect(state.back).not.toHaveBeenCalled();
+});
+it('protects an onboarding draft before going back in Staff history', () => {
+  state.canGoBack.mockReturnValue(true);
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="onboarding">
+        <Draft />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.back).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục nhập' }));
+  expect(state.back).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
+  expect(state.leave).toHaveBeenCalledOnce();
+  expect(state.back).toHaveBeenCalledOnce();
 });

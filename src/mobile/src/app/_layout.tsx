@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider } from '../lib/SessionProvider';
 import { WorkspaceProvider } from '../features/workspace/WorkspaceProvider';
 import { theme } from '../theme/theme';
+import { ToastProvider } from '../components/ToastHost';
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     'Inter-Regular': require('../../assets/fonts/Inter-Regular.ttf'),
@@ -30,16 +31,22 @@ export default function RootLayout() {
           ),
         }}
       >
-        <SessionProvider>
-          <WorkspaceProvider>
-            <Stack screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
-              <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
-              <Stack.Screen name="ocr-test" options={{ title: 'Thử OCR' }} />
-            </Stack>
-          </WorkspaceProvider>
-        </SessionProvider>
+        <ToastProvider>
+          <SessionProvider>
+            <WorkspaceProvider>
+              <Stack screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="meter"
+                  options={{ headerShown: false, gestureEnabled: false }}
+                />
+                <Stack.Screen name="ocr-test" options={{ title: 'Th? OCR' }} />
+                <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+              </Stack>
+            </WorkspaceProvider>
+          </SessionProvider>
+        </ToastProvider>
       </PaperProvider>
     </SafeAreaProvider>
   );

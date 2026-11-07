@@ -1,3 +1,5 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
+import { showSuccess } from '../lib/toast';
 import React, { useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { router } from 'expo-router';
@@ -12,7 +14,7 @@ export function AccountSecurityScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const lock = useRef(false);
   React.useEffect(() => {
     const listener = AppState.addEventListener('change', (state) => {
@@ -48,6 +50,7 @@ export function AccountSecurityScreen() {
         /* MobileSessions.logout clears credentials in finally. */
       }
       router.replace('/');
+      showSuccess('Đã đổi mật khẩu. Hãy đăng nhập lại.');
     } catch (e) {
       setError(errorMessage(e));
     } finally {

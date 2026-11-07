@@ -8,10 +8,32 @@ const mocks = vi.hoisted(() => ({
   go: vi.fn(),
 }));
 vi.mock('react-native', () => ({
+  StyleSheet: { create: (s: unknown) => s },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
 vi.mock('react-native-paper', () => ({
+  MD3LightTheme: { colors: {} },
+  configureFonts: () => ({}),
+  Icon: () => null,
+  ProgressBar: () => null,
+  useTheme: () => ({ colors: { surface: '#fff', onSurfaceVariant: '#64748b' } }),
+  Button: ({ children, onPress }: { children?: React.ReactNode; onPress?: () => void }) => (
+    <button onClick={onPress}>{children}</button>
+  ),
+  TouchableRipple: ({
+    children,
+    onPress,
+    accessibilityLabel,
+  }: {
+    children?: React.ReactNode;
+    onPress: () => void;
+    accessibilityLabel?: string;
+  }) => (
+    <button onClick={onPress} aria-label={accessibilityLabel}>
+      {children}
+    </button>
+  ),
   Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   ActivityIndicator: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
     <span>{accessibilityLabel}</span>
@@ -76,10 +98,11 @@ it('shows loading, an explicit failure, and a retry that really reloads the Owne
   render(<OwnerOverviewScreen />);
   expect(screen.getByText('Đang tải tổng quan')).toBeTruthy();
   reject(new MobileApiError(500, undefined, '/api/v1/rooms'));
-  await screen.findByText(/HTTP 500/);
-  expect(screen.queryByText('Phòng: 0')).toBeNull();
+  await screen.findByText(/Máy chủ gặp lỗi xử lý/);
+  expect(screen.queryByText(/HTTP 500|GET \/api\/v1\//)).toBeNull();
+  expect(screen.queryByText('Phòng')).toBeNull();
   fireEvent.click(screen.getByText('Tải lại dữ liệu'));
-  await screen.findByText('Phòng: 0');
+  await screen.findByText('Phòng');
   expect(mocks.load).toHaveBeenCalledTimes(2);
   expect(screen.queryByText(/HTTP 500/)).toBeNull();
   fireEvent.click(screen.getByText('Hợp đồng & Vòng đời'));

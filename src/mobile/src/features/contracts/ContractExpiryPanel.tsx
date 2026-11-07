@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native-paper';
 import {
@@ -15,7 +16,7 @@ export function ContractExpiryPanel({
   onOpen: (id: string) => void;
 }) {
   const [items, setItems] = useState<ContractExpiryNotice[]>([]),
-    [error, setError] = useState(''),
+    [error, setError] = useFeedbackState(),
     [revision, setRevision] = useState(0);
   useEffect(() => {
     const c = new AbortController();
@@ -31,7 +32,7 @@ export function ContractExpiryPanel({
     }
     void load();
     return () => c.abort();
-  }, [api, revision]);
+  }, [api, revision, setError]);
   return (
     <Box>
       <Heading title="Nhắc gia hạn / trả phòng" />

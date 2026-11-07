@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../../lib/SessionProvider';
 import { errorMessage, type Named, type Resident } from '../../lib/api';
+import { conciseMessage, showError } from '../../lib/toast';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { captureService } from '../../services/captureService';
 
@@ -43,7 +44,9 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
         if (active) {
           setLocations([]);
           setLocation('');
-          setLocationError(errorMessage(e));
+          const message = conciseMessage(errorMessage(e));
+          setLocationError(message);
+          showError(message);
         }
       } finally {
         if (active) setLocationsLoading(false);
@@ -96,7 +99,9 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
       } catch (e) {
         if (active) {
           setRoom('');
-          setRoomError(errorMessage(e));
+          const message = conciseMessage(errorMessage(e));
+          setRoomError(message);
+          showError(message);
         }
       } finally {
         if (active) setRoomsLoading(false);

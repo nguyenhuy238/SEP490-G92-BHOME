@@ -20,13 +20,15 @@ import { TenantPaymentPanel } from './TenantPaymentPanel';
 import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
 import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
-export function TenantInvoicesScreen() {
+export function TenantInvoicesScreen({ intent }: { intent?: 'adjustment' } = {}) {
   const { session } = useSession();
-  // Remount account-specific selection when the principal changes.
-  return <TenantInvoiceList key={session?.userId} />;
-}
-function TenantInvoiceList() {
   const { invoiceId } = useLocalSearchParams<{ invoiceId?: string }>();
+  // Remount account-specific selection when the principal changes.
+  return <TenantInvoiceList key={`${session?.userId}:${invoiceId ?? ''}`} intent={intent} />;
+}
+function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
+  const { invoiceId, focus } = useLocalSearchParams<{ invoiceId?: string; focus?: string }>();
+  const purpose = intent ?? focus;
   const { go } = useWorkspace();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
@@ -79,6 +81,21 @@ function TenantInvoiceList() {
   return (
     <>
       <Heading title="Hóa đơn của tôi" detail="Hóa đơn chung của phòng trong những kỳ bạn đã ở" />
+      {purpose === 'adjustment' && (
+        <Box>
+          <Text>
+            Chọn hóa đơn cần kiểm tra, sau đó mở mục Yêu cầu điều chỉnh trong chi tiết hóa đơn.
+          </Text>
+        </Box>
+      )}
+      {purpose === 'payment' && (
+        <Box>
+          <Text>
+            Chọn hóa đơn đã phát hành để xem thông tin chuyển khoản và số tiền còn phải trả. Hóa đơn
+            nháp chưa thể thanh toán.
+          </Text>
+        </Box>
+      )}
       <Action onPress={() => go('billing-history')}>Lịch sử thanh toán</Action>
       <QueryState {...list} />
       {!!states.error && <QueryState {...states} />}
