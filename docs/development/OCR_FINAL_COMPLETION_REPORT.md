@@ -1,5 +1,7 @@
 # BHOME OCR — kết quả thực hiện master task 05–06/11/2026
 
+**Lượt accuracy recovery 07/11/2026: xem [kết quả và giới hạn mới nhất](OCR_ACCURACY_IMPROVEMENT_REPORT.md). Chưa có cải thiện production được chấp nhận; các số test dưới đây thuộc lượt trước.**
+
 **Lượt tiếp nối từ `83317cb`: xem [kết quả mới nhất](#tiếp-nối-master-implementation-task-từ-83317cb).**
 Đã train YOLO bốn lớp thật nhưng model bị loại; baseline đọc số chưa cải thiện.
 Các kết quả cũ bên dưới được giữ làm lịch sử, không thay thế số đo mới nhất.
