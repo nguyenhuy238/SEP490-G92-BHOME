@@ -100,3 +100,45 @@ Chưa có căn cứ để đổi sortX/NMS hoặc chọn digit giữa các overl
 dotnet run --project tools/BHome.OcrSmoke -c Release -- --water-localization-audit .tools/meter-detection-models .tools/meter-detection-validation tools/BHome.OcrSmoke/model_tools/evaluation-validation-deduplicated-manifest.json .tools/ocr-recovery-localization.json
 .tools/yolo-python/python.exe tools/BHome.OcrSmoke/model_tools/audit_meter_digit_boxes.py .tools/ocr-recovery-validation/diagnostic-public-only.json .tools/meter-detection-validation .tools/ocr-recovery-digit-boxes-validation.json
 ```
+
+## Ch?n ?o?n tr?c ti?p historical52: v? sao ch?10/33
+
+?? ch?y l?i model th?t tr?n52 ?nh pinned;33 publisher-complete labels. Kh?ng d?ng
+l??t n?y ?? ch?n candidate/threshold: c?c English/fusion candidates ?? b? lo?i ?
+validation tr??c khi trace historical ???c xem.
+
+- Full pipeline10 ??ng,0 sai theo33 labels,42 fallback, ??ng/all inputs10/52.
+- Window IoU?0,5:51/52;0 unique predicted window sai IoU,1 kh?ng c? window.
+  Scene gate cho36/52 qua; recall localization v? quy?n qua scene l? hai ch? s? kh?c.
+- Predicted-window Stage2:23 chu?i ??ng,2 sai theo complete labels v?2 proposals c?
+  GT thi?u; ch?10 chu?i ??ng ?i qua fusion. Oracle Stage2 ch?21 ??ng/5 sai theo labels;
+  kh?ng c? l?i ?ch nh?n d?ng r? khi thay to?n b? crop b?ng oracle.
+- Oracle fusion9 ??ng/1 sai,42 fallback; kh?ng ???c d?ng thay production safeguards.
+- Stage2 ordering kh?ng ph?i nguy?n nh?n ?? ???c ch?ng minh ? audit validation.
+
+?? xem contact sheet public13 recovery crops v? ??i chi?u raw trace. T?t c?13 c?
+Stage2 kh?ng c?nh b?ou/geometry v? string kh?p nh?n publisher, IoU0,781..0,945.
+Nh?ng9 c? **numeric PP c?nh tranh th?t**,3 c? nhi?u v?ng numeric/ph?n m?nh,1 m?.
+T?ng ca c?n thi?u decimal/register GT v? human review ??c l?p; kh?ng g?i recovery
+candidates l? c?c proposal ?? ???c x?c minh an to?n.
+
+| ID historical | Stage2 / publisher digits | Window IoU | PP numeric candidate | Veto ph?i gi? |
+| --- | --- | --- | --- | --- |
+| 000004 | 00845922 | 0.865 | 00845927 | valid_numeric_disagreement |
+| 000113 | 0768328 | 0.830 | 0768320 | valid_numeric_disagreement |
+| 000141 | 00244805 | 0.853 | Kh?ng c? chu?i h?p l? | blur_guard |
+| 000143 | 00244805 | 0.938 | Kh?ng c? chu?i h?p l? | multiple_numeric_regions |
+| 000173 | 00429509 | 0.945 | 002295019 | valid_numeric_disagreement |
+| 000175 | 00429509 | 0.816 | 307297599 | valid_numeric_disagreement |
+| 000259 | 00236783 | 0.781 | 002367841 | valid_numeric_disagreement |
+| 000280 | 02332836 | 0.802 | 02332831 | valid_numeric_disagreement |
+| 000333 | 00339036 | 0.836 | 00339039 | valid_numeric_disagreement |
+| 000358 | 00845922 | 0.920 | 00845927 | valid_numeric_disagreement |
+| 000446 | 00555995 | 0.868 | 0055599 | valid_numeric_disagreement |
+| 000490 | 0587956 | 0.809 | Kh?ng c? chu?i h?p l? | multiple_numeric_regions |
+| 000493 | 0587957 | 0.846 | Kh?ng c? chu?i h?p l? | multiple_numeric_regions |
+
+[Evidence13 ca](ocr-recovery-rejected-cases.json), [summary52](ocr-recovery-historical-stages.json).
+Raw text/boxes/crops/latency v?n n?m trong `.tools/ocr-recovery-historical-test`.
+Register/precision c?a m?i ca l? not annotated; kh?ng suy billing value t? digit
+string. Nghi v?n nh?n317 ? validation kh?ng ???c d?ng ?? s?a historical GT.
