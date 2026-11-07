@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-07",
+  "assets": [
+    {
+      "id": "meters_lcd_03kTe6xmxqgD7JcT4DOx",
+      "sourceUrl": "https://universe.roboflow.com/meters-lcd/water-meter-reading-ipqvl",
+      "downloadUrl": "https://source.roboflow.com/nZaN2cf0CudWHhoIJjjRiERWUf62/03kTe6xmxqgD7JcT4DOx/thumb.jpg",
+      "license": "CC BY4.0",
+      "attribution": "Meters LCD / Roboflow Universe",
+      "sha256": "3625fc20a2998bc3cf4d5491f84691869b0fada1f4af53d3f1a13b7e9467e05a",
+      "bytes": 11714,
+      "dimensions": [
+        200,
+        200
+      ],
+      "reviewedTechnology": "mechanical_water",
+      "numericGroundTruth": null,
+      "annotationReview": "agent_visual_body_review_only",
+      "physicalMeterGroup": null,
+      "sourceGroup": "meters_lcd_publisher",
+      "admittedTraining": false,
+      "admittedIndependentEvaluation": false
+    },
+    {
+      "id": "meters_lcd_05p6f5iHsiuWZ4AXub6T",
+      "sourceUrl": "https://universe.roboflow.com/meters-lcd/water-meter-reading-ipqvl",
+      "downloadUrl": "https://source.roboflow.com/nZaN2cf0CudWHhoIJjjRiERWUf62/05p6f5iHsiuWZ4AXub6T/thumb.jpg",
+      "license": "CC BY4.0",
+      "attribution": "Meters LCD / Roboflow Universe",
+      "sha256": "ca89c555aafc4c348b40b07288aa93605d50eafda447460db8b721bc7dd6111e",
+      "bytes": 13158,
+      "dimensions": [
+        200,
+        200
+      ],
+      "reviewedTechnology": "mechanical_water",
+      "numericGroundTruth": null,
+      "annotationReview": "agent_visual_body_review_only",
+      "physicalMeterGroup": null,
+      "sourceGroup": "meters_lcd_publisher",
+      "admittedTraining": false,
+      "admittedIndependentEvaluation": false
+    },
+    {
+      "id": "meters_lcd_0BWCB2XIcCmSvTuof32P",
+      "sourceUrl": "https://universe.roboflow.com/meters-lcd/water-meter-reading-ipqvl",
+      "downloadUrl": "https://source.roboflow.com/nZaN2cf0CudWHhoIJjjRiERWUf62/0BWCB2XIcCmSvTuof32P/thumb.jpg",
+      "license": "CC BY4.0",
+      "attribution": "Meters LCD / Roboflow Universe",
+      "sha256": "0ee472ea393076b3d685f932bc47e835130a92470d821ff02ffebd73a0ad0d52",
+      "bytes": 20012,
+      "dimensions": [
+        200,
+        200
+      ],
+      "reviewedTechnology": "mechanical_water",
+      "numericGroundTruth": null,
+      "annotationReview": "agent_visual_body_review_only",
+      "physicalMeterGroup": null,
+      "sourceGroup": "meters_lcd_publisher",
+      "admittedTraining": false,
+      "admittedIndependentEvaluation": false
+    }
+  ],
+  "observations": [
+    "Publisher name Meters LCD does not establish LCD technology. All3 public example previews visually show wheel meters.",
+    "Three200x200 previews have insufficient digit/register/precision verification. They are not1573 diverse licensed BHOME-annotated images.",
+    "Official download page offers1573 images but export sign-in/access was not bypassed.",
+    "Official Paddle English model acquired and pinned separately for offline experiments; not activated.",
+    "Prior Badger single-device corpus remains quarantined; no new independent labels approved."
+  ],
+  "digitalWaterBlocker": "No newly accessible source with reviewed readable accumulated-water LCD digits, display geometry, precision/register and independent physical-meter groups."
+}
