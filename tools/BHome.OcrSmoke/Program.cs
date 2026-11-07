@@ -5,6 +5,8 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 6 && args[0] == "--experimental-meter-context")
+    return await ExperimentalMeterContext.Run(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 7 && args[0] == "--mechanical-electric-window-study")
     return await MechanicalElectricWindowStudy.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6]);
 if (args.Length == 6 && args[0] == "--reviewed-window-compare")

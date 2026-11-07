@@ -1,0 +1,721 @@
+{
+  "scope": "provisional_and_historical_separate_no_independent_acceptance",
+  "humanReviewsReceived": 0,
+  "businessProposalEnabled": false,
+  "sameFullFrameHttpCohorts": {
+    "provisional_development": {
+      "baseline": {
+        "inputs": 5,
+        "correctCategories": 0,
+        "wrongCategories": 0,
+        "unknownCategories": 5,
+        "readablePositives": 2,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 3,
+        "invalidControlsRejected": 3,
+        "manualFallback": 5
+      },
+      "candidate": {
+        "inputs": 5,
+        "correctCategories": 0,
+        "wrongCategories": 0,
+        "unknownCategories": 5,
+        "readablePositives": 2,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 3,
+        "invalidControlsRejected": 3,
+        "manualFallback": 5
+      }
+    },
+    "historical_validation": {
+      "baseline": {
+        "inputs": 2,
+        "correctCategories": 0,
+        "wrongCategories": 0,
+        "unknownCategories": 2,
+        "readablePositives": 1,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 1,
+        "invalidControlsRejected": 1,
+        "manualFallback": 2
+      },
+      "candidate": {
+        "inputs": 2,
+        "correctCategories": 1,
+        "wrongCategories": 0,
+        "unknownCategories": 1,
+        "readablePositives": 1,
+        "exactDigits": 1,
+        "wrongDigits": 0,
+        "invalidControls": 1,
+        "invalidControlsRejected": 1,
+        "manualFallback": 1
+      }
+    },
+    "historical_exploratory": {
+      "baseline": {
+        "inputs": 4,
+        "correctCategories": 0,
+        "wrongCategories": 0,
+        "unknownCategories": 4,
+        "readablePositives": 3,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 1,
+        "invalidControlsRejected": 1,
+        "manualFallback": 4
+      },
+      "candidate": {
+        "inputs": 4,
+        "correctCategories": 1,
+        "wrongCategories": 0,
+        "unknownCategories": 3,
+        "readablePositives": 3,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 1,
+        "invalidControlsRejected": 1,
+        "manualFallback": 4
+      }
+    },
+    "historical_negative_control": {
+      "baseline": {
+        "inputs": 2,
+        "correctCategories": 0,
+        "wrongCategories": 0,
+        "unknownCategories": 2,
+        "readablePositives": 0,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 2,
+        "invalidControlsRejected": 2,
+        "manualFallback": 2
+      },
+      "candidate": {
+        "inputs": 2,
+        "correctCategories": 0,
+        "wrongCategories": 0,
+        "unknownCategories": 2,
+        "readablePositives": 0,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 2,
+        "invalidControlsRejected": 2,
+        "manualFallback": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "commons_105770219",
+      "sha256": "b91a58dfde67d4c8f0909f06c24757de5c2f7c82bb45885d5bc0817527a18b61",
+      "category": "electricity_digital",
+      "evaluationRole": "provisional_development",
+      "readabilityState": "readable_consumption",
+      "expectedDigits": "16254",
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 5385
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 139,
+        "rawCategoryGuess": "electricity_mechanical",
+        "displayState": "unknown",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_195597533",
+      "sha256": "85ca26dfbd7539305d13cda797981dd03598b57bbe92bb7fd3e3c8d08e8a9306",
+      "category": "not_meter",
+      "evaluationRole": "provisional_development",
+      "readabilityState": "not_meter",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 4276
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 110,
+        "rawCategoryGuess": "electricity_mechanical",
+        "displayState": "unknown",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_54903199",
+      "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
+      "category": "electricity_digital",
+      "evaluationRole": "provisional_development",
+      "readabilityState": "readable_consumption",
+      "expectedDigits": "000501",
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 6688
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 3569,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_33635608",
+      "sha256": "4898d4fde07145a933dcda85d5918f9ce5d12759028c33337803d1d179545aca",
+      "category": "electricity_digital",
+      "evaluationRole": "provisional_development",
+      "readabilityState": "blurred_or_obscured",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 4976
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 1585,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_151445788",
+      "sha256": "2293c68468505cbf294288991299fdfce942bf1b5941d5ae261f360e57a84f82",
+      "category": "not_meter",
+      "evaluationRole": "provisional_development",
+      "readabilityState": "status_only_non_consumption_counter",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 4783
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 105,
+        "rawCategoryGuess": "electricity_mechanical",
+        "displayState": "unknown",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_validation",
+      "readabilityState": "readable_consumption",
+      "expectedDigits": "74590",
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 5799
+      },
+      "candidate": {
+        "acceptedCategory": "electricity_digital",
+        "digits": "74590",
+        "elapsedMilliseconds": 2217,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "consumption_candidate"
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_validation",
+      "readabilityState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 6146
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 2342,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "sha256": "fcf6cfa6830bddcb074895177af34f55dc9b22a6e33051bf9d530565e9006f35",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "readable_consumption",
+      "expectedDigits": "004046",
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 5262
+      },
+      "candidate": {
+        "acceptedCategory": "electricity_digital",
+        "digits": null,
+        "elapsedMilliseconds": 2107,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "sha256": "f08028545baabada7715eb39724edf45a38602ae56759d995408c149595cd810",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "readable_consumption",
+      "expectedDigits": "21594",
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 6215
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 2990,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "category": "electricity_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 6310
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 2330,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "category": "water_digital",
+      "evaluationRole": "historical_exploratory",
+      "readabilityState": "readable_consumption",
+      "expectedDigits": "000880578",
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 5979
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 206,
+        "rawCategoryGuess": "water_digital",
+        "displayState": "unknown",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_156125142",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "category": "water_digital",
+      "evaluationRole": "historical_negative_control",
+      "readabilityState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 5182
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 1930,
+        "rawCategoryGuess": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "unverified"
+      }
+    },
+    {
+      "id": "commons_51969773",
+      "sha256": "6718ddf348ea2bd3b4ffef5706ec66e760f7de39ffede1270c8aefeab843c910",
+      "category": "not_meter",
+      "evaluationRole": "historical_negative_control",
+      "readabilityState": "not_meter",
+      "expectedDigits": null,
+      "baseline": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 2513
+      },
+      "candidate": {
+        "acceptedCategory": "unknown",
+        "digits": null,
+        "elapsedMilliseconds": 66,
+        "rawCategoryGuess": "water_mechanical",
+        "displayState": "unknown",
+        "registerStatus": "unverified"
+      }
+    }
+  ],
+  "classifierPriorFrozenTestRows": [
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.7968462705612183,
+        "water": 0.11043059825897217,
+        "not_meter": 0.09272303432226181
+      },
+      "technology": {
+        "mechanical": 0.9211467504501343,
+        "digital": 0.07885325700044632
+      },
+      "pipelineMs": 22.794799999246607,
+      "isProductIllustration": false,
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.9494397640228271,
+        "water": 0.03351791575551033,
+        "not_meter": 0.017042294144630432
+      },
+      "technology": {
+        "mechanical": 0.5360652804374695,
+        "digital": 0.4639347195625305
+      },
+      "pipelineMs": 23.01869999791961,
+      "isProductIllustration": false,
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.8456394672393799,
+        "water": 0.1435794085264206,
+        "not_meter": 0.010781136341392994
+      },
+      "technology": {
+        "mechanical": 0.09432711452245712,
+        "digital": 0.9056729078292847
+      },
+      "pipelineMs": 23.990699999558274,
+      "isProductIllustration": false,
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.5468407273292542,
+        "water": 0.4175471365451813,
+        "not_meter": 0.03561210632324219
+      },
+      "technology": {
+        "mechanical": 0.13579091429710388,
+        "digital": 0.8642091155052185
+      },
+      "pipelineMs": 24.21169999797712,
+      "isProductIllustration": false,
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.8638469576835632,
+        "water": 0.13442853093147278,
+        "not_meter": 0.0017244360642507672
+      },
+      "technology": {
+        "mechanical": 0.8250909447669983,
+        "digital": 0.17490904033184052
+      },
+      "pipelineMs": 12.627500000235159,
+      "isProductIllustration": false,
+      "prediction": "electricity_mechanical"
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0002879794919863343,
+        "water": 0.9850175976753235,
+        "not_meter": 0.014694406650960445
+      },
+      "technology": {
+        "mechanical": 0.805656373500824,
+        "digital": 0.19434362649917603
+      },
+      "pipelineMs": 30.43029999753344,
+      "isProductIllustration": false,
+      "prediction": "water_mechanical"
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0885944813489914,
+        "water": 0.7354753017425537,
+        "not_meter": 0.17593024671077728
+      },
+      "technology": {
+        "mechanical": 0.9112115502357483,
+        "digital": 0.08878850191831589
+      },
+      "pipelineMs": 13.137099998857593,
+      "isProductIllustration": true,
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.0018699467182159424,
+        "water": 0.9615216255187988,
+        "not_meter": 0.03660845011472702
+      },
+      "technology": {
+        "mechanical": 0.5649200081825256,
+        "digital": 0.43508002161979675
+      },
+      "pipelineMs": 30.179200002748985,
+      "isProductIllustration": false,
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "split": "test",
+      "method": "frozen_hierarchy",
+      "utility": {
+        "electricity": 0.00105352106038481,
+        "water": 0.8670587539672852,
+        "not_meter": 0.13188770413398743
+      },
+      "technology": {
+        "mechanical": 0.9963321089744568,
+        "digital": 0.0036678919568657875
+      },
+      "pipelineMs": 20.35509999768692,
+      "isProductIllustration": false,
+      "prediction": "water_mechanical"
+    }
+  ],
+  "classifierSupervisedTestRows": [
+    {
+      "id": "commons_18880869",
+      "expected": "electricity_mechanical",
+      "utility": {
+        "electricity": 0.8262788653373718,
+        "water": 0.06594213098287582,
+        "not_meter": 0.10777898132801056
+      },
+      "technology": {
+        "mechanical": 0.8807674646377563,
+        "digital": 0.11923257261514664
+      },
+      "prediction": "electricity_mechanical"
+    },
+    {
+      "id": "commons_11930077",
+      "expected": "electricity_mechanical",
+      "utility": {
+        "electricity": 0.7961921691894531,
+        "water": 0.163652703166008,
+        "not_meter": 0.040155138820409775
+      },
+      "technology": {
+        "mechanical": 0.6005396246910095,
+        "digital": 0.39946040511131287
+      },
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_54903199",
+      "expected": "electricity_digital",
+      "utility": {
+        "electricity": 0.8382849097251892,
+        "water": 0.09964597970247269,
+        "not_meter": 0.06206915155053139
+      },
+      "technology": {
+        "mechanical": 0.30717822909355164,
+        "digital": 0.6928218007087708
+      },
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_33635608",
+      "expected": "electricity_digital",
+      "utility": {
+        "electricity": 0.6652883887290955,
+        "water": 0.19362525641918182,
+        "not_meter": 0.14108635485172272
+      },
+      "technology": {
+        "mechanical": 0.43660253286361694,
+        "digital": 0.5633975267410278
+      },
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_38382735",
+      "expected": "water_mechanical",
+      "utility": {
+        "electricity": 0.35860675573349,
+        "water": 0.5709884166717529,
+        "not_meter": 0.07040482014417648
+      },
+      "technology": {
+        "mechanical": 0.6475009322166443,
+        "digital": 0.3524990379810333
+      },
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_166496308",
+      "expected": "water_mechanical",
+      "utility": {
+        "electricity": 0.14768089354038239,
+        "water": 0.3413761258125305,
+        "not_meter": 0.5109429359436035
+      },
+      "technology": {
+        "mechanical": 0.8548510670661926,
+        "digital": 0.14514894783496857
+      },
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_15920280",
+      "expected": "water_digital",
+      "utility": {
+        "electricity": 0.2555084824562073,
+        "water": 0.5989869236946106,
+        "not_meter": 0.14550460875034332
+      },
+      "technology": {
+        "mechanical": 0.8613706827163696,
+        "digital": 0.13862930238246918
+      },
+      "prediction": "water_mechanical"
+    },
+    {
+      "id": "commons_192931434",
+      "expected": "not_meter",
+      "utility": {
+        "electricity": 0.20034419000148773,
+        "water": 0.23115675151348114,
+        "not_meter": 0.5684990286827087
+      },
+      "technology": {
+        "mechanical": 0.822403609752655,
+        "digital": 0.17759636044502258
+      },
+      "prediction": "unknown"
+    },
+    {
+      "id": "commons_51969773",
+      "expected": "not_meter",
+      "utility": {
+        "electricity": 0.1587880402803421,
+        "water": 0.5008460283279419,
+        "not_meter": 0.3403659164905548
+      },
+      "technology": {
+        "mechanical": 0.8068167567253113,
+        "digital": 0.19318325817584991
+      },
+      "prediction": "unknown"
+    }
+  ],
+  "parity": {
+    "images": 9,
+    "nativeToPythonOrtMaxLogitDelta": 3.993511199951172e-06,
+    "pythonToDotnetMaxInputDelta": 0,
+    "pythonToDotnetMaxLogitDelta": 2.2947788e-06
+  },
+  "models": {
+    ".tools/ocr-runtime-focus/classifier-cv2/classifier.onnx": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
+    ".tools/ocr-models/detection.onnx": "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1",
+    ".tools/ocr-models/recognition.onnx": "767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12",
+    ".tools/ocr-recovery-english/inference.onnx": "b5f833dfc5d0eb71da397b4efa06ebeee9b431b690a47d6af40d77d8eabc557f",
+    ".tools/ocr-recovery-english/charset.json": "3a3e5abea6e7d403209043c8d67b052414ae59ece49922cc7e3ac205d59060a8"
+  },
+  "runtimeSourceHead": "f32545431335aeac1843ee4e0c1ab8f4a592a1cd",
+  "rawHttpBenchmarkSha256": "400ec6807d34ae51c5d7310a3f68c5100bc9e2271628c699c11524b84033e0fa",
+  "registerControl": {
+    "imageId": "commons_151445788",
+    "originalRegion": [
+      890,
+      703,
+      49,
+      55
+    ],
+    "englishRaw": "4",
+    "englishConfidence": 0.9975924,
+    "ppRaw": "4",
+    "nearbyDeviceLabel": "HORAIRE",
+    "deviceLabelBounds": [
+      650,
+      165,
+      276,
+      177
+    ],
+    "deviceLabelConfidence": 0.9395302,
+    "independentContextGate": "non_consumption",
+    "fullHttpReading": null,
+    "coordinates": "after neutral cap1600; xywh",
+    "singleDigitPositiveTests": [
+      "0 kWh",
+      "4 kWh",
+      "8 kWh"
+    ]
+  }
+}
