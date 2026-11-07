@@ -1,0 +1,33 @@
+{
+  "scope": "frozen_engineering_gates_before_runtime_evaluation",
+  "startingHead": "ee3dd1405ce4a57a96adf3186721e49feee0f89f",
+  "requirements": ["BF-05", "UC-20", "GBR-07", "UC-21", "JOB-10", "GBR-09"],
+  "diagnostics": {
+    "environment": "Development",
+    "requiresMobileDevelopmentFlag": true,
+    "requiresExperimentalFlag": true,
+    "requiresExplicitRequestOptIn": true,
+    "roles": ["Owner", "Staff"],
+    "businessProposalEnabled": false,
+    "persistsReadingOrBilling": false,
+    "realOnnxRequired": true,
+    "requiredCases": ["readable_positive", "non_consumption_counter", "uncertain_category", "missing_or_corrupt_model"]
+  },
+  "classifierSelection": {"split": "validation_only", "minimumCorrectAccepted": 1, "maximumIncorrectAccepted": 0},
+  "registerSelection": {
+    "requiresSpatialUnitAndConsumptionEvidence": true,
+    "rejectStatusSerialTimerAndFlow": true,
+    "noMinimumDigitCountShortcut": true,
+    "preserveRealSingleDigitConsumptionReadings": true,
+    "unknownStateRequiresReview": true
+  },
+  "businessProposal": {
+    "requiresIndependentVerifiedLabels": true,
+    "requiresRepresentativePerCategoryEvaluation": true,
+    "requiresVerifiedRegisterAndDecimalMetadata": true,
+    "requiresStaffConfirmation": true,
+    "projectReadingTarget": "at least90% on at least50 images, per existing project quality target; not a claim of achievement",
+    "tinyProvisionalZeroErrorSetSufficient": false,
+    "currentStatus": "BLOCKED_BY_DATA"
+  }
+}
