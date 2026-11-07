@@ -11,7 +11,8 @@ using BHome.Application.PropertyManagement;
 
 namespace BHome.Application.PaymentsDebt;
 
-public sealed class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null)
+public sealed class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null,
+    BHome.Application.Contracts.ContractService? contracts = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private DateTimeOffset Now => PaymentRules.Timestamp(clock.GetUtcNow());
@@ -56,7 +57,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         };
         if (!x.HumanVerified || !PaymentRules.ValidMoney(x.Amount) || x.Currency != "VND" || x.OccurredAt == default || x.OccurredAt > Now ||
             !PaymentRules.ValidReference(x.BankReference) || !Regex.IsMatch(x.ProviderIdentity, "^[A-Z0-9][A-Z0-9:-]{0,79}$") ||
-            x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+            x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty || x.ProposedDepositContractId == Guid.Empty ||
+            x.ProposedInvoiceId.HasValue && x.ProposedDepositContractId.HasValue || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw new PaymentException(400, "invalid_verified_bank_transfer");
         x = x with { Amount = decimal.Truncate(x.Amount) };
         var normalized = PaymentRules.NormalizeReference(x.BankReference);
@@ -71,6 +73,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             x.StatementReference,
             x.VerificationReason,
             x.ProposedInvoiceId,
+            x.ProposedDepositContractId,
             x.IsDevelopmentDemo
         };
         // Serializes bank identities across commands without a fictitious financial effect.
@@ -81,11 +84,17 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (existing is not null)
             {
                 if (existing.Amount != x.Amount || existing.OccurredAt != x.OccurredAt || existing.TransferDescription.ToUpperInvariant() != x.TransferDescription.ToUpperInvariant() ||
-                    existing.ProposedInvoiceId != x.ProposedInvoiceId) throw new PaymentException(409, "bank_transaction_identity_conflict");
+                    existing.ProposedInvoiceId != x.ProposedInvoiceId || existing.ProposedDepositContractId != x.ProposedDepositContractId)
+                    throw new PaymentException(409, "bank_transaction_identity_conflict");
                 Remember(key, "register", identity, existing.Id); return await TransferAsync(existing.Id, t);
             }
             if (x.ProposedInvoiceId is { } invoiceId && (await Invoice(invoiceId, t)).Status != InvoiceStatus.Final)
                 throw new PaymentException(409, "final_invoice_required");
+            if (x.ProposedDepositContractId is { } depositId)
+            {
+                if (contracts is null) throw new PaymentException(503, "holding_payment_unavailable");
+                _ = await contracts.HoldingDepositAsync(depositId, t);
+            }
             var transfer = new PaymentTransfer
             {
                 ProviderIdentity = x.ProviderIdentity,
@@ -100,6 +109,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 VerifiedByUserId = Actor,
                 VerifiedAt = Now,
                 ProposedInvoiceId = x.ProposedInvoiceId,
+                ProposedDepositContractId = x.ProposedDepositContractId,
                 IsDevelopmentDemo = x.IsDevelopmentDemo
             };
             repository.Add(transfer);
@@ -107,8 +117,9 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             {
                 TransferId = transfer.Id,
                 InvoiceId = x.ProposedInvoiceId,
+                DepositContractId = x.ProposedDepositContractId,
                 Decision = "PendingReview",
-                Reason = x.ProposedInvoiceId is null ? "unmatched_bank_transfer" : "owner_allocation_confirmation_required",
+                Reason = x.ProposedInvoiceId is null && x.ProposedDepositContractId is null ? "unmatched_bank_transfer" : "owner_allocation_confirmation_required",
                 ActorId = Actor,
                 OccurredAt = Now
             };
@@ -173,13 +184,57 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             return new PaymentReviewResult(review.Decision, review.Reason, transferId, invoice.Id);
         }, t);
     }
+    public async Task<PaymentReviewResult> AllocateDepositAsync(Guid transferId, PaymentDepositMatchInput x, Guid key, CancellationToken t)
+    {
+        Owner(); Validate(x);
+        if (!x.HumanVerified || x.ContractId == Guid.Empty || x.PaidByUserId == Guid.Empty || contracts is null)
+            throw new PaymentException(400, "deposit_allocation_confirmation_required");
+        return await repository.DepositTransactionAsync(transferId, x.ContractId, async () =>
+        {
+            if (await Replay(key, "allocate-deposit", new { transferId, x }, t) is not null) return await Outcome(transferId, t);
+            var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
+            if (await repository.AllocationAsync(transferId, t) is not null) throw new PaymentException(409, "bank_transaction_already_allocated");
+            var holding = await repository.HoldingAsync(x.ContractId, t) ?? throw new PaymentException(404, "holding_contract_not_found");
+            if (holding.Kind != BHome.Domain.TenantContracts.ContractKind.Holding || holding.TenantUserId != x.PaidByUserId)
+                throw new PaymentException(400, "payer_not_holding_tenant");
+            var latest = await repository.LatestReviewAsync(transferId, t);
+            if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
+            var received = await repository.DepositAllocatedAsync(x.ContractId, t);
+            var remaining = holding.RequiredDeposit - received;
+            var claimed = await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t);
+            string? reason = claimed ? "bank_reference_already_credited" : remaining <= 0 ? "holding_deposit_already_satisfied" :
+                !string.Equals(transfer.TransferDescription.Trim(), PaymentRules.DepositReference(holding.Id), StringComparison.OrdinalIgnoreCase) ? "holding_transfer_reference_mismatch" :
+                transfer.Amount > remaining ? "holding_deposit_excess_requires_manual_review" : null;
+            var review = new PaymentReconciliation
+            {
+                TransferId = transfer.Id, DepositContractId = holding.Id, ActorId = Actor, OccurredAt = Now,
+                Decision = reason is null ? "Allocated" : "PendingReview",
+                Reason = reason ?? (transfer.Amount < remaining ? "verified_partial_holding_deposit" : "verified_holding_deposit")
+            };
+            repository.Add(review);
+            if (reason is null)
+            {
+                await contracts.ConfirmHoldingDepositAllocationAsync(holding.Id, transfer.Amount, transfer.VerifiedAt, t);
+                var allocation = new PaymentAllocation
+                {
+                    TransferId = transfer.Id, TargetDepositContractId = holding.Id, Amount = transfer.Amount,
+                    PaidByUserId = x.PaidByUserId, VerifiedByUserId = Actor, AllocatedAt = Now
+                };
+                repository.Add(allocation); repository.Audit(Actor, "HoldingDepositAllocated", allocation.Id, Now);
+                Remember(key, "allocate-deposit", new { transferId, x }, allocation.Id);
+            }
+            else Remember(key, "allocate-deposit", new { transferId, x }, review.Id);
+            return new(review.Decision, review.Reason, transferId, null, holding.Id);
+        }, t);
+    }
     private async Task<PaymentReviewResult> Outcome(Guid transferId, CancellationToken t)
     {
         var allocation = await repository.AllocationAsync(transferId, t);
         var review = await repository.LatestReviewAsync(transferId, t);
-        if (allocation is not null) return new("Allocated", review?.Reason ?? "verified_full_payment", transferId, allocation.InvoiceId);
+        if (allocation is not null) return new("Allocated", review?.Reason ?? "verified_full_payment", transferId, allocation.InvoiceId, allocation.TargetDepositContractId);
         if (review is null) throw new PaymentException(404, "bank_transfer_not_found");
-        return new(review.Decision, review.Reason, transferId, review.InvoiceId);
+        return new(review.Decision, review.Reason, transferId, review.InvoiceId, review.DepositContractId);
     }
     public async Task<TransferView> TransferAsync(Guid id, CancellationToken t)
     {
@@ -224,7 +279,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             transfer.TransferDescription, transfer.StatementReference, transfer.VerificationReason, transfer.VerifiedByUserId, transfer.VerifiedAt,
             transfer.ProposedInvoiceId, allocation is not null ? "Allocated" : review?.Decision ?? "PendingReview",
             review?.Reason ?? (allocation is not null ? "verified_full_payment" : "owner_allocation_confirmation_required"), allocation?.InvoiceId, transfer.IsDevelopmentDemo,
-            allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0));
+            allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0), allocation?.TargetDepositContractId);
     public async Task<InvoicePaymentView> InvoicePaymentAsync(Guid id, CancellationToken t)
     {
         var invoice = await Invoice(id, t);

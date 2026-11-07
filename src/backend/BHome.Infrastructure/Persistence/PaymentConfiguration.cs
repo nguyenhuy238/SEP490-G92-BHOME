@@ -15,6 +15,7 @@ internal sealed class PaymentTransferConfiguration : IEntityTypeConfiguration<Pa
         e.Property(x => x.ProviderIdentity).HasMaxLength(80); e.Property(x => x.BankReference).HasMaxLength(150); e.Property(x => x.NormalizedReference).HasMaxLength(150);
         e.Property(x => x.TransferDescription).HasMaxLength(100); e.Property(x => x.StatementReference).HasMaxLength(500);
         e.Property(x => x.VerificationReason).HasMaxLength(2000); e.Property(x => x.VerificationSource).HasMaxLength(50);
+        e.Ignore(x => x.ProposedDepositContractId);
         e.HasIndex(x => new { x.ProviderIdentity, x.NormalizedReference }).IsUnique();
         e.HasIndex(x => x.VerifiedAt); e.HasOne<Invoice>().WithMany().HasForeignKey(x => x.ProposedInvoiceId).OnDelete(DeleteBehavior.Restrict);
         e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
@@ -25,7 +26,8 @@ internal sealed class PaymentAllocationConfiguration : IEntityTypeConfiguration<
     public void Configure(EntityTypeBuilder<PaymentAllocation> e)
     {
         e.ToTable("PaymentAllocations", t => t.HasCheckConstraint("CK_PaymentAllocation_Amount", "\"Amount\" > 0"));
-        e.Property(x => x.Amount).HasPrecision(18, 0); e.HasIndex(x => x.TransferId).IsUnique();
+        e.Property(x => x.Amount).HasPrecision(18, 0); e.Property(x => x.TransferId).IsRequired(); e.Property(x => x.InvoiceId).IsRequired();
+        e.Ignore(x => x.SourceDepositContractId); e.Ignore(x => x.TargetDepositContractId); e.HasIndex(x => x.TransferId).IsUnique();
         e.HasOne<PaymentTransfer>().WithMany().HasForeignKey(x => x.TransferId).OnDelete(DeleteBehavior.Restrict);
         e.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.PaidByUserId).OnDelete(DeleteBehavior.Restrict);
@@ -38,6 +40,7 @@ internal sealed class PaymentReconciliationConfiguration : IEntityTypeConfigurat
     {
         e.ToTable("PaymentReconciliations", t => t.HasCheckConstraint("CK_PaymentReconciliation_Decision", "\"Decision\" IN ('PendingReview','Allocated','Rejected')"));
         e.Property(x => x.Sequence).UseIdentityByDefaultColumn();
+        e.Ignore(x => x.DepositContractId);
         e.Property(x => x.Decision).HasMaxLength(30); e.Property(x => x.Reason).HasMaxLength(2000);
         e.HasIndex(x => new { x.TransferId, x.OccurredAt });
         e.HasOne<PaymentTransfer>().WithMany().HasForeignKey(x => x.TransferId).OnDelete(DeleteBehavior.Restrict);

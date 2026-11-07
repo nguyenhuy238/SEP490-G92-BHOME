@@ -16,6 +16,7 @@ public sealed class PaymentTransactionsController(PaymentService service) : Cont
     [HttpGet("{id:guid}")] public Task<TransferView> Get(Guid id, CancellationToken t) => service.TransferAsync(id, t);
     [HttpPost] public Task<TransferView> Register(PaymentTransferInput input, CancellationToken t) => service.RegisterAsync(input, Key(), t);
     [HttpPost("{id:guid}/allocate")] public Task<PaymentReviewResult> Allocate(Guid id, PaymentMatchInput input, CancellationToken t) => service.AllocateAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/allocate-holding-deposit")] public Task<PaymentReviewResult> AllocateDeposit(Guid id, PaymentDepositMatchInput input, CancellationToken t) => service.AllocateDepositAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/reject")] public Task<PaymentReviewResult> Reject(Guid id, PaymentRejectInput input, CancellationToken t) => service.RejectAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/reconciliation-history")] public Task<PagedResult<ReconciliationView>> History(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default) => service.ReviewsAsync(id, page, pageSize, t);
 }

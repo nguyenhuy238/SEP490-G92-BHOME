@@ -8,13 +8,22 @@ public sealed class PropertyRulesTests
     [InlineData(RoomStatus.Available, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, true)]
     [InlineData(RoomStatus.Occupied, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, true)]
     [InlineData(RoomStatus.Unavailable, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, false)]
-    [InlineData(RoomStatus.OnHold, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, false)]
+    [InlineData(RoomStatus.OnHold, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, false, true)]
     [InlineData(RoomStatus.Occupied, RoomStatus.Available, RoomTransitionSource.ContractTermination, true, false)]
     [InlineData(RoomStatus.Occupied, RoomStatus.Occupied, RoomTransitionSource.ContractTermination, true, true)]
     [InlineData(RoomStatus.Occupied, RoomStatus.Available, RoomTransitionSource.ContractTermination, false, true)]
     public void SharedTransitionsPreserveWorkflowAndRemainingContracts(RoomStatus current, RoomStatus requested,
         RoomTransitionSource source, bool otherActive, bool allowed) =>
         Assert.Equal(allowed, PropertyRules.CanChangeRoomStatus(current, requested, source, hasOtherActiveContracts: otherActive));
+
+    [Theory]
+    [InlineData(RoomStatus.Available, RoomStatus.OnHold, RoomTransitionSource.HoldingActivation, true)]
+    [InlineData(RoomStatus.OnHold, RoomStatus.OnHold, RoomTransitionSource.HoldingActivation, false)]
+    [InlineData(RoomStatus.OnHold, RoomStatus.Available, RoomTransitionSource.HoldingRelease, true)]
+    [InlineData(RoomStatus.Occupied, RoomStatus.Available, RoomTransitionSource.HoldingRelease, false)]
+    public void HoldingTransitionsAreWorkflowControlled(RoomStatus current, RoomStatus requested,
+        RoomTransitionSource source, bool allowed) =>
+        Assert.Equal(allowed, PropertyRules.CanChangeRoomStatus(current, requested, source));
 
     [Fact]
     public void UsageRecordsFirstUtcInstantAndDoesNotRewriteItOnRetry()
