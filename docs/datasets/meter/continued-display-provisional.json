@@ -1,0 +1,149 @@
+{
+  "scope": "new_provisional_geometry_and_digits_not_independent_acceptance",
+  "taxonomy": [
+    "meter_body",
+    "display_screen",
+    "numeric_register",
+    "serial_region",
+    "non_billing_display"
+  ],
+  "unknownFieldsAreNull": true,
+  "historicalNumericTestUsedForSelection": false,
+  "samples": [
+    {
+      "id": "commons_105770219",
+      "image": ".tools/master-dataset/commons/commons_105770219.jpg",
+      "sha256": "b91a58dfde67d4c8f0909f06c24757de5c2f7c82bb45885d5bc0817527a18b61",
+      "split": "validation",
+      "category": "electricity_digital",
+      "meter_body": [
+        390,
+        380,
+        885,
+        1120
+      ],
+      "display_screen": [
+        520,
+        500,
+        755,
+        590
+      ],
+      "numeric_register": [
+        565,
+        508,
+        714,
+        558
+      ],
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": "16254",
+      "readabilityState": "readable_consumption",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null
+    },
+    {
+      "id": "commons_195597533",
+      "image": ".tools/ocr-continued/commons_195597533.jpg",
+      "sha256": "85ca26dfbd7539305d13cda797981dd03598b57bbe92bb7fd3e3c8d08e8a9306",
+      "split": "validation",
+      "category": "not_meter",
+      "meter_body": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "readabilityState": "not_meter",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null
+    },
+    {
+      "id": "commons_54903199",
+      "image": ".tools/ocr-continued/commons_54903199.jpg",
+      "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
+      "split": "test",
+      "category": "electricity_digital",
+      "meter_body": [
+        125,
+        80,
+        960,
+        1233
+      ],
+      "display_screen": [
+        350,
+        173,
+        719,
+        300
+      ],
+      "numeric_register": [
+        500,
+        177,
+        701,
+        240
+      ],
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": "000501",
+      "readabilityState": "readable_consumption",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null
+    },
+    {
+      "id": "commons_33635608",
+      "image": ".tools/ocr-continued/commons_33635608.jpg",
+      "sha256": "4898d4fde07145a933dcda85d5918f9ce5d12759028c33337803d1d179545aca",
+      "split": "test",
+      "category": "electricity_digital",
+      "meter_body": [
+        178,
+        282,
+        550,
+        682
+      ],
+      "display_screen": [
+        296,
+        451,
+        404,
+        504
+      ],
+      "numeric_register": [
+        300,
+        459,
+        399,
+        494
+      ],
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "readabilityState": "blurred_or_obscured",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null
+    },
+    {
+      "id": "commons_151445788",
+      "image": ".tools/master-dataset/commons/commons_151445788.jpg",
+      "sha256": "2293c68468505cbf294288991299fdfce942bf1b5941d5ae261f360e57a84f82",
+      "split": "test",
+      "category": "not_meter",
+      "meter_body": null,
+      "display_screen": null,
+      "numeric_register": null,
+      "serial_region": null,
+      "non_billing_display": null,
+      "expectedDigits": null,
+      "readabilityState": "status_only_non_consumption_counter",
+      "labelStatus": "agent_provisional_before_numeric_inference",
+      "humanReviewCount": 0,
+      "billingRegisterVerified": false,
+      "decimalPlaces": null
+    }
+  ]
+}
