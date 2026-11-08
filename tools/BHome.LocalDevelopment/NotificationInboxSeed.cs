@@ -41,10 +41,11 @@ internal static class NotificationInboxSeed
             Guid? location = null; Guid taskId = Guid.Empty;
             if (role == Roles.Staff)
             {
-                var assignment = await (from a in db.StaffLocationAssignments join l in db.Locations on a.LocationId equals l.Id
-                    where a.StaffUserId == account.Id && a.StartDate <= today && a.EndDate >= today && l.IsActive &&
-                        (l.Name.Contains("TEST") || l.Name.Contains("test") || l.Name.Contains("demo") || l.Name.Contains("Demo"))
-                    select new { l.Id }).FirstOrDefaultAsync();
+                var assignment = await (from a in db.StaffLocationAssignments
+                                        join l in db.Locations on a.LocationId equals l.Id
+                                        where a.StaffUserId == account.Id && a.StartDate <= today && a.EndDate >= today && l.IsActive &&
+                                            (l.Name.Contains("TEST") || l.Name.Contains("test") || l.Name.Contains("demo") || l.Name.Contains("Demo"))
+                                        select new { l.Id }).FirstOrDefaultAsync();
                 if (assignment is null) { Console.WriteLine($"SKIP {account.Email}: no current synthetic location assignment."); continue; }
                 location = assignment.Id;
                 taskId = await db.Set<OperationalTask>().Where(t => t.Kind == OperationalTaskKind.AdHoc && t.LocationId == location && t.AssignedStaffUserId == account.Id)
@@ -73,15 +74,22 @@ internal static class NotificationInboxSeed
                 if (index == 2) { targetType = role == Roles.Staff ? "OperationalTask" : "Contract"; targetId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(key + ":missing"))[..16]); }
                 var id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(key))[..16]);
                 if (await db.Set<UserNotification>().AnyAsync(n => n.Id == id)) throw new LocalTestAccountException("Fixture ID collision; transaction rolled back.");
-                if (!preview) db.Add(new UserNotification {
-                    Id = id, RecipientUserId = account.Id, AudienceRole = role, LocationId = location,
-                    Category = category, EventKey = key,
+                if (!preview) db.Add(new UserNotification
+                {
+                    Id = id,
+                    RecipientUserId = account.Id,
+                    AudienceRole = role,
+                    LocationId = location,
+                    Category = category,
+                    EventKey = key,
                     Title = $"[TEST] {label} — cập nhật {index + 1:00}",
                     Summary = index == 1 ? "Thông báo thử không có hồ sơ liên quan; dùng để kiểm tra thao tác đọc."
                         : index == 2 ? "Hồ sơ giả lập không còn khả dụng; dùng để kiểm tra thông báo khi mở đích."
                         : "Dữ liệu tổng hợp để kiểm tra giao diện, bộ lọc và phân trang. Không phát sinh hóa đơn, thanh toán hoặc công việc mới.",
-                    RelatedObjectType = targetType, RelatedObjectId = targetId,
-                    CreatedAt = now.AddHours(-index * 3), ReadAt = index % 4 == 0 ? now.AddMinutes(-index) : null,
+                    RelatedObjectType = targetType,
+                    RelatedObjectId = targetId,
+                    CreatedAt = now.AddHours(-index * 3),
+                    ReadAt = index % 4 == 0 ? now.AddMinutes(-index) : null,
                     DeliveryState = "Unconfigured"
                 });
                 added++;
