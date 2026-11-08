@@ -68,6 +68,8 @@ public sealed class PaymentConfirmedEvent
     public Guid InvoiceId { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
     public string Name { get; set; } = "payment.confirmed.v1";
+    public decimal? PaidAmount { get; set; }
+    public decimal? OutstandingAmount { get; set; }
 }
 public static partial class PaymentRules
 {

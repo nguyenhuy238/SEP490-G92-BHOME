@@ -151,7 +151,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
             if (x.PaidByUserId is { } payer && !await repository.EligiblePayerAsync(invoice.Id, payer, t))
                 throw new PaymentException(400, "payer_not_invoice_viewer");
-            var outstanding = (await repository.FinancialsAsync(invoice.Id, t)).OutstandingAmount;
+            var financial = await repository.FinancialsAsync(invoice.Id, t);
+            var outstanding = financial.OutstandingAmount;
             var reason = PaymentRules.ReviewReason(transfer.Amount, outstanding, transfer.TransferDescription,
                 PaymentRules.InvoiceReference(invoice.Id), await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t), repository.AmountMismatchSupported);
             var review = new PaymentReconciliation
@@ -176,7 +177,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                     AllocatedAt = Now
                 };
                 repository.Add(allocation);
-                repository.Add(new PaymentConfirmedEvent { AllocationId = allocation.Id, InvoiceId = invoice.Id, OccurredAt = Now });
+                repository.Add(new PaymentConfirmedEvent { AllocationId = allocation.Id, InvoiceId = invoice.Id, OccurredAt = Now, PaidAmount = financial.AllocatedPayments + allocation.Amount, OutstandingAmount = Math.Max(0, outstanding - allocation.Amount) });
                 repository.Audit(Actor, "InvoicePaymentAllocated", allocation.Id, Now);
                 Remember(key, "allocate", new { transferId, x }, allocation.Id);
             }

@@ -30,7 +30,7 @@ public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string R
     IReadOnlyList<string> MissingInputs, DateOnly ScheduledFinalDate, DateOnly DueDate, DateTimeOffset? FinalizedAt,
     Guid RepresentativeTenantUserId, IReadOnlyList<InvoiceLineView> Lines);
 public sealed record InvoiceScope(Guid Actor, bool Owner, bool Tenant);
-public sealed record BillingOccupancy(Contract Contract, IReadOnlyList<Guid> TenantIds);
+public sealed record BillingOccupancy(Contract Contract, IReadOnlyList<Guid> TenantIds, bool ContactsComplete = true);
 public sealed record BillingReading(MeterReading Reading, DateOnly ReadingDate);
 public sealed class InvoiceException(int status, string code) : Exception("Billing operation rejected.")
 {

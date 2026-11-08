@@ -107,10 +107,14 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             SecurityStamp = Guid.NewGuid().ToString("N"),
             ConcurrencyStamp = Guid.NewGuid().ToString("N")
         };
+        db.PrepareUserRole(user, Roles.Staff);
         var created = await users.CreateAsync(user, input.InitialPassword);
         if (!created.Succeeded) throw OperationsException.Invalid("invalid_staff_account");
-        var role = await users.AddToRoleAsync(user, Roles.Staff);
-        if (!role.Succeeded) throw OperationsException.Invalid("invalid_staff_role");
+        if (!await users.IsInRoleAsync(user, Roles.Staff))
+        {
+            var role = await users.AddToRoleAsync(user, Roles.Staff);
+            if (!role.Succeeded) throw OperationsException.Invalid("invalid_staff_role");
+        }
         await using (var update = Command("UPDATE users SET full_name=@name WHERE id=@id"))
         { update.Parameters.AddWithValue("name", input.FullName); update.Parameters.AddWithValue("id", user.Id); await update.ExecuteNonQueryAsync(t); }
         await SaveEmployment(user.Id, null, input.Employment, actorId, now, t);

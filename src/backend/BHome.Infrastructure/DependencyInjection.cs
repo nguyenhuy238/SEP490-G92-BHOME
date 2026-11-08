@@ -110,7 +110,19 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
-        services.AddScoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>();
+        services.AddScoped<IPasswordResetDelivery, BHome.Infrastructure.Modules.Notifications.PasswordEmailDelivery>();
+        services.AddScoped<IAccountInvitations, AccountInvitations>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
+        services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
+        services.AddScoped<BHome.Application.Notifications.NotificationWorkspaceService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
+        services.AddOptions<BHome.Application.Notifications.NotificationChannelOptions>().BindConfiguration("NotificationChannels")
+            .Validate(o => o.Mode is "Unconfigured" or "Sandbox" or "Smtp" && o.MaxAttempts is >= 1 and <= 10 && o.RetrySeconds is >= 1 and <= 3600 && o.TimeoutSeconds is >= 1 and <= 45, "Invalid notification channel options.").ValidateOnStart();
+        services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
+        services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>());
         services.AddScoped<CompactLocationAssignments>();
         services.AddScoped<ILocationAssignments>(provider => provider.GetRequiredService<CompactLocationAssignments>());
         services.AddScoped<IStaffLocationAccess>(provider => provider.GetRequiredService<CompactLocationAssignments>());

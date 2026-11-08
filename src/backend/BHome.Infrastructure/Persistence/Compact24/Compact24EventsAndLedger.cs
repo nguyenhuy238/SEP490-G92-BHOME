@@ -42,7 +42,7 @@ public sealed partial class Compact24DbContext
         }
         if (inbox is not null && entry.State == EntityState.Modified)
         {
-            var immutable = new[] { "RecipientUserId", "EventKey", "AudienceRole", "Category", "Title", "Summary", "RelatedObjectType", "RelatedObjectId", "LocationId", "CreatedAt", "SourceTaskNotificationId" };
+            var immutable = new[] { "RecipientUserId", "EventKey", "AudienceRole", "Category", "EventType", "Priority", "Source", "Channels", "Title", "Summary", "RelatedObjectType", "RelatedObjectId", "LocationId", "CreatedAt", "SourceTaskNotificationId" };
             if (immutable.Any(name => entry.Property(name).IsModified)) throw new InvalidOperationException("Notification event is immutable.");
             await ExecuteAsync("""
                 UPDATE notifications SET read_at=@read,delivery_status=@status,next_delivery_at=@next,locked_until=@locked,lease_token=@lease,

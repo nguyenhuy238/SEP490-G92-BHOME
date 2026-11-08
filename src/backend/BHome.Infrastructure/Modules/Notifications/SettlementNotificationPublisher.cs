@@ -39,7 +39,9 @@ internal sealed partial class NotificationEventPublisher
             .Where(h => supportedActions.Contains(h.Action) && !db.Set<NotificationPublication>().Any(p => p.EventKey == "move-out:" + h.Id.ToString()))
             .OrderBy(h => h.OccurredAt).ThenBy(h => h.Id).Take(25).ToArrayAsync(token);
         foreach (var change in changes)
-            count += await Publish("move-out:" + change.Id, () => SettlementAudience(change.ContractId, SettlementTitles[change.Action], token), token);
+            count += await Publish("move-out:" + change.Id, async () => (await SettlementAudience(change.ContractId, SettlementTitles[change.Action], token))
+                .Select(i => i with { EventType = change.Action == "Completed" ? "MOVE_OUT_SETTLEMENT_COMPLETED" : "MOVE_OUT_STATUS_CHANGED",
+                    Channels = change.Action == "Completed" ? ["IN_APP", "EMAIL"] : ["IN_APP", "PUSH"] }).ToArray(), token);
         // Explicit Compact24 history sources. Offline legacy regression has no deposit/refund capability.
         if (db is not Compact24DbContext) return count;
         var notices = await db.Database.SqlQuery<SettlementNotice>($"""
@@ -75,7 +77,8 @@ internal sealed partial class NotificationEventPublisher
                 "RefundCompleted" => "Giao dịch hoàn cọc đã được xác minh thủ công",
                 _ => null
             };
-            if (title is not null) count += await Publish(notice.EventKey, () => SettlementAudience(notice.ContractId, title, token), token);
+            if (title is not null) count += await Publish(notice.EventKey, async () => (await SettlementAudience(notice.ContractId, title, token))
+                .Select(i => i with { EventType = "EXCESS_PAYMENT_OR_REFUND_STATUS", Channels = notice.Action == "RefundCompleted" ? ["IN_APP", "PUSH", "EMAIL"] : ["IN_APP", "PUSH"] }).ToArray(), token);
         }
         return count;
     }
