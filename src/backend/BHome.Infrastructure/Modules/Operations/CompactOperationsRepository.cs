@@ -129,7 +129,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         {
             lockUser.Parameters.AddWithValue("id", userId); var current = await lockUser.ExecuteScalarAsync(t);
             if (current is null) throw OperationsException.Missing();
-            if ((bool)current && !input.IsActive && await HasResponsibilities(userId, DateOnly.FromDateTime(now.UtcDateTime), t))
+            if ((bool)current && !input.IsActive && await HasResponsibilities(userId, DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime), t))
                 throw OperationsException.Conflict("staff_responsibilities_unresolved");
         }
         await EnsurePhoneAvailable(userId, input.Phone, t);
@@ -678,8 +678,10 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             SELECT EXISTS(SELECT 1 FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
               WHERE (a->>'staffUserId')::uuid=@staff AND (a->>'endDate')::date>=@today)
               OR EXISTS(SELECT 1 FROM operational_tasks WHERE assigned_user_id=@staff AND
-                ((task_type='GENERAL' AND status NOT IN ('2','3')) OR
+                ((task_type IN ('GENERAL','METER_READ') AND status NOT IN ('2','3')) OR
                  (task_type='WORK_ORDER' AND status NOT IN ('Verified','Cancelled'))))
+              OR EXISTS(SELECT 1 FROM contracts WHERE move_out->'current'->>'inspectionStaffId'=@staff::text
+                AND move_out->'current'->>'inspectedAt' IS NULL AND COALESCE(move_out->'current'->>'status','0')<>'5')
             """); command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("today", today); return (bool)(await command.ExecuteScalarAsync(t))!;
     }
 
@@ -746,9 +748,16 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         (JsonSerializer.Deserialize<RecurringTaskTemplateView[]>(json, Json) ?? []).Select(x => x with { LocationId = location }).OrderBy(x => x.NextRunAt).ThenBy(x => x.Id).ToArray();
 
     private static void StaffParameters(NpgsqlCommand command, StaffQuery query)
-    { command.Parameters.AddWithValue("active", (object?)query.IsActive ?? DBNull.Value); command.Parameters.AddWithValue("search", (object?)query.Search?.Trim() ?? DBNull.Value); }
+    {
+        command.Parameters.Add(new NpgsqlParameter("active", NpgsqlDbType.Boolean) { Value = (object?)query.IsActive ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("search", NpgsqlDbType.Text) { Value = (object?)query.Search?.Trim() ?? DBNull.Value });
+    }
     private static void ResidenceParameters(NpgsqlCommand command, ResidenceQuery query, Guid? tenant)
-    { AddNullableUuid(command, "location", query.LocationId); command.Parameters.AddWithValue("status", (object?)query.Status ?? DBNull.Value); AddNullableUuid(command, "tenant", tenant); }
+    {
+        AddNullableUuid(command, "location", query.LocationId);
+        command.Parameters.Add(new NpgsqlParameter("status", NpgsqlDbType.Text) { Value = (object?)query.Status ?? DBNull.Value });
+        AddNullableUuid(command, "tenant", tenant);
+    }
     private static void OccupancyParameters(NpgsqlCommand command, OccupancyQuery query, Guid? staff, DateOnly today)
     {
         AddNullableUuid(command, "location", query.LocationId);

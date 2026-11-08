@@ -23,7 +23,7 @@ public sealed record InvoiceLineView(Guid Id, string Category, string ChargeCode
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousReading,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? ConfirmedReading,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? CalculatedAmount = null,
-    Guid? CorrectionRequestId = null);
+    Guid? CorrectionRequestId = null, string? UtilityCalculationSnapshot = null);
 public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string RoomNumber, string LocationName,
     DateOnly BillingPeriod, string Status, int Version,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Total,

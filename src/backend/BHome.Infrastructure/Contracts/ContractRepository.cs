@@ -97,8 +97,16 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
     public async Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t) =>
         await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && c.TenantUserId == tenantId).OrderBy(c => c.StartDate).Take(501).ToArrayAsync(t);
-    public async Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t) =>
-        await db.Set<DepositVerification>().Where(d => d.ContractId == contractId).SumAsync(d => (decimal?)d.Amount, t) ?? 0;
+    public async Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t)
+    {
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            return await db.Database.SqlQuery<decimal>($"""
+                SELECT COALESCE(sum(a.amount),0) AS "Value" FROM payment_allocations a
+                JOIN payments p ON p.id=a.source_payment_id
+                WHERE a.target_deposit_contract_id={contractId} AND p.status='VERIFIED'
+                """).SingleAsync(t);
+        return await db.Set<DepositVerification>().Where(d => d.ContractId == contractId).SumAsync(d => (decimal?)d.Amount, t) ?? 0;
+    }
     public Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t) =>
         db.Set<DepositVerification>().SingleOrDefaultAsync(d => d.BankTransactionReference == reference, t);
     public async Task<ResolvedPrices> ResolvePricesAsync(Guid roomId, DateOnly effectiveOn, CancellationToken t)
@@ -114,8 +122,11 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
     }
     public Task<bool> HoldingConflictAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t) =>
         db.Set<Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from &&
-            (c.Kind == ContractKind.Holding && c.Status == ContractStatus.Active ||
-             c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active), t);
+            (c.Status == ContractStatus.Active ||
+             c.Kind != ContractKind.Addendum &&
+             (c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Draft) &&
+             (c.Signatures.Any(s => s.Status != SignatureStatus.Failed) ||
+              db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0))), t);
     public Task<Contract?> MainForHoldingAsync(Guid holdingId, CancellationToken t) => db.Set<Contract>()
         .Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Room).ThenInclude(r => r.RoomType)
         .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery()

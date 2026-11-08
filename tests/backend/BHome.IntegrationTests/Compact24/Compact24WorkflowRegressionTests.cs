@@ -85,6 +85,7 @@ public sealed class Compact24InvoiceRegressionTests
     [CompactPostgresFact] public Task DraftAdjustment() => Run(t => t.ApprovedDraftCorrectionSurvivesRefreshAndFinalizationWithOriginalSourceTrace());
     [CompactPostgresFact] public Task ChangedSource() => Run(t => t.SourceChangeMakesDraftCorrectionExplicitlyPendingAndPreventsFinalization());
     [CompactPostgresFact] public Task DecisionRace() => Run(t => t.OwnerApproveRejectRacePersistsExactlyOneDecisionAndOneResult());
+    [CompactPostgresFact] public Task TieredUtilityInvoice() => Run(t => t.TieredUtilityAndQuotaAreUsedByInvoiceAndMissingQuotaBlocksFinalization());
 }
 
 [Trait("Category", "CompactPostgres")]

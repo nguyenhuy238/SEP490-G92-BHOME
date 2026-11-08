@@ -7,7 +7,7 @@ namespace BHome.Application.PropertyManagement;
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
 
-// Historical Resident records remain a conservative guard, distinct from actual current occupancy.
+// Unresolved Resident records remain a guard; residents retained only in closed Contract history are not current occupancy.
 public readonly record struct RoomObligations(bool HasResidentRecords, bool HasCurrentOccupancy,
     bool HasActiveContracts, bool HasBindingPendingContracts)
 {
