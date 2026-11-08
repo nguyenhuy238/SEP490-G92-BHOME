@@ -4,7 +4,7 @@
   "newTrainingSamples": 0,
   "independentNumericLabels": 0,
   "readableDeviceTargetMet": false,
-  "nativeResolutionAcquisition": "NOT_RUN: original download returned HTTP429; no bypass or repeated retry",
+  "nativeResolutionAcquisition": "BLOCKED_BY_DATA: original download returned HTTP429; original-resolution evaluation NOT_RUN; no bypass or repeated retry",
   "samples": [
     {
       "id": "commons_141189268",
