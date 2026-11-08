@@ -6,6 +6,10 @@ public sealed class UserNotification
     public string AudienceRole { get; set; } = "";
     public Guid? LocationId { get; set; }
     public string Category { get; set; } = "";
+    public string EventType { get; set; } = "";
+    public string Priority { get; set; } = "P1";
+    public string Source { get; set; } = "System";
+    public string[] Channels { get; set; } = [];
     public string Title { get; set; } = "";
     public string Summary { get; set; } = "";
     public string RelatedObjectType { get; set; } = "";

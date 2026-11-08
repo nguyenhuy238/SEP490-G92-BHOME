@@ -10,11 +10,14 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.IncidentMaintenance;
 
 internal sealed class IncidentNotificationDelivery(BHomePersistenceContext db, IIncidentRepository repository,
-    INotificationProvider provider, TimeProvider clock) : IBackgroundJobHandler
+    INotificationProvider provider, TimeProvider clock, BHome.Application.Notifications.INotificationEventPublisher? publisher = null,
+    Microsoft.Extensions.Options.IOptions<BHome.Application.Notifications.NotificationChannelOptions>? channels = null) : IBackgroundJobHandler
 {
     public string Name => "incident.notification";
     public async Task ExecuteAsync(JobExecution job, CancellationToken t)
     {
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext && publisher is not null && channels?.Value.Enabled == true)
+        { await publisher.PublishPendingAsync(t); return; }
         var payload = JsonSerializer.Deserialize<DeliveryPayload>(job.PayloadJson) ?? throw new InvalidOperationException("invalid_notification_job");
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"incident-delivery:" + payload.NotificationId}, 0))", t);

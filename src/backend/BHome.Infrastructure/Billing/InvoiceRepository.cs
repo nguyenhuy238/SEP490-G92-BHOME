@@ -57,8 +57,12 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         if (contracts.Length > 500) throw new InvoiceException(409, "billing_occupancy_review_required");
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();
         var links = await db.Set<Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null).ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t);
+        var linkedUsers = links.Values.Concat(contracts.Where(c => c.TenantUserId != null).Select(c => c.TenantUserId!.Value)).Distinct().ToArray();
+        var emails = await db.Users.AsNoTracking().Where(u => linkedUsers.Contains(u.Id)).Select(u => new { u.Id, u.Email }).ToArrayAsync(t);
+        var validEmails = emails.Where(u => !string.IsNullOrWhiteSpace(u.Email) && new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(u.Email)).Select(u => u.Id).ToHashSet();
         return contracts.Select(c => new BillingOccupancy(c, c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from) && links.ContainsKey(r.ResidentId))
-            .Select(r => links[r.ResidentId]).Append(c.TenantUserId ?? throw new InvoiceException(409, "active_tenant_account_required")).Distinct().ToArray())).ToArray();
+            .Select(r => links[r.ResidentId]).Append(c.TenantUserId ?? throw new InvoiceException(409, "active_tenant_account_required")).Distinct().ToArray(), c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from))
+                .All(r => links.TryGetValue(r.ResidentId, out var user) && validEmails.Contains(user)) && c.TenantUserId is { } representative && validEmails.Contains(representative))).ToArray();
     }
     public async Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t)
     {
