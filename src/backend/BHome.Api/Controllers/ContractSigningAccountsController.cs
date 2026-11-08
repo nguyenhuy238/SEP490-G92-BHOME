@@ -43,7 +43,7 @@ public sealed record GenerateSignatureInput([Required, StringLength(60, MinimumL
 // "Tài khoản ký số Viettel MySign" of the deployment, saved by the Owner over the server configuration.
 // The client secret is stored encrypted (AES-256-GCM) and only its last four characters are ever returned.
 [ApiController, Route("api/v1/digital-signing/settings/viettel"), Authorize(Roles = Roles.Owner)]
-[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(8192)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(8192), ViettelMySignEnabled]
 public sealed class ContractSigningSettingsController(SigningAccountService accounts, ISigningProvider provider) : ControllerBase
 {
     [HttpGet] public Task<ViettelSettingsView> View(CancellationToken t) => accounts.ViewAsync(t);

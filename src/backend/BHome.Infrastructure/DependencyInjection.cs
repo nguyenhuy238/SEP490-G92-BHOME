@@ -197,9 +197,17 @@ public static class DependencyInjection
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
-        services.AddScoped<BHome.Application.Contracts.IContractSigningProvider>(p => p.GetRequiredService<BHome.Application.Contracts.IContractWorkflowMode>().SimulatedSigningEnabled
-            ? p.GetRequiredService<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>()
-            : p.GetRequiredService<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>());
+        // Signing methods (OTP email / Viettel MySign / Development simulation) are chosen per signature by the router.
+        services.AddOptions<BHome.Application.Contracts.ContractSigningOptions>().Bind(configuration.GetSection(BHome.Application.Contracts.ContractSigningOptions.Section))
+            .Validate(o => o.Otp.IsValid(), "ContractSigning:Otp is outside supported bounds.").ValidateOnStart();
+        services.AddSingleton<BHome.Application.Contracts.IContractSigningMethods, BHome.Infrastructure.Contracts.ContractSigningMethods>();
+        services.AddDistributedMemoryCache();
+        services.AddSingleton<BHome.Infrastructure.Contracts.SigningSeal>();
+        services.AddSingleton<BHome.Infrastructure.Contracts.SigningOtpChallenges>();
+        services.AddScoped<BHome.Infrastructure.Contracts.SigningPartyDirectory>();
+        services.AddScoped<BHome.Infrastructure.Contracts.OtpContractSigningAdapter>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningNotifier, BHome.Infrastructure.Contracts.ContractSigningNotifier>();
+        services.AddScoped<BHome.Application.Contracts.IContractSigningProvider, BHome.Infrastructure.Contracts.ContractSigningRouter>();
         services.AddScoped<BHome.Application.Contracts.IContractWorkflowRepository, BHome.Infrastructure.Contracts.ContractWorkflowRepository>();
         services.AddScoped<BHome.Application.Contracts.IContractHandoverRepository, BHome.Infrastructure.Contracts.ContractHandoverRepository>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractPdfOptions>().Bind(configuration.GetSection(BHome.Infrastructure.Contracts.ContractPdfOptions.Section))
