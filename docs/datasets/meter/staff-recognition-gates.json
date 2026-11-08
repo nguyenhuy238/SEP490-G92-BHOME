@@ -1,0 +1,43 @@
+{
+  "startingHead": "f740ba3130c552da672ebee734ae5348259e7f4d",
+  "requirements": ["BF-05", "UC-20", "GBR-07", "UC-21", "JOB-10", "GBR-09"],
+  "traceability": "Experimental classifier/unit crops -> existing recognizer/selector/diagnostic endpoint -> real ONNX positive/invalid/unknown/fallback tests; Staff metadata and confirmation remain authoritative; no schema or billing changes.",
+  "classifier": {
+    "training": "Existing38 licensed provisional TRAIN images; historical/provisional evaluation images and source groups excluded",
+    "candidate": "One limited last-vision-block fine-tune; original architecture and tensor contract",
+    "selection": "validation only; no wrong accepted; improve correct coverage over baseline1/7 validation",
+    "test": "Existing9 are previously explored regression probes, never a new independent acceptance set"
+  },
+  "unit": {
+    "allowed": "Crop refinement and actual re-recognition; exact units only",
+    "forbidden": "Fuzzy KVA/kvVh substitution, calibration units as consumption, changing digits or OBIS code",
+    "requiredControls": [
+      "kW",
+      "kVA",
+      "V",
+      "A",
+      "Hz",
+      "m3/h",
+      "L/min",
+      "serial",
+      "timer",
+      "blank",
+      "single-digit consumption"
+    ]
+  },
+  "diagnostics": {
+    "recoverDevelopmentCases": ["105770219", "54903199"],
+    "retain": "74590",
+    "maximumInvalidReadings": 0,
+    "experimental": true
+  },
+  "staffProposal": {
+    "requiresTrustedMeterProfile": true,
+    "requiresConfirmedRegisterAndPrecisionEvidence": true,
+    "requiresRepresentativeErrorEvaluation": true,
+    "requiresStaffConfirmation": true,
+    "automaticConfirmation": false,
+    "humanReviewsAvailable": 0,
+    "defaultEnabled": false
+  }
+}

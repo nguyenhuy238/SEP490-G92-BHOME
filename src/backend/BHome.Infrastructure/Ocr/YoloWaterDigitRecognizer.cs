@@ -26,8 +26,13 @@ public sealed class YoloWaterDigitRecognizer : IDisposable
             var path = Path.Combine(directory, FileName);
             using var file = File.OpenRead(path);
             if (!Convert.ToHexString(SHA256.HashData(file)).Equals(Sha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Digit model checksum mismatch.");
-            using var config = new SessionOptions { IntraOpNumThreads = options.InferenceThreads, InterOpNumThreads = 1,
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+            using var config = new SessionOptions
+            {
+                IntraOpNumThreads = options.InferenceThreads,
+                InterOpNumThreads = 1,
+                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+                LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+            };
             var loaded = new InferenceSession(path, config);
             if (loaded.InputMetadata.Count != 1 || !loaded.InputMetadata.First().Value.Dimensions.SequenceEqual(new[] { 1, 3, 416, 416 }) ||
                 loaded.OutputMetadata.Count != 1 || !loaded.OutputMetadata.First().Value.Dimensions.SequenceEqual(new[] { 1, 16, 3549 }))

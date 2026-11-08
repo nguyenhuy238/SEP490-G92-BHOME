@@ -85,8 +85,14 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var other = await db.Set<Contract>().AnyAsync(o => o.RoomId == c.RoomId && o.Id != id && o.Status == ContractStatus.Active, t);
         // Obligation reference excludes this workflow's refund reservations/completions: reserving the
         // approved return must not invalidate its own approval. All charge/payment/inspection inputs remain bound.
-        var obligationReference = "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
-            Contract = id, Root = root.Id, root.RequiredDeposit, root.AppliedHoldingDeposit, deposits, Invoices = invoices,
+        var obligationReference = "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            Contract = id,
+            Root = root.Id,
+            root.RequiredDeposit,
+            root.AppliedHoldingDeposit,
+            deposits,
+            Invoices = invoices,
             Blockers = blockers.Where(b => b != "deposit_deduction_refund_policy_required").Distinct().Order().ToArray(),
             Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges },
             Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId }

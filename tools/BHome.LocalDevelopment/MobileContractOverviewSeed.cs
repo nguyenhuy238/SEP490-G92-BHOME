@@ -75,11 +75,23 @@ internal static class MobileContractOverviewSeed
             if (!result.Succeeded) throw new LocalTestAccountException("Không tạo được Tenant tổng hợp: " + string.Join(",", result.Errors.Select(e => e.Code)));
             var state = states[i];
             var active = state is ContractStatus.Active or ContractStatus.Superseded;
-            Add(db, 2000 + i, new Room { LocationId = location.Id, RoomTypeId = Mobile(11), RoomNumber = roomName, Capacity = 1,
-                Status = active ? RoomStatus.Occupied : RoomStatus.Available });
-            Add(db, 3000 + i, new Resident { RoomId = Id(2000 + i), TenantUserId = tenant.Id, OwnerUserId = Mobile(1),
-                DisplayLabel = $"Người thuê tổng hợp {roomName}", ResidentType = ResidentType.Representative,
-                VerificationStatus = IdentityVerificationStatus.Pending });
+            Add(db, 2000 + i, new Room
+            {
+                LocationId = location.Id,
+                RoomTypeId = Mobile(11),
+                RoomNumber = roomName,
+                Capacity = 1,
+                Status = active ? RoomStatus.Occupied : RoomStatus.Available
+            });
+            Add(db, 3000 + i, new Resident
+            {
+                RoomId = Id(2000 + i),
+                TenantUserId = tenant.Id,
+                OwnerUserId = Mobile(1),
+                DisplayLabel = $"Người thuê tổng hợp {roomName}",
+                ResidentType = ResidentType.Representative,
+                VerificationStatus = IdentityVerificationStatus.Pending
+            });
             var start = state is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Cancelled
                 ? today.AddDays(7) : today.AddMonths(-3);
             var end = i == 4 ? today.AddDays(10) : i == 5 ? today.AddDays(30) : state == ContractStatus.Terminated ? today.AddDays(-15)
@@ -87,20 +99,39 @@ internal static class MobileContractOverviewSeed
             var rent = 3000000 + i * 100000;
             Contract MakeContract(int number, ContractKind kind, ContractStatus status, DateOnly from, DateOnly to, Guid? previous = null)
             {
-                var contract = new Contract { RoomId = Id(2000 + i), OwnerSignerId = Mobile(1), TenantUserId = tenant.Id,
-                    RepresentativeResidentId = Id(3000 + i), Kind = kind, Status = status, StartDate = from, EndDate = to,
-                    MonthlyRent = rent, RequiredDeposit = status == ContractStatus.PendingActivation ? rent : 0,
+                var contract = new Contract
+                {
+                    RoomId = Id(2000 + i),
+                    OwnerSignerId = Mobile(1),
+                    TenantUserId = tenant.Id,
+                    RepresentativeResidentId = Id(3000 + i),
+                    Kind = kind,
+                    Status = status,
+                    StartDate = from,
+                    EndDate = to,
+                    MonthlyRent = rent,
+                    RequiredDeposit = status == ContractStatus.PendingActivation ? rent : 0,
                     Terms = $"DỮ LIỆU MINH HỌA TEST {roomName} – không phải hợp đồng thật.\n1. Các bên: Owner và Tenant tổng hợp trong BHOME MOBILE TEST.\n2. Phòng thuê: {roomName}; tối đa 1 người.\n3. Thời hạn: {from:dd/MM/yyyy} – {to:dd/MM/yyyy}.\n4. Tiền thuê mẫu: {rent} VND/tháng; điện, nước theo biểu phí cơ sở.\n5. Bàn giao: ghi nhận hiện trạng, chìa khóa, tài sản và chỉ số xác nhận bằng luồng thật trên ứng dụng.\n6. Gia hạn/trả phòng: gửi yêu cầu, kiểm tra và chờ Owner xử lý theo quy trình.\nTrạng thái được seed để kiểm tra UI; không chứng minh đã ký, đã trả tiền hoặc đã xác minh danh tính.",
                     SnapshotHash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"mobile-contract-overview/{number}"))),
-                    IsDevelopmentDemo = true, PreviousContractId = previous,
+                    IsDevelopmentDemo = true,
+                    PreviousContractId = previous,
                     ActivatedByUserId = status is ContractStatus.Active or ContractStatus.Superseded or ContractStatus.Terminated ? Mobile(1) : null,
                     ActivatedAt = status is ContractStatus.Active or ContractStatus.Superseded or ContractStatus.Terminated ? now.AddDays(-30) : null,
                     ActualEndDate = status == ContractStatus.Terminated ? to : null,
                     Residents = [new ContractResident { ContractId = Id(number), ResidentId = Id(3000 + i), Role = ResidentType.Representative,
-                        ResidenceFrom = from, ResidenceTo = status is ContractStatus.Terminated or ContractStatus.Superseded ? to : null }] };
+                        ResidenceFrom = from, ResidenceTo = status is ContractStatus.Terminated or ContractStatus.Superseded ? to : null }]
+                };
                 Add(db, number, contract);
-                db.SecurityAudit.Add(new SecurityAuditRecord { Id = Id(8000 + number), UserId = Mobile(1), TargetType = "Contract", TargetId = Id(number),
-                    Event = "ContractOverviewFixtureCreated", Succeeded = true, OccurredAt = now });
+                db.SecurityAudit.Add(new SecurityAuditRecord
+                {
+                    Id = Id(8000 + number),
+                    UserId = Mobile(1),
+                    TargetType = "Contract",
+                    TargetId = Id(number),
+                    Event = "ContractOverviewFixtureCreated",
+                    Succeeded = true,
+                    OccurredAt = now
+                });
                 created++;
                 return contract;
             }
@@ -109,20 +140,45 @@ internal static class MobileContractOverviewSeed
                 end.AddDays(1), end.AddYears(1), Id(4000 + i));
             if (i is 6 or 7)
             {
-                Add(db, 5000 + i, new ContractMoveOut { ContractId = Id(4000 + i), Status = i == 6 ? MoveOutStatus.Requested : MoveOutStatus.Approved,
-                    ProposedDate = today.AddDays(7), Reason = "Yêu cầu trả phòng tổng hợp để kiểm tra giao diện; không phải yêu cầu thật.", RequestedByUserId = tenant.Id,
-                    ApprovedByUserId = i == 7 ? Mobile(1) : null, ApprovedAt = i == 7 ? now : null,
-                    InspectionStaffId = i == 7 ? Mobile(2) : null, InspectionScheduledAt = i == 7 ? new DateTimeOffset(today.AddDays(2).ToDateTime(new TimeOnly(3, 0)), TimeSpan.Zero) : null });
+                Add(db, 5000 + i, new ContractMoveOut
+                {
+                    ContractId = Id(4000 + i),
+                    Status = i == 6 ? MoveOutStatus.Requested : MoveOutStatus.Approved,
+                    ProposedDate = today.AddDays(7),
+                    Reason = "Yêu cầu trả phòng tổng hợp để kiểm tra giao diện; không phải yêu cầu thật.",
+                    RequestedByUserId = tenant.Id,
+                    ApprovedByUserId = i == 7 ? Mobile(1) : null,
+                    ApprovedAt = i == 7 ? now : null,
+                    InspectionStaffId = i == 7 ? Mobile(2) : null,
+                    InspectionScheduledAt = i == 7 ? new DateTimeOffset(today.AddDays(2).ToDateTime(new TimeOnly(3, 0)), TimeSpan.Zero) : null
+                });
             }
             if (active)
                 for (var utility = 0; utility < 2; utility++)
                 {
-                    Add(db, 6000 + i * 2 + utility, new Meter { RoomId = Id(2000 + i), Code = $"OVERVIEW-{roomName}-{(utility == 0 ? "E" : "W")}",
-                        UtilityType = (UtilityType)utility, Display = MeterDisplay.Digital, DecimalPlaces = 2, InstalledOn = today.AddMonths(-4) });
-                    Add(db, 7000 + i * 2 + utility, new OperationalTask { Kind = OperationalTaskKind.MeterReading, LocationId = location.Id,
-                        MeterId = Id(6000 + i * 2 + utility), AssignedStaffUserId = Mobile(2), AssignmentId = assignment.Id, AssignedAt = now,
-                        Title = $"Ghi số ban đầu {roomName} (dữ liệu test)", ReadingDate = today, Purpose = ReadingPurpose.Initial,
-                        Status = MeterTaskStatus.Assigned, DueAt = now.AddDays(7) });
+                    Add(db, 6000 + i * 2 + utility, new Meter
+                    {
+                        RoomId = Id(2000 + i),
+                        Code = $"OVERVIEW-{roomName}-{(utility == 0 ? "E" : "W")}",
+                        UtilityType = (UtilityType)utility,
+                        Display = MeterDisplay.Digital,
+                        DecimalPlaces = 2,
+                        InstalledOn = today.AddMonths(-4)
+                    });
+                    Add(db, 7000 + i * 2 + utility, new OperationalTask
+                    {
+                        Kind = OperationalTaskKind.MeterReading,
+                        LocationId = location.Id,
+                        MeterId = Id(6000 + i * 2 + utility),
+                        AssignedStaffUserId = Mobile(2),
+                        AssignmentId = assignment.Id,
+                        AssignedAt = now,
+                        Title = $"Ghi số ban đầu {roomName} (dữ liệu test)",
+                        ReadingDate = today,
+                        Purpose = ReadingPurpose.Initial,
+                        Status = MeterTaskStatus.Assigned,
+                        DueAt = now.AddDays(7)
+                    });
                 }
             await db.SaveChangesAsync(t);
         }

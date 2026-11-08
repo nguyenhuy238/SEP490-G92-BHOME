@@ -6,12 +6,7 @@
       "image": ".tools/ocr-continued/commons_11930077.jpg",
       "sha256": "59f119b49c2d45d8763f3ad4eb8291178db22ed1d49f45acf8031a6b84cfa209",
       "category": "electricity_mechanical",
-      "readingWindow": [
-        386,
-        166,
-        820,
-        238
-      ],
+      "readingWindow": [386, 166, 820, 238],
       "expectedDigits": "12615",
       "uncertainPositions": [],
       "split": "provisional_exploratory",
@@ -25,16 +20,9 @@
       "image": ".tools/ocr-continued/commons_334307.jpg",
       "sha256": "f295f8aef7ba621193328041ff6b06e7323b96fc2405418dc749558360bf4dc2",
       "category": "electricity_mechanical",
-      "readingWindow": [
-        17,
-        13,
-        470,
-        125
-      ],
+      "readingWindow": [17, 13, 470, 125],
       "expectedDigits": null,
-      "uncertainPositions": [
-        6
-      ],
+      "uncertainPositions": [6],
       "split": "provisional_exploratory",
       "humanReviewCount": 0,
       "labelStatus": "agent_visual_before_numeric_probe",
@@ -46,16 +34,9 @@
       "image": ".tools/ocr-next-public-images-expanded/commons_38382735.jpg",
       "sha256": "b6b70684d97c758b69dcbe04c086bc11699fe73db5c7b89ffa9056338a3dd059",
       "category": "water_mechanical",
-      "readingWindow": [
-        156,
-        208,
-        350,
-        271
-      ],
+      "readingWindow": [156, 208, 350, 271],
       "expectedDigits": null,
-      "uncertainPositions": [
-        7
-      ],
+      "uncertainPositions": [7],
       "split": "provisional_exploratory",
       "humanReviewCount": 0,
       "labelStatus": "agent_visual_before_numeric_probe",

@@ -12,10 +12,7 @@
       "author": "MeterOCR",
       "changes": "Publisher-linked 200x150 preview; no image changes; no exact-reading annotation inferred",
       "sha256": "525664c38c86c7c9a0987e5fe8323baf8df6dba93deed50cedf4fc0eddbef809",
-      "dimensions": [
-        200,
-        150
-      ]
+      "dimensions": [200, 150]
     },
     {
       "id": "meterocr_0MlNSNipRwsqs9DqoiQO",
@@ -27,10 +24,7 @@
       "author": "MeterOCR",
       "changes": "Publisher-linked 200x150 preview; no image changes; no exact-reading annotation inferred",
       "sha256": "4bc0a2f66b193ae5b0a1e67b74264b96acef1bfa7128d91c053dc63e841f083e",
-      "dimensions": [
-        200,
-        150
-      ]
+      "dimensions": [200, 150]
     },
     {
       "id": "meterocr_0QOVwGDjB9WO5inVcJN0",
@@ -42,10 +36,7 @@
       "author": "MeterOCR",
       "changes": "Publisher-linked 200x150 preview; no image changes; no exact-reading annotation inferred",
       "sha256": "89840cd77ee9a95bfe47b823047ea51efbdb3862ec0de092acd66d90e80523f4",
-      "dimensions": [
-        200,
-        150
-      ]
+      "dimensions": [200, 150]
     }
   ]
 }

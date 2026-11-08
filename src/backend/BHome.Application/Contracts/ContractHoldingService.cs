@@ -59,17 +59,29 @@ public sealed partial class ContractService
             var prices = await repository.ResolvePricesAsync(input.RoomId, input.StartDate, token);
             var rent = prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")
                 ?? throw ContractException.Conflict("rent_policy_required");
+            Money(rent.Rate, false);
             var c = new Contract
             {
-                RoomId = input.RoomId, OwnerSignerId = input.OwnerSignerId, TenantUserId = input.TenantUserId,
-                RepresentativeResidentId = input.RepresentativeResidentId, Kind = ContractKind.Holding,
-                StartDate = input.StartDate, EndDate = input.EndDate, HoldingExpiryAt = input.ExpiresAt,
-                ReservedCapacity = input.ReservedCapacity ?? checked((short)input.ResidentIds.Length), MonthlyRent = rent.Rate,
-                RequiredDeposit = input.HoldingDeposit, Terms = input.Terms.Trim(), IsDevelopmentDemo = DemoEnabled
+                RoomId = input.RoomId,
+                OwnerSignerId = input.OwnerSignerId,
+                TenantUserId = input.TenantUserId,
+                RepresentativeResidentId = input.RepresentativeResidentId,
+                Kind = ContractKind.Holding,
+                StartDate = input.StartDate,
+                EndDate = input.EndDate,
+                HoldingExpiryAt = input.ExpiresAt,
+                ReservedCapacity = input.ReservedCapacity ?? checked((short)input.ResidentIds.Length),
+                // Policy rates have decimal scale, while contract VND columns use numeric(18,0).
+                // Seal the representation that survives persistence so signing can verify it.
+                MonthlyRent = decimal.Truncate(rent.Rate),
+                RequiredDeposit = decimal.Truncate(input.HoldingDeposit),
+                Terms = input.Terms.Trim(),
+                IsDevelopmentDemo = DemoEnabled
             };
             c.Residents = residents.Select(r => new ContractResident
             {
-                ContractId = c.Id, ResidentId = r.Id,
+                ContractId = c.Id,
+                ResidentId = r.Id,
                 Role = r.Id == input.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant,
                 ResidenceFrom = c.StartDate
             }).ToList();
@@ -178,10 +190,17 @@ public sealed partial class ContractService
             }
             var main = new Contract
             {
-                RoomId = holding.RoomId, OwnerSignerId = holding.OwnerSignerId, TenantUserId = holding.TenantUserId,
-                RepresentativeResidentId = holding.RepresentativeResidentId, HoldingContractId = holding.Id,
-                StartDate = holding.StartDate, EndDate = holding.EndDate, MonthlyRent = holding.MonthlyRent,
-                RequiredDeposit = input.RequiredSecurityDeposit, Terms = holding.Terms, IsDevelopmentDemo = holding.IsDevelopmentDemo
+                RoomId = holding.RoomId,
+                OwnerSignerId = holding.OwnerSignerId,
+                TenantUserId = holding.TenantUserId,
+                RepresentativeResidentId = holding.RepresentativeResidentId,
+                HoldingContractId = holding.Id,
+                StartDate = holding.StartDate,
+                EndDate = holding.EndDate,
+                MonthlyRent = holding.MonthlyRent,
+                RequiredDeposit = input.RequiredSecurityDeposit,
+                Terms = holding.Terms,
+                IsDevelopmentDemo = holding.IsDevelopmentDemo
             };
             var application = await holdings.ApplyAsync(id, main.Id, main.RoomId, RequireTenant(main), main.RequiredDeposit, token);
             if (application.HoldingContractId != id || application.RoomId != main.RoomId || application.TenantUserId != main.TenantUserId ||

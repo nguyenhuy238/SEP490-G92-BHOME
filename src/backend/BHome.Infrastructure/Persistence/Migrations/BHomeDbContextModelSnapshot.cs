@@ -1311,6 +1311,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<string[]>("Channels")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1344,11 +1348,19 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .HasMaxLength(220)
                         .HasColumnType("character varying(220)");
 
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("NextDeliveryAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
@@ -1363,6 +1375,10 @@ namespace BHome.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("SourceTaskNotificationId")
                         .HasColumnType("uuid");
@@ -1435,13 +1451,15 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("InvoiceId")
+                    b.Property<Guid?>("InvoiceId")
+                        .IsRequired()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("PaidByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("TransferId")
+                    b.Property<Guid?>("TransferId")
+                        .IsRequired()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -1510,6 +1528,12 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("OutstandingAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("PaidAmount")
+                        .HasColumnType("numeric");
 
                     b.HasKey("AllocationId");
 

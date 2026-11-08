@@ -28,8 +28,15 @@ public sealed class YoloMeterCategoryClassifierTests
         try
         {
             File.WriteAllBytes(path, content);
-            var options = new OcrOptions { VisualClassifier = new() { Enabled = true, ModelPath = path,
-                Sha256 = Convert.ToHexString(SHA256.HashData(content)) } };
+            var options = new OcrOptions
+            {
+                VisualClassifier = new()
+                {
+                    Enabled = true,
+                    ModelPath = path,
+                    Sha256 = Convert.ToHexString(SHA256.HashData(content))
+                }
+            };
             using (var classifier = new YoloMeterCategoryClassifier(options, true))
             {
                 classifier.Warmup(default);
@@ -87,9 +94,18 @@ public sealed class YoloMeterCategoryClassifierTests
         // Classification is a labelled orchestration boundary; detection/PP/
         // stage2 below use actual pinned ONNX weights, not classifier accuracy.
         var root = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
-        var options = new OcrOptions { Enabled = true, ModelDirectory = Path.Combine(root, ".tools/ocr-models"),
-            MeterDetectionMinConfidence = .7f, MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true,
-                ModelDirectory = Path.Combine(root, ".tools/meter-detection-models") } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = Path.Combine(root, ".tools/ocr-models"),
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new()
+            {
+                Enabled = true,
+                WaterDigitsEnabled = true,
+                ModelDirectory = Path.Combine(root, ".tools/meter-detection-models")
+            }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options); digits.Warmup(default);
         var classifier = new BoundaryClassifier(new("classified", OcrDocumentKind.MechanicalWater, "visual_model", .99f));
@@ -207,8 +223,15 @@ public sealed class YoloMeterCategoryClassifierTests
     [Fact]
     public void InvalidArtifactPathAndThresholdCannotCrashOrCreateAClassification()
     {
-        var options = new OcrOptions { VisualClassifier = new() { Enabled = true,
-            ModelPath = "invalid\0path.onnx", Sha256 = new('0', 64) } };
+        var options = new OcrOptions
+        {
+            VisualClassifier = new()
+            {
+                Enabled = true,
+                ModelPath = "invalid\0path.onnx",
+                Sha256 = new('0', 64)
+            }
+        };
         using var classifier = new YoloMeterCategoryClassifier(options, true);
         using var image = new Mat(100, 200, MatType.CV_8UC3, Scalar.Black);
         classifier.Warmup(default);
@@ -233,9 +256,15 @@ public sealed class YoloMeterCategoryClassifierTests
     public void ExistingRejectedThreeClassCheckpointCannotMasqueradeAsFourClasses()
     {
         var root = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
-        var options = new OcrOptions { VisualClassifier = new() { Enabled = true,
-            ModelPath = Path.Combine(root, ".tools/master-body-verified-export/body.onnx"),
-            Sha256 = "b7fc13aa09262c46ced335f31d5726c8f8369b5f8e2c4ce7ed5994f4166278af" } };
+        var options = new OcrOptions
+        {
+            VisualClassifier = new()
+            {
+                Enabled = true,
+                ModelPath = Path.Combine(root, ".tools/master-body-verified-export/body.onnx"),
+                Sha256 = "b7fc13aa09262c46ced335f31d5726c8f8369b5f8e2c4ce7ed5994f4166278af"
+            }
+        };
         using var classifier = new YoloMeterCategoryClassifier(options, true);
         using var image = new Mat(100, 200, MatType.CV_8UC3, Scalar.Black);
         var result = classifier.Classify(image, default)!;

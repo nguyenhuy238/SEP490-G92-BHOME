@@ -18,8 +18,14 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); await ReadySettlementFixture(w, false);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         using var image = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var photo = image.ImEncode(".png");
-        var proof = new ContractInspectionEvidence { ContractId = w.Contract, UploadedByUserId = w.Staff,
-            ObjectKey = "synthetic/deduction/" + Guid.NewGuid(), ContentType = "image/png", IsLinked = true };
+        var proof = new ContractInspectionEvidence
+        {
+            ContractId = w.Contract,
+            UploadedByUserId = w.Staff,
+            ObjectKey = "synthetic/deduction/" + Guid.NewGuid(),
+            ContentType = "image/png",
+            IsLinked = true
+        };
         db.Add(proof);
         var inspection = await db.Set<ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
         var snapshot = JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot)!;
@@ -87,8 +93,14 @@ public sealed partial class PaymentLedgerTests
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == plan.Id && a.Event == "DepositDeductionApproved"));
         var room = await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room);
-        var emptyRoom = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomTypeId = room.RoomTypeId,
-            RoomNumber = "SYN-OTHER", Capacity = 1, Status = BHome.Domain.PropertyManagement.RoomStatus.Available };
+        var emptyRoom = new BHome.Domain.PropertyManagement.Room
+        {
+            LocationId = w.Location,
+            RoomTypeId = room.RoomTypeId,
+            RoomNumber = "SYN-OTHER",
+            Capacity = 1,
+            Status = BHome.Domain.PropertyManagement.RoomStatus.Available
+        };
         db.Add(emptyRoom); await db.SaveChangesAsync();
         var otherRoom = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={emptyRoom.Id}"));
         Assert.Equal("0", otherRoom.VerifiedDepositReturns);

@@ -38,16 +38,31 @@ internal static class MechanicalElectricWindowStudy
                 { var result = candidate.Recognize(image, default); raw = result.Line.Text; confidence = result.Line.Confidence; }
                 else
                 { var result = baseline.InspectMeterCrop(image, mode == "baseline_direct", default); raw = string.Join(" ", result.Lines.Select(x => x.Text)); confidence = result.Lines.Count == 0 ? 0 : result.Lines.Average(x => x.Confidence); }
-                rows.Add(new { id = sample.GetProperty("id").GetString(), mode, expectedDigits = expected, raw, confidence,
-                    draftMatch = expected is null ? (bool?)null : raw == expected, warnings, observedMs = timer.Elapsed.TotalMilliseconds });
+                rows.Add(new
+                {
+                    id = sample.GetProperty("id").GetString(),
+                    mode,
+                    expectedDigits = expected,
+                    raw,
+                    confidence,
+                    draftMatch = expected is null ? (bool?)null : raw == expected,
+                    warnings,
+                    observedMs = timer.Elapsed.TotalMilliseconds
+                });
             }
         }
         var modelHashes = new Dictionary<string, string>();
         foreach (var (name, path) in new[] { ("pp", Path.Combine(models, "recognition.onnx")),
             ("english", Path.Combine(english, "inference.onnx")), ("stage2", Path.Combine(yolo, "water-stage2.onnx")) })
             modelHashes[name] = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path)));
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { scope = "provisional_oracle_development_no_billing_claim",
-            runtimeEnabled = false, modelHashes, manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifest))), rows }, OcrEvaluation.Json));
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            scope = "provisional_oracle_development_no_billing_claim",
+            runtimeEnabled = false,
+            modelHashes,
+            manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifest))),
+            rows
+        }, OcrEvaluation.Json));
         Console.WriteLine($"Mechanical electricity oracle study: {rows.Count} observations; no independent accuracy claim");
         return 0;
     }

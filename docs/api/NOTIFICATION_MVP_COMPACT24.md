@@ -18,16 +18,16 @@ không tạo bảng mới, không chạy EF migrations legacy trên Compact24.
 
 ## Dữ liệu, transaction và chống trùng
 
-| Bảng hiện có | Nội dung bổ sung |
-| --- | --- |
-| notifications / INBOX | Một row/user/event; state có eventType, priority, source, channels; nội dung bất biến |
-| notifications / OUTBOX | Intents/publication hiện có; thêm recordType=ChannelDelivery, một row/inbox/channel |
-| notifications.delivery_history | ChannelClaim/ChannelAttempt, lease và kết quả từng lần gửi; không lưu email/push token/raw reset token |
-| notifications / AUDIT | Nguồn bảo mật đã commit và audit hiện có; không xuất qua inbox |
-| operational_tasks / SYSTEM_JOB | recordType=Announcement: bản nháp, sender, audience, snapshot gửi; recordType=PushDevice: user, platform, token, lastSeen |
-| locations.operating_settings | notificationPolicy; thay đổi có actor/time/history và tăng version |
-| users | Reset/invitation grant hash/expiry/consumed hiện có; Identity hash/security stamp |
-| invoices/contract_residents/residents | Recipient theo kỳ, liên kết tài khoản/email và trạng thái tạm trú hiện có |
+| Bảng hiện có                          | Nội dung bổ sung                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| notifications / INBOX                 | Một row/user/event; state có eventType, priority, source, channels; nội dung bất biến                                     |
+| notifications / OUTBOX                | Intents/publication hiện có; thêm recordType=ChannelDelivery, một row/inbox/channel                                       |
+| notifications.delivery_history        | ChannelClaim/ChannelAttempt, lease và kết quả từng lần gửi; không lưu email/push token/raw reset token                    |
+| notifications / AUDIT                 | Nguồn bảo mật đã commit và audit hiện có; không xuất qua inbox                                                            |
+| operational_tasks / SYSTEM_JOB        | recordType=Announcement: bản nháp, sender, audience, snapshot gửi; recordType=PushDevice: user, platform, token, lastSeen |
+| locations.operating_settings          | notificationPolicy; thay đổi có actor/time/history và tăng version                                                        |
+| users                                 | Reset/invitation grant hash/expiry/consumed hiện có; Identity hash/security stamp                                         |
+| invoices/contract_residents/residents | Recipient theo kỳ, liên kết tài khoản/email và trạng thái tạm trú hiện có                                                 |
 
 `ux_notification_inbox` chống trùng user+event. Publication khóa transaction cho event;
 đọc nguồn audit/domain đã commit cùng nghiệp vụ. PaymentConfirmedEvent giữ snapshot paid/outstanding
@@ -50,18 +50,18 @@ Không đổi trạng thái nghiệp vụ từ notification.
 
 ## API inbox và kênh gửi
 
-| Method / route | Quyền và hành vi |
-| --- | --- |
-| GET /api/v1/notifications | Chính user; page/pageSize/category/unread hiện có |
-| GET /api/v1/notifications/{id} | Chính recipient; 404 với bản ghi người khác/AUDIT/OUTBOX |
-| GET /api/v1/notifications/unread-count | Chính user |
-| POST hoặc PATCH /api/v1/notifications/{id}/read | Chính recipient; giữ POST để tương thích |
-| POST /api/v1/notifications/read-all | Chính user |
-| GET /api/v1/notifications/{id}/target | Kiểm lại quyền business object; 404 khi hết quyền |
-| POST /api/v1/notifications/devices | Chính user; `{pushToken,platform}` với Android/iOS/Web |
-| DELETE /api/v1/notifications/devices/{id} | Chính user; xóa token khỏi payload, vô hiệu thiết bị |
-| GET /api/v1/notifications/{id}/deliveries | Chính recipient; chỉ channel/status/attempt/nextRetryAt |
-| GET /api/v1/notifications/channel-status | Owner; mode, enable flags, tổng hợp số delivery/channel/status |
+| Method / route                                  | Quyền và hành vi                                               |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| GET /api/v1/notifications                       | Chính user; page/pageSize/category/unread hiện có              |
+| GET /api/v1/notifications/{id}                  | Chính recipient; 404 với bản ghi người khác/AUDIT/OUTBOX       |
+| GET /api/v1/notifications/unread-count          | Chính user                                                     |
+| POST hoặc PATCH /api/v1/notifications/{id}/read | Chính recipient; giữ POST để tương thích                       |
+| POST /api/v1/notifications/read-all             | Chính user                                                     |
+| GET /api/v1/notifications/{id}/target           | Kiểm lại quyền business object; 404 khi hết quyền              |
+| POST /api/v1/notifications/devices              | Chính user; `{pushToken,platform}` với Android/iOS/Web         |
+| DELETE /api/v1/notifications/devices/{id}       | Chính user; xóa token khỏi payload, vô hiệu thiết bị           |
+| GET /api/v1/notifications/{id}/deliveries       | Chính recipient; chỉ channel/status/attempt/nextRetryAt        |
+| GET /api/v1/notifications/channel-status        | Owner; mode, enable flags, tổng hợp số delivery/channel/status |
 
 Notification DTO giữ các field cũ và thêm `eventType`, `priority`, `source`, `isRead`, `action`.
 Category nhận thêm Account/Incident/Announcement/Residence/Other. Action là gợi ý điều hướng,

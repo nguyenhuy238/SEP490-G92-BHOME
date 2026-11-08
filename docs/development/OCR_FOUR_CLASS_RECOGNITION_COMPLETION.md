@@ -89,12 +89,12 @@ Chọn threshold trên validation, freeze rồi chấm15 historical test. Baseli
 cũng được chạy lại trên đúng15 ảnh. [Outputs/confusion/per-class metrics](ocr-four-clip-results.json).
 
 | Metric trên cùng15 test:9 meter+6 negative | App baseline | CLIP candidate | Difference |
-| --- | ---: | ---: | ---: |
-| Correct accepted classifications |0|2|+2|
-| Incorrect accepted classifications |0|0|0|
-| Unknown/fallback classification |15|13|−2|
-| Correct accepted /positive meters |0/9|2/9|+2/9|
-| Non-meter false acceptance |0/6|0/6|0|
+| ------------------------------------------ | -----------: | -------------: | ---------: |
+| Correct accepted classifications           |            0 |              2 |         +2 |
+| Incorrect accepted classifications         |            0 |              0 |          0 |
+| Unknown/fallback classification            |           15 |             13 |         −2 |
+| Correct accepted /positive meters          |          0/9 |            2/9 |       +2/9 |
+| Non-meter false acceptance                 |          0/6 |            0/6 |          0 |
 
 Candidate accepted hai electricity_digital; recall test: electricity_digital2/3,
 các lớp electricity_mechanical0/3, water_mechanical0/2, water_digital0/1. Accepted
@@ -138,9 +138,9 @@ Paddle server model mới chính thức Apache-2.0, revision
 So cùng frozen water crops với PP hiện tại và English mobile:
 
 | Component, cùng75 predicted crops có63 complete labels | PP hiện tại direct | English mobile | Server |
-| --- | ---: | ---: | ---: |
-| Exact digit strings |11|34|33|
-| Incorrect raw numeric strings |41|19|23|
+| ------------------------------------------------------ | -----------------: | -------------: | -----: |
+| Exact digit strings                                    |                 11 |             34 |     33 |
+| Incorrect raw numeric strings                          |                 41 |             19 |     23 |
 
 Oracle100 crops có69 complete labels: PP direct13 exact/37 wrong, English36/25,
 server39/19. Đây là recognition component comparison, không proposal sau parser/
@@ -154,16 +154,15 @@ Trên4 LCD historical test crops cố định (3 digit labels+1 blank):
 Các output dưới đây là parser baseline hoặc strict-numeric candidate outputs ở
 offline probe, không phải API proposals hoặc billing readings đã qua toàn bộ gates.
 
-| Reader | Exact /3 readable labels | Incorrect numeric outputs /4 | Fallback /4 |
-| --- | ---: | ---: | ---: |
-| PP hiện tại direct, parser baseline đo lại |0|2|2|
-| English direct, strict numeric output |2|2|0|
-| Server direct, strict numeric output |2|2|0|
-| New CRNN/CTC |0|0|4|
+| Reader                                     | Exact /3 readable labels | Incorrect numeric outputs /4 | Fallback /4 |
+| ------------------------------------------ | -----------------------: | ---------------------------: | ----------: |
+| PP hiện tại direct, parser baseline đo lại |                        0 |                            2 |           2 |
+| English direct, strict numeric output      |                        2 |                            2 |           0 |
+| Server direct, strict numeric output       |                        2 |                            2 |           0 |
+| New CRNN/CTC                               |                        0 |                            0 |           4 |
 
 Hai recognizer mới đọc đúng004046 và21594 ở crop điện. Nhưng cả hai hallucinate
-88888 trên segment outlines của LCD chưa hoạt động, và đọc sai chuỗi nước
-000880578. Server trả00088058: không tự bổ sung digit. Digit labels không xác minh
+88888 trên segment outlines của LCD chưa hoạt động, và đọc sai chuỗi nước 000880578. Server trả00088058: không tự bổ sung digit. Digit labels không xác minh
 decimal hoặc billing register;21594 vẫn register unknown. Hai correct positives
 không bù được hai wrong numeric outputs. **REJECTED activation** cho digital readers.
 12 Kaggle draft crops vẫn chỉ4/12 matches cho mỗi model, không báo error rate hoặc
@@ -192,23 +191,23 @@ specialized reader integration và independent exact billing accuracy bốn lo�
 
 [Verification evidence và log hashes](ocr-four-verification.json):
 
-| Check thực sự chạy lượt này | Result |
-| --- | --- |
-| Backend solution Release build |PASS,0 warnings/errors|
-| Application full suite |325 PASS,0 skip|
-| Domain |106 PASS,0 skip|
-| OCR Integration, real local ONNX assets |125 PASS,0 skip|
-| PostgreSQL/ONNX Staff correction/confirmation/replay+invoice filters |7 PASS,0 skip|
-| OcrSmoke Release build |PASS,0 warnings/errors|
-| Water Stage2 native/.NET parity |10/10 PASS|
-| English Python/.NET parity |4/4 PASS|
-| New display native/ORT và .NET parity |2/2 mỗi phép đo PASS, không cộng như independent accuracy|
-| New CRNN native/ORT |6/6 same strings; không phải recognition quality pass|
-| Mobile Vitest |56 suites,576 tests PASS|
-| Mobile TypeScript / ESLint |PASS / PASS|
-| Python tooling tests, gồm review integrity |40 PASS|
-| Node dataset validators |29 PASS|
-| Physical camera / real MinIO |NOT RUN|
+| Check thực sự chạy lượt này                                          | Result                                                    |
+| -------------------------------------------------------------------- | --------------------------------------------------------- |
+| Backend solution Release build                                       | PASS,0 warnings/errors                                    |
+| Application full suite                                               | 325 PASS,0 skip                                           |
+| Domain                                                               | 106 PASS,0 skip                                           |
+| OCR Integration, real local ONNX assets                              | 125 PASS,0 skip                                           |
+| PostgreSQL/ONNX Staff correction/confirmation/replay+invoice filters | 7 PASS,0 skip                                             |
+| OcrSmoke Release build                                               | PASS,0 warnings/errors                                    |
+| Water Stage2 native/.NET parity                                      | 10/10 PASS                                                |
+| English Python/.NET parity                                           | 4/4 PASS                                                  |
+| New display native/ORT và .NET parity                                | 2/2 mỗi phép đo PASS, không cộng như independent accuracy |
+| New CRNN native/ORT                                                  | 6/6 same strings; không phải recognition quality pass     |
+| Mobile Vitest                                                        | 56 suites,576 tests PASS                                  |
+| Mobile TypeScript / ESLint                                           | PASS / PASS                                               |
+| Python tooling tests, gồm review integrity                           | 40 PASS                                                   |
+| Node dataset validators                                              | 29 PASS                                                   |
+| Physical camera / real MinIO                                         | NOT RUN                                                   |
 
 PostgreSQL16 isolated loopback55493 chỉ synthetic data, đã dừng sau test. Bảy
 workflow tests chạy backend/ONNX/DB thật nhưng storage là explicit in-memory
@@ -240,12 +239,12 @@ mới; không overwrite frozen runs. Không commit model weights hoặc local pa
 
 ## Kết quả theo loại và blockers
 
-| Meter category | Visual classification, accepted trên9 meter test | Display detection | Exact reading | Validation status |
-| --- | --- | --- | --- | --- |
-| Mechanical Electricity |CLIP0/3|Chưa có candidate mới được xác minh|NOT MEASURED mới|BLOCKED diverse GT; chưa hoàn tất|
-| Digital Electricity |CLIP2/3|New detector1/3, chỉ blank;0/2 readable|English/server oracle crops2/2; có blank false output|EVALUATED, REJECTED activation|
-| Mechanical Water |CLIP0/2|Historical51/52; không benchmark lại mới|Historical full10/33; new component numbers ở bảng trên|Baseline giữ nguyên; chưa có accepted improvement|
-| Digital Water |CLIP0/1|New detector0/1|English/server0/1 oracle crop|BLOCKED representative data, REJECTED reader|
+| Meter category         | Visual classification, accepted trên9 meter test | Display detection                        | Exact reading                                           | Validation status                                 |
+| ---------------------- | ------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| Mechanical Electricity | CLIP0/3                                          | Chưa có candidate mới được xác minh      | NOT MEASURED mới                                        | BLOCKED diverse GT; chưa hoàn tất                 |
+| Digital Electricity    | CLIP2/3                                          | New detector1/3, chỉ blank;0/2 readable  | English/server oracle crops2/2; có blank false output   | EVALUATED, REJECTED activation                    |
+| Mechanical Water       | CLIP0/2                                          | Historical51/52; không benchmark lại mới | Historical full10/33; new component numbers ở bảng trên | Baseline giữ nguyên; chưa có accepted improvement |
+| Digital Water          | CLIP0/1                                          | New detector0/1                          | English/server0/1 oracle crop                           | BLOCKED representative data, REJECTED reader      |
 
 Các mẫu số khác nhau được giữ riêng. Không có independent95% classification hoặc
 90% billing reading result: cả hai **NOT MEASURED**. Cần human-reviewed groups/body
@@ -255,15 +254,15 @@ activation. Review package có thể thu nhận pilot nhỏ; không sửa GT the
 
 ## Chronological local commits và final state
 
-| Commit | Short English description |
-| --- | --- |
-|76c17a2|Restore backend and mobile verification without changing business logic|
-|49cd694|Prepare blinded independent review and separate dataset views|
-|31e5e9a|Evaluate a real visual CLIP four-category baseline|
-|f954115|Train source-separated LCD region detection and verify .NET parity|
-|4ffc6a6|Train/export CRNN and record failed positive-reading gate|
-|ae38bd0|Compare pinned Paddle models on frozen water/LCD crops|
-|Commit chứa report này|Record measured capabilities, regressions and activation blockers|
+| Commit                 | Short English description                                               |
+| ---------------------- | ----------------------------------------------------------------------- |
+| 76c17a2                | Restore backend and mobile verification without changing business logic |
+| 49cd694                | Prepare blinded independent review and separate dataset views           |
+| 31e5e9a                | Evaluate a real visual CLIP four-category baseline                      |
+| f954115                | Train source-separated LCD region detection and verify .NET parity      |
+| 4ffc6a6                | Train/export CRNN and record failed positive-reading gate               |
+| ae38bd0                | Compare pinned Paddle models on frozen water/LCD crops                  |
+| Commit chứa report này | Record measured capabilities, regressions and activation blockers       |
 
 Final HEAD đầy đủ và working tree sau reporting commit ghi tại
 `.tools/ocr-four-final-state.json`; chronological hashes trong `.tools/ocr-next-git-history.md`.

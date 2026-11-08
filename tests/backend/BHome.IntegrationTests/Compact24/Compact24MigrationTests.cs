@@ -167,8 +167,14 @@ public sealed class Compact24MigrationTests
             var asset = new Asset { LocationId = location.Id, Name = "Synthetic asset", Category = "Equipment", Condition = "Good", CommonArea = "Lobby" };
             pair.Source.AddRange(location, asset, new PropertyChange
             {
-                ActorId = account.Id, LocationId = location.Id, TargetId = asset.Id, TargetType = "Asset", Action = "Created",
-                Reason = "Synthetic import", After = "{\"condition\":\"Good\"}", OccurredAt = DateTimeOffset.UtcNow
+                ActorId = account.Id,
+                LocationId = location.Id,
+                TargetId = asset.Id,
+                TargetType = "Asset",
+                Action = "Created",
+                Reason = "Synthetic import",
+                After = "{\"condition\":\"Good\"}",
+                OccurredAt = DateTimeOffset.UtcNow
             });
             await pair.Source.SaveChangesAsync();
         }

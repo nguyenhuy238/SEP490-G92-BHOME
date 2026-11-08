@@ -5,10 +5,7 @@
   "status": "EXPERIMENTAL",
   "selection": {
     "selectedOnNewValidation": {
-      "frozen_hierarchy": [
-        0.85,
-        0.65
-      ],
+      "frozen_hierarchy": [0.85, 0.65],
       "physical_prompts": null,
       "letterbox_physical": null,
       "tta_physical": null,
@@ -2791,7 +2788,7 @@
       "utility": {
         "electricity": 0.7929183840751648,
         "water": 0.2070803940296173,
-        "not_meter": 1.2486602827266324e-06
+        "not_meter": 1.2486602827266324e-6
       },
       "technology": {
         "mechanical": 0.9330219626426697,
@@ -3012,7 +3009,7 @@
       "utility": {
         "electricity": 0.9954620003700256,
         "water": 0.00452239578589797,
-        "not_meter": 1.5556399375782348e-05
+        "not_meter": 1.5556399375782348e-5
       },
       "technology": {
         "mechanical": 0.9626984000205994,
@@ -3029,7 +3026,7 @@
       "utility": {
         "electricity": 0.9962192177772522,
         "water": 0.0037806984037160873,
-        "not_meter": 1.4856769325888308e-07
+        "not_meter": 1.4856769325888308e-7
       },
       "technology": {
         "mechanical": 0.978346049785614,
@@ -3131,7 +3128,7 @@
       "utility": {
         "electricity": 0.9788627624511719,
         "water": 0.021137183532118797,
-        "not_meter": 1.6158433879809309e-07
+        "not_meter": 1.6158433879809309e-7
       },
       "technology": {
         "mechanical": 0.5089292526245117,
@@ -3250,7 +3247,7 @@
       "utility": {
         "electricity": 0.9822942018508911,
         "water": 0.0177055262029171,
-        "not_meter": 2.4439040657853184e-07
+        "not_meter": 2.4439040657853184e-7
       },
       "technology": {
         "mechanical": 0.40741443634033203,
@@ -3386,7 +3383,7 @@
       "utility": {
         "electricity": 0.9720342755317688,
         "water": 0.027963031083345413,
-        "not_meter": 2.6148411507165292e-06
+        "not_meter": 2.6148411507165292e-6
       },
       "technology": {
         "mechanical": 0.5617257356643677,
@@ -3488,7 +3485,7 @@
       "utility": {
         "electricity": 0.43068039417266846,
         "water": 0.5693195462226868,
-        "not_meter": 7.556342751513512e-08
+        "not_meter": 7.556342751513512e-8
       },
       "technology": {
         "mechanical": 0.8652819395065308,
@@ -3743,7 +3740,7 @@
       "utility": {
         "electricity": 0.06859535723924637,
         "water": 0.9313886761665344,
-        "not_meter": 1.599059578438755e-05
+        "not_meter": 1.599059578438755e-5
       },
       "technology": {
         "mechanical": 0.9842685461044312,
@@ -4219,7 +4216,7 @@
       "utility": {
         "electricity": 0.9274882078170776,
         "water": 0.07250363379716873,
-        "not_meter": 8.043180969252717e-06
+        "not_meter": 8.043180969252717e-6
       },
       "technology": {
         "mechanical": 0.8989447355270386,

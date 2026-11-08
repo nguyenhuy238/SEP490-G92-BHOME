@@ -2,9 +2,7 @@
   "schemaVersion": 1,
   "purpose": "Public-fixture failure audit; no training or threshold selection",
   "independentAcceptance": false,
-  "inputTransform": [
-    "mobile-1600-jpeg85"
-  ],
+  "inputTransform": ["mobile-1600-jpeg85"],
   "groundTruthLimitations": [
     "Historical author mechanical-water corpus; physical-meter/site independence is unknown.",
     "Supplied diagnostic records contain no decimal/register ground truth or body/display coordinate comparisons. Source OBB labels exist but crop accuracy is not measured by this join.",
@@ -135,11 +133,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -156,9 +150,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00845927",
@@ -194,9 +186,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -242,9 +232,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -273,36 +261,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00266188",
-        "ppWarnings": [
-          "low_confidence"
-        ],
+        "ppWarnings": ["low_confidence"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -314,9 +291,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -327,9 +302,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -343,10 +316,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -369,36 +339,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "002561818",
-        "ppWarnings": [
-          "low_confidence"
-        ],
+        "ppWarnings": ["low_confidence"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -410,9 +369,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -423,9 +380,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -439,10 +394,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -465,11 +417,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -486,18 +434,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00246084",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -526,9 +470,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": 8,
             "detectedLength": null
           }
@@ -541,9 +483,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -582,34 +522,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00256088",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -621,9 +552,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -634,9 +563,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -650,10 +577,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -676,36 +600,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "reading_region_not_detected",
-            "reading_not_recognized"
-          ]
+          "warnings": ["reading_region_not_detected", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "reading_region_not_detected"
-          ]
+          "warnings": ["reading_region_not_detected"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "reading_region_not_detected"
-        ],
+        "sceneWarnings": ["reading_region_not_detected"],
         "imageWarnings": [],
         "ppLines": 0,
         "ppValue": null,
-        "ppWarnings": [
-          "reading_not_recognized"
-        ],
+        "ppWarnings": ["reading_not_recognized"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "no_unique_window"
-        ]
+        "stage2Warnings": ["no_unique_window"]
       },
       "observations": [
         {
@@ -717,9 +630,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "reading_region_not_detected"
-            ]
+            "warnings": ["reading_region_not_detected"]
           }
         },
         {
@@ -730,9 +641,7 @@
           "assessment": "rejection_not_localization_accuracy",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "reading_region_not_detected"
-            ]
+            "warnings": ["reading_region_not_detected"]
           }
         },
         {
@@ -743,9 +652,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "no_unique_window"
-            ],
+            "warnings": ["no_unique_window"],
             "expectedLength": 8,
             "detectedLength": null
           }
@@ -758,13 +665,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "reading_not_recognized"
-            ],
-            "runtimeWarnings": [
-              "reading_region_not_detected",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["reading_not_recognized"],
+            "runtimeWarnings": ["reading_region_not_detected", "reading_not_recognized"]
           }
         }
       ]
@@ -787,36 +689,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -828,9 +719,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -841,9 +730,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -856,13 +743,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["ambiguous_reading"],
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -885,37 +767,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 6,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -927,9 +797,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -940,9 +808,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -955,14 +821,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -985,10 +845,7 @@
           "proposed": true,
           "exactDigits": true,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizers_agree"
-          ]
+          "warnings": ["meter_category_unverified", "recognizers_agree"]
         },
         "automatic": {
           "proposed": true,
@@ -1004,9 +861,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00431469",
@@ -1024,9 +879,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         }
       ]
@@ -1049,25 +902,18 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "0000603",
@@ -1086,9 +932,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -1115,10 +959,7 @@
             "ppValue": "0000603",
             "stage2Value": "00006036",
             "numericStringsDisagree": true,
-            "warnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "warnings": ["unclear_digit", "reading_not_recognized"]
           }
         },
         {
@@ -1130,10 +971,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -1177,15 +1015,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00171113",
         "stage2Confidence": 0.9381922,
         "stage2Warnings": []
@@ -1217,9 +1051,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -1230,9 +1062,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -1243,9 +1073,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -1273,11 +1101,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -1294,18 +1118,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "0021609",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -1334,9 +1154,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": 7,
             "detectedLength": null
           }
@@ -1349,9 +1167,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -1390,37 +1206,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 4,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -1432,9 +1236,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -1445,9 +1247,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -1460,14 +1260,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -1490,38 +1284,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "blur_or_low_detail",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["blur_or_low_detail", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "blur_or_low_detail",
-            "unclear_digit"
-          ]
+          "warnings": ["blur_or_low_detail", "unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
-        "imageWarnings": [
-          "blur_or_low_detail"
-        ],
+        "sceneWarnings": ["unclear_digit"],
+        "imageWarnings": ["blur_or_low_detail"],
         "ppLines": 1,
         "ppValue": "00768324",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -1533,10 +1314,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "blur_or_low_detail",
-              "unclear_digit"
-            ]
+            "warnings": ["blur_or_low_detail", "unclear_digit"]
           }
         },
         {
@@ -1547,9 +1325,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": 7,
             "detectedLength": null
           }
@@ -1563,11 +1339,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "blur_or_low_detail",
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["blur_or_low_detail", "unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -1611,15 +1383,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00768328",
         "stage2Confidence": 0.9290555,
         "stage2Warnings": []
@@ -1651,9 +1419,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -1664,9 +1430,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -1677,9 +1441,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -1707,11 +1469,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -1728,9 +1486,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "0768320",
@@ -1766,9 +1522,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -1814,9 +1568,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -1845,10 +1597,7 @@
           "proposed": true,
           "exactDigits": true,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizers_agree"
-          ]
+          "warnings": ["meter_category_unverified", "recognizers_agree"]
         },
         "automatic": {
           "proposed": false,
@@ -1865,9 +1614,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00768328",
@@ -1903,9 +1650,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         }
       ]
@@ -1949,15 +1694,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00768328",
         "stage2Confidence": 0.9290555,
         "stage2Warnings": []
@@ -1989,9 +1730,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -2002,9 +1741,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -2015,9 +1752,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -2045,36 +1780,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "060232054",
-        "ppWarnings": [
-          "low_confidence"
-        ],
+        "ppWarnings": ["low_confidence"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -2086,9 +1810,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -2099,9 +1821,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -2115,10 +1835,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -2163,18 +1880,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
-        "imageWarnings": [
-          "blur_or_low_detail"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
+        "imageWarnings": ["blur_or_low_detail"],
         "ppLines": 3,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": "00244805",
         "stage2Confidence": 0.81621903,
         "stage2Warnings": []
@@ -2206,9 +1916,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -2238,10 +1946,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "blur_or_low_detail",
               "meter_category_unverified",
@@ -2259,13 +1964,8 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "blur_or_low_detail",
               "meter_category_unverified",
@@ -2318,16 +2018,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 12,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": "00244805",
         "stage2Confidence": 0.9325596,
         "stage2Warnings": []
@@ -2360,9 +2055,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -2393,10 +2086,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -2415,13 +2105,8 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -2451,11 +2136,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -2472,9 +2153,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "002295019",
@@ -2510,9 +2189,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -2558,9 +2235,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -2589,11 +2264,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -2610,15 +2281,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "307297599",
-        "ppWarnings": [
-          "low_confidence"
-        ],
+        "ppWarnings": ["low_confidence"],
         "stage2Value": "00429509",
         "stage2Confidence": 0.91606,
         "stage2Warnings": []
@@ -2650,9 +2317,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -2698,12 +2363,8 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
-            "ppWarnings": [
-              "low_confidence"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
+            "ppWarnings": ["low_confidence"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "recognizer_conflict",
@@ -2731,36 +2392,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -2772,9 +2422,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -2785,9 +2433,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -2800,13 +2446,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["ambiguous_reading"],
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -2829,34 +2470,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 4,
         "ppValue": "399",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -2868,9 +2500,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -2881,9 +2511,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -2897,10 +2525,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -2923,11 +2548,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -2944,20 +2565,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 4,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -2986,9 +2601,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": 5,
             "detectedLength": null
           }
@@ -3001,9 +2614,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3014,9 +2625,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "unclear_digit",
@@ -3044,11 +2653,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -3065,9 +2670,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "002367841",
@@ -3103,9 +2706,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3151,9 +2752,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -3182,11 +2781,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -3203,9 +2798,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "02332831",
@@ -3241,9 +2834,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3289,9 +2880,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -3342,20 +2931,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
-        "imageWarnings": [
-          "blur_or_low_detail"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
+        "imageWarnings": ["blur_or_low_detail"],
         "ppLines": 1,
         "ppValue": "0420.561",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -3384,9 +2967,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -3399,9 +2980,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3462,15 +3041,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00379355",
         "stage2Confidence": 0.8667208,
         "stage2Warnings": []
@@ -3502,9 +3077,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3515,9 +3088,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3528,9 +3099,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -3558,36 +3127,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -3599,9 +3157,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -3612,9 +3168,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -3627,13 +3181,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["ambiguous_reading"],
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -3656,11 +3205,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -3677,20 +3222,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -3719,9 +3258,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": 8,
             "detectedLength": null
           }
@@ -3734,9 +3271,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3747,9 +3282,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "unclear_digit",
@@ -3800,16 +3333,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 10,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": "00380146",
         "stage2Confidence": 0.9062655,
         "stage2Warnings": []
@@ -3841,9 +3369,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -3874,10 +3400,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -3907,11 +3430,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -3927,9 +3446,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00339039",
@@ -3964,9 +3481,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4012,9 +3527,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -4043,11 +3556,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -4064,9 +3573,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "10445923",
@@ -4102,9 +3609,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4161,11 +3666,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -4182,9 +3683,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00845927",
@@ -4220,9 +3719,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4268,9 +3765,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -4299,11 +3794,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -4320,9 +3811,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "0815924",
@@ -4371,9 +3860,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4452,20 +3939,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
-        "imageWarnings": [
-          "blur_or_low_detail"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
+        "imageWarnings": ["blur_or_low_detail"],
         "ppLines": 1,
         "ppValue": "00393544",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "digit_low_confidence"
-        ]
+        "stage2Warnings": ["digit_low_confidence"]
       },
       "observations": [
         {
@@ -4494,9 +3975,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "digit_low_confidence"
-            ],
+            "warnings": ["digit_low_confidence"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -4509,9 +3988,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4551,10 +4028,7 @@
           "proposed": true,
           "exactDigits": true,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizers_agree"
-          ]
+          "warnings": ["meter_category_unverified", "recognizers_agree"]
         },
         "automatic": {
           "proposed": false,
@@ -4571,9 +4045,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "002105",
@@ -4609,9 +4081,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         }
       ]
@@ -4634,36 +4104,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "reading_not_recognized"
-        ],
+        "ppWarnings": ["reading_not_recognized"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -4675,9 +4134,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -4688,9 +4145,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -4703,13 +4158,8 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "reading_not_recognized"
-            ],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "ppWarnings": ["reading_not_recognized"],
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -4753,15 +4203,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00371",
         "stage2Confidence": 0.8684623,
         "stage2Warnings": []
@@ -4793,9 +4239,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4806,9 +4250,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4819,9 +4261,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -4870,15 +4310,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00371",
         "stage2Confidence": 0.93314236,
         "stage2Warnings": []
@@ -4910,9 +4346,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4923,9 +4357,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -4936,9 +4368,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -4966,34 +4396,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "0041",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -5005,9 +4426,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -5018,9 +4437,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -5034,10 +4451,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -5060,11 +4474,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -5081,20 +4491,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "60341174",
-        "ppWarnings": [
-          "low_confidence"
-        ],
+        "ppWarnings": ["low_confidence"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -5123,9 +4527,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -5138,9 +4540,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5179,11 +4579,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "recognizer_conflict",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "recognizer_conflict", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -5200,9 +4596,7 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "0055599",
@@ -5238,9 +4632,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5286,9 +4678,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
             "ppWarnings": [],
             "runtimeWarnings": [
               "meter_category_unverified",
@@ -5317,34 +4707,25 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "unclear_digit"
-          ]
+          "warnings": ["unclear_digit"]
         }
       },
       "stageEvidence": {
         "sceneAllowed": false,
-        "sceneWarnings": [
-          "unclear_digit"
-        ],
+        "sceneWarnings": ["unclear_digit"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": "00777540",
         "ppWarnings": [],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -5356,9 +4737,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "classificationStatus": "ambiguous",
-            "warnings": [
-              "unclear_digit"
-            ]
+            "warnings": ["unclear_digit"]
           }
         },
         {
@@ -5369,9 +4748,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -5385,10 +4762,7 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "ppWarnings": [],
-            "runtimeWarnings": [
-              "unclear_digit",
-              "reading_not_recognized"
-            ]
+            "runtimeWarnings": ["unclear_digit", "reading_not_recognized"]
           }
         }
       ]
@@ -5432,15 +4806,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": "00400",
         "stage2Confidence": 0.9042835,
         "stage2Warnings": []
@@ -5472,9 +4842,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5485,9 +4853,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5498,9 +4864,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "stage2_only_review",
@@ -5552,16 +4916,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 9,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": "0587956",
         "stage2Confidence": 0.9427922,
         "stage2Warnings": []
@@ -5594,9 +4953,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5627,10 +4984,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -5649,13 +5003,8 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -5708,16 +5057,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 6,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": "0587957",
         "stage2Confidence": 0.92474335,
         "stage2Warnings": []
@@ -5749,9 +5093,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5782,10 +5124,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -5804,13 +5143,8 @@
           "rootCauseConfirmed": false,
           "evidence": {
             "sceneAllowed": true,
-            "sceneWarnings": [
-              "meter_category_unverified"
-            ],
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "sceneWarnings": ["meter_category_unverified"],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -5840,11 +5174,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -5861,21 +5191,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 5,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -5904,9 +5227,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": 7,
             "detectedLength": null
           }
@@ -5919,9 +5240,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -5932,10 +5251,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "unclear_digit",
@@ -5986,16 +5302,11 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 12,
         "ppValue": null,
-        "ppWarnings": [
-          "multiple_reading_regions",
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
         "stage2Value": "00130437",
         "stage2Confidence": 0.9159362,
         "stage2Warnings": []
@@ -6027,9 +5338,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -6060,10 +5369,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "multiple_reading_regions",
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["multiple_reading_regions", "ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "multiple_reading_regions",
@@ -6093,11 +5399,7 @@
           "proposed": false,
           "exactDigits": false,
           "incorrectOnFullDigitLabels": false,
-          "warnings": [
-            "meter_category_unverified",
-            "unclear_digit",
-            "reading_not_recognized"
-          ]
+          "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"]
         },
         "automatic": {
           "proposed": false,
@@ -6114,20 +5416,14 @@
       },
       "stageEvidence": {
         "sceneAllowed": true,
-        "sceneWarnings": [
-          "meter_category_unverified"
-        ],
+        "sceneWarnings": ["meter_category_unverified"],
         "imageWarnings": [],
         "ppLines": 1,
         "ppValue": null,
-        "ppWarnings": [
-          "ambiguous_reading"
-        ],
+        "ppWarnings": ["ambiguous_reading"],
         "stage2Value": null,
         "stage2Confidence": null,
-        "stage2Warnings": [
-          "unclear_digit"
-        ]
+        "stage2Warnings": ["unclear_digit"]
       },
       "observations": [
         {
@@ -6156,9 +5452,7 @@
           "assessment": "sequence_symptom",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "unclear_digit"
-            ],
+            "warnings": ["unclear_digit"],
             "expectedLength": null,
             "detectedLength": null
           }
@@ -6171,9 +5465,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "warnings": [
-              "decimal_separator_unverified"
-            ]
+            "warnings": ["decimal_separator_unverified"]
           }
         },
         {
@@ -6184,9 +5476,7 @@
           "assessment": "observed_rejection",
           "rootCauseConfirmed": false,
           "evidence": {
-            "ppWarnings": [
-              "ambiguous_reading"
-            ],
+            "ppWarnings": ["ambiguous_reading"],
             "runtimeWarnings": [
               "meter_category_unverified",
               "unclear_digit",

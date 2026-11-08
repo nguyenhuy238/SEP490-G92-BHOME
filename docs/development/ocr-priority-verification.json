@@ -4,13 +4,7 @@
   "branch": "member/QHuy",
   "implementationHead": "f061811",
   "status": "partial_not_production_ready",
-  "traceability": [
-    "BF-05",
-    "UC-20",
-    "UC-21",
-    "GBR-01/02/07",
-    "JOB-09/10"
-  ],
+  "traceability": ["BF-05", "UC-20", "UC-21", "GBR-01/02/07", "JOB-09/10"],
   "acceptedRuntimeChange": "Server metadata validated before image consumption; unresolved profiles, unsupported precision and invalid previous baseline return explicit review without choosing another category. Confirmation and financial rules unchanged.",
   "waterFrozenHistoricalBaseline": {
     "typed": {

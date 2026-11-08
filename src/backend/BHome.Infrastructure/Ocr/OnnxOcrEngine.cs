@@ -9,7 +9,7 @@ using OpenCvSharp;
 namespace BHome.Infrastructure.Ocr;
 
 // One detector + recognizer per process. No network, file writes or image logging.
-public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
+public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
     public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2";
     private readonly OcrOptions options;
@@ -20,15 +20,18 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
     private readonly IMeterSceneDetector? meterDetector;
     private readonly IImageCategoryClassifier? categoryClassifier;
     private readonly YoloWaterDigitRecognizer? waterDigits;
+    private readonly ExperimentalMeterRecognizer? experimentalMeter;
 
     public OnnxOcrEngine(OcrOptions options, IImagePreprocessor preprocessor, IMeterSceneDetector? meterDetector = null,
-        IImageCategoryClassifier? categoryClassifier = null, YoloWaterDigitRecognizer? waterDigits = null)
+        IImageCategoryClassifier? categoryClassifier = null, YoloWaterDigitRecognizer? waterDigits = null,
+        ExperimentalMeterRecognizer? experimentalMeter = null)
     {
         this.options = options;
         this.preprocessor = preprocessor;
         this.meterDetector = meterDetector;
         this.categoryClassifier = categoryClassifier;
         this.waterDigits = waterDigits;
+        this.experimentalMeter = experimentalMeter;
         VerifyFile("detection.onnx", "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1");
         VerifyFile("recognition.onnx", "767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12");
         VerifyFile("charset.txt", "5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448");
@@ -374,9 +377,9 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
             .ThenBy(line => line.Bounds!.X).ToArray(), Version, warnings);
     }
 
-    private List<RotatedRect> Detect(Mat image, RunOptions run, CancellationToken token)
+    private List<RotatedRect> Detect(Mat image, RunOptions run, CancellationToken token, int maximumEdge = 960)
     {
-        var ratio = Math.Min(1d, 960d / Math.Max(image.Width, image.Height));
+        var ratio = Math.Min(1d, (double)maximumEdge / Math.Max(image.Width, image.Height));
         var width = Math.Max(32, (int)Math.Round(image.Width * ratio / 32) * 32);
         var height = Math.Max(32, (int)Math.Round(image.Height * ratio / 32) * 32);
         using var resized = new Mat();
@@ -411,12 +414,18 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
         return boxes.OrderBy(b => Math.Round(b.Center.Y / 12)).ThenBy(b => b.Center.X).ToList();
     }
 
-    internal static Mat Crop(Mat source, RotatedRect region)
+    internal static Mat Crop(Mat source, RotatedRect region, int? recognitionHeight = null)
     {
         // Order corners TL/TR/BR/BL, correct local text-line perspective/rotation.
         var src = OcrImageGeometry.Corners(region);
         var width = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[1]), src[2].DistanceTo(src[3])));
         var height = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[3]), src[1].DistanceTo(src[2])));
+        if (recognitionHeight is { } target)
+        {
+            // Small unit labels otherwise undergo perspective sampling followed
+            // by another resize in the CTC adapter, eroding segmented strokes.
+            width = Math.Max(2, (int)Math.Ceiling((double)width * target / height)); height = target;
+        }
         Point2f[] dst = [new(0, 0), new(width - 1, 0), new(width - 1, height - 1), new(0, height - 1)];
         using var transform = Cv2.GetPerspectiveTransform(src, dst);
         var result = new Mat();
@@ -432,6 +441,30 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IDisposable
         using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
         using var registration = token.Register(() => run.Terminate = true);
         return direct ? new([ReadLine(crop, run, true)], Version, []) : ReadPage(crop, Detect(crop, run, token), null, run, token);
+    }
+
+    internal IReadOnlyList<RotatedRect> InspectTextRegions(Mat image, int maximumEdge, CancellationToken token)
+    {
+        using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+        using var registration = token.Register(() => run.Terminate = true);
+        return Detect(image, run, token, maximumEdge);
+    }
+
+    public Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeterAsync(ReadOnlyMemory<byte> image, CancellationToken token)
+        => AnalyzeExperimentalMeter(image, null, token);
+
+    public Task<ExperimentalMeterOcrResult> AnalyzeAssignedMeterAsync(ReadOnlyMemory<byte> image, OcrDocumentKind trustedKind, CancellationToken token)
+        => AnalyzeExperimentalMeter(image, trustedKind, token);
+
+    private Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeter(ReadOnlyMemory<byte> image, OcrDocumentKind? trustedKind, CancellationToken token)
+    {
+        if (experimentalMeter is null) return Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable"));
+        try
+        {
+            using var prepared = preprocessor.PrepareUnclassified(image);
+            return Task.FromResult(experimentalMeter.Recognize(prepared.Image, this, token, trustedKind));
+        }
+        catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
     }
 
     private OcrLine ReadLine(Mat crop, RunOptions run, bool wideLine = false, int tileDepth = 0)

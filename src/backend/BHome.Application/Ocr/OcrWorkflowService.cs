@@ -18,7 +18,8 @@ public interface IOcrWorkflowResources
 public sealed class OcrAccessException : Exception;
 public sealed class OcrWorkflowStateException : Exception;
 
-public sealed class OcrWorkflowService(IOcrWorkflowResources resources, ResourceAccess access, IOcrService ocr)
+public sealed class OcrWorkflowService(IOcrWorkflowResources resources, ResourceAccess access, IOcrService ocr,
+    IExperimentalMeterOcrService? experimental = null)
 {
     public async Task<OcrProposal> IdentityAsync(Guid residentId, OcrDocumentKind side, Stream input, CancellationToken token)
     {
@@ -37,9 +38,7 @@ public sealed class OcrWorkflowService(IOcrWorkflowResources resources, Resource
             throw new OcrWorkflowStateException();
         // Missing/invalid server metadata must not silently choose a digital or
         // electricity reader. Do not consume the image for an unsupported task.
-        var metadataWarning = resource.Kind is null || !Enum.IsDefined(resource.Kind.Value) ? "meter_profile_unavailable" :
-            resource.DecimalPlaces is < 0 or > 4 ? "invalid_meter_precision" :
-            resource.PreviousConfirmedValue is < 0 ? "invalid_previous_reading" : null;
+        var metadataWarning = MeterMetadataWarning(resource);
         if (metadataWarning is not null)
         {
             var fallback = new OcrProposal(new Dictionary<string, string>(), "metadata-validation-v1")
@@ -58,6 +57,29 @@ public sealed class OcrWorkflowService(IOcrWorkflowResources resources, Resource
         await resources.RecordMeterProposalAsync(taskId, proposal, token);
         return proposal;
     }
+
+    // Read-only Development diagnostics: same resource/role/Location checks as
+    // the Staff task workflow, but no proposal persistence or confirmation.
+    public async Task<ExperimentalMeterOcrResult> ExperimentalMeterAsync(Guid taskId, Stream input, CancellationToken token)
+    {
+        var resource = await resources.FindMeterTaskAsync(taskId, token);
+        await AuthorizeAsync(resource, [Roles.Staff], token);
+        if (resource!.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack) throw new OcrWorkflowStateException();
+        var warning = MeterMetadataWarning(resource);
+        if (warning is not null) return ExperimentalMeterOcrResult.Unavailable(warning);
+        if (experimental is null) return ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable");
+        var result = await experimental.ExtractAssignedMeterAsync(input, resource.Kind!.Value, token);
+        return result with
+        {
+            Warnings = [..result.Warnings,"trusted_meter_profile",
+            resource.DecimalPlaces is null?"meter_precision_unavailable":"trusted_meter_precision_available"]
+        };
+    }
+
+    private static string? MeterMetadataWarning(OcrWorkflowResource resource) =>
+        resource.Kind is null || !Enum.IsDefined(resource.Kind.Value) ? "meter_profile_unavailable" :
+        resource.DecimalPlaces is < 0 or > 4 ? "invalid_meter_precision" :
+        resource.PreviousConfirmedValue is < 0 ? "invalid_previous_reading" : null;
 
     private async Task AuthorizeAsync(OcrWorkflowResource? resource, string[] roles, CancellationToken token)
     {

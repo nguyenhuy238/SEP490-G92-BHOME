@@ -29,38 +29,38 @@ public sealed class FinancialReportService(IFinancialReportRepository repository
     internal static string Number(decimal value) => value.ToString("0.############################", CultureInfo.InvariantCulture);
     private void Owner()
     {
-        if (user.UserId is not { } id || id == Guid.Empty) throw new FinanceException(401,"authentication_required");
-        if (!user.IsInRole(Roles.Owner)) throw new FinanceException(403,"finance_owner_required");
+        if (user.UserId is not { } id || id == Guid.Empty) throw new FinanceException(401, "authentication_required");
+        if (!user.IsInRole(Roles.Owner)) throw new FinanceException(403, "finance_owner_required");
     }
     public async Task<FinancialReport> ReadAsync(ReportFilter filter, CancellationToken token)
     {
         Owner();
         if (filter.From == default || filter.To == default || filter.To < filter.From || filter.To.Year >= 9999 ||
             filter.LocationId == Guid.Empty || filter.RoomId == Guid.Empty)
-            throw new FinanceException(400,"invalid_finance_filter");
-        var basis = await repository.ReadAsync(filter,token);
+            throw new FinanceException(400, "invalid_finance_filter");
+        var basis = await repository.ReadAsync(filter, token);
         return Calculate(filter, basis, clock.GetUtcNow());
     }
     public static FinancialReport Calculate(ReportFilter filter, ReportBasis basis, DateTimeOffset now)
     {
-        FinanceTotals Totals(FinanceBasis row) => new(Number(row.Issued),Number(row.Adjustments),Number(row.Collected),Number(row.Operating),
-            Number(row.Issued+row.Adjustments-row.Operating),Number(row.Debt),Number(row.Investment),
-            basis.HasUnclassifiedRefunds ? null : Number(row.Collected-row.Operating),row.Rooms,row.Occupied);
-        var values=basis.Locations;
-        var total=new FinanceBasis(Guid.Empty,"",values.Sum(v=>v.Issued),values.Sum(v=>v.Adjustments),values.Sum(v=>v.Collected),
-            values.Sum(v=>v.Operating),values.Sum(v=>v.Debt),values.Sum(v=>v.Investment),values.Sum(v=>v.CumulativeCollected),
-            values.Sum(v=>v.CumulativeOperating),values.Sum(v=>v.Rooms),values.Sum(v=>v.Occupied));
-        var recovered=total.CumulativeCollected-total.CumulativeOperating;
-        var remaining=Math.Max(0,total.Investment-recovered);
-        var fullMonths=filter.From.Day==1 && filter.To.Day==DateTime.DaysInMonth(filter.To.Year,filter.To.Month);
-        var months=(filter.To.Year-filter.From.Year)*12+filter.To.Month-filter.From.Month+1;
-        var monthly=(total.Collected-total.Operating)/months;
-        var reason=basis.HasUnclassifiedRefunds ? "refund_classification_required" : total.Investment<=0 ? "initial_investment_required" :
-            !fullMonths ? "full_month_baseline_required" : remaining>0 && monthly<=0 ? "positive_cash_flow_required" : null;
-        var capital=new CapitalRecovery(Number(total.Investment),basis.HasUnclassifiedRefunds ? null : Number(recovered),
-            basis.HasUnclassifiedRefunds ? null : Number(remaining),basis.HasUnclassifiedRefunds || total.Investment<=0 ? null : Number(recovered/total.Investment*100),
-            reason is not null ? null : Number(remaining==0 ? 0 : remaining/monthly),reason);
-        return new(filter,now,Totals(total),values.Select(v=>new LocationFinance(v.LocationId,v.LocationName,Totals(v))).ToArray(),capital,basis.HasUnclassifiedRefunds,basis.HistoricalOccupancy,
-            basis.VerifiedDepositReturns is {} returned ? Number(returned) : null);
+        FinanceTotals Totals(FinanceBasis row) => new(Number(row.Issued), Number(row.Adjustments), Number(row.Collected), Number(row.Operating),
+            Number(row.Issued + row.Adjustments - row.Operating), Number(row.Debt), Number(row.Investment),
+            basis.HasUnclassifiedRefunds ? null : Number(row.Collected - row.Operating), row.Rooms, row.Occupied);
+        var values = basis.Locations;
+        var total = new FinanceBasis(Guid.Empty, "", values.Sum(v => v.Issued), values.Sum(v => v.Adjustments), values.Sum(v => v.Collected),
+            values.Sum(v => v.Operating), values.Sum(v => v.Debt), values.Sum(v => v.Investment), values.Sum(v => v.CumulativeCollected),
+            values.Sum(v => v.CumulativeOperating), values.Sum(v => v.Rooms), values.Sum(v => v.Occupied));
+        var recovered = total.CumulativeCollected - total.CumulativeOperating;
+        var remaining = Math.Max(0, total.Investment - recovered);
+        var fullMonths = filter.From.Day == 1 && filter.To.Day == DateTime.DaysInMonth(filter.To.Year, filter.To.Month);
+        var months = (filter.To.Year - filter.From.Year) * 12 + filter.To.Month - filter.From.Month + 1;
+        var monthly = (total.Collected - total.Operating) / months;
+        var reason = basis.HasUnclassifiedRefunds ? "refund_classification_required" : total.Investment <= 0 ? "initial_investment_required" :
+            !fullMonths ? "full_month_baseline_required" : remaining > 0 && monthly <= 0 ? "positive_cash_flow_required" : null;
+        var capital = new CapitalRecovery(Number(total.Investment), basis.HasUnclassifiedRefunds ? null : Number(recovered),
+            basis.HasUnclassifiedRefunds ? null : Number(remaining), basis.HasUnclassifiedRefunds || total.Investment <= 0 ? null : Number(recovered / total.Investment * 100),
+            reason is not null ? null : Number(remaining == 0 ? 0 : remaining / monthly), reason);
+        return new(filter, now, Totals(total), values.Select(v => new LocationFinance(v.LocationId, v.LocationName, Totals(v))).ToArray(), capital, basis.HasUnclassifiedRefunds, basis.HistoricalOccupancy,
+            basis.VerifiedDepositReturns is { } returned ? Number(returned) : null);
     }
 }

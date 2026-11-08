@@ -72,7 +72,8 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             join invoice in db.Set<Invoice>().AsNoTracking() on person.RoomId equals invoice.RoomId
             where invoice.Id == allocation.InvoiceId && person.TenantUserId == payer &&
                 person.VerificationStatus == IdentityVerificationStatus.Verified && invoice.Recipients.Any(r => r.TenantUserId == payer)
-            orderby person.Id select new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+            orderby person.Id
+            select new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         return new(Math.Max(0, excess), payment.IsDevelopmentDemo, people, requests);
     }
     public Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken t) => db.Database.SqlQuery<bool>($"""
@@ -100,8 +101,15 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                   external_refund_reference={row.ExternalReference},execution_evidence_key={row.EvidenceKey},history={json}::jsonb
                 WHERE id={row.Id}
                 """, t);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, TargetId = row.Id, TargetType = "Refund", Event = action,
-            Succeeded = true, OccurredAt = now });
+        db.SecurityAudit.Add(new SecurityAuditRecord
+        {
+            UserId = actor,
+            TargetId = row.Id,
+            TargetType = "Refund",
+            Event = action,
+            Succeeded = true,
+            OccurredAt = now
+        });
         await db.SaveChangesAsync(t);
     }
 }

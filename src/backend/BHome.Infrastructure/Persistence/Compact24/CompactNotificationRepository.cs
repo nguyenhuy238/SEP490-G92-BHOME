@@ -63,8 +63,8 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
             """, scope, token);
         command.Parameters.AddWithValue("id", id);
         await using var reader = await command.ExecuteReaderAsync(token);
-        return await reader.ReadAsync(token) ? new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetGuid(5),
-            reader.GetFieldValue<DateTimeOffset>(6),reader.IsDBNull(7)?null:reader.GetFieldValue<DateTimeOffset>(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.GetString(11)) : null;
+        return await reader.ReadAsync(token) ? new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetGuid(5),
+            reader.GetFieldValue<DateTimeOffset>(6), reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7), reader.GetString(8), reader.GetString(9), reader.GetString(10), reader.GetString(11)) : null;
     }
     public async Task ReadAsync(NotificationScope scope, Guid? id, DateTimeOffset now, CancellationToken token)
     {

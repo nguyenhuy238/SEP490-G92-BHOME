@@ -216,6 +216,8 @@ public static class DependencyInjection
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
         services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
         services.AddSingleton<YoloWaterDigitRecognizer>();
+        services.AddSingleton(provider => new ExperimentalVisualMeterClassifier(provider.GetRequiredService<OcrOptions>(), provider.GetRequiredService<IHostEnvironment>().IsDevelopment()));
+        services.AddSingleton(provider => new ExperimentalMeterRecognizer(provider.GetRequiredService<OcrOptions>(), provider.GetRequiredService<ExperimentalVisualMeterClassifier>(), provider.GetRequiredService<IHostEnvironment>().IsDevelopment()));
         services.AddSingleton<IImageCategoryClassifier>(provider => new YoloMeterCategoryClassifier(
             provider.GetRequiredService<OcrOptions>(), provider.GetRequiredService<IHostEnvironment>().IsDevelopment()));
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
@@ -223,6 +225,7 @@ public static class DependencyInjection
         services.AddSingleton<LocalOcrService>();
         services.AddSingleton<IOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
+        services.AddSingleton<IExperimentalMeterOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         services.AddHostedService<OcrWarmup>();
         services.AddScoped<IOcrWorkflowResources, CaptureWorkflowResources>();
         services.AddScoped<OcrWorkflowService>();

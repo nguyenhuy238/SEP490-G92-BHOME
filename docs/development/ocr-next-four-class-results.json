@@ -67,17 +67,8 @@
     "unsupportedClasses": [],
     "weightsSha256": "57366ec4d8f477c812635b9644ef1e58c805e8adb63adec454c3996d03904593",
     "onnxSha256": "c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7",
-    "input": [
-      1,
-      3,
-      416,
-      416
-    ],
-    "output": [
-      1,
-      8,
-      3549
-    ],
+    "input": [1, 3, 416, 416],
+    "output": [1, 8, 3549],
     "preprocessing": "BGR->RGB/255, centered letterbox114, bilinear, actual rounded left/top",
     "decode": "cxcywh pixels + per-class scores; no objectness; class-aware greedy NMS IoU .45",
     "nativeOnnxParity": [
@@ -1567,9 +1558,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 59.7838
       },
       {
@@ -1580,9 +1569,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 32.4688
       },
       {
@@ -1593,9 +1580,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 47.1136
       },
       {
@@ -1606,9 +1591,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 33.5318
       },
       {
@@ -1619,9 +1602,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 32.4257
       },
       {
@@ -1632,9 +1613,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.4892
       },
       {
@@ -1645,9 +1624,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.9422
       },
       {
@@ -1658,9 +1635,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.3751
       },
       {
@@ -1671,9 +1646,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.709
       },
       {
@@ -1684,9 +1657,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.175
       },
       {
@@ -1697,9 +1668,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.0059
       },
       {
@@ -1710,9 +1679,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 27.8486
       },
       {
@@ -1723,9 +1690,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.0432
       },
       {
@@ -1736,9 +1701,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.9315
       },
       {
@@ -1749,9 +1712,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 31.2005
       },
       {
@@ -1762,9 +1723,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 32.703
       },
       {
@@ -1775,9 +1734,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.2682
       },
       {
@@ -1788,9 +1745,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.5706
       },
       {
@@ -1801,9 +1756,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 41.73
       },
       {
@@ -1814,9 +1767,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.2076
       },
       {
@@ -1827,9 +1778,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.7498
       },
       {
@@ -1840,9 +1789,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.4757
       },
       {
@@ -1853,9 +1800,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.154
       },
       {
@@ -1866,9 +1811,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.3196
       },
       {
@@ -1879,9 +1822,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 29.3157
       },
       {
@@ -1892,9 +1833,7 @@
         "predicted": "unknown",
         "confidence": null,
         "candidates": [],
-        "warnings": [
-          "classification_insufficient_evidence"
-        ],
+        "warnings": ["classification_insufficient_evidence"],
         "elapsedMs": 28.611
       }
     ],
@@ -1911,17 +1850,8 @@
   "datasetAuditSha256": "06dab0326c3868b3f7db5e306d50004908f7c319d306f403d16060ac32f10e7e",
   "dotnetParity": {
     "passed": true,
-    "inputShape": [
-      1,
-      3,
-      416,
-      416
-    ],
-    "outputShape": [
-      1,
-      8,
-      3549
-    ],
+    "inputShape": [1, 3, 416, 416],
+    "outputShape": [1, 8, 3549],
     "classes": [
       "electricity_mechanical",
       "electricity_digital",
