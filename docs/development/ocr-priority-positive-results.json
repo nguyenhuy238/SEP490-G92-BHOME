@@ -35,10 +35,7 @@
           "expectedMultiMeterRejection": false,
           "unsafeMultiMeterProposal": false,
           "fallback": true,
-          "warnings": [
-            "reading_region_not_detected",
-            "reading_not_recognized"
-          ],
+          "warnings": ["reading_region_not_detected", "reading_not_recognized"],
           "elapsedMs": 223
         },
         {
@@ -48,9 +45,7 @@
           "classificationCorrect": false,
           "classificationWrong": false,
           "proposal": false,
-          "warnings": [
-            "reading_region_not_detected"
-          ],
+          "warnings": ["reading_region_not_detected"],
           "elapsedMs": 3357,
           "expectedMultiMeterRejection": false,
           "rejectedMultiMeter": false
@@ -63,9 +58,7 @@
           "expectedMultiMeterRejection": false,
           "unsafeMultiMeterProposal": false,
           "fallback": true,
-          "warnings": [
-            "ambiguous_reading"
-          ],
+          "warnings": ["ambiguous_reading"],
           "elapsedMs": 81
         },
         {
@@ -76,9 +69,7 @@
           "expectedMultiMeterRejection": false,
           "unsafeMultiMeterProposal": false,
           "fallback": true,
-          "warnings": [
-            "ambiguous_reading"
-          ],
+          "warnings": ["ambiguous_reading"],
           "elapsedMs": 60
         },
         {
@@ -87,9 +78,7 @@
           "exactDigits": false,
           "incorrectDigits": false,
           "fallback": true,
-          "warnings": [
-            "unclear_digit"
-          ],
+          "warnings": ["unclear_digit"],
           "elapsedMs": 98
         }
       ]
@@ -133,9 +122,7 @@
           "classificationCorrect": false,
           "classificationWrong": false,
           "proposal": false,
-          "warnings": [
-            "ocr_timeout"
-          ],
+          "warnings": ["ocr_timeout"],
           "elapsedMs": 8018,
           "expectedMultiMeterRejection": true,
           "rejectedMultiMeter": true
@@ -148,10 +135,7 @@
           "expectedMultiMeterRejection": false,
           "unsafeMultiMeterProposal": false,
           "fallback": true,
-          "warnings": [
-            "multiple_reading_regions",
-            "ambiguous_reading"
-          ],
+          "warnings": ["multiple_reading_regions", "ambiguous_reading"],
           "elapsedMs": 1218
         },
         {
@@ -162,9 +146,7 @@
           "expectedMultiMeterRejection": false,
           "unsafeMultiMeterProposal": false,
           "fallback": true,
-          "warnings": [
-            "ambiguous_reading"
-          ],
+          "warnings": ["ambiguous_reading"],
           "elapsedMs": 89
         }
       ]

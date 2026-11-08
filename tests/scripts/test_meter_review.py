@@ -13,6 +13,19 @@ from PIL import Image
 
 
 class ReviewTests(unittest.TestCase):
+    def test_wrong_units_are_recorded_without_becoming_billing_ground_truth(self):
+        for unit in ['kVA','kW','V','A','Hz','imp/kWh','m3/h','L/min','h','other']:
+            self.setUp()
+            for doc in (self.first,self.second):
+                doc['rows'][0].update(unit=unit,register='other',readabilityState='wrong_register')
+            result=reconcile(self.package,self.first,self.second)
+            self.assertEqual([],result['views']['C_recognition'])
+            self.assertEqual(1,len(result['views']['D_negative_controls']))
+            self.assertFalse(result['independentAcceptanceEstablished'])
+            for doc in (self.first,self.second):
+                doc['rows'][0].update(readabilityState='readable_consumption',register='total_energy',decimalPlaces=0)
+            recognition=reconcile(self.package,self.first,self.second)['views']['C_recognition']
+            self.assertFalse(recognition[0]['billingMetadataDeclared'])
     def setUp(self):
         self.package={'sourceGroup':'synthetic_source','samples':[{'id':'synthetic_001','sourceSha256':'a'*64}]}
         row={'id':'synthetic_001','sourceSha256':'a'*64,'category':'electricity_digital','physicalMeterGroup':None,

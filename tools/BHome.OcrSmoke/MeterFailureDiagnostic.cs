@@ -15,8 +15,13 @@ internal static class MeterFailureDiagnostic
     {
         Directory.CreateDirectory(output);
         var manifest = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(manifestPath))!;
-        var options = new OcrOptions { Enabled = true, ModelDirectory = models, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = models,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
@@ -54,10 +59,16 @@ internal static class MeterFailureDiagnostic
             {
                 var timer = Stopwatch.StartNew();
                 var actual = await service.ExtractAsync(input, OcrDocumentKind.MechanicalWater, default);
-                modes.Add(new { mode = "A_full_pipeline", value = actual.ProposedFields.GetValueOrDefault("reading"), actual.IsFallback, actual.Warnings,
+                modes.Add(new
+                {
+                    mode = "A_full_pipeline",
+                    value = actual.ProposedFields.GetValueOrDefault("reading"),
+                    actual.IsFallback,
+                    actual.Warnings,
                     exact = fullLabels && actual.ProposedFields.GetValueOrDefault("reading") == expected,
                     falseProposal = fullLabels && actual.ProposedFields.TryGetValue("reading", out var actualValue) && actualValue != expected,
-                    elapsedMs = timer.ElapsedMilliseconds });
+                    elapsedMs = timer.ElapsedMilliseconds
+                });
             }
             if (selection.Crop is { } rect && selection.CanRecognize)
             {
@@ -69,25 +80,47 @@ internal static class MeterFailureDiagnostic
                 using var oracle = Warp(prepared.Image, gtWindows[0]);
                 modes.Add(Inspect(oracle, "oracle_window", name, engine, digits, prepared.Warnings, output));
             }
-            rows.Add(new { imageId = name, sourceSha256 = manifest[name], dataset = "pinned_author_water",
-                physicalMeterGroup = (string?)null, physicalMeterGroupVerified = false,
-                expectedCategory = "water_mechanical", categorySource = "publisher_water_corpus_not_four_class_validation",
-                expectedDigits = fullLabels ? expected : null, partialAnnotatedDigits = fullLabels ? null : expected,
-                readability = "not_independently_reviewed", unknownDigitAnnotations = labels.Count(l => l.ClassId == 12),
-                decimalPlaces = (int?)null, billingRegister = "not_annotated", classification = "not_run_trusted_profile_path",
-                width = prepared.Image.Width, height = prepared.Image.Height, stage1ElapsedMs = sceneMs,
-                stage1Available = scene.IsAvailable, meters = scene.Meters.Select(m => new { bounds = Rectangle(m.Bounds), m.Confidence }),
-                sceneWarnings = scene.Warnings, selection.CanRecognize, selectionWarnings = selection.Warnings,
+            rows.Add(new
+            {
+                imageId = name,
+                sourceSha256 = manifest[name],
+                dataset = "pinned_author_water",
+                physicalMeterGroup = (string?)null,
+                physicalMeterGroupVerified = false,
+                expectedCategory = "water_mechanical",
+                categorySource = "publisher_water_corpus_not_four_class_validation",
+                expectedDigits = fullLabels ? expected : null,
+                partialAnnotatedDigits = fullLabels ? null : expected,
+                readability = "not_independently_reviewed",
+                unknownDigitAnnotations = labels.Count(l => l.ClassId == 12),
+                decimalPlaces = (int?)null,
+                billingRegister = "not_annotated",
+                classification = "not_run_trusted_profile_path",
+                width = prepared.Image.Width,
+                height = prepared.Image.Height,
+                stage1ElapsedMs = sceneMs,
+                stage1Available = scene.IsAvailable,
+                meters = scene.Meters.Select(m => new { bounds = Rectangle(m.Bounds), m.Confidence }),
+                sceneWarnings = scene.Warnings,
+                selection.CanRecognize,
+                selectionWarnings = selection.Warnings,
                 predictedWindows = windows.Select((w, i) => new { points = Points(predicted[i]), w.Confidence }),
-                groundTruthWindows = gtWindows.Select(Points), bestWindowIoU = bestIoU,
+                groundTruthWindows = gtWindows.Select(Points),
+                bestWindowIoU = bestIoU,
                 localizedAtIoU50 = gtWindows.Length == 1 && predicted.Length == 1 && bestIoU >= .5,
-                qualityWarnings = prepared.Warnings, modes });
+                qualityWarnings = prepared.Warnings,
+                modes
+            });
             Array.Clear(bytes);
             Console.WriteLine($"Diagnosed public fixture {rows.Count}");
         }
-        await File.WriteAllTextAsync(Path.Combine(output, "diagnostic-public-only.json"), JsonSerializer.Serialize(new {
-            engine = OnnxOcrEngine.Version, manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifestPath))),
-            thresholdSelectionPerformed = false, oracleIsProductionPrediction = false, rows,
+        await File.WriteAllTextAsync(Path.Combine(output, "diagnostic-public-only.json"), JsonSerializer.Serialize(new
+        {
+            engine = OnnxOcrEngine.Version,
+            manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifestPath))),
+            thresholdSelectionPerformed = false,
+            oracleIsProductionPrediction = false,
+            rows,
             limitations = new[] { "Publisher polygons/digit labels; no independent human review of every label.",
                 "u is incomplete ground truth, not proof the image is unreadable.", "No verified decimal/register or physical-meter grouping.",
                 "B uses recognizers on the annotated crop; it is not localization or end-to-end accuracy." }
@@ -112,18 +145,32 @@ internal static class MeterFailureDiagnostic
         using var gray = new Mat(); using var laplace = new Mat();
         Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY); Cv2.Laplacian(gray, laplace, MatType.CV_64F);
         Cv2.MeanStdDev(laplace, out _, out var deviation);
-        return new { mode, cropFile = filename, width = crop.Width, height = crop.Height,
-            cropLaplacianVariance = deviation.Val0 * deviation.Val0, warnings,
-            ppRaw = pp.Lines.Select(l => new { l.Text, l.Confidence, l.Bounds }), ppWarnings = pp.Warnings,
-            ppNumericCandidate = parsed.ProposedFields.GetValueOrDefault("reading"), parserWarnings = parsed.Warnings,
+        return new
+        {
+            mode,
+            cropFile = filename,
+            width = crop.Width,
+            height = crop.Height,
+            cropLaplacianVariance = deviation.Val0 * deviation.Val0,
+            warnings,
+            ppRaw = pp.Lines.Select(l => new { l.Text, l.Confidence, l.Bounds }),
+            ppWarnings = pp.Warnings,
+            ppNumericCandidate = parsed.ProposedFields.GetValueOrDefault("reading"),
+            parserWarnings = parsed.Warnings,
             ppDirectRaw = direct.Lines.Select(l => new { l.Text, l.Confidence }),
             ppDirectNumericCandidate = OcrFieldParser.Parse(direct, OcrDocumentKind.MechanicalWater).ProposedFields.GetValueOrDefault("reading"),
-            stage2Value = stage2.Digits, stage2.Confidence, stage2Warnings = stage2.Warnings,
+            stage2Value = stage2.Digits,
+            stage2.Confidence,
+            stage2Warnings = stage2.Warnings,
             digitCandidates = stage2.Detections.OrderBy(d => d.Box.Center.X).Select((d, i) => new { order = i, d.ClassId, d.Confidence, points = Points(d.Box.Points()) }),
-            fusionRaw = fusedText.Lines.Select(l => new { l.Text, l.Confidence }), fusionWarnings = fusedText.Warnings,
-            fusedValue = fused.ProposedFields.GetValueOrDefault("reading"), finalParserWarnings = fused.Warnings,
-            registerVerification = "not_annotated_preserve_veto", precisionVerification = "no_ground_truth_server_metadata_required",
-            elapsedMs = timer.ElapsedMilliseconds };
+            fusionRaw = fusedText.Lines.Select(l => new { l.Text, l.Confidence }),
+            fusionWarnings = fusedText.Warnings,
+            fusedValue = fused.ProposedFields.GetValueOrDefault("reading"),
+            finalParserWarnings = fused.Warnings,
+            registerVerification = "not_annotated_preserve_veto",
+            precisionVerification = "no_ground_truth_server_metadata_required",
+            elapsedMs = timer.ElapsedMilliseconds
+        };
     }
     internal static double IoU(Point2f[] first, Point2f[] second)
     {

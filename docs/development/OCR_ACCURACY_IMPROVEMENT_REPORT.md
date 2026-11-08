@@ -28,27 +28,27 @@ independent acceptance: physical-meter/site grouping, readability và decimal/
 billing-register GT chưa được review độc lập. Không sửa nhãn bằng model output;
 nghi vấn label thiếu digit ởvalidation317 vẫn được giữ và tính sai theo publisher.
 
-| Metric | Baseline | Candidate / hiện trạng | Chênh lệch / quyết định |
-| --- | --- | --- | --- |
-| Historical typed exact /33 |10|10 hiện hành|0|
-| Historical wrong proposals /33 complete |0|0 hiện hành|0; không suy an toàn trên GT thiếu|
-| Historical fallback /52 |42|42 hiện hành|0|
-| Historical correct /all |10/52|10/52|0|
-| Historical automatic exact /33 |1, lần trước|NOT RUN mới|Classifier không đổi|
-| Historical automatic fallback /52 |51, lần trước|NOT RUN mới|Không nhận là cải thiện|
-| Validation exact /69 |12|13 mixed English|+1; REJECTED do bỏ numeric disagreement cũ|
-| Validation wrong /69 |0|0 mixed|0 quan sát; chưa đủ qua safety gate|
-| Validation fallback /100 |88|87 mixed|−1, không tích hợp|
-| Validation correct /all |12%|13% mixed|+1 điểm %, bị loại|
-| Validation exact /emitted |12/12|13/13 mixed|Chỉ theo publisher digit labels|
-| Validation exact /69, strict English |12|11|−1; REJECTED|
-| Validation fallback /100, strict |88|89|+1|
-| Window IoU≥0,5 validation |100/100|100/100 geometry hypothesis|0 selection đổi|
-| Window IoU≥0,5 historical |51/52|Không candidate mới qua gate|1 missing,0 unique wrong selection|
-| Validation Stage2 predicted/oracle exact |47/69|49/69 oracle|+2; không phải production|
-| Validation Stage2 predicted/oracle wrong |4/69|5/69 oracle|+1 sai; không triển khai|
-| Classification recall/mAP mới |N/A|NOT RUN|Không train corpus62 cũ|
-| Validation p95 diagnostic service ms |831,85|Mixed1911,30; strict1789,50|+1079,45/+957,65; wrapper lặp inference|
+| Metric                                   | Baseline      | Candidate / hiện trạng       | Chênh lệch / quyết định                    |
+| ---------------------------------------- | ------------- | ---------------------------- | ------------------------------------------ |
+| Historical typed exact /33               | 10            | 10 hiện hành                 | 0                                          |
+| Historical wrong proposals /33 complete  | 0             | 0 hiện hành                  | 0; không suy an toàn trên GT thiếu         |
+| Historical fallback /52                  | 42            | 42 hiện hành                 | 0                                          |
+| Historical correct /all                  | 10/52         | 10/52                        | 0                                          |
+| Historical automatic exact /33           | 1, lần trước  | NOT RUN mới                  | Classifier không đổi                       |
+| Historical automatic fallback /52        | 51, lần trước | NOT RUN mới                  | Không nhận là cải thiện                    |
+| Validation exact /69                     | 12            | 13 mixed English             | +1; REJECTED do bỏ numeric disagreement cũ |
+| Validation wrong /69                     | 0             | 0 mixed                      | 0 quan sát; chưa đủ qua safety gate        |
+| Validation fallback /100                 | 88            | 87 mixed                     | −1, không tích hợp                         |
+| Validation correct /all                  | 12%           | 13% mixed                    | +1 điểm %, bị loại                         |
+| Validation exact /emitted                | 12/12         | 13/13 mixed                  | Chỉ theo publisher digit labels            |
+| Validation exact /69, strict English     | 12            | 11                           | −1; REJECTED                               |
+| Validation fallback /100, strict         | 88            | 89                           | +1                                         |
+| Window IoU≥0,5 validation                | 100/100       | 100/100 geometry hypothesis  | 0 selection đổi                            |
+| Window IoU≥0,5 historical                | 51/52         | Không candidate mới qua gate | 1 missing,0 unique wrong selection         |
+| Validation Stage2 predicted/oracle exact | 47/69         | 49/69 oracle                 | +2; không phải production                  |
+| Validation Stage2 predicted/oracle wrong | 4/69          | 5/69 oracle                  | +1 sai; không triển khai                   |
+| Classification recall/mAP mới            | N/A           | NOT RUN                      | Không train corpus62 cũ                    |
+| Validation p95 diagnostic service ms     | 831,85        | Mixed1911,30; strict1789,50  | +1079,45/+957,65; wrapper lặp inference    |
 
 Latency chỉ là CPU local, không phải production/upload/camera. Historical trace
 p95 khoảng922,2ms; không so với validation khác tập. Candidate được chọn/loại trên
@@ -77,17 +77,17 @@ Predicted crops:571 known digits,6 missing,18 extra boxes,13 matched wrong digit
 22 extra,20 wrong,13u,0 inversions. Số crop tạo được khác nhau nên mẫu số khác;
 không cộng lỗi chồng lấp hoặc suy u nghĩa là thực sự unreadable.
 
-| Work unit | Trạng thái và bằng chứng |
-| --- | --- |
-| Per-image diagnostic |IMPLEMENTED/VALIDATED với actual inference, hash ảnh/label, predicted/oracle/full pipeline|
-| AABB/OBB u-center hypothesis |REJECTED:0 AABB-only cases,75→75 allowed; không đổi detector/NMS/sortX|
-| Scaling/CLAHE/padding/multiscale mới |NOT RUN; không tuyên bố cải thiện chưa đo hoặc fine-tune thiếu verified groups|
-| Official English PP-OCRv5 mobile |IMPLEMENTED offline, Apache-2.0, pin model/config/charset, Python/.NET parity4/4 PASS|
-| English∩Stage2 |REJECTED: predicted21 proposals,19 exact,1 wrong complete,1 unknownGT; oracle19/17/1/1|
-| Mixed confidence policy |REJECTED:12→13 exact nhưng bỏ một số valid numeric disagreement của baseline|
-| Strict policy giữ mọi disagreement |REJECTED:12→11 exact,88→89 fallback|
-| PP-primary/calibrated billing fusion |NOT RUN: thiếu independent register/precision GT, không bypass veto|
-| Candidate trên historical heldout |NOT RUN sau khi đã fail validation; không dùng test chọn model|
+| Work unit                            | Trạng thái và bằng chứng                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Per-image diagnostic                 | IMPLEMENTED/VALIDATED với actual inference, hash ảnh/label, predicted/oracle/full pipeline |
+| AABB/OBB u-center hypothesis         | REJECTED:0 AABB-only cases,75→75 allowed; không đổi detector/NMS/sortX                     |
+| Scaling/CLAHE/padding/multiscale mới | NOT RUN; không tuyên bố cải thiện chưa đo hoặc fine-tune thiếu verified groups             |
+| Official English PP-OCRv5 mobile     | IMPLEMENTED offline, Apache-2.0, pin model/config/charset, Python/.NET parity4/4 PASS      |
+| English∩Stage2                       | REJECTED: predicted21 proposals,19 exact,1 wrong complete,1 unknownGT; oracle19/17/1/1     |
+| Mixed confidence policy              | REJECTED:12→13 exact nhưng bỏ một số valid numeric disagreement của baseline               |
+| Strict policy giữ mọi disagreement   | REJECTED:12→11 exact,88→89 fallback                                                        |
+| PP-primary/calibrated billing fusion | NOT RUN: thiếu independent register/precision GT, không bypass veto                        |
+| Candidate trên historical heldout    | NOT RUN sau khi đã fail validation; không dùng test chọn model                             |
 
 English revision `3fafbc3b5dcf93dd72add9f48368be8a3a2cd33b`; CTC/resize pin theo
 reference. Adapter chỉ trong smoke tools, không DI/config runtime. Confidence grid
@@ -132,12 +132,12 @@ không gửi ảnh toàn cảnh có serial hoặc dữ liệu Tenant ra AI servi
 
 ## Trạng thái bốn loại
 
-| Loại | Evidence mới | Kết luận |
-| --- | --- | --- |
-| Water mechanical |Full historical10/33; oracle/English thử thật|Chưa có candidate an toàn được chấp nhận|
-| Electricity mechanical |Chưa có corpus mới với GT đầy đủ, độc lập|Reader chuyên biệt BLOCKED data|
-| Electricity digital |English khớp4/12 bản nháp, vẫn sai/thừa ký tự|Offline; chưa xác minh register/precision|
-| Water digital |Thiếu nhiều thiết bị độc lập với exact GT|BLOCKED data|
+| Loại                   | Evidence mới                                  | Kết luận                                  |
+| ---------------------- | --------------------------------------------- | ----------------------------------------- |
+| Water mechanical       | Full historical10/33; oracle/English thử thật | Chưa có candidate an toàn được chấp nhận  |
+| Electricity mechanical | Chưa có corpus mới với GT đầy đủ, độc lập     | Reader chuyên biệt BLOCKED data           |
+| Electricity digital    | English khớp4/12 bản nháp, vẫn sai/thừa ký tự | Offline; chưa xác minh register/precision |
+| Water digital          | Thiếu nhiều thiết bị độc lập với exact GT     | BLOCKED data                              |
 
 Four-class adapter/config vẫn disabled; không train lại weak62. Recall/precision/
 unknown/open-set/mAP/runtime mới NOT RUN. Không coi all-unknown là thành công hoặc
@@ -148,25 +148,25 @@ PP/manual fallback là category-specific reader hoàn tất.
 Không cộng suite chồng lấp thành một tổng. Logs/TRX ở`.tools`/TestResults ignored.
 Runtime không thay đổi so với start; không sửa lỗi Contract/incident ngoài scope.
 
-| Check | Kết quả |
-| --- | --- |
-| Backend API Release build |PASS,0 warnings/errors|
-| Smoke tools Release build, kể cả LCD comparison mới |PASS,0 warnings/errors|
-| Backend solution Release build |FAIL:14 CS1503 ở ContractServiceTests56/57/126/127, DTO constructor không khớp|
-| Full Application tests |Compile-blocked bởi14 lỗi trên; không báo321 suite cũ pass|
-| Focused original OCR Application files, temporary project |154 PASS,0 skip; không phải full Application suite|
-| Domain |106 PASS,0 skip|
-| OCR Integration với local ONNX |125 PASS,0 skip|
-| PostgreSQL/ONNX Staff workflow + invoice filters |7 PASS,0 skip; evidence storage in-memory|
-| Stage2 pinned native/.NET parity |10/10 PASS|
-| English Python/.NET parity |4/4 PASS|
-| Dataset Node validators |29 PASS|
-| Existing Python model tools |29 PASS|
-| New geometry/integrity Python tests |3 PASS: corner winding, crop warp, corrupt model rejected before network|
-| Python compile scripts mới |PASS|
-| Mobile Vitest Node22 |54 suites PASS,2 FAIL collection;544 executed tests PASS|
-| Mobile TypeScript |FAIL: missing installed expo-image-picker và URL/Node iterator type mismatch|
-| Mobile ESLint |PASS, exit0|
+| Check                                                     | Kết quả                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Backend API Release build                                 | PASS,0 warnings/errors                                                         |
+| Smoke tools Release build, kể cả LCD comparison mới       | PASS,0 warnings/errors                                                         |
+| Backend solution Release build                            | FAIL:14 CS1503 ở ContractServiceTests56/57/126/127, DTO constructor không khớp |
+| Full Application tests                                    | Compile-blocked bởi14 lỗi trên; không báo321 suite cũ pass                     |
+| Focused original OCR Application files, temporary project | 154 PASS,0 skip; không phải full Application suite                             |
+| Domain                                                    | 106 PASS,0 skip                                                                |
+| OCR Integration với local ONNX                            | 125 PASS,0 skip                                                                |
+| PostgreSQL/ONNX Staff workflow + invoice filters          | 7 PASS,0 skip; evidence storage in-memory                                      |
+| Stage2 pinned native/.NET parity                          | 10/10 PASS                                                                     |
+| English Python/.NET parity                                | 4/4 PASS                                                                       |
+| Dataset Node validators                                   | 29 PASS                                                                        |
+| Existing Python model tools                               | 29 PASS                                                                        |
+| New geometry/integrity Python tests                       | 3 PASS: corner winding, crop warp, corrupt model rejected before network       |
+| Python compile scripts mới                                | PASS                                                                           |
+| Mobile Vitest Node22                                      | 54 suites PASS,2 FAIL collection;544 executed tests PASS                       |
+| Mobile TypeScript                                         | FAIL: missing installed expo-image-picker và URL/Node iterator type mismatch   |
+| Mobile ESLint                                             | PASS, exit0                                                                    |
 
 Mobile: `meterScreen.test.tsx` paper mock thiếu `MD3LightTheme`; incident suite không
 resolve `expo-image-picker`. Package/lock có dependency nhưng local node_modules
@@ -202,16 +202,16 @@ confirmation/replay và confirmed reading→invoice được regression ở mứ
 
 ## Local commits và final state
 
-| Commit | Short English description |
-| --- | --- |
-| d0fa932 |Compare full-frame, oracle crop, recognizer and fusion failures|
-| 0e715af |Prepare a practical positive capture pilot|
-| cb2bccc |Evaluate water localization and digit geometry|
-| 7d27876 |Evaluate pinned English water recognition candidates|
-| 8324263 |Verify thirteen rejected historical water readings|
-| 55193e8 |Audit licensed electricity LCD candidates and draft crops|
-| 1d83599 |Protect diagnostic geometry and model artifact integrity|
-| Commit chứa report này |Record measured results, rejected gates and blockers|
+| Commit                 | Short English description                                       |
+| ---------------------- | --------------------------------------------------------------- |
+| d0fa932                | Compare full-frame, oracle crop, recognizer and fusion failures |
+| 0e715af                | Prepare a practical positive capture pilot                      |
+| cb2bccc                | Evaluate water localization and digit geometry                  |
+| 7d27876                | Evaluate pinned English water recognition candidates            |
+| 8324263                | Verify thirteen rejected historical water readings              |
+| 55193e8                | Audit licensed electricity LCD candidates and draft crops       |
+| 1d83599                | Protect diagnostic geometry and model artifact integrity        |
+| Commit chứa report này | Record measured results, rejected gates and blockers            |
 
 Final HEAD đầy đủ và working-tree status **sau commit** được ghi tại
 `.tools/ocr-recovery-final-state.json`; full history tại `.tools/ocr-next-git-history.md`.

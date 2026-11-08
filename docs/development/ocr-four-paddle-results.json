@@ -320,9 +320,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 82,
-        "warnings": [
-          "ambiguous_reading"
-        ]
+        "warnings": ["ambiguous_reading"]
       },
       {
         "id": "commons_136480278",
@@ -334,9 +332,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 166,
-        "warnings": [
-          "ambiguous_reading"
-        ]
+        "warnings": ["ambiguous_reading"]
       },
       {
         "id": "commons_136480279",
@@ -348,9 +344,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 56,
-        "warnings": [
-          "reading_not_recognized"
-        ]
+        "warnings": ["reading_not_recognized"]
       },
       {
         "id": "commons_136480279",
@@ -362,9 +356,7 @@
         "falseProposal": true,
         "fallback": false,
         "elapsedMs": 143,
-        "warnings": [
-          "low_confidence"
-        ]
+        "warnings": ["low_confidence"]
       },
       {
         "id": "commons_141575682",
@@ -400,9 +392,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 57,
-        "warnings": [
-          "ambiguous_reading"
-        ]
+        "warnings": ["ambiguous_reading"]
       },
       {
         "id": "commons_26507235",
@@ -414,9 +404,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 67,
-        "warnings": [
-          "ambiguous_reading"
-        ]
+        "warnings": ["ambiguous_reading"]
       },
       {
         "id": "commons_111639614",
@@ -428,9 +416,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 58,
-        "warnings": [
-          "ambiguous_reading"
-        ]
+        "warnings": ["ambiguous_reading"]
       },
       {
         "id": "commons_111639614",
@@ -442,10 +428,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 37,
-        "warnings": [
-          "no_text",
-          "reading_not_recognized"
-        ]
+        "warnings": ["no_text", "reading_not_recognized"]
       },
       {
         "id": "commons_141189268",
@@ -457,9 +440,7 @@
         "falseProposal": true,
         "fallback": false,
         "elapsedMs": 54,
-        "warnings": [
-          "low_confidence"
-        ]
+        "warnings": ["low_confidence"]
       },
       {
         "id": "commons_141189268",
@@ -471,10 +452,7 @@
         "falseProposal": false,
         "fallback": true,
         "elapsedMs": 71,
-        "warnings": [
-          "no_text",
-          "reading_not_recognized"
-        ]
+        "warnings": ["no_text", "reading_not_recognized"]
       }
     ],
     "limitation": "Reviewed display crops; digit sequence only, decimal/register eligibility excluded. No full-frame or billing accuracy claim."

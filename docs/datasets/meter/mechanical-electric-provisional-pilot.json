@@ -1,23 +1,14 @@
 {
   "scope": "oracle_crops_provisional_development_only",
   "selectionBeforeInference": true,
-  "excludedStyles": [
-    "pointer_dials",
-    "multiple_registers",
-    "obscured_wheels"
-  ],
+  "excludedStyles": ["pointer_dials", "multiple_registers", "obscured_wheels"],
   "samples": [
     {
       "id": "commons_49855905",
       "sourceImage": ".tools/master-dataset/commons/commons_49855905.jpg",
       "sourceSha256": "e9d6542f43ccc6c21a90fa2803a2b84f1e665b98dbb03298a5c4d16cf903e354",
       "sourceSplit": "historical_classification_train",
-      "boundsPixels": [
-        429,
-        337,
-        900,
-        414
-      ],
+      "boundsPixels": [429, 337, 900, 414],
       "crop": ".tools/ocr-next-mechanical/commons_49855905-oracle.png",
       "cropSha256": "712fb1dab54c383a1e3c5a34c44a324c5d5a72d943e3997edcec477337cbe87b",
       "expectedDigits": "003443",
@@ -31,12 +22,7 @@
       "sourceImage": ".tools/master-dataset/commons/commons_77534681.jpg",
       "sourceSha256": "1e1873eb55637d24658cd1ca605f43e4d17d861cacde0483f7f19c3bdfb5aa4a",
       "sourceSplit": "historical_classification_train",
-      "boundsPixels": [
-        432,
-        455,
-        899,
-        528
-      ],
+      "boundsPixels": [432, 455, 899, 528],
       "crop": ".tools/ocr-next-mechanical/commons_77534681-oracle.png",
       "cropSha256": "97ce8862b0deece579d5c1ae9d5472d3555e5b54ce253f9dc591516d5f57d42f",
       "expectedDigits": "011049",
@@ -50,18 +36,11 @@
       "sourceImage": ".tools/master-dataset/commons/commons_4508761.jpg",
       "sourceSha256": "f09edb957f13cb8a7c59c83af4f8e73f93611e21cae90180a674d19f10eb2940",
       "sourceSplit": "historical_classification_train",
-      "boundsPixels": [
-        378,
-        349,
-        778,
-        448
-      ],
+      "boundsPixels": [378, 349, 778, 448],
       "crop": ".tools/ocr-next-mechanical/commons_4508761-oracle.png",
       "cropSha256": "9e4c0a08f465bc1f13a3d9c03ddbee3248bd80e68639b3748e4ee0c31758844b",
       "expectedDigits": null,
-      "uncertainPositions": [
-        5
-      ],
+      "uncertainPositions": [5],
       "decimalPlaces": null,
       "annotationStatus": "agent_provisional",
       "humanReviewCount": 0

@@ -87,7 +87,7 @@ public sealed class YoloMeterSceneDetectorTests
     public void RotatedAndStandaloneWindowsMustRemainEntirelyInsideImage()
     {
         var valid = new DetectedReadingRegion(new(100, 100, 200, 50), .95f)
-            { OrientedBounds = new(new(200, 125), new(180, 30), 10) };
+        { OrientedBounds = new(new(200, 125), new(180, 30), 10) };
         var scene = new MeterScene(true, []) { StandaloneReadingRegions = [valid] };
         var result = MeterSceneSelection.Select(scene, new(800, 600), null, .8f);
         Assert.True(result.CanRecognize); Assert.Equal(valid.OrientedBounds, result.OrientedCrop);

@@ -206,10 +206,10 @@ cùng weights và deadline. Đây là corpus đã dùng nhiều lần, có repea
 và annotation/license gaps; chỉ đánh giá lịch sử, không đưa vào fine-tune mới.
 Chưa có decimal/register GT để gọi là billing accuracy độc lập.
 
-| Pipeline | Exact trên33 full labels | False trên full labels | Fallback /52 | Correct /mọi input | Correct /proposals |
-| --- | --- | --- | --- | --- | --- |
-| Typed nước cơ hiện hành | 10/33 | 0 | 42/52 | 10/52 (19.23%) | 10/10 |
-| Automatic hiện hành | 1/33 | 0 | 51/52 | 1/52 (1.92%) | 1/1 |
+| Pipeline                | Exact trên33 full labels | False trên full labels | Fallback /52 | Correct /mọi input | Correct /proposals |
+| ----------------------- | ------------------------ | ---------------------- | ------------ | ------------------ | ------------------ |
+| Typed nước cơ hiện hành | 10/33                    | 0                      | 42/52        | 10/52 (19.23%)     | 10/10              |
+| Automatic hiện hành     | 1/33                     | 0                      | 51/52        | 1/52 (1.92%)       | 1/1                |
 
 Kết quả giữ nguyên baseline trong yêu cầu, **chưa giảm fallback**. Conditional
 accuracy100% trên ít proposal không chứng minh hệ thống tốt. Typed p50/p95/max
@@ -222,12 +222,12 @@ Automatic category baseline trên15 ảnh public development holdout: 9 meter
 exact reading ở tập này. Adapter mới tắt, không diễn giải đây là quality của
 model bốn lớp mới.
 
-| Loại | Body/display detection mới | Visual classification mới | Exact reading full-frame mới | False reading /fallback |
-| --- | --- | --- | --- | --- |
-| Điện cơ | NOT MEASURED | NOT MEASURED | NOT MEASURED | Chưa đủ GT để đo |
-| Điện tử | NOT MEASURED | NOT MEASURED | NOT MEASURED | LCD crops mới2 false/4 tổng, không phải full-frame |
-| Nước cơ | Giữ detector cũ, không đo lại P/R ở phiên này | NOT MEASURED | Typed10/33; auto1/33 trên corpus lặp | 0 false trên33; fallback42/52 typed,51/52 auto |
-| Nước điện tử | NOT MEASURED | NOT MEASURED | NOT MEASURED | Chỉ1 source body test, thiếu train/val/reading GT đại diện |
+| Loại         | Body/display detection mới                    | Visual classification mới | Exact reading full-frame mới         | False reading /fallback                                    |
+| ------------ | --------------------------------------------- | ------------------------- | ------------------------------------ | ---------------------------------------------------------- |
+| Điện cơ      | NOT MEASURED                                  | NOT MEASURED              | NOT MEASURED                         | Chưa đủ GT để đo                                           |
+| Điện tử      | NOT MEASURED                                  | NOT MEASURED              | NOT MEASURED                         | LCD crops mới2 false/4 tổng, không phải full-frame         |
+| Nước cơ      | Giữ detector cũ, không đo lại P/R ở phiên này | NOT MEASURED              | Typed10/33; auto1/33 trên corpus lặp | 0 false trên33; fallback42/52 typed,51/52 auto             |
+| Nước điện tử | NOT MEASURED                                  | NOT MEASURED              | NOT MEASURED                         | Chỉ1 source body test, thiếu train/val/reading GT đại diện |
 
 LCD development crop test mới:2/3 readable exact digit strings,2 false/4 inputs,
 0 fallback; correct/all inputs2/4 và conditional2/4. Không suy digit accuracy,
@@ -236,20 +236,20 @@ không còn là test nghiệm thu độc lập cho các quyết định tiếp t
 
 ### Kiểm tra thực thi
 
-| Check | Kết quả |
-| --- | --- |
-| Backend Release và OcrSmoke build cuối | PASS,0 warning/error |
-| Application UnitTests toàn project | 276 PASS |
-| Domain UnitTests toàn project | 90 PASS |
-| OCR integration namespace, local-model opt-in, không CompactPostgres | 127 PASS,0 skip; gồm8 PostgreSQL/MinIO thật |
-| Adapter suite sau fix invalid-path | 13 PASS,0 skip;12 ca trùng suite127, không cộng thành test độc lập |
-| Compact24 meter confirmation + legacy invoice finalization | 6 PASS,0 skip; PostgreSQL disposable, MinIO riêng cho legacy finalization |
-| Compact24 invoice finalization trên schema hiện hành | 1 PASS,0 skip; database disposable riêng |
-| Mobile Vitest / typecheck / ESLint | 381 PASS / PASS / PASS |
-| Dataset Node validator / Python model tools | 28 PASS /14 PASS |
-| LCD mới native/ORT và .NET tensor parity | 6/6 mỗi phép đối chiếu |
-| Physical Android/iOS camera E2E | NOT RUN: không có camera/device automation session hoặc adb khả dụng |
-| Independent representative4-class acceptance/calibration | NOT RUN: dữ liệu/GT và model chưa đủ |
+| Check                                                                | Kết quả                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Backend Release và OcrSmoke build cuối                               | PASS,0 warning/error                                                      |
+| Application UnitTests toàn project                                   | 276 PASS                                                                  |
+| Domain UnitTests toàn project                                        | 90 PASS                                                                   |
+| OCR integration namespace, local-model opt-in, không CompactPostgres | 127 PASS,0 skip; gồm8 PostgreSQL/MinIO thật                               |
+| Adapter suite sau fix invalid-path                                   | 13 PASS,0 skip;12 ca trùng suite127, không cộng thành test độc lập        |
+| Compact24 meter confirmation + legacy invoice finalization           | 6 PASS,0 skip; PostgreSQL disposable, MinIO riêng cho legacy finalization |
+| Compact24 invoice finalization trên schema hiện hành                 | 1 PASS,0 skip; database disposable riêng                                  |
+| Mobile Vitest / typecheck / ESLint                                   | 381 PASS / PASS / PASS                                                    |
+| Dataset Node validator / Python model tools                          | 28 PASS /14 PASS                                                          |
+| LCD mới native/ORT và .NET tensor parity                             | 6/6 mỗi phép đối chiếu                                                    |
+| Physical Android/iOS camera E2E                                      | NOT RUN: không có camera/device automation session hoặc adb khả dụng      |
+| Independent representative4-class acceptance/calibration             | NOT RUN: dữ liệu/GT và model chưa đủ                                      |
 
 Build đầu đã qua, một lượt build cuối bị MSB3021/MSB3027 vì benchmark của chính
 phiên này đang giữ DLL; đã đợi benchmark kết thúc và chạy lại cả hai build thành
@@ -280,14 +280,14 @@ Những phần này không được đánh dấu completed chỉ vì adapter/tes
 
 ### Commit tiếp nối và file thay đổi
 
-| Commit | Message | Mô tả | Kiểm tra |
-| --- | --- | --- | --- |
-| `63d1995` | `docs(ocr): audit additional public LCD datasets` | Source/license/gaps | API/download151 assets, review50 ảnh, baseline build/unit |
-| `0e8f18f` | `chore(ocr): prepare audited LCD preview training data` | Downloader, quarantine, train isolation | Python14, Node28, prepare206/2/4 thật |
-| `9903527` | `test(ocr): benchmark expanded LCD fine-tuning` | GPU train/export/parity, model rejected |49 epoch, native6/.NET6, exact/false metrics |
-| `a29833e` | `feat(ocr): add guarded four-class ONNX classification` | Adapter/DI/task mismatch/CCCD fallback | Build, OCR127, adapter12, Application276, Domain90 |
-| `7c0aacb` | `fix(ocr): fall back on invalid classifier artifact paths` | Bảo toàn fallback khi path lỗi | Adapter13, Release/tool builds |
-| `HEAD` (commit báo cáo này) | `docs(ocr): record verification results and remaining model gates` | Tổng hợp evidence/giới hạn | Kiểm JSON, links, diff, history |
+| Commit                      | Message                                                            | Mô tả                                   | Kiểm tra                                                  |
+| --------------------------- | ------------------------------------------------------------------ | --------------------------------------- | --------------------------------------------------------- |
+| `63d1995`                   | `docs(ocr): audit additional public LCD datasets`                  | Source/license/gaps                     | API/download151 assets, review50 ảnh, baseline build/unit |
+| `0e8f18f`                   | `chore(ocr): prepare audited LCD preview training data`            | Downloader, quarantine, train isolation | Python14, Node28, prepare206/2/4 thật                     |
+| `9903527`                   | `test(ocr): benchmark expanded LCD fine-tuning`                    | GPU train/export/parity, model rejected | 49 epoch, native6/.NET6, exact/false metrics              |
+| `a29833e`                   | `feat(ocr): add guarded four-class ONNX classification`            | Adapter/DI/task mismatch/CCCD fallback  | Build, OCR127, adapter12, Application276, Domain90        |
+| `7c0aacb`                   | `fix(ocr): fall back on invalid classifier artifact paths`         | Bảo toàn fallback khi path lỗi          | Adapter13, Release/tool builds                            |
+| `HEAD` (commit báo cáo này) | `docs(ocr): record verification results and remaining model gates` | Tổng hợp evidence/giới hạn              | Kiểm JSON, links, diff, history                           |
 
 Hash đầy đủ của mọi commit, kể cả commit báo cáo, được tạo sau commit cuối tại
 `.tools/ocr-20261106-git-history.md`; tái tạo bằng `git log --reverse 8f5c751..HEAD`.
@@ -357,13 +357,13 @@ epoch hoặc giảm ngưỡng bằng kết quả test. Config/augmentation đầ
 - Bốn head thực, input `[1,3,416,416]`, output `[1,8,3549]`, FP32/opset17;
   native/ORT parity10/10, .NET tensor parity10/10. Model/ảnh không commit vào Git.
 
-| Lớp | Val P/R | Val mAP50 / 50–95 | Test P/R | Test mAP50 / 50–95 |
-| --- | --- | --- | --- | --- |
-| Điện cơ | .046 / 1 | .4832 / .2688 | .0051 / 1 | .2296 / .0896 |
-| Điện tử | 0 / 0 | .0703 / .0206 | .0051 / 1 | .0523 / .0067 |
-| Nước cơ | 1 / 0 | .6657 / .3072 | .0017 / .5 | .4954 / .1002 |
-| Nước điện tử | .238 / 1 | .9950 / .7960 | .0017 / 1 | .0829 / .0580 |
-| Tổng mAP | — | .5536 / .3481 | — | .2151 / .0636 |
+| Lớp          | Val P/R  | Val mAP50 / 50–95 | Test P/R   | Test mAP50 / 50–95 |
+| ------------ | -------- | ----------------- | ---------- | ------------------ |
+| Điện cơ      | .046 / 1 | .4832 / .2688     | .0051 / 1  | .2296 / .0896      |
+| Điện tử      | 0 / 0    | .0703 / .0206     | .0051 / 1  | .0523 / .0067      |
+| Nước cơ      | 1 / 0    | .6657 / .3072     | .0017 / .5 | .4954 / .1002      |
+| Nước điện tử | .238 / 1 | .9950 / .7960     | .0017 / 1  | .0829 / .0580      |
+| Tổng mAP     | —        | .5536 / .3481     | —          | .2151 / .0636      |
 
 Đây là detection metrics từ evaluator Ultralytics, không phải accuracy của API.
 Adapter .NET thật, giữ candidate .25/classification .90/NMS .45, trả unknown toàn
@@ -390,11 +390,11 @@ tạm, không lưu thêm ảnh. Test với Stage1/PP/Stage2 thật đọc `00431
 công khai; nhãn classifier trong test này là stub, không dùng làm bằng chứng accuracy
 classifier. Engine version: `ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2`.
 
-| Reader | Kết quả hiện tại |
-| --- | --- |
-| Điện cơ | Giữ PP/manual; chưa có reader chuyên biệt mới được xác thực |
-| Điện tử | Giữ PP/manual và kiểm register/đơn vị; chưa có reader chuyên biệt mới được xác thực |
-| Nước cơ | Có routing tới Stage1/PP/Stage2 hiện hữu, crop review và fusion veto; baseline accuracy chưa tăng |
+| Reader       | Kết quả hiện tại                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| Điện cơ      | Giữ PP/manual; chưa có reader chuyên biệt mới được xác thực                                           |
+| Điện tử      | Giữ PP/manual và kiểm register/đơn vị; chưa có reader chuyên biệt mới được xác thực                   |
+| Nước cơ      | Có routing tới Stage1/PP/Stage2 hiện hữu, crop review và fusion veto; baseline accuracy chưa tăng     |
 | Nước điện tử | Giữ PP/manual; ba preview không đủ train/đánh giá reader, không dùng water mechanical digits thay thế |
 
 Meter metadata server, Staff confirmation, authorization và invoice finalization
@@ -407,10 +407,10 @@ toàn chuỗi camera thật → model thật → xác nhận → billing.
 Chạy lại baseline52 ảnh,33 có digit GT đầy đủ, cùng corpus cũ, không phải independent
 acceptance và chưa có decimal/register GT đủ cho accuracy billing:
 
-| Chế độ | Exact / 33 full labels | False / 33 | Fallback / 52 | p50 / p95 / max ms |
-| --- | --- | --- | --- | --- |
-| Typed nước cơ | 10 (30,30%) | 0 | 42 (80,77%) | 268 / 1006 / 1251 |
-| Automatic | 1 (3,03%) | 0 | 51 (98,08%) | 4174,5 / 6528,15 / 7605 |
+| Chế độ        | Exact / 33 full labels | False / 33 | Fallback / 52 | p50 / p95 / max ms      |
+| ------------- | ---------------------- | ---------- | ------------- | ----------------------- |
+| Typed nước cơ | 10 (30,30%)            | 0          | 42 (80,77%)   | 268 / 1006 / 1251       |
+| Automatic     | 1 (3,03%)              | 0          | 51 (98,08%)   | 4174,5 / 6528,15 / 7605 |
 
 Correct/all-input lần lượt10/52 và1/52. Không dùng conditional10/10 hoặc1/1 để quảng
 bá100% accuracy. Tất cả52 lượt mỗi chế độ ≤10s ở service; chưa gồm upload, cold start,
@@ -420,20 +420,20 @@ Negative controls mới17/17 từ chối đúng,0 phát chỉ số,17 fallback; 
 [Evidence negative](ocr-next-reading-controls-results.json),
 [tổng hợp và hash raw](ocr-next-verification.json); raw `.tools/ocr-next-*`.
 
-| Check thực thi | Kết quả |
-| --- | --- |
-| Release full solution + OcrSmoke build cuối | PASS,0 warnings/errors |
-| Application / Domain toàn project | 311 /102 PASS |
-| OCR integration, tách ba ca model thật, không CompactPostgres | 130 PASS,0 skip; gồm8 capture PostgreSQL/MinIO |
-| Ba ca HTTP/PP/Stage1/Stage2/model thật chạy riêng | 3 PASS,0 skip |
-| Targeted routing/fusion; OCR Application | 29;144 PASS, trùng các suite trên, không cộng lại |
-| Meter confirmation + hai invoice finalization regressions | 7 PASS,0 skip; PostgreSQL disposable, MinIO thật khi cần |
-| Mobile Vitest / typecheck / lint | 386 PASS / PASS / PASS |
-| Node dataset validator / Python model tools | 29 /16 PASS |
-| ESLint script thay đổi / git diff --check | PASS / PASS |
-| ONNX parity native / .NET | 10/10 mỗi phép |
-| Camera Android/iOS vật lý | NOT RUN: không có device/camera automation session hoặc adb |
-| Positive four-class acceptance đại diện | NOT RUN: thiếu licensed data/GT độc lập đủ chất lượng |
+| Check thực thi                                                | Kết quả                                                     |
+| ------------------------------------------------------------- | ----------------------------------------------------------- |
+| Release full solution + OcrSmoke build cuối                   | PASS,0 warnings/errors                                      |
+| Application / Domain toàn project                             | 311 /102 PASS                                               |
+| OCR integration, tách ba ca model thật, không CompactPostgres | 130 PASS,0 skip; gồm8 capture PostgreSQL/MinIO              |
+| Ba ca HTTP/PP/Stage1/Stage2/model thật chạy riêng             | 3 PASS,0 skip                                               |
+| Targeted routing/fusion; OCR Application                      | 29;144 PASS, trùng các suite trên, không cộng lại           |
+| Meter confirmation + hai invoice finalization regressions     | 7 PASS,0 skip; PostgreSQL disposable, MinIO thật khi cần    |
+| Mobile Vitest / typecheck / lint                              | 386 PASS / PASS / PASS                                      |
+| Node dataset validator / Python model tools                   | 29 /16 PASS                                                 |
+| ESLint script thay đổi / git diff --check                     | PASS / PASS                                                 |
+| ONNX parity native / .NET                                     | 10/10 mỗi phép                                              |
+| Camera Android/iOS vật lý                                     | NOT RUN: không có device/camera automation session hoặc adb |
+| Positive four-class acceptance đại diện                       | NOT RUN: thiếu licensed data/GT độc lập đủ chất lượng       |
 
 TRX: `tests/backend/BHome.IntegrationTests/TestResults/ocr-next-{integration,real-models,business}.trx`.
 Log từng check: `.tools/ocr-next-{final-build,application,domain,integration,real-models,business,mobile-tests,mobile-typecheck,mobile-lint,script-lint}.log`.
@@ -444,16 +444,16 @@ nguyên giới hạn truy cập. Không còn test/build failure chưa xử lý �
 
 ### Commit và các điều kiện còn thiếu
 
-| Commit Hash | Commit Message | Short Description | Verification |
-| --- | --- | --- | --- |
-| `edf2861` | `chore(ocr): expand verified meter datasets` | Catalog/license/split và downloads | Prepare62, Python15, Node28 |
-| `2f7e954` | `feat(ocr): train four-class meter detector` | GPU train, ONNX, benchmark adapter, rejected |29 epoch, parity10+10, adapter26 |
-| `76a326c` | `test(ocr): establish independent reading rejection controls` | Blank annotation và negative-only dataset | Python16, Node29, author/hash/pHash guards |
-| `84fd796` | `fix(ocr): reject separately detected non-billing units` | Kiểm đơn vị cạnh số | OCR Application139 |
-| `d00c692` | `fix(ocr): preserve non-billing veto during digit fusion` | Chặn fusion bỏ qua unit veto | WaterDigit15 |
-| `d30b39f` | `feat(ocr): route classified water to verified display reader` | Crop/routing/fusion thực | Build, targeted29, OCR Application144 |
-| `c31892e` | `test(ocr): verify reading rejection and classifier runtime` | Evidence âm và concurrent inference |17 rejects,4 consistent, build |
-| `HEAD` (commit báo cáo này) | `docs(ocr): record continuation results and model rejection` | Báo cáo, JSON tổng hợp | JSON/hash/links/diff/history |
+| Commit Hash                 | Commit Message                                                 | Short Description                            | Verification                               |
+| --------------------------- | -------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------ |
+| `edf2861`                   | `chore(ocr): expand verified meter datasets`                   | Catalog/license/split và downloads           | Prepare62, Python15, Node28                |
+| `2f7e954`                   | `feat(ocr): train four-class meter detector`                   | GPU train, ONNX, benchmark adapter, rejected | 29 epoch, parity10+10, adapter26           |
+| `76a326c`                   | `test(ocr): establish independent reading rejection controls`  | Blank annotation và negative-only dataset    | Python16, Node29, author/hash/pHash guards |
+| `84fd796`                   | `fix(ocr): reject separately detected non-billing units`       | Kiểm đơn vị cạnh số                          | OCR Application139                         |
+| `d00c692`                   | `fix(ocr): preserve non-billing veto during digit fusion`      | Chặn fusion bỏ qua unit veto                 | WaterDigit15                               |
+| `d30b39f`                   | `feat(ocr): route classified water to verified display reader` | Crop/routing/fusion thực                     | Build, targeted29, OCR Application144      |
+| `c31892e`                   | `test(ocr): verify reading rejection and classifier runtime`   | Evidence âm và concurrent inference          | 17 rejects,4 consistent, build             |
+| `HEAD` (commit báo cáo này) | `docs(ocr): record continuation results and model rejection`   | Báo cáo, JSON tổng hợp                       | JSON/hash/links/diff/history               |
 
 Danh sách file thay đổi và full hash sau commit cuối:
 `.tools/ocr-next-git-history.md`, tái tạo từ `git log --reverse 83317cb..HEAD`.
@@ -534,12 +534,12 @@ Duyệt106 ảnh Commons ngoài các author/ID tham chiếu tìm được hai �
 được freeze trước inference, có source/hash/window/license/group; human annotation
 review độc lập thứ hai còn thiếu. Đã chạy model thật, không chỉ validator:
 
-| Category | Automatic classification mới | Display detection | Exact digits mới | Incorrect proposals | Fallback |
-| --- | --- | --- | --- | --- | --- |
-| Điện cơ | NOT MEASURED positive | NOT MEASURED | NOT MEASURED | NOT MEASURED positive | NOT MEASURED positive |
-| Điện LCD | 1 unknown/1 frame, không accepted class | Chỉ có oracle window, không đo localization accuracy | 0/1 selected window mỗi PP mode | 0; full-frame ba meter không proposal | 1/1 mỗi PP oracle mode; full-frame rejection1/1 |
-| Nước cơ | 1 unknown/1 frame, không accepted class | Một ảnh clear nhưng Stage1 không thấy display | 0/1 full-frame và0/1 từng oracle mode | 0 | 1/1 từng mode |
-| Nước LCD | NOT MEASURED positive | NOT MEASURED | NOT MEASURED | NOT MEASURED positive | NOT MEASURED positive |
+| Category | Automatic classification mới            | Display detection                                    | Exact digits mới                      | Incorrect proposals                   | Fallback                                        |
+| -------- | --------------------------------------- | ---------------------------------------------------- | ------------------------------------- | ------------------------------------- | ----------------------------------------------- |
+| Điện cơ  | NOT MEASURED positive                   | NOT MEASURED                                         | NOT MEASURED                          | NOT MEASURED positive                 | NOT MEASURED positive                           |
+| Điện LCD | 1 unknown/1 frame, không accepted class | Chỉ có oracle window, không đo localization accuracy | 0/1 selected window mỗi PP mode       | 0; full-frame ba meter không proposal | 1/1 mỗi PP oracle mode; full-frame rejection1/1 |
+| Nước cơ  | 1 unknown/1 frame, không accepted class | Một ảnh clear nhưng Stage1 không thấy display        | 0/1 full-frame và0/1 từng oracle mode | 0                                     | 1/1 từng mode                                   |
+| Nước LCD | NOT MEASURED positive                   | NOT MEASURED                                         | NOT MEASURED                          | NOT MEASURED positive                 | NOT MEASURED positive                           |
 
 Hai positive candidates **không được nhận dạng đúng**, không gọi là hoàn tất
 positive acceptance. Điện LCD có ba meter: full-frame chỉ dùng cho rejection,
@@ -550,10 +550,10 @@ Các model điện cơ/điện tử/nước LCD chuyên biệt và four-class cl
 
 Frozen historical water benchmark chạy lại, tách khỏi hai ảnh mới:
 
-| Mode | Exact /33 full labels | Incorrect /33 | Fallback /52 | Correct/all inputs | Correct/emitted | p50/p95/max ms |
-| --- | --- | --- | --- | --- | --- | --- |
-| Trusted mechanical-water | 10 | 0 | 42 | 10/52 | 10/10 | 203/779.8/866 |
-| Automatic | 1 | 0 | 51 | 1/52 | 1/1 | 2873.5/5940.5/7494 |
+| Mode                     | Exact /33 full labels | Incorrect /33 | Fallback /52 | Correct/all inputs | Correct/emitted | p50/p95/max ms     |
+| ------------------------ | --------------------- | ------------- | ------------ | ------------------ | --------------- | ------------------ |
+| Trusted mechanical-water | 10                    | 0             | 42           | 10/52              | 10/10           | 203/779.8/866      |
+| Automatic                | 1                     | 0             | 51           | 1/52               | 1/1             | 2873.5/5940.5/7494 |
 
 Đây là digit sequence trên corpus tác giả cũ, chưa có billing-decimal GT và chưa
 independent acceptance. Không quảng bá precision10/10 thành accuracy100% đại diện.
@@ -562,21 +562,21 @@ Không dùng negative-only score để tuyên bố reader đọc được positi
 
 ### Kiểm chứng thực thi trong lượt này
 
-| Check | Kết quả mới |
-| --- | --- |
-| Backend solution Release build cuối | PASS,0 warning/error |
-| Application / Domain | 321 /102 PASS |
-| OCR integration không Docker/CompactPostgres, có opt-in model thật | 125 PASS,0 skip |
-| PostgreSQL metadata/confirmation + invoice finalization/meter job | 6 PASS,0 skip; storage substitute |
-| HTTP task + ONNX thật + correction/evidence/replay | 1 PASS,0 skip; PostgreSQL thật, storage substitute |
-| Mobile Vitest với Node22 của repository | 389 PASS; typecheck/lint PASS |
-| Node dataset / Python meter tools / alignment summary | 29 /29 /3 PASS |
-| Manifest positive mới | valid=true,2 samples; đây chỉ là cấu trúc/hash |
-| Stage2 .NET với native reference pinned | 10/10; input max delta0; không chạy lại PyTorch native |
-| Validation/test overlap guard | Từ chối manifest có SHA trùng test, không tạo output |
-| MinIO thật | NOT RUN: không có service MinIO local/Docker daemon dùng được |
-| Camera Android/iOS vật lý | NOT RUN: không có camera session được điều khiển/adb |
-| Representative positive four-category/billing acceptance | NOT RUN: thiếu verified independent data |
+| Check                                                              | Kết quả mới                                                   |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Backend solution Release build cuối                                | PASS,0 warning/error                                          |
+| Application / Domain                                               | 321 /102 PASS                                                 |
+| OCR integration không Docker/CompactPostgres, có opt-in model thật | 125 PASS,0 skip                                               |
+| PostgreSQL metadata/confirmation + invoice finalization/meter job  | 6 PASS,0 skip; storage substitute                             |
+| HTTP task + ONNX thật + correction/evidence/replay                 | 1 PASS,0 skip; PostgreSQL thật, storage substitute            |
+| Mobile Vitest với Node22 của repository                            | 389 PASS; typecheck/lint PASS                                 |
+| Node dataset / Python meter tools / alignment summary              | 29 /29 /3 PASS                                                |
+| Manifest positive mới                                              | valid=true,2 samples; đây chỉ là cấu trúc/hash                |
+| Stage2 .NET với native reference pinned                            | 10/10; input max delta0; không chạy lại PyTorch native        |
+| Validation/test overlap guard                                      | Từ chối manifest có SHA trùng test, không tạo output          |
+| MinIO thật                                                         | NOT RUN: không có service MinIO local/Docker daemon dùng được |
+| Camera Android/iOS vật lý                                          | NOT RUN: không có camera session được điều khiển/adb          |
+| Representative positive four-category/billing acceptance           | NOT RUN: thiếu verified independent data                      |
 
 Các lỗi đầu lượt đã xử lý và chạy lại: build cùng lúc OcrSmoke gây2 file-copy retry
 warnings (build cuối0); npm.ps1 bị execution policy (dùng npm.cmd); Node toàn cục
@@ -620,15 +620,15 @@ hai study/source report; baseline CLI giữ `--meter-completion-evaluate` với 
 Model binaries, crop tạm, parquet và ảnh public ngoài Git. Không ảnh CCCD thật,
 secrets, real Tenant data hoặc weights mới được commit.
 
-| Commit | Work unit đã kiểm chứng |
-| --- | --- |
-| c2027d2 | Metadata-guided Staff review/validation + UI/tests |
-| 5d921ce | Per-image failure taxonomy và frozen baseline |
-| 2db6232 | PostgreSQL profile/scope/proposal/confirmation regressions |
-| a1abcef | Licensed source acquisition/audit, quarantine và positive candidates |
-| cd8fb3b | Real ONNX HTTP task → Staff correction/evidence/replay |
-| f061811 | Rejected alignment study và positive/negative inference evidence |
-| HEAD của commit báo cáo | Báo cáo trạng thái có bằng chứng |
+| Commit                  | Work unit đã kiểm chứng                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| c2027d2                 | Metadata-guided Staff review/validation + UI/tests                   |
+| 5d921ce                 | Per-image failure taxonomy và frozen baseline                        |
+| 2db6232                 | PostgreSQL profile/scope/proposal/confirmation regressions           |
+| a1abcef                 | Licensed source acquisition/audit, quarantine và positive candidates |
+| cd8fb3b                 | Real ONNX HTTP task → Staff correction/evidence/replay               |
+| f061811                 | Rejected alignment study và positive/negative inference evidence     |
+| HEAD của commit báo cáo | Báo cáo trạng thái có bằng chứng                                     |
 
 Final HEAD và working-tree status được ghi sau commit tại
 `.tools/ocr-priority-final-state.json`; history đầy đủ tái tạo vào tệp IDE đang mở

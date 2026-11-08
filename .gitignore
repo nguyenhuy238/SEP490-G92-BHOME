@@ -25,9 +25,14 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.neon.example
 !**/.env.example
 **/appsettings.Local.json
 **/secrets.json
+# Private database exports and recovery artifacts.
+*.dump
+*.pgdump
+**/database-backups/
 # Generated native projects are added intentionally after platform selection.
 src/mobile/android/
 src/mobile/ios/

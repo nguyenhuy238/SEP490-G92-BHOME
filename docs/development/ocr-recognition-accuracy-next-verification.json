@@ -1,0 +1,170 @@
+{
+  "date": "2026-11-08",
+  "startingHead": "b2cf984d98e08802652d50e11edf5139afe08a3c",
+  "runtimeSourceHead": "cff80c370583a9ad6e73810be9c15fb93a88ed51",
+  "experimentSourceHead": "0167ff6ae95109e0c38f98f5a16f162cab123450",
+  "checks": [
+    {
+      "name": "backend_release_build",
+      "status": "PASS",
+      "warnings": 0,
+      "errors": 0,
+      "exitCode": 0,
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "localLog": ".tools/ocr-accuracy-next/build-final.log",
+      "sha256": "57396801c76ccd7e467ef77af54f2404f5c3181e591740c1f4cb001cd323e87f"
+    },
+    {
+      "name": "application",
+      "status": "PASS",
+      "passed": 349,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "localLog": ".tools/ocr-accuracy-next/application.log",
+      "sha256": "9565952b24764afc2b1e125730bff79c1ba317f08fa640d701a3de35fb7fb676"
+    },
+    {
+      "name": "ocr_integration",
+      "status": "PASS",
+      "passed": 162,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-restore --settings .tools/ocr-next-staff/serial.runsettings --filter FullyQualifiedName~BHome.IntegrationTests.Ocr&Category!=Docker&Category!=CompactPostgres",
+      "localLog": ".tools/ocr-accuracy-next/integration.log",
+      "sha256": "9b81c6c91e4d9b5973bc0b951ff7ed03a675668ec2029be8866ae7b13c78da96",
+      "runnerSettings": {
+        "MaxParallelThreads": 1,
+        "ParallelizeTestCollections": false
+      }
+    },
+    {
+      "name": "new_fresh_controls",
+      "status": "PASS",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-restore --filter FullyQualifiedName~FreshUnverifiedDisplaysDoNotProduceExperimentalReadings",
+      "localLog": ".tools/ocr-accuracy-next/fresh-controls.log",
+      "sha256": "2f63c2c650db69a1df0b68e9def900bf8f52441d737650e5666936300d8d2205",
+      "images": 3,
+      "separateBatchReason": "Added after the162-test batch had compiled; new test has a distinct name. No subsequent product-code change."
+    },
+    {
+      "name": "postgres_staff_and_confirmed_billing",
+      "status": "PASS",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "Owned loopback15493 disposable database; BHOME_COMPACT24_TEST_ADMIN=<local admin>; BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "localLog": ".tools/ocr-accuracy-next/postgres.log",
+      "sha256": "20da290d96c6e5d9bf6d4f17f3a6d6737ca566f51c442f2b2a854fd0c27cc0c5",
+      "storage": "explicit in-memory substitute",
+      "postgresStopped": true
+    },
+    {
+      "name": "english_parity",
+      "status": "PASS",
+      "passed": 4,
+      "exitCode": 0,
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json .tools/ocr-accuracy-next/english-parity.json",
+      "localLog": ".tools/ocr-accuracy-next/english-parity.log",
+      "sha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79",
+      "resultSha256": "1bc173687244bade5c30411388671ee09bc229a4533c8a87683218b0fc8da7bc"
+    },
+    {
+      "name": "stage2_parity",
+      "status": "PASS",
+      "passed": 10,
+      "exitCode": 0,
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops .tools/ocr-accuracy-next/stage2-parity.json",
+      "localLog": ".tools/ocr-accuracy-next/stage2-parity.log",
+      "sha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd",
+      "resultSha256": "53d1aad92df6d2017d408fb8fb7c4d79f93503b52de0502cec9a95adbde3a4c4"
+    },
+    {
+      "name": "classifier_native_dotnet_parity",
+      "status": "PASS",
+      "includedIn": "ocr_integration",
+      "passed": 9,
+      "inputMaxDelta": 0,
+      "logitMaxDelta": 2.2947788e-6,
+      "sha256": "c71e492f75958200dcb0a3bad394cb5a5a0be95e44d6c51483541f95a19b2b9a"
+    },
+    {
+      "name": "postman_status",
+      "status": "PASS",
+      "command": "postman status --json",
+      "initialized": false,
+      "auth": "unauthenticated",
+      "collectionAssertionsRun": false,
+      "sha256": "222866f7731083c75931df247434b05b8fee4165a37596f832a1042eb40b2a0b"
+    }
+  ],
+  "experiments": [
+    {
+      "name": "water_full_row_validation",
+      "execution": "COMPLETED",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --water-full-row-study .tools/ocr-models .tools/meter-detection-models .tools/ocr-recovery-english .tools/meter-detection-validation tools/BHome.OcrSmoke/model_tools/evaluation-validation-deduplicated-manifest.json .tools/ocr-accuracy-next/water-full-row-validation.json",
+      "inputs": 100,
+      "localReceiptSha256": "2e14b385e7a0e3b790252a3b5032d6ae580ea9ad5891c67eb978d8b02b83ab40",
+      "localLog": ".tools/ocr-accuracy-next/water-full-row-validation.log",
+      "logSha256": "ba0cba1b7c73a31d52fce98b24fb5678e3055882261efab1660f184f7cd9bc05",
+      "notes": "Candidate uses existing Vietnamese PP CTC, not English. Raw runner receipt retained its unused legacy English threshold field; serializer clarified afterward without changing algorithm or numerical results."
+    },
+    {
+      "name": "water_full_row_test",
+      "execution": "COMPLETED",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --water-full-row-study .tools/ocr-models .tools/meter-detection-models .tools/ocr-recovery-english .tools/meter-detection-all-test tools/BHome.OcrSmoke/model_tools/evaluation-full-test-manifest.json .tools/ocr-accuracy-next/water-full-row-test.json",
+      "inputs": 52,
+      "localReceiptSha256": "c597289341bc7e08aedd03647df713672386fc574c8e0cdd7aa9aa09973c2c39",
+      "localLog": ".tools/ocr-accuracy-next/water-full-row-test.log",
+      "logSha256": "5157e5400d9ed37ce6d64bbeb0fb779445e4e0555ecb15e2261073a414888a2d",
+      "notes": "Candidate uses existing Vietnamese PP CTC, not English. Raw runner receipt retained its unused legacy English threshold field; serializer clarified afterward without changing algorithm or numerical results."
+    },
+    {
+      "name": "display_aware_classifier",
+      "execution": "COMPLETED_REJECTED",
+      "command": "Local Python wrapper adds existing CLIP/CUDA/model_tools packages; study_display_aware_classification.py .tools/ocr-runtime-focus/classifier-cv2/classifier.onnx .tools/master-body-verified-export/body.onnx .tools/ocr-four-display-export/reading.onnx docs/datasets/meter/accuracy-next-evaluation.json . .tools/ocr-accuracy-next/display-classification.json",
+      "inputs": 23,
+      "localLog": ".tools/ocr-accuracy-next/display-classification.log",
+      "sha256": "175d9d732aa896200a01f37b0ecce9601bb663bab6134cf127a0c2630e0327ac"
+    },
+    {
+      "name": "digital_unit_resolution_probe",
+      "execution": "COMPLETED_REJECTED",
+      "command": "BHome.OcrSmoke --experimental-meter-context .tools/ocr-models .tools/ocr-recovery-english .tools/ocr-accuracy-next/highres-context-manifest.json . .tools/ocr-accuracy-next/highres-context 1600",
+      "inputs": 2,
+      "oracleNumericBoxInput": false,
+      "numericBillingAcceptance": false,
+      "sha256": "dda94d88f48a6670b71f8a0809ed21bd5e82d583514563eba787351bf6d8d01e"
+    }
+  ],
+  "reviewPackage": {
+    "prioritySixPreserved": true,
+    "supplementalWaterSourcePhotos": 3,
+    "modelSuggestionsIncluded": false,
+    "humanReviewsReceived": 0,
+    "localLogSha256": "33bca5dbcbc08fe9bd41163a625b3a5a02436bf733ec76518c8f69772500e49a"
+  },
+  "blockedAcquisition": {
+    "source": "Wikimedia original commons_141189268",
+    "result": "HTTP429",
+    "action": "Stopped; no repeated retry or bypass; no original-resolution benchmark claim"
+  },
+  "notRun": [
+    "Physical camera/device E2E; no adb executable or attached session found in checked paths",
+    "Real MinIO; no local9000/9001 listener; PG tests use explicit storage substitute",
+    "Mobile tests/lint/typecheck; Mobile source and DTOs unchanged",
+    "Independent human reading/register/precision acceptance",
+    "New source-separated final holdout; current fresh probes are development only",
+    "Postman collection assertions"
+  ],
+  "promotedNewStaffReader": false,
+  "productionEnabled": false,
+  "pushedMergedOrDeployed": false
+}

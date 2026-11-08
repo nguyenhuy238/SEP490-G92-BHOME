@@ -1,0 +1,62 @@
+{
+  "scope": "focused6_blind_review_reuses_existing_tool_not_acceptance",
+  "parentPilot": "continued-review-pilot.json",
+  "humanReviewsReceived": 0,
+  "requiredFields": [
+    "category",
+    "displayTechnology",
+    "windowBox",
+    "register",
+    "digits",
+    "decimalPlaces",
+    "unit",
+    "readabilityState",
+    "uncertainPositions",
+    "physicalMeterGroup",
+    "sourceGroup"
+  ],
+  "samples": [
+    {
+      "id": "commons_105770219",
+      "image": ".tools/master-dataset/commons/commons_105770219.jpg",
+      "sha256": "b91a58dfde67d4c8f0909f06c24757de5c2f7c82bb45885d5bc0817527a18b61",
+      "sourceGroup": "author_1a03fe5564c6086ae3d3",
+      "labelStatus": "provisional_pending_two_human_reviews"
+    },
+    {
+      "id": "commons_54903199",
+      "image": ".tools/ocr-continued/commons_54903199.jpg",
+      "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
+      "sourceGroup": "author_f7fe9bd796075719dbb7",
+      "labelStatus": "provisional_pending_two_human_reviews"
+    },
+    {
+      "id": "commons_136480278",
+      "image": ".tools/master-dataset/commons/commons_136480278.jpg",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "sourceGroup": "author_4ffec1e37be7ee092f5d",
+      "labelStatus": "provisional_pending_two_human_reviews"
+    },
+    {
+      "id": "commons_151445788",
+      "image": ".tools/master-dataset/commons/commons_151445788.jpg",
+      "sha256": "2293c68468505cbf294288991299fdfce942bf1b5941d5ae261f360e57a84f82",
+      "sourceGroup": "author_66c555f55750ce0ed805",
+      "labelStatus": "provisional_pending_two_human_reviews"
+    },
+    {
+      "id": "commons_136480279",
+      "image": ".tools/master-dataset/commons/commons_136480279.jpg",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "sourceGroup": "author_4ffec1e37be7ee092f5d",
+      "labelStatus": "provisional_pending_two_human_reviews"
+    },
+    {
+      "id": "commons_111639614",
+      "image": ".tools/master-dataset/commons/commons_111639614.jpg",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "sourceGroup": "author_9b4f2e38fe03196c619f",
+      "labelStatus": "provisional_pending_two_human_reviews"
+    }
+  ]
+}

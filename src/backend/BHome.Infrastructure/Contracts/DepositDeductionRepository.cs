@@ -64,8 +64,15 @@ internal sealed class DepositDeductionRepository(BHomePersistenceContext db, ICo
     {
         var json = JsonSerializer.Serialize(new { recordType = DepositDeductionRecords.Kind, recordKey = plan.Id, state = plan }, DepositDeductionRecords.Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={plan.ContractId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = plan.ApprovedByUserId, TargetId = plan.Id, TargetType = "DepositDeduction",
-            Event = "DepositDeductionApproved", Succeeded = true, OccurredAt = plan.ApprovedAt });
+        db.SecurityAudit.Add(new SecurityAuditRecord
+        {
+            UserId = plan.ApprovedByUserId,
+            TargetId = plan.Id,
+            TargetType = "DepositDeduction",
+            Event = "DepositDeductionApproved",
+            Succeeded = true,
+            OccurredAt = plan.ApprovedAt
+        });
         await db.SaveChangesAsync(token);
     }
 }

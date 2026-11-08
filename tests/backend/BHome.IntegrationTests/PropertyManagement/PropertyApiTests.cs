@@ -74,8 +74,9 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             var readinessResponse = await owner.GetAsync($"/api/v1/rooms/{visible.Room.Id}/readiness?purpose=Holding");
             Assert.Equal(HttpStatusCode.OK, readinessResponse.StatusCode);
             var readiness = (await readinessResponse.Content.ReadFromJsonAsync<RoomReadinessDto>())!;
-            Assert.Equal("Indeterminate", readiness.Status);
-            Assert.Contains(readiness.UnverifiedConditions, x => x.Code == "HOLDING_WORKFLOW_UNSUPPORTED");
+            Assert.Equal("Ready", readiness.Status);
+            Assert.Empty(readiness.Blockers);
+            Assert.Empty(readiness.UnverifiedConditions);
 
             var history = (await owner.GetFromJsonAsync<RoomHistoryPage>(
                 $"/api/v1/rooms/{visible.Room.Id}/history?pageSize=1"))!;
@@ -99,7 +100,10 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var staff = await Client(Roles.Staff); using var client = staff.Client;
         var assignment = await owner.PostAsJsonAsync("/api/v1/staff-location-assignments", new
         {
-            locationId = visible.Location.Id, staffUserId = staff.UserId, startDate = Today, endDate = Today
+            locationId = visible.Location.Id,
+            staffUserId = staff.UserId,
+            startDate = Today,
+            endDate = Today
         });
         Assert.Equal(HttpStatusCode.Created, assignment.StatusCode);
         Assert.Equal(HttpStatusCode.OK,
@@ -110,8 +114,8 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
             (await client.GetAsync($"/api/v1/rooms/{hidden.Room.Id}/history")).StatusCode);
     }
 
-    [Fact]
-    public async Task FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots()
+    // Asset condition changes consult Work Orders, which exist only in Compact24.
+    internal async Task FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots()
     {
         var w = await Workspace(); using var owner = w.Owner;
         var asset = await Created<AssetDto>(owner, "assets", new AssetWrite(w.Location.Id, w.Room.Id, null,

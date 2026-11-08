@@ -33,14 +33,27 @@ internal static class PublicMeterEvaluation
                 var proposal = OcrFieldParser.Parse(text, kind);
                 var value = proposal.ProposedFields.GetValueOrDefault("reading");
                 var digits = value?.Replace(".", "", StringComparison.Ordinal).Replace(",", "", StringComparison.Ordinal);
-                rows.Add(new { id = sample.GetProperty("id").GetString(), split = sample.GetProperty("split").GetString(),
-                    variant = direct ? "pp_direct" : "pp_page", expectedDigits = expected, actualDigits = digits,
-                    exact = expected is not null && expected == digits, falseProposal = digits is not null && digits != expected,
-                    fallback = digits is null, elapsedMs = timer.ElapsedMilliseconds, proposal.Warnings });
+                rows.Add(new
+                {
+                    id = sample.GetProperty("id").GetString(),
+                    split = sample.GetProperty("split").GetString(),
+                    variant = direct ? "pp_direct" : "pp_page",
+                    expectedDigits = expected,
+                    actualDigits = digits,
+                    exact = expected is not null && expected == digits,
+                    falseProposal = digits is not null && digits != expected,
+                    fallback = digits is null,
+                    elapsedMs = timer.ElapsedMilliseconds,
+                    proposal.Warnings
+                });
             }
         }
-        File.WriteAllText(report, JsonSerializer.Serialize(new { engine = OnnxOcrEngine.Version, rows,
-            limitation = "Reviewed display crops; digit sequence only, decimal/register eligibility excluded. No full-frame or billing accuracy claim." }, OcrEvaluation.Json));
+        File.WriteAllText(report, JsonSerializer.Serialize(new
+        {
+            engine = OnnxOcrEngine.Version,
+            rows,
+            limitation = "Reviewed display crops; digit sequence only, decimal/register eligibility excluded. No full-frame or billing accuracy claim."
+        }, OcrEvaluation.Json));
         Console.WriteLine($"Public LCD baseline completed: {rows.Count} variant/image observations; inspect metrics, exit status is not an accuracy pass.");
         return 0;
     }
@@ -48,8 +61,13 @@ internal static class PublicMeterEvaluation
     public static async Task<int> Categories(string models, string yolo, string manifest, string images, string report)
     {
         using var data = JsonDocument.Parse(await File.ReadAllTextAsync(manifest));
-        var options = new OcrOptions { Enabled = true, ModelDirectory = models,
-            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo }, MeterDetectionMinConfidence = .7f };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = models,
+            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo },
+            MeterDetectionMinConfidence = .7f
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
@@ -63,14 +81,27 @@ internal static class PublicMeterEvaluation
             using var input = File.OpenRead(ImagePath(images, sample));
             var timer = Stopwatch.StartNew();
             var result = await service.ExtractAutomaticAsync(input, default);
-            rows.Add(new { id = sample.GetProperty("id").GetString(), expected, result.ClassificationStatus, result.DetectedCategory,
-                result.ClassificationSource, result.ClassificationConfidence,
+            rows.Add(new
+            {
+                id = sample.GetProperty("id").GetString(),
+                expected,
+                result.ClassificationStatus,
+                result.DetectedCategory,
+                result.ClassificationSource,
+                result.ClassificationConfidence,
                 correctCategory = result.ClassificationStatus == "classified" && result.DetectedCategory == expected,
                 wrongCategory = result.ClassificationStatus == "classified" && result.DetectedCategory != expected,
-                fallback = result.ClassificationStatus != "classified", result.Warnings, elapsedMs = timer.ElapsedMilliseconds });
+                fallback = result.ClassificationStatus != "classified",
+                result.Warnings,
+                elapsedMs = timer.ElapsedMilliseconds
+            });
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { engine = OnnxOcrEngine.Version, rows,
-            limitation = "Small public agent-reviewed body-category development holdout; no exact-reading labels. Do not score numeric reading accuracy here." }, OcrEvaluation.Json));
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            engine = OnnxOcrEngine.Version,
+            rows,
+            limitation = "Small public agent-reviewed body-category development holdout; no exact-reading labels. Do not score numeric reading accuracy here."
+        }, OcrEvaluation.Json));
         Console.WriteLine($"Public automatic baseline completed: {rows.Count} images; inspect metrics, exit status is not an accuracy pass.");
         return 0;
     }

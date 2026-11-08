@@ -20,6 +20,7 @@ public sealed class CompactMeterOcrWorkflowTests
     [CompactPostgresFact] public Task MonotonicityRequiresReview() => Run(t => t.OcrWarnsAgainstTheSameMetersConfirmedBaselineWithoutCompletingTheTask());
     [CompactPostgresFact] public Task ConfirmationEvidenceAndReplay() => Run(t => t.ConfirmMeterWorkflowAsync(verifyMinioObject: false));
     [LocalMeterPostgresFact] public Task RealModelsProposalCorrectionAndEvidence() => Run(t => t.RealMeterModelsPersistProposalThenStaffCorrectionAndEvidence());
+    [LocalMeterPostgresFact] public Task AssignedExperimentalModelsRemainReadOnly() => Run(t => t.AssignedExperimentalModelsUseDatabaseProfileWithoutWritingProposals());
 }
 
 public sealed class LocalMeterPostgresFactAttribute : FactAttribute

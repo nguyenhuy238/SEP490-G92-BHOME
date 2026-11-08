@@ -13,8 +13,13 @@ internal static class ReviewedPositiveEvaluation
     public static async Task<int> RunAsync(string ocr, string yolo, string manifest, string root, string report)
     {
         using var data = JsonDocument.Parse(await File.ReadAllTextAsync(manifest));
-        var options = new OcrOptions { Enabled = true, ModelDirectory = ocr, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = ocr,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
@@ -56,12 +61,19 @@ internal static class ReviewedPositiveEvaluation
             {
                 var clock = Stopwatch.StartNew();
                 var automatic = await service.ExtractAutomaticAsync(input, default);
-                observations.Add(new { mode = "automatic_full_frame", automatic.ClassificationStatus, automatic.DetectedCategory,
+                observations.Add(new
+                {
+                    mode = "automatic_full_frame",
+                    automatic.ClassificationStatus,
+                    automatic.DetectedCategory,
                     classificationCorrect = automatic.ClassificationStatus == "classified" && automatic.DetectedCategory == sample.GetProperty("category").GetString(),
                     classificationWrong = automatic.ClassificationStatus == "classified" && automatic.DetectedCategory != sample.GetProperty("category").GetString(),
-                    proposal = automatic.MeterProposal?.ProposedFields.ContainsKey("reading") == true, automatic.Warnings,
-                    elapsedMs = clock.ElapsedMilliseconds, expectedMultiMeterRejection = multiple,
-                    rejectedMultiMeter = multiple && automatic.MeterProposal?.ProposedFields.ContainsKey("reading") != true });
+                    proposal = automatic.MeterProposal?.ProposedFields.ContainsKey("reading") == true,
+                    automatic.Warnings,
+                    elapsedMs = clock.ElapsedMilliseconds,
+                    expectedMultiMeterRejection = multiple,
+                    rejectedMultiMeter = multiple && automatic.MeterProposal?.ProposedFields.ContainsKey("reading") != true
+                });
             }
             // Source compression precedes both full-frame and oracle-window probes.
             using var decoded = Cv2.ImDecode(bytes, ImreadModes.Color);
@@ -82,23 +94,44 @@ internal static class ReviewedPositiveEvaluation
             {
                 var clock = Stopwatch.StartNew();
                 var result = digits.Recognize(crop, default);
-                observations.Add(new { mode = "oracle_window_water_stage2", proposed = result.Digits is not null,
-                    exactDigits = result.Digits == expected, incorrectDigits = result.Digits is not null && result.Digits != expected,
-                    fallback = result.Digits is null, result.Warnings, elapsedMs = clock.ElapsedMilliseconds });
+                observations.Add(new
+                {
+                    mode = "oracle_window_water_stage2",
+                    proposed = result.Digits is not null,
+                    exactDigits = result.Digits == expected,
+                    incorrectDigits = result.Digits is not null && result.Digits != expected,
+                    fallback = result.Digits is null,
+                    result.Warnings,
+                    elapsedMs = clock.ElapsedMilliseconds
+                });
             }
-            rows.Add(new { id = sample.GetProperty("id").GetString(), category = sample.GetProperty("category").GetString(),
-                sha256 = sample.GetProperty("sha256").GetString(), sampleReview = sample.GetProperty("review").Clone(),
-                inputTransform = "mobile-1600-jpeg85", expectedDigits = expected,
-                decimalPlaces = (int?)null, billingAccuracy = (double?)null, fullFrameHasMultipleMeters = multiple,
-                observations });
+            rows.Add(new
+            {
+                id = sample.GetProperty("id").GetString(),
+                category = sample.GetProperty("category").GetString(),
+                sha256 = sample.GetProperty("sha256").GetString(),
+                sampleReview = sample.GetProperty("review").Clone(),
+                inputTransform = "mobile-1600-jpeg85",
+                expectedDigits = expected,
+                decimalPlaces = (int?)null,
+                billingAccuracy = (double?)null,
+                fullFrameHasMultipleMeters = multiple,
+                observations
+            });
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { engine = OnnxOcrEngine.Version,
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            engine = OnnxOcrEngine.Version,
             manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifest))),
-            thresholdSelectionPerformed = false, modelsActivated = false, independentHumanAcceptance = false,
+            thresholdSelectionPerformed = false,
+            modelsActivated = false,
+            independentHumanAcceptance = false,
             limitations = new[] { "Two agent-reviewed images; independent human label review pending.",
                 "Oracle-window probes do not measure localization or full-frame reading accuracy.",
                 "Exact digit sequences exclude decimal/register verification; billing accuracy NOT MEASURED.",
-                "Multiple-meter full frame must reject a proposal, even if a selected oracle crop is readable." }, rows }, OcrEvaluation.Json));
+                "Multiple-meter full frame must reject a proposal, even if a selected oracle crop is readable." },
+            rows
+        }, OcrEvaluation.Json));
         Console.WriteLine($"Evaluated {rows.Count} public positive candidates; inspect evidence, exit0 is not an accuracy gate.");
         return 0;
     }
@@ -107,10 +140,18 @@ internal static class ReviewedPositiveEvaluation
     {
         var value = proposal.ProposedFields.GetValueOrDefault("reading");
         var digitSequence = value?.Replace(".", "", StringComparison.Ordinal);
-        return new { mode, proposed = value is not null, exactDigits = !mustReject && digitSequence == expected,
+        return new
+        {
+            mode,
+            proposed = value is not null,
+            exactDigits = !mustReject && digitSequence == expected,
             incorrectDigits = !mustReject && value is not null && digitSequence != expected,
-            expectedMultiMeterRejection = mustReject, unsafeMultiMeterProposal = mustReject && value is not null,
-            fallback = value is null, proposal.Warnings, elapsedMs = elapsed };
+            expectedMultiMeterRejection = mustReject,
+            unsafeMultiMeterProposal = mustReject && value is not null,
+            fallback = value is null,
+            proposal.Warnings,
+            elapsedMs = elapsed
+        };
     }
 
     private static Mat Window(Mat source, Point2f[] corners)

@@ -29,20 +29,39 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         {
             if (!await ActiveRole(i.Recipient, i.Role, t)) continue; recipients++;
             if (await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == i.Recipient && n.EventKey == key, t)) continue;
-            db.Add(new UserNotification { Id = Guid.NewGuid(), RecipientUserId = i.Recipient, AudienceRole = i.Role,
-                LocationId = i.Location, Category = i.Category, Title = i.Title, Summary = i.Summary,
-                RelatedObjectType = i.Type, RelatedObjectId = i.ObjectId, EventKey = key,
-                EventType = i.EventType.Length > 0 ? i.EventType : EventType(key), Priority = i.Priority, Channels = i.Channels ?? ["IN_APP", "PUSH"],
-                SourceTaskNotificationId = i.TaskSource, CreatedAt = clock.GetUtcNow(), ReadAt = i.ReadAt, DeliveryState = "Unconfigured" });
+            db.Add(new UserNotification
+            {
+                Id = Guid.NewGuid(),
+                RecipientUserId = i.Recipient,
+                AudienceRole = i.Role,
+                LocationId = i.Location,
+                Category = i.Category,
+                Title = i.Title,
+                Summary = i.Summary,
+                RelatedObjectType = i.Type,
+                RelatedObjectId = i.ObjectId,
+                EventKey = key,
+                EventType = i.EventType.Length > 0 ? i.EventType : EventType(key),
+                Priority = i.Priority,
+                Channels = i.Channels ?? ["IN_APP", "PUSH"],
+                SourceTaskNotificationId = i.TaskSource,
+                CreatedAt = clock.GetUtcNow(),
+                ReadAt = i.ReadAt,
+                DeliveryState = "Unconfigured"
+            });
             count++;
         }
         db.Add(new NotificationPublication { EventKey = key, PublishedAt = clock.GetUtcNow(), RecipientCount = recipients }); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return count;
     }
     private static string EventType(string key) => key.Split(':')[0] switch
     {
-        "invoice" => "INVOICE_FINALIZED", "adjustment" => key.Contains("requested") ? "INVOICE_ADJUSTMENT_REQUESTED" : "INVOICE_ADJUSTMENT_DECIDED",
-        "contract-expiry" => "CONTRACT_EXPIRY_REMINDER", "task" => "TASK_UPDATED", "billing-exception" => "INVOICE_FINALIZATION_BLOCKED",
-        "move-out" => "MOVE_OUT_STATUS_CHANGED", _ => "CONTRACT_STATUS_CHANGED"
+        "invoice" => "INVOICE_FINALIZED",
+        "adjustment" => key.Contains("requested") ? "INVOICE_ADJUSTMENT_REQUESTED" : "INVOICE_ADJUSTMENT_DECIDED",
+        "contract-expiry" => "CONTRACT_EXPIRY_REMINDER",
+        "task" => "TASK_UPDATED",
+        "billing-exception" => "INVOICE_FINALIZATION_BLOCKED",
+        "move-out" => "MOVE_OUT_STATUS_CHANGED",
+        _ => "CONTRACT_STATUS_CHANGED"
     };
     private async Task<List<Intent>> InvoiceAudience(Invoice invoice, string category, string title, string summary, CancellationToken t, Guid? extraOwner = null)
     {

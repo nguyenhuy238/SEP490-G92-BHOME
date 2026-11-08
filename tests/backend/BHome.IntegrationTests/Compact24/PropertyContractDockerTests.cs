@@ -68,6 +68,13 @@ public sealed class PropertyContractDockerFixture : IAsyncLifetime
 [Trait("Category", "Docker")]
 public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fixture) : IClassFixture<PropertyContractDockerFixture>
 {
+    [Fact] public Task AssetConfigurationHistory() => new PropertyApiTests(fixture.Properties).FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots();
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HoldingAllocation(bool depositFirst) => new ContractLifecycleApiTests(fixture.Contracts).HoldingAllocationIsPersistedOnceAndCannotFundTwoMainContracts(depositFirst);
+    [Fact] public Task DebtNotifications() => new PaymentsDebt.PaymentLedgerTests(fixture.Capture).DebtRemindersDeduplicateAndStopAfterVerifiedPayment();
+    [Fact] public Task PartialAndPaidNotifications() => new PaymentsDebt.PaymentLedgerTests(fixture.Capture).DelayedNotificationWorkerPreservesPartialSnapshotAndOnePaidTransitionForAllThreeTenants();
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

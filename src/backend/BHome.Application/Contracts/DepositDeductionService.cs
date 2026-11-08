@@ -45,7 +45,8 @@ public static class DepositDeductionPolicy
             throw ContractException.Invalid("invalid_deposit_deduction");
         if (input.Items.Select(i => i.AssetId).Distinct().Count() != input.Items.Length)
             throw ContractException.Invalid("duplicate_deposit_deduction");
-        var normalized = input.Items.Select(i => {
+        var normalized = input.Items.Select(i =>
+        {
             if (i.ReasonCode != "TenantDamage" || i.Amount <= 0 || i.Amount >= 1_000_000_000_000_000_000m ||
                 decimal.Truncate(i.Amount) != i.Amount || string.IsNullOrWhiteSpace(i.Description) || i.Description.Length > 2000 ||
                 i.AssetId == Guid.Empty || i.AssetId is { } asset && !assets.Contains(asset) || i.EvidenceIds is null ||
@@ -67,7 +68,8 @@ public sealed class DepositDeductionService(IDepositDeductionRepository reposito
         if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "deposit_deduction_owner_required");
         if (key == Guid.Empty) throw ContractException.Invalid("idempotency_key_required");
         if (input.Items is null || input.Items.Any(i => i is null)) throw ContractException.Invalid("invalid_deposit_deduction");
-        return repository.TransactionAsync(contractId, async () => {
+        return repository.TransactionAsync(contractId, async () =>
+        {
             // Replay uses normalized input, not a refreshed financial snapshot, and has no second effect.
             var previous = await repository.OperationAsync(actor, key, token);
             var items = DepositDeductionPolicy.Normalize(input, 999999999999999999m,

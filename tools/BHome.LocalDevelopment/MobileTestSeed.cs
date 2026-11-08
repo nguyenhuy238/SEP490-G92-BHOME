@@ -72,10 +72,21 @@ internal static class MobileTestSeed
         Add(30, new Resident { RoomId = Id(20), TenantUserId = Id(3), OwnerUserId = Id(1), DisplayLabel = "Khách thuê tổng hợp Mobile", ResidentType = ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Pending });
         var contract = new Contract
         {
-            RoomId = Id(20), OwnerSignerId = Id(1), TenantUserId = Id(3), RepresentativeResidentId = Id(30),
-            Kind = ContractKind.Main, Status = ContractStatus.Active, StartDate = today.AddMonths(-3), EndDate = today.AddMonths(9),
-            MonthlyRent = 3000000, RequiredDeposit = 0, Terms = "SYNTHETIC UI FIXTURE: không phải hợp đồng/ký/giao dịch thật.",
-            SnapshotHash = new string('0', 64), IsDevelopmentDemo = true, ActivatedByUserId = Id(1), ActivatedAt = now,
+            RoomId = Id(20),
+            OwnerSignerId = Id(1),
+            TenantUserId = Id(3),
+            RepresentativeResidentId = Id(30),
+            Kind = ContractKind.Main,
+            Status = ContractStatus.Active,
+            StartDate = today.AddMonths(-3),
+            EndDate = today.AddMonths(9),
+            MonthlyRent = 3000000,
+            RequiredDeposit = 0,
+            Terms = "SYNTHETIC UI FIXTURE: không phải hợp đồng/ký/giao dịch thật.",
+            SnapshotHash = new string('0', 64),
+            IsDevelopmentDemo = true,
+            ActivatedByUserId = Id(1),
+            ActivatedAt = now,
             Residents = [new ContractResident { ContractId = Id(40), ResidentId = Id(30), Role = ResidentType.Representative, ResidenceFrom = today.AddMonths(-3) }]
         };
         Add(40, contract);

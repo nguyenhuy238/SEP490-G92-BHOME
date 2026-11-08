@@ -27,9 +27,18 @@ public sealed class OcrApiTests
     public async Task RealModelsReadWaterThroughDiagnosticHttpAndResolveElectricLabelWithoutPersistence()
     {
         var directory = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
-        var options = new OcrOptions { Enabled = true, ModelDirectory = Path.Combine(directory, ".tools/ocr-models"),
-            MeterDetectionMinConfidence = .7f, MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true,
-                ModelDirectory = Path.Combine(directory, ".tools/meter-detection-models") } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = Path.Combine(directory, ".tools/ocr-models"),
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new()
+            {
+                Enabled = true,
+                WaterDigitsEnabled = true,
+                ModelDirectory = Path.Combine(directory, ".tools/meter-detection-models")
+            }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
@@ -358,7 +367,7 @@ public sealed class OcrApiTests
             services.AddSingleton<IAutomaticOcrService>(provider => provider.GetRequiredService<LocalOcrService>());
         }));
 
-    private static void AddTestAuthentication(IServiceCollection services)
+    internal static void AddTestAuthentication(IServiceCollection services)
     {
         services.AddAuthentication("OcrTest").AddScheme<AuthenticationSchemeOptions, TestAuthentication>("OcrTest", _ => { });
         services.AddSingleton<ISecurityAudit, TestAudit>();

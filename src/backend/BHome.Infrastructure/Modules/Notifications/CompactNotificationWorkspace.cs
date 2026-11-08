@@ -119,7 +119,7 @@ internal sealed class CompactNotificationWorkspace(Compact24DbContext db, Compac
             WHERE event_data->>'recordType'='ChannelDelivery' AND event_data->>'notificationId'=@id::text AND event_data->>'recipient'=@actor::text ORDER BY event_data->>'channel'
             """, t, ("id", id), ("actor", actor));
         var result = new List<NotificationChannelStatus>(); await using var reader = await cmd.ExecuteReaderAsync(t);
-        while (await reader.ReadAsync(t)) result.Add(new(reader.GetString(0),reader.GetString(1),reader.GetInt32(2),reader.IsDBNull(3)?null:reader.GetFieldValue<DateTimeOffset>(3)));
+        while (await reader.ReadAsync(t)) result.Add(new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3)));
         return result;
     }
     public async Task<NotificationChannelOverview> ChannelOverviewAsync(CancellationToken t)
@@ -130,8 +130,8 @@ internal sealed class CompactNotificationWorkspace(Compact24DbContext db, Compac
             GROUP BY event_data->>'channel',delivery_status ORDER BY event_data->>'channel',delivery_status
             """, t);
         var result = new List<NotificationChannelSummary>(); await using var reader = await cmd.ExecuteReaderAsync(t);
-        while (await reader.ReadAsync(t)) result.Add(new(reader.GetString(0),reader.GetString(1),reader.GetInt32(2)));
-        return new(options.Value.Enabled,options.Value.AutomationEnabled,options.Value.Mode,result);
+        while (await reader.ReadAsync(t)) result.Add(new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        return new(options.Value.Enabled, options.Value.AutomationEnabled, options.Value.Mode, result);
     }
     public async Task<NotificationReminderPolicy> PolicyAsync(Guid location, CancellationToken t)
     {

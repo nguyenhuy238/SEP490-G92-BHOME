@@ -11,7 +11,8 @@ public sealed partial class PaymentLedgerTests
     {
         await Task.WhenAll(PumpNotifications(), PumpNotifications());
         using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
-        foreach (var client in new[] { owner, tenant }) {
+        foreach (var client in new[] { owner, tenant })
+        {
             var notices = (await client.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Contract&pageSize=100"))!.Items;
             var closed = Assert.Single(notices, n => n.RelatedObjectId == w.Contract && n.Title == "Hợp đồng đã hoàn tất trả phòng");
             Assert.Equal("Unconfigured", closed.DeliveryState);

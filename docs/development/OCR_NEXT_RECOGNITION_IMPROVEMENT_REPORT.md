@@ -14,11 +14,11 @@ failure-root-cause, dataset/review instructions, evaluation JSON và model tools
 [Báo cáo trước](OCR_RECOGNITION_PROGRESS_REPORT.md) là baseline; không tái tạo
 commit, không tune bộ9 meter lịch sử, không train lại weak62 YOLO/all-blank CRNN.
 
-| Yêu cầu → nguồn | Thành phần | Kiểm chứng / ranh giới |
-| --- | --- | --- |
-| Type từ pixels, đúng display/digits: task hiện tại, BF-05/UC-20/GBR-07 | Offline CLIP/localization/reader tools | Source-group/hash/pHash audit; raw strings; positive/negative và oracle/full-frame riêng |
-| OCR là suggestion, Staff xác nhận: UC-20/GBR-07 | Runtime không đổi | OCR125 và PostgreSQL7 workflow; giữ Location authorization, Meter metadata, correction/confirmation |
-| Confirmed reading mới đi vào billing: UC-21/JOB-10/GBR-09 | Không sửa invoice/payment/API/schema | Finalization/payment automation trong7 workflow; không tự xác nhận số từ model |
+| Yêu cầu → nguồn                                                        | Thành phần                             | Kiểm chứng / ranh giới                                                                              |
+| ---------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Type từ pixels, đúng display/digits: task hiện tại, BF-05/UC-20/GBR-07 | Offline CLIP/localization/reader tools | Source-group/hash/pHash audit; raw strings; positive/negative và oracle/full-frame riêng            |
+| OCR là suggestion, Staff xác nhận: UC-20/GBR-07                        | Runtime không đổi                      | OCR125 và PostgreSQL7 workflow; giữ Location authorization, Meter metadata, correction/confirmation |
+| Confirmed reading mới đi vào billing: UC-21/JOB-10/GBR-09              | Không sửa invoice/payment/API/schema   | Finalization/payment automation trong7 workflow; không tự xác nhận số từ model                      |
 
 Mapping nghiệp vụ dựa trên repository guardrails và tài liệu mapping hiện có;
 lượt này không đọc lại hay diễn giải policy mới từ SRS .docx. Không thay đổi
@@ -26,15 +26,15 @@ nghiệp vụ tiền, quyền, precision, occupancy hoặc status.
 
 ## 2. Baseline trước lượt này
 
-| Phạm vi lịch sử | Kết quả đã ghi nhận |
-| --- | --- |
-| Full-frame direct CLIP,9 meter +6 negative |2/9 correct accepted,0/15 incorrect,13/15 unknown|
-| Full-frame hierarchical CLIP, cùng ảnh |5/9 correct accepted,0/15 incorrect,10/15 unknown|
-| Historical readable LCD localization |YOLO416/Grounding DINO readable0/3; oracle body không giải quyết|
-| Historical5 LCD crops, không readability gate |English/server:2 exact,2 incorrect numeric,1 fallback|
-| Shape-combined gate, cùng5 |Giữ1/3 readable, chặn2/2 invalid;1 exact,0 incorrect,4 fallback|
-| Mechanical water full runtime benchmark |Historical10/33 exact;42/52 fallback; không phải independent acceptance|
-| Mechanical electricity oracle provisional |English1/2; water Stage2 transfer0/2; rolling label chưa giải quyết|
+| Phạm vi lịch sử                               | Kết quả đã ghi nhận                                                     |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| Full-frame direct CLIP,9 meter +6 negative    | 2/9 correct accepted,0/15 incorrect,13/15 unknown                       |
+| Full-frame hierarchical CLIP, cùng ảnh        | 5/9 correct accepted,0/15 incorrect,10/15 unknown                       |
+| Historical readable LCD localization          | YOLO416/Grounding DINO readable0/3; oracle body không giải quyết        |
+| Historical5 LCD crops, không readability gate | English/server:2 exact,2 incorrect numeric,1 fallback                   |
+| Shape-combined gate, cùng5                    | Giữ1/3 readable, chặn2/2 invalid;1 exact,0 incorrect,4 fallback         |
+| Mechanical water full runtime benchmark       | Historical10/33 exact;42/52 fallback; không phải independent acceptance |
+| Mechanical electricity oracle provisional     | English1/2; water Stage2 transfer0/2; rolling label chưa giải quyết     |
 
 Historical classification scores được phân tích bằng JSON đã có; không chạy lại
 hoặc chọn prompts/threshold trên9 test meter cũ.
@@ -90,10 +90,10 @@ policy trên7 validation mới với ràng buộc có positive đúng và0 wrong
 **Không candidate mới nào thỏa điều kiện**, nên policy=null, không giả vờ reject-all
 là improvement. [Scores, grid và quyết định](ocr-continued-classifier-results.json).
 
-| Strategy / new9 probes | Correct /7 category positives | Incorrect /9 | Unknown /9 | Non-meter false /2 |
-| --- | --- | --- | --- | --- |
-| Frozen hierarchy |1|2|6|1|
-| Physical prompts, letterbox, TTA, few-shot |0 mỗi candidate|0|9|0|
+| Strategy / new9 probes                     | Correct /7 category positives | Incorrect /9 | Unknown /9 | Non-meter false /2 |
+| ------------------------------------------ | ----------------------------- | ------------ | ---------- | ------------------ |
+| Frozen hierarchy                           | 1                             | 2            | 6          | 1                  |
+| Physical prompts, letterbox, TTA, few-shot | 0 mỗi candidate               | 0            | 9          | 0                  |
 
 Frozen hierarchy per-class recall: electricity mechanical0/2, electricity
 digital0/2, water mechanical1/2, water digital0/1 illustration. Accepted precision
@@ -117,15 +117,15 @@ Giữ geometry/offset về ảnh gốc; cohort3 màn hình(validation1,test2) c�
 và1 blurred. Các số
 sau là **raw top proposal trước acceptance threshold**, không phải API success:
 
-| Method | Screen IoU≥.5 /3 | Numeric IoU≥.5 /3 | Calibration policy |
-| --- | --- | --- | --- |
-| Full416 |2|0|.25|
-| Tiles640 |2|1|Không có eligible policy|
-| Tiles416 |2|1|.25|
-| Predicted body→display |1|0|Không có eligible policy|
-| Predicted body→tiles416 |0|0|Không có eligible policy|
-| Native text1280 |Không phải screen detector|2|.7|
-| Screen→native text1280 |2|1|Không có eligible policy|
+| Method                  | Screen IoU≥.5 /3           | Numeric IoU≥.5 /3 | Calibration policy       |
+| ----------------------- | -------------------------- | ----------------- | ------------------------ |
+| Full416                 | 2                          | 0                 | .25                      |
+| Tiles640                | 2                          | 1                 | Không có eligible policy |
+| Tiles416                | 2                          | 1                 | .25                      |
+| Predicted body→display  | 1                          | 0                 | Không có eligible policy |
+| Predicted body→tiles416 | 0                          | 0                 | Không có eligible policy |
+| Native text1280         | Không phải screen detector | 2                 | .7                       |
+| Screen→native text1280  | 2                          | 1                 | Không có eligible policy |
 
 Full416 có box screen IoU.845 ở clear test nhưng score.224 dưới selected.25;
 không tính accepted localization. Tiling tìm được blurred LCD bị full416 bỏ sót,
@@ -147,13 +147,13 @@ Pixel-only không có eligible positive policy. Combined chọn L2=1,threshold.6
 Segment-test preview trong calibration cũ mang CC BY-NC4.0, chỉ dùng nghiên cứu
 offline; không coi weights nghiên cứu này là model đã duyệt cho sản phẩm.
 
-| Cohort / gate | Readable giữ được | Invalid accepted | Fallback |
-| --- | --- | --- | --- |
-| New4:2 readable +status row +blurred; frozen shape |1/2|1/2|2/4|
-| New4; learned combined |1/2|1/2|2/4|
-| New4; learned pixel |0/2|0/2|4/4|
-| Historical5; frozen shape |1/3|0/2|4/5|
-| Historical5; learned combined |3/3|2/2|0/5|
+| Cohort / gate                                      | Readable giữ được | Invalid accepted | Fallback |
+| -------------------------------------------------- | ----------------- | ---------------- | -------- |
+| New4:2 readable +status row +blurred; frozen shape | 1/2               | 1/2              | 2/4      |
+| New4; learned combined                             | 1/2               | 1/2              | 2/4      |
+| New4; learned pixel                                | 0/2               | 0/2              | 4/4      |
+| Historical5; frozen shape                          | 1/3               | 0/2              | 4/5      |
+| Historical5; learned combined                      | 3/3               | 2/2              | 0/5      |
 
 Learned combined phục hồi readable retention nhưng nhận cả hai invalid historical
 controls. Cả frozen/learned đều nhận status row1.8.0 của ảnh mới như readable.
@@ -177,14 +177,14 @@ khác whole-sequence CTC all-blank đã bị loại; không train CRNN cũ, khô
 provisional/test numeric labels. Segmentation từ ảnh, không supplied digit count.
 Final train loss≈.203 không được gọi accuracy. Model không generalize đủ.
 
-| Same2 labeled LCD positives(1validation +1test), oracle numeric crop | Exact | Incorrect numeric | Fallback |
-| --- | --- | --- | --- |
-| PP runtime direct |1/2|0/2|1/2 non-numeric|
-| PP runtime page |0/2|0/2|2/2 non-numeric|
-| English CTC |2/2|0/2|0/2|
-| Server CTC |2/2|0/2|0/2|
-| PARSeq |2/2|0/2|0/2|
-| Character CNN |0/2|1/2|1/2|
+| Same2 labeled LCD positives(1validation +1test), oracle numeric crop | Exact | Incorrect numeric | Fallback        |
+| -------------------------------------------------------------------- | ----- | ----------------- | --------------- |
+| PP runtime direct                                                    | 1/2   | 0/2               | 1/2 non-numeric |
+| PP runtime page                                                      | 0/2   | 0/2               | 2/2 non-numeric |
+| English CTC                                                          | 2/2   | 0/2               | 0/2             |
+| Server CTC                                                           | 2/2   | 0/2               | 0/2             |
+| PARSeq                                                               | 2/2   | 0/2               | 0/2             |
+| Character CNN                                                        | 0/2   | 1/2               | 1/2             |
 
 Oracle full-screen crop khác oracle numeric crop: English1/2,server0/2,PARSeq1/2,
 character CNN0/2 exact. Multi-row/status/small thin digits gây lỗi; không strip
@@ -199,11 +199,11 @@ Cùng5 full photographs(2validation +3test), gồm2 readable positives,1 blurred
 1 covered meter và1 non-consumption timer. Đây là **ảnh gốc→localization→numeric string**, chưa gồm
 type/readability/register/precision/API/Staff; tất cả labels provisional.
 
-| Pipeline | Correct positive /2 | Incorrect positive numeric /2 | Invalid-control numeric /3 | Fallback /5 | Observed p95 |
-| --- | --- | --- | --- | --- | --- |
-| YOLO416 .25→English |0|0|0|5|55ms|
-| Native text .7→English |1|1|1|2|2049ms|
-| Native text .7 +row margin→English |2|0|1|2|2108ms|
+| Pipeline                           | Correct positive /2 | Incorrect positive numeric /2 | Invalid-control numeric /3 | Fallback /5 | Observed p95 |
+| ---------------------------------- | ------------------- | ----------------------------- | -------------------------- | ----------- | ------------ |
+| YOLO416 .25→English                | 0                   | 0                             | 0                          | 5           | 55ms         |
+| Native text .7→English             | 1                   | 1                             | 1                          | 2           | 2049ms       |
+| Native text .7 +row margin→English | 2                   | 0                             | 1                          | 2           | 2108ms       |
 
 Một additional correct string được phục hồi từ pixel của digit1 thật; không
 chỉ giảm false positives bằng reject-all. Nhưng non-consumption counter vẫn ra4,
@@ -218,14 +218,14 @@ interval về accuracy. [Benchmark chạy thật](ocr-continued-full-image-resul
 PARSeq là architecture mới; các models/decoding được đóng băng, chỉ đánh giá
 historical exploratory crops, không fit/train hoặc chọn threshold từ test.
 
-| Crop cohort | Reader | Exact | Incorrect numeric | Labeled fallback |
-| --- | --- | --- | --- | --- |
-| Predicted36 crops,30 labeled |English|12/30|13/30|5/30|
-| Cùng cohort |Server|16/30|10/30|4/30|
-| Cùng cohort |PARSeq|15/30|10/30|5/30|
-| Oracle52 crops,33 labeled |English|12/33|19/33|2/33|
-| Cùng cohort |Server|17/33|13/33|3/33|
-| Cùng cohort |PARSeq|14/33|17/33|2/33|
+| Crop cohort                  | Reader  | Exact | Incorrect numeric | Labeled fallback |
+| ---------------------------- | ------- | ----- | ----------------- | ---------------- |
+| Predicted36 crops,30 labeled | English | 12/30 | 13/30             | 5/30             |
+| Cùng cohort                  | Server  | 16/30 | 10/30             | 4/30             |
+| Cùng cohort                  | PARSeq  | 15/30 | 10/30             | 5/30             |
+| Oracle52 crops,33 labeled    | English | 12/33 | 19/33             | 2/33             |
+| Cùng cohort                  | Server  | 17/33 | 13/33             | 3/33             |
+| Cùng cohort                  | PARSeq  | 14/33 | 17/33             | 2/33             |
 
 Unlabeled numeric outputs và fallback trên toàn cohort nằm riêng trong JSON,
 không gọi chúng đúng/sai khi thiếu exact GT. PARSeq không hơn server; **REJECTED**.
@@ -255,12 +255,12 @@ vấn đề riêng, **NOT_RUN**. [Native/grouped/oracle evidence](ocr-continued-
 “Incorrect/fallback” dưới đây là offline component outcomes, không phải proposal
 được phát qua API. Các denominator khác mục đích không cộng thành một accuracy.
 
-| Category | New classification | Display localization | Exact reading evidence | Incorrect / fallback evidence |
-| --- | --- | --- | --- | --- |
-| Electricity mechanical |0/2|Native/grouped row thiếu glyphs trên new1; không có accepted detector|Old oracle server2/2; new oracle0/1|New assembled wrong1/1; English new oracle non-numeric1/1|
-| Electricity digital |0/2|Native numeric IoU≥.5 ở2/2 labeled positives; chưa xác minh billing register|Full-image subpipeline1/2→2/2 provisional|After margin0/2 positive wrong, nhưng invalid controls1/3 numeric; total fallback2/5|
-| Water mechanical |1/2|Không có full-pipeline localization gain mới được accepted|Historical runtime10/33; new PARSeq crop14/33 oracle|Historical PARSeq oracle17/33 wrong,2/33 labeled fallback; runtime fallback42/52 giữ nguyên|
-| Water digital |0/1 illustration, real-photo recall NOT MEASURED|Không có representative positive set mới|NOT MEASURED mới|BLOCKED_BY_DATA; không suy từ water-mechanical/energy-LCD data|
+| Category               | New classification                               | Display localization                                                         | Exact reading evidence                               | Incorrect / fallback evidence                                                               |
+| ---------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Electricity mechanical | 0/2                                              | Native/grouped row thiếu glyphs trên new1; không có accepted detector        | Old oracle server2/2; new oracle0/1                  | New assembled wrong1/1; English new oracle non-numeric1/1                                   |
+| Electricity digital    | 0/2                                              | Native numeric IoU≥.5 ở2/2 labeled positives; chưa xác minh billing register | Full-image subpipeline1/2→2/2 provisional            | After margin0/2 positive wrong, nhưng invalid controls1/3 numeric; total fallback2/5        |
+| Water mechanical       | 1/2                                              | Không có full-pipeline localization gain mới được accepted                   | Historical runtime10/33; new PARSeq crop14/33 oracle | Historical PARSeq oracle17/33 wrong,2/33 labeled fallback; runtime fallback42/52 giữ nguyên |
+| Water digital          | 0/1 illustration, real-photo recall NOT MEASURED | Không có representative positive set mới                                     | NOT MEASURED mới                                     | BLOCKED_BY_DATA; không suy từ water-mechanical/energy-LCD data                              |
 
 Không có new independent test/human acceptance; không báo CI của các tỷ lệ nhỏ,
 biased/provisional như giới hạn tin cậy cho hệ thống. Classifier accepted precision
@@ -269,18 +269,18 @@ accuracy **NOT MEASURED**.
 
 ## 12. Model decisions và ONNX/.NET integration
 
-| Model / candidate | Explicit status | Lý do |
-| --- | --- | --- |
-| Existing hierarchy |EXPERIMENTAL|Giữ historical improvement, new probes cho thấy sai/unknown; chưa activation|
-| Physical prompts /TTA /few-shot CLIP |REJECTED|Không có eligible positive policy trên new validation|
-| Tiled display /predicted-body cascade |REJECTED|Không tăng readable-positive accepted coverage đáng tin cậy|
-| Native text +row margin |EXPERIMENTAL; activation REJECTED|Có thêm correct positive nhưng invalid counter vẫn có số|
-| Learned readability pixel/combined |REJECTED|Reject-all hoặc blank/status false acceptance|
-| PARSeq base |REJECTED|Không hơn best CTC; sai numeric và chưa có state/register gates|
-| Publisher-supervised character CNN |REJECTED|0/2 provisional numeric positives|
-| Mechanical row assembly |REJECTED|Incomplete rows, new positive chưa đúng|
-| Verified water-LCD training/acceptance |BLOCKED_BY_DATA|Thiếu đa thiết bị và human-reviewed exact/state/register GT|
-| New accepted-model ONNX/.NET adapter |NOT_RUN|Không candidate qua quality gates, không export để gọi thành công|
+| Model / candidate                      | Explicit status                   | Lý do                                                                        |
+| -------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------- |
+| Existing hierarchy                     | EXPERIMENTAL                      | Giữ historical improvement, new probes cho thấy sai/unknown; chưa activation |
+| Physical prompts /TTA /few-shot CLIP   | REJECTED                          | Không có eligible positive policy trên new validation                        |
+| Tiled display /predicted-body cascade  | REJECTED                          | Không tăng readable-positive accepted coverage đáng tin cậy                  |
+| Native text +row margin                | EXPERIMENTAL; activation REJECTED | Có thêm correct positive nhưng invalid counter vẫn có số                     |
+| Learned readability pixel/combined     | REJECTED                          | Reject-all hoặc blank/status false acceptance                                |
+| PARSeq base                            | REJECTED                          | Không hơn best CTC; sai numeric và chưa có state/register gates              |
+| Publisher-supervised character CNN     | REJECTED                          | 0/2 provisional numeric positives                                            |
+| Mechanical row assembly                | REJECTED                          | Incomplete rows, new positive chưa đúng                                      |
+| Verified water-LCD training/acceptance | BLOCKED_BY_DATA                   | Thiếu đa thiết bị và human-reviewed exact/state/register GT                  |
+| New accepted-model ONNX/.NET adapter   | NOT_RUN                           | Không candidate qua quality gates, không export để gọi thành công            |
 
 New `ACCEPTED` runtime models **0**. Không thay API/DTO/DI/config/auth, Meter metadata,
 Staff confirmation, invoice/payment, unknown fallback hoặc safeguards. Không có
@@ -314,20 +314,20 @@ selection set ở lượt sau. Source captions không phải technology/digit GT
 hash logs local. Checks được chạy sau model/code units, không dùng chúng làm
 thước đo accuracy.
 
-| Check thực sự đã chạy | Kết quả |
-| --- | --- |
-| Backend solution Release build --no-restore |PASS,0 warnings/0 errors|
-| Application /Domain |PASS325 /106|
-| OCR integration, pinned models, exclude Docker/CompactPostgres |PASS125,0 skipped|
-| Disposable PostgreSQL confirmation/real ONNX/invoice/payment workflows |PASS7,0 skipped; evidence storage in memory|
-| Python script regressions |PASS59|
-| Dataset Node tests |PASS29|
-| Mobile Vitest |PASS56 suites/576 tests|
-| TypeScript /ESLint |PASS /PASS|
-| Existing Stage2 native/.NET /English Python/.NET parity |PASS10 /4 crops|
-| Full-image numeric benchmark |Executed5 images×3 methods, measured results above|
-| Physical-camera HTTPS→API→confirmation→DB→MinIO E2E |NOT_RUN: no accessible adb/device session|
-| Real MinIO evidence upload/retrieval/failure cleanup |NOT_RUN: no local9000/9001 listener; Docker Linux daemon missing pipe|
+| Check thực sự đã chạy                                                  | Kết quả                                                               |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Backend solution Release build --no-restore                            | PASS,0 warnings/0 errors                                              |
+| Application /Domain                                                    | PASS325 /106                                                          |
+| OCR integration, pinned models, exclude Docker/CompactPostgres         | PASS125,0 skipped                                                     |
+| Disposable PostgreSQL confirmation/real ONNX/invoice/payment workflows | PASS7,0 skipped; evidence storage in memory                           |
+| Python script regressions                                              | PASS59                                                                |
+| Dataset Node tests                                                     | PASS29                                                                |
+| Mobile Vitest                                                          | PASS56 suites/576 tests                                               |
+| TypeScript /ESLint                                                     | PASS /PASS                                                            |
+| Existing Stage2 native/.NET /English Python/.NET parity                | PASS10 /4 crops                                                       |
+| Full-image numeric benchmark                                           | Executed5 images×3 methods, measured results above                    |
+| Physical-camera HTTPS→API→confirmation→DB→MinIO E2E                    | NOT_RUN: no accessible adb/device session                             |
+| Real MinIO evidence upload/retrieval/failure cleanup                   | NOT_RUN: no local9000/9001 listener; Docker Linux daemon missing pipe |
 
 Owned disposable PostgreSQL loopback55493 đã dừng sau test. In-memory evidence
 không thay cho MinIO thật. Không upload private images, không thay hardware E2E
@@ -342,16 +342,16 @@ Không che các failed activation gates bằng các engineering PASS.
 
 ## 15. Chronological commits và final state
 
-| Commit | Nội dung |
-| --- | --- |
-|b934e2f|Freeze new author-separated probes and integrity checks|
-|f18611e|Evaluate hierarchy prompts, full-frame TTA and few-shot prototypes|
-|f0145f4|Separate screen/numeric taxonomy and compare native/tiled/body localization|
-|f219f25|Measure source-group cross-validated readability retention/failures|
-|b9b04f1|Compare PARSeq, trained character CNN, Paddle and margin recovery|
-|e063b22|Probe new wheel rows, preserve rolling ambiguity, prepare blinded pilot8|
-|c61f2db|Benchmark full-image numeric before/after with actual latency/invalid controls|
-|Commit chứa report này|Record results, replay instructions and final regression evidence|
+| Commit                 | Nội dung                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| b934e2f                | Freeze new author-separated probes and integrity checks                        |
+| f18611e                | Evaluate hierarchy prompts, full-frame TTA and few-shot prototypes             |
+| f0145f4                | Separate screen/numeric taxonomy and compare native/tiled/body localization    |
+| f219f25                | Measure source-group cross-validated readability retention/failures            |
+| b9b04f1                | Compare PARSeq, trained character CNN, Paddle and margin recovery              |
+| e063b22                | Probe new wheel rows, preserve rolling ambiguity, prepare blinded pilot8       |
+| c61f2db                | Benchmark full-image numeric before/after with actual latency/invalid controls |
+| Commit chứa report này | Record results, replay instructions and final regression evidence              |
 
 Final reporting HEAD là commit chứa file này; hash đầy đủ, danh sách file thay đổi
 và clean-tree status

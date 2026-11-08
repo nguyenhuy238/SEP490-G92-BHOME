@@ -6,12 +6,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BHome.Api.Controllers.Ocr;
 
-// A development harness, with no Resident/Task access or persistence. Business OCR keeps its scope checks.
+// Development harness; optional assigned-task lookup uses the normal Staff scope
+// checks and is read-only. This endpoint never persists a proposal or reading.
 [ApiController, Route("api/v1/ocr/diagnostics")]
 [Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class OcrDiagnosticsController(
-    IWebHostEnvironment environment, IConfiguration configuration, IOcrService ocr, IAutomaticOcrService automaticOcr) : ControllerBase
+    IWebHostEnvironment environment, IConfiguration configuration, IOcrService ocr, IAutomaticOcrService automaticOcr,
+    IExperimentalMeterOcrService experimentalOcr, OcrWorkflowService workflow) : ControllerBase
 {
     private bool Enabled => environment.IsDevelopment() && configuration.GetValue<bool>("MobileDevelopment:Enabled");
 
@@ -21,10 +23,20 @@ public sealed class OcrDiagnosticsController(
     [HttpPost("auto")]
     [Consumes("image/jpeg", "image/png")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public async Task<IActionResult> Automatic(CancellationToken token)
+    public async Task<IActionResult> Automatic(CancellationToken token, [FromQuery] bool experimental = false,
+        [FromQuery] Guid? taskId = null)
     {
         if (!Enabled) return NotFound();
+        if (Request.Query["experimental"].Count > 1) throw new OcrInputException("invalid_experimental_opt_in");
+        if (Request.Query["taskId"].Count > 1 || (taskId is not null && !experimental)) throw new OcrInputException("invalid_experimental_task");
+        if (experimental && !configuration.GetValue<bool>("Ocr:ExperimentalMeter:Enabled")) return NotFound();
         var elapsed = Stopwatch.StartNew();
+        if (experimental)
+        {
+            var result = taskId is { } id ? await workflow.ExperimentalMeterAsync(id, Request.Body, token) :
+                await experimentalOcr.ExtractExperimentalMeterAsync(Request.Body, token);
+            return Ok(new { analysis = result, elapsedMilliseconds = elapsed.ElapsedMilliseconds });
+        }
         var analysis = await automaticOcr.ExtractAutomaticAsync(Request.Body, token);
         return Ok(new { analysis, elapsedMilliseconds = elapsed.ElapsedMilliseconds });
     }

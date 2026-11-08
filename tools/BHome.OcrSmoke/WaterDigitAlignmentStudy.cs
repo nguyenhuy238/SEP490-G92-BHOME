@@ -21,8 +21,13 @@ internal static class WaterDigitAlignmentStudy
             throw new InvalidDataException("Validation source overlaps excluded held-out images.");
         // The caller supplies a frozen validation manifest with the known exact
         // overlap removed. Assert that each input and label matches its hash.
-        var options = new OcrOptions { Enabled = true, ModelDirectory = ocr, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = ocr,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
@@ -83,21 +88,40 @@ internal static class WaterDigitAlignmentStudy
                         alignedValue.Replace(".", "", StringComparison.Ordinal) == digit.Digits;
                     var strict = agrees ? candidate : candidate with { ProposedFields = new Dictionary<string, string>(), IsFallback = true };
                     variants.Add(Observation("aligned_pp_must_agree", strict, expected, clear));
-                    variants.Add(new { name = "diagnostics", stage2 = digit.Digits, pp = fullProposal.ProposedFields.GetValueOrDefault("reading"),
-                        alignedPp = rowText.Lines.Select(l => new { l.Text, l.Confidence }), veto,
-                        originalDisagreement = fullProposal.ProposedFields.TryGetValue("reading", out var full) && full.Replace(".", "") != digit.Digits });
+                    variants.Add(new
+                    {
+                        name = "diagnostics",
+                        stage2 = digit.Digits,
+                        pp = fullProposal.ProposedFields.GetValueOrDefault("reading"),
+                        alignedPp = rowText.Lines.Select(l => new { l.Text, l.Confidence }),
+                        veto,
+                        originalDisagreement = fullProposal.ProposedFields.TryGetValue("reading", out var full) && full.Replace(".", "") != digit.Digits
+                    });
                 }
             }
-            rows.Add(new { imageId = name, sha256 = manifest[name], completeDigitGroundTruth = clear ? expected : null,
-                partialDigitGroundTruth = !clear ? expected : null, sceneAllowed = selection.CanRecognize,
-                sceneWarnings = selection.Warnings, elapsedMs = clock.ElapsedMilliseconds, variants });
+            rows.Add(new
+            {
+                imageId = name,
+                sha256 = manifest[name],
+                completeDigitGroundTruth = clear ? expected : null,
+                partialDigitGroundTruth = !clear ? expected : null,
+                sceneAllowed = selection.CanRecognize,
+                sceneWarnings = selection.Warnings,
+                elapsedMs = clock.ElapsedMilliseconds,
+                variants
+            });
             Console.WriteLine($"Aligned validation fixture {rows.Count}");
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { experiment = "digit-polygon-aligned-pp-v1",
-            inputTransform = "mobile-1600-jpeg85", selectionSet = "historical_author_validation_deduplicated",
-            independentAcceptance = false, runtimeEnabled = false,
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            experiment = "digit-polygon-aligned-pp-v1",
+            inputTransform = "mobile-1600-jpeg85",
+            selectionSet = "historical_author_validation_deduplicated",
+            independentAcceptance = false,
+            runtimeEnabled = false,
             manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifestPath))),
-            excludedManifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(excludedManifestPath))), rows,
+            excludedManifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(excludedManifestPath))),
+            rows,
             limitations = new[] { "Digit-only labels; no decimal/register ground truth.", "Shared source/physical-meter independence unknown.",
                 "New digit-polygon ROI, not a repeat of display-margin/CLAHE probes.", "Reject if false/unknown proposals increase or exact coverage does not improve on validation; do not select using test." }
         }, OcrEvaluation.Json));
@@ -107,9 +131,15 @@ internal static class WaterDigitAlignmentStudy
     private static object Observation(string name, OcrProposal proposal, string expected, bool clear)
     {
         var value = proposal.ProposedFields.GetValueOrDefault("reading");
-        return new { name, proposed = value is not null, exactDigits = clear && value == expected,
-            falseProposal = clear && value is not null && value != expected, unknownGroundTruth = !clear && value is not null,
-            warnings = proposal.Warnings };
+        return new
+        {
+            name,
+            proposed = value is not null,
+            exactDigits = clear && value == expected,
+            falseProposal = clear && value is not null && value != expected,
+            unknownGroundTruth = !clear && value is not null,
+            warnings = proposal.Warnings
+        };
     }
 
     internal static bool TryDigitRow(Size display, IReadOnlyList<YoloMeterSceneDetector.YoloBox> boxes, out RotatedRect row)

@@ -150,7 +150,10 @@ function validateMeterDataset(manifest, imageRoot) {
         issue(index, 'window_outside_meter');
       const r = s.reading;
       const nonNumeric = r && ['blank', 'status'].includes(r.visibility);
-      if (r?.visibility !== undefined && !['readable', 'unreadable', 'blank', 'status'].includes(r.visibility))
+      if (
+        r?.visibility !== undefined &&
+        !['readable', 'unreadable', 'blank', 'status'].includes(r.visibility)
+      )
         issue(index, 'invalid_display_visibility');
       if (
         !r ||
@@ -164,8 +167,13 @@ function validateMeterDataset(manifest, imageRoot) {
         issue(index, 'invalid_digit_layout');
       else {
         if (nonNumeric) {
-          if (r.digitCount !== 0 || r.digits !== null || r.unreadablePositions.length !== 0 ||
-              r.decimalPlaces !== null || !['unknown', 'other'].includes(r.billingRegister))
+          if (
+            r.digitCount !== 0 ||
+            r.digits !== null ||
+            r.unreadablePositions.length !== 0 ||
+            r.decimalPlaces !== null ||
+            !['unknown', 'other'].includes(r.billingRegister)
+          )
             issue(index, 'non_numeric_display_has_reading');
         } else if (
           r.unreadablePositions.length

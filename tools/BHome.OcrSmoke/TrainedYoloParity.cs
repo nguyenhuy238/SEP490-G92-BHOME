@@ -59,8 +59,15 @@ internal static class TrainedYoloParity
                 }
                 finally { input.Buffer.Span.Clear(); }
             }
-            File.WriteAllText(report, JsonSerializer.Serialize(new { passed, inputShape, outputShape, classes, rows,
-                limitation = "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim." }, OcrEvaluation.Json));
+            File.WriteAllText(report, JsonSerializer.Serialize(new
+            {
+                passed,
+                inputShape,
+                outputShape,
+                classes,
+                rows,
+                limitation = "Preprocessing and tensor parity only; no category, reading accuracy or runtime activation claim."
+            }, OcrEvaluation.Json));
             Console.WriteLine($"Fine-tuned .NET/ORT parity: {passed}, {rows.Count} images");
             return passed ? 0 : 1;
         }
