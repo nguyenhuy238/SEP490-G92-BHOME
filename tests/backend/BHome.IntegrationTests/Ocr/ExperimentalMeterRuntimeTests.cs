@@ -17,6 +17,28 @@ namespace BHome.IntegrationTests.Ocr;
 public sealed class ExperimentalMeterRuntimeTests
 {
     [ExperimentalModelsFact]
+    public async Task FreshUnverifiedDisplaysDoNotProduceExperimentalReadings()
+    {
+        var directory=Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
+        using var catalog=JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory,"docs/datasets/meter/accuracy-next-public-sources.json")));
+        using var root=new ApiFactory();using var factory=Configure(root,directory);using var client=factory.CreateClient();
+        var rows=new List<object>();
+        foreach(var sample in catalog.RootElement.GetProperty("assets").EnumerateArray())
+        {
+            var bytes=await File.ReadAllBytesAsync(Path.Combine(directory,sample.GetProperty("image").GetString()!));
+            Assert.Equal(sample.GetProperty("sha256").GetString(),Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+            using var request=Request("?experimental=true",Roles.Staff,bytes);
+            using var response=await client.SendAsync(request);Assert.Equal(HttpStatusCode.OK,response.StatusCode);
+            using var body=JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var result=body.RootElement.GetProperty("analysis");
+            Assert.Null(result.GetProperty("readingCandidate").GetString());
+            Assert.False(result.GetProperty("businessProposalEnabled").GetBoolean());
+            rows.Add(new {id=sample.GetProperty("id").GetString(),result=body.RootElement.Clone()});
+        }
+        Assert.Equal(3,rows.Count);
+        await File.WriteAllTextAsync(Path.Combine(directory,".tools/ocr-accuracy-next/fresh-http.json"),JsonSerializer.Serialize(rows,new JsonSerializerOptions {WriteIndented=true}));
+    }
+    [ExperimentalModelsFact]
     public async Task UnitRefinementRecoversConsumptionWithoutAcceptingInvalidFullFrames()
     {
         var directory=Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;

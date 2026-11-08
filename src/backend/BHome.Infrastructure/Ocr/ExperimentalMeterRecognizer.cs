@@ -1,5 +1,6 @@
 using BHome.Application.Ocr;
 using OpenCvSharp;
+using System.Text.RegularExpressions;
 
 namespace BHome.Infrastructure.Ocr;
 
@@ -53,9 +54,12 @@ public sealed class ExperimentalMeterRecognizer : IDisposable
                 var expanded=ExpandNumericRow(bounds,regions,image.Size());
                 using var expandedImage=new Mat(image,expanded);
                 var alternate=reader.Value.Recognize(expandedImage,token).Line;
-                if(!HasActiveInk(expandedImage)) continue;
+                line=ChooseNumericExpansion(line,alternate with { Bounds=new(expanded.X,expanded.Y,expanded.Width,expanded.Height) });
+                var selectedBounds=line.Bounds!;
+                using var selectedImage=new Mat(image,new Rect((int)selectedBounds.X,(int)selectedBounds.Y,
+                    (int)selectedBounds.Width,(int)selectedBounds.Height));
+                if(!HasActiveInk(selectedImage)) continue;
                 activeNumeric=true;
-                line=alternate with { Bounds=new(expanded.X,expanded.Y,expanded.Width,expanded.Height) };
             }
             else if(options.ExperimentalMeter.RefineUnitCrops && NeedsUnitRefinement(line))
             {
@@ -87,6 +91,11 @@ public sealed class ExperimentalMeterRecognizer : IDisposable
         return new("review_required",visual.Decision,category,candidate.Text,"readable_candidate",selected.Status,
             [..selected.Warnings,"category_requires_human_review",..unitRefined?new[]{"unit_crop_rectified","unit_requires_human_review"}:Array.Empty<string>()],candidate.Bounds);
     }
+    // Expanding a row may pull a brand/status label into CTC. Keep the observed
+    // numeric box instead of replacing digits with mixed text or stripping it.
+    internal static OcrLine ChooseNumericExpansion(OcrLine original,OcrLine expanded) =>
+        Regex.IsMatch(expanded.Text,@"^[0-9]{1,12}(?:[.,][0-9]{1,4})?$",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100))
+            ? expanded : original;
     internal static bool NeedsUnitRefinement(OcrLine original) => original.Text.Length is >=1 and <=12 &&
         original.Text.Any(char.IsLetter) && !original.Text.Any(char.IsDigit) &&
         !MeterOcrLayout.IsUnit(original.Text) && !MeterOcrLayout.IsNonBillingUnit(original.Text) &&
