@@ -17,11 +17,16 @@ import {
   type IncidentPhoto,
 } from '../../services/incidents';
 import { useIncidentMutation, useIncidentQuery } from './useIncidentData';
+import { TenantIncidentReportForm } from './TenantIncidentReportForm';
 
 export function IncidentReportForm() {
   const { session } = useSession();
   const { role } = useWorkspace();
-  return <ReportForm key={`${session?.userId}:${role}`} />;
+  return role === 'Tenant' ? (
+    <TenantIncidentReportForm key={`${session?.userId}:${role}`} />
+  ) : (
+    <ReportForm key={`${session?.userId}:${role}`} />
+  );
 }
 function ReportForm() {
   const { api, session } = useSession();

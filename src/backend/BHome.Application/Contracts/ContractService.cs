@@ -5,6 +5,7 @@ using System.Text.Json;
 using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Storage;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
@@ -17,7 +18,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IContractSettlementLedger ledger, IContractHoldingLedger holdings, TimeProvider clock,
     IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null,
     IContractHandoverRepository? handoverRepository = null, IContractSigningPages? signingPages = null,
-    IContractSigningDocumentSource? signingDocuments = null) : IAdministrativeContractReadiness
+    IContractSigningDocumentSource? signingDocuments = null, IPropertyLifecycleChecks? lifecycle = null,
+    IOperatingPolicyWorkflow? operatingPolicies = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -93,8 +95,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private static Guid RequireTenant(Contract c) => c.TenantUserId ?? throw ContractException.Conflict("tenant_account_required_for_lifecycle");
     private static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, RequireTenant(c),
         c.RepresentativeResidentId, c.Residents.Select(x => x.ResidentId).Order().ToArray(), c.StartDate, c.EndDate,
-        c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash);
-    private static void Seal(Contract c) => c.SnapshotHash = ContractDocumentSnapshot.Hash(Document(c));
+        c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
+    { IsOperatingPolicyAmendment = c.Kind == ContractKind.Addendum };
+    private static void Seal(Contract c)
+    {
+        // Native VND columns have scale 0; hash the exact values that survive a database round-trip.
+        c.MonthlyRent = decimal.Truncate(c.MonthlyRent); c.RequiredDeposit = decimal.Truncate(c.RequiredDeposit);
+        c.AppliedHoldingDeposit = decimal.Truncate(c.AppliedHoldingDeposit);
+        c.SnapshotHash = ContractDocumentSnapshot.Hash(Document(c));
+    }
     private static bool Intact(Contract c) => c.SnapshotHash == ContractDocumentSnapshot.Hash(Document(c));
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
         c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
@@ -134,6 +143,16 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             x.ResidentIds.Distinct().Count() != x.ResidentIds.Length || !x.ResidentIds.Contains(x.RepresentativeResidentId))
             throw ContractException.Invalid("invalid_contract_period_or_residents");
         await ScopeRoom(x.RoomId, t);
+        if (x.HoldingContractId is { } sourceId)
+        {
+            var source = await Load(sourceId, [Roles.Owner, Roles.Staff], t);
+            if (source.RoomId != x.RoomId || source.OwnerSignerId != x.OwnerSignerId || source.TenantUserId != x.TenantUserId ||
+                source.RepresentativeResidentId != x.RepresentativeResidentId || source.MonthlyRent != x.MonthlyRent ||
+                source.StartDate != x.StartDate || source.EndDate != x.EndDate || source.Terms != x.Terms.Trim() ||
+                !source.Residents.Select(r => r.ResidentId).Order().SequenceEqual(x.ResidentIds.Order()))
+                throw ContractException.Conflict("holding_conversion_terms_mismatch");
+            return await ConvertHoldingAsync(sourceId, new(x.RequiredDeposit), key, t);
+        }
         return await repository.InTransactionAsync(x.RoomId, async () =>
         {
             await ScopeRoom(x.RoomId, t);
@@ -176,6 +195,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 Role = r.Id == x.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant,
                 ResidenceFrom = c.StartDate
             }).ToList();
+            if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(c, t);
             Seal(c); repository.Add(c); Audit("ContractDraftCreated", c.Id); Remember(key, "draft", x, c.Id); return new ContractId(c.Id);
         }, t);
     }
@@ -205,6 +225,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 Terms = x.Terms.Trim()
             };
             next.Residents = c.Residents.Select(r => new ContractResident { ContractId = next.Id, ResidentId = r.ResidentId, Role = r.Role, ResidenceFrom = next.StartDate }).ToList();
+            if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(next, t);
             Seal(next); repository.Add(next); Audit("ContractRenewalPrepared", next.Id); Remember(key, "renewal", new { id, x }, next.Id); return new ContractId(next.Id);
         }, t);
     }
@@ -237,9 +258,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             };
             if (c.Kind == ContractKind.Holding)
             {
+                if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
                 var already = await repository.DepositTotalAsync(c.Id, t);
                 if (already + entry.Amount > c.RequiredDeposit) throw ContractException.Conflict("holding_deposit_excess_requires_manual_review");
-                await LockHoldingPriceAsync(c, "VerifiedDeposit", entry.VerifiedAt, t);
+                await LockHoldingPriceAsync(c, "VerifiedDeposit", entry.VerifiedAt, t, entry.Amount);
             }
             repository.Add(entry); Audit("ContractDepositVerified", id); Remember(key, "deposit", new { id, x }, entry.Id); return new ContractId(entry.Id);
         }, t);
@@ -256,6 +278,16 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private async Task<ActivationReadiness> Readiness(Contract c, CancellationToken t)
     {
         List<string> blockers = [];
+        if (c.Kind == ContractKind.Addendum)
+        {
+            var parent = c.ParentContractId is { } amendmentParent ? await repository.FindAsync(amendmentParent, t) : null;
+            if (parent is null || parent.Status != ContractStatus.Active || parent.RoomId != c.RoomId || parent.TenantUserId != c.TenantUserId || parent.OwnerSignerId != c.OwnerSignerId)
+                blockers.Add("amendment_parent_not_active");
+            if (c.Status != ContractStatus.PendingActivation || !Intact(c) || !HoldingSigned(c)) blockers.Add("verified_signature_evidence_required");
+            if (Today < c.StartDate || Today > c.EndDate) blockers.Add("amendment_not_effective");
+            return new(blockers.Count == 0, 0, 0, blockers.ToArray());
+        }
+        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, t));
         if (c.Kind == ContractKind.Holding) blockers.Add("main_contract_required");
         if (c.IsDevelopmentDemo && !DemoEnabled) blockers.Add("development_demo_disabled");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("contract_not_pending_activation");
@@ -311,6 +343,12 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             using var bytes = new MemoryStream(); await storage.CopyToAsync(s.SignedObjectKey!, bytes, t);
             if (FileHash(bytes.ToArray()) != s.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
         }
+        if (c.Kind == ContractKind.Addendum)
+        {
+            await (operatingPolicies ?? throw ContractException.Conflict("operating_policy_workflow_unavailable")).ApplyAmendmentAsync(c, t);
+            c.Status = ContractStatus.Applied; c.ActivatedAt = clock.GetUtcNow(); c.ActivatedByUserId = Actor;
+            Audit("OperatingPolicyAmendmentApplied", id); Remember(key, "activate", id, id); return View(c);
+        }
         if (c.PreviousContractId is { } previous)
         {
             var parent = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
@@ -334,6 +372,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         Audit("ContractActivated", id); Remember(key, "activate", id, id); return View(c);
     }, t);
 
+    public Task<ContractView> CancelPolicyAmendmentAsync(Guid id, PolicyAmendmentCancellation input, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
+    {
+        if (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Length > 2000) throw ContractException.Invalid("reason_required");
+        if (await Replay(key, "cancel-policy-amendment", new { id, input }, t) is not null) return View(c);
+        if (c.Kind != ContractKind.Addendum || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation)) throw ContractException.Conflict("policy_amendment_not_cancellable");
+        c.Status = ContractStatus.Cancelled; c.LifecycleActorId = Actor; c.LifecycleAt = clock.GetUtcNow(); c.LifecycleReason = input.Reason.Trim();
+        Audit("OperatingPolicyAmendmentCancelled", id); Remember(key, "cancel-policy-amendment", new { id, input }, id); return View(c);
+    }, t);
+
     // Persist prepared work before making the ambiguous external mutation. Never automatically resend Dispatching.
     public async Task<SignatureView> RequestSigningAsync(Guid id, SigningInput x, Guid key, CancellationToken t)
     {
@@ -345,6 +392,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign", new { id, x }, t) is not null) return true;
             if (c.Kind == ContractKind.Holding && c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
+            if (c.Kind == ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
             if (c.Status == ContractStatus.Draft) { c.Status = ContractStatus.PendingSigning; Audit("ContractSigningInitiated", id); }
             return true;
@@ -355,6 +403,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign", new { id, x }, t) is { } prior) return prior;
             if (c.Kind == ContractKind.Holding && c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
+            if (c.Kind == ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
             if (c.Signatures.Any(s => s.SignerUserId == Actor && s.Status != SignatureStatus.Failed)) throw ContractException.Conflict("signer_already_requested");
             if (c.Signatures.Any(s => s.Status is not (SignatureStatus.Signed or SignatureStatus.Simulated or SignatureStatus.Failed))) throw ContractException.Conflict("previous_signature_pending");
@@ -418,7 +467,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     {
         RequireSigningMode(c);
         if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
-        if (c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Superseded) return View(c);
+        if (c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Applied) return View(c);
         var s = c.Signatures.Where(s => s.SignerUserId == Actor).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
         if (s.Status != SignatureStatus.Pending) return View(c);
         if (!Intact(c) || s.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");

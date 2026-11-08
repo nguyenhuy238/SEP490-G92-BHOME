@@ -3,6 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Button, Icon, ProgressBar, Text } from 'react-native-paper';
 import { StaffFeatureCard } from './StaffFeatureCard';
 import { colors as c, staffColors as s } from '../theme/theme';
+import { typography } from '../theme/typography';
 
 // Shared presentation follows the existing Staff dashboard, including its spacing,
 // surfaces and icon palette. Data and navigation remain in each role's screen.
@@ -75,7 +76,7 @@ export function DashboardStatus({
         maxWidth: '100%',
       }}
     >
-      <Text variant="labelMedium" style={{ color }}>
+      <Text variant="labelMedium" style={[typography.label, { color }]}>
         {children}
       </Text>
     </View>
@@ -94,10 +95,10 @@ export function DashboardSummary({
   return (
     <View style={dashboardStyles.summary}>
       <View style={{ gap: 4 }}>
-        <Text variant="headlineSmall" style={dashboardStyles.title}>
+        <Text variant="headlineSmall" style={[dashboardStyles.title, typography.screenTitle]}>
           {title}
         </Text>
-        <Text variant="bodySmall" style={dashboardStyles.muted}>
+        <Text variant="bodySmall" style={[dashboardStyles.muted, typography.secondary]}>
           {detail}
         </Text>
       </View>
@@ -121,11 +122,11 @@ export function DashboardHeading({
     <View style={dashboardStyles.sectionHeading}>
       <View style={dashboardStyles.accent} />
       <View style={dashboardStyles.grow}>
-        <Text variant="titleMedium" style={dashboardStyles.title}>
+        <Text variant="titleMedium" style={[dashboardStyles.title, typography.sectionHeading]}>
           {title}
         </Text>
         {!!detail && (
-          <Text variant="bodySmall" style={dashboardStyles.muted}>
+          <Text variant="bodySmall" style={[dashboardStyles.muted, typography.secondary]}>
             {detail}
           </Text>
         )}

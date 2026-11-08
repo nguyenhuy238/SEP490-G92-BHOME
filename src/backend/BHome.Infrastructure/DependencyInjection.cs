@@ -151,6 +151,20 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        services.AddScoped<BHome.Application.PropertyManagement.ISetupWorkspaceStore,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
+        services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
+        services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
+        services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
+        services.AddHostedService<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateAutomationWorker>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>());
+        services.AddScoped<BHome.Application.PropertyManagement.UtilityWorkspaceService>();
+        services.AddScoped<BHome.Application.PropertyManagement.IUtilityBilling>(p => p.GetRequiredService<BHome.Application.PropertyManagement.UtilityWorkspaceService>());
+        services.AddScoped<BHome.Application.PropertyManagement.OperatingPolicyService>();
+        services.AddScoped<BHome.Application.PropertyManagement.IOperatingPolicyWorkflow>(p => p.GetRequiredService<BHome.Application.PropertyManagement.OperatingPolicyService>());
+        services.AddScoped<BHome.Application.PropertyManagement.IPropertyLifecycleChecks,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.PropertyLifecycleChecks>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();

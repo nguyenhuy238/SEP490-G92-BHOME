@@ -1,8 +1,15 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { Dialog, Portal, Button, Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
-import { homeScreen, sessionRole, type MobileRole, type WorkspaceScreen } from './navigation';
+import {
+  homeScreen,
+  sessionRole,
+  isWorkspaceTabDestination,
+  workspaceTabHref,
+  type MobileRole,
+  type WorkspaceScreen,
+} from './navigation';
 
 interface WorkspaceContext {
   registerExitGuard: (guard: () => boolean, onLeave: () => void) => () => void;
@@ -21,6 +28,12 @@ interface WorkspaceContext {
 const Context = createContext<WorkspaceContext | null>(null);
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
+  const identity = session ? `${session.userId}:${session.roles.join(',')}` : 'anonymous';
+  return <WorkspaceSessionProvider key={identity}>{children}</WorkspaceSessionProvider>;
+}
+function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
+  const { session } = useSession();
+  const segments = useSegments();
   const [previewRole, setPreviewRole] = useState<MobileRole | null>(null);
   const [message, setMessage] = useState('');
   const [confirmExit, setConfirmExit] = useState(false);
@@ -45,9 +58,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
   const go = (screen: WorkspaceScreen, params?: Record<string, string>) =>
-    requestNavigation(() =>
-      router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } }),
-    );
+    requestNavigation(() => {
+      if (role && isWorkspaceTabDestination(role, screen, params)) {
+        const href = workspaceTabHref(screen);
+        // Inside Tabs this changes the selected route. From a detail, unwind to
+        // the existing Tabs instance instead of stacking another workspace.
+        if (segments.includes('(tabs)')) router.navigate(href);
+        else router.dismissTo(href);
+      } else router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } });
+    });
   return (
     <Context.Provider
       value={{
@@ -67,7 +86,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         startPreview: (next) => {
           if (session || !__DEV__) return;
           setPreviewRole(next);
-          router.replace({ pathname: '/workspace/[screen]', params: { screen: homeScreen[next] } });
+          router.replace(workspaceTabHref(homeScreen[next]));
         },
         leavePreview: () =>
           requestNavigation(() => {

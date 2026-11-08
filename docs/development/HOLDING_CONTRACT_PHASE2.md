@@ -1,5 +1,7 @@
 # Phase 2 — Holding Contract, Deposit and Price Protection
 
+> Quyết định bổ sung 08/11/2026: khóa approved price snapshot chỉ khi **đủ chữ ký và đủ cọc đã xác minh** (`SigningAndDepositCompleted`), thay cho mô tả trigger “chữ ký hoặc cọc” bên dưới. Holding giữ độc quyền cả Room khi có cam kết ký/cọc; các Draft chưa cam kết có thể cùng tồn tại. Owner activation mới đưa Holding Active/Room OnHold. Hủy/hết hạn có tiền chờ Owner xử lý, không tự hoàn. Implementation và bằng chứng kiểm thử mới: [Owner setup delivery](OWNER_SETUP_DELIVERY_2026-11-08.md).
+
 Ngày cập nhật: 06/11/2026.
 
 Trạng thái: **IMPLEMENTED IN WORKTREE — NOT ACCEPTED / POSTGRESQL VERIFICATION BLOCKED**.

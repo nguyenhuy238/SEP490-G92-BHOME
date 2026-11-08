@@ -29,9 +29,9 @@ public sealed class PersistenceCompositionTests
         var names = services.GetServices<IBackgroundJobHandler>().Select(h => h.Name).Order().ToArray();
         var shared = new[] { "billing-draft", "billing-final", "billing-meter", "contract-expiry",
             "incident.notification", "notification-publish", "notification-delivery" };
-        var expected = compact ? shared.Concat(["notification-channels", "recurring-operational-tasks"]) : shared;
+        var expected = compact ? shared.Concat(["asset-template-sync", "notification-channels", "recurring-operational-tasks"]) : shared;
         Assert.Equal(expected.Order(), names);
-        Assert.Equal(compact ? 5 : 3, services.GetServices<IJobScheduleContributor>().Count());
+        Assert.Equal(compact ? 6 : 3, services.GetServices<IJobScheduleContributor>().Count());
         if (!compact) Assert.Null(services.GetService<Compact24DbContext>());
     }
 }

@@ -36,6 +36,8 @@ internal static class Compact24DomainModel
         model.Entity<IdentityUserRole<Guid>>().HasKey(x => new { x.UserId, x.RoleId });
 
         var contract = model.Entity<Contract>();
+        model.Entity<BHome.Domain.Billing.InvoiceLine>().Property(x => x.UtilityCalculationSnapshot);
+        contract.Property(x => x.ParentContractId); contract.Property(x => x.OperatingPolicySnapshot);
         contract.Property(x => x.HoldingExpiryAt); contract.Property(x => x.ReservedCapacity);
         contract.Property(x => x.ApprovedByUserId); contract.Property(x => x.ApprovedAt); contract.Property(x => x.ApprovalReason);
         contract.Property(x => x.AgreedPriceSnapshot); contract.Property(x => x.PriceLockTrigger); contract.Property(x => x.PriceLockedAt);

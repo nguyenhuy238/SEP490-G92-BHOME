@@ -8,6 +8,7 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
 import { colors as c, staffColors as s } from '../theme/theme';
+import { typography } from '../theme/typography';
 
 export function StaffDashboard() {
   const { go, preview } = useWorkspace();
@@ -63,10 +64,12 @@ export function StaffDashboard() {
     ? 'BHOME Đống Đa - Tòa B · Mẫu'
     : data.locations.loading
       ? 'Đang tải cơ sở…'
-      : data.locations.error
-        ? 'Chưa tải được cơ sở'
-        : data.locations.data?.map((item) => item.label).join(' · ') ||
-          'Chưa có cơ sở được phân công';
+      : data.locations.data?.length
+        ? data.locations.data.map((item) => item.label).join(' · ') +
+          (data.locations.error ? ' · Chưa cập nhật được' : '')
+        : data.locations.error
+          ? 'Chưa tải được cơ sở'
+          : 'Chưa có cơ sở được phân công';
   const taskValue = preview ? '6' : data.tasks.data ? String(data.tasks.data.totalCount) : '—';
   const pendingInspections = data.inspections.data?.filter((item) => item.status === 'Approved');
   function open(screen: WorkspaceScreen) {
@@ -78,10 +81,10 @@ export function StaffDashboard() {
       <View style={styles.summary}>
         <View style={styles.greetingRow}>
           <View style={styles.greeting}>
-            <Text variant="headlineSmall" style={styles.title}>
+            <Text variant="headlineSmall" style={[styles.title, typography.screenTitle]}>
               {preview ? 'Xin chào, Long!' : 'Chào bạn, bắt đầu ngày mới!'}
             </Text>
-            <Text variant="bodySmall" style={styles.muted}>
+            <Text variant="bodySmall" style={[styles.muted, typography.secondary]}>
               {locationLabel}
             </Text>
           </View>
@@ -103,7 +106,7 @@ export function StaffDashboard() {
             <DashboardStatus tone="neutral">
               {preview ? 'Ca sáng · 07:30–16:30 · Mẫu' : 'Chưa có dữ liệu ca làm'}
             </DashboardStatus>
-            <Text variant="labelSmall" style={styles.muted}>
+            <Text variant="labelSmall" style={[styles.muted, typography.status]}>
               Xem lịch ca ›
             </Text>
           </View>
@@ -138,7 +141,7 @@ export function StaffDashboard() {
               accessibilityLabel={metric.label}
             >
               <View style={styles.metricContent}>
-                <Text variant="headlineMedium" style={styles.title}>
+                <Text variant="headlineMedium" style={[styles.title, typography.metric]}>
                   {metric.value}
                 </Text>
                 <Text style={styles.metricLabel}>{metric.label}</Text>
@@ -147,7 +150,7 @@ export function StaffDashboard() {
           ))}
         </View>
         {!preview && (
-          <Text variant="labelSmall" style={styles.muted}>
+          <Text variant="labelSmall" style={[styles.muted, typography.status]}>
             Lịch bàn giao nhận phòng chưa có dữ liệu tổng hợp. Dấu — nghĩa là chưa có dữ liệu hoặc
             chưa tải được dữ liệu.
           </Text>
@@ -174,10 +177,10 @@ export function StaffDashboard() {
               >
                 <View style={styles.priority}>
                   <View style={styles.greeting}>
-                    <Text variant="titleSmall" style={styles.title}>
+                    <Text variant="titleSmall" style={[styles.title, typography.cardTitle]}>
                       {item.title}
                     </Text>
-                    <Text variant="labelSmall" style={styles.muted}>
+                    <Text variant="labelSmall" style={[styles.muted, typography.secondary]}>
                       {item.detail}
                     </Text>
                   </View>
@@ -198,7 +201,7 @@ export function StaffDashboard() {
         <Dialog visible={handover} onDismiss={() => setHandover(false)}>
           <Dialog.Title>Bàn giao / Trả phòng</Dialog.Title>
           <Dialog.Content>
-            <Text>Chọn nghiệp vụ cần thực hiện theo hồ sơ hợp đồng.</Text>
+            <Text style={typography.body}>Chọn nghiệp vụ cần thực hiện theo hồ sơ hợp đồng.</Text>
           </Dialog.Content>
           <Dialog.Actions style={styles.dialogActions}>
             <Button
@@ -229,12 +232,12 @@ const styles = StyleSheet.create({
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   greeting: { flex: 1, minWidth: 100, gap: 4 },
   title: { color: s.navy },
-  muted: { color: c.muted },
+  muted: { ...typography.body, color: c.muted },
   shift: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   metrics: { flexDirection: 'row' },
   metric: { flex: 1 },
   metricContent: { alignItems: 'center', paddingHorizontal: 4, paddingVertical: 8, gap: 5 },
-  metricLabel: { fontSize: 11, lineHeight: 16, textAlign: 'center', color: c.muted },
+  metricLabel: { ...typography.status, textAlign: 'center', color: c.muted },
   divider: { borderLeftWidth: 1, borderLeftColor: c.border },
   section: dashboardStyles.section,
   priorityList: { backgroundColor: c.white, borderRadius: 16, overflow: 'hidden' },
@@ -246,6 +249,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.border,
   },
-  priorityStatus: { color: s.orange, flexShrink: 1 },
+  priorityStatus: { ...typography.status, color: s.orange, flexShrink: 1 },
   dialogActions: { flexDirection: 'column', alignItems: 'stretch' },
 });

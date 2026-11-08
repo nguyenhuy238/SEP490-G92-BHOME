@@ -5,7 +5,9 @@ import { paymentText } from '../../../../../packages/client-core/src/payments';
 export function positiveAmount(value: string) {
   return /^\d+(?:\.\d+)?$/.test(value) && /[1-9]/.test(value);
 }
-export function tenantPaymentLabel(payment: InvoicePayment) {
+export function tenantPaymentLabel(
+  payment: Pick<InvoicePayment, 'paymentStatus' | 'paidAmount' | 'outstandingAmount'>,
+) {
   if (
     payment.paymentStatus === 'Unpaid' &&
     positiveAmount(payment.paidAmount) &&

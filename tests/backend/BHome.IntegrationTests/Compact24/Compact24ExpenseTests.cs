@@ -35,7 +35,7 @@ public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IC
         var owner = await User("Owner");
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var location = new Location("Synthetic Finance " + Guid.NewGuid()) { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
+        var location = new Location("Synthetic Finance " + Guid.NewGuid());
         db.Add(location); await db.SaveChangesAsync();
         return (owner, new(location.Id, null, "OPERATING", "Điện khu vực chung", 123456, new(2026, 11, 1), "Chứng từ tổng hợp"));
     }

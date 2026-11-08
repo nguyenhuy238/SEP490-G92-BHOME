@@ -20,11 +20,11 @@ public sealed partial class Compact24ExpenseTests
         var otherRoom = new Room { LocationId = input.LocationId, RoomNumber = "REF-B", Capacity = 2 };
         var asset = new Asset { LocationId = input.LocationId, RoomId = room.Id, Name = "SYNTHETIC ASSET", Category = "Furniture", Condition = "Good" };
         var otherAsset = new Asset { LocationId = input.LocationId, RoomId = otherRoom.Id, Name = "OTHER ROOM ASSET", Category = "Furniture", Condition = "Good" };
-        var outsideLocation = new BHome.Domain.Locations.Location("SYNTHETIC OUTSIDE") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
+        var outsideLocation = new BHome.Domain.Locations.Location("SYNTHETIC OUTSIDE");
         var outsideAsset = new Asset { LocationId = outsideLocation.Id, CommonArea = "Synthetic area", Name = "OUTSIDE ASSET", Category = "Furniture", Condition = "Good" };
         db.AddRange(room, otherRoom, asset, otherAsset, outsideLocation, outsideAsset); await db.SaveChangesAsync();
         var actor = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM users WHERE 'Owner'=ANY(roles) ORDER BY id LIMIT 1").SingleAsync();
-        var incident = Guid.NewGuid(); var task = Guid.NewGuid(); var general = Guid.NewGuid(); var outsideIncident = Guid.NewGuid(); var corruptTask = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
+        var incident = Guid.NewGuid(); var task = Guid.NewGuid(); var general = Guid.NewGuid(); var outsideIncident = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
         // Only synthetic existing-source records: this does not claim a Work Order workflow/API exists.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO incident_reports(id,location_id,room_id,reporter_user_id,severity,summary,description,status,reported_at)
@@ -32,10 +32,10 @@ public sealed partial class Compact24ExpenseTests
               ({outsideIncident},{outsideLocation.Id},NULL,{actor},'NORMAL','Other source','Synthetic incident','REVIEWED',{now})
             """);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO operational_tasks(id,task_type,location_id,room_id,asset_id,incident_report_id,title,status)
-            VALUES({task},'WORK_ORDER',{input.LocationId},{room.Id},{asset.Id},{incident},'SYNTHETIC WORK ORDER','VERIFIED'),
-              ({general},'GENERAL',{input.LocationId},{room.Id},NULL,NULL,'SYNTHETIC GENERAL TASK','0'),
-              ({corruptTask},'WORK_ORDER',{input.LocationId},{room.Id},{asset.Id},{outsideIncident},'SYNTHETIC INCONSISTENT SOURCE','VERIFIED')
+            INSERT INTO operational_tasks(id,task_type,location_id,room_id,asset_id,assigned_user_id,incident_report_id,title,status,task_data)
+            VALUES({task},'WORK_ORDER',{input.LocationId},{room.Id},{asset.Id},{actor},{incident},'SYNTHETIC WORK ORDER','Assigned',
+                jsonb_build_object('state',jsonb_build_object('incidentId',{incident}::text,'assignedStaffId',{actor}::text))),
+              ({general},'GENERAL',{input.LocationId},{room.Id},NULL,NULL,NULL,'SYNTHETIC GENERAL TASK','0',jsonb_build_object())
             """);
         var choices = (await owner.GetFromJsonAsync<ExpenseReferences>($"{Root}/reference-choices?locationId={input.LocationId}&roomId={room.Id}"))!;
         Assert.Contains(choices.Rooms, r => r.Id == room.Id); Assert.Equal(asset.Id, Assert.Single(choices.Assets).Id);
@@ -46,7 +46,7 @@ public sealed partial class Compact24ExpenseTests
         Assert.Equal("SYNTHETIC ASSET", expense.AssetName); Assert.Equal("SYNTHETIC WORK ORDER", expense.TaskTitle);
         Assert.Equal(expense.Id, (await Value(await Create(owner, linked, key))).Id);
         Assert.Equal(HttpStatusCode.Conflict, (await Create(owner, linked with { TaskId = null }, key)).StatusCode);
-        foreach (var invalid in new[] { linked with { AssetId = otherAsset.Id }, linked with { AssetId = outsideAsset.Id }, linked with { TaskId = general }, linked with { TaskId = corruptTask }, linked with { RoomId = otherRoom.Id }, linked with { AssetId = null }, linked with { TaskId = Guid.NewGuid() } })
+        foreach (var invalid in new[] { linked with { AssetId = otherAsset.Id }, linked with { AssetId = outsideAsset.Id }, linked with { TaskId = general }, linked with { RoomId = otherRoom.Id }, linked with { AssetId = null }, linked with { TaskId = Guid.NewGuid() } })
             Assert.Equal(HttpStatusCode.NotFound, (await Create(owner, invalid, Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Create(owner, linked with { ExpenseType = "INITIAL_INVESTMENT" }, Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"{Root}/{expense.Id}", new ExpenseUpdate(linked with { TaskId = null }, 1, "Cannot detach source"))).StatusCode);

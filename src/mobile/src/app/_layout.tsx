@@ -5,8 +5,8 @@ import { PaperProvider } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SessionProvider } from '../lib/SessionProvider';
-import { WorkspaceProvider } from '../features/workspace/WorkspaceProvider';
+import { SessionProvider, useSession } from '../lib/SessionProvider';
+import { WorkspaceProvider, useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { theme } from '../theme/theme';
 import { ToastProvider } from '../components/ToastHost';
 export default function RootLayout() {
@@ -34,20 +34,30 @@ export default function RootLayout() {
         <ToastProvider>
           <SessionProvider>
             <WorkspaceProvider>
-              <Stack screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="meter"
-                  options={{ headerShown: false, gestureEnabled: false }}
-                />
-                <Stack.Screen name="ocr-test" options={{ title: 'Th? OCR' }} />
-                <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
-              </Stack>
+              <WorkspaceNavigation />
             </WorkspaceProvider>
           </SessionProvider>
         </ToastProvider>
       </PaperProvider>
     </SafeAreaProvider>
+  );
+}
+
+function WorkspaceNavigation() {
+  const { session } = useSession();
+  const { role, preview } = useWorkspace();
+  // Drop navigation history and mounted tab state at every principal/role change.
+  const identity = `${session?.userId ?? (preview ? 'preview' : 'anonymous')}:${role}`;
+  return (
+    <Stack key={identity} screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Protected guard={!!role}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
+      </Stack.Protected>
+      <Stack.Screen name="meter" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="ocr-test" options={{ title: 'Th? OCR' }} />
+      <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+    </Stack>
   );
 }

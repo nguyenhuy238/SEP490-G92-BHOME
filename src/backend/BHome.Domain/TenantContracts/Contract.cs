@@ -3,14 +3,16 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Domain.TenantContracts;
 
-public enum ContractKind { Main, Renewal, Holding }
-public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled, Expired, Converted }
+public enum ContractKind { Main, Renewal, Holding, Addendum }
+public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled, Expired, Converted, Applied }
 public enum SignatureStatus { Prepared, Dispatching, Pending, Signed, Failed, ManualReview, Simulated }
 public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, Settled, Completed }
 
 // Signed versions are never edited. A renewal is a new version of the same tenancy.
 public sealed class Contract : AuditableEntity
 {
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? ParentContractId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string OperatingPolicySnapshot { get; set; } = "";
     public Guid RoomId { get; set; }
     public Room Room { get; set; } = null!;
     public Guid OwnerSignerId { get; set; }

@@ -1,4 +1,5 @@
 import { configureFonts, MD3LightTheme } from 'react-native-paper';
+import { fontFaces, fontStyle } from './typography';
 
 // Values from the exported Stitch HTML. DESIGN.md contains a second palette;
 // the rendered screens take precedence when those values differ.
@@ -55,18 +56,21 @@ export const theme = {
   },
   fonts: configureFonts({
     config: {
-      headlineLarge: { fontFamily: 'Inter-Bold', fontSize: 30, lineHeight: 38 },
-      headlineMedium: { fontFamily: 'Inter-Bold', fontSize: 24, lineHeight: 32 },
-      headlineSmall: { fontFamily: 'Inter-SemiBold', fontSize: 20, lineHeight: 28 },
-      titleLarge: { fontFamily: 'Inter-SemiBold', fontSize: 17, lineHeight: 24 },
-      titleMedium: { fontFamily: 'Inter-SemiBold', fontSize: 14, lineHeight: 20 },
-      titleSmall: { fontFamily: 'Inter-SemiBold', fontSize: 12, lineHeight: 16 },
-      labelLarge: { fontFamily: 'Inter-SemiBold', fontSize: 14, lineHeight: 20 },
-      labelMedium: { fontFamily: 'Inter-SemiBold', fontSize: 12, lineHeight: 16 },
-      labelSmall: { fontFamily: 'Inter-Medium', fontSize: 11, lineHeight: 14 },
-      bodyLarge: { fontFamily: 'Inter-Regular', fontSize: 16, lineHeight: 24 },
-      bodyMedium: { fontFamily: 'Inter-Regular', fontSize: 14, lineHeight: 20 },
-      bodySmall: { fontFamily: 'Inter-Regular', fontSize: 13, lineHeight: 18 },
+      ...configureFonts({
+        config: { fontFamily: fontFaces.regular, fontWeight: 'normal', letterSpacing: 0 },
+      }),
+      headlineLarge: fontStyle('bold', 30, 38),
+      headlineMedium: fontStyle('bold', 24, 32),
+      headlineSmall: fontStyle('semibold', 20, 28),
+      titleLarge: fontStyle('semibold', 17, 24),
+      titleMedium: fontStyle('semibold', 14, 20),
+      titleSmall: fontStyle('semibold', 12, 16),
+      labelLarge: fontStyle('semibold', 14, 20),
+      labelMedium: fontStyle('semibold', 12, 16),
+      labelSmall: fontStyle('medium', 11, 14),
+      bodyLarge: fontStyle('regular', 16, 24),
+      bodyMedium: fontStyle('regular', 14, 20),
+      bodySmall: fontStyle('regular', 13, 18),
     },
   }),
 };

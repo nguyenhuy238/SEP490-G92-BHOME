@@ -53,6 +53,7 @@ public sealed class Invoice : AuditableEntity
 
 public sealed class InvoiceLine
 {
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? UtilityCalculationSnapshot { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid InvoiceId { get; set; }
     public ChargeCategory Category { get; set; }

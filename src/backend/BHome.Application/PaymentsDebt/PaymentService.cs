@@ -204,7 +204,10 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             var received = await repository.DepositAllocatedAsync(x.ContractId, t);
             var remaining = holding.RequiredDeposit - received;
             var claimed = await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t);
-            string? reason = claimed ? "bank_reference_already_credited" : remaining <= 0 ? "holding_deposit_already_satisfied" :
+            string? reason = holding.Status is BHome.Domain.TenantContracts.ContractStatus.Expired or BHome.Domain.TenantContracts.ContractStatus.Cancelled or BHome.Domain.TenantContracts.ContractStatus.Converted ||
+                holding.HoldingExpiryAt <= Now || holding.ApprovedAt is null ? "holding_deposit_requires_manual_review" :
+                !await contracts.CanAcceptHoldingDepositAsync(holding.Id, t) ? "holding_room_commitment_requires_manual_review" :
+                claimed ? "bank_reference_already_credited" : remaining <= 0 ? "holding_deposit_already_satisfied" :
                 !string.Equals(transfer.TransferDescription.Trim(), PaymentRules.DepositReference(holding.Id), StringComparison.OrdinalIgnoreCase) ? "holding_transfer_reference_mismatch" :
                 transfer.Amount > remaining ? "holding_deposit_excess_requires_manual_review" : null;
             var review = new PaymentReconciliation

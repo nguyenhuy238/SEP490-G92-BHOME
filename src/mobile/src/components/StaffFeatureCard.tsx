@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { staffColors } from '../theme/theme';
+import { typography } from '../theme/typography';
+import { featureCardLayout } from './FeatureCardLayout';
 
 interface StaffFeatureCardProps {
   title: string;
@@ -70,26 +72,12 @@ export function StaffFeatureCard({
 
 const styles = StyleSheet.create({
   incidentSurface: { borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: 'none' },
-  surface: { flex: 1, borderRadius: 18, boxShadow: '0 3px 14px rgba(25, 52, 82, 0.05)' },
-  ripple: { flex: 1, borderRadius: 18, overflow: 'hidden' },
-  content: { flexGrow: 1, padding: 12, alignItems: 'center', gap: 6 },
-  compact: { padding: 12, gap: 4 },
-  compactIcon: { width: 36, height: 36, borderRadius: 12 },
-  status: { color: staffColors.orange, textAlign: 'center' },
-  icon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
+  ...featureCardLayout,
+  status: { ...typography.status, color: staffColors.orange, textAlign: 'center' },
   title: {
     color: staffColors.navy,
     textAlign: 'center',
-    fontWeight: '600',
-    fontSize: 13,
-    lineHeight: 18,
+    ...typography.cardTitle,
   },
-  description: { textAlign: 'center', fontSize: 12, lineHeight: 17 },
+  description: { ...typography.secondary, textAlign: 'center' },
 });

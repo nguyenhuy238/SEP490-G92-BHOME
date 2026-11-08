@@ -1,5 +1,7 @@
 # API cấu hình sau reset DB — 04/11/2026
 
+Bổ sung ngày 08/11: [Owner setup P0–P2](OWNER_SETUP_COMPACT24.md) mô tả closure-check, Staff responsibility, asset template/inventory, điện nước nâng cao và nội quy/phụ lục.
+
 Quyết định mới: bỏ Chain và RoomType. Location là cấp cao nhất, Room thuộc trực tiếp Location. Tài liệu này thay các phần Chain/RoomType và thứ tự giá cũ trong PROPERTY_MANAGEMENT.md, SINGLE_SYSTEM_CHAIN.md và API_CONVENTIONS.md.
 
 ## API và quyền

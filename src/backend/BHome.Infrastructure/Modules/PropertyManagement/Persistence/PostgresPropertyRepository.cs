@@ -26,8 +26,8 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         var rooms = db.Set<Room>().Where(r => r.LocationId == locationId &&
             (!roomId.HasValue || r.Id == roomId)).Select(r => r.Id);
         var contracts = db.Set<Contract>().Where(c => rooms.Contains(c.RoomId));
-        var residents = await db.Set<Resident>().AnyAsync(r => rooms.Contains(r.RoomId), token);
-        var occupancy = await contracts.AnyAsync(c => c.Status == ContractStatus.Active &&
+        var residents = await UnresolvedResidents(db).AnyAsync(r => rooms.Contains(r.RoomId), token);
+        var occupancy = await contracts.AnyAsync(c => c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active &&
             c.Residents.Any(r => r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
         var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
         // Status alone is not a reservation. Protect signed evidence or verified money;
@@ -95,8 +95,12 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23503" or "23514" })
         { throw new PropertyException(409, "configuration_dependency_conflict"); }
     }
+    internal static IQueryable<Resident> UnresolvedResidents(BHomePersistenceContext context) => context.Set<Resident>().Where(r =>
+        !context.Set<Contract>().Any(c => c.RoomId == r.RoomId && c.Residents.Any(cr => cr.ResidentId == r.Id)) ||
+        context.Set<Contract>().Any(c => c.RoomId == r.RoomId && c.Residents.Any(cr => cr.ResidentId == r.Id) &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation)));
     public Task<bool> HasResidentsAsync(Guid roomId, CancellationToken token) =>
-        db.Set<Resident>().AnyAsync(x => x.RoomId == roomId, token);
+        UnresolvedResidents(db).AnyAsync(x => x.RoomId == roomId, token);
     public void Add<T>(T entity) where T : class => db.Set<T>().Add(entity);
     public void Audit(PropertyChange change)
     {

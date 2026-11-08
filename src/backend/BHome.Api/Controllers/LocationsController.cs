@@ -38,6 +38,11 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.Property.Manage)]
     public Task<LocationDto> Update(Guid id, LocationWrite input, CancellationToken t) => properties.SaveLocationAsync(id, input, t);
 
+    [HttpGet("{id:guid}/closure-check"), Authorize(Policy = Permissions.Property.Manage)]
+    public Task<LocationClosureCheck> ClosureCheck(Guid id, CancellationToken t) => properties.ClosureCheckAsync(id, t);
+    [HttpGet("{id:guid}/staff-change-preview"), Authorize(Policy = Permissions.Property.Manage)]
+    public Task<StaffChangePreview> StaffChangePreview(Guid id, CancellationToken t) => properties.StaffChangePreviewAsync(id, t);
+
     [HttpGet("assigned-to-me")]
     [Authorize(Policy = Permissions.Locations.ViewAssigned)]
     public async Task<ActionResult<IReadOnlyList<LocationSummary>>> ListAssigned(CancellationToken cancellationToken) =>

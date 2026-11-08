@@ -129,6 +129,12 @@ export function operationalTasks(api: MobileApi) {
       api.request<TaskEvidence[]>(`${path(id)}/evidence`, { signal }),
     image: (id: string, evidenceId: string, signal?: AbortSignal) =>
       api.request<Blob>(`${path(id)}/evidence/${guid(evidenceId)}`, { signal }, 'blob'),
+    imageBytes: (id: string, evidenceId: string, signal?: AbortSignal) =>
+      api.request<Uint8Array<ArrayBuffer>>(
+        `${path(id)}/evidence/${guid(evidenceId)}`,
+        { signal },
+        'bytes',
+      ),
     act: (
       id: string,
       action: TaskAction,

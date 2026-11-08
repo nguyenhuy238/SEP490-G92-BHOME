@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApiError } from '../lib/api';
+import { QueryCache } from '../lib/queryCache';
 import type { Incident, WorkOrder } from '../services/incidents';
 
 const s = vi.hoisted(() => ({
@@ -15,7 +16,7 @@ const s = vi.hoisted(() => ({
   gallery: vi.fn(),
 }));
 const actor = '11111111-1111-4111-8111-111111111111';
-const api = { request: s.request };
+const api = { request: s.request, queryCache: new QueryCache() };
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
     api,
@@ -35,9 +36,27 @@ vi.mock('../lib/toast', () => ({
   showSuccess: s.success,
   clearToasts: vi.fn(),
 }));
-vi.mock('expo-image-picker', () => ({ launchImageLibraryAsync: s.gallery }));
+vi.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: s.gallery,
+  requestCameraPermissionsAsync: async () => ({ granted: true }),
+  launchCameraAsync: async () => ({
+    canceled: false,
+    assets: [{ uri: 'file:///synthetic.png', mimeType: 'image/png' }],
+  }),
+}));
+vi.mock('expo-file-system', () => ({
+  File: class {
+    size = 8;
+    async bytes() {
+      return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    }
+  },
+}));
 type C = { children?: React.ReactNode };
 vi.mock('react-native', () => ({
+  StyleSheet: { create: (value: unknown) => value },
+  Platform: { OS: 'ios' },
+  ScrollView: ({ children }: C) => <div>{children}</div>,
   View: ({ children }: C) => <div>{children}</div>,
   Image: ({
     source,
@@ -61,6 +80,31 @@ vi.mock('react-native-paper', () => {
     </button>
   );
   return {
+    MD3LightTheme: { colors: {} },
+    configureFonts: () => ({}),
+    Icon: () => null,
+    TouchableRipple: Button,
+    TextInput: ({
+      label,
+      value,
+      onChangeText,
+      onBlur,
+      disabled,
+    }: {
+      label: string;
+      value: string;
+      onChangeText: (v: string) => void;
+      onBlur?: () => void;
+      disabled?: boolean;
+    }) => (
+      <textarea
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChangeText(event.target.value)}
+        onBlur={onBlur}
+        disabled={disabled}
+      />
+    ),
     Text: ({ children }: C) => <span>{children}</span>,
     Button,
     IconButton: Button,
@@ -241,6 +285,8 @@ function respond(path: string, init?: RequestInit): unknown {
   throw new Error('Unexpected endpoint: ' + path);
 }
 beforeEach(() => {
+  api.queryCache.dispose();
+  api.queryCache = new QueryCache();
   vi.clearAllMocks();
   s.role = 'Staff';
   s.preview = false;
@@ -294,7 +340,10 @@ beforeEach(() => {
   s.request.mockImplementation(async (path, init) => respond(path, init));
   s.gallery.mockResolvedValue({ canceled: true, assets: null });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  api.queryCache.dispose();
+});
 const choose = (label: string, value: string) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const confirm = () => fireEvent.click(screen.getByRole('checkbox'));
@@ -308,12 +357,12 @@ async function photo() {
 it('submits a Tenant multipart report with UTF-8 description and opens the real ID returned by backend', async () => {
   s.role = 'Tenant';
   render(<IncidentReportForm />);
-  await screen.findByRole('option', { name: 'Phòng A101 · Cơ sở thử nghiệm' });
-  choose('Phòng / cơ sở của bạn', rid);
-  choose('Mô tả sự cố (10–8000 ký tự)', 'Ống nước bị vỡ, cần sửa chữa');
-  choose('Mức độ', 'Emergency');
-  await photo();
-  fireEvent.click(screen.getByText('Gửi báo cáo sự cố'));
+  await screen.findByText('Phòng A101');
+  choose('Mô tả sự cố', 'Ống nước bị vỡ, cần sửa chữa');
+  fireEvent.click(screen.getByText('Khẩn cấp'));
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  await screen.findByAltText('Ảnh hiện trường 1');
+  fireEvent.click(screen.getByText('Gửi báo cáo'));
   await waitFor(() => expect(s.go).toHaveBeenCalledWith('incident-detail', { incidentId: id }));
   expect(mutations()).toHaveLength(1);
   const [, init] = mutations()[0];
@@ -364,6 +413,19 @@ it('Tenant detail shows history but never requests or exposes WorkOrder finances
     ),
   ).toBe(false);
 });
+it.each(['Owner', 'Staff', 'Tenant'])(
+  'preserves the separate incident inbox entry from the %s incident feature',
+  async (role) => {
+    s.role = role;
+    render(<IncidentListScreen />);
+    await screen.findByText('INC-SYNTHETIC');
+    fireEvent.click(screen.getByText('Thông báo sự cố và bảo trì'));
+    expect(s.go).toHaveBeenCalledWith('incident-inbox');
+    expect(s.request.mock.calls.some(([path]) => path.startsWith('/api/v1/notifications'))).toBe(
+      false,
+    );
+  },
+);
 it('filters real report list by backend status and retains existing invoice adjustment navigation', async () => {
   s.role = 'Tenant';
   render(<IncidentListScreen />);
@@ -374,6 +436,30 @@ it('filters real report list by backend status and retains existing invoice adju
   );
   fireEvent.click(screen.getByText('Yêu cầu điều chỉnh hóa đơn'));
   expect(s.go).toHaveBeenCalledWith('invoice', { focus: 'adjustment' });
+});
+it('shows Tenant report photos only even if an unexpected internal evidence kind is returned', async () => {
+  s.role = 'Tenant';
+  s.params = { incidentId: id };
+  s.request.mockImplementation(async (path, init) =>
+    path.endsWith('/evidence')
+      ? ['Report', 'Inspection', 'Completion'].map((kind, index) => ({
+          id: `evidence-${index}`,
+          workOrderId: null,
+          activityId: null,
+          kind,
+          contentType: 'image/png',
+          length: 8,
+        }))
+      : respond(path, init),
+  );
+  render(<IncidentDetailScreen />);
+  await screen.findByText(/Ảnh báo cáo · image\/png/);
+  expect(screen.queryByText(/Ảnh kiểm tra ·/)).toBeNull();
+  expect(screen.queryByText(/Ảnh kết quả ·/)).toBeNull();
+  expect(screen.getAllByText('Tải ảnh minh chứng')).toHaveLength(1);
+  expect(s.request.mock.calls.some(([path]) => /\/evidence\/evidence-[12]$/.test(path))).toBe(
+    false,
+  );
 });
 it('uploads Inspection evidence then submits the proposal using the WorkOrder version and exact DTO', async () => {
   render(<IncidentActionPanel report={report} work={work} role="Staff" />);

@@ -1,14 +1,25 @@
 import { KeyboardFormScrollView } from './KeyboardFormScrollView';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { colors as c, staffColors as s } from '../theme/theme';
+import { WorkspaceTabBar } from './WorkspaceTabBar';
+import { WorkspaceTabsContext } from '../features/workspace/WorkspaceTabsContext';
 import {
   activeWorkspaceTab,
   homeScreen,
+  isWorkspaceTabDestination,
+  workspaceTabHref,
   roleLabel,
   tabs,
   type WorkspaceScreen,
@@ -17,40 +28,40 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { queryPolicies } from '../lib/queryPolicies';
 import type { Named } from '../lib/api';
 import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
 
 function StaffLocationSubtitle() {
-  const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations');
+  const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations', {
+    cache: queryPolicies.rooms,
+  });
   return (
     <Text variant="labelSmall" numberOfLines={2} style={styles.staffSubtitle}>
       {locations.loading
         ? 'Đang tải cơ sở…'
-        : locations.error
-          ? 'Chưa tải được cơ sở'
-          : locations.data?.map((item) => item.label).join(' · ') || 'Chưa có cơ sở được phân công'}
+        : locations.data?.length
+          ? locations.data.map((item) => item.label).join(' · ') +
+            (locations.error ? ' · Chưa cập nhật được' : '')
+          : locations.error
+            ? 'Chưa tải được cơ sở'
+            : 'Chưa có cơ sở được phân công'}
     </Text>
   );
 }
 function TenantLocationSubtitle() {
   const contracts = useWorkspaceQuery<{
     items: { locationName: string; roomNumber: string; kind?: string }[];
-  }>('/api/v1/contracts?page=1&pageSize=20&status=Active');
-  const reload = contracts.reload;
-  useFocusEffect(
-    useCallback(() => {
-      reload();
-    }, [reload]),
-  );
+  }>('/api/v1/contracts?page=1&pageSize=20&status=Active', { cache: queryPolicies.contracts });
   const current = contracts.data?.items.find((item) => item.kind !== 'Holding');
   return (
     <Text variant="labelSmall" numberOfLines={2} style={styles.staffSubtitle}>
       {contracts.loading
         ? 'Đang tải phòng…'
-        : contracts.error
-          ? 'Chưa tải được phòng'
-          : current
-            ? `${current.locationName} · Phòng ${current.roomNumber}`
+        : current
+          ? `${current.locationName} · Phòng ${current.roomNumber}${contracts.error ? ' · Chưa cập nhật được' : ''}`
+          : contracts.error
+            ? 'Chưa tải được phòng'
             : 'Chưa có hợp đồng đang hiệu lực'}
     </Text>
   );
@@ -70,7 +81,8 @@ export function WorkspaceShell({
   contentRevision?: number;
 }) {
   const { role, preview, go, leavePreview, scrollRevision, requestNavigation } = useWorkspace();
-  const insets = useSafeAreaInsets();
+  const insideTabs = useContext(WorkspaceTabsContext);
+  const navigation = useNavigation();
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
@@ -78,33 +90,59 @@ export function WorkspaceShell({
     return () => setHeaderAction(null);
   }, []);
   useEffect(() => {
-    scroll.current?.scrollTo({ y: 0, animated: false });
-  }, [screen, scrollRevision, contentRevision]);
+    if (navigation.isFocused()) scroll.current?.scrollTo({ y: 0, animated: false });
+  }, [screen, scrollRevision, contentRevision, navigation]);
   if (!role) return null;
   const staff = role === 'Staff';
+  const tenantFeatures = role === 'Tenant' && screen === 'tenant-features';
+  const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
   const compactContracts = staff && screen === 'signing' && !preview;
+  const compactTasks = staff && ['work-orders', 'task-detail'].includes(screen) && !preview;
+  const compactTaskDetail = compactTasks && screen === 'task-detail';
+  const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
+  const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
+  const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
+  const tenantIncidentForm = role === 'Tenant' && screen === 'incidents';
+  const dashboard = !preview && (screen === 'tenant-home' || screen === 'staff-home');
+  const profile = !preview && screen === 'profile';
+  const profileEdit = screen === 'profile-edit';
+  const notificationInbox = screen === 'notifications' && !preview;
+  const tenantInvoice =
+    role === 'Tenant' && ['invoice', 'adjustment', 'billing-history'].includes(screen) && !preview;
   const visibleTabs = tabs[role];
   const active = activeWorkspaceTab(role, screen);
   function back() {
     if (onBack) return onBack();
     const fallback =
-      screen === 'checklist'
-        ? 'contract'
-        : ['security', 'preferences'].includes(screen)
-          ? 'profile'
-          : staff && screen === 'task-detail'
-            ? 'work-orders'
-            : homeScreen[role!];
-    if (!staff && role !== 'Tenant') return go(fallback);
+      screen === 'incident-inbox'
+        ? role === 'Tenant'
+          ? 'tenant-requests'
+          : role === 'Staff'
+            ? 'staff-incidents'
+            : 'owner-incidents'
+        : screen === 'checklist'
+          ? 'contract'
+          : ['security', 'preferences', 'profile-edit'].includes(screen)
+            ? 'profile'
+            : staff && screen === 'task-detail'
+              ? 'work-orders'
+              : homeScreen[role!];
+    if (!staff && role !== 'Tenant' && !profileEdit && screen !== 'incident-inbox')
+      return go(fallback);
     requestNavigation(() => {
       if (router.canGoBack()) router.back();
+      else if (isWorkspaceTabDestination(role!, fallback))
+        router.replace(workspaceTabHref(fallback));
       else router.replace({ pathname: '/workspace/[screen]', params: { screen: fallback } });
     });
   }
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.root, tenantHomeLayout && { backgroundColor: '#173654' }]}
+      edges={['top', 'left', 'right']}
+    >
       <StatusBar style="light" />
-      <View style={styles.header}>
+      <View style={[styles.header, tenantHomeLayout && styles.tenantHeader]}>
         <TouchableRipple
           onPress={() =>
             go(
@@ -122,17 +160,35 @@ export function WorkspaceShell({
           style={ui.grow}
         >
           <View style={ui.row}>
-            <View style={styles.logo}>
-              <Icon source="home-roof" size={32} color={s.blue} />
+            <View style={[styles.logo, tenantHomeLayout && styles.tenantLogo]}>
+              <Icon source="home-roof" size={tenantHomeLayout ? 24 : 32} color={s.blue} />
             </View>
             <View style={ui.grow}>
-              <Text variant="titleLarge" style={ui.white}>
-                BHOME {staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : role.toUpperCase()}
+              <Text variant={tenantHomeLayout ? 'titleMedium' : 'titleLarge'} style={ui.white}>
+                {tenantHomeLayout
+                  ? 'BHOME'
+                  : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : role.toUpperCase()}`}
               </Text>
-              {staff && !preview ? (
+              {tenantHomeLayout ? (
+                <Text variant="labelSmall" style={styles.staffSubtitle}>
+                  {tenantFeatures ? 'Tiện ích cư dân' : 'Chào mừng trở lại!'}
+                </Text>
+              ) : staff && !preview ? (
                 <StaffLocationSubtitle />
               ) : role === 'Tenant' && !preview ? (
-                <TenantLocationSubtitle />
+                tenantRoom || tenantInvoice || tenantIncidentForm || tenantResidence ? (
+                  <Text variant="labelSmall" style={styles.staffSubtitle}>
+                    {tenantResidence
+                      ? 'Theo dõi tạm trú'
+                      : tenantRoom
+                        ? 'Phòng thuê & hợp đồng'
+                        : tenantIncidentForm
+                          ? 'Hỗ trợ cư dân'
+                          : 'Thông tin tài chính của phòng'}
+                  </Text>
+                ) : (
+                  <TenantLocationSubtitle />
+                )
               ) : (
                 <Text variant="labelSmall" style={styles.staffSubtitle}>
                   {!preview
@@ -151,7 +207,7 @@ export function WorkspaceShell({
           <IconButton
             icon="bell-outline"
             iconColor={c.white}
-            size={22}
+            size={tenantHomeLayout ? 20 : 22}
             onPress={() => go('notifications')}
             accessibilityLabel="Thông báo"
           />
@@ -185,103 +241,156 @@ export function WorkspaceShell({
         style={[ui.grow, styles.staffBody]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <KeyboardFormScrollView
-          ref={scroll}
-          key={screen}
-          contentContainerStyle={[
-            ui.page,
-            styles.staffPage,
-            compactContracts && { gap: 12, paddingTop: 8 },
-            screen === 'meter-reading' && { gap: 16 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {((staff && !['staff-home', 'profile'].includes(screen)) ||
-            (role === 'Tenant' && !visibleTabs.some((tab) => tab.screen === screen)) ||
-            ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
-              screen,
-            )) && (
-            <View style={ui.row}>
-              <IconButton
-                icon="arrow-left"
-                accessibilityLabel="Quay lại"
-                disabled={backDisabled}
-                onPress={back}
-              />
-              <Text
-                variant={compactContracts ? 'titleMedium' : 'labelSmall'}
-                style={
-                  compactContracts ? [ui.grow, { color: c.primary, fontWeight: '700' }] : ui.muted
-                }
-              >
-                {compactContracts ? 'Hợp đồng' : 'Quay lại'}
-              </Text>
-              {compactContracts && headerAction && (
-                <>
-                  <IconButton
-                    icon="refresh"
-                    accessibilityLabel="Tải lại hợp đồng"
-                    disabled={headerAction.disabled}
-                    onPress={headerAction.onRefresh}
-                  />
-                </>
-              )}
-            </View>
-          )}
-          {__DEV__ && !preview && (role === 'Owner' || staff) && screen === homeScreen[role] && (
-            <Button
-              mode="contained-tonal"
-              icon="test-tube"
-              onPress={() => requestNavigation(() => router.push('/ocr-test'))}
-            >
-              Test OCR
-            </Button>
-          )}
-          <WorkspaceHeaderContext.Provider value={compactContracts ? registerHeaderAction : null}>
-            {children}
-          </WorkspaceHeaderContext.Provider>
-        </KeyboardFormScrollView>
-      </KeyboardAvoidingView>
-      <View style={[styles.tabs, { paddingBottom: insets.bottom }]}>
-        {visibleTabs.map((tab) => (
-          <TouchableRipple
-            key={tab.screen}
-            onPress={() => go(tab.screen)}
-            style={ui.grow}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active === tab.screen }}
-            accessibilityLabel={tab.title}
-          >
-            <View style={styles.tab}>
-              <View
-                style={[styles.indicator, active === tab.screen && { backgroundColor: s.blueSoft }]}
-              >
-                <Icon
-                  source={tab.icon}
-                  size={22}
-                  color={active === tab.screen ? s.blue : c.muted}
+        {notificationInbox ? (
+          children
+        ) : (
+          <KeyboardFormScrollView
+            ref={scroll}
+            key={screen}
+            contentContainerStyle={[
+              ui.page,
+              styles.staffPage,
+              (compactContracts || compactTasks) && { gap: 12, paddingTop: 8 },
+              (profile || profileEdit) && { gap: 16 },
+              tenantRoom && { gap: 12, paddingTop: 8 },
+              tenantResidence && { gap: 12, paddingTop: 8 },
+              tenantInvoice && { gap: 12, paddingTop: 8 },
+              tenantHomeLayout && { gap: 20, paddingTop: 12 },
+              screen === 'meter-reading' && { gap: 16 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              (dashboard ||
+                tenantRoom ||
+                tenantInvoice ||
+                profile ||
+                compactTasks ||
+                tenantResidence) &&
+              headerAction ? (
+                <RefreshControl
+                  refreshing={headerAction.disabled}
+                  onRefresh={headerAction.onRefresh}
                 />
-              </View>
-              <Text
-                style={{
-                  textAlign: 'center',
-                  fontSize: 11,
-                  lineHeight: 14,
-                  fontWeight: active === tab.screen ? '700' : '500',
-                  color: active === tab.screen ? s.blue : c.muted,
-                }}
+              ) : undefined
+            }
+          >
+            {!tenantIncidentForm &&
+              (profileEdit ||
+                tenantInvoice ||
+                (staff && !['staff-home', 'profile'].includes(screen)) ||
+                (role === 'Tenant' && !visibleTabs.some((tab) => tab.screen === screen)) ||
+                ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
+                  screen,
+                )) && (
+                <View style={ui.row}>
+                  <IconButton
+                    icon="arrow-left"
+                    accessibilityLabel="Quay lại"
+                    disabled={backDisabled || (profileEdit && !!headerAction?.disabled)}
+                    onPress={
+                      (tenantInvoice || profileEdit) && headerAction?.onBack
+                        ? headerAction.onBack
+                        : back
+                    }
+                  />
+                  <Text
+                    variant={
+                      compactContracts ||
+                      compactTasks ||
+                      tenantResidence ||
+                      tenantInvoice ||
+                      tenantFeatures ||
+                      profileEdit
+                        ? 'titleMedium'
+                        : 'labelSmall'
+                    }
+                    style={
+                      compactContracts ||
+                      compactTasks ||
+                      tenantResidence ||
+                      tenantInvoice ||
+                      tenantFeatures ||
+                      profileEdit
+                        ? [ui.grow, { color: c.primary, fontWeight: '700' }]
+                        : ui.muted
+                    }
+                  >
+                    {profileEdit
+                      ? 'Chỉnh sửa hồ sơ'
+                      : tenantResidence
+                        ? 'Đăng ký tạm trú'
+                        : tenantFeatures
+                          ? 'Tất cả chức năng'
+                          : tenantInvoice
+                            ? (headerAction?.title ?? 'Hóa đơn của tôi')
+                            : compactTasks
+                              ? compactTaskDetail
+                                ? 'Chi tiết công việc'
+                                : 'Công việc vận hành'
+                              : compactContracts
+                                ? 'Hợp đồng'
+                                : 'Quay lại'}
+                  </Text>
+                  {(compactContracts || compactTasks || tenantInvoice || tenantResidence) &&
+                    headerAction && (
+                      <>
+                        <IconButton
+                          icon="refresh"
+                          accessibilityLabel={
+                            tenantResidence
+                              ? 'Tải lại hồ sơ tạm trú'
+                              : compactTasks
+                                ? 'Tải lại công việc'
+                                : tenantLedger
+                                  ? 'Tải lại giao dịch'
+                                  : tenantInvoice
+                                    ? 'Tải lại hóa đơn'
+                                    : 'Tải lại hợp đồng'
+                          }
+                          disabled={headerAction.disabled}
+                          onPress={headerAction.onRefresh}
+                        />
+                      </>
+                    )}
+                </View>
+              )}
+            {__DEV__ && !preview && (role === 'Owner' || staff) && screen === homeScreen[role] && (
+              <Button
+                mode="contained-tonal"
+                icon="test-tube"
+                onPress={() => requestNavigation(() => router.push('/ocr-test'))}
               >
-                {tab.title}
-              </Text>
-            </View>
-          </TouchableRipple>
-        ))}
-      </View>
+                Test OCR
+              </Button>
+            )}
+            <WorkspaceHeaderContext.Provider
+              value={
+                dashboard ||
+                compactContracts ||
+                compactTasks ||
+                tenantRoom ||
+                tenantResidence ||
+                tenantInvoice ||
+                profile ||
+                profileEdit
+                  ? registerHeaderAction
+                  : null
+              }
+            >
+              {children}
+            </WorkspaceHeaderContext.Provider>
+          </KeyboardFormScrollView>
+        )}
+        {(profileEdit || compactTaskDetail) && headerAction?.footer}
+      </KeyboardAvoidingView>
+      {!insideTabs && <WorkspaceTabBar role={role} screen={screen} active={active} onSelect={go} />}
     </SafeAreaView>
   );
 }
 const styles = StyleSheet.create({
+  tenantHeader: { minHeight: 64, paddingLeft: 16 },
+  tenantLogo: { width: 32, height: 32, borderRadius: 10 },
   root: { flex: 1, backgroundColor: s.navy },
   staffSubtitle: { color: '#d5e4ff', marginTop: 3 },
   staffBody: {
@@ -310,20 +419,4 @@ const styles = StyleSheet.create({
   },
   badge: { position: 'absolute', top: 12, right: 12, backgroundColor: c.red },
   preview: { paddingVertical: 5, alignItems: 'center', backgroundColor: c.tint },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: c.white,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    boxShadow: '0 -3px 16px rgba(25, 52, 82, 0.06)',
-  },
-  tab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    minHeight: 60,
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-  },
-  indicator: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 4 },
 });

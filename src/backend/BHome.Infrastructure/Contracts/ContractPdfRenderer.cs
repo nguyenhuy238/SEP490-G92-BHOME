@@ -46,6 +46,8 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         t.ThrowIfCancellationRequested();
         var template = ResolveTemplate();
         var snapshot = Snapshot(document);
+        var amendment = snapshot.IsOperatingPolicyAmendment;
+        var title = amendment ? "PHỤ LỤC NỘI QUY HỢP ĐỒNG" : template.Title;
         var values = Values(snapshot);
         // PdfFont belongs to one PDF document. Only the immutable font bytes are shared between requests.
         var font = PdfFontFactory.CreateFont(FontBytes.Value, PdfEncodings.IDENTITY_H,
@@ -56,17 +58,18 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         using (var pdf = new PdfDocument(new PdfWriter(output)))
         using (var layout = new Document(pdf, PageSize.A4))
         {
-            var info = pdf.GetDocumentInfo().SetTitle(template.Title).SetCreator("BHOME");
+            var info = pdf.GetDocumentInfo().SetTitle(title).SetCreator("BHOME");
             info.SetMoreInfo("BHomeContractId", snapshot.ContractId.ToString());
             info.SetMoreInfo("BHomeSnapshotHash", snapshot.SnapshotHash);
             info.SetMoreInfo("BHomeTemplateId", template.Id);
             info.SetMoreInfo("BHomeTemplateVersion", template.Version.ToString(CultureInfo.InvariantCulture));
             layout.SetFont(font).SetFontSize(11);
-            layout.Add(new Paragraph(template.Title).SetFontSize(16));
+            layout.Add(new Paragraph(title).SetFontSize(16));
             layout.Add(new Paragraph(template.Notice).SetFontSize(10));
             layout.Add(new Paragraph($"Template: {template.Id} / v{template.Version}"));
             var table = new Table(UnitValue.CreatePercentArray([35f, 65f])).UseAllAvailableWidth();
-            foreach (var field in template.Fields.Where(f => f.Key != nameof(ContractDocument.Terms)))
+            foreach (var field in template.Fields.Where(f => f.Key != nameof(ContractDocument.Terms) &&
+                (!amendment || f.Key is not (nameof(ContractDocument.MonthlyRent) or nameof(ContractDocument.RequiredDeposit) or nameof(ContractDocument.AppliedHoldingDeposit) or nameof(ContractDocument.HoldingContractId)))))
             {
                 t.ThrowIfCancellationRequested();
                 table.AddCell(new Cell().Add(new Paragraph(field.Label)));
@@ -183,7 +186,7 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         Template? template;
         try { template = JsonSerializer.Deserialize<Template>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web)); }
         catch (JsonException) { throw new ContractException(503, "contract_template_invalid"); }
-        var keys = typeof(ContractDocument).GetProperties().Select(p => p.Name).Order(StringComparer.Ordinal);
+        var keys = typeof(ContractDocument).GetProperties().Where(p => !Attribute.IsDefined(p, typeof(System.Text.Json.Serialization.JsonIgnoreAttribute))).Select(p => p.Name).Order(StringComparer.Ordinal);
         if (template is null || template.Id != DevelopmentTemplateId || template.Version != 1 ||
             string.IsNullOrWhiteSpace(template.Title) || string.IsNullOrWhiteSpace(template.Notice) || template.Fields is null ||
             template.Fields.Any(f => f is null || string.IsNullOrWhiteSpace(f.Label)) ||

@@ -27,6 +27,21 @@ vi.mock('react-native', () => ({
     },
   },
   StyleSheet: { create: (s: unknown) => s },
+  Modal: ({
+    visible,
+    children,
+    onRequestClose,
+  }: {
+    visible: boolean;
+    children: React.ReactNode;
+    onRequestClose: () => void;
+  }) =>
+    visible ? (
+      <div role="dialog">
+        <button aria-label="Android back" onClick={onRequestClose} />
+        {children}
+      </div>
+    ) : null,
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Image: ({
     accessibilityLabel,
@@ -59,11 +74,15 @@ vi.mock('react-native-paper', () => {
     configureFonts: () => ({}),
     Button,
     TouchableRipple: Button,
+    IconButton: Button,
     Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
     ActivityIndicator: () => <span>Loading</span>,
     Icon: () => null,
   };
 });
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
 vi.mock('../components/Controls', () => ({ styles: {} }));
 vi.mock('../lib/captureFiles', () => ({ ownCapture: (uri: string) => uri }));
 vi.mock('expo-camera', () => ({
@@ -399,4 +418,128 @@ it('discards a capture that completes after the app goes to background', async (
   expect(screen.queryByTestId('native-camera')).toBeNull();
   expect(screen.queryByAltText('Ảnh CCCD vừa chụp')).toBeNull();
   expect(capture).not.toHaveBeenCalled();
+});
+
+async function evidencePhoto() {
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  await screen.findByTestId('native-camera');
+  const shutter = screen.getByRole('button', { name: 'Chụp ảnh minh chứng' });
+  await waitFor(() => expect((shutter as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(shutter);
+  await screen.findByAltText('Ảnh minh chứng vừa chụp');
+}
+it('opens evidence in an opaque modal, unmounts live camera for review, retakes and uploads bytes', async () => {
+  const upload = vi.fn().mockResolvedValue(true);
+  render(
+    <CameraCapture
+      presentation="evidence"
+      label="Thêm ảnh minh chứng"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={upload}
+    />,
+  );
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await evidencePhoto();
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(screen.getByAltText('Ảnh minh chứng vừa chụp').getAttribute('data-resize')).toBe(
+    'contain',
+  );
+  expect(upload).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
+  expect(native.files.size).toBe(0);
+  await screen.findByTestId('native-camera');
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
+  await screen.findByAltText('Ảnh minh chứng vừa chụp');
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(upload).toHaveBeenCalledOnce();
+  expect(upload.mock.calls[0][0]).toBeInstanceOf(Uint8Array);
+  expect(native.files.size).toBe(0);
+});
+it('preserves evidence preview after upload failure, blocks duplicate submission and retries', async () => {
+  let finish!: (ok: boolean) => void;
+  const upload = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValue(true);
+  const view = render(
+    <CameraCapture
+      presentation="evidence"
+      label="Thêm ảnh minh chứng"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={upload}
+    />,
+  );
+  await evidencePhoto();
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh' }));
+  await waitFor(() => expect(upload).toHaveBeenCalledOnce());
+  fireEvent.click(screen.getByRole('button', { name: 'Android back' }));
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  await act(async () => finish(false));
+  expect(screen.getByAltText('Ảnh minh chứng vừa chụp')).toBeTruthy();
+  expect(native.files.size).toBe(1);
+  view.rerender(
+    <CameraCapture
+      presentation="evidence"
+      label="Thêm ảnh minh chứng"
+      disabled={false}
+      retryOnly
+      uploadError="Kết nối gián đoạn. Hãy thử lại."
+      reviewBeforeSubmit
+      onCapture={upload}
+    />,
+  );
+  expect((screen.getByRole('button', { name: 'Chụp lại' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(upload).toHaveBeenCalledTimes(2);
+});
+it('handles denied evidence permission without manual OCR controls and closes on Android back', async () => {
+  native.granted = false;
+  render(
+    <CameraCapture
+      presentation="evidence"
+      label="Thêm ảnh minh chứng"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  await screen.findByText(/Cần cấp quyền camera/);
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(screen.queryByText(/Nhập thủ công/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Android back' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+it('cleans an evidence preview on Android back and background', async () => {
+  render(
+    <CameraCapture
+      presentation="evidence"
+      label="Thêm ảnh minh chứng"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={vi.fn()}
+    />,
+  );
+  await evidencePhoto();
+  fireEvent.click(screen.getByRole('button', { name: 'Android back' }));
+  expect(native.files.size).toBe(0);
+  await evidencePhoto();
+  act(() => native.listeners.forEach((cb) => cb('background')));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(native.files.size).toBe(0);
 });

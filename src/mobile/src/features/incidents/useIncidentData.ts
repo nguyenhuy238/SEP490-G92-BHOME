@@ -30,7 +30,9 @@ export function useIncidentQuery<T>(path: string | null) {
 }
 
 // Keep operation keys on ambiguous failure; no automatic retries of mutations.
-export function useIncidentMutation() {
+export function useIncidentMutation({
+  successMessage = 'Máy chủ đã ghi nhận.',
+}: { successMessage?: string } = {}) {
   const { api } = useSession();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
@@ -75,8 +77,8 @@ export function useIncidentMutation() {
       });
       if (request.signal.aborted || !active.current) return;
       pending.current.clear();
-      setNotice('Máy chủ đã ghi nhận.');
-      showSuccess('Máy chủ đã ghi nhận.');
+      setNotice(successMessage);
+      showSuccess(successMessage);
       refreshIncidents();
       return result;
     } catch (e) {

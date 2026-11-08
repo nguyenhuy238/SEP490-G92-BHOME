@@ -15,6 +15,8 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type Named } from '../lib/api';
+import { StaffTaskListScreen } from './StaffTaskListScreen';
+import { StaffTaskDetailScreen } from './StaffTaskDetailScreen';
 import {
   availableTaskActions,
   operationalTasks,
@@ -29,6 +31,11 @@ import {
 } from '../services/operationalTasks';
 
 export function OperationalTasksScreen({ approvals = false }: { approvals?: boolean }) {
+  const { role } = useWorkspace();
+  return role === 'Staff' ? <StaffTaskListScreen /> : <OwnerTaskList approvals={approvals} />;
+}
+
+function OwnerTaskList({ approvals }: { approvals: boolean }) {
   const { role, go } = useWorkspace();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState(approvals ? 'PendingVerification' : '');
@@ -133,6 +140,7 @@ export function OperationalTasksScreen({ approvals = false }: { approvals?: bool
 }
 
 export function OperationalTaskDetail() {
+  const { role } = useWorkspace();
   const params = useLocalSearchParams<{ taskId?: string }>();
   let id = '';
   try {
@@ -141,7 +149,11 @@ export function OperationalTaskDetail() {
     /* Reject untrusted route values before fetching. */
   }
   return id ? (
-    <TaskDetail key={id} id={id} />
+    role === 'Staff' ? (
+      <StaffTaskDetailScreen key={id} id={id} />
+    ) : (
+      <TaskDetail key={id} id={id} />
+    )
   ) : (
     <Box>
       <Text>Mã công việc không hợp lệ. Hãy chọn công việc từ danh sách.</Text>

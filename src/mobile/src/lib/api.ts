@@ -1,4 +1,6 @@
 import { requestDiagnostic } from '../../../../packages/client-core/src/api';
+import { QueryCache } from './queryCache';
+import { mutationTags } from './queryPolicies';
 
 export interface Session {
   userId: string;
@@ -191,6 +193,7 @@ export function errorMessage(error: unknown): string {
   );
 }
 export class MobileApi {
+  readonly queryCache = new QueryCache();
   constructor(
     private base: string,
     private token: () => string | undefined,
@@ -257,18 +260,30 @@ export class MobileApi {
         return sendOnce();
       }
     };
+    const received = (value: T) => {
+      if (['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase())) {
+        if (responseType === 'json') {
+          this.queryCache.observePayment(path, value);
+          this.queryCache.observeNotifications(path, value);
+        }
+      } else this.queryCache.invalidate(mutationTags(path.split('?')[0]));
+      return value;
+    };
     try {
       try {
-        return await send();
+        return received(await send());
       } catch (error) {
         if (!(error instanceof MobileApiError) || error.status !== 401 || !original) throw error;
         const next = this.token() !== original ? this.token() : await this.refresh();
         if (!next) throw error;
         headers.set('Authorization', 'Bearer ' + next);
-        return await send();
+        return received(await send());
       }
     } catch (error) {
-      if (error instanceof MobileApiError && error.status === 401) this.expired();
+      if (error instanceof MobileApiError && error.status === 401) {
+        this.queryCache.dispose();
+        this.expired();
+      }
       throw error;
     }
   }

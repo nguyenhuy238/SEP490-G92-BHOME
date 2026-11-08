@@ -12,7 +12,8 @@ namespace BHome.Application.Contracts;
 
 public sealed class MainDraftService(IContractRepository repository, IMainDraftData data, ICurrentUser user,
     ResourceAccess access, PropertyService prices, IMainDraftRenderer renderer, IContractFileStore files,
-    IObjectStorage storage, TimeProvider clock, IMainDraftPreviewRenderer preview, IContractWorkflowMode? workflowMode = null)
+    IObjectStorage storage, TimeProvider clock, IMainDraftPreviewRenderer preview, IContractWorkflowMode? workflowMode = null,
+    IOperatingPolicyWorkflow? operatingPolicies = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private void Role() { _ = Actor; if (!user.IsInRole(Roles.Staff) && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden"); }
@@ -149,6 +150,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             c.MonthlyRent = preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate;
             if (c.MonthlyRent <= 0 || decimal.Truncate(c.MonthlyRent) != c.MonthlyRent) throw ContractException.Invalid("invalid_vnd_amount");
             c.RequiredDeposit = settings.SecurityDeposit; c.Terms = settings.AdditionalTerms + "\n" + x.Notes.Trim();
+            c.OperatingPolicySnapshot = "";
+            if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(c, t);
             var state = new MainDraftState(x, preparation.Charges, settings.Version, Hash(settings), renderer.TemplateHash);
             c.DraftMetadata = data.Protect(c, state); c.SnapshotHash = Snapshot(c, state);
             repository.Add(new ContractOperation { ActorId = Actor, Key = key, Operation = "main-draft", Fingerprint = fingerprint, ResultId = c.Id, CreatedAt = clock.GetUtcNow() });
