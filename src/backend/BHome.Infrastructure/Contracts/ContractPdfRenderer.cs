@@ -186,7 +186,7 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         Template? template;
         try { template = JsonSerializer.Deserialize<Template>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web)); }
         catch (JsonException) { throw new ContractException(503, "contract_template_invalid"); }
-        var keys = typeof(ContractDocument).GetProperties().Where(p=>!Attribute.IsDefined(p,typeof(System.Text.Json.Serialization.JsonIgnoreAttribute))).Select(p => p.Name).Order(StringComparer.Ordinal);
+        var keys = typeof(ContractDocument).GetProperties().Where(p => !Attribute.IsDefined(p, typeof(System.Text.Json.Serialization.JsonIgnoreAttribute))).Select(p => p.Name).Order(StringComparer.Ordinal);
         if (template is null || template.Id != DevelopmentTemplateId || template.Version != 1 ||
             string.IsNullOrWhiteSpace(template.Title) || string.IsNullOrWhiteSpace(template.Notice) || template.Fields is null ||
             template.Fields.Any(f => f is null || string.IsNullOrWhiteSpace(f.Label)) ||

@@ -147,18 +147,26 @@ public sealed class ContractServiceTests
         var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
         await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved reviewed terms"), Guid.NewGuid(), default);
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-ONE", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
-        var holding = r.Contracts.Single();Assert.Null(holding.PriceLockedAt);
-        foreach(var signer in new[]{holding.OwnerSignerId,holding.TenantUserId!.Value})holding.Signatures.Add(new ContractSignature{
-            ContractId=holding.Id,SignerUserId=signer,Status=SignatureStatus.Signed,SnapshotHash=holding.SnapshotHash,
-            SignedObjectKey="synthetic-signed",SignedHash="synthetic-hash",ProviderReference="synthetic-provider",SignedAt=new Clock().GetUtcNow()});
+        var holding = r.Contracts.Single(); Assert.Null(holding.PriceLockedAt);
+        foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSignature
+        {
+            ContractId = holding.Id,
+            SignerUserId = signer,
+            Status = SignatureStatus.Signed,
+            SnapshotHash = holding.SnapshotHash,
+            SignedObjectKey = "synthetic-signed",
+            SignedHash = "synthetic-hash",
+            ProviderReference = "synthetic-provider",
+            SignedAt = new Clock().GetUtcNow()
+        });
         r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today,
             [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, r.Room.Id, ChargeCategory.Rent, "RENT", "Changed",
                 ChargingMethod.FixedPerRoomPerMonth, 9000000, Today, null, 2)], []));
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
-        Assert.Equal("SigningAndDepositCompleted", holding.PriceLockTrigger);Assert.NotNull(holding.PriceLockedAt);
-        var locked=holding.AgreedPriceSnapshot;var lockedAt=holding.PriceLockedAt;
-        await r.Service.VerifyDepositAsync(id.Id,new("HOLD-TWO",1000000,"Verified bank statement"),Guid.NewGuid(),default);
-        Assert.Equal(lockedAt,holding.PriceLockedAt);Assert.Equal(locked,holding.AgreedPriceSnapshot);
+        Assert.Equal("SigningAndDepositCompleted", holding.PriceLockTrigger); Assert.NotNull(holding.PriceLockedAt);
+        var locked = holding.AgreedPriceSnapshot; var lockedAt = holding.PriceLockedAt;
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
+        Assert.Equal(lockedAt, holding.PriceLockedAt); Assert.Equal(locked, holding.AgreedPriceSnapshot);
     }
 
     [Fact]

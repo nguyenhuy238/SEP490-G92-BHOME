@@ -434,10 +434,10 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         Require(Permissions.Property.Manage); await LocationAsync(locationId, true, t);
         return await (lifecycle ?? throw new InvalidOperationException("Lifecycle checks are unavailable.")).ClosureAsync(locationId, t);
     }
-    public async Task<StaffChangePreview> StaffChangePreviewAsync(Guid locationId,CancellationToken t)
+    public async Task<StaffChangePreview> StaffChangePreviewAsync(Guid locationId, CancellationToken t)
     {
-        Require(Permissions.Property.Manage);await LocationAsync(locationId,true,t);
-        return await (lifecycle??throw new InvalidOperationException("Lifecycle checks are unavailable.")).StaffChangeAsync(locationId,t);
+        Require(Permissions.Property.Manage); await LocationAsync(locationId, true, t);
+        return await (lifecycle ?? throw new InvalidOperationException("Lifecycle checks are unavailable.")).StaffChangeAsync(locationId, t);
     }
 
     public async Task<RoomHistoryPage> RoomHistoryAsync(Guid roomId, RoomHistoryQuery query, CancellationToken t)

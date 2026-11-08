@@ -46,11 +46,17 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                     var deposit = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? await db.Database.SqlQuery<decimal>($"""
                         SELECT COALESCE(sum(a.amount),0) AS "Value" FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
                         WHERE a.target_deposit_contract_id={c.Id} AND p.status='VERIFIED'
-                        """).SingleAsync(t) : await db.Set<DepositVerification>().Where(d => d.ContractId == c.Id).SumAsync(d => (decimal?)d.Amount,t) ?? 0;
+                        """).SingleAsync(t) : await db.Set<DepositVerification>().Where(d => d.ContractId == c.Id).SumAsync(d => (decimal?)d.Amount, t) ?? 0;
                     if (deposit > 0 && !await db.Set<ContractSettlementReview>().AnyAsync(r => r.ContractId == c.Id && r.Decision == "PendingManualReview", t))
-                        db.Add(new ContractSettlementReview { ContractId = c.Id, Decision = "PendingManualReview", Settled = false,
-                            ReviewedByUserId = c.OwnerSignerId, ReviewedAt = now,
-                            FinancialSnapshot = System.Text.Json.JsonSerializer.Serialize(new { verifiedDeposit = deposit, source = "SystemHoldingExpiry", automaticRefund = false }) });
+                        db.Add(new ContractSettlementReview
+                        {
+                            ContractId = c.Id,
+                            Decision = "PendingManualReview",
+                            Settled = false,
+                            ReviewedByUserId = c.OwnerSignerId,
+                            ReviewedAt = now,
+                            FinancialSnapshot = System.Text.Json.JsonSerializer.Serialize(new { verifiedDeposit = deposit, source = "SystemHoldingExpiry", automaticRefund = false })
+                        });
                     var otherBinding = await db.Set<Contract>().AnyAsync(x => x.RoomId == c.RoomId && x.Id != c.Id && x.Status == ContractStatus.Active, t);
                     if (room.Status == RoomStatus.OnHold && !otherBinding)
                     {

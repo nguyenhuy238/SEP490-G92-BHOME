@@ -3,6 +3,7 @@ using BHome.Application.Jobs;
 using BHome.Application.Locations;
 using BHome.Application.Notifications;
 using BHome.Application.Operations;
+using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Jobs;
 using BHome.Infrastructure.Locations;
@@ -31,6 +32,20 @@ internal static class LegacyPersistenceRegistration
         // new Compact24 handlers can be inserted before the recurring handler at any time.
         services.RemoveAll<IBackgroundJobHandler>();
         services.RemoveAll<IJobScheduleContributor>();
+        // Owner setup P0-P2 persists versioned workspaces in Compact24 native JSON containers.
+        // The explicit legacy regression host must not resolve those adapters through ordinary
+        // controllers such as InvoiceService; their constructor ports are optional there.
+        services.RemoveAll<ISetupWorkspaceStore>();
+        services.RemoveAll<AssetInventoryService>();
+        services.RemoveAll<SetupEvidenceService>();
+        services.RemoveAll<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
+        services.RemoveAll<UtilityWorkspaceService>();
+        services.RemoveAll<IUtilityBilling>();
+        services.RemoveAll<OperatingPolicyService>();
+        services.RemoveAll<IOperatingPolicyWorkflow>();
+        services.RemoveAll<IPropertyLifecycleChecks>();
+        foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService) &&
+            s.ImplementationType == typeof(BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateAutomationWorker)).ToArray()) services.Remove(worker);
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));

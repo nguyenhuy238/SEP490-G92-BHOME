@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text.Json;
 using BHome.Application.Operations;
@@ -748,9 +748,16 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         (JsonSerializer.Deserialize<RecurringTaskTemplateView[]>(json, Json) ?? []).Select(x => x with { LocationId = location }).OrderBy(x => x.NextRunAt).ThenBy(x => x.Id).ToArray();
 
     private static void StaffParameters(NpgsqlCommand command, StaffQuery query)
-    { command.Parameters.AddWithValue("active", (object?)query.IsActive ?? DBNull.Value); command.Parameters.AddWithValue("search", (object?)query.Search?.Trim() ?? DBNull.Value); }
+    {
+        command.Parameters.Add(new NpgsqlParameter("active", NpgsqlDbType.Boolean) { Value = (object?)query.IsActive ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("search", NpgsqlDbType.Text) { Value = (object?)query.Search?.Trim() ?? DBNull.Value });
+    }
     private static void ResidenceParameters(NpgsqlCommand command, ResidenceQuery query, Guid? tenant)
-    { AddNullableUuid(command, "location", query.LocationId); command.Parameters.AddWithValue("status", (object?)query.Status ?? DBNull.Value); AddNullableUuid(command, "tenant", tenant); }
+    {
+        AddNullableUuid(command, "location", query.LocationId);
+        command.Parameters.Add(new NpgsqlParameter("status", NpgsqlDbType.Text) { Value = (object?)query.Status ?? DBNull.Value });
+        AddNullableUuid(command, "tenant", tenant);
+    }
     private static void OccupancyParameters(NpgsqlCommand command, OccupancyQuery query, Guid? staff, DateOnly today)
     {
         AddNullableUuid(command, "location", query.LocationId);

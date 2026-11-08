@@ -98,9 +98,9 @@ public static class AdjustmentRules
             Previous = line.PreviousReading is { } p ? D(p) : null,
             Confirmed = line.ConfirmedReading is { } c ? D(c) : null
         };
-        var bytes=System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value);
-        if(!string.IsNullOrEmpty(line.UtilityCalculationSnapshot))
-            bytes=bytes.Concat(System.Text.Encoding.UTF8.GetBytes("\n"+line.UtilityCalculationSnapshot)).ToArray();
+        var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value);
+        if (!string.IsNullOrEmpty(line.UtilityCalculationSnapshot))
+            bytes = bytes.Concat(System.Text.Encoding.UTF8.GetBytes("\n" + line.UtilityCalculationSnapshot)).ToArray();
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
     }
 }

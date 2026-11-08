@@ -22,31 +22,31 @@ Giữ các API Holding/payment/signing/activation/conversion đang có, không t
 
 ## P1 — Location, Staff và an toàn
 
-| Method/path | Tác dụng |
-|---|---|
-| `GET /locations/{id}/closure-check` | Owner xem các nhóm nghĩa vụ đang chặn đóng Location; chỉ số lượng, không lộ PII |
-| `GET /locations/{id}/staff-change-preview` | Owner xem trách nhiệm đang mở trước thay/gỡ Staff |
-| PUT/DELETE assignment hiện hữu | Chuyển GENERAL, METER_READ, WorkOrder và inspection đang mở trong transaction; lưu lịch sử/thông báo |
-| PUT Location hiện hữu | Chặn đóng khi còn nghĩa vụ thực tế; Resident lịch sử đã kết thúc không bị xóa và không tự chặn vĩnh viễn |
-| Readiness và activation hiện hữu | Dùng nguồn sự cố Emergency đang mở/Asset hỏng để đánh giá và chặn chuyển trạng thái bắt buộc |
+| Method/path                                | Tác dụng                                                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `GET /locations/{id}/closure-check`        | Owner xem các nhóm nghĩa vụ đang chặn đóng Location; chỉ số lượng, không lộ PII                          |
+| `GET /locations/{id}/staff-change-preview` | Owner xem trách nhiệm đang mở trước thay/gỡ Staff                                                        |
+| PUT/DELETE assignment hiện hữu             | Chuyển GENERAL, METER_READ, WorkOrder và inspection đang mở trong transaction; lưu lịch sử/thông báo     |
+| PUT Location hiện hữu                      | Chặn đóng khi còn nghĩa vụ thực tế; Resident lịch sử đã kết thúc không bị xóa và không tự chặn vĩnh viễn |
+| Readiness và activation hiện hữu           | Dùng nguồn sự cố Emergency đang mở/Asset hỏng để đánh giá và chặn chuyển trạng thái bắt buộc             |
 
 Gỡ Staff mà còn WorkOrder/inspection đặc biệt chưa hoàn tất bị từ chối, cần thay người chịu trách nhiệm. Không thêm Staff tự chuyển việc, phân ca hoặc quyền quyết định tài chính.
 
 ## P2 — Tài sản
 
-| Method/path | Quyền và tác dụng |
-|---|---|
-| `GET /asset-templates?locationId=…`, `GET /asset-templates/{id}` | Owner đọc bộ mẫu |
-| `POST /asset-templates`, `PUT /asset-templates/{id}/draft` | Owner tạo/sửa Draft: `locationId,name,items,expectedVersion` |
-| `POST /asset-templates/{id}/drafts` | Owner clone bản thành Draft mới, giữ stable item ID |
-| `POST /asset-templates/{id}/publish` | Owner publish với `expectedVersion`; bản publish bất biến; trả sync run |
-| `POST /asset-templates/{id}/sync`, `GET /asset-template-sync-runs/{id}` | Owner chạy lại/xem kết quả từng Room |
-| `PUT /rooms/{id}/asset-template` | Owner gán `templateId`; null trở lại bộ mẫu mặc định Location; có `expectedVersion` |
-| `GET /rooms/{id}/asset-inventory` hoặc `/desired-assets` | Owner/Staff đúng Location xem physical, desired, phiên bản hiện hành và discrepancy |
-| `POST /rooms/{id}/assets/verify` | Owner/Staff xác nhận vật lý bằng evidence; trả `assetId`; có kiểm soát retry/số lượng/version |
-| `GET /assets/{id}/history` | Owner/Staff xem lịch sử tài sản theo scope |
-| `GET/PUT /assets/{id}/metadata` | Owner xem/sửa tracking, quantity, purchase cost/date, useful life và reason/version |
-| `POST /assets/{id}/replace` | Owner thay tài sản có reason/version; giữ bản cũ và liên kết lịch sử |
+| Method/path                                                             | Quyền và tác dụng                                                                             |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `GET /asset-templates?locationId=…`, `GET /asset-templates/{id}`        | Owner đọc bộ mẫu                                                                              |
+| `POST /asset-templates`, `PUT /asset-templates/{id}/draft`              | Owner tạo/sửa Draft: `locationId,name,items,expectedVersion`                                  |
+| `POST /asset-templates/{id}/drafts`                                     | Owner clone bản thành Draft mới, giữ stable item ID                                           |
+| `POST /asset-templates/{id}/publish`                                    | Owner publish với `expectedVersion`; bản publish bất biến; trả sync run                       |
+| `POST /asset-templates/{id}/sync`, `GET /asset-template-sync-runs/{id}` | Owner chạy lại/xem kết quả từng Room                                                          |
+| `PUT /rooms/{id}/asset-template`                                        | Owner gán `templateId`; null trở lại bộ mẫu mặc định Location; có `expectedVersion`           |
+| `GET /rooms/{id}/asset-inventory` hoặc `/desired-assets`                | Owner/Staff đúng Location xem physical, desired, phiên bản hiện hành và discrepancy           |
+| `POST /rooms/{id}/assets/verify`                                        | Owner/Staff xác nhận vật lý bằng evidence; trả `assetId`; có kiểm soát retry/số lượng/version |
+| `GET /assets/{id}/history`                                              | Owner/Staff xem lịch sử tài sản theo scope                                                    |
+| `GET/PUT /assets/{id}/metadata`                                         | Owner xem/sửa tracking, quantity, purchase cost/date, useful life và reason/version           |
+| `POST /assets/{id}/replace`                                             | Owner thay tài sản có reason/version; giữ bản cũ và liên kết lịch sử                          |
 
 Item có `id,name,category,trackingMode,quantity`; tracking là `Serialized` hoặc `BulkQuantity`. Verify nhận `templateId,itemId,code,quantity,condition,evidenceObjectKey,expectedVersion` (phiên bản desired), và `existingAssetId` tùy chọn để liên kết tài sản đã có thay vì tạo trùng. Serialized kiểm kê từng mã, quantity 1. `condition` là mô tả tình trạng; trạng thái Asset vẫn theo enum/domain hiện hữu.
 
@@ -58,21 +58,21 @@ Tự sync dùng job `asset-template-sync` khi Jobs bật. Khi Jobs tắt, có th
 
 Các API sau dành cho Owner, riêng source reading cho Owner/Staff đúng Location.
 
-| Method/path | Tác dụng |
-|---|---|
-| `GET/POST /utility-tariffs`, `GET /utility-tariffs/{id}` | Biểu giá theo Location/type/effective dates, supplier/classification/source, tiers, rounding, verified |
-| `POST /utility-tariffs/{id}/replacement` | Thêm phiên bản biểu giá có hiệu lực mới, giữ nguồn cũ |
-| `GET/POST /utility-source-meters` | Công tơ tổng/khu chung; không giả làm Room meter |
-| `POST /utility-meter-links` | Liên kết Room meter hiện hữu vào công tơ tổng đúng scope/type/thời hạn |
-| `POST /utility-source-readings` | Ghi chỉ số đầu/cuối, tháng, evidence, `humanConfirmed=true` |
-| `GET/POST /utility-quotas` | Định mức miễn phí Room/type/tháng, nguồn xác minh/version |
-| `GET/POST /utility-profiles` | Room áp tariff theo thời gian; gửi rõ `requireQuota,requireReconciliation` |
-| `POST /utility-profiles/{id}/replacement` | Thay profile từ ngày mới, `expectedVersion` của bản nguồn; lịch sử không bị sửa |
-| `GET/POST /utility-source-bills`, `GET /utility-source-bills/{id}` | Hóa đơn đầu vào tháng/source meter, sản lượng, số tiền VND, reference/evidence; POST cần UUID key |
-| `POST /utility-reconciliations/preview` | Tính chênh lệch source − room − common, không ghi dữ liệu |
-| `POST /utility-reconciliations`, `GET /utility-reconciliations/{id}` | Lưu/đọc đối soát với tolerance do Owner chỉ định và input hash |
-| `POST /utility-reconciliations/{id}/review` | Owner chấp nhận chênh lệch có reason/version; không tự thu thêm/hoàn tiền |
-| `POST /utility-period-breakdowns` | Xác nhận phân đoạn kỳ khi thay tariff/profile giữa tháng, có bằng chứng và tổng lượng khớp chỉ số đã xác nhận |
+| Method/path                                                          | Tác dụng                                                                                                      |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET/POST /utility-tariffs`, `GET /utility-tariffs/{id}`             | Biểu giá theo Location/type/effective dates, supplier/classification/source, tiers, rounding, verified        |
+| `POST /utility-tariffs/{id}/replacement`                             | Thêm phiên bản biểu giá có hiệu lực mới, giữ nguồn cũ                                                         |
+| `GET/POST /utility-source-meters`                                    | Công tơ tổng/khu chung; không giả làm Room meter                                                              |
+| `POST /utility-meter-links`                                          | Liên kết Room meter hiện hữu vào công tơ tổng đúng scope/type/thời hạn                                        |
+| `POST /utility-source-readings`                                      | Ghi chỉ số đầu/cuối, tháng, evidence, `humanConfirmed=true`                                                   |
+| `GET/POST /utility-quotas`                                           | Định mức miễn phí Room/type/tháng, nguồn xác minh/version                                                     |
+| `GET/POST /utility-profiles`                                         | Room áp tariff theo thời gian; gửi rõ `requireQuota,requireReconciliation`                                    |
+| `POST /utility-profiles/{id}/replacement`                            | Thay profile từ ngày mới, `expectedVersion` của bản nguồn; lịch sử không bị sửa                               |
+| `GET/POST /utility-source-bills`, `GET /utility-source-bills/{id}`   | Hóa đơn đầu vào tháng/source meter, sản lượng, số tiền VND, reference/evidence; POST cần UUID key             |
+| `POST /utility-reconciliations/preview`                              | Tính chênh lệch source − room − common, không ghi dữ liệu                                                     |
+| `POST /utility-reconciliations`, `GET /utility-reconciliations/{id}` | Lưu/đọc đối soát với tolerance do Owner chỉ định và input hash                                                |
+| `POST /utility-reconciliations/{id}/review`                          | Owner chấp nhận chênh lệch có reason/version; không tự thu thêm/hoàn tiền                                     |
+| `POST /utility-period-breakdowns`                                    | Xác nhận phân đoạn kỳ khi thay tariff/profile giữa tháng, có bằng chứng và tổng lượng khớp chỉ số đã xác nhận |
 
 GET list nhận `locationId`. Tháng gửi ngày đầu tháng. Tiers dùng `through` tăng dần, bậc cuối `through:null`; `rate` do Owner nhập, không có biểu giá pháp lý hardcode. `rounding` theo enum VndRounding. Verified là xác nhận nghiệp vụ của Owner, không phải backend chứng nhận pháp lý của nhà cung cấp. Giới hạn kỹ thuật: tối đa 50 bậc, rate/sản lượng ≤ 1 tỷ; source bill VND nguyên không âm < 10^18.
 
@@ -82,14 +82,14 @@ Line invoice trả `utilityCalculationSnapshot`: lượng, bậc giá và tham c
 
 ## P2 — Nội quy có phiên bản và phụ lục
 
-| Method/path | Quyền và tác dụng |
-|---|---|
-| `GET /operating-policies?locationId=…`, `GET /operating-policies/{id}`, `GET /operating-policies/{id}/versions` | Owner đọc; Staff đúng Location chỉ đọc bản đã publish |
-| `POST /operating-policies`, `PUT /operating-policies/{id}/draft` | Owner tạo/sửa Draft: location/title/content/effectiveFrom/version |
-| `POST /operating-policies/{id}/publish` | Owner publish với expectedVersion, lưu phiên bản bất biến và thông báo |
-| `GET /contracts/{id}/agreed-operating-policy` | Đọc nội quy đã thỏa thuận theo quyền Contract; Tenant chỉ hợp đồng mình |
-| `POST /contracts/{id}/operating-policy-amendments` | Owner tạo Addendum: policyId/effectiveFrom/reason, UUID key; trả contractId phụ lục |
-| `POST /contracts/{id}/operating-policy-amendment-cancellation` | ID là phụ lục; Owner hủy bản chưa Applied với reason và UUID key |
+| Method/path                                                                                                     | Quyền và tác dụng                                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /operating-policies?locationId=…`, `GET /operating-policies/{id}`, `GET /operating-policies/{id}/versions` | Owner đọc; Staff đúng Location chỉ đọc bản đã publish                               |
+| `POST /operating-policies`, `PUT /operating-policies/{id}/draft`                                                | Owner tạo/sửa Draft: location/title/content/effectiveFrom/version                   |
+| `POST /operating-policies/{id}/publish`                                                                         | Owner publish với expectedVersion, lưu phiên bản bất biến và thông báo              |
+| `GET /contracts/{id}/agreed-operating-policy`                                                                   | Đọc nội quy đã thỏa thuận theo quyền Contract; Tenant chỉ hợp đồng mình             |
+| `POST /contracts/{id}/operating-policy-amendments`                                                              | Owner tạo Addendum: policyId/effectiveFrom/reason, UUID key; trả contractId phụ lục |
+| `POST /contracts/{id}/operating-policy-amendment-cancellation`                                                  | ID là phụ lục; Owner hủy bản chưa Applied với reason và UUID key                    |
 
 Draft Main/Renewal bind policy đang hiệu lực vào đúng nội dung và hash đem ký. Publish V2 không đổi điều khoản V1 đã ký. Hợp đồng cũ không có bằng chứng binding trả NotRecorded, không tự coi Tenant đã đồng ý.
 

@@ -16,13 +16,13 @@ Luồng handover được dùng để rà nghiệp vụ. Checklist/lệnh trong 
 
 ## Traceability và kết quả
 
-| Yêu cầu/nguồn | Thành phần thay đổi | Acceptance được kiểm tra |
-|---|---|---|
-| P0; handover §6; BF-03, UC-14/15, GBR-04/18, DBR-02, JOB-05 | ContractHoldingService, ContractService/Repository, Compact24Records, PaymentService, ContractExpiryProcessor | Cọc manual+bank cùng canonical sum; không double count; ký+partial chưa khóa; đủ tiền+chữ ký mới khóa approved giá; cạnh tranh cả phòng bị chặn trước dispatch; expiry giữ tiền/evidence và sync không hồi sinh trạng thái |
-| P1; handover §5/10; BF-01/02/07, UC-04/07/08..12/15..17, GBR-01/02/12 | PropertyService, PropertyLifecycleChecks, CompactLocationAssignments, CompactOperationsRepository | Scope trái Location bị từ chối; emergency chặn vận hành; chuyển task/meter/WO/inspection có lịch sử; gỡ Staff còn việc đặc biệt rollback; Resident đã kết thúc không chặn đóng Location và không bị xóa |
-| P2 tài sản; handover §7; UC-05/17, GBR-12 | AssetInventoryService, SetupWorkspaceStore, AssetTemplateSyncJob/AutomationWorker | Publish bất biến; clone/pin; sync theo từng Room; phòng không đủ điều kiện bị bỏ qua; trở lại Available được sync; evidence/version/replay/ExistingAsset liên kết không tạo trùng; physical giữ lịch sử |
-| P2 utility; handover §8.3; BF-01/05, UC-06/20/21, GBR-07..09, DBR-06/07, JOB-09/10 | UtilityWorkspaceService/PeriodBreakdowns, InvoiceService, InvoiceLine Compact24 snapshot | Tính bậc/quota/rounding decimal; source bill idempotent; thiếu source inputs không được waive; Owner review variance có lý do; profile replacement giữ nguồn; thay giá giữa tháng cần segment evidence và tổng lượng khớp; thiếu quota chặn Finalize; invoice authoritative snapshot giữ qua Tenant read |
-| P2 nội quy; handover §9; BF-03/04, UC-15/19, GBR-04/13/18 | OperatingPolicyService, Contract Addendum flow, PDF renderer, notifications | Publish V2 giữ binding V1; cross-Tenant 404; hồ sơ cũ NotRecorded; chưa ký không activate; ký giả lập đủ rồi Owner áp dụng phụ lục không đổi parent terms/occupancy; Applied không hủy; draft phụ lục hủy idempotent và có thể tạo đề xuất mới |
+| Yêu cầu/nguồn                                                                      | Thành phần thay đổi                                                                                           | Acceptance được kiểm tra                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0; handover §6; BF-03, UC-14/15, GBR-04/18, DBR-02, JOB-05                        | ContractHoldingService, ContractService/Repository, Compact24Records, PaymentService, ContractExpiryProcessor | Cọc manual+bank cùng canonical sum; không double count; ký+partial chưa khóa; đủ tiền+chữ ký mới khóa approved giá; cạnh tranh cả phòng bị chặn trước dispatch; expiry giữ tiền/evidence và sync không hồi sinh trạng thái                                                                               |
+| P1; handover §5/10; BF-01/02/07, UC-04/07/08..12/15..17, GBR-01/02/12              | PropertyService, PropertyLifecycleChecks, CompactLocationAssignments, CompactOperationsRepository             | Scope trái Location bị từ chối; emergency chặn vận hành; chuyển task/meter/WO/inspection có lịch sử; gỡ Staff còn việc đặc biệt rollback; Resident đã kết thúc không chặn đóng Location và không bị xóa                                                                                                  |
+| P2 tài sản; handover §7; UC-05/17, GBR-12                                          | AssetInventoryService, SetupWorkspaceStore, AssetTemplateSyncJob/AutomationWorker                             | Publish bất biến; clone/pin; sync theo từng Room; phòng không đủ điều kiện bị bỏ qua; trở lại Available được sync; evidence/version/replay/ExistingAsset liên kết không tạo trùng; physical giữ lịch sử                                                                                                  |
+| P2 utility; handover §8.3; BF-01/05, UC-06/20/21, GBR-07..09, DBR-06/07, JOB-09/10 | UtilityWorkspaceService/PeriodBreakdowns, InvoiceService, InvoiceLine Compact24 snapshot                      | Tính bậc/quota/rounding decimal; source bill idempotent; thiếu source inputs không được waive; Owner review variance có lý do; profile replacement giữ nguồn; thay giá giữa tháng cần segment evidence và tổng lượng khớp; thiếu quota chặn Finalize; invoice authoritative snapshot giữ qua Tenant read |
+| P2 nội quy; handover §9; BF-03/04, UC-15/19, GBR-04/13/18                          | OperatingPolicyService, Contract Addendum flow, PDF renderer, notifications                                   | Publish V2 giữ binding V1; cross-Tenant 404; hồ sơ cũ NotRecorded; chưa ký không activate; ký giả lập đủ rồi Owner áp dụng phụ lục không đổi parent terms/occupancy; Applied không hủy; draft phụ lục hủy idempotent và có thể tạo đề xuất mới                                                           |
 
 Utility/nội quy nâng cao là mở rộng được người dùng duyệt trong gói này, không diễn giải rằng SRS đã có sẵn toàn bộ endpoint chi tiết.
 
@@ -39,14 +39,14 @@ Utility/nội quy nâng cao là mở rộng được người dùng duyệt tron
 
 Chạy trên source đã sửa, dữ liệu synthetic và PostgreSQL database ngẫu nhiên dành riêng cho test. Các con số dưới đây không cộng các lần chạy lặp thành độ phủ.
 
-| Lệnh/nhóm | Kết quả |
-|---|---|
-| `dotnet build src/backend/BHome.Api/BHome.Api.csproj --no-restore` | PASS, 0 warning, 0 error |
-| `dotnet test tests/backend/BHome.Application.UnitTests/BHome.Application.UnitTests.csproj --no-restore` | **333 passed**, 0 failed/skipped |
-| `dotnet test tests/backend/BHome.Domain.UnitTests/BHome.Domain.UnitTests.csproj --no-restore` | **106 passed**, 0 failed/skipped |
-| Compact24OwnerSetupTests + Assignment + PropertyShape/PropertyRegression + Contract/Invoice/Payment/Task regression + NotificationMvp | **111 passed**, 0 failed/skipped; 2m02s |
-| Compact24OwnerSetupTests chạy lại sau mở rộng assertion variance review/cancellation | **13 passed**, 0 failed/skipped; 10s; là tập con của 111, không cộng thêm |
-| `git diff --check` | PASS |
+| Lệnh/nhóm                                                                                                                             | Kết quả                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `dotnet build src/backend/BHome.Api/BHome.Api.csproj --no-restore`                                                                    | PASS, 0 warning, 0 error                                                  |
+| `dotnet test tests/backend/BHome.Application.UnitTests/BHome.Application.UnitTests.csproj --no-restore`                               | **333 passed**, 0 failed/skipped                                          |
+| `dotnet test tests/backend/BHome.Domain.UnitTests/BHome.Domain.UnitTests.csproj --no-restore`                                         | **106 passed**, 0 failed/skipped                                          |
+| Compact24OwnerSetupTests + Assignment + PropertyShape/PropertyRegression + Contract/Invoice/Payment/Task regression + NotificationMvp | **111 passed**, 0 failed/skipped; 2m02s                                   |
+| Compact24OwnerSetupTests chạy lại sau mở rộng assertion variance review/cancellation                                                  | **13 passed**, 0 failed/skipped; 10s; là tập con của 111, không cộng thêm |
+| `git diff --check`                                                                                                                    | PASS                                                                      |
 
 Integration dùng launcher local truyền admin connection qua environment, không ghi secret vào report. Filter cụ thể của lượt 111:
 

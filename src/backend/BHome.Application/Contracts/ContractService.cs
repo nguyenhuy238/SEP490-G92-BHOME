@@ -96,7 +96,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, RequireTenant(c),
         c.RepresentativeResidentId, c.Residents.Select(x => x.ResidentId).Order().ToArray(), c.StartDate, c.EndDate,
         c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
-        {IsOperatingPolicyAmendment=c.Kind==ContractKind.Addendum};
+    { IsOperatingPolicyAmendment = c.Kind == ContractKind.Addendum };
     private static void Seal(Contract c)
     {
         // Native VND columns have scale 0; hash the exact values that survive a database round-trip.
@@ -258,10 +258,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             };
             if (c.Kind == ContractKind.Holding)
             {
-                if(await repository.HoldingConflictAsync(c.RoomId,c.Id,c.StartDate,c.EndDate,t))throw ContractException.Conflict("room_contract_conflict");
+                if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
                 var already = await repository.DepositTotalAsync(c.Id, t);
                 if (already + entry.Amount > c.RequiredDeposit) throw ContractException.Conflict("holding_deposit_excess_requires_manual_review");
-                await LockHoldingPriceAsync(c, "VerifiedDeposit", entry.VerifiedAt, t,entry.Amount);
+                await LockHoldingPriceAsync(c, "VerifiedDeposit", entry.VerifiedAt, t, entry.Amount);
             }
             repository.Add(entry); Audit("ContractDepositVerified", id); Remember(key, "deposit", new { id, x }, entry.Id); return new ContractId(entry.Id);
         }, t);
@@ -281,7 +281,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.Kind == ContractKind.Addendum)
         {
             var parent = c.ParentContractId is { } amendmentParent ? await repository.FindAsync(amendmentParent, t) : null;
-            if (parent is null || parent.Status != ContractStatus.Active || parent.RoomId != c.RoomId || parent.TenantUserId != c.TenantUserId || parent.OwnerSignerId!=c.OwnerSignerId)
+            if (parent is null || parent.Status != ContractStatus.Active || parent.RoomId != c.RoomId || parent.TenantUserId != c.TenantUserId || parent.OwnerSignerId != c.OwnerSignerId)
                 blockers.Add("amendment_parent_not_active");
             if (c.Status != ContractStatus.PendingActivation || !Intact(c) || !HoldingSigned(c)) blockers.Add("verified_signature_evidence_required");
             if (Today < c.StartDate || Today > c.EndDate) blockers.Add("amendment_not_effective");
@@ -372,14 +372,14 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         Audit("ContractActivated", id); Remember(key, "activate", id, id); return View(c);
     }, t);
 
-    public Task<ContractView> CancelPolicyAmendmentAsync(Guid id,PolicyAmendmentCancellation input,Guid key,CancellationToken t)=>Mutate(id,[Roles.Owner],async c=>
+    public Task<ContractView> CancelPolicyAmendmentAsync(Guid id, PolicyAmendmentCancellation input, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
-        if(string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Length>2000)throw ContractException.Invalid("reason_required");
-        if(await Replay(key,"cancel-policy-amendment",new{id,input},t)is not null)return View(c);
-        if(c.Kind!=ContractKind.Addendum || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation))throw ContractException.Conflict("policy_amendment_not_cancellable");
-        c.Status=ContractStatus.Cancelled;c.LifecycleActorId=Actor;c.LifecycleAt=clock.GetUtcNow();c.LifecycleReason=input.Reason.Trim();
-        Audit("OperatingPolicyAmendmentCancelled",id);Remember(key,"cancel-policy-amendment",new{id,input},id);return View(c);
-    },t);
+        if (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Length > 2000) throw ContractException.Invalid("reason_required");
+        if (await Replay(key, "cancel-policy-amendment", new { id, input }, t) is not null) return View(c);
+        if (c.Kind != ContractKind.Addendum || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation)) throw ContractException.Conflict("policy_amendment_not_cancellable");
+        c.Status = ContractStatus.Cancelled; c.LifecycleActorId = Actor; c.LifecycleAt = clock.GetUtcNow(); c.LifecycleReason = input.Reason.Trim();
+        Audit("OperatingPolicyAmendmentCancelled", id); Remember(key, "cancel-policy-amendment", new { id, input }, id); return View(c);
+    }, t);
 
     // Persist prepared work before making the ambiguous external mutation. Never automatically resend Dispatching.
     public async Task<SignatureView> RequestSigningAsync(Guid id, SigningInput x, Guid key, CancellationToken t)
@@ -392,7 +392,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign", new { id, x }, t) is not null) return true;
             if (c.Kind == ContractKind.Holding && c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
-            if(c.Kind==ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId,c.Id,c.StartDate,c.EndDate,t))throw ContractException.Conflict("room_contract_conflict");
+            if (c.Kind == ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
             if (c.Status == ContractStatus.Draft) { c.Status = ContractStatus.PendingSigning; Audit("ContractSigningInitiated", id); }
             return true;
@@ -403,7 +403,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
             if (await Replay(key, "sign", new { id, x }, t) is { } prior) return prior;
             if (c.Kind == ContractKind.Holding && c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
-            if(c.Kind==ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId,c.Id,c.StartDate,c.EndDate,t))throw ContractException.Conflict("room_contract_conflict");
+            if (c.Kind == ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
             if (c.Signatures.Any(s => s.SignerUserId == Actor && s.Status != SignatureStatus.Failed)) throw ContractException.Conflict("signer_already_requested");
             if (c.Signatures.Any(s => s.Status is not (SignatureStatus.Signed or SignatureStatus.Simulated or SignatureStatus.Failed))) throw ContractException.Conflict("previous_signature_pending");

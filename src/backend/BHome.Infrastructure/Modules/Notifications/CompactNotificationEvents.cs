@@ -72,7 +72,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleOrDefaultAsync(c => c.Id == e.Target, t);
                 if (contract is not null)
                 {
-                    var eventType = e.Event.StartsWith("OperatingPolicyAmendment",StringComparison.Ordinal)?e.Event=="OperatingPolicyAmendmentApplied"?"OPERATING_POLICY_AMENDMENT_APPLIED":"OPERATING_POLICY_AMENDMENT_CANCELLED":
+                    var eventType = e.Event.StartsWith("OperatingPolicyAmendment", StringComparison.Ordinal) ? e.Event == "OperatingPolicyAmendmentApplied" ? "OPERATING_POLICY_AMENDMENT_APPLIED" : "OPERATING_POLICY_AMENDMENT_CANCELLED" :
                         e.Event == "ContractActivated" ? "CONTRACT_ACTIVATED" : e.Event == "ContractRenewalPrepared" ? "CONTRACT_RENEWAL_ACTION_REQUIRED" : "CONTRACT_SIGNING_REQUIRED";
                     foreach (var r in await Roles(new[] { contract.OwnerSignerId, contract.TenantUserId ?? Guid.Empty }, t))
                         count += await sql.Emit(r.Id, r.Role, contract.Room.LocationId, "contract-state:" + contract.Id + ":" + eventType, eventType, "Contract",

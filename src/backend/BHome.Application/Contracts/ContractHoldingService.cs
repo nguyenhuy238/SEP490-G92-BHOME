@@ -12,11 +12,11 @@ public sealed partial class ContractService
             s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) &&
             !string.IsNullOrWhiteSpace(s.SignedHash) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
 
-    private async Task LockHoldingPriceAsync(Contract c, string trigger, DateTimeOffset at, CancellationToken token, decimal incomingAmount=0)
+    private async Task LockHoldingPriceAsync(Contract c, string trigger, DateTimeOffset at, CancellationToken token, decimal incomingAmount = 0)
     {
         if (c.Kind != ContractKind.Holding || c.PriceLockedAt.HasValue) return;
         if (c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
-        if(!HoldingSigned(c) || await repository.DepositTotalAsync(c.Id,token)+incomingAmount!=c.RequiredDeposit)return;
+        if (!HoldingSigned(c) || await repository.DepositTotalAsync(c.Id, token) + incomingAmount != c.RequiredDeposit) return;
         if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token))
             throw ContractException.Conflict("room_contract_conflict");
         var approved = c.AgreedPriceSnapshot == "{}" ? null : JsonSerializer.Deserialize<HoldingPriceSnapshot>(c.AgreedPriceSnapshot);
@@ -25,9 +25,9 @@ public sealed partial class ContractService
             x.Id, x.ChargeCode, (int)x.Category, (int)x.Method, x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version)).ToArray();
         if (charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent)
             throw ContractException.Conflict("holding_approved_price_changed");
-        var signedAt=c.Signatures.Where(s=>CompleteSignature(s,c)).Max(s=>s.SignedAt)!.Value;
-        var instant = (at>signedAt?at:signedAt).ToUniversalTime();
-        trigger="SigningAndDepositCompleted";
+        var signedAt = c.Signatures.Where(s => CompleteSignature(s, c)).Max(s => s.SignedAt)!.Value;
+        var instant = (at > signedAt ? at : signedAt).ToUniversalTime();
+        trigger = "SigningAndDepositCompleted";
         var snapshot = new HoldingPriceSnapshot(c.MonthlyRent, c.RequiredDeposit, c.StartDate, c.EndDate,
             c.HoldingExpiryAt!.Value, trigger, instant, charges);
         c.AgreedPriceSnapshot = JsonSerializer.Serialize(snapshot);
@@ -137,13 +137,13 @@ public sealed partial class ContractService
         var c = await Load(id, [Roles.Owner], token);
         if (c.Kind != ContractKind.Holding || c.ApprovedAt is null || c.Status is ContractStatus.Expired or ContractStatus.Cancelled or ContractStatus.Converted ||
             c.HoldingExpiryAt <= verifiedAt) throw ContractException.Conflict("holding_deposit_requires_manual_review");
-        if(await repository.HoldingConflictAsync(c.RoomId,c.Id,c.StartDate,c.EndDate,token))throw ContractException.Conflict("room_contract_conflict");
-        await LockHoldingPriceAsync(c, "VerifiedDeposit", verifiedAt, token,amount);
+        if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token)) throw ContractException.Conflict("room_contract_conflict");
+        await LockHoldingPriceAsync(c, "VerifiedDeposit", verifiedAt, token, amount);
     }
-    public async Task<bool> CanAcceptHoldingDepositAsync(Guid id,CancellationToken t)
+    public async Task<bool> CanAcceptHoldingDepositAsync(Guid id, CancellationToken t)
     {
-        var c=await Load(id,[Roles.Owner],t);
-        return !await repository.HoldingConflictAsync(c.RoomId,c.Id,c.StartDate,c.EndDate,t);
+        var c = await Load(id, [Roles.Owner], t);
+        return !await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t);
     }
 
     private async Task<ActivationReadiness> HoldingReadiness(Contract c, CancellationToken token)
@@ -194,9 +194,15 @@ public sealed partial class ContractService
             c.Status = ContractStatus.Cancelled; c.ActualEndDate = Today; c.LifecycleActorId = Actor;
             c.LifecycleAt = clock.GetUtcNow(); c.LifecycleReason = input.Reason.Trim();
             var received = await repository.DepositTotalAsync(c.Id, token);
-            if (received > 0) repository.Add(new ContractSettlementReview { ContractId = c.Id, Decision = "PendingManualReview",
-                Settled = false, ReviewedByUserId = Actor, ReviewedAt = clock.GetUtcNow(),
-                FinancialSnapshot = JsonSerializer.Serialize(new { verifiedDeposit = received, reason = "HoldingCancelled", automaticRefund = false }) });
+            if (received > 0) repository.Add(new ContractSettlementReview
+            {
+                ContractId = c.Id,
+                Decision = "PendingManualReview",
+                Settled = false,
+                ReviewedByUserId = Actor,
+                ReviewedAt = clock.GetUtcNow(),
+                FinancialSnapshot = JsonSerializer.Serialize(new { verifiedDeposit = received, reason = "HoldingCancelled", automaticRefund = false })
+            });
             Audit("HoldingCancelled", id); Remember(key, "holding-cancel", new { id, input }, id); return View(c);
         }, token);
     }
