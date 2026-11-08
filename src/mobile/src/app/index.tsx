@@ -3,7 +3,7 @@ import { Redirect } from 'expo-router';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { Page } from '../components/Controls';
 import { useSession } from '../lib/SessionProvider';
-import { homeScreen, sessionRole } from '../features/workspace/navigation';
+import { homeScreen, sessionRole, workspaceTabHref } from '../features/workspace/navigation';
 import { LoginScreen } from '../screens/LoginScreen';
 export default function Index() {
   const { session, ready } = useSession();
@@ -21,7 +21,5 @@ export default function Index() {
         <Text>Tài khoản chưa có vai trò mobile được hỗ trợ.</Text>
       </Page>
     );
-  return (
-    <Redirect href={{ pathname: '/workspace/[screen]', params: { screen: homeScreen[role] } }} />
-  );
+  return <Redirect href={workspaceTabHref(homeScreen[role])} />;
 }

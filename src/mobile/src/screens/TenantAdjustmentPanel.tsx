@@ -1,8 +1,8 @@
-import { useFeedbackState } from '../lib/useFeedbackState';
+﻿import { useFeedbackState } from '../lib/useFeedbackState';
 import { showSuccess } from '../lib/toast';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Platform } from 'react-native';
-import { Checkbox, Text, TextInput } from 'react-native-paper';
+import { Image, Platform, View } from 'react-native';
+import { Button, IconButton, Checkbox, Text, TextInput, TouchableRipple } from 'react-native-paper';
 import { randomUUID } from '../lib/randomUUID';
 import {
   adjustmentClient,
@@ -15,8 +15,14 @@ import {
 import { formatContractMoney, vnd } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
-import { Action, Box, Heading, Pill, ui } from '../components/WorkspaceKit';
-import { Pagination, QueryState } from '../components/WorkspaceQueryState';
+import { Action, Pill, ui } from '../components/WorkspaceKit';
+import {
+  InvoiceFeedback,
+  InvoiceMoneyRow,
+  InvoicePager,
+  invoiceUi,
+} from '../components/InvoiceDetailUi';
+import { loadAdjustmentPage, loadTenantAdjustment } from '../services/tenantInvoices';
 import { ChoiceField } from '../components/WorkflowControls';
 import { CameraCapture } from '../components/CameraCapture';
 import { useSession } from '../lib/SessionProvider';
@@ -29,90 +35,162 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
     [effectPage, setEffectPage] = useState(1),
     [selected, setSelected] = useState(''),
     [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'requests' | 'approved'>('requests');
+  const allowed = session?.roles.includes('Tenant') && !!client;
   const list = useWorkspaceQuery<Page<Adjustment>>(
-    `/api/v1/invoice-adjustments?invoiceId=${invoice.id}&page=${page}&pageSize=20`,
+    allowed
+      ? `/api/v1/invoice-adjustments?invoiceId=${encodeURIComponent(invoice.id)}&page=${page}&pageSize=20`
+      : null,
+    { load: loadAdjustmentPage<Adjustment>, notifyError: false },
   );
   const effects = useWorkspaceQuery<Page<AdjustmentEffect>>(
-    `/api/v1/invoices/${invoice.id}/adjustments?page=${effectPage}&pageSize=20`,
+    allowed
+      ? `/api/v1/invoices/${encodeURIComponent(invoice.id)}/adjustments?page=${effectPage}&pageSize=20`
+      : null,
+    { load: loadAdjustmentPage<AdjustmentEffect>, notifyError: false },
   );
   const detail = useWorkspaceQuery<Adjustment>(
-    selected ? `/api/v1/invoice-adjustments/${selected}` : null,
+    allowed && selected && tab === 'requests'
+      ? `/api/v1/invoice-adjustments/${encodeURIComponent(selected)}`
+      : null,
+    { load: loadTenantAdjustment, notifyError: false },
   );
-  if (!session?.roles.includes('Tenant') || !client) return null;
+  const current = tab === 'requests' ? list : effects;
+  if (!allowed || !client) return null;
   return (
-    <>
-      <Box>
-        <Heading
-          title="Điều chỉnh hóa đơn"
-          detail="Owner quyết định; yêu cầu và ảnh của bạn được giữ riêng tư."
-        />
-        <Action onPress={() => setOpen(!open)}>
-          {open ? 'Đóng yêu cầu mới' : 'Yêu cầu điều chỉnh'}
-        </Action>
-        {open && (
-          <RequestForm
-            key={invoice.id + ':' + invoice.version}
-            invoice={invoice}
-            client={client}
-            submitted={(id) => {
-              setOpen(false);
-              setSelected(id);
-              list.reload();
-              effects.reload();
-            }}
-          />
-        )}
-      </Box>
-      <Box>
-        <Heading title="Lịch sử yêu cầu của bạn" />
-        <QueryState
-          loading={list.loading || effects.loading}
-          error={list.error || effects.error}
-          reload={() => {
+    <View style={[invoiceUi.section, { borderBottomWidth: 0 }]}>
+      <Text style={invoiceUi.heading}>Điều chỉnh hóa đơn</Text>
+      {open && (
+        <RequestForm
+          key={invoice.id + ':' + invoice.version}
+          invoice={invoice}
+          client={client}
+          submitted={(id) => {
+            setOpen(false);
+            setTab('requests');
+            setSelected(id);
             list.reload();
             effects.reload();
-            detail.reload();
           }}
         />
-        {list.data?.items.length === 0 && <Text>Bạn chưa gửi yêu cầu cho hóa đơn này.</Text>}
-        {list.data?.items.map((r) => (
-          <React.Fragment key={r.id}>
-            <Text>
-              {adjustmentStatus(r.status)} · {r.chargeCode ?? 'Toàn hóa đơn'} ·{' '}
-              {formatInstant(r.submittedAt)}
-            </Text>
-            <Action secondary onPress={() => setSelected(r.id)}>
-              Xem yêu cầu của tôi
-            </Action>
-          </React.Fragment>
-        ))}
-        {list.data && (
-          <Pagination
-            page={page}
-            total={list.data.totalCount}
-            loading={list.loading}
-            onChange={setPage}
-          />
-        )}
-      </Box>
-      {selected && (
-        <Box>
-          <Heading title="Kết quả yêu cầu" />
-          <QueryState {...detail} />
+      )}
+      <View style={invoiceUi.tabBar}>
+        <TouchableRipple
+          style={[invoiceUi.tab, tab === 'requests' && invoiceUi.tabActive]}
+          accessibilityRole="tab"
+          accessibilityLabel="Yêu cầu của tôi"
+          accessibilityState={{ selected: tab === 'requests' }}
+          onPress={() => setTab('requests')}
+        >
+          <Text style={[invoiceUi.tabText, tab === 'requests' && invoiceUi.tabTextActive]}>
+            Yêu cầu của tôi ({list.error ? '—' : (list.data?.totalCount ?? '…')})
+          </Text>
+        </TouchableRipple>
+        <TouchableRipple
+          style={[invoiceUi.tab, tab === 'approved' && invoiceUi.tabActive]}
+          accessibilityRole="tab"
+          accessibilityLabel="Đã duyệt"
+          accessibilityState={{ selected: tab === 'approved' }}
+          onPress={() => setTab('approved')}
+        >
+          <Text style={[invoiceUi.tabText, tab === 'approved' && invoiceUi.tabTextActive]}>
+            Đã duyệt ({effects.error ? '—' : (effects.data?.totalCount ?? '…')})
+          </Text>
+        </TouchableRipple>
+      </View>
+      <InvoiceFeedback {...current} />
+      {tab === 'requests' && (
+        <>
+          {list.data?.items.length === 0 && (
+            <Text style={invoiceUi.secondary}>Chưa có yêu cầu điều chỉnh.</Text>
+          )}
+          {list.data?.items.map((r) => (
+            <View key={r.id} style={invoiceUi.divider}>
+              <View style={invoiceUi.row}>
+                <Pill>{adjustmentStatus(r.status)}</Pill>
+                <Text variant="bodySmall" style={ui.muted}>
+                  {formatInstant(r.submittedAt)}
+                </Text>
+              </View>
+              <Button compact onPress={() => setSelected(r.id)}>
+                Xem yêu cầu của tôi
+              </Button>
+            </View>
+          ))}
+          {list.data && (
+            <InvoicePager
+              page={page}
+              total={list.data.totalCount}
+              loading={list.loading}
+              onChange={setPage}
+            />
+          )}
+        </>
+      )}
+      {tab === 'approved' && (
+        <>
+          {effects.data?.items.length === 0 && (
+            <Text style={invoiceUi.secondary}>Chưa có điều chỉnh được duyệt.</Text>
+          )}
+          {effects.data?.items.map((e) => (
+            <View key={e.id} style={invoiceUi.divider}>
+              <View style={invoiceUi.row}>
+                <Text style={ui.grow}>
+                  {e.invoiceStatus === 'Draft'
+                    ? 'Đã áp dụng trước phát hành'
+                    : 'Điều chỉnh sau phát hành'}
+                </Text>
+                <Text style={invoiceUi.amount}>{signedVnd(e.delta)}</Text>
+              </View>
+              <Text variant="bodySmall" style={ui.muted}>
+                {formatInstant(e.decidedAt)}
+              </Text>
+            </View>
+          ))}
+          {effects.data && (
+            <InvoicePager
+              page={effectPage}
+              total={effects.data.totalCount}
+              loading={effects.loading}
+              onChange={setEffectPage}
+            />
+          )}
+        </>
+      )}
+      <Button
+        compact
+        mode="text"
+        icon={open ? 'close' : 'plus'}
+        style={invoiceUi.inlineAction}
+        onPress={() => setOpen(!open)}
+      >
+        {open ? 'Đóng yêu cầu mới' : 'Gửi yêu cầu điều chỉnh'}
+      </Button>
+      {selected && tab === 'requests' && (
+        <View style={invoiceUi.divider}>
+          <View style={invoiceUi.row}>
+            <Text variant="titleSmall">Kết quả yêu cầu</Text>
+            <IconButton
+              icon="close"
+              accessibilityLabel="Đóng chi tiết yêu cầu"
+              onPress={() => setSelected('')}
+            />
+          </View>
+          <InvoiceFeedback {...detail} />
           {detail.data && (
             <>
               <Pill>{adjustmentStatus(detail.data.status)}</Pill>
               <Text>Lý do: {detail.data.reason}</Text>
-              <Text>
-                Giá trị khi gửi: {formatContractMoney(detail.data.currentAmount)} · Đề xuất:{' '}
-                {detail.data.proposedAmount === null
-                  ? 'Không đề xuất'
-                  : formatContractMoney(detail.data.proposedAmount)}
-              </Text>
+              <InvoiceMoneyRow label="Giá trị khi gửi" value={detail.data.currentAmount} />
+              {detail.data.proposedAmount === null ? (
+                <Text style={ui.muted}>Không đề xuất số tiền.</Text>
+              ) : (
+                <InvoiceMoneyRow label="Giá trị đề xuất" value={detail.data.proposedAmount} />
+              )}
               {detail.data.decision && (
                 <>
                   <Text>Quyết định Owner: {detail.data.decision.reason}</Text>
-                  <Text>
+                  <Text variant="bodySmall" style={ui.muted}>
                     {formatInstant(detail.data.decision.decidedAt)} · Thay đổi{' '}
                     {signedVnd(detail.data.decision.delta)}
                   </Text>
@@ -120,13 +198,16 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
               )}
               {detail.data.financials && (
                 <>
-                  <Text>
-                    Nghĩa vụ hiện hành:{' '}
-                    {formatContractMoney(detail.data.financials.effectivePayableAmount)} · Còn phải
-                    trả: {formatContractMoney(detail.data.financials.outstandingAmount)}
-                  </Text>
+                  <InvoiceMoneyRow
+                    label="Số tiền phải thanh toán"
+                    value={detail.data.financials.effectivePayableAmount}
+                  />
+                  <InvoiceMoneyRow
+                    label="Còn phải trả"
+                    value={detail.data.financials.outstandingAmount}
+                  />
                   {detail.data.financials.reviewStatus === 'PendingReview' && (
-                    <Text style={ui.red}>
+                    <Text style={ui.muted}>
                       Tiền thừa chờ xem xét:{' '}
                       {formatContractMoney(detail.data.financials.potentialExcessAmount)}. Chưa hoàn
                       tiền hoặc chuyển credit.
@@ -144,41 +225,11 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
                   number={index + 1}
                 />
               ))}
-              <Action
-                secondary
-                onPress={() => {
-                  detail.reload();
-                  list.reload();
-                  effects.reload();
-                }}
-              >
-                Tải lại kết quả điều chỉnh
-              </Action>
             </>
           )}
-        </Box>
+        </View>
       )}
-      <Box>
-        <Heading title="Điều chỉnh đã duyệt của hóa đơn" />
-        {effects.data?.items.length === 0 && <Text>Chưa có điều chỉnh được duyệt.</Text>}
-        {effects.data?.items.map((e) => (
-          <Text key={e.id}>
-            {e.invoiceStatus === 'Draft'
-              ? 'Đã áp dụng trước phát hành'
-              : 'Điều chỉnh sau phát hành'}{' '}
-            · {e.chargeCode ?? 'Toàn hóa đơn'} · {signedVnd(e.delta)} · {formatInstant(e.decidedAt)}
-          </Text>
-        ))}
-        {effects.data && (
-          <Pagination
-            page={effectPage}
-            total={effects.data.totalCount}
-            loading={effects.loading}
-            onChange={setEffectPage}
-          />
-        )}
-      </Box>
-    </>
+    </View>
   );
 }
 type AdjustmentClient = ReturnType<typeof adjustmentClient>;

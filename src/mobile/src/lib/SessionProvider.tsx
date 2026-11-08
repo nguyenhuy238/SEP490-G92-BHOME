@@ -34,6 +34,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (AppState.currentState === 'active') void manager.reconnect();
     };
     const listener = AppState.addEventListener('change', (state) => {
+      manager.snapshot.api?.queryCache.setForeground(state === 'active');
       if (state === 'active') void manager.reconnect();
     });
     const timer = setInterval(reconnect, 5000);
@@ -43,6 +44,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       clearInterval(timer);
     };
   }, [manager]);
+  useEffect(() => {
+    view.api?.queryCache.setForeground(
+      AppState.currentState !== 'background' && AppState.currentState !== 'inactive',
+    );
+  }, [view.api]);
   return (
     <Context.Provider
       value={{
