@@ -44,14 +44,16 @@ public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page
 public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
 // Placement null puts the signature in the signer's own box of the contract's signature block. UsePicture null/true
 // shows the signer's saved signature picture (when there is one) above "Ký bởi / Ngày ký"; false shows the text only.
-public sealed record SigningInput(Guid CertificateId, SignaturePlacementInput? Placement = null, bool? UsePicture = null);
+// Method: OTP (in-app electronic signature) or null for the certificate-based provider of the deployment.
+public sealed record SigningInput(Guid CertificateId, SignaturePlacementInput? Placement = null, bool? UsePicture = null,
+    [System.ComponentModel.DataAnnotations.StringLength(20)] string? Method = null);
 // Page is 1-based; X, Y and Width are fractions of the page measured from its top-left corner.
 public sealed record SignaturePlacementInput(int Page, double X, double Y, double Width)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsValid => Page is >= 1 and <= 500 && X is >= 0 and < 1 && Y is >= 0 and < 1 && Width is >= 0.08 and <= 0.6 && X + Width <= 1.0001;
 }
-public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture);
+public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null);
 // What a signer sees before choosing where to sign: the pages of the PDF they will sign, and their suggested box.
 public sealed record SigningPageSize(double Width, double Height);
 public sealed record SigningLayout(int PageCount, IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested,
@@ -133,6 +135,15 @@ public interface IContractSigningProvider
     Task<(bool HasPicture, string SignerName)> SignerAsync(CancellationToken t) => Task.FromResult((false, ""));
     Task<string> RequestAsync(ContractSignature signature, CancellationToken t);
     Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t);
+    // OTP only: the signer types the code that RequestAsync sent. A wrong code throws; too many wrong codes or an
+    // expired code returns "Failed" so the signer starts again.
+    Task<SigningOutcome> ConfirmAsync(ContractSignature signature, byte[] preparedPdf, string code, CancellationToken t)
+        => throw ContractException.Conflict("signing_confirmation_not_supported");
+    // OTP only: a new code (after the resend delay); returns when the next resend is allowed.
+    Task<SigningOtpView> ResendAsync(ContractSignature signature, CancellationToken t)
+        => throw ContractException.Conflict("signing_confirmation_not_supported");
+    // OTP only: where the code was sent and until when it is valid, for the confirmation screen.
+    Task<SigningOtpView?> ChallengeAsync(ContractSignature signature, CancellationToken t) => Task.FromResult<SigningOtpView?>(null);
 }
 public interface IContractDocumentRenderer
 {

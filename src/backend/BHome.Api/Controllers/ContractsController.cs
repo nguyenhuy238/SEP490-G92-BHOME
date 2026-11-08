@@ -87,6 +87,16 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpGet("{id:guid}/signing/pages/{page:int}"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant), ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> SigningPage(Guid id, int page, [FromQuery] int width = 900, CancellationToken t = default)
         => File(await service.SigningPageAsync(id, page, width, t), "image/png");
+    // Which signing methods this deployment offers (OTP, VIETTEL_MYSIGN or SIMULATED); clients show only these.
+    [HttpGet("signing-methods"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public SigningMethodsView SigningMethods() => service.ListSigningMethods();
+    // OTP signing: where the code was sent and until when it is valid.
+    [HttpGet("{id:guid}/signing/otp"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<SigningOtpView> SigningOtp(Guid id, CancellationToken t) => service.SigningChallengeAsync(id, t);
+    [HttpPost("{id:guid}/signing/otp/confirm"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant), RequestSizeLimit(1024)]
+    public Task<ContractView> ConfirmSigningOtp(Guid id, SigningOtpConfirmation x, CancellationToken t) => service.ConfirmSigningAsync(id, x, Key(), t);
+    [HttpPost("{id:guid}/signing/otp/resend"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    public Task<SigningOtpView> ResendSigningOtp(Guid id, CancellationToken t) => service.ResendSigningCodeAsync(id, t);
     [HttpPost("{id:guid}/signing/sync"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<ContractView> Sync(Guid id, CancellationToken t) => service.SyncSigningAsync(id, t);
     [HttpPost("{id:guid}/signing/recover"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

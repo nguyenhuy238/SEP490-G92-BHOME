@@ -19,7 +19,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null,
     IContractHandoverRepository? handoverRepository = null, IContractSigningPages? signingPages = null,
     IContractSigningDocumentSource? signingDocuments = null, IPropertyLifecycleChecks? lifecycle = null,
-    IOperatingPolicyWorkflow? operatingPolicies = null) : IAdministrativeContractReadiness
+    IOperatingPolicyWorkflow? operatingPolicies = null, IContractSigningMethods? signingMethods = null,
+    IContractSigningNotifier? signingNotifier = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -384,7 +385,11 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     // Persist prepared work before making the ambiguous external mutation. Never automatically resend Dispatching.
     public async Task<SignatureView> RequestSigningAsync(Guid id, SigningInput x, Guid key, CancellationToken t)
     {
-        if (x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
+        var otp = SigningMethods.IsOtp(x.Method);
+        if (x.Method is { } method && !otp && !string.Equals(method, SigningMethods.ViettelMySign, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(method, SigningMethods.Simulated, StringComparison.OrdinalIgnoreCase)) throw ContractException.Invalid("signing_method_invalid");
+        if (otp && signingMethods?.IsEnabled(SigningMethods.Otp) != true) throw new ContractException(503, "signing_method_disabled");
+        if (!otp && x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
         if (x.Placement is { IsValid: false }) throw ContractException.Invalid("signature_placement_invalid");
         await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
         {
@@ -408,14 +413,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.Signatures.Any(s => s.SignerUserId == Actor && s.Status != SignatureStatus.Failed)) throw ContractException.Conflict("signer_already_requested");
             if (c.Signatures.Any(s => s.Status is not (SignatureStatus.Signed or SignatureStatus.Simulated or SignatureStatus.Failed))) throw ContractException.Conflict("previous_signature_pending");
             var previous = await PreviousSignedPdfAsync(c, t);
-            var prepared = x.Placement is null && x.UsePicture is null or true
+            var prepared = !otp && x.Placement is null && x.UsePicture is null or true
                 ? await signing.PrepareAsync(Document(c), x.CertificateId, previous, t)
-                : await signing.PrepareAsync(Document(c), x.CertificateId, previous, new SigningAppearance(x.Placement, x.UsePicture ?? true), t);
+                : await signing.PrepareAsync(Document(c), x.CertificateId, previous,
+                    new SigningAppearance(x.Placement, x.UsePicture ?? true, otp ? SigningMethods.Otp : null), t);
             var s = new ContractSignature
             {
                 ContractId = id,
                 SignerUserId = Actor,
-                CertificateId = x.CertificateId,
+                CertificateId = otp ? Guid.Empty : x.CertificateId,
                 SnapshotHash = c.SnapshotHash,
                 SourceHash = FileHash(prepared.SourcePdf),
                 FieldName = prepared.FieldName,
@@ -463,21 +469,98 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return new(result.Id, result.SignerUserId, result.Status.ToString(), result.SignedAt);
     }
 
-    public Task<ContractView> SyncSigningAsync(Guid id, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
+    public async Task<ContractView> SyncSigningAsync(Guid id, CancellationToken t)
+    {
+        var completed = false;
+        var view = await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
+        {
+            RequireSigningMode(c);
+            if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
+            if (c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Applied) return View(c);
+            var s = c.Signatures.Where(s => s.SignerUserId == Actor).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
+            if (s.Status != SignatureStatus.Pending) return View(c);
+            var prepared = await PreparedPdfAsync(c, s, t);
+            completed = await ApplyOutcomeAsync(c, s, await signing.PollAsync(s, prepared, t), t);
+            return View(c);
+        }, t);
+        if (completed) await NotifySignatureCompletedAsync(id, t);
+        return view;
+    }
+
+    // OTP: the signer types the code emailed by RequestSigningAsync. A wrong code changes nothing and is reported
+    // (otp_incorrect); too many wrong codes fail the signature so the signer starts again with a new code.
+    public async Task<ContractView> ConfirmSigningAsync(Guid id, SigningOtpConfirmation x, Guid key, CancellationToken t)
+    {
+        if (string.IsNullOrWhiteSpace(x.Code) || x.Code.Length > 16) throw ContractException.Invalid("otp_invalid_format");
+        var completed = false;
+        var view = await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
+        {
+            RequireSigningMode(c);
+            if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
+            if (await Replay(key, "sign-confirm", id, t) is not null) return View(c);
+            var s = PendingOtpSignature(c);
+            if (s.Status != SignatureStatus.Pending) throw ContractException.Conflict("signing_not_pending");
+            var prepared = await PreparedPdfAsync(c, s, t);
+            completed = await ApplyOutcomeAsync(c, s, await signing.ConfirmAsync(s, prepared, x.Code, t), t);
+            if (!completed) Audit("ContractSigningOtpRejected", id);
+            Remember(key, "sign-confirm", id, s.Id);
+            return View(c);
+        }, t);
+        if (completed) await NotifySignatureCompletedAsync(id, t);
+        return view;
+    }
+
+    // OTP: a new code after the resend delay. Also recovers a code whose first email could not be sent.
+    public Task<SigningOtpView> ResendSigningCodeAsync(Guid id, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
     {
         RequireSigningMode(c);
         if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
-        if (c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Applied) return View(c);
-        var s = c.Signatures.Where(s => s.SignerUserId == Actor).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
-        if (s.Status != SignatureStatus.Pending) return View(c);
+        var s = PendingOtpSignature(c);
+        if (s.Status is not (SignatureStatus.Pending or SignatureStatus.Dispatching or SignatureStatus.ManualReview)) throw ContractException.Conflict("signing_not_pending");
+        if (!Intact(c) || s.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
+        var sent = await signing.ResendAsync(s, t);
+        if (s.Status != SignatureStatus.Pending) { s.ProviderReference = "otp:" + s.Id.ToString("N"); s.Status = SignatureStatus.Pending; }
+        s.ExpiresAt = sent.ExpiresAt;
+        Audit("ContractSigningOtpResent", id);
+        return sent;
+    }, t);
+
+    public async Task<SigningOtpView> SigningChallengeAsync(Guid id, CancellationToken t)
+    {
+        var c = await Load(id, [Roles.Owner, Roles.Tenant], t);
+        if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
+        return await signing.ChallengeAsync(PendingOtpSignature(c), t) ?? throw ContractException.Conflict("otp_expired");
+    }
+
+    public SigningMethodsView ListSigningMethods()
+    {
+        Role(Roles.Owner, Roles.Tenant);
+        IReadOnlyList<string> enabled = signingMethods?.Enabled ?? (DemoEnabled ? [SigningMethods.Simulated] : [SigningMethods.ViettelMySign]);
+        return new(enabled, enabled.Contains(SigningMethods.Otp) ? SigningMethods.Otp : enabled.FirstOrDefault());
+    }
+
+    private ContractSignature PendingOtpSignature(Contract c) =>
+        c.Signatures.Where(s => s.SignerUserId == Actor && s.CredentialId == OtpCredential && s.Status != SignatureStatus.Failed)
+            .OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
+
+    // Marks an OTP signature (ContractSigningRouter.OtpCredential in Infrastructure).
+    private const string OtpCredential = "BHOME-OTP";
+
+    private async Task<byte[]> PreparedPdfAsync(Contract c, ContractSignature s, CancellationToken t)
+    {
         if (!Intact(c) || s.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
         using var prepared = new MemoryStream(); await storage.CopyToAsync(s.PreparedObjectKey, prepared, t);
         if (FileHash(prepared.ToArray()) != s.PreparedHash) throw ContractException.Conflict("prepared_document_integrity_failed");
-        var answer = await signing.PollAsync(s, prepared.ToArray(), t);
+        return prepared.ToArray();
+    }
+
+    // Stores a verified signed PDF and moves the contract on when every party has signed. True when a signature completed.
+    private async Task<bool> ApplyOutcomeAsync(Contract c, ContractSignature s, SigningOutcome answer, CancellationToken t)
+    {
         if (answer.State is "Signed" or "Simulated" && answer.SignedPdf is { Length: > 0 } pdf)
         {
             if ((answer.State == "Simulated") != c.IsDevelopmentDemo) throw ContractException.Conflict("signing_mode_mismatch");
-            s.SignedObjectKey = $"contracts/{id:N}/signatures/{s.Id:N}/signed.pdf";  // 372–377 (CopyDocumentAsync): Kiểm tra đúng quyền Owner/Tenant rồi gọi storage.CopyToAsync tải PDF từ MinIO.
+            s.SignedObjectKey = $"contracts/{c.Id:N}/signatures/{s.Id:N}/signed.pdf";  // 372–377 (CopyDocumentAsync): Kiểm tra đúng quyền Owner/Tenant rồi gọi storage.CopyToAsync tải PDF từ MinIO.
             await files.PutAsync(c.RoomId, s.SignedObjectKey, pdf, "application/pdf", t);
             s.SignedHash = FileHash(pdf); s.Status = c.IsDevelopmentDemo ? SignatureStatus.Simulated : SignatureStatus.Signed; s.SignedAt = clock.GetUtcNow();
             if (new[] { c.OwnerSignerId, c.TenantUserId }.All(signer => c.Signatures.Any(a => a.SignerUserId == signer && CompleteSignature(a, c))))
@@ -485,11 +568,26 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 c.Status = ContractStatus.PendingActivation;
                 if (c.Kind == ContractKind.Holding) await LockHoldingPriceAsync(c, "SigningCompleted", s.SignedAt.Value, t);
             }
-            Audit(c.IsDevelopmentDemo ? "ContractSignatureSimulated" : "ContractSignatureVerified", id);
+            Audit(c.IsDevelopmentDemo ? "ContractSignatureSimulated" : "ContractSignatureVerified", c.Id);
+            return true;
         }
-        else if (answer.State == "Failed") { s.Status = SignatureStatus.Failed; Audit("ContractSigningFailed", id); }
-        return View(c);
-    }, t);
+        if (answer.State == "Failed") { s.Status = SignatureStatus.Failed; Audit("ContractSigningFailed", c.Id); }
+        return false;
+    }
+
+    // Best effort, after the transaction: an email failure never undoes a verified signature.
+    private async Task NotifySignatureCompletedAsync(Guid id, CancellationToken t)
+    {
+        if (signingNotifier is null) return;
+        try
+        {
+            var c = await Load(id, [Roles.Owner, Roles.Tenant], t);
+            Guid[] parties = c.TenantUserId is { } tenant ? [c.OwnerSignerId, tenant] : [c.OwnerSignerId];
+            Guid? next = parties.Where(p => !c.Signatures.Any(a => a.SignerUserId == p && CompleteSignature(a, c))).Select(p => (Guid?)p).FirstOrDefault();
+            await signingNotifier.SignatureCompletedAsync(new(c.Id, c.Room.RoomNumber, c.Room.Location?.Name ?? "", next, parties), t);
+        }
+        catch (Exception e) when (e is not OperationCanceledException) { }
+    }
     public Task<ContractView> RecoverSigningAsync(Guid id, SigningRecoveryInput x, Guid key, CancellationToken t)
     {
         Validate(x);
