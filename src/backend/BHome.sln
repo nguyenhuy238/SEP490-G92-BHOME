@@ -25,6 +25,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.Infras
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.OcrSmoke", "..\..\tools\BHome.OcrSmoke\BHome.OcrSmoke.csproj", "{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{5FDE5147-F662-454B-8576-7994ADD6805B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DatabaseCheck", "..\..\tools\BHome.DatabaseCheck\BHome.DatabaseCheck.csproj", "{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -75,11 +79,18 @@ Global
 		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5FDF61DE-A09D-4136-B034-6C8ABC2D5E66}.Release|Any CPU.Build.0 = Release|Any CPU
+		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5CC81170-F844-4B1F-AA7E-A51869EB8A59}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4} = {5FDE5147-F662-454B-8576-7994ADD6805B}
 	EndGlobalSection
 EndGlobal

@@ -37,6 +37,28 @@ public static class Compact24SampleSeed
         bool setSamplePasswords = false, CancellationToken token = default)
     {
         ValidateTarget(environment, services.GetRequiredService<IConfiguration>().GetConnectionString("Database") ?? "");
+        return await SeedAsync(services, password, setSamplePasswords, token);
+    }
+
+    public static void ValidateSharedTarget(string? environment, string? branch, string connection)
+    {
+        var target = new NpgsqlConnectionStringBuilder(connection);
+        if (environment != "Development" || branch != "development" || target.Database != "neondb" ||
+            target.Host != "ep-royal-water-ao5mauq0-pooler.c-2.ap-southeast-1.aws.neon.tech" ||
+            target.SslMode != SslMode.VerifyFull || target.ChannelBinding != ChannelBinding.Require)
+            throw new LocalTestAccountException("Shared seed requires the explicitly selected verified Neon development pooled endpoint with TLS verification and channel binding.");
+    }
+
+    public static Task<bool> RunSharedDevelopmentAsync(IServiceProvider services, string? environment, string? branch,
+        string password, CancellationToken token = default)
+    {
+        ValidateSharedTarget(environment, branch, services.GetRequiredService<IConfiguration>().GetConnectionString("Database") ?? "");
+        if (string.IsNullOrWhiteSpace(password)) throw new LocalTestAccountException("Provide the synthetic account password through local secrets.");
+        return SeedAsync(services, password, false, token);
+    }
+
+    private static async Task<bool> SeedAsync(IServiceProvider services, string? password, bool setSamplePasswords, CancellationToken token)
+    {
         if (setSamplePasswords && string.IsNullOrWhiteSpace(password))
             throw new LocalTestAccountException("Enter a password explicitly before updating sample accounts.");
         await using var scope = services.CreateAsyncScope();

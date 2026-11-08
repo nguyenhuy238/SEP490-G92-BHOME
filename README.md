@@ -7,10 +7,20 @@ Identity/JWT cho tài khoản đã tồn tại, phiên phía server, refresh xoa
 Owner Web/Mobile có màn hình đăng nhập. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản và tích hợp
 nhà cung cấp bên ngoài chưa hoàn thiện. Migration không tạo tài khoản demo.
 
-Database phát triển hiện dùng **Compact24: 24 bảng, 386 cột, 83 FK**. Sau khi cấu hình `.env`
+Database phát triển hiện dùng **Compact24: 24 bảng, 383 cột, 83 FK**. Sau khi cấu hình `.env`
 và bật PostgreSQL local, chạy API ở Development sẽ tự tạo database `bhome` nếu thiếu và dựng schema
 nếu trống. Những lần chạy sau giữ nguyên dữ liệu. Có thể dùng PostgreSQL 16 qua Docker hoặc native
 PostgreSQL qua pgAdmin. Xem [hướng dẫn database](docs/database/2026-11-03/README.md).
+
+Nhóm dùng Neon đọc [thiết lập Neon](docs/database/NEON_SETUP.md),
+[hướng dẫn 5 thành viên](docs/database/TEAM_DATABASE_GUIDE.md),
+[quy trình schema/migration](docs/database/DATABASE_MIGRATION_WORKFLOW.md) và
+[kết quả kiểm chứng](docs/database/DATABASE_VERIFICATION.md). Dùng `.env.neon` riêng,
+tắt khởi tạo schema/worker trên laptop và giữ `.env` cho local. Shared development
+đã bootstrap Compact24, có EF baseline/history riêng và đã kiểm chứng API bằng hai process.
+35 EF migrations của `BHomeDbContext` thuộc schema nguồn cũ; migrations runtime
+Compact24 dùng history trong `bhome_meta`. MinIO giữ local theo phạm vi đã chốt;
+storage liên máy để giai đoạn sau.
 
 ## Hướng dẫn nhanh khi mới clone
 
