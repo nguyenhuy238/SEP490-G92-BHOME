@@ -9,13 +9,13 @@ Bắt đầu trên `member/QHuy`, clean HEAD
 UC-21 / JOB-10 / GBR-09 tiếp tục yêu cầu confirmed readings. Đã đọc UC-20/21 trong
 bản SRS local và các service/tests hiện có. Không đổi billing, schema hoặc quyền.
 
-| Status | Kết quả |
-| --- | --- |
-| `DEVELOPMENT_DIAGNOSTICS_ENABLED` | Endpoint opt-in hiện có chạy unit refinement bằng ONNX thật |
-| `STAFF_PROPOSAL_ENABLED` | **Không category mới nào**; luồng Staff hiện hữu giữ nguyên |
-| `EXPERIMENTAL` | Candidate `000501`, vẫn unknown category và cần review unit/register/decimal |
-| `REJECTED` | Limited fine-tune, keypad-domain heads và contrast view không đạt gate classifier |
-| `BLOCKED_BY_DATA` | Human reviews 0, independent verified reading labels 0; digital-water thiếu dữ liệu |
+| Status                            | Kết quả                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `DEVELOPMENT_DIAGNOSTICS_ENABLED` | Endpoint opt-in hiện có chạy unit refinement bằng ONNX thật                         |
+| `STAFF_PROPOSAL_ENABLED`          | **Không category mới nào**; luồng Staff hiện hữu giữ nguyên                         |
+| `EXPERIMENTAL`                    | Candidate `000501`, vẫn unknown category và cần review unit/register/decimal        |
+| `REJECTED`                        | Limited fine-tune, keypad-domain heads và contrast view không đạt gate classifier   |
+| `BLOCKED_BY_DATA`                 | Human reviews 0, independent verified reading labels 0; digital-water thiếu dữ liệu |
 
 1. **Image-based classification có cải thiện không?** Chưa. Limited unfreeze
    last vision block + balanced augmentation làm tăng false acceptance validation
@@ -28,12 +28,12 @@ bản SRS local và các service/tests hiện có. Không đổi billing, schema
 2. **Nhận được những loại nào?** Runtime giữ classifier cũ, SHA `f7277b05…`.
    Trên cùng 9 provisional probes đã khảo sát, kết quả không đổi:
 
-   | Category nháp | Đúng | Sai | Unknown | Recall | Precision theo predicted class |
-   | --- | ---: | ---: | ---: | ---: | ---: |
-   | Electricity mechanical | 1 | 0 | 1 | 1/2 | 1/1 |
-   | Electricity digital | 0 | 0 | 2 | 0/2 | N/A |
-   | Water mechanical | 0 | 0 | 2 | 0/2 | 0/1 |
-   | Water digital, illustration | 0 | 1 | 0 | 0/1 | N/A |
+   | Category nháp               | Đúng | Sai | Unknown | Recall | Precision theo predicted class |
+   | --------------------------- | ---: | --: | ------: | -----: | -----------------------------: |
+   | Electricity mechanical      |    1 |   0 |       1 |    1/2 |                            1/1 |
+   | Electricity digital         |    0 |   0 |       2 |    0/2 |                            N/A |
+   | Water mechanical            |    0 |   0 |       2 |    0/2 |                            0/1 |
+   | Water digital, illustration |    0 |   1 |       0 |    0/1 |                            N/A |
 
    Illustration water-digital bị nhận thành water-mechanical; không coi là ảnh
    thiết bị thật. Overall accepted precision1/2; non-meter false acceptance0/2.
@@ -95,21 +95,21 @@ bản SRS local và các service/tests hiện có. Không đổi billing, schema
    inputs có SHA; baseline tắt `RefineUnitCrops`, candidate bật. Baseline digits
    khớp receipt đã commit trước. New provisional cohort5:
 
-   | Metric | Baseline | Candidate | Delta |
-   | --- | ---: | ---: | ---: |
-   | Correct accepted categories | 0 | 0 | 0 |
-   | Incorrect categories | 0 | 0 | 0 |
-   | Unknown categories | 5 | 5 | 0 |
-   | Exact reading candidates /2 draft positives | 0 | 1 | +1 |
-   | Incorrect numeric candidates | 0 | 0 | 0 |
-   | Invalid controls rejected /3 | 3 | 3 | 0 |
-   | Reading fallback /5 | 5 | 4 | −1 |
+   | Metric                                      | Baseline | Candidate | Delta |
+   | ------------------------------------------- | -------: | --------: | ----: |
+   | Correct accepted categories                 |        0 |         0 |     0 |
+   | Incorrect categories                        |        0 |         0 |     0 |
+   | Unknown categories                          |        5 |         5 |     0 |
+   | Exact reading candidates /2 draft positives |        0 |         1 |    +1 |
+   | Incorrect numeric candidates                |        0 |         0 |     0 |
+   | Invalid controls rejected /3                |        3 |         3 |     0 |
+   | Reading fallback /5                         |        5 |         4 |    −1 |
 
-   | Cohort khác, giữ riêng | Exact strings baseline→candidate | Invalid rejected | Fallback |
-   | --- | --- | --- | --- |
-   | Historical validation2 | 1/1→1/1 | 1/1→1/1 | 1/2→1/2 |
-   | Historical exploratory4 | 0/3→0/3 | 1/1→1/1 | 4/4→4/4 |
-   | Historical controls2 | N/A | 2/2→2/2 | 2/2→2/2 |
+   | Cohort khác, giữ riêng  | Exact strings baseline→candidate | Invalid rejected | Fallback |
+   | ----------------------- | -------------------------------- | ---------------- | -------- |
+   | Historical validation2  | 1/1→1/1                          | 1/1→1/1          | 1/2→1/2  |
+   | Historical exploratory4 | 0/3→0/3                          | 1/1→1/1          | 4/4→4/4  |
+   | Historical controls2    | N/A                              | 2/2→2/2          | 2/2→2/2  |
 
    Numeric improvement chỉ ở digital electricity; exploratory water-digital vẫn
    0/1 draft-positive, không có mechanical numeric inputs mới trong benchmark13.
@@ -118,11 +118,11 @@ bản SRS local và các service/tests hiện có. Không đổi billing, schema
 
 10. **Commits local?**
 
-    | Commit | Short English description |
-    | --- | --- |
-    | `feb6d56` | Evaluate targeted visual adaptations; reject failed candidates |
-    | `5104901` | Recover unit evidence and reject adjacent phase/status numbers |
-    | Commit chứa report này | Record targeted runtime results and Staff blockers |
+    | Commit                 | Short English description                                      |
+    | ---------------------- | -------------------------------------------------------------- |
+    | `feb6d56`              | Evaluate targeted visual adaptations; reject failed candidates |
+    | `5104901`              | Recover unit evidence and reject adjacent phase/status numbers |
+    | Commit chứa report này | Record targeted runtime results and Staff blockers             |
 
     Sau reporting commit, full HEAD/clean status ở `.tools/ocr-staff-final-state.json`;
     history được append vào `.tools/ocr-next-git-history.md`. Không push/merge/

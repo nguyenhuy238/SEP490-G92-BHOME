@@ -9,8 +9,13 @@ internal static class PretrainedYoloChallenges
 {
     public static async Task<int> RunAsync(string ocrModels, string yoloModels, string waterImage, string syntheticImages, string report)
     {
-        var options = new OcrOptions { Enabled = true, ModelDirectory = ocrModels, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, ModelDirectory = yoloModels } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = ocrModels,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, ModelDirectory = yoloModels }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector);
         using var service = new LocalOcrService(options, new Lazy<IOcrEngine>(() => engine), NullLogger<LocalOcrService>.Instance);
@@ -48,13 +53,25 @@ internal static class PretrainedYoloChallenges
             if (sample.Name.StartsWith("synthetic-back-", StringComparison.Ordinal))
                 safe &= result.IdentityProposal is not null && !reading && result.DetectedCategory == "cccd_back";
             if (sample.Name == "synthetic-mixed-sides-0") safe &= result.IdentityProposal is null && !reading;
-            rows.Add(new { sample.Name, result.ClassificationStatus, result.DetectedCategory, result.PartialCategory,
-                readingProposed = reading, cropAvailable = result.CropPreviewDataUri is not null,
-                warnings = result.Warnings.Concat(result.MeterProposal?.Warnings ?? []).Distinct().ToArray(), elapsedMilliseconds = clock.ElapsedMilliseconds });
+            rows.Add(new
+            {
+                sample.Name,
+                result.ClassificationStatus,
+                result.DetectedCategory,
+                result.PartialCategory,
+                readingProposed = reading,
+                cropAvailable = result.CropPreviewDataUri is not null,
+                warnings = result.Warnings.Concat(result.MeterProposal?.Warnings ?? []).Distinct().ToArray(),
+                elapsedMilliseconds = clock.ElapsedMilliseconds
+            });
             Array.Clear(sample.Bytes);
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { safetyAssertionsPassed = safe, rows,
-            limitation = "Derived public water image and synthetic cards/unit labels; no real electricity/digital-water accuracy evidence. No training." }, OcrEvaluation.Json));
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            safetyAssertionsPassed = safe,
+            rows,
+            limitation = "Derived public water image and synthetic cards/unit labels; no real electricity/digital-water accuracy evidence. No training."
+        }, OcrEvaluation.Json));
         Console.WriteLine(JsonSerializer.Serialize(new { safetyAssertionsPassed = safe, rows }));
         return safe ? 0 : 1;
     }

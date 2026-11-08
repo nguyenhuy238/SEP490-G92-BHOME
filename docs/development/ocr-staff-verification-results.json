@@ -68,7 +68,7 @@
   "classifierDotnetParity": {
     "images": 9,
     "maxInputDelta": 0,
-    "maxLogitDelta": 2.2947788e-06
+    "maxLogitDelta": 2.2947788e-6
   },
   "ownedPostgresStopped": true,
   "physicalCamera": "NOT_RUN: no accessible phone/adb session",

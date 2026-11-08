@@ -420,11 +420,11 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var src = OcrImageGeometry.Corners(region);
         var width = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[1]), src[2].DistanceTo(src[3])));
         var height = Math.Max(2, (int)Math.Max(src[0].DistanceTo(src[3]), src[1].DistanceTo(src[2])));
-        if(recognitionHeight is {} target)
+        if (recognitionHeight is { } target)
         {
             // Small unit labels otherwise undergo perspective sampling followed
             // by another resize in the CTC adapter, eroding segmented strokes.
-            width=Math.Max(2,(int)Math.Ceiling((double)width*target/height));height=target;
+            width = Math.Max(2, (int)Math.Ceiling((double)width * target / height)); height = target;
         }
         Point2f[] dst = [new(0, 0), new(width - 1, 0), new(width - 1, height - 1), new(0, height - 1)];
         using var transform = Cv2.GetPerspectiveTransform(src, dst);
@@ -445,26 +445,26 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
 
     internal IReadOnlyList<RotatedRect> InspectTextRegions(Mat image, int maximumEdge, CancellationToken token)
     {
-        using var run=new RunOptions { LogSeverityLevel=OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
-        using var registration=token.Register(()=>run.Terminate=true);
-        return Detect(image,run,token,maximumEdge);
+        using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+        using var registration = token.Register(() => run.Terminate = true);
+        return Detect(image, run, token, maximumEdge);
     }
 
     public Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeterAsync(ReadOnlyMemory<byte> image, CancellationToken token)
-        => AnalyzeExperimentalMeter(image,null,token);
+        => AnalyzeExperimentalMeter(image, null, token);
 
     public Task<ExperimentalMeterOcrResult> AnalyzeAssignedMeterAsync(ReadOnlyMemory<byte> image, OcrDocumentKind trustedKind, CancellationToken token)
-        => AnalyzeExperimentalMeter(image,trustedKind,token);
+        => AnalyzeExperimentalMeter(image, trustedKind, token);
 
-    private Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeter(ReadOnlyMemory<byte> image,OcrDocumentKind? trustedKind,CancellationToken token)
+    private Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeter(ReadOnlyMemory<byte> image, OcrDocumentKind? trustedKind, CancellationToken token)
     {
-        if(experimentalMeter is null) return Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable"));
+        if (experimentalMeter is null) return Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable"));
         try
         {
-            using var prepared=preprocessor.PrepareUnclassified(image);
-            return Task.FromResult(experimentalMeter.Recognize(prepared.Image,this,token,trustedKind));
+            using var prepared = preprocessor.PrepareUnclassified(image);
+            return Task.FromResult(experimentalMeter.Recognize(prepared.Image, this, token, trustedKind));
         }
-        catch(OnnxRuntimeException) when(token.IsCancellationRequested) { throw new OperationCanceledException(token); }
+        catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
     }
 
     private OcrLine ReadLine(Mat crop, RunOptions run, bool wideLine = false, int tileDepth = 0)

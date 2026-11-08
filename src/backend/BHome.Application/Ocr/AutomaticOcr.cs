@@ -110,9 +110,13 @@ public static class AutomaticOcrRouter
             var fields = new Dictionary<string, string>(); var scores = new Dictionary<string, float>();
             if (value is { } number) { fields["reading"] = number.Value; scores["reading"] = number.Confidence; }
             if (scores.Values.Any(s => s < .8f)) regionWarnings.Add("low_confidence");
-            var localizedProposal = new OcrProposal(fields, region.Text.EngineVersion) { Confidence = scores,
-                IsFallback = fields.Count == 0, MissingFields = fields.Count == 0 ? ["reading"] : [],
-                Warnings = [.. regionWarnings, "meter_type_confirmation_required", "decimal_separator_unverified"] };
+            var localizedProposal = new OcrProposal(fields, region.Text.EngineVersion)
+            {
+                Confidence = scores,
+                IsFallback = fields.Count == 0,
+                MissingFields = fields.Count == 0 ? ["reading"] : [],
+                Warnings = [.. regionWarnings, "meter_type_confirmation_required", "decimal_separator_unverified"]
+            };
             var candidates = (rules.Candidates ?? []).Where(k => k is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)).ToArray();
             if (candidates.Length == 0) candidates = [OcrDocumentKind.MechanicalElectricity, OcrDocumentKind.DigitalElectricity, OcrDocumentKind.MechanicalWater, OcrDocumentKind.DigitalWater];
             var partial = Utility(candidates) ?? "meter";
@@ -151,14 +155,21 @@ public static class AutomaticOcrRouter
         var unsafeRegion = selectedRegion is not null && selectedRegion.Text.Warnings.Concat(analysis.Text.Warnings)
             .Any(w => w is "unclear_digit" or "text_region_limit" or "conflicting_reading" or "recognizer_conflict" or "blur_or_low_detail" or "orientation_uncertain");
         var proposal = selectedRegion is not null && (!validRegion || unsafeRegion)
-            ? new OcrProposal(new Dictionary<string, string>(), analysis.Text.EngineVersion) { IsFallback = true, MissingFields = ["reading"],
-                Warnings = [.. selectedRegion.Text.Warnings, .. analysis.Text.Warnings, "reading_region_uncertain"] }
+            ? new OcrProposal(new Dictionary<string, string>(), analysis.Text.EngineVersion)
+            {
+                IsFallback = true,
+                MissingFields = ["reading"],
+                Warnings = [.. selectedRegion.Text.Warnings, .. analysis.Text.Warnings, "reading_region_uncertain"]
+            }
             : OcrFieldParser.Parse(validRegion ? selectedRegion!.Text : analysis.Text, kind);
         if (kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
         {
             proposal = MeterReadingPrecision.Apply(proposal, null);
-            proposal = proposal with { Warnings = [.. proposal.Warnings, .. validRegion ? Array.Empty<string>() : new[] { "reading_region_unverified" },
-                .. kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater ? new[] { "billing_register_unverified" } : []] };
+            proposal = proposal with
+            {
+                Warnings = [.. proposal.Warnings, .. validRegion ? Array.Empty<string>() : new[] { "reading_region_unverified" },
+                .. kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater ? new[] { "billing_register_unverified" } : []]
+            };
         }
         return new("classified", OcrCategories.Name(kind), decision.Confidence, decision.Source, [], warnings,
             kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? proposal : null,

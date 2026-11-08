@@ -58,17 +58,17 @@ host hiện có. Không commit authentication secrets. Bản local với đườ
 Response vẫn có envelope `{ "analysis": ..., "elapsedMilliseconds": ... }`.
 Experimental `analysis` gồm:
 
-| Field | Ý nghĩa |
-| --- | --- |
-| `experimental`, `businessProposalEnabled`, `requiresConfirmation` | Luôn `true`, `false`, `true` |
-| `status` | `review_required` hoặc `unavailable` |
-| `classification` | OcrCategoryDecision hiện có; `classified`, `unknown` hoặc `unavailable` |
-| `candidateCategory` | Argmax từ pixels, có thể sai ngay cả khi `classification.status=unknown`; không phải type đã xác thực |
-| `readingCandidate` | Chuỗi diagnostic có unit cùng vùng và qua gate; null nếu chưa đủ bằng chứng |
-| `displayState` | `readable_candidate`, `numeric_text_present_display_unverified`, `unreadable_or_unverified` hoặc `unknown` |
-| `registerStatus` | `consumption_candidate`, `unverified`, `ambiguous`, `non_consumption` |
-| `readingBounds` | Nullable x/y/width/height trong ảnh sau cap1600; không phải ảnh gốc nếu đã resize |
-| `warnings` | Bao gồm experimental, category/register review, decimal precision chưa xác minh |
+| Field                                                             | Ý nghĩa                                                                                                    |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `experimental`, `businessProposalEnabled`, `requiresConfirmation` | Luôn `true`, `false`, `true`                                                                               |
+| `status`                                                          | `review_required` hoặc `unavailable`                                                                       |
+| `classification`                                                  | OcrCategoryDecision hiện có; `classified`, `unknown` hoặc `unavailable`                                    |
+| `candidateCategory`                                               | Argmax từ pixels, có thể sai ngay cả khi `classification.status=unknown`; không phải type đã xác thực      |
+| `readingCandidate`                                                | Chuỗi diagnostic có unit cùng vùng và qua gate; null nếu chưa đủ bằng chứng                                |
+| `displayState`                                                    | `readable_candidate`, `numeric_text_present_display_unverified`, `unreadable_or_unverified` hoặc `unknown` |
+| `registerStatus`                                                  | `consumption_candidate`, `unverified`, `ambiguous`, `non_consumption`                                      |
+| `readingBounds`                                                   | Nullable x/y/width/height trong ảnh sau cap1600; không phải ảnh gốc nếu đã resize                          |
+| `warnings`                                                        | Bao gồm experimental, category/register review, decimal precision chưa xác minh                            |
 
 `readingCandidate` có thể tồn tại khi classifier còn unknown vì người dùng đang
 chủ động thử diagnostics. Nó không trở thành `OcrProposal`, không có

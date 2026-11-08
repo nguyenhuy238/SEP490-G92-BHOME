@@ -73,22 +73,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.18,
-          0
-        ],
-        [
-          0.85,
-          0
-        ],
-        [
-          0.85,
-          0.98
-        ],
-        [
-          0.18,
-          0.98
-        ]
+        [0.18, 0],
+        [0.85, 0],
+        [0.85, 0.98],
+        [0.18, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -107,10 +95,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "2cb4a1d8e3434cb7"
@@ -128,22 +113,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.09,
-          0
-        ],
-        [
-          0.87,
-          0
-        ],
-        [
-          0.87,
-          1
-        ],
-        [
-          0.09,
-          1
-        ]
+        [0.09, 0],
+        [0.87, 0],
+        [0.87, 1],
+        [0.09, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -162,10 +135,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "78e7ec86701701ea"
@@ -183,22 +153,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.03,
-          0.04
-        ],
-        [
-          0.96,
-          0.04
-        ],
-        [
-          0.96,
-          0.99
-        ],
-        [
-          0.03,
-          0.99
-        ]
+        [0.03, 0.04],
+        [0.96, 0.04],
+        [0.96, 0.99],
+        [0.03, 0.99]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -217,10 +175,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "37a596565c5e60a1"
@@ -238,22 +193,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0.05
-        ],
-        [
-          0.84,
-          0.05
-        ],
-        [
-          0.84,
-          1
-        ],
-        [
-          0.1,
-          1
-        ]
+        [0.1, 0.05],
+        [0.84, 0.05],
+        [0.84, 1],
+        [0.1, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -272,10 +215,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "69e1a1c88390f67b"
@@ -293,22 +233,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.12,
-          0.04
-        ],
-        [
-          0.89,
-          0.04
-        ],
-        [
-          0.89,
-          0.97
-        ],
-        [
-          0.12,
-          0.97
-        ]
+        [0.12, 0.04],
+        [0.89, 0.04],
+        [0.89, 0.97],
+        [0.12, 0.97]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -327,10 +255,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "434cc34353433dbd"
@@ -348,22 +273,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.01,
-          0.01
-        ],
-        [
-          0.82,
-          0.01
-        ],
-        [
-          0.82,
-          1
-        ],
-        [
-          0.01,
-          1
-        ]
+        [0.01, 0.01],
+        [0.82, 0.01],
+        [0.82, 1],
+        [0.01, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -382,10 +295,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "69f1a604de1628eb"
@@ -403,22 +313,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0
-        ],
-        [
-          1,
-          0
-        ],
-        [
-          1,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -437,10 +335,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "2764ee1b13dd908a"
@@ -458,22 +353,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.08
-        ],
-        [
-          0.82,
-          0.08
-        ],
-        [
-          0.82,
-          0.86
-        ],
-        [
-          0.2,
-          0.86
-        ]
+        [0.2, 0.08],
+        [0.82, 0.08],
+        [0.82, 0.86],
+        [0.2, 0.86]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -492,10 +375,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "2677b3461a1368b9"
@@ -513,22 +393,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.3,
-          0.03
-        ],
-        [
-          0.7,
-          0.03
-        ],
-        [
-          0.7,
-          0.66
-        ],
-        [
-          0.3,
-          0.66
-        ]
+        [0.3, 0.03],
+        [0.7, 0.03],
+        [0.7, 0.66],
+        [0.3, 0.66]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -547,10 +415,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "64361e5b1cda432d"
@@ -568,22 +433,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.07,
-          0
-        ],
-        [
-          0.91,
-          0
-        ],
-        [
-          0.91,
-          0.8
-        ],
-        [
-          0.07,
-          0.8
-        ]
+        [0.07, 0],
+        [0.91, 0],
+        [0.91, 0.8],
+        [0.07, 0.8]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -602,10 +455,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "349cccdcbc3e1d80"
@@ -623,22 +473,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0.11
-        ],
-        [
-          0.95,
-          0.11
-        ],
-        [
-          0.95,
-          0.98
-        ],
-        [
-          0.1,
-          0.98
-        ]
+        [0.1, 0.11],
+        [0.95, 0.11],
+        [0.95, 0.98],
+        [0.1, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -657,10 +495,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "27db087a7a2a2715"
@@ -678,22 +513,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.02
-        ],
-        [
-          0.82,
-          0.02
-        ],
-        [
-          0.82,
-          0.9
-        ],
-        [
-          0.2,
-          0.9
-        ]
+        [0.2, 0.02],
+        [0.82, 0.02],
+        [0.82, 0.9],
+        [0.2, 0.9]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -712,10 +535,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "660f121e19723de9"
@@ -733,22 +553,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0.12
-        ],
-        [
-          0.78,
-          0.12
-        ],
-        [
-          0.78,
-          0.93
-        ],
-        [
-          0.1,
-          0.93
-        ]
+        [0.1, 0.12],
+        [0.78, 0.12],
+        [0.78, 0.93],
+        [0.1, 0.93]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -767,10 +575,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "18e0e322c6d73fa8"
@@ -788,22 +593,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.03
-        ],
-        [
-          0.87,
-          0.03
-        ],
-        [
-          0.87,
-          0.95
-        ],
-        [
-          0.13,
-          0.95
-        ]
+        [0.13, 0.03],
+        [0.87, 0.03],
+        [0.87, 0.95],
+        [0.13, 0.95]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -822,10 +615,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "167f718e408e3275"
@@ -843,22 +633,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.16,
-          0.08
-        ],
-        [
-          0.8,
-          0.08
-        ],
-        [
-          0.8,
-          0.98
-        ],
-        [
-          0.16,
-          0.98
-        ]
+        [0.16, 0.08],
+        [0.8, 0.08],
+        [0.8, 0.98],
+        [0.16, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -877,10 +655,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "3235c3534f4b0bac"
@@ -898,22 +673,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.15,
-          0.17
-        ],
-        [
-          0.8,
-          0.17
-        ],
-        [
-          0.8,
-          1
-        ],
-        [
-          0.15,
-          1
-        ]
+        [0.15, 0.17],
+        [0.8, 0.17],
+        [0.8, 1],
+        [0.15, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -932,10 +695,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "120ccca5b4d753dc"
@@ -953,22 +713,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.1
-        ],
-        [
-          0.83,
-          0.1
-        ],
-        [
-          0.83,
-          0.86
-        ],
-        [
-          0.2,
-          0.86
-        ]
+        [0.2, 0.1],
+        [0.83, 0.1],
+        [0.83, 0.86],
+        [0.2, 0.86]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -987,10 +735,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "40acb99384cb1bbd"
@@ -1008,22 +753,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.22,
-          0.1
-        ],
-        [
-          0.9,
-          0.1
-        ],
-        [
-          0.9,
-          0.97
-        ],
-        [
-          0.22,
-          0.97
-        ]
+        [0.22, 0.1],
+        [0.9, 0.1],
+        [0.9, 0.97],
+        [0.22, 0.97]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1042,10 +775,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "39c0a5f301eb7934"
@@ -1063,22 +793,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.22,
-          0.06
-        ],
-        [
-          0.85,
-          0.06
-        ],
-        [
-          0.85,
-          0.94
-        ],
-        [
-          0.22,
-          0.94
-        ]
+        [0.22, 0.06],
+        [0.85, 0.06],
+        [0.85, 0.94],
+        [0.22, 0.94]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1097,10 +815,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "24f384d3d6cb0b1c"
@@ -1118,22 +833,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.04
-        ],
-        [
-          0.84,
-          0.04
-        ],
-        [
-          0.84,
-          0.98
-        ],
-        [
-          0.13,
-          0.98
-        ]
+        [0.13, 0.04],
+        [0.84, 0.04],
+        [0.84, 0.98],
+        [0.13, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1152,10 +855,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "321bcd5339e97124"
@@ -1173,22 +873,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.34,
-          0.24
-        ],
-        [
-          0.98,
-          0.24
-        ],
-        [
-          0.98,
-          0.74
-        ],
-        [
-          0.34,
-          0.74
-        ]
+        [0.34, 0.24],
+        [0.98, 0.24],
+        [0.98, 0.74],
+        [0.34, 0.74]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1207,10 +895,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "1f3d64c3624cdb88"
@@ -1228,22 +913,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.35,
-          0.18
-        ],
-        [
-          0.77,
-          0.18
-        ],
-        [
-          0.77,
-          0.92
-        ],
-        [
-          0.35,
-          0.92
-        ]
+        [0.35, 0.18],
+        [0.77, 0.18],
+        [0.77, 0.92],
+        [0.35, 0.92]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1262,10 +935,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "53e02939f3c342cd"
@@ -1283,22 +953,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.12,
-          0.11
-        ],
-        [
-          0.78,
-          0.11
-        ],
-        [
-          0.78,
-          0.96
-        ],
-        [
-          0.12,
-          0.96
-        ]
+        [0.12, 0.11],
+        [0.78, 0.11],
+        [0.78, 0.96],
+        [0.12, 0.96]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1317,10 +975,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "595b69da49f09e20"
@@ -1338,22 +993,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.07,
-          0.1
-        ],
-        [
-          0.62,
-          0.1
-        ],
-        [
-          0.62,
-          0.98
-        ],
-        [
-          0.07,
-          0.98
-        ]
+        [0.07, 0.1],
+        [0.62, 0.1],
+        [0.62, 0.98],
+        [0.07, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1372,10 +1015,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "763b89cf196c2611"
@@ -1393,22 +1033,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.28,
-          0.14
-        ],
-        [
-          0.77,
-          0.14
-        ],
-        [
-          0.77,
-          0.65
-        ],
-        [
-          0.28,
-          0.65
-        ]
+        [0.28, 0.14],
+        [0.77, 0.14],
+        [0.77, 0.65],
+        [0.28, 0.65]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1449,22 +1077,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.41,
-          0.16
-        ],
-        [
-          0.91,
-          0.16
-        ],
-        [
-          0.91,
-          0.87
-        ],
-        [
-          0.41,
-          0.87
-        ]
+        [0.41, 0.16],
+        [0.91, 0.16],
+        [0.91, 0.87],
+        [0.41, 0.87]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1483,10 +1099,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "5b6c9b5a491d31c2"
@@ -1504,22 +1117,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.25,
-          0.08
-        ],
-        [
-          0.55,
-          0.08
-        ],
-        [
-          0.55,
-          0.58
-        ],
-        [
-          0.25,
-          0.58
-        ]
+        [0.25, 0.08],
+        [0.55, 0.08],
+        [0.55, 0.58],
+        [0.25, 0.58]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1538,10 +1139,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "423938dac76714bc"
@@ -1559,22 +1157,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.14,
-          0.25
-        ],
-        [
-          0.83,
-          0.25
-        ],
-        [
-          0.83,
-          0.78
-        ],
-        [
-          0.14,
-          0.78
-        ]
+        [0.14, 0.25],
+        [0.83, 0.25],
+        [0.83, 0.78],
+        [0.14, 0.78]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1593,10 +1179,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ],
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"],
       "labelStatus": "historical_agent_provisional",
       "newHeldOut": false,
       "pHash63": "376cca0789db15d0"
@@ -1647,22 +1230,10 @@
       "category": "water_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0
-        ],
-        [
-          1,
-          0
-        ],
-        [
-          1,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1703,22 +1274,10 @@
       "category": "water_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0
-        ],
-        [
-          1,
-          0
-        ],
-        [
-          1,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1759,22 +1318,10 @@
       "category": "water_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0
-        ],
-        [
-          1,
-          0
-        ],
-        [
-          1,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,

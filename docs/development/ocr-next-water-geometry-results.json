@@ -66,10 +66,7 @@
       "unresolvedProposals": 1,
       "fallbackAmongAdmitted": 15
     },
-    "dimensions": [
-      320,
-      240
-    ],
+    "dimensions": [320, 240],
     "pretrainingOverlap": "unknown",
     "independentPhysicalGroupingVerified": false,
     "unresolvedCase": "quanhui_water_01:00000 on a wheel transition; present in all three readers; not counted correct",
@@ -84,12 +81,7 @@
     "rawEnglishExactAfter": 3,
     "additionalCase": {
       "id": "quanhui_water_14",
-      "bounds": [
-        41,
-        108,
-        197,
-        60
-      ],
+      "bounds": [41, 108, 197, 60],
       "Text": "00458",
       "Confidence": 0.9923913,
       "MinimumCharacterScore": 0.9829503,
@@ -110,18 +102,8 @@
     "unitProbe": [
       {
         "id": "quanhui_water_14",
-        "unitBox": [
-          254,
-          124,
-          320,
-          172
-        ],
-        "numberBox": [
-          41,
-          108,
-          238,
-          168
-        ],
+        "unitBox": [254, 124, 320, 172],
+        "numberBox": [41, 108, 238, 168],
         "unit": {
           "raw": "m3",
           "digits": null,

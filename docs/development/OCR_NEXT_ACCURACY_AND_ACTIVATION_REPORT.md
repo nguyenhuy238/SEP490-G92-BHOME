@@ -13,11 +13,11 @@ Trace: BF-05/UC-20/GBR-07; UC-21/JOB-10/GBR-09 giữ confirmed-reading-only bill
    bằng PP CTC, vẫn giữ complete-number disagreement veto và mean≥.95.
 
    | Historical publisher52, profile MechanicalWater | Default | Full-row cũ | Geometry mới |
-   | --- | ---: | ---: | ---: |
-   | Exact complete strings /33 labels | 10 | 11 | 11 |
-   | Wrong strings /33 labels | 0 | 0 | 0 |
-   | Proposals khi thiếu complete GT /19 | 0 | 0 | 0 |
-   | Fallback /52 | 42 | 41 | 41 |
+   | ----------------------------------------------- | ------: | ----------: | -----------: |
+   | Exact complete strings /33 labels               |      10 |          11 |           11 |
+   | Wrong strings /33 labels                        |       0 |           0 |            0 |
+   | Proposals khi thiếu complete GT /19             |       0 |           0 |            0 |
+   | Fallback /52                                    |      42 |          41 |           41 |
 
    Geometry **REJECTED**. Giữ baseline và full-row cũ **EXPERIMENTAL**, không
    promote. Ca0587956 được full-row cũ phục hồi vì page detector tách từng glyph;
@@ -61,12 +61,12 @@ Trace: BF-05/UC-20/GBR-07; UC-21/JOB-10/GBR-09 giữ confirmed-reading-only bill
    frame là50 thiết bị: có manufacturer/device lặp. License chỉ dùng research
    offline phi thương mại; không đưa weights/images vào Git hoặc business runtime.
 
-   | Cohort | Baseline correct/wrong/unknown | Candidate |
-   | --- | --- | --- |
-   | Historical test9 | 1/1/7 | 2/1/6 |
-   | Historical validation7 | 1/0/6 | 1/2/4 |
-   | Previous source development2 | 0/0/2 | 0/2/0 |
-   | New-source native-admitted16 | 0/0/16 | 0/5/11 |
+   | Cohort                       | Baseline correct/wrong/unknown | Candidate |
+   | ---------------------------- | ------------------------------ | --------- |
+   | Historical test9             | 1/1/7                          | 2/1/6     |
+   | Historical validation7       | 1/0/6                          | 1/2/4     |
+   | Previous source development2 | 0/0/2                          | 0/2/0     |
+   | New-source native-admitted16 | 0/0/16                         | 0/5/11    |
 
    New-source accepted precision0/5; validation non-meter false acceptance0/4→2/4.
    Native C# loader/class mapping/hash/parity chạy thật; bad header vẫn bị chặn.
@@ -96,12 +96,12 @@ Trace: BF-05/UC-20/GBR-07; UC-21/JOB-10/GBR-09 giữ confirmed-reading-only bill
 
 9. **Status và before/after theo category:** các partitions khác nhau được giữ riêng.
 
-   | Category | Historical classifier test correct/wrong/unknown, cũ→candidate | Numeric scope cũ→candidate | Status |
-   | --- | --- | --- | --- |
-   | Mechanical electricity | 1/0/1→1/0/1, n=2 | Complete numeric cohort mới: NOT_RUN | BLOCKED_BY_DATA |
-   | Digital electricity | 0/0/2→1/0/1, n=2 | Frozen8 frames/5 drafts:2 exact,0 wrong,6 fallback→giữ nguyên | DEVELOPMENT_DIAGNOSTICS; Staff blocked |
-   | Mechanical water | 0/0/2→0/0/2, n=2 | Historical10/33→11/33→11/33; new-source0/3 ở cả3 readers | EXPERIMENTAL; geometry rejected |
-   | Digital water | 0/1/0→0/1/0, n=1 | Frozen2 frames/1 draft:0 exact,0 wrong,2 fallback→giữ nguyên | BLOCKED_BY_DATA |
+   | Category               | Historical classifier test correct/wrong/unknown, cũ→candidate | Numeric scope cũ→candidate                                    | Status                                 |
+   | ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------- |
+   | Mechanical electricity | 1/0/1→1/0/1, n=2                                               | Complete numeric cohort mới: NOT_RUN                          | BLOCKED_BY_DATA                        |
+   | Digital electricity    | 0/0/2→1/0/1, n=2                                               | Frozen8 frames/5 drafts:2 exact,0 wrong,6 fallback→giữ nguyên | DEVELOPMENT_DIAGNOSTICS; Staff blocked |
+   | Mechanical water       | 0/0/2→0/0/2, n=2                                               | Historical10/33→11/33→11/33; new-source0/3 ở cả3 readers      | EXPERIMENTAL; geometry rejected        |
+   | Digital water          | 0/1/0→0/1/0, n=1                                               | Frozen2 frames/1 draft:0 exact,0 wrong,2 fallback→giữ nguyên  | BLOCKED_BY_DATA                        |
 
    Verified billing values và newly enabled Staff readers đều0→0 ở mọi category.
    WD historical classifier case là illustration, không phải real-device proof.

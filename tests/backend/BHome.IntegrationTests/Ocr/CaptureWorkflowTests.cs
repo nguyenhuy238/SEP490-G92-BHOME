@@ -94,73 +94,76 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
 
     internal async Task AssignedExperimentalModelsUseDatabaseProfileWithoutWritingProposals()
     {
-        var directory=Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
-        var w=await Workspace();
-        var meter=await Create(w.Owner,"meters",new MeterInput(w.Room,"SYN-EXPERIMENTAL-ELECTRICITY",UtilityType.Electricity,MeterDisplay.Digital,2,Today.AddDays(-10)));
-        var task=await Create(w.Owner,"meter-tasks",new MeterTaskInput(meter,ReadingPurpose.Initial,Today,null));
-        using var host=fixture.Factory.WithWebHostBuilder(b=>b.UseEnvironment("Development").ConfigureAppConfiguration((_,config)=>
-            config.AddInMemoryCollection(new Dictionary<string,string?>
+        var directory = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
+        var w = await Workspace();
+        var meter = await Create(w.Owner, "meters", new MeterInput(w.Room, "SYN-EXPERIMENTAL-ELECTRICITY", UtilityType.Electricity, MeterDisplay.Digital, 2, Today.AddDays(-10)));
+        var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(meter, ReadingPurpose.Initial, Today, null));
+        using var host = fixture.Factory.WithWebHostBuilder(b => b.UseEnvironment("Development").ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["MobileDevelopment:Enabled"]="true",["Ocr:Enabled"]="true",["Ocr:TimeoutMilliseconds"]="9000",
-                ["Ocr:ModelDirectory"]=Path.Combine(directory,".tools/ocr-models"),["Ocr:ExperimentalMeter:Enabled"]="true",
-                ["Ocr:ExperimentalMeter:ClassifierPath"]=Path.Combine(directory,".tools/ocr-runtime-focus/classifier-cv2/classifier.onnx"),
-                ["Ocr:ExperimentalMeter:ClassifierSha256"]="f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
-                ["Ocr:ExperimentalMeter:EnglishModelDirectory"]=Path.Combine(directory,".tools/ocr-recovery-english"),
-                ["Ocr:ExperimentalMeter:Categories:0"]="DigitalElectricity"
+                ["MobileDevelopment:Enabled"] = "true",
+                ["Ocr:Enabled"] = "true",
+                ["Ocr:TimeoutMilliseconds"] = "9000",
+                ["Ocr:ModelDirectory"] = Path.Combine(directory, ".tools/ocr-models"),
+                ["Ocr:ExperimentalMeter:Enabled"] = "true",
+                ["Ocr:ExperimentalMeter:ClassifierPath"] = Path.Combine(directory, ".tools/ocr-runtime-focus/classifier-cv2/classifier.onnx"),
+                ["Ocr:ExperimentalMeter:ClassifierSha256"] = "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
+                ["Ocr:ExperimentalMeter:EnglishModelDirectory"] = Path.Combine(directory, ".tools/ocr-recovery-english"),
+                ["Ocr:ExperimentalMeter:Categories:0"] = "DigitalElectricity"
             })));
-        using var client=host.CreateClient();
-        await using(var scope=host.Services.CreateAsyncScope())
+        using var client = host.CreateClient();
+        await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db=scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            var email=(await db.Users.SingleAsync(u=>u.Id==w.StaffId)).Email;
-            var login=await client.PostAsJsonAsync("/api/v1/auth/login",new {email,password=Password});login.EnsureSuccessStatusCode();
-            client.DefaultRequestHeaders.Authorization=new("Bearer",(await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
-            var saved=await db.Set<OperationalTask>().SingleAsync(t=>t.Id==task);
-            saved.OcrProposedValue=17.25m;saved.OcrImageHash=new string('a',64);saved.OcrEngineVersion="prior-proposal";await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var email = (await db.Users.SingleAsync(u => u.Id == w.StaffId)).Email;
+            var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password }); login.EnsureSuccessStatusCode();
+            client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
+            var saved = await db.Set<OperationalTask>().SingleAsync(t => t.Id == task);
+            saved.OcrProposedValue = 17.25m; saved.OcrImageHash = new string('a', 64); saved.OcrEngineVersion = "prior-proposal"; await db.SaveChangesAsync();
         }
-        var observations=new List<object>();
-        foreach(var (id,path,expected) in new[] {
+        var observations = new List<object>();
+        foreach (var (id, path, expected) in new[] {
             ("105770219",".tools/master-dataset/commons/commons_105770219.jpg",(string?)null),
             ("54903199",".tools/ocr-continued/commons_54903199.jpg","000501"),
             ("136480278",".tools/master-dataset/commons/commons_136480278.jpg","74590"),
             ("151445788",".tools/master-dataset/commons/commons_151445788.jpg",(string?)null),
             ("136480279",".tools/master-dataset/commons/commons_136480279.jpg",(string?)null) })
         {
-            using var body=new ByteArrayContent(await File.ReadAllBytesAsync(Path.Combine(directory,path)));body.Headers.ContentType=new("image/jpeg");
-            using var response=await client.PostAsync($"/api/v1/ocr/diagnostics/auto?experimental=true&taskId={task}&kind=DigitalWater&decimalPlaces=0",body);
-            Assert.Equal(HttpStatusCode.OK,response.StatusCode);
-            using var json=System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());var analysis=json.RootElement.GetProperty("analysis");
-            Assert.Equal(expected,analysis.GetProperty("readingCandidate").GetString());
+            using var body = new ByteArrayContent(await File.ReadAllBytesAsync(Path.Combine(directory, path))); body.Headers.ContentType = new("image/jpeg");
+            using var response = await client.PostAsync($"/api/v1/ocr/diagnostics/auto?experimental=true&taskId={task}&kind=DigitalWater&decimalPlaces=0", body);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync()); var analysis = json.RootElement.GetProperty("analysis");
+            Assert.Equal(expected, analysis.GetProperty("readingCandidate").GetString());
             Assert.False(analysis.GetProperty("businessProposalEnabled").GetBoolean());
-            Assert.Contains(analysis.GetProperty("warnings").EnumerateArray(),x=>x.GetString()=="trusted_meter_profile");
-            if(id=="105770219")
+            Assert.Contains(analysis.GetProperty("warnings").EnumerateArray(), x => x.GetString() == "trusted_meter_profile");
+            if (id == "105770219")
             {
-                Assert.Equal("electricity_mechanical",analysis.GetProperty("candidateCategory").GetString());
-                Assert.Equal("numeric_text_present_display_unverified",analysis.GetProperty("displayState").GetString());
+                Assert.Equal("electricity_mechanical", analysis.GetProperty("candidateCategory").GetString());
+                Assert.Equal("numeric_text_present_display_unverified", analysis.GetProperty("displayState").GetString());
             }
-            observations.Add(new {id,result=json.RootElement.Clone()});
+            observations.Add(new { id, result = json.RootElement.Clone() });
         }
-        var foreign=await Workspace();var foreignTask=await Create(foreign.Owner,"meter-tasks",new MeterTaskInput(foreign.Meter,ReadingPurpose.Initial,Today,null));
-        using(var body=new ByteArrayContent([]))
+        var foreign = await Workspace(); var foreignTask = await Create(foreign.Owner, "meter-tasks", new MeterTaskInput(foreign.Meter, ReadingPurpose.Initial, Today, null));
+        using (var body = new ByteArrayContent([]))
         {
-            body.Headers.ContentType=new("image/jpeg");
-            Assert.Equal(HttpStatusCode.NotFound,(await client.PostAsync($"/api/v1/ocr/diagnostics/auto?experimental=true&taskId={foreignTask}",body)).StatusCode);
+            body.Headers.ContentType = new("image/jpeg");
+            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/v1/ocr/diagnostics/auto?experimental=true&taskId={foreignTask}", body)).StatusCode);
         }
-        await using(var scope=host.Services.CreateAsyncScope())
+        await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db=scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();var saved=await db.Set<OperationalTask>().SingleAsync(t=>t.Id==task);
-            Assert.Equal(17.25m,saved.OcrProposedValue);Assert.Equal(new string('a',64),saved.OcrImageHash);Assert.Equal("prior-proposal",saved.OcrEngineVersion);
-            Assert.NotEqual(MeterTaskStatus.Completed,saved.Status);Assert.False(await db.Set<MeterReading>().AnyAsync(r=>r.TaskId==task));
-            var assignment=await db.Set<StaffLocationAssignment>().SingleAsync(a=>a.LocationId==w.Location&&a.StaffUserId==w.StaffId);
-            db.Entry(assignment).Property(a=>a.EndDate).CurrentValue=Today.AddDays(-1);
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var saved = await db.Set<OperationalTask>().SingleAsync(t => t.Id == task);
+            Assert.Equal(17.25m, saved.OcrProposedValue); Assert.Equal(new string('a', 64), saved.OcrImageHash); Assert.Equal("prior-proposal", saved.OcrEngineVersion);
+            Assert.NotEqual(MeterTaskStatus.Completed, saved.Status); Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
+            var assignment = await db.Set<StaffLocationAssignment>().SingleAsync(a => a.LocationId == w.Location && a.StaffUserId == w.StaffId);
+            db.Entry(assignment).Property(a => a.EndDate).CurrentValue = Today.AddDays(-1);
             await db.SaveChangesAsync();
         }
-        using(var body=new ByteArrayContent([]))
+        using (var body = new ByteArrayContent([]))
         {
-            body.Headers.ContentType=new("image/jpeg");
-            Assert.Equal(HttpStatusCode.NotFound,(await client.PostAsync($"/api/v1/ocr/diagnostics/auto?experimental=true&taskId={task}",body)).StatusCode);
+            body.Headers.ContentType = new("image/jpeg");
+            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/v1/ocr/diagnostics/auto?experimental=true&taskId={task}", body)).StatusCode);
         }
-        await File.WriteAllTextAsync(Path.Combine(directory,".tools/ocr-next-staff/assigned-runtime.json"),System.Text.Json.JsonSerializer.Serialize(observations,new System.Text.Json.JsonSerializerOptions {WriteIndented=true}));
+        await File.WriteAllTextAsync(Path.Combine(directory, ".tools/ocr-next-staff/assigned-runtime.json"), System.Text.Json.JsonSerializer.Serialize(observations, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
     // Invoked only by the explicit local-model + disposable-PostgreSQL test.
@@ -181,9 +184,18 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var room = await Create(w.Owner, "rooms", new RoomInput(w.Location, "SYN-REAL-MODEL", 2));
         var meter = await Create(w.Owner, "meters", new MeterInput(room, "SYN-REAL-WATER", UtilityType.Water, MeterDisplay.Mechanical, 2, Today.AddDays(-10)));
         var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(meter, ReadingPurpose.Initial, Today, null));
-        var options = new OcrOptions { Enabled = true, ModelDirectory = Path.Combine(root, ".tools/ocr-models"),
-            MeterDetectionMinConfidence = .7f, MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true,
-                ModelDirectory = Path.Combine(root, ".tools/meter-detection-models") } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = Path.Combine(root, ".tools/ocr-models"),
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new()
+            {
+                Enabled = true,
+                WaterDigitsEnabled = true,
+                ModelDirectory = Path.Combine(root, ".tools/meter-detection-models")
+            }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);

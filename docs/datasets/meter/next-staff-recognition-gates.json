@@ -23,6 +23,11 @@
     "activation": "BLOCKED_BY_DATA; no business proposal promotion without independent labels"
   },
   "classifierReplacement": "Select on validation only; improve positive coverage without increasing wrong acceptance, then measure new source-separated probes; do not use the final test to choose thresholds.",
-  "newSourceClassifierGate": {"minimumAdditionalCorrect": 1, "maximumAdditionalWrong": 0, "retainBaselineCorrect": true, "humanIndependentAcceptance": false},
+  "newSourceClassifierGate": {
+    "minimumAdditionalCorrect": 1,
+    "maximumAdditionalWrong": 0,
+    "retainBaselineCorrect": true,
+    "humanIndependentAcceptance": false
+  },
   "hardware": "Run camera/MinIO if accessible; otherwise explicitly NOT_RUN"
 }

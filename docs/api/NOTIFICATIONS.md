@@ -1,5 +1,3 @@
-
-
 # Notification inbox — UC-35/36
 
 Cập nhật **06/11/2026**: inbox, business-event publisher và JOB-04 delivery engine đã có trong
@@ -101,5 +99,6 @@ Owner có màn đọc OperationalTask thật; xử lý nghiệp vụ task hiện
 Capture GET `meter-tasks` bổ sung optional query `locationId`, `roomId`, `dueDate` (ngày VN),
 `status` (enum numeric), `page` (mỗi trang tối đa 100). Bộ lọc áp dụng trước giới hạn,
 giữ nguyên array contract và kiểm tra Staff assignment hiện tại. Không lọc bằng PII.
+
 > Cập nhật 08/11/2026: [Notification MVP trên Compact24](NOTIFICATION_MVP_COMPACT24.md) bổ sung
 > invitation, inbox detail, announcements, devices, kênh gửi và reminder policy; giữ tương thích các route cũ bên dưới.

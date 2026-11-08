@@ -11,9 +11,18 @@
     "businessProposalEnabled": false,
     "persistsReadingOrBilling": false,
     "realOnnxRequired": true,
-    "requiredCases": ["readable_positive", "non_consumption_counter", "uncertain_category", "missing_or_corrupt_model"]
+    "requiredCases": [
+      "readable_positive",
+      "non_consumption_counter",
+      "uncertain_category",
+      "missing_or_corrupt_model"
+    ]
   },
-  "classifierSelection": {"split": "validation_only", "minimumCorrectAccepted": 1, "maximumIncorrectAccepted": 0},
+  "classifierSelection": {
+    "split": "validation_only",
+    "minimumCorrectAccepted": 1,
+    "maximumIncorrectAccepted": 0
+  },
   "registerSelection": {
     "requiresSpatialUnitAndConsumptionEvidence": true,
     "rejectStatusSerialTimerAndFlow": true,

@@ -7,45 +7,17 @@
   "caseDiagnostics": [
     {
       "id": "105770219",
-      "utilityLogits": [
-        0.5751840472221375,
-        -0.6491451263427734,
-        -0.16943776607513428
-      ],
-      "technologyLogits": [
-        0.33719635009765625,
-        -0.27570104598999023
-      ],
-      "utility": [
-        0.5653330683708191,
-        0.16618238389492035,
-        0.26848453283309937
-      ],
-      "technology": [
-        0.6486014723777771,
-        0.3513985574245453
-      ]
+      "utilityLogits": [0.5751840472221375, -0.6491451263427734, -0.16943776607513428],
+      "technologyLogits": [0.33719635009765625, -0.27570104598999023],
+      "utility": [0.5653330683708191, 0.16618238389492035, 0.26848453283309937],
+      "technology": [0.6486014723777771, 0.3513985574245453]
     },
     {
       "id": "54903199",
-      "utilityLogits": [
-        1.5394970178604126,
-        -0.5902333855628967,
-        -1.0636110305786133
-      ],
-      "technologyLogits": [
-        -0.34401965141296387,
-        0.46932122111320496
-      ],
-      "utility": [
-        0.8382845520973206,
-        0.09964632242918015,
-        0.062069185078144073
-      ],
-      "technology": [
-        0.3071790337562561,
-        0.6928209662437439
-      ]
+      "utilityLogits": [1.5394970178604126, -0.5902333855628967, -1.0636110305786133],
+      "technologyLogits": [-0.34401965141296387, 0.46932122111320496],
+      "utility": [0.8382845520973206, 0.09964632242918015, 0.062069185078144073],
+      "technology": [0.3071790337562561, 0.6928209662437439]
     }
   ],
   "baselineClassifierTest9": {
@@ -152,10 +124,7 @@
             }
           }
         ],
-        "thresholds": [
-          0.55,
-          0.75
-        ],
+        "thresholds": [0.55, 0.75],
         "passesDevelopmentReplacementGate": false,
         "selected": {
           "epoch": 0,
@@ -195,7 +164,7 @@
       },
       "exportedEpoch": 0,
       "modelSha256": "9f957127a69eb8248e26a217c27e208564fa309ba83148187e54f8f4f9bf8859",
-      "nativeOnnxMaxLogitDelta": 3.993511199951172e-06
+      "nativeOnnxMaxLogitDelta": 3.993511199951172e-6
     },
     {
       "name": "three_targeted_real_LCD_keypad_TRAIN_crops",
@@ -204,10 +173,7 @@
       "trainingManifest": "../datasets/meter/staff-classification-provisional.json",
       "validationSelection": {
         "epoch": 50,
-        "thresholds": [
-          0.55,
-          0.85
-        ],
+        "thresholds": [0.55, 0.85],
         "counts": {
           "inputs": 7,
           "meters": 3,
@@ -241,7 +207,7 @@
         }
       },
       "modelSha256": "1aeadf1480e608de6a7b74dd09cc16e0aac279598d474a19a48b3f7a8c0185a9",
-      "nativeOnnxMaxLogitDelta": 4.410743713378906e-06,
+      "nativeOnnxMaxLogitDelta": 4.410743713378906e-6,
       "expandedTrainingManifestSha256": "505dd92b0de4004efceecb8a26132423221c170e4be7c3a3b2ec30a8047b2d86",
       "expandedTrainingManifestLocalFile": ".tools/ocr-staff-focus/keypad-training-manifest.json",
       "compositionManifestSha256": "8aa7ddfed9d7b513e9c941f1a5c6131b12bb50f16c035207f990249b7f6ab7cb",

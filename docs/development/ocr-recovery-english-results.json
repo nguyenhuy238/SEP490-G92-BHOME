@@ -116,7 +116,7 @@
       {
         "file": "wm_clean_000317-predicted_window.png",
         "passed": true,
-        "meanDelta": 1.1920929e-07,
+        "meanDelta": 1.1920929e-7,
         "minimumDelta": 0
       },
       {
@@ -155,11 +155,7 @@
           "incorrectOnCompleteLabels": false,
           "unknownGroundTruthProposal": false,
           "isFallback": false,
-          "warnings": [
-            "meter_category_unverified",
-            "english_meter_candidate",
-            "recognizers_agree"
-          ],
+          "warnings": ["meter_category_unverified", "english_meter_candidate", "recognizers_agree"],
           "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-candidate95",
           "elapsedMs": 499
         },
@@ -262,11 +258,7 @@
           "incorrectOnCompleteLabels": false,
           "unknownGroundTruthProposal": false,
           "isFallback": false,
-          "warnings": [
-            "meter_category_unverified",
-            "english_meter_candidate",
-            "recognizers_agree"
-          ],
+          "warnings": ["meter_category_unverified", "english_meter_candidate", "recognizers_agree"],
           "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-candidate95",
           "elapsedMs": 535
         },

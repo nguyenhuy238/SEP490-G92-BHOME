@@ -677,9 +677,9 @@
   ],
   "parity": {
     "images": 9,
-    "nativeToPythonOrtMaxLogitDelta": 3.993511199951172e-06,
+    "nativeToPythonOrtMaxLogitDelta": 3.993511199951172e-6,
     "pythonToDotnetMaxInputDelta": 0,
-    "pythonToDotnetMaxLogitDelta": 2.2947788e-06
+    "pythonToDotnetMaxLogitDelta": 2.2947788e-6
   },
   "models": {
     ".tools/ocr-runtime-focus/classifier-cv2/classifier.onnx": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
@@ -692,30 +692,16 @@
   "rawHttpBenchmarkSha256": "400ec6807d34ae51c5d7310a3f68c5100bc9e2271628c699c11524b84033e0fa",
   "registerControl": {
     "imageId": "commons_151445788",
-    "originalRegion": [
-      890,
-      703,
-      49,
-      55
-    ],
+    "originalRegion": [890, 703, 49, 55],
     "englishRaw": "4",
     "englishConfidence": 0.9975924,
     "ppRaw": "4",
     "nearbyDeviceLabel": "HORAIRE",
-    "deviceLabelBounds": [
-      650,
-      165,
-      276,
-      177
-    ],
+    "deviceLabelBounds": [650, 165, 276, 177],
     "deviceLabelConfidence": 0.9395302,
     "independentContextGate": "non_consumption",
     "fullHttpReading": null,
     "coordinates": "after neutral cap1600; xywh",
-    "singleDigitPositiveTests": [
-      "0 kWh",
-      "4 kWh",
-      "8 kWh"
-    ]
+    "singleDigitPositiveTests": ["0 kWh", "4 kWh", "8 kWh"]
   }
 }

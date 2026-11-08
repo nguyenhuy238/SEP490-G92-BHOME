@@ -11,8 +11,13 @@ internal static class PretrainedYoloEvaluation
 {
     public static async Task<int> RunAsync(string ocrModels, string yoloModels, string images, string reportPath)
     {
-        var options = new OcrOptions { Enabled = true, ModelDirectory = ocrModels, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, ModelDirectory = yoloModels } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = ocrModels,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, ModelDirectory = yoloModels }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var candidateEngine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector);
         using var baselineEngine = new OnnxOcrEngine(options, new ImagePreprocessor(options));
@@ -70,25 +75,60 @@ internal static class PretrainedYoloEvaluation
                     new(n.GetProperty("xywhr")[2].GetSingle(), n.GetProperty("xywhr")[3].GetSingle()), n.GetProperty("xywhr")[4].GetSingle() * 180f / MathF.PI))));
             if (parity) detectionParity++;
             tensor.Buffer.Span.Clear();
-            rows.Add(new { index = rows.Count, bodyHit, windowHit, hasUnclear, exactBefore = correctBefore, exactAfter = correctAfter,
-                after.IsFallback, warnings = after.Warnings, auto.ClassificationStatus, auto.PartialCategory,
+            rows.Add(new
+            {
+                index = rows.Count,
+                bodyHit,
+                windowHit,
+                hasUnclear,
+                exactBefore = correctBefore,
+                exactAfter = correctAfter,
+                after.IsFallback,
+                warnings = after.Warnings,
+                auto.ClassificationStatus,
+                auto.PartialCategory,
                 automaticReadingAvailable = auto.MeterProposal?.ProposedFields.ContainsKey("reading") == true,
-                cropPreviewAvailable = auto.CropPreviewDataUri is not null, preprocessingMaxDelta = deltaInput, detectionParity = parity,
-                elapsedMilliseconds = times[^1], automaticMilliseconds = autoTimes[^1], baselineMilliseconds = baselineTimes[^1], baselineReadingAvailable = before.ProposedFields.ContainsKey("reading") });
+                cropPreviewAvailable = auto.CropPreviewDataUri is not null,
+                preprocessingMaxDelta = deltaInput,
+                detectionParity = parity,
+                elapsedMilliseconds = times[^1],
+                automaticMilliseconds = autoTimes[^1],
+                baselineMilliseconds = baselineTimes[^1],
+                baselineReadingAvailable = before.ProposedFields.ContainsKey("reading")
+            });
             Console.WriteLine(JsonSerializer.Serialize(rows[^1]));
         }
-        var summary = new { images = rows.Count, meterHitsIoU50 = meters, windowHitsIoU50 = windows, fullyLabeledReadings = labeled,
-            exactBefore, exactAfter, proposed, incorrectOnFullyLabeled = incorrect, manualFallbacks = fallback,
-            fallbackRatePercent = 100m * fallback / rows.Count, preprocessingParity, detectionParity,
-            baselineProposed, baselineIncorrectOnFullyLabeled = baselineIncorrect, baselineManualFallbacks = rows.Count - baselineProposed,
-            baselineP50Milliseconds = baselineTimes.Order().ElementAt((int)Math.Ceiling(times.Count * .5) - 1), baselineP95Milliseconds = baselineTimes.Order().ElementAt((int)Math.Ceiling(times.Count * .95) - 1),
+        var summary = new
+        {
+            images = rows.Count,
+            meterHitsIoU50 = meters,
+            windowHitsIoU50 = windows,
+            fullyLabeledReadings = labeled,
+            exactBefore,
+            exactAfter,
+            proposed,
+            incorrectOnFullyLabeled = incorrect,
+            manualFallbacks = fallback,
+            fallbackRatePercent = 100m * fallback / rows.Count,
+            preprocessingParity,
+            detectionParity,
+            baselineProposed,
+            baselineIncorrectOnFullyLabeled = baselineIncorrect,
+            baselineManualFallbacks = rows.Count - baselineProposed,
+            baselineP50Milliseconds = baselineTimes.Order().ElementAt((int)Math.Ceiling(times.Count * .5) - 1),
+            baselineP95Milliseconds = baselineTimes.Order().ElementAt((int)Math.Ceiling(times.Count * .95) - 1),
             p50Milliseconds = times.Order().ElementAt((int)Math.Ceiling(times.Count * .5) - 1),
-            p95Milliseconds = times.Order().ElementAt((int)Math.Ceiling(times.Count * .95) - 1), maxMilliseconds = times.Max(),
-            within10Seconds = times.Count(t => t <= 10000), automaticP50Milliseconds = autoTimes.Order().ElementAt((int)Math.Ceiling(autoTimes.Count * .5) - 1),
+            p95Milliseconds = times.Order().ElementAt((int)Math.Ceiling(times.Count * .95) - 1),
+            maxMilliseconds = times.Max(),
+            within10Seconds = times.Count(t => t <= 10000),
+            automaticP50Milliseconds = autoTimes.Order().ElementAt((int)Math.Ceiling(autoTimes.Count * .5) - 1),
             automaticP95Milliseconds = autoTimes.Order().ElementAt((int)Math.Ceiling(autoTimes.Count * .95) - 1),
-            automaticWithin10Seconds = autoTimes.Count(t => t <= 10000), classificationAccuracy = (decimal?)null,
-            accuracyTargetMet = false, minimum50ImageEvaluationComplete = false,
-            limitation = "Ten selected public author test images (first five plus five clear annotations); three unclear readings excluded from exact-match denominator. Not an independent BHOME holdout or four-class classifier. No training." };
+            automaticWithin10Seconds = autoTimes.Count(t => t <= 10000),
+            classificationAccuracy = (decimal?)null,
+            accuracyTargetMet = false,
+            minimum50ImageEvaluationComplete = false,
+            limitation = "Ten selected public author test images (first five plus five clear annotations); three unclear readings excluded from exact-match denominator. Not an independent BHOME holdout or four-class classifier. No training."
+        };
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new { summary, rows }, OcrEvaluation.Json));
         Console.WriteLine(JsonSerializer.Serialize(summary));
         return preprocessingParity == rows.Count && detectionParity == rows.Count && windows > 0 ? 0 : 1;

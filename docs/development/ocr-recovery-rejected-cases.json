@@ -9,9 +9,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8653888207929076,
       "ppNumericCandidate": "00845927",
-      "ppRaw": [
-        "00845927"
-      ],
+      "ppRaw": ["00845927"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -26,9 +24,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8297467317720999,
       "ppNumericCandidate": "0768320",
-      "ppRaw": [
-        "0768320"
-      ],
+      "ppRaw": ["0768320"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -43,11 +39,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8530699717888874,
       "ppNumericCandidate": null,
-      "ppRaw": [
-        "0",
-        "8",
-        "Q"
-      ],
+      "ppRaw": ["0", "8", "Q"],
       "rejection": "blur_guard",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -62,20 +54,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.9382696789109699,
       "ppNumericCandidate": null,
-      "ppRaw": [
-        "0",
-        "P",
-        "H",
-        "P",
-        "0",
-        "2",
-        "T",
-        "4",
-        "8",
-        "Ọ",
-        "T",
-        "P"
-      ],
+      "ppRaw": ["0", "P", "H", "P", "0", "2", "T", "4", "8", "Ọ", "T", "P"],
       "rejection": "multiple_numeric_regions",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -90,9 +69,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.9449130025961424,
       "ppNumericCandidate": "002295019",
-      "ppRaw": [
-        "002295019"
-      ],
+      "ppRaw": ["002295019"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -107,9 +84,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8159026593250258,
       "ppNumericCandidate": "307297599",
-      "ppRaw": [
-        "307297599"
-      ],
+      "ppRaw": ["307297599"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -124,9 +99,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.7805448136396774,
       "ppNumericCandidate": "002367841",
-      "ppRaw": [
-        "002367841"
-      ],
+      "ppRaw": ["002367841"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -141,9 +114,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8024397272301977,
       "ppNumericCandidate": "02332831",
-      "ppRaw": [
-        "02332831"
-      ],
+      "ppRaw": ["02332831"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -158,9 +129,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8359671391751573,
       "ppNumericCandidate": "00339039",
-      "ppRaw": [
-        "00339039"
-      ],
+      "ppRaw": ["00339039"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -175,9 +144,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.9199564930268987,
       "ppNumericCandidate": "00845927",
-      "ppRaw": [
-        "00845927"
-      ],
+      "ppRaw": ["00845927"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -192,9 +159,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8683641776199651,
       "ppNumericCandidate": "0055599",
-      "ppRaw": [
-        "0055599"
-      ],
+      "ppRaw": ["0055599"],
       "rejection": "valid_numeric_disagreement",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -209,17 +174,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8093636114422681,
       "ppNumericCandidate": null,
-      "ppRaw": [
-        "I",
-        "P.",
-        "9",
-        "0",
-        "H",
-        "5",
-        "8",
-        "5",
-        "6"
-      ],
+      "ppRaw": ["I", "P.", "9", "0", "H", "5", "8", "5", "6"],
       "rejection": "multiple_numeric_regions",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,
@@ -234,14 +189,7 @@
       "stage2Warnings": [],
       "displayIoU": 0.8462103444419764,
       "ppNumericCandidate": null,
-      "ppRaw": [
-        "8",
-        "I",
-        "95",
-        "Z",
-        "0",
-        "5"
-      ],
+      "ppRaw": ["8", "I", "95", "Z", "0", "5"],
       "rejection": "multiple_numeric_regions",
       "registerGroundTruth": null,
       "decimalGroundTruth": null,

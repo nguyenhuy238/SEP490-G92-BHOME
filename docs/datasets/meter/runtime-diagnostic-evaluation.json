@@ -7,24 +7,9 @@
       "sha256": "b91a58dfde67d4c8f0909f06c24757de5c2f7c82bb45885d5bc0817527a18b61",
       "split": "validation",
       "category": "electricity_digital",
-      "meter_body": [
-        390,
-        380,
-        885,
-        1120
-      ],
-      "display_screen": [
-        520,
-        500,
-        755,
-        590
-      ],
-      "numeric_register": [
-        565,
-        508,
-        714,
-        558
-      ],
+      "meter_body": [390, 380, 885, 1120],
+      "display_screen": [520, 500, 755, 590],
+      "numeric_register": [565, 508, 714, 558],
       "serial_region": null,
       "non_billing_display": null,
       "expectedDigits": "16254",
@@ -60,24 +45,9 @@
       "sha256": "54e73ce3fa7dd7a7d22ac0966513c90ad6fb28990127ced16ceaa7c99b91452f",
       "split": "test",
       "category": "electricity_digital",
-      "meter_body": [
-        125,
-        80,
-        960,
-        1233
-      ],
-      "display_screen": [
-        350,
-        173,
-        719,
-        300
-      ],
-      "numeric_register": [
-        500,
-        177,
-        701,
-        240
-      ],
+      "meter_body": [125, 80, 960, 1233],
+      "display_screen": [350, 173, 719, 300],
+      "numeric_register": [500, 177, 701, 240],
       "serial_region": null,
       "non_billing_display": null,
       "expectedDigits": "000501",
@@ -94,24 +64,9 @@
       "sha256": "4898d4fde07145a933dcda85d5918f9ce5d12759028c33337803d1d179545aca",
       "split": "test",
       "category": "electricity_digital",
-      "meter_body": [
-        178,
-        282,
-        550,
-        682
-      ],
-      "display_screen": [
-        296,
-        451,
-        404,
-        504
-      ],
-      "numeric_register": [
-        300,
-        459,
-        399,
-        494
-      ],
+      "meter_body": [178, 282, 550, 682],
+      "display_screen": [296, 451, 404, 504],
+      "numeric_register": [300, 459, 399, 494],
       "serial_region": null,
       "non_billing_display": null,
       "expectedDigits": null,

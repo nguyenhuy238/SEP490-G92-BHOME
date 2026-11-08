@@ -71,7 +71,7 @@ internal sealed partial class CompactNotificationEvents
                     AND cr.actual_residence_from<=@today AND (cr.residence_to IS NULL OR cr.residence_to>=@today)
                     AND COALESCE(cr.registration_status,'Pending') IN ('Pending','InProgress') AND cr.owner_confirmed_at IS NULL
                     """, t, ("location", location), ("today", Today)))
-                { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) rows.Add((reader.GetGuid(0),reader.GetGuid(1),reader.IsDBNull(2)?null:reader.GetGuid(2),reader.GetGuid(3))); }
+                { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) rows.Add((reader.GetGuid(0), reader.GetGuid(1), reader.IsDBNull(2) ? null : reader.GetGuid(2), reader.GetGuid(3))); }
                 foreach (var r in rows)
                 {
                     var key = $"residence:{r.Contract}:{r.Resident}:{window}"; if (await Done(key, t)) continue;

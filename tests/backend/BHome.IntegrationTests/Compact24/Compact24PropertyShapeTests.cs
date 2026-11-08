@@ -35,10 +35,10 @@ public sealed class Compact24PropertyShapeTests(Compact24Fixture fixture) : ICla
         var room = await roomResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(room.TryGetProperty("roomTypeId", out _));
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/rooms", new
-            { locationId, roomTypeId = Guid.NewGuid(), roomNumber = "RETIRED", capacity = 2 })).StatusCode);
+        { locationId, roomTypeId = Guid.NewGuid(), roomNumber = "RETIRED", capacity = 2 })).StatusCode);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var policyResponse = await client.PostAsJsonAsync("/api/v1/billing-policies", new
-            { locationId, category = 0, chargeCode = "RENT", name = "Synthetic rent", method = 0, rate = 1000000, effectiveFrom = today });
+        { locationId, category = 0, chargeCode = "RENT", name = "Synthetic rent", method = 0, rate = 1000000, effectiveFrom = today });
         Assert.Equal(HttpStatusCode.Created, policyResponse.StatusCode);
         var policy = await policyResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(policy.TryGetProperty("roomTypeId", out _));

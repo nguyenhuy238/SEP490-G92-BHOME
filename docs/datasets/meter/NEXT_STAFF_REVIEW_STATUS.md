@@ -8,13 +8,13 @@ promotion blocked. Không approve toàn bộ327 ảnh Kaggle đang quarantine.
 không thay pilot8. Gói local `.tools/ocr-next-staff/review-v3/index.html` không
 hiện nhãn nháp, digits hay model suggestions. SHA ảnh và author groups được pin.
 
-| Vai trò nháp cần review, không phải GT | Số ảnh |
-| --- | ---: |
-| Potential digital-electricity positives | 3 |
-| Negative controls: timer/counter, blank/inactive | 3 |
-| Blank/inactive trong nhóm controls | 2 |
-| Thiếu independent register/precision labels | 6 |
-| Human-verified / independent consensus | 0 |
+| Vai trò nháp cần review, không phải GT           | Số ảnh |
+| ------------------------------------------------ | -----: |
+| Potential digital-electricity positives          |      3 |
+| Negative controls: timer/counter, blank/inactive |      3 |
+| Blank/inactive trong nhóm controls               |      2 |
+| Thiếu independent register/precision labels      |      6 |
+| Human-verified / independent consensus           |      0 |
 
 Hai người tự xem full photo, vẽ meterBox và windowBox sát **numeric register**,
 chọn category (đã mã hóa utility + mechanical/digital), unit, total register,

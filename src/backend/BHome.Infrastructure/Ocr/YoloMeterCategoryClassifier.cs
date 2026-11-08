@@ -39,8 +39,13 @@ public sealed class YoloMeterCategoryClassifier : IImageCategoryClassifier, IDis
         {
             if (!Convert.ToHexString(SHA256.HashData(bytes)).Equals(options.VisualClassifier.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Visual classifier checksum mismatch.");
-            using var config = new SessionOptions { IntraOpNumThreads = options.InferenceThreads, InterOpNumThreads = 1,
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+            using var config = new SessionOptions
+            {
+                IntraOpNumThreads = options.InferenceThreads,
+                InterOpNumThreads = 1,
+                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+                LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+            };
             var model = new InferenceSession(bytes, config);
             try
             {
@@ -156,12 +161,12 @@ public sealed class YoloMeterCategoryClassifier : IImageCategoryClassifier, IDis
         {
             // Class-wise NMS can retain several weak category hypotheses for
             // the very same body. They are not evidence of multiple meters.
-            var weakSameBody=detections.All(d=>Categories.Contains(d.Category) && float.IsFinite(d.Confidence) &&
-                d.Confidence>0 && d.Confidence<minimumConfidence) &&
-                detections.Select(d=>d.Category).Distinct().Count()==detections.Count &&
-                detections.All(a=>detections.All(b=>IoU(a.Bounds,b.Bounds)>=.8));
-            if(weakSameBody) return new("ambiguous",null,"visual_model",detections.Max(d=>d.Confidence),
-                Candidates:detections.Select(d=>d.Category).ToArray(),Warnings:["overlapping_category_hypotheses","classification_requires_review"]);
+            var weakSameBody = detections.All(d => Categories.Contains(d.Category) && float.IsFinite(d.Confidence) &&
+                d.Confidence > 0 && d.Confidence < minimumConfidence) &&
+                detections.Select(d => d.Category).Distinct().Count() == detections.Count &&
+                detections.All(a => detections.All(b => IoU(a.Bounds, b.Bounds) >= .8));
+            if (weakSameBody) return new("ambiguous", null, "visual_model", detections.Max(d => d.Confidence),
+                Candidates: detections.Select(d => d.Category).ToArray(), Warnings: ["overlapping_category_hypotheses", "classification_requires_review"]);
             return new("ambiguous", null, "visual_model",
                 Candidates: detections.Select(d => d.Category).ToArray(), Warnings: ["multiple_meters"]);
         }

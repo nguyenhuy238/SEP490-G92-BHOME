@@ -22,8 +22,12 @@ public sealed class EnglishMeterTextRecognizer : IDisposable
         Verify(Path.Combine(directory, "inference.onnx"), ModelSha256);
         Verify(Path.Combine(directory, "charset.json"), DictionarySha256);
         dictionary = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(directory, "charset.json"), Encoding.UTF8))!;
-        using var settings = new SessionOptions { IntraOpNumThreads = 2, InterOpNumThreads = 1,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+        using var settings = new SessionOptions
+        {
+            IntraOpNumThreads = 2,
+            InterOpNumThreads = 1,
+            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        };
         session = new InferenceSession(Path.Combine(directory, "inference.onnx"), settings);
         if (dictionary.Length != 438 || session.InputMetadata.Count != 1 ||
             session.InputMetadata.First().Value.Dimensions is not [_, 3, 48, _])

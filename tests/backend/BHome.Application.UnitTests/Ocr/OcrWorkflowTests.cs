@@ -65,7 +65,7 @@ public sealed class OcrWorkflowTests
     }
 
     private static (OcrWorkflowService Service, IOcrWorkflowResources Resources, IOcrService Ocr, Guid Id)
-        MeterWorkflow(OcrDocumentKind? kind, int precision, decimal? previous,IExperimentalMeterOcrService? experimental=null)
+        MeterWorkflow(OcrDocumentKind? kind, int precision, decimal? previous, IExperimentalMeterOcrService? experimental = null)
     {
         var user = Substitute.For<ICurrentUser>(); user.UserId.Returns(Guid.NewGuid()); user.IsInRole(Roles.Staff).Returns(true);
         var assignments = Substitute.For<IStaffLocationAccess>();
@@ -75,7 +75,7 @@ public sealed class OcrWorkflowTests
         resources.FindMeterTaskAsync(id, Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(
             new ResourceScope(Guid.NewGuid(), null), true, kind, precision, previous));
         var ocr = Substitute.For<IOcrService>();
-        return (new OcrWorkflowService(resources, new ResourceAccess(user, assignments), ocr,experimental), resources, ocr, id);
+        return (new OcrWorkflowService(resources, new ResourceAccess(user, assignments), ocr, experimental), resources, ocr, id);
     }
 
     [Theory]
@@ -85,48 +85,48 @@ public sealed class OcrWorkflowTests
     [InlineData(OcrDocumentKind.MechanicalWater)]
     public async Task AssignedDiagnosticsUseServerKindWithoutPersistingAProposal(OcrDocumentKind kind)
     {
-        var experimental=Substitute.For<IExperimentalMeterOcrService>();
-        var (service,resources,ocr,id)=MeterWorkflow(kind,2,null,experimental);
-        using var input=new MemoryStream([1,2,3]);
-        experimental.ExtractAssignedMeterAsync(input,kind,Arg.Any<CancellationToken>()).Returns(
+        var experimental = Substitute.For<IExperimentalMeterOcrService>();
+        var (service, resources, ocr, id) = MeterWorkflow(kind, 2, null, experimental);
+        using var input = new MemoryStream([1, 2, 3]);
+        experimental.ExtractAssignedMeterAsync(input, kind, Arg.Any<CancellationToken>()).Returns(
             ExperimentalMeterOcrResult.Unavailable("synthetic_model_unavailable"));
-        var result=await service.ExperimentalMeterAsync(id,input,default);
-        Assert.True(result.Experimental);Assert.False(result.BusinessProposalEnabled);
-        Assert.Contains("trusted_meter_profile",result.Warnings);Assert.Contains("trusted_meter_precision_available",result.Warnings);
-        await experimental.Received(1).ExtractAssignedMeterAsync(input,kind,Arg.Any<CancellationToken>());
-        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(),Arg.Any<OcrProposal>(),Arg.Any<CancellationToken>());
-        await ocr.DidNotReceive().ExtractAsync(Arg.Any<Stream>(),Arg.Any<OcrDocumentKind>(),Arg.Any<CancellationToken>());
+        var result = await service.ExperimentalMeterAsync(id, input, default);
+        Assert.True(result.Experimental); Assert.False(result.BusinessProposalEnabled);
+        Assert.Contains("trusted_meter_profile", result.Warnings); Assert.Contains("trusted_meter_precision_available", result.Warnings);
+        await experimental.Received(1).ExtractAssignedMeterAsync(input, kind, Arg.Any<CancellationToken>());
+        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(), Arg.Any<OcrProposal>(), Arg.Any<CancellationToken>());
+        await ocr.DidNotReceive().ExtractAsync(Arg.Any<Stream>(), Arg.Any<OcrDocumentKind>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AssignedDiagnosticsRejectInvalidMetadataBeforeConsumingPixels()
     {
-        var experimental=Substitute.For<IExperimentalMeterOcrService>();
-        var (service,resources,_,id)=MeterWorkflow(OcrDocumentKind.DigitalElectricity,5,null,experimental);
-        using var input=new MemoryStream([1,2,3]);
-        var result=await service.ExperimentalMeterAsync(id,input,default);
-        Assert.Equal("unavailable",result.Status);Assert.Contains("invalid_meter_precision",result.Warnings);
-        Assert.Equal(0,input.Position);
-        await experimental.DidNotReceive().ExtractAssignedMeterAsync(Arg.Any<Stream>(),Arg.Any<OcrDocumentKind>(),Arg.Any<CancellationToken>());
-        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(),Arg.Any<OcrProposal>(),Arg.Any<CancellationToken>());
+        var experimental = Substitute.For<IExperimentalMeterOcrService>();
+        var (service, resources, _, id) = MeterWorkflow(OcrDocumentKind.DigitalElectricity, 5, null, experimental);
+        using var input = new MemoryStream([1, 2, 3]);
+        var result = await service.ExperimentalMeterAsync(id, input, default);
+        Assert.Equal("unavailable", result.Status); Assert.Contains("invalid_meter_precision", result.Warnings);
+        Assert.Equal(0, input.Position);
+        await experimental.DidNotReceive().ExtractAssignedMeterAsync(Arg.Any<Stream>(), Arg.Any<OcrDocumentKind>(), Arg.Any<CancellationToken>());
+        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(), Arg.Any<OcrProposal>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AssignedDiagnosticsCheckLocationAndTaskStateBeforeInference()
     {
-        var user=Substitute.For<ICurrentUser>();user.UserId.Returns(Guid.NewGuid());user.IsInRole(Roles.Staff).Returns(true);
-        var assignments=Substitute.For<IStaffLocationAccess>();
-        var resources=Substitute.For<IOcrWorkflowResources>();var id=Guid.NewGuid();
-        resources.FindMeterTaskAsync(id,Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(new(Guid.NewGuid(),null),false,OcrDocumentKind.DigitalElectricity,2));
-        var experimental=Substitute.For<IExperimentalMeterOcrService>();
-        var service=new OcrWorkflowService(resources,new ResourceAccess(user,assignments),Substitute.For<IOcrService>(),experimental);
-        using var input=new MemoryStream([1,2,3]);
-        await Assert.ThrowsAsync<OcrAccessException>(()=>service.ExperimentalMeterAsync(id,input,default));
-        assignments.IsAssignedAsync(Arg.Any<Guid>(),Arg.Any<Guid>(),Arg.Any<CancellationToken>()).Returns(true);
-        await Assert.ThrowsAsync<OcrWorkflowStateException>(()=>service.ExperimentalMeterAsync(id,input,default));
-        Assert.Equal(0,input.Position);
-        await experimental.DidNotReceive().ExtractAssignedMeterAsync(Arg.Any<Stream>(),Arg.Any<OcrDocumentKind>(),Arg.Any<CancellationToken>());
-        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(),Arg.Any<OcrProposal>(),Arg.Any<CancellationToken>());
+        var user = Substitute.For<ICurrentUser>(); user.UserId.Returns(Guid.NewGuid()); user.IsInRole(Roles.Staff).Returns(true);
+        var assignments = Substitute.For<IStaffLocationAccess>();
+        var resources = Substitute.For<IOcrWorkflowResources>(); var id = Guid.NewGuid();
+        resources.FindMeterTaskAsync(id, Arg.Any<CancellationToken>()).Returns(new OcrWorkflowResource(new(Guid.NewGuid(), null), false, OcrDocumentKind.DigitalElectricity, 2));
+        var experimental = Substitute.For<IExperimentalMeterOcrService>();
+        var service = new OcrWorkflowService(resources, new ResourceAccess(user, assignments), Substitute.For<IOcrService>(), experimental);
+        using var input = new MemoryStream([1, 2, 3]);
+        await Assert.ThrowsAsync<OcrAccessException>(() => service.ExperimentalMeterAsync(id, input, default));
+        assignments.IsAssignedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        await Assert.ThrowsAsync<OcrWorkflowStateException>(() => service.ExperimentalMeterAsync(id, input, default));
+        Assert.Equal(0, input.Position);
+        await experimental.DidNotReceive().ExtractAssignedMeterAsync(Arg.Any<Stream>(), Arg.Any<OcrDocumentKind>(), Arg.Any<CancellationToken>());
+        await resources.DidNotReceive().RecordMeterProposalAsync(Arg.Any<Guid>(), Arg.Any<OcrProposal>(), Arg.Any<CancellationToken>());
     }
 
     [Theory]

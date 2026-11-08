@@ -9,12 +9,7 @@
   "numericExpansionFix": {
     "status": "DEVELOPMENT_DIAGNOSTICS",
     "source": "commons_122443403",
-    "detectedBox": [
-      363,
-      239,
-      431,
-      138
-    ],
+    "detectedBox": [363, 239, 431, 138],
     "originalObserved": "000890",
     "oldExpanded": "GF000898",
     "after": "Keep original numeric observation and its box; ink is checked in selected pixels",
@@ -49,10 +44,7 @@
     "selectedDisplayImages": 1,
     "totalImages": 23,
     "fixedWholeTechnologyWeight": 0.5,
-    "thresholds": [
-      0.55,
-      0.75
-    ],
+    "thresholds": [0.55, 0.75],
     "models": {
       "classifier": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
       "body": "b7fc13aa09262c46ced335f31d5726c8f8369b5f8e2c4ce7ed5994f4166278af",
@@ -536,22 +528,14 @@
             "publisherDigits": "0587954",
             "before": null,
             "after": "0587954",
-            "warnings": [
-              "meter_category_unverified",
-              "offline_full_row_probe",
-              "recognizers_agree"
-            ]
+            "warnings": ["meter_category_unverified", "offline_full_row_probe", "recognizers_agree"]
           },
           {
             "id": "wm_clean_000504.jpg",
             "publisherDigits": "00130437",
             "before": null,
             "after": "00130437",
-            "warnings": [
-              "meter_category_unverified",
-              "offline_full_row_probe",
-              "recognizers_agree"
-            ]
+            "warnings": ["meter_category_unverified", "offline_full_row_probe", "recognizers_agree"]
           }
         ],
         "manifestSha256": "94DBCF13AFA03CD09507FF0BA87C972798CF70DB97D26164874187F49B566013",
@@ -582,11 +566,7 @@
             "publisherDigits": "0587956",
             "before": null,
             "after": "0587956",
-            "warnings": [
-              "meter_category_unverified",
-              "offline_full_row_probe",
-              "recognizers_agree"
-            ]
+            "warnings": ["meter_category_unverified", "offline_full_row_probe", "recognizers_agree"]
           }
         ],
         "manifestSha256": "0F4E5E847F3026ED5FAEABBA2CC538DAF6211D78F273CADE9ACB3CD7EB58C565",
@@ -705,13 +685,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.5653329,
-          "candidates": [
-            2
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [2],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -726,13 +701,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.5934356,
-          "candidates": [
-            2
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [2],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -747,13 +717,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.6928201,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "consumption_candidate"
       },
@@ -768,13 +733,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.56339884,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -789,13 +749,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.58897007,
-          "candidates": [
-            2
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [2],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -810,13 +765,8 @@
           "kind": 4,
           "source": "experimental_supervised_clip",
           "confidence": 0.8245187,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "consumption_candidate"
       },
@@ -831,13 +781,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.5173608,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -852,13 +797,8 @@
           "kind": 4,
           "source": "experimental_supervised_clip",
           "confidence": 0.78407645,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -873,13 +813,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.65535337,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -894,13 +829,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.58043694,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -915,13 +845,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.4826842,
-          "candidates": [
-            5
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [5],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -936,13 +861,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.60176367,
-          "candidates": [
-            4
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [4],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       },
@@ -957,13 +877,8 @@
           "kind": null,
           "source": "experimental_supervised_clip",
           "confidence": 0.50084627,
-          "candidates": [
-            3
-          ],
-          "warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "candidates": [3],
+          "warnings": ["experimental_model", "category_requires_human_review"]
         },
         "registerStatus": "unverified"
       }
@@ -986,22 +901,14 @@
               "kind": null,
               "source": "experimental_supervised_clip",
               "confidence": 0.72669894,
-              "candidates": [
-                2
-              ],
-              "warnings": [
-                "experimental_model",
-                "category_requires_human_review"
-              ]
+              "candidates": [2],
+              "warnings": ["experimental_model", "category_requires_human_review"]
             },
             "candidateCategory": "electricity_mechanical",
             "readingCandidate": null,
             "displayState": "unknown",
             "registerStatus": "unverified",
-            "warnings": [
-              "experimental_ocr",
-              "experimental_category_disabled"
-            ],
+            "warnings": ["experimental_ocr", "experimental_category_disabled"],
             "readingBounds": null,
             "experimental": true,
             "businessProposalEnabled": false,
@@ -1020,22 +927,14 @@
               "kind": 4,
               "source": "experimental_supervised_clip",
               "confidence": 0.763571,
-              "candidates": [
-                4
-              ],
-              "warnings": [
-                "experimental_model",
-                "category_requires_human_review"
-              ]
+              "candidates": [4],
+              "warnings": ["experimental_model", "category_requires_human_review"]
             },
             "candidateCategory": "electricity_digital",
             "readingCandidate": null,
             "displayState": "numeric_text_present_display_unverified",
             "registerStatus": "unverified",
-            "warnings": [
-              "experimental_ocr",
-              "consumption_unit_or_register_unverified"
-            ],
+            "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
             "readingBounds": null,
             "experimental": true,
             "businessProposalEnabled": false,
@@ -1054,22 +953,14 @@
               "kind": null,
               "source": "experimental_supervised_clip",
               "confidence": 0.559775,
-              "candidates": [
-                4
-              ],
-              "warnings": [
-                "experimental_model",
-                "category_requires_human_review"
-              ]
+              "candidates": [4],
+              "warnings": ["experimental_model", "category_requires_human_review"]
             },
             "candidateCategory": "electricity_digital",
             "readingCandidate": null,
             "displayState": "numeric_text_present_display_unverified",
             "registerStatus": "unverified",
-            "warnings": [
-              "experimental_ocr",
-              "consumption_unit_or_register_unverified"
-            ],
+            "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
             "readingBounds": null,
             "experimental": true,
             "businessProposalEnabled": false,

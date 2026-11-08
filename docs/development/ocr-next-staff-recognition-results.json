@@ -190,10 +190,7 @@
     "newTrainingImages": 2,
     "newModelDataImagesIncludingProbe": 3,
     "excludedSourceAliases": 3,
-    "thresholds": [
-      0.55,
-      0.75
-    ],
+    "thresholds": [0.55, 0.75],
     "validationBaseline": {
       "inputs": 7,
       "meters": 3,
@@ -301,13 +298,8 @@
           "Kind": null,
           "Source": "experimental_supervised_clip",
           "Confidence": 0.51981556,
-          "Candidates": [
-            2
-          ],
-          "Warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "Candidates": [2],
+          "Warnings": ["experimental_model", "category_requires_human_review"]
         },
         "guess": "electricity_mechanical",
         "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
@@ -322,13 +314,8 @@
           "Kind": null,
           "Source": "experimental_supervised_clip",
           "Confidence": 0.5225445,
-          "Candidates": [
-            2
-          ],
-          "Warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "Candidates": [2],
+          "Warnings": ["experimental_model", "category_requires_human_review"]
         },
         "guess": "electricity_mechanical",
         "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
@@ -344,10 +331,7 @@
           "Source": "experimental_supervised_clip",
           "Confidence": 0.4841711,
           "Candidates": null,
-          "Warnings": [
-            "not_meter_or_unsupported_image",
-            "experimental_model"
-          ]
+          "Warnings": ["not_meter_or_unsupported_image", "experimental_model"]
         },
         "guess": null,
         "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
@@ -363,10 +347,7 @@
           "Source": "experimental_supervised_clip",
           "Confidence": 0.5029094,
           "Candidates": null,
-          "Warnings": [
-            "not_meter_or_unsupported_image",
-            "experimental_model"
-          ]
+          "Warnings": ["not_meter_or_unsupported_image", "experimental_model"]
         },
         "guess": null,
         "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
@@ -381,13 +362,8 @@
           "Kind": null,
           "Source": "experimental_supervised_clip",
           "Confidence": 0.57820845,
-          "Candidates": [
-            4
-          ],
-          "Warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "Candidates": [4],
+          "Warnings": ["experimental_model", "category_requires_human_review"]
         },
         "guess": "electricity_digital",
         "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
@@ -402,13 +378,8 @@
           "Kind": null,
           "Source": "experimental_supervised_clip",
           "Confidence": 0.53826326,
-          "Candidates": [
-            2
-          ],
-          "Warnings": [
-            "experimental_model",
-            "category_requires_human_review"
-          ]
+          "Candidates": [2],
+          "Warnings": ["experimental_model", "category_requires_human_review"]
         },
         "guess": "electricity_mechanical",
         "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
@@ -424,10 +395,7 @@
           "Source": "experimental_supervised_clip",
           "Confidence": 0.4980495,
           "Candidates": null,
-          "Warnings": [
-            "not_meter_or_unsupported_image",
-            "experimental_model"
-          ]
+          "Warnings": ["not_meter_or_unsupported_image", "experimental_model"]
         },
         "guess": null,
         "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
@@ -443,16 +411,13 @@
           "Source": "experimental_supervised_clip",
           "Confidence": 0.51747,
           "Candidates": null,
-          "Warnings": [
-            "not_meter_or_unsupported_image",
-            "experimental_model"
-          ]
+          "Warnings": ["not_meter_or_unsupported_image", "experimental_model"]
         },
         "guess": null,
         "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
       }
     ],
-    "nativeOnnxParityMaxLogitDelta": 4.470348358154297e-06,
+    "nativeOnnxParityMaxLogitDelta": 4.470348358154297e-6,
     "rawTrainingReceiptSha256": "c2963c3bab702d3f3bd05c5660150e810fb9669d0d4ec6782c5d72af9d109cc7",
     "whyRejected": "No validation coverage gain; no additional correct accepted classification on four frozen source-author-separated probes. Physical-device grouping and labels remain provisional."
   },

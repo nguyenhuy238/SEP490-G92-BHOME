@@ -11,8 +11,33 @@
   "unit": {
     "allowed": "Crop refinement and actual re-recognition; exact units only",
     "forbidden": "Fuzzy KVA/kvVh substitution, calibration units as consumption, changing digits or OBIS code",
-    "requiredControls": ["kW", "kVA", "V", "A", "Hz", "m3/h", "L/min", "serial", "timer", "blank", "single-digit consumption"]
+    "requiredControls": [
+      "kW",
+      "kVA",
+      "V",
+      "A",
+      "Hz",
+      "m3/h",
+      "L/min",
+      "serial",
+      "timer",
+      "blank",
+      "single-digit consumption"
+    ]
   },
-  "diagnostics": {"recoverDevelopmentCases": ["105770219", "54903199"], "retain": "74590", "maximumInvalidReadings": 0, "experimental": true},
-  "staffProposal": {"requiresTrustedMeterProfile": true, "requiresConfirmedRegisterAndPrecisionEvidence": true, "requiresRepresentativeErrorEvaluation": true, "requiresStaffConfirmation": true, "automaticConfirmation": false, "humanReviewsAvailable": 0, "defaultEnabled": false}
+  "diagnostics": {
+    "recoverDevelopmentCases": ["105770219", "54903199"],
+    "retain": "74590",
+    "maximumInvalidReadings": 0,
+    "experimental": true
+  },
+  "staffProposal": {
+    "requiresTrustedMeterProfile": true,
+    "requiresConfirmedRegisterAndPrecisionEvidence": true,
+    "requiresRepresentativeErrorEvaluation": true,
+    "requiresStaffConfirmation": true,
+    "automaticConfirmation": false,
+    "humanReviewsAvailable": 0,
+    "defaultEnabled": false
+  }
 }

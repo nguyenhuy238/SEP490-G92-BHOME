@@ -204,10 +204,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 100
       },
       "candidate": {
@@ -216,10 +213,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 129
       }
     },
@@ -236,10 +230,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 107
       },
       "candidate": {
@@ -248,10 +239,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 104
       }
     },
@@ -268,10 +256,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 3043
       },
       "candidate": {
@@ -304,10 +289,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 1081
       },
       "candidate": {
@@ -316,10 +298,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 1182
       }
     },
@@ -336,10 +315,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 87
       },
       "candidate": {
@@ -348,10 +324,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 94
       }
     },
@@ -404,10 +377,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2523
       },
       "candidate": {
@@ -416,10 +386,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2288
       }
     },
@@ -436,10 +403,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 3288
       },
       "candidate": {
@@ -448,10 +412,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2837
       }
     },
@@ -468,10 +429,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 3797
       },
       "candidate": {
@@ -480,10 +438,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2986
       }
     },
@@ -500,10 +455,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2173
       },
       "candidate": {
@@ -512,10 +464,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2190
       }
     },
@@ -532,10 +481,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 93
       },
       "candidate": {
@@ -544,10 +490,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 99
       }
     },
@@ -564,10 +507,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2167
       },
       "candidate": {
@@ -576,10 +516,7 @@
         "digits": null,
         "displayState": "numeric_text_present_display_unverified",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "consumption_unit_or_register_unverified"
-        ],
+        "warnings": ["experimental_ocr", "consumption_unit_or_register_unverified"],
         "elapsedMilliseconds": 2349
       }
     },
@@ -596,10 +533,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 97
       },
       "candidate": {
@@ -608,10 +542,7 @@
         "digits": null,
         "displayState": "unknown",
         "registerStatus": "unverified",
-        "warnings": [
-          "experimental_ocr",
-          "experimental_category_disabled"
-        ],
+        "warnings": ["experimental_ocr", "experimental_category_disabled"],
         "elapsedMilliseconds": 66
       }
     }
@@ -621,12 +552,7 @@
     "Confidence": 0.8437044,
     "ppRaw": "KVA",
     "ppConfidence": 0.77814895,
-    "bounds": [
-      634,
-      252,
-      58,
-      26
-    ],
+    "bounds": [634, 252, 58, 26],
     "expanded": "kiVh",
     "oriented": "kwh",
     "orientedConfidence": 0.82965595,

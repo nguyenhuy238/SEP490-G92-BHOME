@@ -130,8 +130,14 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             }
             else
             {
-                c = new Contract { RoomId = x.RoomId, OwnerSignerId = settings.OwnerSignerId, RepresentativeResidentId = x.RepresentativeResidentId, Status = ContractStatus.Draft,
-                    IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true };
+                c = new Contract
+                {
+                    RoomId = x.RoomId,
+                    OwnerSignerId = settings.OwnerSignerId,
+                    RepresentativeResidentId = x.RepresentativeResidentId,
+                    Status = ContractStatus.Draft,
+                    IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true
+                };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
                 c.TenantUserId = representative.TenantUserId;
                 c.Residents = x.ResidentIds.Select(r => new ContractResident { ContractId = c.Id, ResidentId = r, Role = r == x.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant, ResidenceFrom = x.StartDate }).ToList();
@@ -316,9 +322,20 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, input.TenantUserId, c.RepresentativeResidentId,
                 c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, "");
             c.SnapshotHash = ContractDocumentSnapshot.Hash(document); c.Status = ContractStatus.PendingSigning;
-            var canonical = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.Preview, SnapshotHash = c.SnapshotHash,
-                TemplateId = review.TemplateId, TemplateVersion = review.TemplateVersion, DevelopmentOnly = true,
-                FileHash = review.FileHash, ContentType = review.ContentType, Length = review.Length, RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
+            var canonical = new ContractDocumentFile
+            {
+                ContractId = id,
+                Kind = ContractFileKind.Preview,
+                SnapshotHash = c.SnapshotHash,
+                TemplateId = review.TemplateId,
+                TemplateVersion = review.TemplateVersion,
+                DevelopmentOnly = true,
+                FileHash = review.FileHash,
+                ContentType = review.ContentType,
+                Length = review.Length,
+                RecordedByUserId = Actor,
+                RecordedAt = clock.GetUtcNow()
+            };
             canonical.ObjectKey = $"contracts/{id:N}/review/{canonical.Id:N}.pdf";
             await files.PutAsync(c.RoomId, canonical.ObjectKey, bytes.ToArray(), canonical.ContentType, t);
             repository.Add(canonical);

@@ -22,15 +22,15 @@ Validation100 sau loại SHA trùng test (`wm_clean_000386`),69 nhãn digit đư
 coi đầy đủ; không phải acceptance độc lập. Source quadrilateral label class1 là
 oracle, không phải dự đoán production. Một số label cần kiểm lại, xem bên dưới.
 
-| Cấu hình / cả100 inputs | Exact /69 publisher-complete | Wrong proposal /69 | Fallback /100 |
-| --- | --- | --- | --- |
-| A: Full service hiện hành | 12 | 0 | 88 |
-| Predicted window → Stage2 | 47 | 4 | 48 |
-| Predicted window → PP page | 5 | 26 | 62 |
-| Predicted window → current fusion | 12 | 0 | 88 |
-| C: Oracle window → Stage2 | 49 | 5 | 44 |
-| D: Oracle window → PP page | 10 | 28 | 48 |
-| E: Oracle window → current fusion | 15 | 2 | 83 |
+| Cấu hình / cả100 inputs           | Exact /69 publisher-complete | Wrong proposal /69 | Fallback /100 |
+| --------------------------------- | ---------------------------- | ------------------ | ------------- |
+| A: Full service hiện hành         | 12                           | 0                  | 88            |
+| Predicted window → Stage2         | 47                           | 4                  | 48            |
+| Predicted window → PP page        | 5                            | 26                 | 62            |
+| Predicted window → current fusion | 12                           | 0                  | 88            |
+| C: Oracle window → Stage2         | 49                           | 5                  | 44            |
+| D: Oracle window → PP page        | 10                           | 28                 | 48            |
+| E: Oracle window → current fusion | 15                           | 2                  | 83            |
 
 Số proposed với GT chưa đầy đủ được tách trong JSON, không tính như đúng/sai.
 PP direct cũng được chạy riêng: predicted11 đúng/41 sai; oracle13 đúng/37 sai.
@@ -122,21 +122,21 @@ Nhưng9 có **numeric PP cạnh tranh thật**,3 có nhiều vùng numeric/phân
 Từng ca còn thiếu decimal/register GT và human review độc lập; không gọi recovery
 candidates là các proposal đã được xác minh an toàn.
 
-| ID historical | Stage2 / publisher digits | Window IoU | PP numeric candidate | Veto phải giữ |
-| --- | --- | --- | --- | --- |
-| 000004 | 00845922 | 0.865 | 00845927 | valid_numeric_disagreement |
-| 000113 | 0768328 | 0.830 | 0768320 | valid_numeric_disagreement |
-| 000141 | 00244805 | 0.853 | Không có chuỗi hợp lệ | blur_guard |
-| 000143 | 00244805 | 0.938 | Không có chuỗi hợp lệ | multiple_numeric_regions |
-| 000173 | 00429509 | 0.945 | 002295019 | valid_numeric_disagreement |
-| 000175 | 00429509 | 0.816 | 307297599 | valid_numeric_disagreement |
-| 000259 | 00236783 | 0.781 | 002367841 | valid_numeric_disagreement |
-| 000280 | 02332836 | 0.802 | 02332831 | valid_numeric_disagreement |
-| 000333 | 00339036 | 0.836 | 00339039 | valid_numeric_disagreement |
-| 000358 | 00845922 | 0.920 | 00845927 | valid_numeric_disagreement |
-| 000446 | 00555995 | 0.868 | 0055599 | valid_numeric_disagreement |
-| 000490 | 0587956 | 0.809 | Không có chuỗi hợp lệ | multiple_numeric_regions |
-| 000493 | 0587957 | 0.846 | Không có chuỗi hợp lệ | multiple_numeric_regions |
+| ID historical | Stage2 / publisher digits | Window IoU | PP numeric candidate  | Veto phải giữ              |
+| ------------- | ------------------------- | ---------- | --------------------- | -------------------------- |
+| 000004        | 00845922                  | 0.865      | 00845927              | valid_numeric_disagreement |
+| 000113        | 0768328                   | 0.830      | 0768320               | valid_numeric_disagreement |
+| 000141        | 00244805                  | 0.853      | Không có chuỗi hợp lệ | blur_guard                 |
+| 000143        | 00244805                  | 0.938      | Không có chuỗi hợp lệ | multiple_numeric_regions   |
+| 000173        | 00429509                  | 0.945      | 002295019             | valid_numeric_disagreement |
+| 000175        | 00429509                  | 0.816      | 307297599             | valid_numeric_disagreement |
+| 000259        | 00236783                  | 0.781      | 002367841             | valid_numeric_disagreement |
+| 000280        | 02332836                  | 0.802      | 02332831              | valid_numeric_disagreement |
+| 000333        | 00339036                  | 0.836      | 00339039              | valid_numeric_disagreement |
+| 000358        | 00845922                  | 0.920      | 00845927              | valid_numeric_disagreement |
+| 000446        | 00555995                  | 0.868      | 0055599               | valid_numeric_disagreement |
+| 000490        | 0587956                   | 0.809      | Không có chuỗi hợp lệ | multiple_numeric_regions   |
+| 000493        | 0587957                   | 0.846      | Không có chuỗi hợp lệ | multiple_numeric_regions   |
 
 [Evidence13 ca](ocr-recovery-rejected-cases.json), [summary52](ocr-recovery-historical-stages.json).
 Raw text/boxes/crops/latency vẫn nằm trong `.tools/ocr-recovery-historical-test`.

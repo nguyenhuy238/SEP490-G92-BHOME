@@ -7,6 +7,7 @@ using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Jobs;
 using BHome.Infrastructure.Locations;
 using BHome.Infrastructure.Modules.Operations;
+using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Identity;
@@ -14,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 
 namespace BHome.IntegrationTests.Fixtures;
 
@@ -25,10 +27,28 @@ internal static class LegacyPersistenceRegistration
     {
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
-        // AddInfrastructure registers the Compact24 recurring handler first. Legacy source-schema tests
-        // retain the remaining job handlers, but must not resolve this Compact24-only dependency graph.
-        RemoveFirst<IBackgroundJobHandler>(services);
-        RemoveFirst<IJobScheduleContributor>(services);
+        // Compose the source-schema handlers explicitly. Registration order is not a schema boundary:
+        // new Compact24 handlers can be inserted before the recurring handler at any time.
+        services.RemoveAll<IBackgroundJobHandler>();
+        services.RemoveAll<IJobScheduleContributor>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<NotificationEventPublisher>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<NotificationDeliveryService>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
+        services.AddScoped<IJobScheduleContributor, BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<NotificationEventPublisher>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<NotificationDeliveryService>());
+        services.RemoveAll<IAccountInvitations>();
+        services.RemoveAll<CompactNotificationWriter>();
+        services.RemoveAll<INotificationWorkspace>();
+        services.RemoveAll<NotificationWorkspaceService>();
+        services.RemoveAll<CompactNotificationEvents>();
+        services.RemoveAll<NotificationChannelWorker>();
+        foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService) &&
+            s.ImplementationType == typeof(NotificationAutomationWorker)).ToArray()) services.Remove(worker);
         services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
         services.RemoveAll<RecurringOperationsJob>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
@@ -47,9 +67,4 @@ internal static class LegacyPersistenceRegistration
         return services;
     }
 
-    private static void RemoveFirst<T>(IServiceCollection services)
-    {
-        var descriptor = services.FirstOrDefault(x => x.ServiceType == typeof(T));
-        if (descriptor is not null) services.Remove(descriptor);
-    }
 }

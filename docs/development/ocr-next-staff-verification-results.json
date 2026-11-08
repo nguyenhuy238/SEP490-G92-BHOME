@@ -112,7 +112,7 @@
       "passed": 9,
       "includedIn": "ocr_integration_serial",
       "inputMaxDelta": 0,
-      "logitMaxDelta": 2.2947788e-06,
+      "logitMaxDelta": 2.2947788e-6,
       "sha256": "c71e492f75958200dcb0a3bad394cb5a5a0be95e44d6c51483541f95a19b2b9a"
     },
     {

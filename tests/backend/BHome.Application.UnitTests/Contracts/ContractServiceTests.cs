@@ -102,10 +102,15 @@ public sealed class ContractServiceTests
         }
     }
 
-    [Fact]
-    public async Task HoldingDraftUsesResolvedRentAndDoesNotReserveRoom()
+    [Theory]
+    [InlineData("3000000")]
+    [InlineData("3000000.000000")]
+    public async Task HoldingDraftUsesResolvedRentAndDoesNotReserveRoom(string rate)
     {
         var r = new Rig();
+        r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today,
+            [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, r.Room.Id, ChargeCategory.Rent, "RENT", "Rent",
+                ChargingMethod.FixedPerRoomPerMonth, decimal.Parse(rate, System.Globalization.CultureInfo.InvariantCulture), Today, null, 1)], []));
         var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
         var holding = Assert.Single(r.Contracts, c => c.Id == id.Id);
         Assert.Equal(ContractKind.Holding, holding.Kind);
@@ -113,6 +118,27 @@ public sealed class ContractServiceTests
         Assert.Equal(ContractStatus.Draft, holding.Status);
         Assert.Equal(RoomStatus.Available, r.Room.Status);
         Assert.Null(holding.ApprovedAt);
+        var persistedDocument = new ContractDocument(holding.Id, holding.RoomId, holding.OwnerSignerId, holding.TenantUserId!.Value,
+            holding.RepresentativeResidentId, holding.Residents.Select(x => x.ResidentId).Order().ToArray(), holding.StartDate, holding.EndDate,
+            decimal.Truncate(holding.MonthlyRent), decimal.Truncate(holding.RequiredDeposit), holding.HoldingContractId,
+            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHash);
+        Assert.Equal(holding.SnapshotHash, ContractDocumentSnapshot.Hash(persistedDocument));
+    }
+
+    [Theory]
+    [InlineData("3000000.5")]
+    [InlineData("-1")]
+    [InlineData("0")]
+    public async Task HoldingDraftRejectsInvalidRentInsteadOfTruncatingIt(string rate)
+    {
+        var r = new Rig();
+        r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today,
+            [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, r.Room.Id, ChargeCategory.Rent, "RENT", "Rent",
+                ChargingMethod.FixedPerRoomPerMonth, decimal.Parse(rate, System.Globalization.CultureInfo.InvariantCulture), Today, null, 1)], []));
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default));
+        Assert.Equal("invalid_vnd_amount", error.Code);
+        Assert.Empty(r.Contracts);
+        Assert.Equal(RoomStatus.Available, r.Room.Status);
     }
 
     [Fact]
@@ -140,8 +166,14 @@ public sealed class ContractServiceTests
         var bytes = Encoding.UTF8.GetBytes("TEST ONLY signed Holding PDF"); var hash = Convert.ToHexString(SHA256.HashData(bytes));
         foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSignature
         {
-            ContractId = holding.Id, SignerUserId = signer, Status = SignatureStatus.Signed, SnapshotHash = holding.SnapshotHash,
-            SignedObjectKey = "holding-signed", SignedHash = hash, ProviderReference = Guid.NewGuid().ToString(), SignedAt = new Clock().GetUtcNow()
+            ContractId = holding.Id,
+            SignerUserId = signer,
+            Status = SignatureStatus.Signed,
+            SnapshotHash = holding.SnapshotHash,
+            SignedObjectKey = "holding-signed",
+            SignedHash = hash,
+            ProviderReference = Guid.NewGuid().ToString(),
+            SignedAt = new Clock().GetUtcNow()
         });
         r.Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(bytes));
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-FULL", 2000000, "Verified bank statement"), Guid.NewGuid(), default);

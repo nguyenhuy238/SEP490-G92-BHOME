@@ -112,9 +112,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8501457770610253,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -135,9 +133,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8159342864491342,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "reading_region_uncertain"
-      ],
+      "selectionWarnings": ["reading_region_uncertain"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": "00346176",
@@ -158,9 +154,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8568469926068504,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -181,9 +175,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7917567573177572,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": "01186116",
@@ -204,9 +196,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8694486590953424,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -227,9 +217,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9108479809697188,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -250,9 +238,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.93928750307576,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -273,9 +259,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8551719663141931,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -296,9 +280,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7527217118736843,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "02550368",
@@ -319,9 +301,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8066277041980223,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "03550368",
@@ -342,9 +322,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7603972511738138,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00431469",
@@ -365,9 +343,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8507403628961598,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00431469",
@@ -388,9 +364,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8013124943542022,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00565846",
@@ -411,9 +385,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8397472817492881,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00171113",
@@ -434,9 +406,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9573928829094049,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00171113",
         "predicted_window:stage2Value": "00171113",
@@ -457,9 +427,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8561096506199012,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00171113",
         "predicted_window:stage2Value": "00171113",
@@ -480,9 +448,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7173634223837091,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -503,9 +469,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6256767567414702,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -526,9 +490,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.824595317718437,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -549,9 +511,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9390260529134029,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -572,9 +532,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9002299257872466,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "0768328",
         "predicted_window:stage2Value": "0768328",
@@ -595,9 +553,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.876422054753926,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "meter_region_invalid"
-      ],
+      "selectionWarnings": ["meter_region_invalid"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -618,9 +574,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7963913258442401,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00768328",
         "predicted_window:stage2Value": "00768328",
@@ -641,9 +595,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8796321042492335,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -664,9 +616,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8413611080014394,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -687,9 +637,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8420549493107056,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00019107",
@@ -710,9 +658,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7477926101081485,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -733,9 +679,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8073013901429339,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "meter_region_invalid"
-      ],
+      "selectionWarnings": ["meter_region_invalid"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -756,9 +700,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8140210925520629,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00019113",
         "predicted_window:stage2Value": "00019113",
@@ -779,9 +721,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8785948023179797,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00211755",
@@ -802,9 +742,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6716774349177285,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00211755",
@@ -825,9 +763,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8983489125396403,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00705448",
@@ -848,9 +784,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7756016887701815,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "01074233",
         "predicted_window:stage2Value": "01074233",
@@ -871,9 +805,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8964920178985949,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00429509",
@@ -894,9 +826,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9084105582587088,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -917,9 +847,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6066260116822456,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -940,9 +868,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8127288341193145,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00058653",
         "predicted_window:stage2Value": "00058653",
@@ -963,9 +889,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8785263821517431,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00058653",
@@ -986,9 +910,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.852342387856619,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00058647",
@@ -1009,9 +931,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7658400255454068,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00057916",
@@ -1032,9 +952,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6355720491064837,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00178896",
@@ -1055,9 +973,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7359792636508353,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00178896",
@@ -1078,9 +994,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.819389237123323,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1101,9 +1015,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7922127810098978,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1124,9 +1036,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7512977133589336,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "01187817",
@@ -1147,9 +1057,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8327500204003553,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1170,9 +1078,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9037013595010808,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -1193,9 +1099,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8396404989942319,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00130437",
@@ -1216,9 +1120,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9484729115256616,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00130437",
@@ -1239,9 +1141,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7989548812631295,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00334126",
@@ -1262,9 +1162,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7062361276325353,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1285,9 +1183,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7530191705645882,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "reading_region_uncertain"
-      ],
+      "selectionWarnings": ["reading_region_uncertain"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": "00236783",
@@ -1308,10 +1204,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7124698751639743,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_body_unverified",
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_body_unverified", "meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "0004385",
@@ -1332,9 +1225,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6540692243965613,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00043851",
         "predicted_window:stage2Value": "00043851",
@@ -1355,10 +1246,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6861528115317056,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_body_unverified",
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_body_unverified", "meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00043851",
@@ -1379,9 +1267,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8556988661862592,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1402,9 +1288,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7442249587444577,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "02332828",
@@ -1425,9 +1309,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7712673445295143,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1448,9 +1330,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8483543816842161,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00086454",
@@ -1471,9 +1351,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8174365217965018,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00086454",
@@ -1494,9 +1372,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8399227871142272,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00086454",
@@ -1517,9 +1393,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9102354022486111,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -1540,9 +1414,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7527369036438831,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1563,9 +1435,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8740501881321792,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "01187817",
@@ -1586,9 +1456,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8934620010567015,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "01187817",
@@ -1609,9 +1477,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9049931577816716,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1632,9 +1498,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7736800906117964,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -1655,9 +1519,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8814538452394526,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00339036",
         "predicted_window:stage2Value": "00339036",
@@ -1678,9 +1540,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8965510373604628,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00339036",
@@ -1701,9 +1561,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9102625945717573,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00339036",
@@ -1724,9 +1582,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.862938822656849,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "0845922",
@@ -1747,9 +1603,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.5865663426631003,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00845922",
@@ -1770,9 +1624,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8468034216200592,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00845922",
@@ -1793,9 +1645,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8622489070320428,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00845922",
@@ -1816,9 +1666,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8429989636887208,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1839,9 +1687,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6587270981900594,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -1862,9 +1708,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8190978344402166,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "002105",
         "predicted_window:stage2Value": "002105",
@@ -1885,9 +1729,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7952969324265518,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00371",
@@ -1908,9 +1750,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7980502726248844,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -1931,9 +1771,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8517128801491729,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1954,9 +1792,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7739143547678906,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -1977,9 +1813,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8116763990608513,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "1023959",
         "predicted_window:stage2Value": "1023959",
@@ -2000,9 +1834,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8120044545279,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": "0034567",
@@ -2023,9 +1855,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8851137366859827,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -2046,9 +1876,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9120217945140676,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00531258",
@@ -2069,9 +1897,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8022007463888137,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00438580",
@@ -2092,9 +1918,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7624832306992995,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -2115,9 +1939,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7599485224784013,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": "00555995",
         "predicted_window:stage2Value": "00555995",
@@ -2138,9 +1960,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8489640830791827,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2161,9 +1981,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.6639597274945085,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "reading_region_uncertain"
-      ],
+      "selectionWarnings": ["reading_region_uncertain"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2184,9 +2002,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8618850888374225,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2207,9 +2023,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.850990032502123,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2230,9 +2044,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.838993208747515,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2253,9 +2065,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8905686915375911,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "meter_detection_uncertain"
-      ],
+      "selectionWarnings": ["meter_detection_uncertain"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2276,9 +2086,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9102256698635444,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,
@@ -2299,9 +2107,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8049968765878501,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "0587954",
@@ -2322,9 +2128,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9366457376798343,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": null,
@@ -2345,9 +2149,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.9169424263977591,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00130437",
@@ -2368,9 +2170,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.8497374935224824,
       "sceneAllowed": true,
-      "selectionWarnings": [
-        "meter_category_unverified"
-      ],
+      "selectionWarnings": ["meter_category_unverified"],
       "outputs": {
         "A_full_pipeline": null,
         "predicted_window:stage2Value": "00130437",
@@ -2391,9 +2191,7 @@
       "physicalMeterGroup": null,
       "windowIoU": 0.7977994284586871,
       "sceneAllowed": false,
-      "selectionWarnings": [
-        "unclear_digit"
-      ],
+      "selectionWarnings": ["unclear_digit"],
       "outputs": {
         "A_full_pipeline": null,
         "oracle_window:stage2Value": null,

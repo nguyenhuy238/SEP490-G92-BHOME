@@ -39,13 +39,13 @@ API, schema, authorization, model weights hoặc billing.
    thêm tín hiệu digital nhưng fused score chưa đủ ngưỡng. **REJECTED**, giữ model
    `f7277b05…`; không port candidate bị loại vào workflow.
 
-   | Classification cohort, provisional | Cũ correct/wrong/unknown | Candidate |
-   | --- | --- | --- |
-   | Historical validation7 | 1/0/6 | 1/0/6 |
-   | Historical test9 | 1/1/7 | 1/1/7 |
-   | Previous source probes4 | 0/0/4 | 0/0/4 |
-   | Fresh source development2 | 0/0/2 | 0/0/2 |
-   | New photo, author đã có trong development1 | 1/0/0 | 1/0/0 |
+   | Classification cohort, provisional         | Cũ correct/wrong/unknown | Candidate |
+   | ------------------------------------------ | ------------------------ | --------- |
+   | Historical validation7                     | 1/0/6                    | 1/0/6     |
+   | Historical test9                           | 1/1/7                    | 1/1/7     |
+   | Previous source probes4                    | 0/0/4                    | 0/0/4     |
+   | Fresh source development2                  | 0/0/2                    | 0/0/2     |
+   | New photo, author đã có trong development1 | 1/0/0                    | 1/0/0     |
 
    Historical test precision1/2, non-meter false acceptance0/2, đều không đổi.
    Fresh source precision undefined vì không accepted output; recall DE0/1,
@@ -65,13 +65,13 @@ API, schema, authorization, model weights hoặc billing.
    Candidate không đăng ký DI, không chạy trong ordinary Staff route.
 
    | Metric, cùng historical test52/profile MechanicalWater | Baseline | Candidate | Delta |
-   | --- | ---: | ---: | ---: |
-   | Complete-label exact strings /33 | 10 | 11 | +1 |
-   | Wrong strings /33 complete labels | 0 | 0 | 0 |
-   | Proposals khi thiếu complete GT /19 | 0 | 0 | 0 |
-   | Manual fallback /52 | 42 | 41 | −1 |
-   | Independently verified billing readings | 0 | 0 | 0 |
-   | Newly Staff-enabled readers | 0 | 0 | 0 |
+   | ------------------------------------------------------ | -------: | --------: | ----: |
+   | Complete-label exact strings /33                       |       10 |        11 |    +1 |
+   | Wrong strings /33 complete labels                      |        0 |         0 |     0 |
+   | Proposals khi thiếu complete GT /19                    |        0 |         0 |     0 |
+   | Manual fallback /52                                    |       42 |        41 |    −1 |
+   | Independently verified billing readings                |        0 |         0 |     0 |
+   | Newly Staff-enabled readers                            |        0 |         0 |     0 |
 
    Validation100: fallback88→86, wrong0/69 và unknown-GT proposals0/31. Các
    partitions cũ chưa được xác minh tách physical meter; không coi đây là fresh
@@ -86,12 +86,12 @@ API, schema, authorization, model weights hoặc billing.
    `businessProposalEnabled=false`; PP/Stage2 và manual correction/confirmation
    hiện có tiếp tục theo config. Không sửa routing đã hoàn tất hoặc bật Production.
 
-   | Category | Historical classifier test: correct/wrong/unknown | Full-frame reading scope hiện đo | Status mới |
-   | --- | --- | --- | --- |
-   | Mechanical electricity | 1/0/1, n=2 | Không có complete numeric cohort mới | BLOCKED_BY_DATA |
-   | Digital electricity | 0/0/2, n=2 | Frozen8 ảnh,5 draft positives:2 exact,0 wrong,6 fallback; không đổi | DEVELOPMENT_DIAGNOSTICS; Staff blocked |
-   | Mechanical water | 0/0/2, n=2 | Historical52: candidate11/33 exact,0 wrong,41 fallback | EXPERIMENTAL |
-   | Digital water | 0/1/0, n=1 | Frozen2 ảnh,1 draft positive:0 exact,0 wrong,2 fallback; không đổi | BLOCKED_BY_DATA |
+   | Category               | Historical classifier test: correct/wrong/unknown | Full-frame reading scope hiện đo                                    | Status mới                             |
+   | ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------- |
+   | Mechanical electricity | 1/0/1, n=2                                        | Không có complete numeric cohort mới                                | BLOCKED_BY_DATA                        |
+   | Digital electricity    | 0/0/2, n=2                                        | Frozen8 ảnh,5 draft positives:2 exact,0 wrong,6 fallback; không đổi | DEVELOPMENT_DIAGNOSTICS; Staff blocked |
+   | Mechanical water       | 0/0/2, n=2                                        | Historical52: candidate11/33 exact,0 wrong,41 fallback              | EXPERIMENTAL                           |
+   | Digital water          | 0/1/0, n=1                                        | Frozen2 ảnh,1 draft positive:0 exact,0 wrong,2 fallback; không đổi  | BLOCKED_BY_DATA                        |
 
    Classifier recall lần lượt1/2,0/2,0/2,0/1. Class-specific precision chỉ có
    ME1/1, WM0/1; DE/WD undefined vì không accepted prediction. Numeric profiles

@@ -64,11 +64,11 @@ Không đổi schema, tiền điện/nước hoặc quyền nghiệp vụ.
    cũ đã loại; một blank keypad mới giữ TEST. Threshold chọn bằng validation,
    không chỉnh theo test. Candidate ONNX `768d89b6…` thực sự chạy trong .NET:
 
-   | Cohort classifier, nhãn provisional | Cũ correct/wrong/unknown | Candidate |
-   | --- | --- | --- |
-   | Validation 7 | 1/0/6 | 1/0/6 |
-   | Historical test 9 | 1/1/7 | 2/1/6 |
-   | Frozen source-author-separated probes 4 | 0/0/4 | 0/0/4 |
+   | Cohort classifier, nhãn provisional     | Cũ correct/wrong/unknown | Candidate |
+   | --------------------------------------- | ------------------------ | --------- |
+   | Validation 7                            | 1/0/6                    | 1/0/6     |
+   | Historical test 9                       | 1/1/7                    | 2/1/6     |
+   | Frozen source-author-separated probes 4 | 0/0/4                    | 0/0/4     |
 
    Historical accepted precision 1/2→2/3; recall ME 1/2→1/2, DE 0/2→1/2,
    WM 0/2→0/2, WD 0/1→0/1. New probes: ME 0/1, DE 0/1; WM/WD không có positive,
@@ -104,12 +104,12 @@ Không đổi schema, tiền điện/nước hoặc quyền nghiệp vụ.
     thấp; WD: thiếu diverse readable LCD/total-m³ evidence. Full-frame replay so
     với candidate đã commit ở lượt trước, cùng 13 inputs/SHA, giữ riêng cohort:
 
-    | Cohort | Exact strings cũ→nay | Wrong strings | Invalid rejected | Fallback cũ→nay |
-    | --- | --- | --- | --- | --- |
-    | Development 5, 2 draft positives | 1/2→1/2 | 0→0 | 3/3→3/3 | 4→4 |
-    | Historical validation 2 | 1/1→1/1 | 0→0 | 1/1→1/1 | 1→1 |
-    | Historical exploratory 4 | 0/3→0/3 | 0→0 | 1/1→1/1 | 4→4 |
-    | Historical controls 2 | N/A | 0→0 | 2/2→2/2 | 2→2 |
+    | Cohort                           | Exact strings cũ→nay | Wrong strings | Invalid rejected | Fallback cũ→nay |
+    | -------------------------------- | -------------------- | ------------- | ---------------- | --------------- |
+    | Development 5, 2 draft positives | 1/2→1/2              | 0→0           | 3/3→3/3          | 4→4             |
+    | Historical validation 2          | 1/1→1/1              | 0→0           | 1/1→1/1          | 1→1             |
+    | Historical exploratory 4         | 0/3→0/3              | 0→0           | 1/1→1/1          | 4→4             |
+    | Historical controls 2            | N/A                  | 0→0           | 2/2→2/2          | 2→2             |
 
     Category counts từng cohort cũng không đổi; không cộng các nhóm thành
     independent accuracy. Verified billing-value acceptance vẫn 0.
@@ -126,12 +126,12 @@ Không đổi schema, tiền điện/nước hoặc quyền nghiệp vụ.
 
 13. **Commits local.**
 
-    | Commit | Short English description |
-    | --- | --- |
-    | `bb4e4e6` | Prepare focused blind review inputs and licensed source probes |
-    | `9970911` | Route by trusted task profiles; preserve scope and mismatch safeguards |
-    | `826303d` | Measure rejected classifier, unit geometry and water-row candidates |
-    | Commit chứa report này | Record recognition results, executed checks and activation blockers |
+    | Commit                 | Short English description                                              |
+    | ---------------------- | ---------------------------------------------------------------------- |
+    | `bb4e4e6`              | Prepare focused blind review inputs and licensed source probes         |
+    | `9970911`              | Route by trusted task profiles; preserve scope and mismatch safeguards |
+    | `826303d`              | Measure rejected classifier, unit geometry and water-row candidates    |
+    | Commit chứa report này | Record recognition results, executed checks and activation blockers    |
 
     Full final HEAD/clean status được ghi sau reporting commit tại
     `.tools/ocr-next-staff-final-state.json`; history append vào

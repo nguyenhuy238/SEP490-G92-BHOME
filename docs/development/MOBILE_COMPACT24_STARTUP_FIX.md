@@ -57,21 +57,21 @@ Chỉ RoomType cũ được bỏ theo chấp thuận; không reset database hay 
 
 ## Kiểm tra đã thực thi
 
-| Check | Kết quả |
-| --- | --- |
-| `MobileDevelopment.Tests.ps1` | PASS88 assertions |
-| Mobile Vitest: `expoStartup`, `mobileApiProbe`, `expoConnectivity` | PASS39 tests /3 files |
-| `dotnet build src/backend/BHome.sln -c Release --no-restore` | PASS,0 warnings/errors |
-| `Prepare-OcrMobile.ps1` không `-SkipDatabase` | PASS, Compact24 READY; không gọi EF legacy |
-| `Update-LocalDatabase.ps1 -Check` | READY sau nâng cấp |
-| `Update-LocalDatabase.ps1 -UpgradePropertySchema` chạy lại | READY, idempotent |
-| `npm.cmd run mobile` thật | API và Metro khởi động, Expo online, QR được in |
-| LAN HTTPS `/health/live`, `/health/ready` | HTTP200, TLS authorized=true |
-| Anonymous `/api/v1/contracts` | HTTP401 |
-| CA không tin cậy / sai hostname | Từ chối đúng `UNABLE_TO_VERIFY_LEAF_SIGNATURE` / `ERR_TLS_CERT_ALTNAME_INVALID` |
-| `Test-ExpoMobile.cjs` | Exit0: Metro status và manifest iOS đúng LAN host |
-| Tải launchAsset iOS từ manifest | HTTP200,8.019.667 bytes; Metro compile1.645 modules trong4.314 ms |
-| Camera/iPhone thao tác thực | NOT RUN; kiểm tra từ máy tính không chứng minh phone connectivity |
+| Check                                                              | Kết quả                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `MobileDevelopment.Tests.ps1`                                      | PASS88 assertions                                                               |
+| Mobile Vitest: `expoStartup`, `mobileApiProbe`, `expoConnectivity` | PASS39 tests /3 files                                                           |
+| `dotnet build src/backend/BHome.sln -c Release --no-restore`       | PASS,0 warnings/errors                                                          |
+| `Prepare-OcrMobile.ps1` không `-SkipDatabase`                      | PASS, Compact24 READY; không gọi EF legacy                                      |
+| `Update-LocalDatabase.ps1 -Check`                                  | READY sau nâng cấp                                                              |
+| `Update-LocalDatabase.ps1 -UpgradePropertySchema` chạy lại         | READY, idempotent                                                               |
+| `npm.cmd run mobile` thật                                          | API và Metro khởi động, Expo online, QR được in                                 |
+| LAN HTTPS `/health/live`, `/health/ready`                          | HTTP200, TLS authorized=true                                                    |
+| Anonymous `/api/v1/contracts`                                      | HTTP401                                                                         |
+| CA không tin cậy / sai hostname                                    | Từ chối đúng `UNABLE_TO_VERIFY_LEAF_SIGNATURE` / `ERR_TLS_CERT_ALTNAME_INVALID` |
+| `Test-ExpoMobile.cjs`                                              | Exit0: Metro status và manifest iOS đúng LAN host                               |
+| Tải launchAsset iOS từ manifest                                    | HTTP200,8.019.667 bytes; Metro compile1.645 modules trong4.314 ms               |
+| Camera/iPhone thao tác thực                                        | NOT RUN; kiểm tra từ máy tính không chứng minh phone connectivity               |
 
 Log/checks local: `.tools/startup-repair-{database-check,repeat-upgrade,prepare,script-tests,mobile-tests,api-probe,bundle-probe,backend-build}.log`.
 Row counts: `.tools/startup-repair-{before,after}-counts.txt`; upgrade transaction:

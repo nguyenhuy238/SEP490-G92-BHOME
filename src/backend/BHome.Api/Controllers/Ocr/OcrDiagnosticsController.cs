@@ -28,12 +28,12 @@ public sealed class OcrDiagnosticsController(
     {
         if (!Enabled) return NotFound();
         if (Request.Query["experimental"].Count > 1) throw new OcrInputException("invalid_experimental_opt_in");
-        if(Request.Query["taskId"].Count>1 || (taskId is not null && !experimental)) throw new OcrInputException("invalid_experimental_task");
+        if (Request.Query["taskId"].Count > 1 || (taskId is not null && !experimental)) throw new OcrInputException("invalid_experimental_task");
         if (experimental && !configuration.GetValue<bool>("Ocr:ExperimentalMeter:Enabled")) return NotFound();
         var elapsed = Stopwatch.StartNew();
         if (experimental)
         {
-            var result = taskId is {} id ? await workflow.ExperimentalMeterAsync(id,Request.Body,token) :
+            var result = taskId is { } id ? await workflow.ExperimentalMeterAsync(id, Request.Body, token) :
                 await experimentalOcr.ExtractExperimentalMeterAsync(Request.Body, token);
             return Ok(new { analysis = result, elapsedMilliseconds = elapsed.ElapsedMilliseconds });
         }

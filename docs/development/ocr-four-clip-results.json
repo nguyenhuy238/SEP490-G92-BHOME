@@ -532,7 +532,7 @@
         "electricity_digital": 0.08257923275232315,
         "water_mechanical": 0.01926281489431858,
         "water_digital": 0.007012924179434776,
-        "not_meter": 6.385675078490749e-05
+        "not_meter": 6.385675078490749e-5
       },
       "forwardMs": 9.84470000003057
     },
@@ -583,7 +583,7 @@
         "electricity_digital": 0.4074951410293579,
         "water_mechanical": 0.00667675631120801,
         "water_digital": 0.02303600311279297,
-        "not_meter": 8.668913505971432e-05
+        "not_meter": 8.668913505971432e-5
       },
       "forwardMs": 10.790999999699125
     },
@@ -634,7 +634,7 @@
         "electricity_digital": 0.36123543977737427,
         "water_mechanical": 0.015269662253558636,
         "water_digital": 0.03489891439676285,
-        "not_meter": 7.487177208531648e-05
+        "not_meter": 7.487177208531648e-5
       },
       "forwardMs": 10.89849999971193
     },
@@ -668,7 +668,7 @@
         "electricity_digital": 0.29074782133102417,
         "water_mechanical": 0.017652034759521484,
         "water_digital": 0.020850418135523796,
-        "not_meter": 3.745378853636794e-05
+        "not_meter": 3.745378853636794e-5
       },
       "forwardMs": 14.026799999555806
     },
@@ -855,7 +855,7 @@
         "electricity_digital": 0.44770488142967224,
         "water_mechanical": 0.015541826374828815,
         "water_digital": 0.06446971744298935,
-        "not_meter": 9.072341345017776e-05
+        "not_meter": 9.072341345017776e-5
       },
       "forwardMs": 9.970499999326421
     },
@@ -872,7 +872,7 @@
         "electricity_digital": 0.008790018036961555,
         "water_mechanical": 0.17073233425617218,
         "water_digital": 0.8110489845275879,
-        "not_meter": 3.6024688597535715e-05
+        "not_meter": 3.6024688597535715e-5
       },
       "forwardMs": 11.043799999242765
     },
@@ -889,7 +889,7 @@
         "electricity_digital": 0.001315379748120904,
         "water_mechanical": 0.38511282205581665,
         "water_digital": 0.6106030941009521,
-        "not_meter": 1.3656396731676068e-05
+        "not_meter": 1.3656396731676068e-5
       },
       "forwardMs": 12.589699999807635
     },
@@ -1263,7 +1263,7 @@
         "electricity_digital": 0.36282575130462646,
         "water_mechanical": 0.03156735375523567,
         "water_digital": 0.4553494155406952,
-        "not_meter": 3.0425226213992573e-05
+        "not_meter": 3.0425226213992573e-5
       },
       "forwardMs": 8.69059999968158
     },

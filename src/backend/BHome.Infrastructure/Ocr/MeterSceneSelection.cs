@@ -45,7 +45,7 @@ public sealed record MeterSceneSelection(Rect? Crop, bool CanRecognize, IReadOnl
             if (!Inside(standalone.Bounds, new(0, 0, imageSize.Width, imageSize.Height)) || !ValidPose(standalone.OrientedBounds, imageSize) || !Confident(standalone.Confidence, minimumConfidence))
                 return Reject("reading_region_uncertain");
             return new(standalone.Bounds, true, [.. scene.Warnings, "meter_body_unverified", "meter_category_unverified"])
-                { OrientedCrop = standalone.OrientedBounds };
+            { OrientedCrop = standalone.OrientedBounds };
         }
         if (scene.Meters.Count == 0) return Reject("meter_not_detected");
         if (scene.Meters.Count != 1) return Reject("multiple_meters");

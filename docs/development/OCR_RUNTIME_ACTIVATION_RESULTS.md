@@ -10,25 +10,25 @@ Branch `member/QHuy`; bắt đầu từ clean HEAD
 chỉ nhận confirmed readings. Không thay schema, billing hay quyền nghiệp vụ.
 Gates được ghi trước evaluation trong [activation gates](../datasets/meter/runtime-activation-gates.json).
 
-| Trạng thái | Kết quả |
-| --- | --- |
-| `OFFLINE_EXPERIMENT` | Heads dùng PIL preprocessing ban đầu không có positive validation; không tích hợp bản đó |
+| Trạng thái                        | Kết quả                                                                                                                          |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `OFFLINE_EXPERIMENT`              | Heads dùng PIL preprocessing ban đầu không có positive validation; không tích hợp bản đó                                         |
 | `DEVELOPMENT_DIAGNOSTICS_ENABLED` | Supervised CLIP + native PP detector + English CTC, explicit opt-in; reader bật riêng DigitalElectricity trong cấu hình đánh giá |
-| `BUSINESS_PROPOSAL_ENABLED` | **Không có candidate mới**; không nối experimental result vào luồng Staff proposal |
-| `REJECTED` | Promotion classifier/reader: còn wrong category và fallback cả hai positive mới |
-| `BLOCKED_BY_DATA` | Human reviews 0; independent register/decimal GT 0; digital-water thiếu ảnh readable từ thiết bị thật |
+| `BUSINESS_PROPOSAL_ENABLED`       | **Không có candidate mới**; không nối experimental result vào luồng Staff proposal                                               |
+| `REJECTED`                        | Promotion classifier/reader: còn wrong category và fallback cả hai positive mới                                                  |
+| `BLOCKED_BY_DATA`                 | Human reviews 0; independent register/decimal GT 0; digital-water thiếu ảnh readable từ thiết bị thật                            |
 
 1. **Model nhận đúng loại nào?** Validation 7 ảnh: water-mechanical đúng 1/1,
    electricity-mechanical 0/1, electricity-digital 0/1, bốn negatives bị từ chối.
    Trên test provisional 9 ảnh đã từng được khảo sát, kết quả như sau:
 
-   | Nhãn nháp | Đúng | Sai | Unknown | Recall đúng |
-   | --- | ---: | ---: | ---: | ---: |
-   | Electricity mechanical | 1 | 0 | 1 | 1/2 |
-   | Electricity digital | 0 | 0 | 2 | 0/2 |
-   | Water mechanical | 0 | 0 | 2 | 0/2 |
-   | Water digital, **illustration** | 0 | 1 | 0 | 0/1; không chứng minh thiết bị thật |
-   | Non-meter | 0 accepted | 0 false accepted | 2 | 2/2 rejected |
+   | Nhãn nháp                       |       Đúng |              Sai | Unknown |                         Recall đúng |
+   | ------------------------------- | ---------: | ---------------: | ------: | ----------------------------------: |
+   | Electricity mechanical          |          1 |                0 |       1 |                                 1/2 |
+   | Electricity digital             |          0 |                0 |       2 |                                 0/2 |
+   | Water mechanical                |          0 |                0 |       2 |                                 0/2 |
+   | Water digital, **illustration** |          0 |                1 |       0 | 0/1; không chứng minh thiết bị thật |
+   | Non-meter                       | 0 accepted | 0 false accepted |       2 |                        2/2 rejected |
 
    Ngoài tập 9 này, HTTP historical cohorts có hai category electricity-digital
    đúng (`136480278`, `141575682`). Không gộp các cohorts thành một accuracy.
@@ -143,24 +143,24 @@ Gates được ghi trước evaluation trong [activation gates](../datasets/mete
 
 11. **Before/after đo được gì?** Cùng test classifier 9 ảnh:
 
-    | Metric | Frozen hierarchy | Supervised candidate |
-    | --- | ---: | ---: |
-    | Correct accepted categories | 1 | 1 |
-    | Incorrect accepted categories | 2 | 1 |
-    | Unknown | 6 | 7 |
-    | Accepted precision | 1/3 | 1/2 |
-    | Non-meter false acceptance | 1/2 | 0/2 |
+    | Metric                        | Frozen hierarchy | Supervised candidate |
+    | ----------------------------- | ---------------: | -------------------: |
+    | Correct accepted categories   |                1 |                    1 |
+    | Incorrect accepted categories |                2 |                    1 |
+    | Unknown                       |                6 |                    7 |
+    | Accepted precision            |              1/3 |                  1/2 |
+    | Non-meter false acceptance    |              1/2 |                  0/2 |
 
     Cùng 13 full-frame HTTP inputs, chia cohorts; baseline là automatic endpoint
     mặc định PP/text-router, không ép loại và không bật YOLO flags. Candidate là
     opt-in pipeline. Các cặp dưới đây là **baseline → candidate**:
 
-    | Cohort | Type đúng / sai / unknown | Exact strings / positives | Wrong digits | Invalid rejected | Reading fallback |
-    | --- | --- | --- | --- | --- | --- |
-    | New provisional 5 | 0/0/5 → 0/0/5 | 0/2 → 0/2 | 0 → 0 | 3/3 → 3/3 | 5/5 → 5/5 |
-    | Historical validation 2 | 0/0/2 → 1/0/1 | 0/1 → 1/1 | 0 → 0 | 1/1 → 1/1 | 2/2 → 1/2 |
-    | Historical exploratory 4 | 0/0/4 → 1/0/3 | 0/3 → 0/3 | 0 → 0 | 1/1 → 1/1 | 4/4 → 4/4 |
-    | Historical controls 2 | 0/0/2 → 0/0/2 | N/A | 0 → 0 | 2/2 → 2/2 | 2/2 → 2/2 |
+    | Cohort                   | Type đúng / sai / unknown | Exact strings / positives | Wrong digits | Invalid rejected | Reading fallback |
+    | ------------------------ | ------------------------- | ------------------------- | ------------ | ---------------- | ---------------- |
+    | New provisional 5        | 0/0/5 → 0/0/5             | 0/2 → 0/2                 | 0 → 0        | 3/3 → 3/3        | 5/5 → 5/5        |
+    | Historical validation 2  | 0/0/2 → 1/0/1             | 0/1 → 1/1                 | 0 → 0        | 1/1 → 1/1        | 2/2 → 1/2        |
+    | Historical exploratory 4 | 0/0/4 → 1/0/3             | 0/3 → 0/3                 | 0 → 0        | 1/1 → 1/1        | 4/4 → 4/4        |
+    | Historical controls 2    | 0/0/2 → 0/0/2             | N/A                       | 0 → 0        | 2/2 → 2/2        | 2/2 → 2/2        |
 
     So với offline unguarded experiment trước trên cùng new5, raw positive digits
     từng 2/2, invalid numeric 1/3 (`4`), fallback 2/5. API mới loại invalid nhưng
@@ -182,13 +182,13 @@ Gates được ghi trước evaluation trong [activation gates](../datasets/mete
 
 12. **Commits local và mô tả English?**
 
-    | Commit | Description |
-    | --- | --- |
-    | `bcc96ac` | Require spatial consumption evidence in diagnostics |
-    | `f264005` | Train supervised visual heads for runtime diagnostics |
-    | `f325454` | Integrate real ONNX behind guarded ASP.NET diagnostics |
-    | `07ee8b2` | Verify runtime accuracy, invalid controls and fallback |
-    | Commit chứa report này | Record activation results and remaining blockers |
+    | Commit                 | Description                                            |
+    | ---------------------- | ------------------------------------------------------ |
+    | `bcc96ac`              | Require spatial consumption evidence in diagnostics    |
+    | `f264005`              | Train supervised visual heads for runtime diagnostics  |
+    | `f325454`              | Integrate real ONNX behind guarded ASP.NET diagnostics |
+    | `07ee8b2`              | Verify runtime accuracy, invalid controls and fallback |
+    | Commit chứa report này | Record activation results and remaining blockers       |
 
     Full final HEAD/clean-tree check sau reporting commit nằm ở
     `.tools/ocr-runtime-final-state.json`; chronological hashes ở

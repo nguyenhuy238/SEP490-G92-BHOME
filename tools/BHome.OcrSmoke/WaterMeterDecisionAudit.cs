@@ -10,8 +10,12 @@ internal static class WaterMeterDecisionAudit
     public static async Task<int> RunAsync(string ocr, string yolo, string images, string output)
     {
         Directory.CreateDirectory(output);
-        var options = new OcrOptions { ModelDirectory = ocr, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, ModelDirectory = yolo } };
+        var options = new OcrOptions
+        {
+            ModelDirectory = ocr,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, ModelDirectory = yolo }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector);
@@ -60,11 +64,25 @@ internal static class WaterMeterDecisionAudit
             var ppValue = parsed.ProposedFields.GetValueOrDefault("reading");
             var fused = OcrFieldParser.Parse(MeterRecognitionFusion.Combine(pp, stage2), OcrDocumentKind.MechanicalWater);
             var value = selection.CanRecognize ? fused.ProposedFields.GetValueOrDefault("reading") : null;
-            rows.Add(new { file = Path.GetFileName(path), sourceSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path))).ToLowerInvariant(),
-                clear, expected, sceneAvailable = scene.IsAvailable, sceneAllowed = selection.CanRecognize,
-                sceneWarnings = selection.Warnings, imageWarnings = prepared.Warnings, ppLines = pp.Lines.Count,
-                ppValue, ppWarnings = parsed.Warnings, stage2Value = stage2.Digits, stage2Confidence = stage2.Confidence,
-                stage2Warnings = stage2.Warnings, fusedValue = value, cells });
+            rows.Add(new
+            {
+                file = Path.GetFileName(path),
+                sourceSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path))).ToLowerInvariant(),
+                clear,
+                expected,
+                sceneAvailable = scene.IsAvailable,
+                sceneAllowed = selection.CanRecognize,
+                sceneWarnings = selection.Warnings,
+                imageWarnings = prepared.Warnings,
+                ppLines = pp.Lines.Count,
+                ppValue,
+                ppWarnings = parsed.Warnings,
+                stage2Value = stage2.Digits,
+                stage2Confidence = stage2.Confidence,
+                stage2Warnings = stage2.Warnings,
+                fusedValue = value,
+                cells
+            });
         }
         await File.WriteAllTextAsync(Path.Combine(output, "audit-public-only.json"), JsonSerializer.Serialize(new { rows }, OcrEvaluation.Json));
         Console.WriteLine($"Audited {rows.Count} public images; no private inputs or training.");

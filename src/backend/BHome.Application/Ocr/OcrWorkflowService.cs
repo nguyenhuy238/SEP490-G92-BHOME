@@ -62,15 +62,18 @@ public sealed class OcrWorkflowService(IOcrWorkflowResources resources, Resource
     // the Staff task workflow, but no proposal persistence or confirmation.
     public async Task<ExperimentalMeterOcrResult> ExperimentalMeterAsync(Guid taskId, Stream input, CancellationToken token)
     {
-        var resource=await resources.FindMeterTaskAsync(taskId,token);
-        await AuthorizeAsync(resource,[Roles.Staff],token);
-        if(resource!.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack) throw new OcrWorkflowStateException();
-        var warning=MeterMetadataWarning(resource);
-        if(warning is not null) return ExperimentalMeterOcrResult.Unavailable(warning);
-        if(experimental is null) return ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable");
-        var result=await experimental.ExtractAssignedMeterAsync(input,resource.Kind!.Value,token);
-        return result with { Warnings=[..result.Warnings,"trusted_meter_profile",
-            resource.DecimalPlaces is null?"meter_precision_unavailable":"trusted_meter_precision_available"] };
+        var resource = await resources.FindMeterTaskAsync(taskId, token);
+        await AuthorizeAsync(resource, [Roles.Staff], token);
+        if (resource!.Kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack) throw new OcrWorkflowStateException();
+        var warning = MeterMetadataWarning(resource);
+        if (warning is not null) return ExperimentalMeterOcrResult.Unavailable(warning);
+        if (experimental is null) return ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable");
+        var result = await experimental.ExtractAssignedMeterAsync(input, resource.Kind!.Value, token);
+        return result with
+        {
+            Warnings = [..result.Warnings,"trusted_meter_profile",
+            resource.DecimalPlaces is null?"meter_precision_unavailable":"trusted_meter_precision_available"]
+        };
     }
 
     private static string? MeterMetadataWarning(OcrWorkflowResource resource) =>

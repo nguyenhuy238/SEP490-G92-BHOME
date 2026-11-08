@@ -33,20 +33,37 @@ internal static class WaterLocalizationAudit
             input.Buffer.Span.Clear();
             var windows = boxes.Where(b => b.ClassId == 1).ToArray();
             var unclear = boxes.Where(b => b.ClassId == 12).ToArray();
-            var overlaps = unclear.Select(u => new { u.Confidence, points = Points(u.Box.Points()),
+            var overlaps = unclear.Select(u => new
+            {
+                u.Confidence,
+                points = Points(u.Box.Points()),
                 insideAabb = windows.Any(w => w.Box.BoundingRect().Contains(new Point((int)u.Box.Center.X, (int)u.Box.Center.Y))),
-                insideOriented = windows.Any(w => Cv2.PointPolygonTest(w.Box.Points(), u.Box.Center, false) >= 0) }).ToArray();
+                insideOriented = windows.Any(w => Cv2.PointPolygonTest(w.Box.Points(), u.Box.Center, false) >= 0)
+            }).ToArray();
             var scene = detector.Detect(decoded, default);
             var originalSelection = MeterSceneSelection.Select(scene, decoded.Size(), OcrDocumentKind.MechanicalWater, .7f);
             var candidateScene = scene with { Warnings = scene.Warnings.Where(w => w != "unclear_digit" || overlaps.Any(u => u.insideOriented)).ToArray() };
             var candidateSelection = MeterSceneSelection.Select(candidateScene, decoded.Size(), OcrDocumentKind.MechanicalWater, .7f);
-            rows.Add(new { imageId = name, sha256 = manifest[name], windowCount = windows.Length,
-                windows = windows.Select(w => new { w.Confidence, points = Points(w.Box.Points()) }), unclear = overlaps,
-                originalAllowed = originalSelection.CanRecognize, originalWarnings = originalSelection.Warnings,
-                candidateAllowed = candidateSelection.CanRecognize, candidateWarnings = candidateSelection.Warnings });
+            rows.Add(new
+            {
+                imageId = name,
+                sha256 = manifest[name],
+                windowCount = windows.Length,
+                windows = windows.Select(w => new { w.Confidence, points = Points(w.Box.Points()) }),
+                unclear = overlaps,
+                originalAllowed = originalSelection.CanRecognize,
+                originalWarnings = originalSelection.Warnings,
+                candidateAllowed = candidateSelection.CanRecognize,
+                candidateWarnings = candidateSelection.Warnings
+            });
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { experiment = "oriented-unclear-membership",
-            runtimeChanged = false, thresholdsUnchanged = true, rows }, OcrEvaluation.Json));
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            experiment = "oriented-unclear-membership",
+            runtimeChanged = false,
+            thresholdsUnchanged = true,
+            rows
+        }, OcrEvaluation.Json));
         Console.WriteLine($"Audited raw localization candidates on {rows.Count} images"); return 0;
     }
     private static float[][] Points(Point2f[] p) => p.Select(v => new[] { v.X, v.Y }).ToArray();

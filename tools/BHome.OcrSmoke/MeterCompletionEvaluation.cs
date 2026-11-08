@@ -10,8 +10,13 @@ internal static class MeterCompletionEvaluation
 {
     public static async Task<int> RunAsync(string ocr, string yolo, string images, string report)
     {
-        var options = new OcrOptions { Enabled = true, ModelDirectory = ocr, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = ocr,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = yolo }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digitEngine = new YoloWaterDigitRecognizer(options); digitEngine.Warmup(default);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digitEngine);
@@ -43,19 +48,38 @@ internal static class MeterCompletionEvaluation
             var typedValue = typed.ProposedFields.GetValueOrDefault("reading");
             var autoValue = auto.MeterProposal?.ProposedFields.GetValueOrDefault("reading");
             var baselineValue = before.ProposedFields.GetValueOrDefault("reading");
-            rows.Add(new { file = Path.GetFileName(path), clear, inputTransform = "mobile-1600-jpeg85",
-                baselineProposed = baselineValue is not null, baselineExact = clear && baselineValue == expected,
-                baselineFalse = clear && baselineValue is not null && baselineValue != expected, baselineMilliseconds,
-                typedProposed = typedValue is not null, typedExact = clear && typedValue == expected, typedFalse = clear && typedValue is not null && typedValue != expected,
-                typedWarnings = typed.Warnings, typedMilliseconds = elapsed,
-                automaticProposed = autoValue is not null, automaticExact = clear && autoValue == expected, automaticFalse = clear && autoValue is not null && autoValue != expected,
-                auto.ClassificationStatus, auto.DetectedCategory, auto.PartialCategory, cropAvailable = auto.CropPreviewDataUri is not null,
-                automaticWarnings = auto.Warnings.Concat(auto.MeterProposal?.Warnings ?? []).Distinct().ToArray(), automaticMilliseconds = watch.ElapsedMilliseconds });
+            rows.Add(new
+            {
+                file = Path.GetFileName(path),
+                clear,
+                inputTransform = "mobile-1600-jpeg85",
+                baselineProposed = baselineValue is not null,
+                baselineExact = clear && baselineValue == expected,
+                baselineFalse = clear && baselineValue is not null && baselineValue != expected,
+                baselineMilliseconds,
+                typedProposed = typedValue is not null,
+                typedExact = clear && typedValue == expected,
+                typedFalse = clear && typedValue is not null && typedValue != expected,
+                typedWarnings = typed.Warnings,
+                typedMilliseconds = elapsed,
+                automaticProposed = autoValue is not null,
+                automaticExact = clear && autoValue == expected,
+                automaticFalse = clear && autoValue is not null && autoValue != expected,
+                auto.ClassificationStatus,
+                auto.DetectedCategory,
+                auto.PartialCategory,
+                cropAvailable = auto.CropPreviewDataUri is not null,
+                automaticWarnings = auto.Warnings.Concat(auto.MeterProposal?.Warnings ?? []).Distinct().ToArray(),
+                automaticMilliseconds = watch.ElapsedMilliseconds
+            });
             Console.WriteLine($"Final pipeline evaluated {rows.Count} public images");
             Array.Clear(mobileBytes); resized.SetTo(Scalar.All(0));
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { rows,
-            limitation = "Author analog-water test split; repeated meters and annotation gaps. No independent Vietnamese four-category acceptance set; decimal billing precision not labeled." }, OcrEvaluation.Json));
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new
+        {
+            rows,
+            limitation = "Author analog-water test split; repeated meters and annotation gaps. No independent Vietnamese four-category acceptance set; decimal billing precision not labeled."
+        }, OcrEvaluation.Json));
         return 0;
     }
 }

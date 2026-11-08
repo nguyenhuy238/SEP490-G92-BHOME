@@ -90,14 +90,14 @@
       "includedIn": "ocr_integration",
       "passed": 9,
       "inputMaxDelta": 0,
-      "logitMaxDelta": 2.2947788e-06,
+      "logitMaxDelta": 2.2947788e-6,
       "sha256": "c71e492f75958200dcb0a3bad394cb5a5a0be95e44d6c51483541f95a19b2b9a"
     },
     {
       "name": "new_classifier_pytorch_onnx_parity",
       "status": "PASS",
       "passed": 9,
-      "maxLogitDelta": 3.993511199951172e-06,
+      "maxLogitDelta": 3.993511199951172e-6,
       "receiptSha256": "12b93ead2014673a66ae17905a026f00c5d05559d84318443834750b692fbbca",
       "accuracyOutcome": "REJECTED"
     },
@@ -151,10 +151,7 @@
       "command": "Local Python wrapper adds existing package paths; adapt_meter_technology_head.py .tools/ocr-four-clip .tools/ocr-runtime-focus/classifier-cv2 docs/datasets/meter/runtime-supervised-provisional.json docs/datasets/meter/activation-next-technology-training.json docs/datasets/meter/accuracy-next-evaluation.json docs/datasets/meter/activation-next-source-probes.json . .tools/ocr-activation-next/lcd-tech-heads",
       "trainingFrames": 83,
       "epochs": 50,
-      "thresholds": [
-        0.55,
-        0.75
-      ],
+      "thresholds": [0.55, 0.75],
       "sha256": "12b93ead2014673a66ae17905a026f00c5d05559d84318443834750b692fbbca"
     }
   ],

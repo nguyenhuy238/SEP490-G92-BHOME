@@ -505,8 +505,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, "/api/v1/contracts", input with { MonthlyRent = 4000000 }, key)).StatusCode);
     }
 
-    [Fact]
-    public async Task HoldingAllocationIsPersistedOnceAndCannotFundTwoMainContracts()
+    // The holding allocation ledger is implemented by Compact24, not the source-schema host.
+    internal async Task HoldingAllocationIsPersistedOnceAndCannotFundTwoMainContracts(bool depositFirst = true)
     {
         var w = await Setup();
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
@@ -514,19 +514,34 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             var setupDb = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC HOLDING TYPE", DefaultCapacity = 2 };
             setupDb.Add(type); (await setupDb.Set<Room>().SingleAsync(r => r.Id == w.Room)).RoomTypeId = type.Id;
-            setupDb.Add(new BillingPolicy { LocationId = w.Location, RoomTypeId = type.Id, Category = ChargeCategory.Rent,
-                ChargeCode = "RENT", Name = "Synthetic Holding Rent", Method = ChargingMethod.FixedPerRoomPerMonth,
-                Rate = 3000000, EffectiveFrom = Today });
+            setupDb.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                RoomTypeId = type.Id,
+                Category = ChargeCategory.Rent,
+                ChargeCode = "RENT",
+                Name = "Synthetic Holding Rent",
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 3000000,
+                EffectiveFrom = Today
+            });
             await setupDb.SaveChangesAsync();
         }
         var holdingInput = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident],
-            Today.AddDays(1), Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "SYNTHETIC protected Holding terms", 1);
+            Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "SYNTHETIC protected Holding terms", 1);
         var holding = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", holdingInput))).Id;
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(holding, "holding-approval"), new HoldingDecisionInput("Not allowed"))).StatusCode);
         await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-approval"), new HoldingDecisionInput("Owner reviewed and approved")));
-        await Signed(w, holding); await Deposit(w, holding, 1000000);
+        if (depositFirst) await Deposit(w, holding, 1000000);
+        await Signed(w, holding);
+        if (!depositFirst)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(holding, "holding-activation"))).StatusCode);
+            await Deposit(w, holding, 1000000);
+        }
         var activeHolding = await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-activation")));
-        Assert.Equal("Active", activeHolding.Status); Assert.Equal("VerifiedDeposit", activeHolding.PriceLockTrigger);
+        Assert.Equal("Active", activeHolding.Status);
+        Assert.Equal(depositFirst ? "VerifiedDeposit" : "SigningCompleted", activeHolding.PriceLockTrigger);
         var conversionKey = Guid.NewGuid();
         var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id;
         Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id);

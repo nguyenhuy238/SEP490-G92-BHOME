@@ -9,16 +9,13 @@
   "utilityHeadFrozen": true,
   "visionEncoderFrozen": true,
   "epochs": 50,
-  "thresholds": [
-    0.55,
-    0.75
-  ],
+  "thresholds": [0.55, 0.75],
   "utilityLabelsInventedForNewData": false,
   "uniquePhysicalDeviceCount": null,
   "licenseScope": "CC-BY-NC-4.0 noncommercial offline research only",
   "modelCandidateActivated": false,
   "pytorchOnnxParityImages": 9,
-  "pytorchOnnxMaxLogitDelta": 3.993511199951172e-06,
+  "pytorchOnnxMaxLogitDelta": 3.993511199951172e-6,
   "decodedComponentCohorts": {
     "fresh_source_development": {
       "baseline": {

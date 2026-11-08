@@ -13,11 +13,11 @@ trùng test trước inference. Validation100 ảnh,69 nhãn digit đầy đủ;
 `wm_clean_000386.jpg` và label tương ứng vì trùng byte test. Physical-meter/site
 independence chưa rõ. Không chạy candidate trên test hoặc dùng test để lựa chọn.
 
-| Policy offline trên validation100 | Exact digits /69 | False /69 | Fallback /100 |
-| --- | --- | --- | --- |
-| Runtime baseline hiện tại | 12 | 0 | 88 |
-| PP căn theo polygon, vẫn cho Stage2-only nếu PP malformed | 13 | 0 | 87 |
-| PP căn theo polygon bắt buộc parse đủ và khớp Stage2 | 7 | 0 | 93 |
+| Policy offline trên validation100                         | Exact digits /69 | False /69 | Fallback /100 |
+| --------------------------------------------------------- | ---------------- | --------- | ------------- |
+| Runtime baseline hiện tại                                 | 12               | 0         | 88            |
+| PP căn theo polygon, vẫn cho Stage2-only nếu PP malformed | 13               | 0         | 87            |
+| PP căn theo polygon bắt buộc parse đủ và khớp Stage2      | 7                | 0         | 93            |
 
 **REJECTED cả hai biến thể, không tích hợp.** Biến thể permissive13 có thể làm
 PP mới malformed, rồi đi nhánh Stage2-only và xóa bất đồng numeric hợp lệ trước
@@ -44,10 +44,10 @@ Body polygon chỉ hỗ trợ chỉ định đối tượng; không dùng làm d
 cho ảnh ba meter. Chạy riêng full-frame trusted profile, automatic và window do
 annotation cung cấp (oracle). Các phép đo không cộng gộp với training/validation.
 
-| Category / ảnh | Trusted full-frame | Automatic full-frame | Oracle PP page/direct | Oracle Stage2 |
-| --- | --- | --- | --- | --- |
-| Nước cơ / `commons_88598855`, digits35558 | Fallback: display không tìm thấy | Unknown, không proposal | 0/1 đúng mỗi mode, fallback | 0/1, unclear_digit |
-| Điện LCD / `commons_52855795`, selected digits000059 | Từ chối ảnh ba meter | Timeout/manual trong8.018s | 0/1 đúng mỗi mode, fallback | Không áp dụng water model |
+| Category / ảnh                                       | Trusted full-frame               | Automatic full-frame       | Oracle PP page/direct       | Oracle Stage2             |
+| ---------------------------------------------------- | -------------------------------- | -------------------------- | --------------------------- | ------------------------- |
+| Nước cơ / `commons_88598855`, digits35558            | Fallback: display không tìm thấy | Unknown, không proposal    | 0/1 đúng mỗi mode, fallback | 0/1, unclear_digit        |
+| Điện LCD / `commons_52855795`, selected digits000059 | Từ chối ảnh ba meter             | Timeout/manual trong8.018s | 0/1 đúng mỗi mode, fallback | Không áp dụng water model |
 
 Không có đề xuất numeric sai ở hai ảnh, nhưng cũng **không có positive đúng**.
 Full-frame điện là rejection control cho nhiều meter, không đưa vào mẫu số

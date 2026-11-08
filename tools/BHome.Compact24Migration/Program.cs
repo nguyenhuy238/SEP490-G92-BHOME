@@ -17,9 +17,18 @@ try
     if (args[0] == "--initialize-target")
     {
         await Compact24Schema.InitializeAsync(to); committed = true;
-        await WriteReport(new { Status = "EMPTY_TARGET_INITIALIZED", SchemaVersion = Compact24Schema.Version,
-            Compact24Schema.ScriptSha256, BusinessTables = 24, Columns = 383, ForeignKeys = 83,
-            TechnicalMigrationHistoryTables = 0, SourceRead = false, RuntimeConnectionChanged = false });
+        await WriteReport(new
+        {
+            Status = "EMPTY_TARGET_INITIALIZED",
+            SchemaVersion = Compact24Schema.Version,
+            Compact24Schema.ScriptSha256,
+            BusinessTables = 24,
+            Columns = 383,
+            ForeignKeys = 83,
+            TechnicalMigrationHistoryTables = 0,
+            SourceRead = false,
+            RuntimeConnectionChanged = false
+        });
         Console.WriteLine("EMPTY_TARGET_INITIALIZED: 24 business tables; no accounts/data imported or runtime connection changed."); return 0;
     }
     var from = Environment.GetEnvironmentVariable("BHOME_COMPACT24_SOURCE");
@@ -32,8 +41,13 @@ try
     if (args[0] == "--copy-identity-fixture")
     {
         var copied = await new Compact24FixtureMigration(source, target).CopyIdentityFixtureAsync(); committed = true;
-        await WriteReport(new { Status = "IDENTITY_FIXTURE_COPIED", IdentityCopy = copied,
-            FullDataCopy = false, RuntimeConnectionChanged = false });
+        await WriteReport(new
+        {
+            Status = "IDENTITY_FIXTURE_COPIED",
+            IdentityCopy = copied,
+            FullDataCopy = false,
+            RuntimeConnectionChanged = false
+        });
         Console.WriteLine("IDENTITY_FIXTURE_COPIED: focused fixture only."); return 0;
     }
     var migration = new Compact24DataMigration(source, target, limit);
@@ -41,15 +55,29 @@ try
     if (inspection.Blockers.Count > 0 || args[0] == "--inspect")
     {
         var ready = inspection.Blockers.Count == 0;
-        await WriteReport(new { Status = ready ? "PREFLIGHT_READY" : "BLOCKED", MaximumRowsPerTable = limit,
-            Tables = inspection.Tables.Select(t => new { t.Source, t.Target, t.Rows }), inspection.Blockers,
-            SourceReadOnly = true, TargetWritten = false, RuntimeConnectionChanged = false });
+        await WriteReport(new
+        {
+            Status = ready ? "PREFLIGHT_READY" : "BLOCKED",
+            MaximumRowsPerTable = limit,
+            Tables = inspection.Tables.Select(t => new { t.Source, t.Target, t.Rows }),
+            inspection.Blockers,
+            SourceReadOnly = true,
+            TargetWritten = false,
+            RuntimeConnectionChanged = false
+        });
         Console.WriteLine($"{(ready ? "PREFLIGHT_READY" : "BLOCKED")}: {inspection.Tables.Count} source tables inspected."); return ready ? 0 : 2;
     }
     var result = await migration.CopyAsync(); committed = true;
-    await WriteReport(new { Status = "DATA_COPIED_AND_RECONCILED", SchemaVersion = Compact24Schema.Version,
-        Compact24Schema.ScriptSha256, MaximumRowsPerTable = limit, DataMigration = result,
-        RuntimeConnectionChanged = false, RuntimeVerificationPerformedByThisCommand = false });
+    await WriteReport(new
+    {
+        Status = "DATA_COPIED_AND_RECONCILED",
+        SchemaVersion = Compact24Schema.Version,
+        Compact24Schema.ScriptSha256,
+        MaximumRowsPerTable = limit,
+        DataMigration = result,
+        RuntimeConnectionChanged = false,
+        RuntimeVerificationPerformedByThisCommand = false
+    });
     Console.WriteLine($"DATA_COPIED_AND_RECONCILED: {result.Tables.Count} source tables. Validate the deployment before changing its connection.");
     return 0;
 }

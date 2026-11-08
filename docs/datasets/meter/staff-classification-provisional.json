@@ -17,12 +17,7 @@
       "humanReviewCount": 0,
       "parentImage": ".tools/master-dataset/commons/commons_169007819.jpg",
       "parentSha256": "385b3f4af3acb04607f4ff6852c23f9df3764f9d2b58c6670f4809399b51bf14",
-      "cropXyxy": [
-        220,
-        670,
-        380,
-        865
-      ],
+      "cropXyxy": [220, 670, 380, 865],
       "provenance": {
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Automatic_electricity_meter_testing_arrangement.jpg",
         "license": "CC BY-SA 4.0",
@@ -42,12 +37,7 @@
       "humanReviewCount": 0,
       "parentImage": ".tools/master-dataset/commons/commons_169007819.jpg",
       "parentSha256": "385b3f4af3acb04607f4ff6852c23f9df3764f9d2b58c6670f4809399b51bf14",
-      "cropXyxy": [
-        425,
-        665,
-        575,
-        865
-      ],
+      "cropXyxy": [425, 665, 575, 865],
       "provenance": {
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Automatic_electricity_meter_testing_arrangement.jpg",
         "license": "CC BY-SA 4.0",
@@ -67,12 +57,7 @@
       "humanReviewCount": 0,
       "parentImage": ".tools/master-dataset/commons/commons_169007819.jpg",
       "parentSha256": "385b3f4af3acb04607f4ff6852c23f9df3764f9d2b58c6670f4809399b51bf14",
-      "cropXyxy": [
-        595,
-        665,
-        735,
-        865
-      ],
+      "cropXyxy": [595, 665, 735, 865],
       "provenance": {
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Automatic_electricity_meter_testing_arrangement.jpg",
         "license": "CC BY-SA 4.0",

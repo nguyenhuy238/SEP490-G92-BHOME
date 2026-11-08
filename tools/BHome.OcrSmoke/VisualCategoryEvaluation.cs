@@ -16,8 +16,15 @@ internal static class VisualCategoryEvaluation
         if (!audit.RootElement.GetProperty("classes").EnumerateArray().Select(c => c.GetString()).SequenceEqual(expected) ||
             !metadata.RootElement.GetProperty("classes").EnumerateArray().Select(c => c.GetString()).SequenceEqual(expected))
             throw new InvalidDataException("Exactly four trained classes required.");
-        var options = new OcrOptions { VisualClassifier = new() { Enabled = true,
-            ModelPath = Path.Combine(export, "body.onnx"), Sha256 = metadata.RootElement.GetProperty("onnxSha256").GetString()! } };
+        var options = new OcrOptions
+        {
+            VisualClassifier = new()
+            {
+                Enabled = true,
+                ModelPath = Path.Combine(export, "body.onnx"),
+                Sha256 = metadata.RootElement.GetProperty("onnxSha256").GetString()!
+            }
+        };
         var coldLoad = Stopwatch.StartNew();
         using var classifier = new YoloMeterCategoryClassifier(options, development: true);
         classifier.Warmup(default);
@@ -58,25 +65,48 @@ internal static class VisualCategoryEvaluation
         {
             var selected = rows.Where(r => r.Split == split).ToArray();
             var timings = selected.Select(r => r.ElapsedMs).Order().ToArray();
-            return new { images = selected.Length, perClass = expected.Select(category => new {
-                category, images = selected.Count(r => r.Expected == category),
-                correct = selected.Count(r => r.Expected == category && r.Predicted == category),
-                wrong = selected.Count(r => r.Expected == category && r.Status == "classified" && r.Predicted != category),
-                fallback = selected.Count(r => r.Expected == category && r.Status != "classified") }),
+            return new
+            {
+                images = selected.Length,
+                perClass = expected.Select(category => new
+                {
+                    category,
+                    images = selected.Count(r => r.Expected == category),
+                    correct = selected.Count(r => r.Expected == category && r.Predicted == category),
+                    wrong = selected.Count(r => r.Expected == category && r.Status == "classified" && r.Predicted != category),
+                    fallback = selected.Count(r => r.Expected == category && r.Status != "classified")
+                }),
                 negatives = selected.Count(r => r.Expected == "not_meter"),
                 negativeFalseClassifications = selected.Count(r => r.Expected == "not_meter" && r.Status == "classified"),
                 confusion = selected.GroupBy(r => (r.Expected, r.Predicted)).Select(g => new { actual = g.Key.Expected, predicted = g.Key.Predicted, count = g.Count() }),
-                latencyMs = new { p50 = timings[(int)Math.Ceiling(timings.Length * .5) - 1],
-                    p95 = timings[(int)Math.Ceiling(timings.Length * .95) - 1], max = timings[^1] } };
+                latencyMs = new
+                {
+                    p50 = timings[(int)Math.Ceiling(timings.Length * .5) - 1],
+                    p95 = timings[(int)Math.Ceiling(timings.Length * .95) - 1],
+                    max = timings[^1]
+                }
+            };
         }
-        File.WriteAllText(report, JsonSerializer.Serialize(new { modelSha256 = options.VisualClassifier.Sha256,
+        File.WriteAllText(report, JsonSerializer.Serialize(new
+        {
+            modelSha256 = options.VisualClassifier.Sha256,
             coldModelLoadMs = coldLoad.Elapsed.TotalMilliseconds,
-            concurrentChecks = new { runs = concurrent.Length, consistent, elapsedMs = concurrentTime.Elapsed.TotalMilliseconds,
-                limitation = "Same validation image on one model/session; checks thread safety, not classification correctness or HTTP load." },
-            options.VisualClassifier.CandidateThreshold, options.VisualClassifier.NmsThreshold, options.AutomaticClassificationMinConfidence,
-            validation = Summary("val"), test = Summary("test"), rows,
+            concurrentChecks = new
+            {
+                runs = concurrent.Length,
+                consistent,
+                elapsedMs = concurrentTime.Elapsed.TotalMilliseconds,
+                limitation = "Same validation image on one model/session; checks thread safety, not classification correctness or HTTP load."
+            },
+            options.VisualClassifier.CandidateThreshold,
+            options.VisualClassifier.NmsThreshold,
+            options.AutomaticClassificationMinConfidence,
+            validation = Summary("val"),
+            test = Summary("test"),
+            rows,
             activationDecision = "not_activated",
-            limitation = "Small development corpus; historical test groups were previously observed. Only one new blank LCD test group. Not representative independent four-class acceptance or reading accuracy." }, OcrEvaluation.Json));
+            limitation = "Small development corpus; historical test groups were previously observed. Only one new blank LCD test group. Not representative independent four-class acceptance or reading accuracy."
+        }, OcrEvaluation.Json));
         Console.WriteLine($"Actual four-class ONNX adapter evaluated {rows.Count} validation/test images. No activation or accuracy pass is implied.");
         return 0;
     }

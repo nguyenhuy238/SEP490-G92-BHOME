@@ -209,7 +209,10 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 transfer.Amount > remaining ? "holding_deposit_excess_requires_manual_review" : null;
             var review = new PaymentReconciliation
             {
-                TransferId = transfer.Id, DepositContractId = holding.Id, ActorId = Actor, OccurredAt = Now,
+                TransferId = transfer.Id,
+                DepositContractId = holding.Id,
+                ActorId = Actor,
+                OccurredAt = Now,
                 Decision = reason is null ? "Allocated" : "PendingReview",
                 Reason = reason ?? (transfer.Amount < remaining ? "verified_partial_holding_deposit" : "verified_holding_deposit")
             };
@@ -219,8 +222,12 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 await contracts.ConfirmHoldingDepositAllocationAsync(holding.Id, transfer.Amount, transfer.VerifiedAt, t);
                 var allocation = new PaymentAllocation
                 {
-                    TransferId = transfer.Id, TargetDepositContractId = holding.Id, Amount = transfer.Amount,
-                    PaidByUserId = x.PaidByUserId, VerifiedByUserId = Actor, AllocatedAt = Now
+                    TransferId = transfer.Id,
+                    TargetDepositContractId = holding.Id,
+                    Amount = transfer.Amount,
+                    PaidByUserId = x.PaidByUserId,
+                    VerifiedByUserId = Actor,
+                    AllocatedAt = Now
                 };
                 repository.Add(allocation); repository.Audit(Actor, "HoldingDepositAllocated", allocation.Id, Now);
                 Remember(key, "allocate-deposit", new { transferId, x }, allocation.Id);

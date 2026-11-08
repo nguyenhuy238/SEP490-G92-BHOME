@@ -1,38 +1,328 @@
-<!doctype html><html lang="vi"><meta charset="utf-8"><title>BHOME — Review ảnh meter</title>
-<style>body{font:16px system-ui;margin:24px;background:#f5f7fb;color:#172b4d}main{max-width:1100px;margin:auto}label{display:inline-grid;margin:6px;gap:4px}input,select,button{padding:8px;font:inherit}button{cursor:pointer}canvas{background:white;display:block;max-width:100%;touch-action:none;border:1px solid #aaa}fieldset{background:white;margin:12px 0}#message{white-space:pre-wrap;color:#9b2727}small{display:block}h1{font-size:24px}</style>
-<main><h1>Đối chiếu ảnh công tơ</h1><p>Review cục bộ, không upload. Không hiển thị nhãn nháp hoặc dự đoán model. Chỉ nhập chữ số nhìn rõ; dùng “Chưa rõ” khi chưa xác minh register hoặc precision.</p>
-<label>Mã reviewer độc lập <input id="reviewer" pattern="[A-Za-z0-9_-]{3,80}" placeholder="reviewer_01"></label>
-<label><input type="checkbox" id="human">Tôi trực tiếp xem ảnh và tự nhập nhãn</label>
-<button id="previous">Ảnh trước</button><button id="next">Ảnh sau</button><button id="export">Xuất review JSON</button>
-<h2 id="identifier"></h2><small id="progress"></small><a id="original" target="_blank" rel="noopener">Mở ảnh gốc để phóng to</a>
-<p>Kéo chuột trên ảnh để vẽ: <select id="target"><option value="meterBox">Khung toàn công tơ</option><option value="windowBox">Khung vùng chỉ số</option></select> <button id="clear">Xóa khung đang chọn</button></p>
-<canvas id="photo"></canvas>
-<fieldset><legend>Nhãn ảnh</legend>
-<label>Loại<select id="category"><option value="unknown">Chưa rõ</option><option value="electricity_mechanical">Điện cơ</option><option value="electricity_digital">Điện LCD/LED</option><option value="water_mechanical">Nước cơ</option><option value="water_digital">Nước LCD/LED</option><option value="not_meter">Không có công tơ</option></select></label>
-<label>Nhóm thiết bị vật lý<input id="physicalMeterGroup" placeholder="Để trống nếu chưa rõ"></label>
-<label>Số vùng hiển thị<select id="displayState"><option value="unknown">Chưa rõ</option><option value="single">Một vùng</option><option value="multiple">Nhiều vùng</option></select></label>
-<label>Đọc rõ chữ số?<select id="readable"><option value="">Chưa rõ</option><option value="true">Có</option><option value="false">Không</option></select></label>
-<label>Trạng thái màn hình<select id="readabilityState"><option value="unknown">Chưa rõ</option><option value="readable_consumption">Có chỉ số tiêu thụ nhìn rõ</option><option value="blank_or_unpowered">Trống / chưa hoạt động</option><option value="segment_test">Đang kiểm tra toàn bộ segment</option><option value="status_only">Chỉ có thông báo trạng thái</option><option value="wrong_register">Register không phù hợp</option><option value="blurred_or_obscured">Mờ / bị che</option></select></label>
-<label>Độ chắc chắn của annotation<select id="annotationConfidence"><option value="unknown">Chưa rõ</option><option value="high">Cao</option><option value="medium">Vừa</option><option value="low">Thấp</option></select></label>
-<label>Toàn bộ chữ số, giữ số 0 đầu<input id="digits" inputmode="numeric" placeholder="Không điền số đoán"></label>
-<label>Vị trí không rõ, bắt đầu từ 0<input id="uncertainPositions" placeholder="Ví dụ 2,5"></label>
-<label>Số chữ số thập phân<input id="decimalPlaces" type="number" min="0" max="4" placeholder="Để trống nếu chưa rõ"></label>
-<label>Đơn vị<select id="unit"><option value="">Chưa rõ</option><option>kWh</option><option value="m3">m³</option><option>kW</option><option>kVA</option><option>V</option><option>A</option><option>Hz</option><option>imp/kWh</option><option>m3/h</option><option>L/min</option><option>h</option><option value="other">Khác</option></select></label>
-<label>Register<select id="register"><option value="unknown">Chưa rõ</option><option value="total_energy">Tổng điện năng</option><option value="total_volume">Tổng thể tích nước</option><option value="other">Khác / không dùng tính tiền</option></select></label>
-<p id="bounds"></p><button id="save">Lưu nhãn ảnh này</button></fieldset>
-<p id="message" role="status"></p><p>Hai người xuất hai file riêng. Công cụ merge không chứng minh tính độc lập của reviewer; cần project review trước train/nghiệm thu.</p></main>
-<script>
-'use strict';
-const data=__PACKAGE__, $=id=>document.getElementById(id), fields=['category','physicalMeterGroup','displayState','readable','digits','uncertainPositions','decimalPlaces','unit','register','readabilityState','annotationConfidence'];
-let index=0, rows={}, boxes={}, start=null, image=new Image();const canvas=$('photo'),ctx=canvas.getContext('2d');
-function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);for(const [key,b] of Object.entries(boxes)){if(!b)continue;ctx.strokeStyle=key==='meterBox'?'#0b53c9':'#d4431b';ctx.lineWidth=3;ctx.strokeRect(b[0]*canvas.width,b[1]*canvas.height,(b[2]-b[0])*canvas.width,(b[3]-b[1])*canvas.height)}$('bounds').textContent=JSON.stringify(boxes)}
-function show(){const s=data.samples[index],r=rows[s.id]||{};boxes={meterBox:r.meterBox||null,windowBox:r.windowBox||null};for(const f of fields){const value=r[f];$(f).value=Array.isArray(value)?value.join(','):value===null||value===undefined?'':String(value)}$('category').value=r.category||'unknown';$('displayState').value=r.displayState||'unknown';$('register').value=r.register||'unknown';$('readabilityState').value=r.readabilityState||'unknown';$('annotationConfidence').value=r.annotationConfidence||'unknown';$('identifier').textContent=s.id;$('original').href=s.image;$('progress').textContent=`${index+1}/${data.samples.length} ảnh · ${Object.keys(rows).length} nhãn đã lưu`;image.onload=()=>{const scale=Math.min(1,960/image.width,650/image.height);canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);draw()};image.src=s.image;$('message').textContent=''}
-function point(e){const r=canvas.getBoundingClientRect();return [Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))]}
-canvas.onpointerdown=e=>{start=point(e);canvas.setPointerCapture(e.pointerId)};
-canvas.onpointerup=e=>{if(!start)return;const end=point(e),b=[Math.min(start[0],end[0]),Math.min(start[1],end[1]),Math.max(start[0],end[0]),Math.max(start[1],end[1])];if(b[2]-b[0]>.005&&b[3]-b[1]>.005)boxes[$('target').value]=b;start=null;draw()};
-$('clear').onclick=()=>{boxes[$('target').value]=null;draw()};
-$('save').onclick=()=>{try{if(!/^[A-Za-z0-9_-]{3,80}$/.test($('reviewer').value)||!$('human').checked)throw Error('Cần mã reviewer và xác nhận tự review.');const s=data.samples[index],r={id:s.id,sourceSha256:s.sourceSha256,...boxes};for(const f of fields)r[f]=$(f).value.trim();r.physicalMeterGroup=r.physicalMeterGroup||null;r.digits=r.digits||null;r.readable=r.readable===''?null:r.readable==='true';r.decimalPlaces=r.decimalPlaces===''?null:Number(r.decimalPlaces);r.unit=r.unit||null;r.uncertainPositions=r.uncertainPositions===''?[]:r.uncertainPositions.split(',').map(Number);if(r.digits!==null&&(!/^[0-9]{1,12}$/.test(r.digits)||r.readable!==true||r.uncertainPositions.length))throw Error('Chỉ ghi exact digits khi đọc rõ toàn bộ, không có vị trí chưa rõ.');rows[s.id]=r;$('message').textContent='Đã lưu trong phiên; nhớ xuất JSON trước khi đóng trang.';$('progress').textContent=`${index+1}/${data.samples.length} ảnh · ${Object.keys(rows).length} nhãn đã lưu`}catch(e){$('message').textContent=e.message}};
-$('previous').onclick=()=>{index=Math.max(0,index-1);show()};$('next').onclick=()=>{index=Math.min(data.samples.length-1,index+1);show()};
-$('export').onclick=()=>{if(!Object.keys(rows).length)return;$('save').click();const content={reviewerId:$('reviewer').value,humanVisualReview:$('human').checked,createdAt:new Date().toISOString(),rows:Object.values(rows)};const url=URL.createObjectURL(new Blob([JSON.stringify(content,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='meter-review-'+content.reviewerId+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
-show();
-</script></html>
+<!doctype html>
+<html lang="vi">
+  <meta charset="utf-8" /><title>BHOME — Review ảnh meter</title>
+  <style>
+    body {
+      font: 16px system-ui;
+      margin: 24px;
+      background: #f5f7fb;
+      color: #172b4d;
+    }
+    main {
+      max-width: 1100px;
+      margin: auto;
+    }
+    label {
+      display: inline-grid;
+      margin: 6px;
+      gap: 4px;
+    }
+    input,
+    select,
+    button {
+      padding: 8px;
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+    }
+    canvas {
+      background: white;
+      display: block;
+      max-width: 100%;
+      touch-action: none;
+      border: 1px solid #aaa;
+    }
+    fieldset {
+      background: white;
+      margin: 12px 0;
+    }
+    #message {
+      white-space: pre-wrap;
+      color: #9b2727;
+    }
+    small {
+      display: block;
+    }
+    h1 {
+      font-size: 24px;
+    }
+  </style>
+  <main>
+    <h1>Đối chiếu ảnh công tơ</h1>
+    <p>
+      Review cục bộ, không upload. Không hiển thị nhãn nháp hoặc dự đoán model. Chỉ nhập chữ số nhìn
+      rõ; dùng “Chưa rõ” khi chưa xác minh register hoặc precision.
+    </p>
+    <label
+      >Mã reviewer độc lập
+      <input id="reviewer" pattern="[A-Za-z0-9_-]{3,80}" placeholder="reviewer_01"
+    /></label>
+    <label><input type="checkbox" id="human" />Tôi trực tiếp xem ảnh và tự nhập nhãn</label>
+    <button id="previous">Ảnh trước</button><button id="next">Ảnh sau</button
+    ><button id="export">Xuất review JSON</button>
+    <h2 id="identifier"></h2>
+    <small id="progress"></small
+    ><a id="original" target="_blank" rel="noopener">Mở ảnh gốc để phóng to</a>
+    <p>
+      Kéo chuột trên ảnh để vẽ:
+      <select id="target">
+        <option value="meterBox">Khung toàn công tơ</option>
+        <option value="windowBox">Khung vùng chỉ số</option>
+      </select>
+      <button id="clear">Xóa khung đang chọn</button>
+    </p>
+    <canvas id="photo"></canvas>
+    <fieldset>
+      <legend>Nhãn ảnh</legend>
+      <label
+        >Loại<select id="category">
+          <option value="unknown">Chưa rõ</option>
+          <option value="electricity_mechanical">Điện cơ</option>
+          <option value="electricity_digital">Điện LCD/LED</option>
+          <option value="water_mechanical">Nước cơ</option>
+          <option value="water_digital">Nước LCD/LED</option>
+          <option value="not_meter">Không có công tơ</option>
+        </select></label
+      >
+      <label
+        >Nhóm thiết bị vật lý<input id="physicalMeterGroup" placeholder="Để trống nếu chưa rõ"
+      /></label>
+      <label
+        >Số vùng hiển thị<select id="displayState">
+          <option value="unknown">Chưa rõ</option>
+          <option value="single">Một vùng</option>
+          <option value="multiple">Nhiều vùng</option>
+        </select></label
+      >
+      <label
+        >Đọc rõ chữ số?<select id="readable">
+          <option value="">Chưa rõ</option>
+          <option value="true">Có</option>
+          <option value="false">Không</option>
+        </select></label
+      >
+      <label
+        >Trạng thái màn hình<select id="readabilityState">
+          <option value="unknown">Chưa rõ</option>
+          <option value="readable_consumption">Có chỉ số tiêu thụ nhìn rõ</option>
+          <option value="blank_or_unpowered">Trống / chưa hoạt động</option>
+          <option value="segment_test">Đang kiểm tra toàn bộ segment</option>
+          <option value="status_only">Chỉ có thông báo trạng thái</option>
+          <option value="wrong_register">Register không phù hợp</option>
+          <option value="blurred_or_obscured">Mờ / bị che</option>
+        </select></label
+      >
+      <label
+        >Độ chắc chắn của annotation<select id="annotationConfidence">
+          <option value="unknown">Chưa rõ</option>
+          <option value="high">Cao</option>
+          <option value="medium">Vừa</option>
+          <option value="low">Thấp</option>
+        </select></label
+      >
+      <label
+        >Toàn bộ chữ số, giữ số 0 đầu<input
+          id="digits"
+          inputmode="numeric"
+          placeholder="Không điền số đoán"
+      /></label>
+      <label
+        >Vị trí không rõ, bắt đầu từ 0<input id="uncertainPositions" placeholder="Ví dụ 2,5"
+      /></label>
+      <label
+        >Số chữ số thập phân<input
+          id="decimalPlaces"
+          type="number"
+          min="0"
+          max="4"
+          placeholder="Để trống nếu chưa rõ"
+      /></label>
+      <label
+        >Đơn vị<select id="unit">
+          <option value="">Chưa rõ</option>
+          <option>kWh</option>
+          <option value="m3">m³</option>
+          <option>kW</option>
+          <option>kVA</option>
+          <option>V</option>
+          <option>A</option>
+          <option>Hz</option>
+          <option>imp/kWh</option>
+          <option>m3/h</option>
+          <option>L/min</option>
+          <option>h</option>
+          <option value="other">Khác</option>
+        </select></label
+      >
+      <label
+        >Register<select id="register">
+          <option value="unknown">Chưa rõ</option>
+          <option value="total_energy">Tổng điện năng</option>
+          <option value="total_volume">Tổng thể tích nước</option>
+          <option value="other">Khác / không dùng tính tiền</option>
+        </select></label
+      >
+      <p id="bounds"></p>
+      <button id="save">Lưu nhãn ảnh này</button>
+    </fieldset>
+    <p id="message" role="status"></p>
+    <p>
+      Hai người xuất hai file riêng. Công cụ merge không chứng minh tính độc lập của reviewer; cần
+      project review trước train/nghiệm thu.
+    </p>
+  </main>
+  <script>
+    'use strict';
+    const data = __PACKAGE__,
+      $ = (id) => document.getElementById(id),
+      fields = [
+        'category',
+        'physicalMeterGroup',
+        'displayState',
+        'readable',
+        'digits',
+        'uncertainPositions',
+        'decimalPlaces',
+        'unit',
+        'register',
+        'readabilityState',
+        'annotationConfidence',
+      ];
+    let index = 0,
+      rows = {},
+      boxes = {},
+      start = null,
+      image = new Image();
+    const canvas = $('photo'),
+      ctx = canvas.getContext('2d');
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      for (const [key, b] of Object.entries(boxes)) {
+        if (!b) continue;
+        ctx.strokeStyle = key === 'meterBox' ? '#0b53c9' : '#d4431b';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(
+          b[0] * canvas.width,
+          b[1] * canvas.height,
+          (b[2] - b[0]) * canvas.width,
+          (b[3] - b[1]) * canvas.height,
+        );
+      }
+      $('bounds').textContent = JSON.stringify(boxes);
+    }
+    function show() {
+      const s = data.samples[index],
+        r = rows[s.id] || {};
+      boxes = { meterBox: r.meterBox || null, windowBox: r.windowBox || null };
+      for (const f of fields) {
+        const value = r[f];
+        $(f).value = Array.isArray(value)
+          ? value.join(',')
+          : value === null || value === undefined
+            ? ''
+            : String(value);
+      }
+      $('category').value = r.category || 'unknown';
+      $('displayState').value = r.displayState || 'unknown';
+      $('register').value = r.register || 'unknown';
+      $('readabilityState').value = r.readabilityState || 'unknown';
+      $('annotationConfidence').value = r.annotationConfidence || 'unknown';
+      $('identifier').textContent = s.id;
+      $('original').href = s.image;
+      $('progress').textContent =
+        `${index + 1}/${data.samples.length} ảnh · ${Object.keys(rows).length} nhãn đã lưu`;
+      image.onload = () => {
+        const scale = Math.min(1, 960 / image.width, 650 / image.height);
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+        draw();
+      };
+      image.src = s.image;
+      $('message').textContent = '';
+    }
+    function point(e) {
+      const r = canvas.getBoundingClientRect();
+      return [
+        Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+        Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+      ];
+    }
+    canvas.onpointerdown = (e) => {
+      start = point(e);
+      canvas.setPointerCapture(e.pointerId);
+    };
+    canvas.onpointerup = (e) => {
+      if (!start) return;
+      const end = point(e),
+        b = [
+          Math.min(start[0], end[0]),
+          Math.min(start[1], end[1]),
+          Math.max(start[0], end[0]),
+          Math.max(start[1], end[1]),
+        ];
+      if (b[2] - b[0] > 0.005 && b[3] - b[1] > 0.005) boxes[$('target').value] = b;
+      start = null;
+      draw();
+    };
+    $('clear').onclick = () => {
+      boxes[$('target').value] = null;
+      draw();
+    };
+    $('save').onclick = () => {
+      try {
+        if (!/^[A-Za-z0-9_-]{3,80}$/.test($('reviewer').value) || !$('human').checked)
+          throw Error('Cần mã reviewer và xác nhận tự review.');
+        const s = data.samples[index],
+          r = { id: s.id, sourceSha256: s.sourceSha256, ...boxes };
+        for (const f of fields) r[f] = $(f).value.trim();
+        r.physicalMeterGroup = r.physicalMeterGroup || null;
+        r.digits = r.digits || null;
+        r.readable = r.readable === '' ? null : r.readable === 'true';
+        r.decimalPlaces = r.decimalPlaces === '' ? null : Number(r.decimalPlaces);
+        r.unit = r.unit || null;
+        r.uncertainPositions =
+          r.uncertainPositions === '' ? [] : r.uncertainPositions.split(',').map(Number);
+        if (
+          r.digits !== null &&
+          (!/^[0-9]{1,12}$/.test(r.digits) || r.readable !== true || r.uncertainPositions.length)
+        )
+          throw Error('Chỉ ghi exact digits khi đọc rõ toàn bộ, không có vị trí chưa rõ.');
+        rows[s.id] = r;
+        $('message').textContent = 'Đã lưu trong phiên; nhớ xuất JSON trước khi đóng trang.';
+        $('progress').textContent =
+          `${index + 1}/${data.samples.length} ảnh · ${Object.keys(rows).length} nhãn đã lưu`;
+      } catch (e) {
+        $('message').textContent = e.message;
+      }
+    };
+    $('previous').onclick = () => {
+      index = Math.max(0, index - 1);
+      show();
+    };
+    $('next').onclick = () => {
+      index = Math.min(data.samples.length - 1, index + 1);
+      show();
+    };
+    $('export').onclick = () => {
+      if (!Object.keys(rows).length) return;
+      $('save').click();
+      const content = {
+        reviewerId: $('reviewer').value,
+        humanVisualReview: $('human').checked,
+        createdAt: new Date().toISOString(),
+        rows: Object.values(rows),
+      };
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }),
+      );
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'meter-review-' + content.reviewerId + '.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    show();
+  </script>
+</html>

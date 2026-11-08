@@ -50,17 +50,17 @@ public sealed class LocalOcrService : IOcrService, IAutomaticOcrService, IExperi
         }, AutomaticOcrRouter.Unavailable, token);
 
     public Task<ExperimentalMeterOcrResult> ExtractExperimentalMeterAsync(Stream input, CancellationToken token) =>
-        ExecuteAsync(input, (readyEngine,bytes,cancellation) => readyEngine is IExperimentalMeterAnalysisEngine experimental
-            ? experimental.AnalyzeExperimentalMeterAsync(bytes,cancellation)
+        ExecuteAsync(input, (readyEngine, bytes, cancellation) => readyEngine is IExperimentalMeterAnalysisEngine experimental
+            ? experimental.AnalyzeExperimentalMeterAsync(bytes, cancellation)
             : Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable")), ExperimentalMeterOcrResult.Unavailable, token);
 
     public Task<ExperimentalMeterOcrResult> ExtractAssignedMeterAsync(Stream input, OcrDocumentKind trustedKind, CancellationToken token)
     {
-        if(trustedKind is not (OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity or
+        if (trustedKind is not (OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity or
             OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater)) throw new OcrInputException("unsupported_profile");
-        return ExecuteAsync(input,(readyEngine,bytes,cancellation)=>readyEngine is IExperimentalMeterAnalysisEngine experimental
-            ? experimental.AnalyzeAssignedMeterAsync(bytes,trustedKind,cancellation)
-            : Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable")),ExperimentalMeterOcrResult.Unavailable,token);
+        return ExecuteAsync(input, (readyEngine, bytes, cancellation) => readyEngine is IExperimentalMeterAnalysisEngine experimental
+            ? experimental.AnalyzeAssignedMeterAsync(bytes, trustedKind, cancellation)
+            : Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable")), ExperimentalMeterOcrResult.Unavailable, token);
     }
 
     private async Task<T> ExecuteAsync<T>(Stream temporaryInput,

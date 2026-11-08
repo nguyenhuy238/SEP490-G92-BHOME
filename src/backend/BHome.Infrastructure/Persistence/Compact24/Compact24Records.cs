@@ -148,7 +148,9 @@ internal static class Compact24Records
         var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
         allocation.CustomFrom = "payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE";
         allocation.CustomState = "s.data";
-        allocation.Where = "(t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL) OR (t.source_deposit_contract_id IS NOT NULL AND t.target_deposit_contract_id IS NOT NULL)";
+        // Include verified bank receipts allocated to a deposit as well as invoice payments
+        // and Holding-to-Main transfers; otherwise the Holding ledger cannot see received money.
+        allocation.Where = "(t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL) OR (t.target_deposit_contract_id IS NOT NULL AND (t.source_payment_id IS NOT NULL OR t.source_deposit_contract_id IS NOT NULL))";
         allocation.Read["CreatedAt"] = "COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at)";
         allocation.Read["UpdatedAt"] = "COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at)";
         allocation.Write["operation_key"] = "@state::jsonb->>'id'"; allocation.Write["line_number"] = "1";
