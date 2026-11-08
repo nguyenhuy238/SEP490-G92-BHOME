@@ -2,7 +2,12 @@
 import { useEffect } from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const state = vi.hoisted(() => ({ role: 'Staff', preview: false, api: { request: vi.fn() } }));
+import { QueryCache } from '../lib/queryCache';
+const state = vi.hoisted(() => ({
+  role: 'Staff',
+  preview: false,
+  api: { request: vi.fn(), queryCache: null as QueryCache | null },
+}));
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
@@ -15,6 +20,7 @@ beforeEach(() => {
   state.role = 'Staff';
   state.preview = false;
   state.api = {
+    queryCache: new QueryCache(),
     request: vi.fn(async (path: string) =>
       path.includes('operational-tasks') ? { items: [], totalCount: 0 } : [],
     ),
@@ -22,6 +28,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  state.api.queryCache?.dispose();
   vi.useRealTimers();
 });
 it('queries the full local day in Vietnam and uses the server total rather than the page length', async () => {
@@ -65,7 +72,8 @@ it('clears earlier account data while the replacement account is loading', async
     await Promise.resolve();
   });
   expect(view.result.current.locations.data?.[0].label).toBe('Earlier account');
-  state.api = { request: vi.fn(() => new Promise(() => {})) };
+  state.api.queryCache?.dispose();
+  state.api = { request: vi.fn(() => new Promise(() => {})), queryCache: new QueryCache() };
   view.rerender();
   expect(view.result.current.locations.data).toBeNull();
   expect(view.result.current.locations.loading).toBe(true);

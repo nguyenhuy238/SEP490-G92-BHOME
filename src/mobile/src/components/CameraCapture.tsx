@@ -10,6 +10,7 @@ import { ownCapture } from '../lib/captureFiles';
 import { captureLensOptions } from '../lib/captureLenses';
 import { DocumentCameraView } from './DocumentCameraView';
 import { MeterCameraView } from './MeterCameraView';
+import { TaskEvidenceCameraView } from './TaskEvidenceCameraView';
 import { useFocusEffect } from 'expo-router';
 
 // Only URIs created by this component in the application's cache are accepted for deletion.
@@ -35,19 +36,25 @@ export function CameraCapture({
   onPhotoCleared,
   meterStep = 1,
   autoOpen = false,
+  captureInstruction,
+  retryOnly = false,
+  uploadError = '',
 }: {
   label: string;
   buttonMode?: 'outlined' | 'contained';
   disabled: boolean;
-  onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
+  onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void | boolean>;
   retainPreview?: boolean;
   reviewBeforeSubmit?: boolean;
   reviewActionLabel?: string;
   reviewNotice?: string;
   documentSide?: 'front' | 'back';
-  presentation?: 'inline' | 'document' | 'meter';
+  presentation?: 'inline' | 'document' | 'meter' | 'evidence';
+  retryOnly?: boolean;
+  uploadError?: string;
   meterStep?: number;
   autoOpen?: boolean;
+  captureInstruction?: string;
   onManual?: () => void;
   onPhotoCaptured?: () => void;
   onPhotoCleared?: () => void;
@@ -55,6 +62,7 @@ export function CameraCapture({
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
   const [open, setOpen] = useState(false);
+  const [evidenceVisible, setEvidenceVisible] = useState(false);
   const [ready, setReady] = useState(false);
   const [working, setWorking] = useState(false);
   const [preview, setPreview] = useState('');
@@ -87,11 +95,12 @@ export function CameraCapture({
   useFocusEffect(
     useCallback(
       () => () => {
-        if (presentation !== 'meter') return;
+        if (presentation !== 'meter' && presentation !== 'evidence') return;
         generation.current++;
         clearFiles();
         setPreview('');
         setOpen(false);
+        setEvidenceVisible(false);
       },
       [clearFiles, presentation],
     ),
@@ -104,6 +113,7 @@ export function CameraCapture({
     setPreview('');
     setError('');
     setReady(false);
+    if (presentation === 'evidence') setEvidenceVisible(true);
     setRequestingPermission(true);
     try {
       const access = permissionAccess.current;
@@ -111,7 +121,7 @@ export function CameraCapture({
       if (!alive.current || epoch !== generation.current) return;
       if (!allowed) {
         setError(
-          presentation === 'meter'
+          presentation === 'meter' || presentation === 'evidence'
             ? 'Cần cấp quyền camera trong Cài đặt để chụp ảnh.'
             : 'Cần cấp quyền camera trong Cài đặt để chụp ảnh. Nhập thủ công vẫn khả dụng.',
         );
@@ -125,7 +135,7 @@ export function CameraCapture({
     } catch {
       if (alive.current && epoch === generation.current)
         setError(
-          presentation === 'meter'
+          presentation === 'meter' || presentation === 'evidence'
             ? 'Không mở được camera. Hãy thử lại.'
             : 'Không mở được camera. Bạn có thể thử lại hoặc nhập thủ công.',
         );
@@ -142,6 +152,7 @@ export function CameraCapture({
         clearFiles();
         setPreview('');
         setOpen(false);
+        setEvidenceVisible(false);
       }
     });
     const invalidate = () => {
@@ -199,7 +210,7 @@ export function CameraCapture({
       if (epoch !== generation.current || !alive.current) return;
       const file = new File(saved);
       if (file.size > 5 * 1024 * 1024) throw new Error('oversized');
-      if (reviewBeforeSubmit) {
+      if (reviewBeforeSubmit || presentation === 'evidence') {
         pending.current = saved;
         setPreview(saved);
         setOpen(false);
@@ -217,7 +228,7 @@ export function CameraCapture({
     } catch {
       if (alive.current)
         setError(
-          presentation === 'meter'
+          presentation === 'meter' || presentation === 'evidence'
             ? 'Không xử lý được ảnh. Hãy chụp lại.'
             : 'Không xử lý được ảnh. Bạn có thể chụp lại hoặc nhập thủ công.',
         );
@@ -242,24 +253,34 @@ export function CameraCapture({
     const uri = pending.current;
     const epoch = generation.current;
     setWorking(true);
+    setError('');
+    let confirmed = false;
     try {
       const bytes = await new File(uri).bytes();
       try {
-        if (alive.current && epoch === generation.current) await onCapture(bytes);
+        if (alive.current && epoch === generation.current) {
+          const result = await onCapture(bytes);
+          confirmed = result !== false;
+        }
       } finally {
         bytes.fill(0);
       }
     } catch {
       if (alive.current)
         setError(
-          presentation === 'meter'
-            ? 'Không xử lý được ảnh. Hãy chụp lại.'
-            : 'Không xử lý được ảnh. Hãy chụp lại hoặc nhập thủ công.',
+          presentation === 'evidence'
+            ? 'Chưa tải được ảnh. Hãy thử lại.'
+            : presentation === 'meter'
+              ? 'Không xử lý được ảnh. Hãy chụp lại.'
+              : 'Không xử lý được ảnh. Hãy chụp lại hoặc nhập thủ công.',
         );
     } finally {
       // Meter evidence stays available for review/retry; identity captures keep their
       // existing immediate cleanup behavior. All captures are removed on exit/background.
-      const keep = retainPreview && alive.current && epoch === generation.current;
+      const keep =
+        (retainPreview || (presentation === 'evidence' && !confirmed)) &&
+        alive.current &&
+        epoch === generation.current;
       if (!keep) {
         remove(uri);
         files.current.delete(uri);
@@ -268,10 +289,72 @@ export function CameraCapture({
       if (alive.current) {
         setWorking(false);
         if (!keep) setPreview('');
+        if (presentation === 'evidence' && confirmed) setEvidenceVisible(false);
       }
       workingLock.current = false;
     }
   };
+  if (presentation === 'evidence') {
+    const close = () => {
+      if (workingLock.current) return;
+      generation.current++;
+      clearFiles();
+      setPreview('');
+      setReady(false);
+      setOpen(false);
+      setEvidenceVisible(false);
+      setError('');
+    };
+    return (
+      <>
+        <Button
+          mode={buttonMode}
+          disabled={disabled || working || retryOnly}
+          onPress={() => void openCamera()}
+        >
+          {label}
+        </Button>
+        <TaskEvidenceCameraView
+          visible={evidenceVisible}
+          camera={
+            evidenceVisible && open && !preview ? (
+              <CameraView
+                ref={camera}
+                key={cameraGeneration}
+                style={{ flex: 1 }}
+                facing="back"
+                mode="picture"
+                autofocus="off"
+                onCameraReady={() => setReady(true)}
+                onMountError={() => {
+                  setOpen(false);
+                  setReady(false);
+                  setError('Không mở được camera. Hãy thử lại.');
+                }}
+              />
+            ) : null
+          }
+          preview={preview}
+          working={working || requestingPermission}
+          ready={ready}
+          disabled={disabled}
+          retryOnly={retryOnly}
+          error={uploadError || error}
+          onClose={close}
+          onTake={() => void take()}
+          onUse={() => void submitPending()}
+          onOpen={() => void openCamera()}
+          onRetake={() => {
+            clearFiles();
+            setPreview('');
+            setReady(false);
+            setError('');
+            setOpen(true);
+          }}
+        />
+      </>
+    );
+  }
   if (presentation === 'meter')
     return (
       <MeterCameraView
@@ -425,7 +508,8 @@ export function CameraCapture({
             </Button>
           </View>
           <Text>
-            Giữ giấy tờ hoặc mặt số ở giữa khung, đủ sáng. Di chuyển chậm và chờ chữ rõ rồi chụp.
+            {captureInstruction ??
+              'Giữ giấy tờ hoặc mặt số ở giữa khung, đủ sáng. Di chuyển chậm và chờ chữ rõ rồi chụp.'}
           </Text>
           <Text>
             Nếu đưa gần bị mờ: lùi máy đến khi chữ rõ, rồi dùng Phóng thêm. Không áp sát ống kính.

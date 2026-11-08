@@ -1,18 +1,24 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { Badge } from 'react-native-paper';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { notificationRefresh } from '../services/notificationRefresh';
+import { queryPolicies } from '../lib/queryPolicies';
+import { useSession } from '../lib/SessionProvider';
 export function NotificationBadge() {
-  const query = useWorkspaceQuery<{ unreadCount: number }>('/api/v1/notifications/unread-count');
-  const refresh = query.reload;
+  const { api } = useSession();
+  const query = useWorkspaceQuery<{ unreadCount: number }>('/api/v1/notifications/unread-count', {
+    cache: queryPolicies.notifications,
+  });
+  const refresh = query.revalidate;
   useEffect(() => {
-    const stop = notificationRefresh.subscribe(() => refresh());
-    const timer = setInterval(() => refresh(), 30000);
-    return () => {
-      stop();
-      clearInterval(timer);
-    };
+    return notificationRefresh.subscribe(refresh);
   }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      return api ? notificationRefresh.poll(api, refresh) : undefined;
+    }, [api, refresh]),
+  );
   return query.data && query.data.unreadCount > 0 ? (
     <Badge
       accessibilityLabel={`${query.data.unreadCount} thông báo chưa đọc`}

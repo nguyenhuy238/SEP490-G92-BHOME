@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { Text } from 'react-native-paper';
+import { Button, Text } from 'react-native-paper';
 import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { QueryState, Pagination } from '../../components/WorkspaceQueryState';
@@ -76,6 +76,9 @@ export function IncidentListScreen({ emergency = false }: { emergency?: boolean 
       {!enabled && <Text>Đăng nhập để xem dữ liệu sự cố thật.</Text>}
       {enabled && (
         <>
+          <Button compact mode="text" icon="bell-outline" onPress={() => go('incident-inbox')}>
+            Thông báo sự cố và bảo trì
+          </Button>
           <ChoiceField
             label="Trạng thái báo cáo"
             value={status}
@@ -182,6 +185,9 @@ function IncidentDetail({ id }: { id: string }) {
   const evidence = useIncidentQuery<IncidentEvidence[]>(
     loaded ? `${incidentRoot}/${id}/evidence` : null,
   );
+  const visibleEvidence = evidence.data?.filter(
+    (image) => role !== 'Tenant' || image.kind === 'Report',
+  );
   const work = useIncidentQuery<IncidentPage<WorkOrder>>(
     loaded && role !== 'Tenant'
       ? `${workOrderRoot}?incidentId=${id}&page=${workPage}&pageSize=20`
@@ -250,10 +256,10 @@ function IncidentDetail({ id }: { id: string }) {
           <IncidentPlace report={query.data} role={role!} />
           <Heading title="Ảnh minh chứng" />
           <QueryState {...evidence} />
-          {evidence.data?.length === 0 && (
+          {visibleEvidence?.length === 0 && (
             <Text>Chưa có ảnh được trả về cho tài khoản của bạn.</Text>
           )}
-          {evidence.data?.map((image) => (
+          {visibleEvidence?.map((image) => (
             <EvidenceImage key={image.id} incidentId={id} evidence={image} />
           ))}
           {role !== 'Tenant' && (

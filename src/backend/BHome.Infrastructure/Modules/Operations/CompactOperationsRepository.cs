@@ -755,7 +755,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private static void ResidenceParameters(NpgsqlCommand command, ResidenceQuery query, Guid? tenant)
     {
         AddNullableUuid(command, "location", query.LocationId);
-        command.Parameters.Add(new NpgsqlParameter("status", NpgsqlDbType.Text) { Value = (object?)query.Status ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("status", NpgsqlDbType.Varchar)
+        { Value = (object?)query.Status ?? DBNull.Value });
         AddNullableUuid(command, "tenant", tenant);
     }
     private static void OccupancyParameters(NpgsqlCommand command, OccupancyQuery query, Guid? staff, DateOnly today)
