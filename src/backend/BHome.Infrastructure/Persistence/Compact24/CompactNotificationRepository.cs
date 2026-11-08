@@ -9,15 +9,15 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 internal sealed class CompactNotificationRepository(Compact24DbContext db) : INotificationRepository
 {
-    private const string SourceRead = "(SELECT old.read_at FROM notifications old WHERE old.record_kind='OUTBOX' AND old.id=(n.event_data->'state'->>'sourceTaskNotificationId')::uuid AND old.event_data->'state'->>'recipientUserId'=@actor::text)";
+    private const string SourceRead = "(SELECT old.read_at FROM notifications old WHERE old.record_kind='OUTBOX' AND old.id=(n.event_data->'state'->>'sourceTaskNotificationId')::uuid AND COALESCE(old.event_data->'state'->>'recipientUserId',old.event_data->'state'->>'recipientId')=@actor::text)";
     private const string EffectiveRead = "COALESCE(n.read_at," + SourceRead + ")";
     private const string Visible = """
         n.record_kind='INBOX' AND n.recipient_user_id=@actor AND
         ((@owner AND n.event_data->>'audienceRole'='Owner') OR (@tenant AND n.event_data->>'audienceRole'='Tenant') OR
-         (@staff AND n.event_data->>'audienceRole'='Staff' AND n.event_data->>'category'='Task' AND EXISTS(
+         (@staff AND n.event_data->>'audienceRole'='Staff' AND (n.event_data->>'category'='Account' OR (n.event_data->>'category' IN ('Task','Incident','Announcement','Contract','Invoice') AND EXISTS(
            SELECT 1 FROM locations l WHERE l.id=n.location_id AND l.is_active AND EXISTS(
              SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@actor
-             AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))
+             AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))))
         """;
     private async Task<NpgsqlCommand> Query(string sql, NotificationScope scope, CancellationToken token)
     {
@@ -41,7 +41,7 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
         command.Parameters.AddWithValue("unread", NpgsqlDbType.Boolean, (object?)query.Unread ?? DBNull.Value);
         var count = checked((int)(long)(await command.ExecuteScalarAsync(token))!);
         command.CommandText = $"""
-            SELECT n.id,n.event_data->>'category',n.title,n.message,n.related_entity_type,n.related_entity_id,n.event_at,{EffectiveRead},n.delivery_status
+            SELECT n.id,n.event_data->>'category',n.title,n.message,n.related_entity_type,n.related_entity_id,n.event_at,{EffectiveRead},n.delivery_status,COALESCE(n.event_data->'state'->>'eventType',''),COALESCE(n.event_data->'state'->>'priority','P1'),COALESCE(n.event_data->'state'->>'source','System')
             FROM notifications n WHERE {filter} ORDER BY n.event_at DESC,n.id OFFSET @skip LIMIT @take
             """;
         command.Parameters.AddWithValue("skip", checked((query.Page - 1) * query.PageSize)); command.Parameters.AddWithValue("take", query.PageSize);
@@ -50,8 +50,21 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
         while (await reader.ReadAsync(token))
             items.Add(new(reader.GetGuid(0), reader.GetString(1), reader.IsDBNull(2) ? "" : reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3),
                 reader.IsDBNull(4) ? "" : reader.GetString(4), reader.IsDBNull(5) ? Guid.Empty : reader.GetGuid(5), reader.GetFieldValue<DateTimeOffset>(6),
-                reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7), reader.IsDBNull(8) ? "Unconfigured" : reader.GetString(8)));
+                reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7), reader.IsDBNull(8) ? "Unconfigured" : reader.GetString(8), reader.GetString(9), reader.GetString(10), reader.GetString(11)));
         return new(items, query.Page, query.PageSize, count);
+    }
+    public async Task<NotificationView?> GetAsync(NotificationScope scope, Guid id, CancellationToken token)
+    {
+        await using var command = await Query($"""
+            SELECT n.id,n.event_data->>'category',COALESCE(n.title,''),COALESCE(n.message,''),COALESCE(n.related_entity_type,''),
+              COALESCE(n.related_entity_id,'00000000-0000-0000-0000-000000000000'::uuid),n.event_at,{EffectiveRead},COALESCE(n.delivery_status,'Unconfigured'),
+              COALESCE(n.event_data->'state'->>'eventType',''),COALESCE(n.event_data->'state'->>'priority','P1'),COALESCE(n.event_data->'state'->>'source','System')
+            FROM notifications n WHERE {Visible} AND n.id=@id
+            """, scope, token);
+        command.Parameters.AddWithValue("id", id);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        return await reader.ReadAsync(token) ? new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetGuid(5),
+            reader.GetFieldValue<DateTimeOffset>(6),reader.IsDBNull(7)?null:reader.GetFieldValue<DateTimeOffset>(7),reader.GetString(8),reader.GetString(9),reader.GetString(10),reader.GetString(11)) : null;
     }
     public async Task ReadAsync(NotificationScope scope, Guid? id, DateTimeOffset now, CancellationToken token)
     {
@@ -62,7 +75,7 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
         if (id is not null && updated == 0) throw new NotificationException(404, "notification_not_found");
         command.CommandText = $"""
             UPDATE notifications old SET read_at=COALESCE(old.read_at,@now) WHERE old.record_kind='OUTBOX'
-              AND old.event_data->'state'->>'recipientUserId'=@actor::text AND EXISTS(
+              AND COALESCE(old.event_data->'state'->>'recipientUserId',old.event_data->'state'->>'recipientId')=@actor::text AND EXISTS(
               SELECT 1 FROM notifications n WHERE {Visible} AND (@id IS NULL OR n.id=@id)
                 AND old.id=(n.event_data->'state'->>'sourceTaskNotificationId')::uuid)
             """;
@@ -84,6 +97,18 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
         {
             "Invoice" => "SELECT EXISTS(SELECT 1 FROM invoices i WHERE i.id=@target AND (@owner OR (@tenant AND @actor=ANY(i.recipient_user_ids))))",
             "Adjustment" => "SELECT EXISTS(SELECT 1 FROM invoice_adjustments a JOIN invoices i ON i.id=a.invoice_id WHERE a.id=@target AND (@owner OR (@tenant AND a.requested_by_user_id=@actor AND @actor=ANY(i.recipient_user_ids))))",
+            "Location" => "SELECT EXISTS(SELECT 1 FROM locations l WHERE l.id=@target AND (@owner OR (@staff AND l.is_active AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@actor AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))",
+            "Room" => "SELECT EXISTS(SELECT 1 FROM rooms r JOIN contracts c ON c.room_id=r.id JOIN contract_residents cr ON cr.contract_id=c.id JOIN residents p ON p.id=cr.resident_id WHERE r.id=@target AND p.user_id=@actor AND c.status=3 AND cr.residence_from<=@today AND (cr.residence_to IS NULL OR cr.residence_to>=@today))",
+            "Debt" => "SELECT EXISTS(SELECT 1 FROM invoices i JOIN locations l ON l.id=i.location_id WHERE i.id=@target AND @staff AND l.is_active AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@actor AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))",
+            "BankTransfer" => "SELECT @owner AND EXISTS(SELECT 1 FROM payments WHERE id=@target)",
+            "Account" => "SELECT @target=@actor",
+            "Announcement" => "SELECT true",
+            "Residence" => "SELECT EXISTS(SELECT 1 FROM contract_residents cr JOIN residents r ON r.id=cr.resident_id WHERE r.id=@target AND (@owner OR (@tenant AND r.user_id=@actor)))",
+            "Incident" => """
+                SELECT EXISTS(SELECT 1 FROM incident_reports i WHERE i.id=@target AND (@owner OR (@tenant AND i.reporter_user_id=@actor)
+                OR (@staff AND EXISTS(SELECT 1 FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
+                  WHERE l.id=i.location_id AND l.is_active AND (a->>'staffUserId')::uuid=@actor AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))
+                """,
             "Contract" => "SELECT EXISTS(SELECT 1 FROM contracts c WHERE c.id=@target AND (@owner OR (@tenant AND c.tenant_user_id=@actor)))",
             "MeterTask" or "OperationalTask" => """
                 SELECT EXISTS(SELECT 1 FROM operational_tasks t JOIN locations l ON l.id=t.location_id WHERE t.id=@target AND t.task_type=@tasktype AND

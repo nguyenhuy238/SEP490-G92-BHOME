@@ -198,6 +198,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         var rateDate = schedule.RateDate == BillingRateDate.PeriodStart ? start : end;
         var prices = await properties.ResolvePricesAsync(invoice.RoomId, rateDate, t);
         var missing = new List<string>();
+        if (occupants.Any(o => !o.ContactsComplete)) missing.Add("occupant_account_email_required");
         var used = new List<Guid>();
         foreach (var category in new[] { ChargeCategory.Rent, ChargeCategory.Electricity, ChargeCategory.Water })
             if (!(category == ChargeCategory.Rent && schedule.RentSource == BillingRentSource.RepresentativeContract) && !prices.Charges.Any(p => p.Category == category)) missing.Add("rate_" + category);
