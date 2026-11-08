@@ -1,0 +1,108 @@
+{
+  "assets": [
+    {
+      "id": "commons_93794983",
+      "image": ".tools/ocr-accuracy-next/fresh/commons_93794983.jpg",
+      "sha256": "c1bcc552cf205766aead85b11518a09502a2afc3ba6de1ba0bdade18ed4f4d21",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digital_Electric_meter_Erorr.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c5/Digital_Electric_meter_Erorr.jpg/1920px-Digital_Electric_meter_Erorr.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:KingWriter1245\" title=\"User:KingWriter1245\">KingWriter1245</a>",
+      "dimensions": [
+        1920,
+        2560
+      ],
+      "title": "File:Digital Electric meter Erorr.jpg",
+      "labelStatus": "agent_visual_provisional_before_candidate_inference",
+      "sourceGroup": "author_07e89180928ceee31bd3",
+      "humanReviewCount": 0,
+      "split": "development_probe",
+      "physicalGroupVerified": false,
+      "category": "electricity_digital",
+      "expectedDigits": null,
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "readability": "blank_or_status_unverified",
+      "duplicateAudit": {
+        "sameSha256Files": [],
+        "nearestDHash256File": ".tools/master-dataset/commons/commons_4508761.jpg",
+        "nearestDHash256Distance": 95,
+        "physicalDeviceIndependence": "provisional_not_proven_by_hash"
+      },
+      "cohort": "fresh_source_development"
+    },
+    {
+      "id": "commons_136478647",
+      "image": ".tools/ocr-accuracy-next/fresh/commons_136478647.jpg",
+      "sha256": "c52f63809f348a6fe33aff57869e900e73435d9f3242b92329dde97fa7898bb6",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Elster_A3RAL_electricity_meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4e/Elster_A3RAL_electricity_meter.jpg/1920px-Elster_A3RAL_electricity_meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:277volts\" title=\"User:277volts\">277volts</a>",
+      "dimensions": [
+        1920,
+        1442
+      ],
+      "title": "File:Elster A3RAL electricity meter.jpg",
+      "labelStatus": "agent_visual_provisional_before_candidate_inference",
+      "sourceGroup": "author_4ffec1e37be7ee092f5d",
+      "humanReviewCount": 0,
+      "split": "development_probe",
+      "physicalGroupVerified": false,
+      "category": "electricity_digital",
+      "expectedDigits": null,
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "readability": "blank_or_status_unverified",
+      "duplicateAudit": {
+        "sameSha256Files": [],
+        "nearestDHash256File": ".tools/master-dataset/commons/commons_14926242.jpg",
+        "nearestDHash256Distance": 89,
+        "physicalDeviceIndependence": "provisional_not_proven_by_hash"
+      },
+      "cohort": "same_author_new_photo"
+    },
+    {
+      "id": "commons_162552968",
+      "image": ".tools/ocr-accuracy-next/fresh/commons_162552968.jpg",
+      "sha256": "7ac6cba9f5efe63cd70308764c893096f5885f7a534970c558035eac9ee55605",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wasserz%C3%A4hler_mit_CE_Kennzeichnung_und_Metrologiezeichen_(M).jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/Wasserz%C3%A4hler_mit_CE_Kennzeichnung_und_Metrologiezeichen_%28M%29.jpg/1920px-Wasserz%C3%A4hler_mit_CE_Kennzeichnung_und_Metrologiezeichen_%28M%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Chief335\" title=\"User:Chief335\">Chief335</a>",
+      "dimensions": [
+        1920,
+        909
+      ],
+      "title": "File:Wasserz\u00e4hler mit CE Kennzeichnung und Metrologiezeichen (M).jpg",
+      "labelStatus": "agent_visual_provisional_before_candidate_inference",
+      "sourceGroup": "author_994413e006a064d6e51b",
+      "humanReviewCount": 0,
+      "split": "development_probe",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "readability": "rolling_digit_ambiguous",
+      "duplicateAudit": {
+        "sameSha256Files": [],
+        "nearestDHash256File": ".tools/master-dataset/commons/commons_4624561.jpg",
+        "nearestDHash256Distance": 96,
+        "physicalDeviceIndependence": "provisional_not_proven_by_hash"
+      },
+      "cohort": "fresh_source_development"
+    }
+  ],
+  "excludedAliases": [
+    "commons_166496308",
+    "commons_195597533",
+    "commons_141189268",
+    "commons_88598842"
+  ],
+  "humanReviews": 0,
+  "newVerifiedNumericLabels": 0
+}
