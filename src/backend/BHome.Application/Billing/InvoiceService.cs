@@ -7,7 +7,8 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.Billing;
 
-public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock, IBillingAutomationSchedules? automation = null)
+public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock, IBillingAutomationSchedules? automation = null,
+    IUtilityBilling? utilities = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new InvoiceException(401, "authentication_required");
     private bool Owner => user.IsInRole(Roles.Owner);
@@ -221,6 +222,12 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             decimal amount;
             try { amount = InvoiceMath.Amount(policy.Rate, quantity, occupiedDays, end.Day, schedule.PartialMonth, schedule.Rounding, metered); }
             catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
+            UtilityCalculation? utility = null;
+            if (metered && utilities is not null)
+            {
+                utility = await utilities.CalculateAsync(invoice.RoomId, policy.Category == ChargeCategory.Electricity ? UtilityType.Electricity : UtilityType.Water, start, quantity, t);
+                if (utility is not null) { missing.AddRange(utility.MissingInputs); amount = utility.Amount; }
+            }
             invoice.Lines.Add(new InvoiceLine
             {
                 InvoiceId = invoice.Id,
@@ -235,6 +242,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 OccupiedDays = occupiedDays,
                 PeriodDays = end.Day,
                 Amount = amount,
+                UtilityCalculationSnapshot = utility?.Snapshot,
                 MeterReadingId = reading?.Reading.Id,
                 PreviousReading = reading?.Reading.PreviousValue,
                 ConfirmedReading = reading?.Reading.ConfirmedValue
@@ -258,5 +266,5 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         i.BillingPeriod, i.Status.ToString(), i.Version, i.Total, i.MissingInputs, i.ScheduledFinalDate, i.DueDate, i.FinalizedAt,
         i.RepresentativeTenantUserId, i.Lines.OrderBy(l => l.ChargeCode).Select(l => new InvoiceLineView(l.Id, l.Category.ToString(),
             l.ChargeCode, l.Name, l.PolicyId, l.PolicyVersion, l.RateDate, l.Rate, l.Quantity, l.OccupiedDays, l.PeriodDays,
-            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading, l.CalculatedAmount, l.CorrectionRequestId)).ToArray());
+            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading, l.CalculatedAmount, l.CorrectionRequestId, l.UtilityCalculationSnapshot)).ToArray());
 }

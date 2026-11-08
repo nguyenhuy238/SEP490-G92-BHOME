@@ -114,7 +114,11 @@ public sealed class ContractException(int status, string code) : Exception(code)
 // All PDF input comes from the immutable server snapshot. No uploaded arbitrary PDF can replace signed terms.
 public sealed record ContractDocument(Guid ContractId, Guid RoomId, Guid OwnerSignerId, Guid TenantUserId,
     Guid RepresentativeResidentId, Guid[] ResidentIds, DateOnly StartDate, DateOnly EndDate, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent,
-    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, Guid? HoldingContractId, decimal AppliedHoldingDeposit, string Terms, string SnapshotHash);
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, Guid? HoldingContractId, decimal AppliedHoldingDeposit, string Terms, string SnapshotHash)
+{
+    // Server-derived rendering context; excluded from the persisted historical document/hash format.
+    [JsonIgnore] public bool IsOperatingPolicyAmendment { get; init; }
+}
 public sealed record SigningPreparation(byte[] SourcePdf, byte[] PreparedPdf, string FieldName, string DocumentDigest,
     string DataToSignDigest, string CertificateChain, string ProviderUserId, string CredentialId);
 public sealed record SigningOutcome(string State, byte[]? SignedPdf = null);

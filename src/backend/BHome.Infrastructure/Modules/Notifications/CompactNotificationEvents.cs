@@ -45,7 +45,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             SELECT n.id,n.notification_type,COALESCE(n.related_entity_id,(n.event_data->'state'->>'targetId')::uuid,(n.event_data->'state'->>'targetUserId')::uuid)
             FROM notifications n WHERE n.record_kind='AUDIT' AND COALESCE((n.event_data->'state'->>'succeeded')::boolean,(n.event_data->>'succeeded')::boolean,true)
             AND n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','RoleChanged','StaffCreated','InvoiceDraftGenerated',
-              'ContractSigningInitiated','ContractSigningPrepared','ContractActivated','ContractRenewalPrepared')
+              'ContractSigningInitiated','ContractSigningPrepared','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied')
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
             """, t))
@@ -72,7 +72,8 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleOrDefaultAsync(c => c.Id == e.Target, t);
                 if (contract is not null)
                 {
-                    var eventType = e.Event == "ContractActivated" ? "CONTRACT_ACTIVATED" : e.Event == "ContractRenewalPrepared" ? "CONTRACT_RENEWAL_ACTION_REQUIRED" : "CONTRACT_SIGNING_REQUIRED";
+                    var eventType = e.Event.StartsWith("OperatingPolicyAmendment",StringComparison.Ordinal)?e.Event=="OperatingPolicyAmendmentApplied"?"OPERATING_POLICY_AMENDMENT_APPLIED":"OPERATING_POLICY_AMENDMENT_CANCELLED":
+                        e.Event == "ContractActivated" ? "CONTRACT_ACTIVATED" : e.Event == "ContractRenewalPrepared" ? "CONTRACT_RENEWAL_ACTION_REQUIRED" : "CONTRACT_SIGNING_REQUIRED";
                     foreach (var r in await Roles(new[] { contract.OwnerSignerId, contract.TenantUserId ?? Guid.Empty }, t))
                         count += await sql.Emit(r.Id, r.Role, contract.Room.LocationId, "contract-state:" + contract.Id + ":" + eventType, eventType, "Contract",
                             eventType == "CONTRACT_ACTIVATED" ? "Hợp đồng đã được kích hoạt" : "Hợp đồng có bước cần thực hiện",

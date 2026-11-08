@@ -520,13 +520,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             await setupDb.SaveChangesAsync();
         }
         var holdingInput = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident],
-            Today.AddDays(1), Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "SYNTHETIC protected Holding terms", 1);
+            Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "SYNTHETIC protected Holding terms", 1);
         var holding = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", holdingInput))).Id;
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(holding, "holding-approval"), new HoldingDecisionInput("Not allowed"))).StatusCode);
         await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-approval"), new HoldingDecisionInput("Owner reviewed and approved")));
-        await Signed(w, holding); await Deposit(w, holding, 1000000);
+        await Signed(w, holding);
+        Assert.Null((await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.PriceLockedAt);
+        await Deposit(w, holding, 1000000);
         var activeHolding = await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-activation")));
-        Assert.Equal("Active", activeHolding.Status); Assert.Equal("VerifiedDeposit", activeHolding.PriceLockTrigger);
+        Assert.Equal("Active", activeHolding.Status); Assert.Equal("SigningAndDepositCompleted", activeHolding.PriceLockTrigger);
         var conversionKey = Guid.NewGuid();
         var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id;
         Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id);

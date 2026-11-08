@@ -18,8 +18,10 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
         while (true)
         {
             var now = clock.GetUtcNow();
-            var batch = await db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active &&
-                (c.Kind == ContractKind.Holding ? c.HoldingExpiryAt <= now : c.EndDate <= through) &&
+            var batch = await db.Set<Contract>().AsNoTracking().Where(c =>
+                (c.Kind == ContractKind.Holding ?
+                    (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now :
+                    c.Status == ContractStatus.Active && c.EndDate <= through) &&
                 (after == null || c.Id.CompareTo(after.Value) > 0))
                 .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId, c.Room.LocationId }).Take(100).ToArrayAsync(t);
             if (batch.Length == 0) break;
@@ -30,10 +32,18 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                 await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({item.LocationId.ToString()},0))", t);
                 var room = await db.Locked<Room>(item.RoomId).SingleAsync(t);
                 var c = await db.Set<Contract>().SingleAsync(c => c.Id == item.Id, t);
-                if (c.Kind == ContractKind.Holding && c.Status == ContractStatus.Active && c.HoldingExpiryAt <= now)
+                if (c.Kind == ContractKind.Holding && c.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active && c.HoldingExpiryAt <= now)
                 {
-                    c.Status = ContractStatus.Expired; c.ActualEndDate = today; c.LifecycleActorId = c.OwnerSignerId;
-                    c.LifecycleAt = now; c.LifecycleReason = "HoldingExpired";
+                    c.Status = ContractStatus.Expired; c.ActualEndDate = today; c.LifecycleActorId = null;
+                    c.LifecycleAt = now; c.LifecycleReason = "HoldingExpired; system job; deposited funds require Owner review";
+                    var deposit = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? await db.Database.SqlQuery<decimal>($"""
+                        SELECT COALESCE(sum(a.amount),0) AS "Value" FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
+                        WHERE a.target_deposit_contract_id={c.Id} AND p.status='VERIFIED'
+                        """).SingleAsync(t) : await db.Set<DepositVerification>().Where(d => d.ContractId == c.Id).SumAsync(d => (decimal?)d.Amount,t) ?? 0;
+                    if (deposit > 0 && !await db.Set<ContractSettlementReview>().AnyAsync(r => r.ContractId == c.Id && r.Decision == "PendingManualReview", t))
+                        db.Add(new ContractSettlementReview { ContractId = c.Id, Decision = "PendingManualReview", Settled = false,
+                            ReviewedByUserId = c.OwnerSignerId, ReviewedAt = now,
+                            FinancialSnapshot = System.Text.Json.JsonSerializer.Serialize(new { verifiedDeposit = deposit, source = "SystemHoldingExpiry", automaticRefund = false }) });
                     var otherBinding = await db.Set<Contract>().AnyAsync(x => x.RoomId == c.RoomId && x.Id != c.Id && x.Status == ContractStatus.Active, t);
                     if (room.Status == RoomStatus.OnHold && !otherBinding)
                     {

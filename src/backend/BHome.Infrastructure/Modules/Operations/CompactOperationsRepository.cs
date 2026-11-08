@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Text.Json;
 using BHome.Application.Operations;
@@ -129,7 +129,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         {
             lockUser.Parameters.AddWithValue("id", userId); var current = await lockUser.ExecuteScalarAsync(t);
             if (current is null) throw OperationsException.Missing();
-            if ((bool)current && !input.IsActive && await HasResponsibilities(userId, DateOnly.FromDateTime(now.UtcDateTime), t))
+            if ((bool)current && !input.IsActive && await HasResponsibilities(userId, DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime), t))
                 throw OperationsException.Conflict("staff_responsibilities_unresolved");
         }
         await EnsurePhoneAvailable(userId, input.Phone, t);
@@ -678,8 +678,10 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             SELECT EXISTS(SELECT 1 FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
               WHERE (a->>'staffUserId')::uuid=@staff AND (a->>'endDate')::date>=@today)
               OR EXISTS(SELECT 1 FROM operational_tasks WHERE assigned_user_id=@staff AND
-                ((task_type='GENERAL' AND status NOT IN ('2','3')) OR
+                ((task_type IN ('GENERAL','METER_READ') AND status NOT IN ('2','3')) OR
                  (task_type='WORK_ORDER' AND status NOT IN ('Verified','Cancelled'))))
+              OR EXISTS(SELECT 1 FROM contracts WHERE move_out->'current'->>'inspectionStaffId'=@staff::text
+                AND move_out->'current'->>'inspectedAt' IS NULL AND COALESCE(move_out->'current'->>'status','0')<>'5')
             """); command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("today", today); return (bool)(await command.ExecuteScalarAsync(t))!;
     }
 
