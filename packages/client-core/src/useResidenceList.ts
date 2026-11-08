@@ -7,35 +7,29 @@ export function useResidenceList(api: ResidenceClient) {
     api: ResidenceClient;
     page: number;
     data: ResidencePage | null;
-    loading: boolean;
+    revision: number;
     error: string;
   } | null>(null);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
-    setState((previous) => ({
-      api,
-      page,
-      data: previous?.api === api && previous.page === page ? previous.data : null,
-      loading: true,
-      error: '',
-    }));
     void api.list(page, controller.signal).then(
       (data) => {
-        if (!controller.signal.aborted) setState({ api, page, data, loading: false, error: '' });
+        if (!controller.signal.aborted) setState({ api, page, revision, data, error: '' });
       },
       (failure) => {
         if (!controller.signal.aborted)
-          setState({ api, page, data: null, loading: false, error: residenceError(failure) });
+          setState({ api, page, revision, data: null, error: residenceError(failure) });
       },
     );
     return () => controller.abort();
   }, [api, page, revision]);
   const current = state?.api === api && state.page === page ? state : null;
+  const loading = current?.revision !== revision;
   return {
     data: current?.data ?? null,
-    loading: current?.loading ?? true,
-    error: current?.error ?? '',
+    loading,
+    error: loading ? '' : (current?.error ?? ''),
     page,
     setPage,
     reload,

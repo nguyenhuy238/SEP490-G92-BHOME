@@ -20,34 +20,41 @@ export function useResidenceRecord(api: ResidenceClient, contractId: string, res
       request.current?.abort();
     };
   }, []);
-  const reload = useCallback(async () => {
-    if (lock.current) return;
+  const load = useCallback(() => {
+    if (lock.current) return Promise.resolve();
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
+    return api.get(contractId, residentId, controller.signal).then(
+      (data) => {
+        if (!controller.signal.aborted && alive.current) {
+          setError('');
+          setTask(data);
+          setRevision((value) => value + 1);
+          setLoading(false);
+        }
+      },
+      (failure) => {
+        if (!controller.signal.aborted && alive.current) {
+          const status = (failure as { status?: number })?.status;
+          if ([401, 403, 404].includes(status ?? 0)) setTask(null);
+          else setReview(true);
+          setError(residenceError(failure));
+          setLoading(false);
+        }
+      },
+    );
+  }, [api, contractId, residentId]);
+  const reload = useCallback(async () => {
+    if (lock.current) return;
     setLoading(true);
     setError('');
-    try {
-      const data = await api.get(contractId, residentId, controller.signal);
-      if (!controller.signal.aborted && alive.current) {
-        setTask(data);
-        setRevision((value) => value + 1);
-      }
-    } catch (failure) {
-      if (!controller.signal.aborted && alive.current) {
-        const status = (failure as { status?: number })?.status;
-        if ([401, 403, 404].includes(status ?? 0)) setTask(null);
-        else setReview(true);
-        setError(residenceError(failure));
-      }
-    } finally {
-      if (!controller.signal.aborted && alive.current) setLoading(false);
-    }
-  }, [api, contractId, residentId]);
+    await load();
+  }, [load]);
   useEffect(() => {
-    void reload();
+    void load();
     return () => request.current?.abort();
-  }, [reload]);
+  }, [load]);
   async function mutate(write: () => Promise<ResidenceTask>, message: string) {
     if (lock.current || loading || review) return false;
     request.current?.abort();

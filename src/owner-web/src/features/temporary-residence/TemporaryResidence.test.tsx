@@ -1,10 +1,19 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   residenceClient,
   type ResidenceTask,
 } from '../../../../../packages/client-core/src/residence';
 import TemporaryResidencePage, { OwnerResidenceRecord } from './pages/TemporaryResidencePage';
+import { useResidenceList } from '../../../../../packages/client-core/src/useResidenceList';
 
 const state = vi.hoisted(() => ({ roles: ['Owner'], transport: vi.fn() }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -50,6 +59,33 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('marks a list refresh as loading, keeps same-page data and ignores an aborted page response', async () => {
+  const api = residenceClient(state.transport);
+  const { result } = renderHook(() => useResidenceList(api));
+  expect(result.current.loading).toBe(true);
+  await waitFor(() => expect(result.current.data?.items).toEqual([task]));
+  let finishRefresh!: (value: unknown) => void;
+  state.transport.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishRefresh = resolve;
+      }),
+  );
+  act(() => result.current.reload());
+  expect(result.current.loading).toBe(true);
+  expect(result.current.data?.items).toEqual([task]);
+  const signal = state.transport.mock.calls.at(-1)?.[1].signal as AbortSignal;
+  act(() => result.current.setPage(2));
+  expect(result.current.loading).toBe(true);
+  expect(result.current.data).toBeNull();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(signal.aborted).toBe(true);
+  await act(async () => {
+    finishRefresh({ items: [], page: 1, pageSize: 20, totalCount: 0 });
+  });
+  expect(result.current.page).toBe(2);
+  expect(result.current.data?.items).toEqual([task]);
+});
 it('loads authenticated evidence and confirms only after entering a note, then reads latest record', async () => {
   const api = residenceClient(state.transport);
   render(
