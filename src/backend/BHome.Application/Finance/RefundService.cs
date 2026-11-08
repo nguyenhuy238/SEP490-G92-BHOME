@@ -116,7 +116,8 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
     private async Task<RefundSource> ReadSourceAsync(Guid id, bool deposit, CancellationToken t)
     {
         _ = Owner();
-        return await repository.TransactionAsync(async () => {
+        return await repository.TransactionAsync(async () =>
+        {
             var source = deposit ? await repository.DepositSourceAsync(id, t) : await repository.SourceAsync(id, t);
             var paid = source.Requests.Where(r => r.Status == "COMPLETED").Sum(r => r.Amount);
             var held = Reserved(source) - paid;
@@ -143,12 +144,27 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
         if (!x.HumanConfirmed || x.BeneficiaryResidentId == Guid.Empty || x.Amount <= 0 ||
             x.Amount >= 1_000_000_000_000_000_000m || decimal.Truncate(x.Amount) != x.Amount)
             throw new FinanceException(400, "invalid_refund_request");
-        var fingerprint = deposit is null ? Hash(new { sourceId, input = x }) : Hash(new { sourceId, input = x,
-            deposit.ExpectedFinancialReference, deposit.BeneficiaryVerified, deposit.NoDeductionsConfirmed });
+        var fingerprint = deposit is null ? Hash(new { sourceId, input = x }) : Hash(new
+        {
+            sourceId,
+            input = x,
+            deposit.ExpectedFinancialReference,
+            deposit.BeneficiaryVerified,
+            deposit.NoDeductionsConfirmed
+        });
         if (deposit?.ExpectedDeductionPlanId is not null || deposit?.DeductionsConfirmed == true)
-            fingerprint = Hash(new { sourceId, input = x, deposit.ExpectedFinancialReference, deposit.BeneficiaryVerified,
-                deposit.NoDeductionsConfirmed, deposit.ExpectedDeductionPlanId, deposit.DeductionsConfirmed });
-        return repository.TransactionAsync(async () => {
+            fingerprint = Hash(new
+            {
+                sourceId,
+                input = x,
+                deposit.ExpectedFinancialReference,
+                deposit.BeneficiaryVerified,
+                deposit.NoDeductionsConfirmed,
+                deposit.ExpectedDeductionPlanId,
+                deposit.DeductionsConfirmed
+            });
+        return repository.TransactionAsync(async () =>
+        {
             if (await repository.OperationAsync(key, t) is { } previous)
             {
                 ValidateMode(previous.IsDevelopmentDemo);
@@ -170,14 +186,31 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
             if (source.Requests.Count >= 100 || x.Amount > source.Excess - Reserved(source))
                 throw new FinanceException(409, "refund_amount_unavailable");
             var now = Now;
-            var row = new RefundRecord { Id = Guid.NewGuid(), SourcePaymentId = deposit is null ? sourceId : null,
-                SourceDepositContractId = source.DepositContractId, BeneficiaryResidentId = person.Id,
-                BeneficiaryLabel = person.Label, Amount = x.Amount, Reason = x.Reason, RequestedBy = actor,
-                RequestedAt = now, OperationKey = key, IsDevelopmentDemo = source.IsDevelopmentDemo };
-            if (deposit is not null) row.State = new() { Classification = "SecurityDepositRefundV1", SettlementContractId = sourceId,
-                SourceReference = source.FinancialReference, BeneficiaryVerified = true, NoDeductionsConfirmed = deposit.NoDeductionsConfirmed,
-                DeductionsConfirmed = deposit.DeductionsConfirmed, DeductionPlanId = deposit.ExpectedDeductionPlanId,
-                IsDevelopmentDemo = source.IsDevelopmentDemo };
+            var row = new RefundRecord
+            {
+                Id = Guid.NewGuid(),
+                SourcePaymentId = deposit is null ? sourceId : null,
+                SourceDepositContractId = source.DepositContractId,
+                BeneficiaryResidentId = person.Id,
+                BeneficiaryLabel = person.Label,
+                Amount = x.Amount,
+                Reason = x.Reason,
+                RequestedBy = actor,
+                RequestedAt = now,
+                OperationKey = key,
+                IsDevelopmentDemo = source.IsDevelopmentDemo
+            };
+            if (deposit is not null) row.State = new()
+            {
+                Classification = "SecurityDepositRefundV1",
+                SettlementContractId = sourceId,
+                SourceReference = source.FinancialReference,
+                BeneficiaryVerified = true,
+                NoDeductionsConfirmed = deposit.NoDeductionsConfirmed,
+                DeductionsConfirmed = deposit.DeductionsConfirmed,
+                DeductionPlanId = deposit.ExpectedDeductionPlanId,
+                IsDevelopmentDemo = source.IsDevelopmentDemo
+            };
             row.State.Events.Add(new("Requested", actor, now, x.Reason, row.Version, key, fingerprint));
             await repository.SaveAsync(row, true, actor, deposit is null ? "ExcessRefundRequested" : "DepositRefundRequested", now, t); return View(row);
         }, t);
@@ -187,7 +220,8 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
         var actor = Owner(); Key(key); var x = input with { Reason = Reason(input.Reason) };
         if (!x.HumanConfirmed || x.ExpectedVersion < 1) throw new FinanceException(400, "invalid_refund_decision");
         var fingerprint = Hash(x);
-        return repository.TransactionAsync(async () => {
+        return repository.TransactionAsync(async () =>
+        {
             var row = await repository.GetAsync(id, t);
             ValidateMode(row.IsDevelopmentDemo);
             if (Replay(row, actor, key, fingerprint)) return View(row);
@@ -218,23 +252,30 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
     public async Task<RefundView> ExecuteAsync(Guid id, RefundExecution input, Guid key, Stream image, CancellationToken t)
     {
         var actor = Owner(); Key(key);
-        var x = input with { Reason = Reason(input.Reason), ExternalReference = input.ExternalReference?.Trim().ToUpperInvariant() ?? "",
-            ExecutedAt = input.ExecutedAt.ToUniversalTime() };
+        var x = input with
+        {
+            Reason = Reason(input.Reason),
+            ExternalReference = input.ExternalReference?.Trim().ToUpperInvariant() ?? "",
+            ExecutedAt = input.ExecutedAt.ToUniversalTime()
+        };
         if (!x.HumanConfirmed || x.ExpectedVersion < 1 || x.ExecutedAt == default || x.ExecutedAt > Now ||
             x.ExternalReference.Length is < 1 or > 200 || x.ExternalReference.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or ':' or '.' or '/')))
             throw new FinanceException(400, "invalid_refund_execution");
         _ = await repository.GetAsync(id, t);
         using var buffer = new MemoryStream(); var block = new byte[81920];
-        while (true) {
+        while (true)
+        {
             var count = await image.ReadAsync(block, t); if (count == 0) break;
             if (buffer.Length + count > 5 * 1024 * 1024) throw new FinanceException(413, "refund_evidence_too_large");
             await buffer.WriteAsync(block.AsMemory(0, count), t);
         }
         var bytes = buffer.ToArray();
-        try {
+        try
+        {
             var type = images.Validate(bytes); var hash = Convert.ToHexString(SHA256.HashData(bytes));
             var fingerprint = Hash(new { input = x, type, hash, length = bytes.Length });
-            var row = await repository.TransactionAsync(async () => {
+            var row = await repository.TransactionAsync(async () =>
+            {
                 var current = await repository.GetAsync(id, t);
                 ValidateMode(current.IsDevelopmentDemo);
                 if (Replay(current, actor, key, fingerprint)) return current;
@@ -244,7 +285,8 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 if (current.State.Upload is { } prior && (prior.Key != key || prior.Fingerprint != fingerprint))
                     throw new FinanceException(409, "refund_execution_intent_conflict");
                 if (await repository.ReferenceUsedAsync(x.ExternalReference, id, t)) throw new FinanceException(409, "refund_reference_used");
-                if (current.State.Upload is null) {
+                if (current.State.Upload is null)
+                {
                     current.State.Upload = new(key, fingerprint, $"refunds/{id:N}/{key:N}", type, bytes.Length, hash,
                         x.ExecutedAt, x.ExternalReference, x.Reason);
                     await repository.SaveAsync(current, false, actor, AuditPrefix(current) + "ExecutionPending", Now, t);
@@ -257,7 +299,8 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
             using var content = new MemoryStream(bytes);
             await storage.PutAsync(intent.ObjectKey, content, bytes.Length, type, deadline.Token);
             await CopyVerified(intent, Stream.Null, deadline.Token);
-            return await repository.TransactionAsync(async () => {
+            return await repository.TransactionAsync(async () =>
+            {
                 var current = await repository.GetAsync(id, t);
                 if (Replay(current, actor, key, fingerprint)) return View(current);
                 if (current.Status != "APPROVED" || current.Version != x.ExpectedVersion || current.State.Upload?.Fingerprint != fingerprint)
@@ -268,7 +311,8 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 current.State.Events.Add(new("Completed", actor, Now, x.Reason, current.Version, key, fingerprint));
                 await repository.SaveAsync(current, false, actor, AuditPrefix(current) + "Completed", Now, t); return View(current);
             }, t);
-        } finally { CryptographicOperations.ZeroMemory(bytes); }
+        }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
     }
     public async Task<string> CopyAsync(Guid id, Stream output, CancellationToken t)
     {

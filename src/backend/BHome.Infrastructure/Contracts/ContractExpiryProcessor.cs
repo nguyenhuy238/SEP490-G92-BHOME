@@ -18,11 +18,18 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
         while (true)
         {
             var now = clock.GetUtcNow();
-            var batch = await db.Set<Contract>().AsNoTracking().Where(c =>
-                (c.Kind == ContractKind.Holding ?
-                    (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now :
-                    c.Status == ContractStatus.Active && c.EndDate <= through) &&
-                (after == null || c.Id.CompareTo(after.Value) > 0))
+            // The offline source schema predates Holding expiry metadata. Keep its Main tenancy
+            // regression query translatable. Runtime Compact24 expires Holding drafts and pending
+            // signing/activation records as well as Active Holding contracts.
+            var due = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+                ? db.Set<Contract>().AsNoTracking().Where(c =>
+                    c.Kind == ContractKind.Holding
+                        ? (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
+                           c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now
+                        : c.Status == ContractStatus.Active && c.EndDate <= through)
+                : db.Set<Contract>().AsNoTracking().Where(c =>
+                    c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.EndDate <= through);
+            var batch = await due.Where(c => after == null || c.Id.CompareTo(after.Value) > 0)
                 .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId, c.Room.LocationId }).Take(100).ToArrayAsync(t);
             if (batch.Length == 0) break;
             foreach (var item in batch)
@@ -49,12 +56,28 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                     {
                         var before = System.Text.Json.JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id });
                         room.Status = RoomStatus.Available; room.Version++;
-                        db.Add(new PropertyChange { ActorId = c.OwnerSignerId, LocationId = room.LocationId, TargetId = room.Id,
-                            TargetType = nameof(Room), Action = RoomTransitionSource.HoldingRelease.ToString(), Reason = "HoldingExpired",
-                            Before = before, After = System.Text.Json.JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id }), OccurredAt = now });
+                        db.Add(new PropertyChange
+                        {
+                            ActorId = c.OwnerSignerId,
+                            LocationId = room.LocationId,
+                            TargetId = room.Id,
+                            TargetType = nameof(Room),
+                            Action = RoomTransitionSource.HoldingRelease.ToString(),
+                            Reason = "HoldingExpired",
+                            Before = before,
+                            After = System.Text.Json.JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id }),
+                            OccurredAt = now
+                        });
                     }
-                    db.SecurityAudit.Add(new SecurityAuditRecord { UserId = c.OwnerSignerId, Event = "HoldingExpired", TargetId = c.Id,
-                        TargetType = "Contract", Succeeded = true, OccurredAt = now });
+                    db.SecurityAudit.Add(new SecurityAuditRecord
+                    {
+                        UserId = c.OwnerSignerId,
+                        Event = "HoldingExpired",
+                        TargetId = c.Id,
+                        TargetType = "Contract",
+                        Succeeded = true,
+                        OccurredAt = now
+                    });
                     await db.SaveChangesAsync(t);
                 }
                 else if (c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.EndDate <= through)
@@ -62,8 +85,15 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                     var stage = c.EndDate < today ? "Expired" : "Upcoming30";
                     foreach (var recipient in new[] { c.OwnerSignerId, c.TenantUserId }.Distinct())
                         if (recipient is { } user && !await db.Set<ContractExpiryNotice>().AnyAsync(n => n.ContractId == c.Id && n.EndDate == c.EndDate && n.Stage == stage && n.RecipientId == user, t))
-                            db.Add(new ContractExpiryNotice { Id = Guid.NewGuid(), ContractId = c.Id, RecipientId = user,
-                                EndDate = c.EndDate, Stage = stage, CreatedAt = clock.GetUtcNow() });
+                            db.Add(new ContractExpiryNotice
+                            {
+                                Id = Guid.NewGuid(),
+                                ContractId = c.Id,
+                                RecipientId = user,
+                                EndDate = c.EndDate,
+                                Stage = stage,
+                                CreatedAt = clock.GetUtcNow()
+                            });
                     await db.SaveChangesAsync(t);
                 }
                 await tx.CommitAsync(t);

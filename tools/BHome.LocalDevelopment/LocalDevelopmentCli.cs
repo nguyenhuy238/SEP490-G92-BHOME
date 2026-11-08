@@ -8,7 +8,25 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
-        if (args.Length is 1 or 2 && args[0] == "seed-development-data" &&
+        if (args.SequenceEqual(new[] { "provision-shared-development-roles" }))
+        {
+            try
+            {
+                var directory = Environment.GetEnvironmentVariable("BHOME_DEVELOPMENT_CREDENTIAL_DIRECTORY");
+                if (string.IsNullOrWhiteSpace(directory) || !Path.IsPathFullyQualified(directory))
+                    throw new LocalTestAccountException("Set a private absolute credential directory outside tracked source files.");
+                await SharedDevelopmentRoles.ProvisionAsync(Environment.GetEnvironmentVariable("BHOME_COMPACT24_DIRECT") ?? "", directory);
+                Console.WriteLine("RUNTIME_ROLES_READY: 5 individual LOGIN roles; no owner/admin credentials printed; local credential files preserved on replay.");
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"ROLE_PROVISION_FAILED ({error.GetType().Name}); credential and SQL error details suppressed.");
+                return 1;
+            }
+        }
+        var sharedSeed = args.SequenceEqual(new[] { "seed-shared-development-data" });
+        if (sharedSeed || args.Length is 1 or 2 && args[0] == "seed-development-data" &&
             (args.Length == 1 || args[1] == "--set-sample-passwords"))
         {
             var samplePassword = Environment.GetEnvironmentVariable("BHOME_DEV_TEST_PASSWORD");
@@ -19,7 +37,10 @@ internal static class LocalDevelopmentCli
                 var registration = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration);
                 registration.AddInfrastructure(configuration);
                 await using var sampleProvider = registration.BuildServiceProvider();
-                var added = await Compact24SampleSeed.RunAsync(sampleProvider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), samplePassword, args.Length == 2);
+                var added = sharedSeed
+                    ? await Compact24SampleSeed.RunSharedDevelopmentAsync(sampleProvider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+                        Environment.GetEnvironmentVariable("BHOME_DATABASE_BRANCH"), samplePassword ?? "")
+                    : await Compact24SampleSeed.RunAsync(sampleProvider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), samplePassword, args.Length == 2);
                 Console.WriteLine(added ? "SAMPLE_CREATED: 4 users, 2 Locations, 6 Rooms, 2 RoomTypes, 6 Assets, 12 Meters, 8 sample rates, 3 pending Residents, 4 Tasks."
                     : "SAMPLE_ALREADY_PRESENT: existing business data preserved.");
                 Console.WriteLine(samplePassword is null ? "Sample accounts use random undisclosed passwords. Run Seed-LocalDevelopmentData.ps1 -SetSamplePasswords to choose a login password."

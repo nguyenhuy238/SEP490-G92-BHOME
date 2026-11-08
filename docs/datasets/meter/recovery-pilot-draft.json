@@ -3,7 +3,12 @@
   "status": "awaiting_authorized_capture_and_two_reviews",
   "plannedPhysicalMeters": 8,
   "plannedImagesPerMeter": 3,
-  "requiredCategories": ["electricity_mechanical", "electricity_digital", "water_mechanical", "water_digital"],
+  "requiredCategories": [
+    "electricity_mechanical",
+    "electricity_digital",
+    "water_mechanical",
+    "water_digital"
+  ],
   "samplesAreGroundTruth": false,
   "worksheet": {
     "imageId": null,

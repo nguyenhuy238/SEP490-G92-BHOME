@@ -30,8 +30,16 @@ internal static class ReviewedWindowComparison
                 string raw; float confidence;
                 if (mode == "english_direct") { var result = candidate.Recognize(image, default); raw = result.Line.Text; confidence = result.Line.Confidence; }
                 else { var result = baseline.InspectMeterCrop(image, mode == "baseline_direct", default); raw = string.Join(" ", result.Lines.Select(x => x.Text)); confidence = result.Lines.Count == 0 ? 0 : result.Lines.Average(x => x.Confidence); }
-                rows.Add(new { id = sample.GetProperty("id").GetString(), mode, expectedDigits = expected, raw, confidence,
-                    exactRaw = raw == expected, observedMs = timer.Elapsed.TotalMilliseconds });
+                rows.Add(new
+                {
+                    id = sample.GetProperty("id").GetString(),
+                    mode,
+                    expectedDigits = expected,
+                    raw,
+                    confidence,
+                    exactRaw = raw == expected,
+                    observedMs = timer.Elapsed.TotalMilliseconds
+                });
             }
         }
         await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { scope = "agent_reviewed_development_oracle_crops_no_billing_claim", rows }, OcrEvaluation.Json));

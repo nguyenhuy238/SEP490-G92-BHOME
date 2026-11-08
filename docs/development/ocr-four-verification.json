@@ -126,7 +126,7 @@
         {
           "file": "wm_clean_000317-predicted_window.png",
           "passed": true,
-          "meanDelta": 1.1920929e-07,
+          "meanDelta": 1.1920929e-7,
           "minimumDelta": 0
         },
         {
@@ -139,21 +139,9 @@
     },
     "newDisplayDotnet": {
       "passed": true,
-      "inputShape": [
-        1,
-        3,
-        416,
-        416
-      ],
-      "outputShape": [
-        1,
-        6,
-        3549
-      ],
-      "classes": [
-        "reading_region",
-        "serial_region"
-      ],
+      "inputShape": [1, 3, 416, 416],
+      "outputShape": [1, 6, 3549],
+      "classes": ["reading_region", "serial_region"],
       "rows": [
         {
           "id": "commons_136480278",

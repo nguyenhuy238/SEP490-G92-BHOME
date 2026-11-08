@@ -1,0 +1,167 @@
+{
+  "date": "2026-11-08",
+  "testedRuntimeSourceHead": "99709118195c4c1d489eec438462e7714780d4fd",
+  "testedImplementationAndExperimentHead": "826303d78e34946a5a998c1ada0641b582bdf65c",
+  "checks": [
+    {
+      "name": "backend_release_build",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "localLog": ".tools/ocr-next-staff/build-final.log",
+      "sha256": "cf9b43595331cefd0b327fca4e88e395db203931bb16fa2b013dccbd845a6498"
+    },
+    {
+      "name": "application",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 349,
+      "failed": 0,
+      "skipped": 0,
+      "total": 349,
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "localLog": ".tools/ocr-next-staff/application.log",
+      "sha256": "318a412920021b8701390869ef6b91793a1fc594226d94c10043e77ab87d2568"
+    },
+    {
+      "name": "ocr_integration_serial",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 155,
+      "failed": 0,
+      "skipped": 0,
+      "total": 155,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-restore --settings .tools/ocr-next-staff/serial.runsettings --filter FullyQualifiedName~BHome.IntegrationTests.Ocr&Category!=Docker&Category!=CompactPostgres",
+      "localLog": ".tools/ocr-next-staff/integration-serial.log",
+      "sha256": "7e70c364735db7636b04ad8a38e2a4298c5b52c5bcca9a74a8fb13848df24a3e",
+      "runSettings": {
+        "xUnit": {
+          "MaxParallelThreads": 1,
+          "ParallelizeTestCollections": false
+        }
+      }
+    },
+    {
+      "name": "timeout_case_isolated_retry",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "total": 1,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-restore --filter FullyQualifiedName~OcrApiTests.RealModelsReadWaterThroughDiagnosticHttpAndResolveElectricLabelWithoutPersistence",
+      "localLog": ".tools/ocr-next-staff/timeout-retry-v2.log",
+      "sha256": "2f63c2c650db69a1df0b68e9def900bf8f52441d737650e5666936300d8d2205"
+    },
+    {
+      "name": "postgres_staff_and_confirmed_billing",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "total": 8,
+      "command": "Owned loopback15493 disposable DB; BHOME_COMPACT24_TEST_ADMIN=<local admin>; BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "localLog": ".tools/ocr-next-staff/postgres-final.log",
+      "sha256": "3a30fd47d49c33f3bac5fdc7307b9b13661e32f1cf01295a145ed22d843a6a1d",
+      "storage": "explicit in-memory substitute",
+      "clusterStoppedAfterRun": true
+    },
+    {
+      "name": "mobile_ocr",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 50,
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/vitest/vitest.mjs run --config vitest.config.ts src/__tests__/document-camera.test.tsx src/__tests__/capture-scope.test.tsx src/__tests__/meter-flow.test.tsx src/__tests__/meter-reading.test.ts src/__tests__/room-meter-tasks.test.ts",
+      "localLog": ".tools/ocr-next-staff/mobile.log",
+      "sha256": "a25ba4bdae253d3f31ab44285bc357955e2c3005fe6878aa26e7629cafeebb03"
+    },
+    {
+      "name": "blind_review_tool",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 9,
+      "command": ".tools/yolo-python/python.exe - (stdin wrapper: add local CLIP/CUDA/model_tools package directories to sys.path; runpy.run_path tests/scripts/test_meter_review.py as __main__)",
+      "localLog": ".tools/ocr-next-staff/review-final-v2.log",
+      "sha256": "64b9a2a9313296e9a9d705dbd9522e693058c7071782e6bae06c2d524d205350"
+    },
+    {
+      "name": "english_parity",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 4,
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json .tools/ocr-next-staff/english-parity.json",
+      "localLog": ".tools/ocr-next-staff/english-parity.log",
+      "sha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79",
+      "resultSha256": "1bc173687244bade5c30411388671ee09bc229a4533c8a87683218b0fc8da7bc"
+    },
+    {
+      "name": "stage2_parity",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 10,
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops .tools/ocr-next-staff/stage2-parity.json",
+      "localLog": ".tools/ocr-next-staff/stage2-parity.log",
+      "sha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd",
+      "resultSha256": "53d1aad92df6d2017d408fb8fb7c4d79f93503b52de0502cec9a95adbde3a4c4"
+    },
+    {
+      "name": "classifier_native_dotnet_parity",
+      "status": "PASS",
+      "passed": 9,
+      "includedIn": "ocr_integration_serial",
+      "inputMaxDelta": 0,
+      "logitMaxDelta": 2.2947788e-6,
+      "sha256": "c71e492f75958200dcb0a3bad394cb5a5a0be95e44d6c51483541f95a19b2b9a"
+    },
+    {
+      "name": "postman_environment_status",
+      "status": "PASS",
+      "command": "postman status --json",
+      "initialized": false,
+      "authStatus": "unauthenticated",
+      "collectionAssertionsRun": false,
+      "sha256": "222866f7731083c75931df247434b05b8fee4165a37596f832a1042eb40b2a0b"
+    }
+  ],
+  "earlierAttempts": [
+    {
+      "name": "initial_parallel_ocr",
+      "status": "FAILED_THEN_RESOLVED",
+      "explanation": "154 pass,1 timeout,0 skipped; rotated public meter returned ocr_timeout. Deadline unchanged. Isolated retry and full serial run pass. Concurrency is a suspected contributor, not proven root cause.",
+      "localLog": ".tools/ocr-next-staff/integration.log",
+      "sha256": "53250f96dcc4997ed29ed9261550f6480544f8420ffa8be8abd9734cf4bef29d"
+    },
+    {
+      "name": "initial_assigned_postgres",
+      "status": "FAILED_THEN_RESOLVED",
+      "explanation": "Test setup ExecuteUpdate failed on Compact24 FromSql query. Changed test setup to tracked-property update; final eight workflows pass.",
+      "localLog": ".tools/ocr-next-staff/assigned-pg.log",
+      "sha256": "90c63225d76ae4f5312abce959637e26a8ee048cff56cc70d631a01b68ec6852"
+    },
+    {
+      "name": "test_file_extraction_build",
+      "status": "FAILED_THEN_RESOLVED",
+      "explanation": "Moved classifier test into separate file and initially omitted Application.Ocr using. Added import; subsequent build and tests pass.",
+      "localLog": ".tools/ocr-next-staff/timeout-retry.log",
+      "sha256": "c9397b689b49bcba17d97736dbde8f098f5dfad3a5a4c818dc8e3d4077d64c7e"
+    },
+    {
+      "name": "review_command_path",
+      "status": "FAILED_THEN_RESOLVED",
+      "explanation": "First repeat command looked for the test under model_tools instead of tests/scripts. Corrected path; nine tests pass. No source or threshold change.",
+      "localLog": ".tools/ocr-next-staff/review-final.log",
+      "sha256": "d244be861c3fd8bf18fe78a0ba4443facc75012c6aa766c648f2044492aff002"
+    }
+  ],
+  "notRun": [
+    "Real MinIO object operations",
+    "Physical camera/device E2E",
+    "Independent human acceptance and physical-meter-separated exact-reading benchmark",
+    "Mobile lint/typecheck; Mobile source unchanged",
+    "Postman collection assertions; uninitialized and unauthenticated"
+  ],
+  "productionEnabled": false,
+  "pushedOrDeployed": false
+}

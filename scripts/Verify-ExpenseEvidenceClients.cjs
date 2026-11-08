@@ -1,4 +1,3 @@
-/* global document */
 const assert = require('node:assert/strict');
 const { readFile } = require('node:fs/promises');
 const { createHash } = require('node:crypto');

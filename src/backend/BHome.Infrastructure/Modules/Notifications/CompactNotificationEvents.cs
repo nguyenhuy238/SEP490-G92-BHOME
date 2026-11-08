@@ -64,8 +64,8 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             {
                 var invoice = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == e.Target, t);
                 if (invoice is not null) foreach (var user in await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == invoice.Id).Select(r => r.TenantUserId).ToArrayAsync(t))
-                    count += await sql.Emit(user, "Tenant", invoice.LocationId, key, "INVOICE_DRAFT_CREATED", "Invoice", "Có hóa đơn nháp để kiểm tra",
-                        $"Phòng {invoice.RoomNumber} có hóa đơn nháp kỳ {invoice.BillingPeriod:MM/yyyy}. Mở hóa đơn để xem trạng thái mới nhất.", "Invoice", invoice.Id, t, channels: ["IN_APP", "PUSH", "EMAIL"]);
+                        count += await sql.Emit(user, "Tenant", invoice.LocationId, key, "INVOICE_DRAFT_CREATED", "Invoice", "Có hóa đơn nháp để kiểm tra",
+                            $"Phòng {invoice.RoomNumber} có hóa đơn nháp kỳ {invoice.BillingPeriod:MM/yyyy}. Mở hóa đơn để xem trạng thái mới nhất.", "Invoice", invoice.Id, t, channels: ["IN_APP", "PUSH", "EMAIL"]);
             }
             else
             {
@@ -95,9 +95,17 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             {
                 if (r.Role == "Staff" && !(await Staff(report.LocationId, t)).Contains(r.Id))
                 { db.Attach(n); n.DeliveryState = "Suppressed"; continue; }
-                var eventType = n.Event switch { "submitted" => n.HighPriority ? "INCIDENT_EMERGENCY_SUBMITTED" : "INCIDENT_NORMAL_SUBMITTED",
-                    "acknowledged" => "EMERGENCY_ACKNOWLEDGED", "assigned" or "reassigned" => "WORK_ORDER_ASSIGNED", "proposal_submitted" => "REPAIR_PROPOSAL_REQUIRES_APPROVAL", "submit" => "WORK_ORDER_VERIFICATION_REQUIRED",
-                    "rework" => "WORK_ORDER_REWORK_REQUESTED", "resolved" or "rejected" or "duplicate" => "INCIDENT_CLOSED", _ => "INCIDENT_UPDATED" };
+                var eventType = n.Event switch
+                {
+                    "submitted" => n.HighPriority ? "INCIDENT_EMERGENCY_SUBMITTED" : "INCIDENT_NORMAL_SUBMITTED",
+                    "acknowledged" => "EMERGENCY_ACKNOWLEDGED",
+                    "assigned" or "reassigned" => "WORK_ORDER_ASSIGNED",
+                    "proposal_submitted" => "REPAIR_PROPOSAL_REQUIRES_APPROVAL",
+                    "submit" => "WORK_ORDER_VERIFICATION_REQUIRED",
+                    "rework" => "WORK_ORDER_REWORK_REQUESTED",
+                    "resolved" or "rejected" or "duplicate" => "INCIDENT_CLOSED",
+                    _ => "INCIDENT_UPDATED"
+                };
                 count += await sql.Emit(r.Id, r.Role, report.LocationId, "incident:" + n.Id, eventType, "Incident",
                     n.HighPriority && n.Event == "submitted" ? "Có sự cố khẩn cấp tại cơ sở" : "Sự cố có cập nhật",
                     "Mở sự cố để xem thông tin và hành động trong phạm vi được phân công. Trường hợp đe dọa tính mạng, gọi cơ quan khẩn cấp phù hợp.",
@@ -126,7 +134,8 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     }
     private async Task<Guid[]> Occupants(Guid room, DateOnly periodStart, DateOnly periodEnd, CancellationToken t)
     {
-        return await (from cr in db.Set<ContractResident>().AsNoTracking() join c in db.Set<Contract>() on cr.ContractId equals c.Id
+        return await (from cr in db.Set<ContractResident>().AsNoTracking()
+                      join c in db.Set<Contract>() on cr.ContractId equals c.Id
                       join r in db.Set<Resident>() on cr.ResidentId equals r.Id
                       where c.RoomId == room && c.ActivatedAt != null && c.Kind != ContractKind.Holding && c.StartDate <= periodEnd && (c.ActualEndDate ?? c.EndDate) >= periodStart &&
                         cr.ResidenceFrom <= periodEnd && (cr.ResidenceTo == null || cr.ResidenceTo >= periodStart) && r.TenantUserId != null

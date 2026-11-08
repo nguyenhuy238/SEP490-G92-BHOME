@@ -73,12 +73,24 @@ vi.mock('../../../src/mobile/src/components/WorkspaceKit', () => ({
   ui: {},
 }));
 vi.mock('../../../src/mobile/src/screens/MeterRoomOverview', () => ({
-  MeterRoomOverview: ({ tasks, onSelect }: { tasks: { id: string }[]; onSelect: (id: string) => void }) => (
-    <div>{tasks.map((task) => <button key={task.id} onClick={() => onSelect(task.id)}>Chọn đồng hồ</button>)}</div>
+  MeterRoomOverview: ({
+    tasks,
+    onSelect,
+  }: {
+    tasks: { id: string }[];
+    onSelect: (id: string) => void;
+  }) => (
+    <div>
+      {tasks.map((task) => (
+        <button key={task.id} onClick={() => onSelect(task.id)}>
+          Chọn đồng hồ
+        </button>
+      ))}
+    </div>
   ),
 }));
 vi.mock('../../../src/mobile/src/lib/toast', async (original) => ({
-  ...await original<typeof import('../../../src/mobile/src/lib/toast')>(),
+  ...(await original<typeof import('../../../src/mobile/src/lib/toast')>()),
   showSuccess: mocks.success,
 }));
 vi.mock('../../../src/mobile/src/components/Controls', () => ({
@@ -109,7 +121,13 @@ vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({
     onPhotoCleared: () => void;
     disabled?: boolean;
   }) => (
-    <button disabled={disabled} onClick={() => { onPhotoCleared(); void onCapture(new Uint8Array([1, 2, 3])); }}>
+    <button
+      disabled={disabled}
+      onClick={() => {
+        onPhotoCleared();
+        void onCapture(new Uint8Array([1, 2, 3]));
+      }}
+    >
       Chụp ảnh thử
     </button>
   ),
@@ -145,7 +163,8 @@ afterEach(cleanup);
 async function capture() {
   const select = screen.queryByText('Chọn đồng hồ');
   if (select) fireEvent.click(select);
-  else if (!screen.queryByText('Chụp ảnh thử')) fireEvent.click(await screen.findByText('Chọn đồng hồ'));
+  else if (!screen.queryByText('Chụp ảnh thử'))
+    fireEvent.click(await screen.findByText('Chọn đồng hồ'));
   fireEvent.click(await screen.findByText('Chụp ảnh thử'));
   await waitFor(() => expect(mocks.image).toHaveBeenCalled());
 }

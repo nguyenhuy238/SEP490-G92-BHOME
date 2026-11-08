@@ -17,11 +17,11 @@ working tree sạch. Đây là lượt tiếp theo của
 [báo cáo trước](OCR_FOUR_CLASS_RECOGNITION_COMPLETION.md), không chạy lại training
 trên weak62, không huấn luyện bằng historical test hoặc nhãn số chưa duyệt.
 
-| Hành vi yêu cầu → nguồn | Thành phần ảnh hưởng | Acceptance / negative cases |
-| --- | --- | --- |
-| OCR là đề xuất, Staff xác nhận: BF-05 / UC-20 / GBR-07 | Offline model tools, blinded review pack; runtime giữ nguyên | Đọc được positive; blank/segment/serial không thành số billing; không tự confirm |
-| Chọn vùng số, phân biệt loại từ ảnh: task hiện tại + UC-20 | CLIP, Grounding DINO, Stage2/Paddle component studies | Cùng ảnh/split/GT; oracle crop tách full-frame; không dùng filename/OCR metadata để suy loại |
-| Chỉ confirmed reading đi vào hóa đơn: UC-21 / JOB-10 / GBR-09 | Không đổi invoice/API/schema | Test confirmation, finalization, payment/meter automation và quyền Location |
+| Hành vi yêu cầu → nguồn                                       | Thành phần ảnh hưởng                                         | Acceptance / negative cases                                                                  |
+| ------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| OCR là đề xuất, Staff xác nhận: BF-05 / UC-20 / GBR-07        | Offline model tools, blinded review pack; runtime giữ nguyên | Đọc được positive; blank/segment/serial không thành số billing; không tự confirm             |
+| Chọn vùng số, phân biệt loại từ ảnh: task hiện tại + UC-20    | CLIP, Grounding DINO, Stage2/Paddle component studies        | Cùng ảnh/split/GT; oracle crop tách full-frame; không dùng filename/OCR metadata để suy loại |
+| Chỉ confirmed reading đi vào hóa đơn: UC-21 / JOB-10 / GBR-09 | Không đổi invoice/API/schema                                 | Test confirmation, finalization, payment/meter automation và quyền Location                  |
 
 Task hiện tại cho phép nghiên cứu provisional, không phê duyệt nhãn thành GT hay
 thay đổi chính sách billing. Các tham chiếu nghiệp vụ dùng guardrail AGENTS và
@@ -29,13 +29,13 @@ mapping sẵn có; lượt này không diễn giải lại nguyên văn báo cá
 
 ## 2. Baseline đã đối chiếu
 
-| Baseline tại starting HEAD | Kết quả lịch sử, không phải independent acceptance |
-| --- | --- |
-| CLIP direct, 15 test:9 meter +6 negative | Đúng accepted2/9; sai accepted0/15; unknown13/15 |
-| YOLO display 416, 4 Commons test | Numeric-proxy IoU≥.5:1/4, chỉ blank; readable0/3 |
+| Baseline tại starting HEAD                                   | Kết quả lịch sử, không phải independent acceptance                     |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| CLIP direct, 15 test:9 meter +6 negative                     | Đúng accepted2/9; sai accepted0/15; unknown13/15                       |
+| YOLO display 416, 4 Commons test                             | Numeric-proxy IoU≥.5:1/4, chỉ blank; readable0/3                       |
 | English/mobile và multilingual/server CTC, 4 oracle LCD crop | Mỗi model đúng2/3 readable; sai numeric2/4 gồm blank và water disputed |
-| Water mechanical full pipeline | Historical exact10/33, fallback42/52; auto exact1/33, fallback51/52 |
-| Weak62 four-class YOLO và CC0 LCD CRNN | Đã rejected ở lượt trước; CRNN historical exact0/3 |
+| Water mechanical full pipeline                               | Historical exact10/33, fallback42/52; auto exact1/33, fallback51/52    |
+| Weak62 four-class YOLO và CC0 LCD CRNN                       | Đã rejected ở lượt trước; CRNN historical exact0/3                     |
 
 Baseline direct CLIP đã replay trong study mới: max score delta **0.0** với report
 cũ. Các số water10/33 không benchmark lại hoặc dùng để tune trong lượt này.
@@ -88,14 +88,14 @@ Threshold chọn trên11 calibration:7 provisional readable +4 negative gồm bl
 segment test và2 publisher serial crops; đóng băng trước historical test5 ảnh.
 Test có3 readable +2 blank/inactive. Segment/status held-out đa thiết bị còn thiếu.
 
-| Gate | Readable giữ được /3 | Negative chặn /2 | Sai numeric /5 | Exact frozen /5 | Fallback /5 |
-| --- | --- | --- | --- | --- | --- |
-| Không gate: English hoặc server | Không áp dụng | Không áp dụng |2|2|1|
-| Pixel contrast |0|2|0|0|5|
-| CLIP visual state |1|0|1|1|3|
-| Visual + contrast |1|0|1|1|3|
-| Visual + contrast + segment structure |1|2|0|1|4|
-| Shape primary |0|2|0|0|5|
+| Gate                                  | Readable giữ được /3 | Negative chặn /2 | Sai numeric /5 | Exact frozen /5 | Fallback /5 |
+| ------------------------------------- | -------------------- | ---------------- | -------------- | --------------- | ----------- |
+| Không gate: English hoặc server       | Không áp dụng        | Không áp dụng    | 2              | 2               | 1           |
+| Pixel contrast                        | 0                    | 2                | 0              | 0               | 5           |
+| CLIP visual state                     | 1                    | 0                | 1              | 1               | 3           |
+| Visual + contrast                     | 1                    | 0                | 1              | 1               | 3           |
+| Visual + contrast + segment structure | 1                    | 2                | 0              | 1               | 4           |
+| Shape primary                         | 0                    | 2                | 0              | 0               | 5           |
 
 Pixel/shape-primary không tìm được positive policy an toàn trên calibration nên
 reject-all, **REJECTED**. Shape-combined chặn hai blank nhưng mất2/3 readable,
@@ -107,10 +107,10 @@ server cho cùng bảng numeric này; output component không phải API proposa
 
 Tách hai category trong cùng5 oracle test inputs (English và server giống nhau):
 
-| Category / số ảnh | Ungated exact / sai numeric / fallback | Shape-combined exact / sai numeric / fallback |
-| --- | --- | --- |
-| Electricity digital /3, gồm1 blank |2 /1 /0|1 /0 /2|
-| Water digital /2, gồm1 blank |0 /1 /1|0 /0 /2|
+| Category / số ảnh                  | Ungated exact / sai numeric / fallback | Shape-combined exact / sai numeric / fallback |
+| ---------------------------------- | -------------------------------------- | --------------------------------------------- |
+| Electricity digital /3, gồm1 blank | 2 /1 /0                                | 1 /0 /2                                       |
+| Water digital /2, gồm1 blank       | 0 /1 /1                                | 0 /0 /2                                       |
 
 Không được báo water gate là thành công khi nó không đọc đúng positive nào.
 
@@ -127,12 +127,12 @@ Chọn prompt/resolution/score từ2 validation trước4 test. Model Apache-2.0
 [official source](https://huggingface.co/IDEA-Research/grounding-dino-tiny), pinned
 revision/hash ở [receipt](../../tools/BHome.OcrSmoke/model_tools/grounding-display-receipt.json).
 
-| Input / model | Test localized proxy IoU≥.5 /4 | Readable /3 |
-| --- | --- | --- |
-| Full-frame YOLO416 |1, blank|0|
-| Oracle-body YOLO416 |1, blank|0|
-| Full-frame Grounding DINO, selected800 |0|0|
-| Oracle-body Grounding DINO, selected640 |0|0|
+| Input / model                           | Test localized proxy IoU≥.5 /4 | Readable /3 |
+| --------------------------------------- | ------------------------------ | ----------- |
+| Full-frame YOLO416                      | 1, blank                       | 0           |
+| Oracle-body YOLO416                     | 1, blank                       | 0           |
+| Full-frame Grounding DINO, selected800  | 0                              | 0           |
+| Oracle-body Grounding DINO, selected640 | 0                              | 0           |
 
 Grounding thường bỏ sót LCD hoặc bao generic meter body. Body oracle không cứu
 localization; không có improvement được acceptance. Một YOLO crop IoU≈.399 đọc
@@ -158,12 +158,12 @@ server CTC trong scope activation chung: **REJECTED**. Chúng vẫn hữu ích �
 Chạy PP direct/page, English CTC và water Stage2 trên3 oracle wheel crops, crop
 và provisional labels đóng băng trước inference. Hai ảnh có chuỗi nháp:
 
-| Reader | Khớp nháp /2 | Numeric khác nháp /2 | Không có numeric /2 |
-| --- | --- | --- | --- |
-| PP direct |0|0|2|
-| PP page |0|1|1|
-| English |1|1|0|
-| Water Stage2 transfer |0|1|1|
+| Reader                | Khớp nháp /2 | Numeric khác nháp /2 | Không có numeric /2 |
+| --------------------- | ------------ | -------------------- | ------------------- |
+| PP direct             | 0            | 0                    | 2                   |
+| PP page               | 0            | 1                    | 1                   |
+| English               | 1            | 1                    | 0                   |
+| Water Stage2 transfer | 0            | 1                    | 1                   |
 
 Stage2 có lần trả0034 thay vì đủ6 chữ số. Đây là thiếu digit chứ không phải
 recognition thành công. Ảnh thứ ba rolling digit chưa có GT: PP239659,
@@ -185,12 +185,12 @@ filename/OCR/metadata để quyết định loại. Direct5 classes so với uti
 khi cả hai heads đạt confidence và margin. Threshold chọn trên11 validation;
 test15 gồm9 meter +6 negative. Pretraining overlap unknown, không độc lập.
 
-| Input / strategy | Đúng accepted /9 meter | Sai accepted /15 | Unknown /15 | Negative false accepted /6 |
-| --- | --- | --- | --- | --- |
-| Full-frame direct |2|0|13|0|
-| Full-frame hierarchy |5|0|10|0|
-| Oracle-body direct |1|0|14|0|
-| Oracle-body hierarchy |3|1|11|0|
+| Input / strategy      | Đúng accepted /9 meter | Sai accepted /15 | Unknown /15 | Negative false accepted /6 |
+| --------------------- | ---------------------- | ---------------- | ----------- | -------------------------- |
+| Full-frame direct     | 2                      | 0                | 13          | 0                          |
+| Full-frame hierarchy  | 5                      | 0                | 10          | 0                          |
+| Oracle-body direct    | 1                      | 0                | 14          | 0                          |
+| Oracle-body hierarchy | 3                      | 1                | 11          | 0                          |
 
 Body oracle gây1 mechanical-electricity→digital sai; không mặc định crop là tốt
 hơn. Full-frame hierarchy: **EXPERIMENTAL**, chưa export/activate; direct:
@@ -200,12 +200,12 @@ bao preprocessing/API/queue, không phải latency SLA. [Confusion và scores](o
 
 ## 9. Kết quả positive theo loại và activation decisions
 
-| Category | Visual direct → hierarchy, full-frame | Exact reading evidence | Trạng thái |
-| --- | --- | --- | --- |
-| Electricity mechanical |0/3 →1/3|English1/2 oracle **provisional**, Stage2 0/2; full-frame mới chưa đo|EXPERIMENTAL; BLOCKED_BY_DATA cho acceptance|
-| Electricity digital |2/3 →3/3|English/server2/2 readable oracle; blank có numeric sai; detector readable0/2|REJECTED activation|
-| Water mechanical |0/2 →1/2|Historical full10/33; không đo lại mới|Baseline giữ nguyên, không có accepted improvement|
-| Water digital |0/1 →0/1|Frozen readable0/1; disputed glyph; blank control không có số|BLOCKED_BY_DATA; reader REJECTED|
+| Category               | Visual direct → hierarchy, full-frame | Exact reading evidence                                                        | Trạng thái                                         |
+| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------- |
+| Electricity mechanical | 0/3 →1/3                              | English1/2 oracle **provisional**, Stage2 0/2; full-frame mới chưa đo         | EXPERIMENTAL; BLOCKED_BY_DATA cho acceptance       |
+| Electricity digital    | 2/3 →3/3                              | English/server2/2 readable oracle; blank có numeric sai; detector readable0/2 | REJECTED activation                                |
+| Water mechanical       | 0/2 →1/2                              | Historical full10/33; không đo lại mới                                        | Baseline giữ nguyên, không có accepted improvement |
+| Water digital          | 0/1 →0/1                              | Frozen readable0/1; disputed glyph; blank control không có số                 | BLOCKED_BY_DATA; reader REJECTED                   |
 
 Không gộp component/exact/provisional vào accuracy billing. Positive independent
 four-class accuracy và independent exact-reading accuracy: **NOT MEASURED**.
@@ -223,20 +223,20 @@ invoice và payment giữ nguyên. CLI nghiên cứu nằm trong OcrSmoke, khôn
 [Verification receipt](ocr-progress-verification-results.json) giữ commands,
 kết quả và hash logs local; không dùng số test làm độ chính xác model.
 
-| Check đã chạy sau code | Kết quả |
-| --- | --- |
-| Backend solution Release build, no-restore |PASS,0 warnings/0 errors|
-| Application / Domain unit tests |PASS325 /106|
-| OCR integration, loại Docker/CompactPostgres, pinned local models |PASS125,0 skipped|
-| PostgreSQL workflow + real ONNX + invoice finalization/payment automation |PASS7,0 skipped; storage substitute in memory|
-| Python scripts unit/regression |PASS49|
-| Node dataset tests |PASS29|
-| Mobile Vitest |PASS56 suites/576 tests|
-| Mobile TypeScript / ESLint |PASS / PASS|
-| Stage2 native/.NET parity / English Python/.NET parity |PASS10 /4 crops|
-| Mechanical component benchmark |Đã chạy12 observations; không independent acceptance|
-| Real camera |NOT_RUN: không có adb/device được kết nối qua môi trường này|
-| Real MinIO |NOT_RUN: không listener9000/9001, Docker daemon unavailable|
+| Check đã chạy sau code                                                    | Kết quả                                                      |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Backend solution Release build, no-restore                                | PASS,0 warnings/0 errors                                     |
+| Application / Domain unit tests                                           | PASS325 /106                                                 |
+| OCR integration, loại Docker/CompactPostgres, pinned local models         | PASS125,0 skipped                                            |
+| PostgreSQL workflow + real ONNX + invoice finalization/payment automation | PASS7,0 skipped; storage substitute in memory                |
+| Python scripts unit/regression                                            | PASS49                                                       |
+| Node dataset tests                                                        | PASS29                                                       |
+| Mobile Vitest                                                             | PASS56 suites/576 tests                                      |
+| Mobile TypeScript / ESLint                                                | PASS / PASS                                                  |
+| Stage2 native/.NET parity / English Python/.NET parity                    | PASS10 /4 crops                                              |
+| Mechanical component benchmark                                            | Đã chạy12 observations; không independent acceptance         |
+| Real camera                                                               | NOT_RUN: không có adb/device được kết nối qua môi trường này |
+| Real MinIO                                                                | NOT_RUN: không listener9000/9001, Docker daemon unavailable  |
 
 PostgreSQL disposable đã có được chạy ở loopback55493 bằng test role, test tự tạo
 và dọn DB; server đã dừng sau suite. In-memory evidence test không phải MinIO E2E.
@@ -267,15 +267,15 @@ trước khi đánh giá reader E2E. Camera/MinIO cần môi trường thật đ
 
 ## 12. Incremental commits và final state
 
-| Commit | Nội dung |
-| --- | --- |
-|e6bdf8b|Prepare provisional12-image state pilot and blinded review workflow|
-|e157f3a|Evaluate actual display-state and numeric gate tradeoffs|
-|f5dd307|Isolate pure policy tests from optional model dependencies|
-|6ccb35f|Compare Grounding DINO, YOLO and oracle localization; record domain gap|
-|09b4588|Measure direct vs hierarchical visual classification|
-|3648d46|Probe electricity wheel readers and preserve numeric disagreement|
-|Commit chứa report này|Record measured results, replay commands and final verification|
+| Commit                 | Nội dung                                                                |
+| ---------------------- | ----------------------------------------------------------------------- |
+| e6bdf8b                | Prepare provisional12-image state pilot and blinded review workflow     |
+| e157f3a                | Evaluate actual display-state and numeric gate tradeoffs                |
+| f5dd307                | Isolate pure policy tests from optional model dependencies              |
+| 6ccb35f                | Compare Grounding DINO, YOLO and oracle localization; record domain gap |
+| 09b4588                | Measure direct vs hierarchical visual classification                    |
+| 3648d46                | Probe electricity wheel readers and preserve numeric disagreement       |
+| Commit chứa report này | Record measured results, replay commands and final verification         |
 
 Final reporting HEAD là commit chứa file này; hash đầy đủ và working-tree status
 sau commit ghi tại `.tools/ocr-recognition-final-state.json`, chronological log

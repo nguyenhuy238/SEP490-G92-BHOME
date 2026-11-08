@@ -85,9 +85,7 @@
       "raw": null,
       "confidence": null,
       "draftMatch": false,
-      "warnings": [
-        "unclear_digit"
-      ],
+      "warnings": ["unclear_digit"],
       "observedMs": 35.2848
     },
     {

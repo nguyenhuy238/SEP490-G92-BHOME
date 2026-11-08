@@ -37,8 +37,15 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
         var path = $"/api/v1/contracts/{w.Contract}/move-out/settlement-summary";
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        db.Add(new DepositVerification { ContractId = w.Contract, Amount = 400000, BankTransactionReference = "SYN-POS-" + Guid.NewGuid(),
-            VerificationReason = "Synthetic verified deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow });
+        db.Add(new DepositVerification
+        {
+            ContractId = w.Contract,
+            Amount = 400000,
+            BankTransactionReference = "SYN-POS-" + Guid.NewGuid(),
+            VerificationReason = "Synthetic verified deposit",
+            VerifiedByUserId = w.Owner,
+            VerifiedAt = DateTimeOffset.UtcNow
+        });
         await db.SaveChangesAsync();
         var before = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path))!;
         Assert.Equal(400000, before.Calculation!.AvailableSecurityDeposit);

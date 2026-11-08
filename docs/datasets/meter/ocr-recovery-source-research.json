@@ -9,10 +9,7 @@
       "attribution": "Meters LCD / Roboflow Universe",
       "sha256": "3625fc20a2998bc3cf4d5491f84691869b0fada1f4af53d3f1a13b7e9467e05a",
       "bytes": 11714,
-      "dimensions": [
-        200,
-        200
-      ],
+      "dimensions": [200, 200],
       "reviewedTechnology": "mechanical_water",
       "numericGroundTruth": null,
       "annotationReview": "agent_visual_body_review_only",
@@ -29,10 +26,7 @@
       "attribution": "Meters LCD / Roboflow Universe",
       "sha256": "ca89c555aafc4c348b40b07288aa93605d50eafda447460db8b721bc7dd6111e",
       "bytes": 13158,
-      "dimensions": [
-        200,
-        200
-      ],
+      "dimensions": [200, 200],
       "reviewedTechnology": "mechanical_water",
       "numericGroundTruth": null,
       "annotationReview": "agent_visual_body_review_only",
@@ -49,10 +43,7 @@
       "attribution": "Meters LCD / Roboflow Universe",
       "sha256": "0ee472ea393076b3d685f932bc47e835130a92470d821ff02ffebd73a0ad0d52",
       "bytes": 20012,
-      "dimensions": [
-        200,
-        200
-      ],
+      "dimensions": [200, 200],
       "reviewedTechnology": "mechanical_water",
       "numericGroundTruth": null,
       "annotationReview": "agent_visual_body_review_only",

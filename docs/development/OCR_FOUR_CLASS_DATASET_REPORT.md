@@ -9,13 +9,13 @@ Kaggle nháp thành ground truth. [Counts máy đọc được](ocr-four-dataset
 Giữ manifest62 development cũ để so sánh pretrained model, không retrain YOLO trên
 tập yếu này. Body/category do agent review, chưa có human acceptance độc lập.
 
-| Category | Train cũ | Validation cũ | Test cũ |
-| --- | ---: | ---: | ---: |
-| electricity_mechanical |15|3|3|
-| electricity_digital |7|3|3|
-| water_mechanical |10|3|2|
-| water_digital |3|1|1|
-| not_meter |1|1|6|
+| Category               | Train cũ | Validation cũ | Test cũ |
+| ---------------------- | -------: | ------------: | ------: |
+| electricity_mechanical |       15 |             3 |       3 |
+| electricity_digital    |        7 |             3 |       3 |
+| water_mechanical       |       10 |             3 |       2 |
+| water_digital          |        3 |             1 |       1 |
+| not_meter              |        1 |             1 |       6 |
 
 Ba train water_digital chỉ là preview200×150 cùng một nguồn; không coi là ba thiết
 bị độc lập. Một test LCD trống không thay được nhiều water LCD readable positives.

@@ -5,6 +5,10 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 6 && args[0] == "--experimental-meter-context")
+    return await ExperimentalMeterContext.Run(args[1], args[2], args[3], args[4], args[5]);
+if (args.Length == 7 && args[0] == "--experimental-meter-context")
+    return await ExperimentalMeterContext.Run(args[1], args[2], args[3], args[4], args[5], int.Parse(args[6]));
 if (args.Length == 7 && args[0] == "--mechanical-electric-window-study")
     return await MechanicalElectricWindowStudy.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6]);
 if (args.Length == 6 && args[0] == "--reviewed-window-compare")
@@ -13,6 +17,14 @@ if (args.Length == 5 && args[0] == "--english-meter-parity")
     return await WaterReaderComparison.ParityAsync(args[1], args[2], args[3], args[4]);
 if (args.Length == 7 && args[0] == "--water-reader-compare")
     return await WaterReaderComparison.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6]);
+if (args.Length == 7 && args[0] == "--water-row-margin-study")
+    return await WaterReaderComparison.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6], rowMarginStudy: true);
+if (args.Length == 7 && args[0] == "--water-full-row-study")
+    return await WaterReaderComparison.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6], fullRowStudy: true);
+if (args.Length == 7 && args[0] == "--water-digit-geometry-study")
+    return await WaterReaderComparison.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6], digitGeometryStudy: true);
+if (args.Length == 6 && args[0] == "--water-source-probes")
+    return await WaterSourceProbeStudy.Run(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 5 && args[0] == "--water-localization-audit")
     return await WaterLocalizationAudit.RunAsync(args[1], args[2], args[3], args[4]);
 if (args.Length == 6 && args[0] == "--meter-failure-diagnostic")
@@ -35,8 +47,13 @@ if (args.Length == 4 && args[0] == "--visual-category-benchmark")
     return VisualCategoryEvaluation.Run(args[1], args[2], args[3]);
 if (args.Length == 5 && args[0] == "--meter-reading-controls")
 {
-    var controlOptions = new OcrOptions { Enabled = true, ModelDirectory = args[1], MeterDetectionMinConfidence = .7f,
-        MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = args[2] } };
+    var controlOptions = new OcrOptions
+    {
+        Enabled = true,
+        ModelDirectory = args[1],
+        MeterDetectionMinConfidence = .7f,
+        MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = args[2] }
+    };
     using var controlDetector = new YoloMeterSceneDetector(controlOptions);
     using var controlDigits = new YoloWaterDigitRecognizer(controlOptions);
     using var controlEngine = new OnnxOcrEngine(controlOptions, new ImagePreprocessor(controlOptions), controlDetector, waterDigits: controlDigits);

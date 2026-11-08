@@ -1,8 +1,6 @@
 {
   "dataset": "meter-evaluation",
-  "engineVersions": [
-    "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2"
-  ],
+  "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2"],
   "sourceCount": 8,
   "total": 17,
   "exactMatches": 17,
@@ -78,10 +76,7 @@
       "fields": {},
       "elapsedMilliseconds": 165,
       "isFallback": true,
-      "warnings": [
-        "meter_not_detected",
-        "reading_not_recognized"
-      ],
+      "warnings": ["meter_not_detected", "reading_not_recognized"],
       "expectedRejection": true
     },
     {
@@ -107,10 +102,7 @@
       "fields": {},
       "elapsedMilliseconds": 84,
       "isFallback": true,
-      "warnings": [
-        "meter_detection_uncertain",
-        "reading_not_recognized"
-      ],
+      "warnings": ["meter_detection_uncertain", "reading_not_recognized"],
       "expectedRejection": true
     },
     {
@@ -166,10 +158,7 @@
       "fields": {},
       "elapsedMilliseconds": 93,
       "isFallback": true,
-      "warnings": [
-        "meter_not_detected",
-        "reading_not_recognized"
-      ],
+      "warnings": ["meter_not_detected", "reading_not_recognized"],
       "expectedRejection": true
     },
     {
@@ -226,11 +215,7 @@
       "fields": {},
       "elapsedMilliseconds": 69,
       "isFallback": true,
-      "warnings": [
-        "possible_glare",
-        "meter_not_detected",
-        "reading_not_recognized"
-      ],
+      "warnings": ["possible_glare", "meter_not_detected", "reading_not_recognized"],
       "expectedRejection": true
     },
     {
@@ -256,10 +241,7 @@
       "fields": {},
       "elapsedMilliseconds": 84,
       "isFallback": true,
-      "warnings": [
-        "meter_not_detected",
-        "reading_not_recognized"
-      ],
+      "warnings": ["meter_not_detected", "reading_not_recognized"],
       "expectedRejection": true
     },
     {
@@ -284,11 +266,7 @@
       "fields": {},
       "elapsedMilliseconds": 256,
       "isFallback": true,
-      "warnings": [
-        "meter_category_unverified",
-        "unclear_digit",
-        "reading_not_recognized"
-      ],
+      "warnings": ["meter_category_unverified", "unclear_digit", "reading_not_recognized"],
       "expectedRejection": true
     },
     {

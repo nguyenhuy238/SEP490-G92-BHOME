@@ -61,7 +61,8 @@ public sealed class Compact24RefundTests
     public async Task UnknownOrInconsistentCompletedRefundCannotClearTheInvoicePendingReview()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try {
+        try
+        {
             var (owner, sourceId) = await Setup(fixture); using var client = owner;
             var sourceRoute = $"/api/v1/payment-transactions/{sourceId}/refunds";
             var source = await Value<RefundSource>(await owner.GetAsync(sourceRoute));
@@ -82,7 +83,8 @@ public sealed class Compact24RefundTests
             // Later imported/corrupted proof metadata has identical amounts/status to a valid return.
             // Neither may release settlement simply because COMPLETED sums match the excess.
             foreach (var history in new[] { record.Replace("sha256", "missingHash", StringComparison.Ordinal),
-                record.Replace("SYN-GUARD", "SYN-MISMATCH", StringComparison.Ordinal), malformed.ToJsonString() }) {
+                record.Replace("SYN-GUARD", "SYN-MISMATCH", StringComparison.Ordinal), malformed.ToJsonString() })
+            {
                 await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({history}::jsonb) WHERE id={row.Id}");
                 Assert.True(await Pending());
                 var report = await Value<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
@@ -91,14 +93,16 @@ public sealed class Compact24RefundTests
                 await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({record}::jsonb) WHERE id={row.Id}");
                 Assert.False(await Pending());
             }
-        } finally { await fixture.DisposeAsync(); }
+        }
+        finally { await fixture.DisposeAsync(); }
     }
 
     [CompactPostgresFact]
     public async Task UnclassifiedCompletedRefundEqualToExcessKeepsPendingReview()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try {
+        try
+        {
             var (owner, sourceId) = await Setup(fixture); using var client = owner;
             var source = await Value<RefundSource>(await owner.GetAsync($"/api/v1/payment-transactions/{sourceId}/refunds"));
             await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
@@ -114,14 +118,16 @@ public sealed class Compact24RefundTests
             var invoice = await db.Set<Invoice>().Select(i => i.Id).SingleAsync();
             var payment = await Value<InvoicePaymentView>(await owner.GetAsync($"/api/v1/invoices/{invoice}/payment"));
             Assert.True(payment.PendingReview); Assert.Equal(100000, payment.PaidAmount);
-        } finally { await fixture.DisposeAsync(); }
+        }
+        finally { await fixture.DisposeAsync(); }
     }
 
     [CompactPostgresFact]
     public async Task ExcessRefundReservesRejectsApprovesExecutesAndReplaysWithoutChangingInvoiceAllocations()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try {
+        try
+        {
             var (owner, sourceId) = await Setup(fixture); using var client = owner;
             var sourceRoute = $"/api/v1/payment-transactions/{sourceId}/refunds";
             var source = await Value<RefundSource>(await owner.GetAsync(sourceRoute));
@@ -160,14 +166,16 @@ public sealed class Compact24RefundTests
             Assert.False(report.HasUnclassifiedRefunds); Assert.Equal("100000", report.Total.VerifiedCollections);
             Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == row.Id && a.Event == "ExcessRefundCompleted"));
             Assert.True(await db.IsSchemaReadyAsync());
-        } finally { await fixture.DisposeAsync(); }
+        }
+        finally { await fixture.DisposeAsync(); }
     }
 
     [CompactPostgresFact]
     public async Task ExcessRefundRejectsOtherRolesInvalidPayersAndConcurrentOverReservation()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try {
+        try
+        {
             var (owner, sourceId) = await Setup(fixture); using var client = owner;
             var route = $"/api/v1/payment-transactions/{sourceId}/refunds";
             var source = await Value<RefundSource>(await owner.GetAsync(route));
@@ -179,7 +187,8 @@ public sealed class Compact24RefundTests
             Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
             using var anonymous = fixture.Capture.Factory.CreateClient(); Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(route)).StatusCode);
             await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-            foreach (var role in new[] { "Staff", "Tenant" }) {
+            foreach (var role in new[] { "Staff", "Tenant" })
+            {
                 var account = await db.Users.FirstAsync(u => EF.Property<string[]>(u, "roles").Contains(role));
                 using var other = fixture.Capture.Factory.CreateClient();
                 var login = await other.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = "Synthetic-Payment-Test!123" });
@@ -192,7 +201,8 @@ public sealed class Compact24RefundTests
                     Guid.NewGuid(), DateTimeOffset.UtcNow, "SYN", Photo())).StatusCode);
                 Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync($"{Root}/{Guid.NewGuid()}/evidence")).StatusCode);
             }
-        } finally { await fixture.DisposeAsync(); }
+        }
+        finally { await fixture.DisposeAsync(); }
     }
 
     private sealed class InterruptedStorage : IObjectStorage
@@ -208,17 +218,20 @@ public sealed class Compact24RefundTests
     public async Task RefundUploadRecoversAndRejectsTamperingReferencesUnknownPayerAndUnclassifiedLegacyRows()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try {
+        try
+        {
             var (original, sourceId) = await Setup(fixture); using var originalClient = original;
             var store = new InterruptedStorage(); var signingKey = fixture.Capture.Factory.Services.GetRequiredService<IConfiguration>()["Jwt:SigningKey"];
-            await using var host = fixture.Capture.Factory.WithWebHostBuilder(b => {
-                b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string,string?> { ["Jwt:SigningKey"] = signingKey }));
+            await using var host = fixture.Capture.Factory.WithWebHostBuilder(b =>
+            {
+                b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = signingKey }));
                 b.ConfigureTestServices(s => { s.RemoveAll<IObjectStorage>(); s.AddSingleton<IObjectStorage>(store); });
             });
             using var owner = host.CreateClient(); owner.DefaultRequestHeaders.Authorization = original.DefaultRequestHeaders.Authorization;
             var route = $"/api/v1/payment-transactions/{sourceId}/refunds";
             var source = await Value<RefundSource>(await owner.GetAsync(route));
-            async Task<RefundView> Approved(decimal amount) {
+            async Task<RefundView> Approved(decimal amount)
+            {
                 var row = await Value<RefundView>(await Post(owner, route, new RefundInput(source.Beneficiaries[0].Id, amount, "Synthetic refund", true), Guid.NewGuid()));
                 return await Value<RefundView>(await Post(owner, $"{Root}/{row.Id}/decision", new RefundDecision(row.Version, true, "Synthetic approval", true), Guid.NewGuid()));
             }
@@ -251,10 +264,12 @@ public sealed class Compact24RefundTests
             var report = await Value<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
             Assert.True(report.HasUnclassifiedRefunds); Assert.Null(report.Capital.NetRecovery);
             Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(route)).StatusCode);
-        } finally { await fixture.DisposeAsync(); }
+        }
+        finally { await fixture.DisposeAsync(); }
         // Unknown payer is deliberately retained instead of substituting a representative.
         var unknown = new Compact24WorkflowFixture(); await unknown.InitializeAsync();
-        try {
+        try
+        {
             await new PaymentLedgerTests(unknown.Capture).OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(120000, "verified_excess_payment_pending_review");
             await using var scope = unknown.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var sourceId = await db.Set<PaymentTransfer>().Select(p => p.Id).SingleAsync();
@@ -264,7 +279,8 @@ public sealed class Compact24RefundTests
             Assert.Empty((await service.SourceAsync(sourceId, default)).Beneficiaries);
             var error = await Assert.ThrowsAsync<FinanceException>(() => service.CreateAsync(sourceId, new(Guid.NewGuid(), 100, "Synthetic", true), Guid.NewGuid(), default));
             Assert.Equal("refund_verified_payer_required", error.Code);
-        } finally { await unknown.DisposeAsync(); }
+        }
+        finally { await unknown.DisposeAsync(); }
     }
     private sealed class TestOwner(Guid id) : ICurrentUser
     { public Guid? UserId => id; public bool IsInRole(string role) => role == "Owner"; }

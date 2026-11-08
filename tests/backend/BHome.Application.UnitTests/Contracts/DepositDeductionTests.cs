@@ -26,7 +26,10 @@ public sealed class DepositDeductionTests
         Assert.Empty(DepositDeductionPolicy.Normalize(Input() with { Items = [] }, 10000, [], []));
     }
     [Theory]
-    [InlineData(0)] [InlineData(-1)] [InlineData(0.01)] [InlineData(10001)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(0.01)]
+    [InlineData(10001)]
     public void ImpossibleOrOverBudgetAmountsAreRejected(decimal amount)
     {
         var x = Input(); x = x with { Items = [x.Items[0] with { Amount = amount }] };
@@ -72,7 +75,9 @@ public sealed class DepositDeductionTests
         await repo.DidNotReceiveWithAnyArgs().SaveAsync(default!, default);
     }
     [Theory]
-    [InlineData("Staff", 403)] [InlineData("Tenant", 403)] [InlineData("", 401)]
+    [InlineData("Staff", 403)]
+    [InlineData("Tenant", 403)]
+    [InlineData("", 401)]
     public async Task NonOwnerIsDeniedBeforeAnySourceOrPrivateFileLookup(string role, int status)
     {
         var repo = Substitute.For<IDepositDeductionRepository>(); var files = Substitute.For<IDepositDeductionEvidence>();

@@ -1,0 +1,118 @@
+{
+  "date": "2026-11-07",
+  "runtimeSourceHead": "f32545431335aeac1843ee4e0c1ab8f4a592a1cd",
+  "checks": [
+    {
+      "name": "backend_build",
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "skipped": null,
+      "localLog": ".tools/ocr-runtime-focus/build-final.log",
+      "sha256": "388bfd8253141fecd1cfe2a2dbfdfd5b8447f53b15aa24f208a408683735ab40"
+    },
+    {
+      "name": "application",
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 337,
+      "skipped": 0,
+      "localLog": ".tools/ocr-runtime-focus/application-final.log",
+      "sha256": "d56ae2ef567e9e8fb1adf89bd6cb90c1f403e4cbf9018dd754ae46d97e1f2688"
+    },
+    {
+      "name": "ocr_integration",
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~Ocr&Category!=Docker&Category!=CompactPostgres",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 139,
+      "skipped": 0,
+      "localLog": ".tools/ocr-runtime-focus/ocr-integration-final.log",
+      "sha256": "b087ab581072ffea482b02782466ac818700fbc854fc16202bd2554d1d712e25"
+    },
+    {
+      "name": "postgres_workflows",
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; BHOME_COMPACT24_TEST_ADMIN=<owned disposable loopback15493>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 7,
+      "skipped": 0,
+      "localLog": ".tools/ocr-runtime-focus/postgres-workflows.log",
+      "sha256": "273ff7e0f216456ffa9aa2b229b300d0bd93f17356a5e2223479c8524b11d377"
+    },
+    {
+      "name": "mobile_ocr",
+      "command": "cwd src/mobile: node vitest run --config vitest.config.ts document-camera.test.tsx capture-scope.test.tsx meter-flow.test.tsx meter-reading.test.ts room-meter-tasks.test.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 50,
+      "skipped": 0,
+      "localLog": ".tools/ocr-runtime-focus/mobile-ocr.log",
+      "sha256": "9aa592f51dbc070ad9c0dde87147e012e85d5349ac3513b2a64b6185c75a864b"
+    },
+    {
+      "name": "english_python_dotnet_parity",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json .tools/ocr-runtime-focus/english-parity.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 4,
+      "skipped": 0,
+      "localLog": ".tools/ocr-runtime-focus/english-parity.log",
+      "sha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79"
+    },
+    {
+      "name": "stage2_native_dotnet_parity",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops .tools/ocr-runtime-focus/stage2-parity.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 10,
+      "skipped": 0,
+      "localLog": ".tools/ocr-runtime-focus/stage2-parity.log",
+      "sha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd"
+    }
+  ],
+  "independentAcceptance": false,
+  "humanReviewsReceived": 0,
+  "notRun": {
+    "physicalCamera": "No accessible physical device/adb session",
+    "realMinio": "No local9000/9001 listener; PostgreSQL tests explicitly use in-memory evidence storage",
+    "mobileTypecheckAndLint": "No Mobile source change; focused existing OCR tests executed",
+    "postmanAssertions": "Not configured; ASP.NET HTTP integration tests executed instead"
+  },
+  "postmanStatus": {
+    "command": "postman status --json",
+    "exitCode": 0,
+    "initialized": false,
+    "auth": "unauthenticated",
+    "workspaceModified": false
+  },
+  "resolvedFailures": [
+    "Initial classifier with PIL preprocessing rejected: validation allunknown; final uses measured OpenCV preprocessing.",
+    "Positive549 strict runtime gate correctly withheld kvVh unit instead of forcing a match; positive136480278 proves a real full-image candidate.",
+    "PostgreSQL55493 bind permission denied; owned existing cluster started loopback15493 with command-line override,7 tests passed and server stopped."
+  ],
+  "runtimeEvidence": [
+    {
+      "localFile": ".tools/ocr-runtime-focus/http-before-after.json",
+      "sha256": "400ec6807d34ae51c5d7310a3f68c5100bc9e2271628c699c11524b84033e0fa"
+    },
+    {
+      "localFile": ".tools/ocr-runtime-focus/http-runtime-results.json",
+      "sha256": "6541235635b9cb0a4c7bbc1cca7d87aa5f83b76e0b43d36f42957c7f73b3edce"
+    },
+    {
+      "localFile": ".tools/ocr-runtime-focus/parity/dotnet-results.json",
+      "sha256": "c71e492f75958200dcb0a3bad394cb5a5a0be95e44d6c51483541f95a19b2b9a"
+    },
+    {
+      "localFile": ".tools/ocr-runtime-focus/native-parity/references.json",
+      "sha256": "521de3a2ab6342577a45915e2be4c87f421cbe61ac19af60e9ac6ebeef856e5e"
+    },
+    {
+      "localFile": ".tools/ocr-runtime-focus/context-v3/context.json",
+      "sha256": "5d5c29446fe288534f2dbeb68907363cb35b295df969930c0bf4e944d2556ab1"
+    }
+  ]
+}

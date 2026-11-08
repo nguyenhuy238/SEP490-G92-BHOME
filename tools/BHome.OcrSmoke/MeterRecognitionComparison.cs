@@ -10,8 +10,13 @@ internal static class MeterRecognitionComparison
     public static async Task<int> RunAsync(string models, string yolo, string images, string output)
     {
         Directory.CreateDirectory(output);
-        var options = new OcrOptions { Enabled = true, ModelDirectory = models, MeterDetectionMinConfidence = .7f,
-            MeterDetector = new() { Enabled = true, ModelDirectory = yolo } };
+        var options = new OcrOptions
+        {
+            Enabled = true,
+            ModelDirectory = models,
+            MeterDetectionMinConfidence = .7f,
+            MeterDetector = new() { Enabled = true, ModelDirectory = yolo }
+        };
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector);
@@ -48,16 +53,43 @@ internal static class MeterRecognitionComparison
                     // Diagnostic C keeps the same scene guards, never picks by score.
                     var c = selected.CanRecognize && b is not null && (a is null || a == b) ? b : null;
                     object Metric(string? value) => new { proposed = value is not null, exact = clear && value == expected, falseProposal = clear && value is not null && value != expected };
-                    variants.Add(new { name, width = crop.Width, height = crop.Height, pp = Metric(selected.CanRecognize ? a : null),
-                        ppDirect = Metric(selected.CanRecognize ? d : null), ppContrast = Metric(selected.CanRecognize ? e : null),
-                        stage2 = Metric(selected.CanRecognize ? b : null), combined = Metric(c), digitWarnings = stage2.Warnings,
-                        recognizerConflict = a is not null && b is not null && a != b });
-                    local.Add(new { name, expected, pp = pp.Lines.Select(l => new { l.Text, l.Confidence, l.Bounds }), direct = direct.Lines.Select(l => new { l.Text, l.Confidence }),
-                        contrast = contrast.Lines.Select(l => new { l.Text, l.Confidence }), parsed = a, stage2, sceneGuardsPassed = selected.CanRecognize });
+                    variants.Add(new
+                    {
+                        name,
+                        width = crop.Width,
+                        height = crop.Height,
+                        pp = Metric(selected.CanRecognize ? a : null),
+                        ppDirect = Metric(selected.CanRecognize ? d : null),
+                        ppContrast = Metric(selected.CanRecognize ? e : null),
+                        stage2 = Metric(selected.CanRecognize ? b : null),
+                        combined = Metric(c),
+                        digitWarnings = stage2.Warnings,
+                        recognizerConflict = a is not null && b is not null && a != b
+                    });
+                    local.Add(new
+                    {
+                        name,
+                        expected,
+                        pp = pp.Lines.Select(l => new { l.Text, l.Confidence, l.Bounds }),
+                        direct = direct.Lines.Select(l => new { l.Text, l.Confidence }),
+                        contrast = contrast.Lines.Select(l => new { l.Text, l.Confidence }),
+                        parsed = a,
+                        stage2,
+                        sceneGuardsPassed = selected.CanRecognize
+                    });
                 }
             }
-            rows.Add(new { file = Path.GetFileName(path), clear, meterCount = scene.Meters.Count, windowCount = windows.Length,
-                sceneWarnings = selected.Warnings, canRecognize = selected.CanRecognize, elapsedMilliseconds = watch.ElapsedMilliseconds, variants });
+            rows.Add(new
+            {
+                file = Path.GetFileName(path),
+                clear,
+                meterCount = scene.Meters.Count,
+                windowCount = windows.Length,
+                sceneWarnings = selected.Warnings,
+                canRecognize = selected.CanRecognize,
+                elapsedMilliseconds = watch.ElapsedMilliseconds,
+                variants
+            });
             details.Add(new { file = Path.GetFileName(path), clear, expected, variants = local });
             Console.WriteLine($"Compared {rows.Count} public images");
         }

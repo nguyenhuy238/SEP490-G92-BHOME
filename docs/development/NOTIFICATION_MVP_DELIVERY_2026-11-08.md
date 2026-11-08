@@ -29,19 +29,19 @@ Chi tiết API, config, data mapping và giới hạn tương thích:
 
 ## Traceability và kiểm thử nghiệp vụ
 
-| Yêu cầu | Căn cứ | Thực hiện / kiểm chứng |
-| --- | --- | --- |
-| Đổi mật khẩu, refresh an toàn | FE-02, UC-01/02, GBR-13, Report 4 Token Design | Compact24AuthTests; đổi mật khẩu revoke session; audit → PASSWORD_CHANGED |
-| Không đọc dữ liệu Tenant khác | I.4.4, GBR-02, FE-07; PDF §2.2/3 | RoomAndContractReadsRejectOtherTenantsEvenInTheSameRoom; Contract scope/revocation/signed-document regression |
-| Inbox theo user, privacy và dedup | FE-07 §7.4, GBR-14/18; NOT-09 | Inbox/detail/read/target; không trả AUDIT/OUTBOX; negative ID và read của Tenant khác |
-| Invoice chung và mọi co-occupant | UC-20..25, PDF Q1/Q2; NOT-03/T01 | Invoice recipient snapshot; MissingInputs khi thiếu account/email; ba người nhận notices riêng |
-| Partial/Paid và transaction idempotency | GBR-10/18, PDF Q3; NOT-04..07/T02..05 | Worker xử lý trễ vẫn giữ 20.000/80.000 và một Paid transition; replay không tăng allocation; payer null vẫn unknown |
-| Announcements theo scope | UC-35/36, GBR-14; NOT-01/02/12 | Staff Location khác hoặc selected user ngoài scope nhận 403; concurrent send không trùng |
-| Kênh gửi và retry | API-02/JOB-04, GBR-14/18; NOT-08 | Stable key, retry không nhân inbox; source/read-state không bị rollback; API chỉ trả trạng thái an toàn |
-| Incident/emergency | UC-26..30, GBR-11, PDF Q4/Q5; NOT-10/11 | Location assignment, cấu hình explicit; read không acknowledge; giữ generic adapter khi v2 channel tắt |
-| Nhắc tạm trú | GBR-06/JOB-08, PDF Q6; T08/09 | WEEKLY/MONTHLY dedup riêng, kết thúc không tạo thêm, channel còn chờ bị Suppressed |
-| Account invitation | UC-15, PDF §2.1/Q2 | Owner-only, active-tenancy scope, một lần, xác nhận email, không lưu raw token trong notification |
-| Worker không bật nghiệp vụ khác | Q7, nguyên tắc không thay đổi financial state từ notification | NotificationOnlyAutomationRunsWithoutEnablingFinancialJobs |
+| Yêu cầu                                 | Căn cứ                                                        | Thực hiện / kiểm chứng                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Đổi mật khẩu, refresh an toàn           | FE-02, UC-01/02, GBR-13, Report 4 Token Design                | Compact24AuthTests; đổi mật khẩu revoke session; audit → PASSWORD_CHANGED                                           |
+| Không đọc dữ liệu Tenant khác           | I.4.4, GBR-02, FE-07; PDF §2.2/3                              | RoomAndContractReadsRejectOtherTenantsEvenInTheSameRoom; Contract scope/revocation/signed-document regression       |
+| Inbox theo user, privacy và dedup       | FE-07 §7.4, GBR-14/18; NOT-09                                 | Inbox/detail/read/target; không trả AUDIT/OUTBOX; negative ID và read của Tenant khác                               |
+| Invoice chung và mọi co-occupant        | UC-20..25, PDF Q1/Q2; NOT-03/T01                              | Invoice recipient snapshot; MissingInputs khi thiếu account/email; ba người nhận notices riêng                      |
+| Partial/Paid và transaction idempotency | GBR-10/18, PDF Q3; NOT-04..07/T02..05                         | Worker xử lý trễ vẫn giữ 20.000/80.000 và một Paid transition; replay không tăng allocation; payer null vẫn unknown |
+| Announcements theo scope                | UC-35/36, GBR-14; NOT-01/02/12                                | Staff Location khác hoặc selected user ngoài scope nhận 403; concurrent send không trùng                            |
+| Kênh gửi và retry                       | API-02/JOB-04, GBR-14/18; NOT-08                              | Stable key, retry không nhân inbox; source/read-state không bị rollback; API chỉ trả trạng thái an toàn             |
+| Incident/emergency                      | UC-26..30, GBR-11, PDF Q4/Q5; NOT-10/11                       | Location assignment, cấu hình explicit; read không acknowledge; giữ generic adapter khi v2 channel tắt              |
+| Nhắc tạm trú                            | GBR-06/JOB-08, PDF Q6; T08/09                                 | WEEKLY/MONTHLY dedup riêng, kết thúc không tạo thêm, channel còn chờ bị Suppressed                                  |
+| Account invitation                      | UC-15, PDF §2.1/Q2                                            | Owner-only, active-tenancy scope, một lần, xác nhận email, không lưu raw token trong notification                   |
+| Worker không bật nghiệp vụ khác         | Q7, nguyên tắc không thay đổi financial state từ notification | NotificationOnlyAutomationRunsWithoutEnablingFinancialJobs                                                          |
 
 Nguồn gốc vẫn là reports trong `docs/reports/` và PDF đã đính kèm; không lấy báo cáo tiến độ làm test evidence.
 Report 5 UT/IT/ST/AT gốc chưa có trong thư mục reports ở lượt phân tích; dùng test thực tế trong repo.

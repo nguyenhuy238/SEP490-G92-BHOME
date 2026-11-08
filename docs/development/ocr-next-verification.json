@@ -3,24 +3,14 @@
   "startHead": "83317cb",
   "branch": "member/QHuy",
   "status": "partial_not_production_ready",
-  "scope": [
-    "BF-05",
-    "UC-20",
-    "GBR-07",
-    "GBR-01/02",
-    "UC-21/GBR-09"
-  ],
+  "scope": ["BF-05", "UC-20", "GBR-07", "GBR-01/02", "UC-21/GBR-09"],
   "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
   "bodyTraining": {
     "images": 62,
     "train": 36,
     "validation": 11,
     "test": 15,
-    "waterDigitalTrainValTest": [
-      3,
-      1,
-      1
-    ],
+    "waterDigitalTrainValTest": [3, 1, 1],
     "activationDecision": "rejected",
     "trainedClasses": 4,
     "onnxSha256": "c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7",

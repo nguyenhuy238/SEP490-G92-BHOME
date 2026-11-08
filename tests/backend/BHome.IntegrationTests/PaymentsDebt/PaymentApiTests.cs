@@ -17,7 +17,7 @@ public sealed partial class PaymentLedgerTests
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var email = await db.Users.Where(u => u.Id == actor).Select(u => u.Email).SingleAsync();
-        var client = fixture.Factory.CreateClient(); var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = "Synthetic-Payment-Test!123" });
+        var client = fixture.Factory.CreateClient(); var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password });
         login.EnsureSuccessStatusCode(); var session = (await login.Content.ReadFromJsonAsync<LoginResult>())!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken); return client;
     }

@@ -58,8 +58,16 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         else
         {
             if (await users.FindByEmailAsync(request.Email) is not null) throw new NotificationException(409, "email_requires_explicit_account_link");
-            var id = Guid.NewGuid(); user = new ApplicationUser { Id = id, UserName = request.Email, Email = request.Email, EmailConfirmed = false,
-                SecurityStamp = Guid.NewGuid().ToString("N"), ConcurrencyStamp = Guid.NewGuid().ToString("N"), LockoutEnabled = true };
+            var id = Guid.NewGuid(); user = new ApplicationUser
+            {
+                Id = id,
+                UserName = request.Email,
+                Email = request.Email,
+                EmailConfirmed = false,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
+                ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                LockoutEnabled = true
+            };
             db.Users.Add(user); db.Entry(user).Property("roles").CurrentValue = new[] { Roles.Tenant };
             // Unknowable random initial credential; no default password is issued to the user.
             user.PasswordHash = users.PasswordHasher.HashPassword(user, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");

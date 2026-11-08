@@ -45,14 +45,29 @@ internal static class AutomaticOcrEvaluation
             results.Add(new { index = results.Count, passed = success, result.ClassificationStatus, result.DetectedCategory, elapsedMilliseconds = times[^1], fields, result.Warnings });
             Console.WriteLine(JsonSerializer.Serialize(new { index = results.Count - 1, passed = success, result.ClassificationStatus, elapsedMilliseconds = times[^1] }));
         }
-        var summary = new { manifest.Dataset, sourceCount = manifest.Cases.Select(c => c.Source ?? c.File).Distinct().Count(), total = results.Count, passed, statusMatches, classified, reviewed, correctExpectedFields = correctFields,
-            totalExpectedFields = totalFields, falseProposalsOnReviewCases,
-            explicitProfileCorrectExpectedFields = explicitCorrectFields, classifiedCasesIdenticalToExplicitProfile = sameAsExplicit,
+        var summary = new
+        {
+            manifest.Dataset,
+            sourceCount = manifest.Cases.Select(c => c.Source ?? c.File).Distinct().Count(),
+            total = results.Count,
+            passed,
+            statusMatches,
+            classified,
+            reviewed,
+            correctExpectedFields = correctFields,
+            totalExpectedFields = totalFields,
+            falseProposalsOnReviewCases,
+            explicitProfileCorrectExpectedFields = explicitCorrectFields,
+            classifiedCasesIdenticalToExplicitProfile = sameAsExplicit,
             fallbackRatePercent = decimal.Round(100m * reviewed / results.Count, 2),
-            within10Seconds = times.Count(t => t <= 10000), p95Milliseconds = times.Order().ElementAt((int)Math.Ceiling(times.Count * .95) - 1), maxMilliseconds = times.Max(),
+            within10Seconds = times.Count(t => t <= 10000),
+            p95Milliseconds = times.Order().ElementAt((int)Math.Ceiling(times.Count * .95) - 1),
+            maxMilliseconds = times.Max(),
             expectedToDetected = transitions,
-            classificationAccuracy = (decimal?)null, sixClassConfusionMatrix = (object?)null,
-            limitation = "Synthetic text-evidence acceptance cases; no real six-class labeled dataset or visual classifier. NOT a classification accuracy benchmark." };
+            classificationAccuracy = (decimal?)null,
+            sixClassConfusionMatrix = (object?)null,
+            limitation = "Synthetic text-evidence acceptance cases; no real six-class labeled dataset or visual classifier. NOT a classification accuracy benchmark."
+        };
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new { summary, results }, OcrEvaluation.Json));
         Console.WriteLine(JsonSerializer.Serialize(summary));
         return passed == results.Count ? 0 : 1;

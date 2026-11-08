@@ -8,7 +8,8 @@ namespace BHome.Infrastructure.Modules.Notifications;
 
 internal sealed partial class NotificationEventPublisher
 {
-    private static readonly IReadOnlyDictionary<string, string> SettlementTitles = new Dictionary<string, string> {
+    private static readonly IReadOnlyDictionary<string, string> SettlementTitles = new Dictionary<string, string>
+    {
         ["Requested"] = "Có yêu cầu trả phòng",
         ["Approved"] = "Yêu cầu trả phòng đã được duyệt",
         ["Rejected"] = "Yêu cầu trả phòng đã bị từ chối",
@@ -28,7 +29,7 @@ internal sealed partial class NotificationEventPublisher
         var list = new List<Intent> { new(contract.OwnerSignerId, Roles.Owner, contract.Room.LocationId, "Contract", title, summary, "Contract", contract.Id) };
         // Contract settlement entitlement belongs to this linked Tenant; co-occupancy alone does
         // not grant finance visibility. Never send amounts, reasons, bank references or evidence.
-        if (contract.TenantUserId is {} tenant) list.Add(new(tenant, Roles.Tenant, contract.Room.LocationId, "Contract", title, summary, "Contract", contract.Id));
+        if (contract.TenantUserId is { } tenant) list.Add(new(tenant, Roles.Tenant, contract.Room.LocationId, "Contract", title, summary, "Contract", contract.Id));
         return list;
     }
     private async Task<int> PublishSettlementAsync(CancellationToken token)
@@ -40,8 +41,11 @@ internal sealed partial class NotificationEventPublisher
             .OrderBy(h => h.OccurredAt).ThenBy(h => h.Id).Take(25).ToArrayAsync(token);
         foreach (var change in changes)
             count += await Publish("move-out:" + change.Id, async () => (await SettlementAudience(change.ContractId, SettlementTitles[change.Action], token))
-                .Select(i => i with { EventType = change.Action == "Completed" ? "MOVE_OUT_SETTLEMENT_COMPLETED" : "MOVE_OUT_STATUS_CHANGED",
-                    Channels = change.Action == "Completed" ? ["IN_APP", "EMAIL"] : ["IN_APP", "PUSH"] }).ToArray(), token);
+                .Select(i => i with
+                {
+                    EventType = change.Action == "Completed" ? "MOVE_OUT_SETTLEMENT_COMPLETED" : "MOVE_OUT_STATUS_CHANGED",
+                    Channels = change.Action == "Completed" ? ["IN_APP", "EMAIL"] : ["IN_APP", "PUSH"]
+                }).ToArray(), token);
         // Explicit Compact24 history sources. Offline legacy regression has no deposit/refund capability.
         if (db is not Compact24DbContext) return count;
         var notices = await db.Database.SqlQuery<SettlementNotice>($"""
@@ -68,8 +72,10 @@ internal sealed partial class NotificationEventPublisher
                 AND latest.state->'upload'->>'sha256' ~ {"^[A-F0-9]{64}$"}))
             """).Where(n => !db.Set<NotificationPublication>().Any(p => p.EventKey == n.EventKey))
             .OrderBy(n => n.EventKey).Take(25).ToArrayAsync(token);
-        foreach (var notice in notices) {
-            var title = notice.Action switch {
+        foreach (var notice in notices)
+        {
+            var title = notice.Action switch
+            {
                 "Deduction" => "Owner đã ghi nhận quyết định khấu trừ cọc",
                 "RefundRequested" => "Đã lập yêu cầu hoàn cọc",
                 "RefundApproved" => "Yêu cầu hoàn cọc đã được duyệt, chờ thực hiện",

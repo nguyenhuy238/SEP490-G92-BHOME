@@ -6,10 +6,12 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
 
-// Offline candidate adapter; not registered in application DI/configuration.
+namespace BHome.Infrastructure.Ocr;
+
+// Pinned candidate adapter, used only by explicit experimental diagnostics.
 // Official Paddle English CTC provides stronger digit evidence than the existing
 // Vietnamese recognizer on some water windows. It is not a category classifier.
-internal sealed class EnglishMeterTextRecognizer : IDisposable
+public sealed class EnglishMeterTextRecognizer : IDisposable
 {
     public const string ModelSha256 = "b5f833dfc5d0eb71da397b4efa06ebeee9b431b690a47d6af40d77d8eabc557f";
     public const string DictionarySha256 = "3a3e5abea6e7d403209043c8d67b052414ae59ece49922cc7e3ac205d59060a8";
@@ -20,8 +22,12 @@ internal sealed class EnglishMeterTextRecognizer : IDisposable
         Verify(Path.Combine(directory, "inference.onnx"), ModelSha256);
         Verify(Path.Combine(directory, "charset.json"), DictionarySha256);
         dictionary = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(directory, "charset.json"), Encoding.UTF8))!;
-        using var settings = new SessionOptions { IntraOpNumThreads = 2, InterOpNumThreads = 1,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+        using var settings = new SessionOptions
+        {
+            IntraOpNumThreads = 2,
+            InterOpNumThreads = 1,
+            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        };
         session = new InferenceSession(Path.Combine(directory, "inference.onnx"), settings);
         if (dictionary.Length != 438 || session.InputMetadata.Count != 1 ||
             session.InputMetadata.First().Value.Dimensions is not [_, 3, 48, _])

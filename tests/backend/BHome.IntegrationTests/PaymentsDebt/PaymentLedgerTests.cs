@@ -34,7 +34,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         {
             var email = Guid.NewGuid() + "@example.invalid";
             var account = new ApplicationUser { UserName = email, Email = email };
-            account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, account, role, "Synthetic-Payment-Test!123");
+            account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, account, role, BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password);
             return account.Id;
         }
         var owner = await Account(Roles.Owner); var staff = await Account(Roles.Staff);
@@ -158,18 +158,18 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         var w = await Setup(); var transfer = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, amount), Guid.NewGuid(), default));
         Assert.Equal(reason, (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, verifiedPayer ? w.Tenants[0] : null, true), Guid.NewGuid(), default))).Reason);
         var view = await As(w.Tenants[0], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default));
-        Assert.Equal(amount<100000?"Unpaid":"Paid", view.PaymentStatus);
-        Assert.Equal(Math.Max(0,100000-amount),view.OutstandingAmount);
-        Assert.Equal(Math.Min(100000,amount),view.PaidAmount);Assert.Equal(amount>100000,view.PendingReview);
-        var receipt=await As(w.Owner,Roles.Owner,s=>s.TransferAsync(transfer.Id,default));
-        Assert.Equal(Math.Min(100000,amount),receipt.AllocatedAmount);Assert.Equal(Math.Max(0,amount-100000),receipt.UnallocatedAmount);
-        Assert.Equal(reason,(await As(w.Owner,Roles.Owner,s=>s.AllocateAsync(transfer.Id,new(w.Invoice,verifiedPayer ? w.Tenants[0] : null,true),Guid.NewGuid(),default))).Reason);
-        if(amount<100000)
+        Assert.Equal(amount < 100000 ? "Unpaid" : "Paid", view.PaymentStatus);
+        Assert.Equal(Math.Max(0, 100000 - amount), view.OutstandingAmount);
+        Assert.Equal(Math.Min(100000, amount), view.PaidAmount); Assert.Equal(amount > 100000, view.PendingReview);
+        var receipt = await As(w.Owner, Roles.Owner, s => s.TransferAsync(transfer.Id, default));
+        Assert.Equal(Math.Min(100000, amount), receipt.AllocatedAmount); Assert.Equal(Math.Max(0, amount - 100000), receipt.UnallocatedAmount);
+        Assert.Equal(reason, (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, verifiedPayer ? w.Tenants[0] : null, true), Guid.NewGuid(), default))).Reason);
+        if (amount < 100000)
         {
-            var rest=await As(w.Owner,Roles.Owner,s=>s.RegisterAsync(Input(w,100000-amount),Guid.NewGuid(),default));
-            Assert.Equal("Allocated",(await As(w.Owner,Roles.Owner,s=>s.AllocateAsync(rest.Id,new(w.Invoice,null,true),Guid.NewGuid(),default))).Status);
-            var paid=await As(w.Tenants[0],Roles.Tenant,s=>s.InvoicePaymentAsync(w.Invoice,default));
-            Assert.Equal("Paid",paid.PaymentStatus);Assert.Equal(100000,paid.PaidAmount);Assert.Equal(2,paid.History.Count);
+            var rest = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, 100000 - amount), Guid.NewGuid(), default));
+            Assert.Equal("Allocated", (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(rest.Id, new(w.Invoice, null, true), Guid.NewGuid(), default))).Status);
+            var paid = await As(w.Tenants[0], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default));
+            Assert.Equal("Paid", paid.PaymentStatus); Assert.Equal(100000, paid.PaidAmount); Assert.Equal(2, paid.History.Count);
         }
     }
     [Fact]

@@ -93,23 +93,25 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
     }
     public async Task<ExpenseReferences> ReferencesAsync(Guid locationId, Guid? roomId, CancellationToken t)
     {
-        var rooms=await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r=>r.LocationId==locationId).OrderBy(r=>r.RoomNumber)
-            .Select(r=>new ExpenseReference(r.Id,r.RoomNumber,r.Id,null)).Take(501).ToArrayAsync(t);
-        var assets=await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a=>a.LocationId==locationId&&a.RoomId==roomId).OrderBy(a=>a.Name)
-            .Select(a=>new ExpenseReference(a.Id,a.Name,a.RoomId,a.Id)).Take(501).ToArrayAsync(t);
-        var tasks=await db.Database.SqlQuery<WorkOrderReferenceRow>($"""
+        var rooms = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.RoomNumber)
+            .Select(r => new ExpenseReference(r.Id, r.RoomNumber, r.Id, null)).Take(501).ToArrayAsync(t);
+        var assets = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.RoomId == roomId).OrderBy(a => a.Name)
+            .Select(a => new ExpenseReference(a.Id, a.Name, a.RoomId, a.Id)).Take(501).ToArrayAsync(t);
+        var tasks = await db.Database.SqlQuery<WorkOrderReferenceRow>($"""
             SELECT t.id AS "Id",COALESCE(NULLIF(t.title,''),'Work Order chưa có tên') AS "Label",t.room_id AS "RoomId",t.asset_id AS "AssetId"
             FROM operational_tasks t JOIN incident_reports i ON i.id=t.incident_report_id
             WHERE t.task_type='WORK_ORDER' AND t.location_id={locationId} AND t.room_id IS NOT DISTINCT FROM {roomId}::uuid
               AND i.location_id=t.location_id AND (i.room_id IS NULL OR i.room_id IS NOT DISTINCT FROM t.room_id)
             ORDER BY t.title,t.id LIMIT 501
             """).ToArrayAsync(t);
-        return new(rooms.Take(500).ToArray(),assets.Take(500).ToArray(),tasks.Take(500).Select(w=>new ExpenseReference(w.Id,w.Label,w.RoomId,w.AssetId)).ToArray(),rooms.Length>500||assets.Length>500||tasks.Length>500);
+        return new(rooms.Take(500).ToArray(), assets.Take(500).ToArray(), tasks.Take(500).Select(w => new ExpenseReference(w.Id, w.Label, w.RoomId, w.AssetId)).ToArray(), rooms.Length > 500 || assets.Length > 500 || tasks.Length > 500);
     }
 }
 public sealed class WorkOrderReferenceRow
 {
-    public Guid Id { get; set; } public string Label { get; set; } = ""; public Guid? RoomId { get; set; } public Guid? AssetId { get; set; }
+    public Guid Id { get; set; }
+    public string Label { get; set; } = ""; public Guid? RoomId { get; set; }
+    public Guid? AssetId { get; set; }
 }
 public sealed class ExpenseRow
 {

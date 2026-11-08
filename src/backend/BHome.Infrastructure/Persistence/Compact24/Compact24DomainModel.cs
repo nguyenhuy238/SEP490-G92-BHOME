@@ -57,6 +57,11 @@ internal static class Compact24DomainModel
             if (entity.ClrType == typeof(ApplicationUser) || entity.ClrType == typeof(CompactRefreshRow)) continue;
             var spec = Compact24Records.For(entity.ClrType);
             var builder = model.Entity(entity.ClrType);
+            // These entities are SQL projections, not physical tables. Table-only
+            // checks make EF 8 scaffold invalid ToTable(null, ...) snapshot calls.
+            // Physical checks remain in the reviewed Compact24 SQL and migration.
+            foreach (var constraint in entity.GetCheckConstraints().ToArray())
+                entity.RemoveCheckConstraint(constraint.ModelName);
             foreach (var property in entity.GetProperties())
             {
                 property.SetColumnName(property.Name);

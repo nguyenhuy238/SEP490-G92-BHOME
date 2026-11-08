@@ -31,9 +31,25 @@ internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvi
         string title, string body, string type, Guid target, CancellationToken t, string priority = "P1", string[]? channels = null, string source = "System", Guid? taskSource = null)
     {
         var id = Guid.NewGuid(); var now = Now;
-        var state = new UserNotification { Id = id, RecipientUserId = user, AudienceRole = role, LocationId = location, EventKey = key,
-            EventType = eventType, Category = category, Title = title, Summary = body, RelatedObjectType = type, RelatedObjectId = target,
-            Priority = priority, Source = source, Channels = channels ?? ["IN_APP", "PUSH"], CreatedAt = now, SourceTaskNotificationId = taskSource };
+        var state = new UserNotification
+        {
+            Id = id,
+            RecipientUserId = user,
+            AudienceRole = role,
+            LocationId = location,
+            EventKey = key,
+            EventType = eventType,
+            Category = category,
+            Title = title,
+            Summary = body,
+            RelatedObjectType = type,
+            RelatedObjectId = target,
+            Priority = priority,
+            Source = source,
+            Channels = channels ?? ["IN_APP", "PUSH"],
+            CreatedAt = now,
+            SourceTaskNotificationId = taskSource
+        };
         var data = JsonSerializer.Serialize(new { schemaVersion = 2, recordType = "UserNotification", audienceRole = role, category, state }, Json);
         return await Execute("""
             INSERT INTO notifications(id,record_kind,recipient_user_id,location_id,event_key,notification_type,title,message,related_entity_type,related_entity_id,event_data,event_at,delivery_status)

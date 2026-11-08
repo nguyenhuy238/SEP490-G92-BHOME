@@ -1,0 +1,58 @@
+{
+  "scope": "three_existing_source_photos_not_three_verified_readable_devices",
+  "humanReviews": 0,
+  "newTrainingSamples": 0,
+  "independentNumericLabels": 0,
+  "readableDeviceTargetMet": false,
+  "nativeResolutionAcquisition": "BLOCKED_BY_DATA: original download returned HTTP429; original-resolution evaluation NOT_RUN; no bypass or repeated retry",
+  "samples": [
+    {
+      "id": "commons_141189268",
+      "image": ".tools/master-dataset/commons/commons_141189268.jpg",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "sourceGroup": "author_b046fcd7de5e048d7d72",
+      "originalSplitPreserved": true,
+      "humanReviewCount": 0,
+      "physicalDeviceVerified": false,
+      "labelStatus": "provisional_pending_independent_review",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digitaler_Wasserzaehler.jpg",
+        "license": "CC0",
+        "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:HelgeRieder\" title=\"User:HelgeRieder\">HelgeRieder</a>"
+      }
+    },
+    {
+      "id": "commons_152002068",
+      "image": ".tools/ocr-next-public-images-expanded/commons_152002068.jpg",
+      "sha256": "00b166a538cad07b7eced3097971a24694eb956130fb702bf3af832dfe72d8d6",
+      "sourceGroup": "author_cdaf67406c5749c512bb",
+      "originalSplitPreserved": true,
+      "humanReviewCount": 0,
+      "physicalDeviceVerified": false,
+      "labelStatus": "provisional_pending_independent_review",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Water_meter_2.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Vaibhavratnaparkhi&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Vaibhavratnaparkhi (page does not exist)\">Vaibhavratnaparkhi</a>"
+      }
+    },
+    {
+      "id": "commons_156125142",
+      "image": ".tools/ocr-next-public-images-expanded/commons_156125142.jpg",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "sourceGroup": "author_55f7acb4d72855e42cf1",
+      "originalSplitPreserved": true,
+      "humanReviewCount": 0,
+      "physicalDeviceVerified": false,
+      "labelStatus": "provisional_pending_independent_review",
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:WMBUS_Water_Meter_for_submetering.jpg",
+        "license": "CC0",
+        "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Boutboul\" title=\"User:Boutboul\">Boutboul</a>"
+      }
+    }
+  ]
+}
