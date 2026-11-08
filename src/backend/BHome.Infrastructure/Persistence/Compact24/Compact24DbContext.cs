@@ -7,6 +7,11 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 public sealed partial class Compact24DbContext(DbContextOptions<Compact24DbContext> options,
     Compact24Compatibility? compatibility = null) : BHomePersistenceContext(options)
 {
+    public const string MigrationHistorySchema = "bhome_meta";
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        optionsBuilder.UseNpgsql(options => options.MigrationsHistoryTable("__EFMigrationsHistory", MigrationHistorySchema));
+
     public override BHomePersistenceContext CreateIndependentContext() => new Compact24DbContext(options, compatibility);
     public override async Task<bool> IsSchemaReadyAsync(CancellationToken token = default) =>
         await Database.CanConnectAsync(token) && (await Compact24Schema.VerifyAsync(this, token) ||

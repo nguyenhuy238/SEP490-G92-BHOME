@@ -2,6 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../src/backend/BHome.Api/BHome.Api.csproj" />
     <ProjectReference Include="../../../tools/BHome.LocalDevelopment/BHome.LocalDevelopment.csproj" />
+    <ProjectReference Include="../../../tools/BHome.DatabaseCheck/BHome.DatabaseCheck.csproj" />
     <ProjectReference Include="../../../tools/BHome.Compact24Migration/BHome.Compact24Migration.csproj" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.32" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
