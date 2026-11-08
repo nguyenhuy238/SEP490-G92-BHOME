@@ -68,6 +68,7 @@ export class MobileSessions {
   }
   async clear() {
     const epoch = ++this.epoch;
+    this.value.api?.queryCache.dispose();
     this.credential = undefined;
     this.waitingForConnection = false;
     this.emit({ session: null, api: null, restoreError: undefined });
@@ -185,9 +186,14 @@ export class MobileSessions {
         );
         if (epoch !== this.epoch) return undefined;
         this.credential = next.refreshToken;
+        const changedPrincipal =
+          this.value.session &&
+          (this.value.session.userId !== next.userId ||
+            [...this.value.session.roles].sort().join(',') !== [...next.roles].sort().join(','));
+        if (changedPrincipal) this.value.api?.queryCache.dispose();
         this.emit({
           session: next,
-          api: this.value.api || this.api(base),
+          api: changedPrincipal ? this.api(base) : this.value.api || this.api(base),
           restoreError: undefined,
         });
         return next.accessToken;

@@ -49,6 +49,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const [staffListView, setStaffListView] = useState({ ...defaultStaffContractListView });
   const params = useLocalSearchParams<{
     contractId?: string;
+    section?: string;
     mainDraftId?: string;
     roomId?: string;
     representativeResidentId?: string;
@@ -188,6 +189,11 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           id={id}
           role={role}
           actorId={session.userId}
+          initialSection={
+            role === 'Tenant' && contractSections.some((item) => item.id === params.section)
+              ? (params.section as ContractSection)
+              : 'overview'
+          }
           onNext={setSelected}
         />
       </>
@@ -288,16 +294,18 @@ function LiveContractDetail({
   role,
   actorId,
   onNext,
+  initialSection = 'overview',
 }: {
   api: ReturnType<typeof contractClient>;
   id: string;
   role: string;
   actorId: string;
   onNext: (id: string) => void;
+  initialSection?: ContractSection;
 }) {
   const detail = useContractDetail(api, id, role);
   const [selectedAction, setSelectedAction] = useState('');
-  const [section, setSection] = useState<ContractSection>('overview');
+  const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),
