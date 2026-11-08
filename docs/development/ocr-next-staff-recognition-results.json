@@ -1,0 +1,512 @@
+{
+  "date": "2026-11-08",
+  "startingHead": "f766b0d29f204d9d83ceb12262844918bfd292a9",
+  "scope": "provisional_development_not_independent_business_acceptance",
+  "humanReviewsReceived": 0,
+  "newStaffReadersPromoted": 0,
+  "verifiedBillingValues": 0,
+  "frozenGates": "../datasets/meter/next-staff-recognition-gates.json",
+  "fullFrameReplay": {
+    "previousReceipt": "ocr-staff-runtime-results.json",
+    "currentRawReceiptSha256": "175e9de6dd6a7dcb808d31688e41e4cb1b7752de1ead3235096b95fc01831328",
+    "cohorts": {
+      "historical_exploratory": {
+        "previousCommittedPipeline": {
+          "inputs": 4,
+          "categoryCorrect": 1,
+          "categoryWrong": 0,
+          "categoryUnknown": 3,
+          "positiveLabels": 3,
+          "exactDigits": 0,
+          "wrongDigits": 0,
+          "invalidControls": 1,
+          "invalidRejected": 1,
+          "fallback": 4
+        },
+        "currentPipeline": {
+          "inputs": 4,
+          "categoryCorrect": 1,
+          "categoryWrong": 0,
+          "categoryUnknown": 3,
+          "positiveLabels": 3,
+          "exactDigits": 0,
+          "wrongDigits": 0,
+          "invalidControls": 1,
+          "invalidRejected": 1,
+          "fallback": 4
+        }
+      },
+      "historical_negative_control": {
+        "previousCommittedPipeline": {
+          "inputs": 2,
+          "categoryCorrect": 0,
+          "categoryWrong": 0,
+          "categoryUnknown": 2,
+          "positiveLabels": 0,
+          "exactDigits": 0,
+          "wrongDigits": 0,
+          "invalidControls": 2,
+          "invalidRejected": 2,
+          "fallback": 2
+        },
+        "currentPipeline": {
+          "inputs": 2,
+          "categoryCorrect": 0,
+          "categoryWrong": 0,
+          "categoryUnknown": 2,
+          "positiveLabels": 0,
+          "exactDigits": 0,
+          "wrongDigits": 0,
+          "invalidControls": 2,
+          "invalidRejected": 2,
+          "fallback": 2
+        }
+      },
+      "historical_validation": {
+        "previousCommittedPipeline": {
+          "inputs": 2,
+          "categoryCorrect": 1,
+          "categoryWrong": 0,
+          "categoryUnknown": 1,
+          "positiveLabels": 1,
+          "exactDigits": 1,
+          "wrongDigits": 0,
+          "invalidControls": 1,
+          "invalidRejected": 1,
+          "fallback": 1
+        },
+        "currentPipeline": {
+          "inputs": 2,
+          "categoryCorrect": 1,
+          "categoryWrong": 0,
+          "categoryUnknown": 1,
+          "positiveLabels": 1,
+          "exactDigits": 1,
+          "wrongDigits": 0,
+          "invalidControls": 1,
+          "invalidRejected": 1,
+          "fallback": 1
+        }
+      },
+      "provisional_development": {
+        "previousCommittedPipeline": {
+          "inputs": 5,
+          "categoryCorrect": 0,
+          "categoryWrong": 0,
+          "categoryUnknown": 5,
+          "positiveLabels": 2,
+          "exactDigits": 1,
+          "wrongDigits": 0,
+          "invalidControls": 3,
+          "invalidRejected": 3,
+          "fallback": 4
+        },
+        "currentPipeline": {
+          "inputs": 5,
+          "categoryCorrect": 0,
+          "categoryWrong": 0,
+          "categoryUnknown": 5,
+          "positiveLabels": 2,
+          "exactDigits": 1,
+          "wrongDigits": 0,
+          "invalidControls": 3,
+          "invalidRejected": 3,
+          "fallback": 4
+        }
+      }
+    }
+  },
+  "trustedTaskDiagnostics": {
+    "status": "DEVELOPMENT_DIAGNOSTICS_ENABLED",
+    "readOnly": true,
+    "businessProposalEnabled": false,
+    "clientKindAndPrecisionIgnored": true,
+    "usesDatabaseProfile": true,
+    "preservesPriorProposal": true,
+    "noConfirmedReading": true,
+    "independentAcceptance": false,
+    "results": [
+      {
+        "id": "105770219",
+        "digits": null,
+        "classification": "unknown",
+        "rawCategory": "electricity_mechanical",
+        "displayState": "numeric_text_present_display_unverified",
+        "registerStatus": "unverified",
+        "elapsedMilliseconds": 4139
+      },
+      {
+        "id": "54903199",
+        "digits": "000501",
+        "classification": "unknown",
+        "rawCategory": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "consumption_candidate",
+        "elapsedMilliseconds": 3609
+      },
+      {
+        "id": "136480278",
+        "digits": "74590",
+        "classification": "classified",
+        "rawCategory": "electricity_digital",
+        "displayState": "readable_candidate",
+        "registerStatus": "consumption_candidate",
+        "elapsedMilliseconds": 2712
+      },
+      {
+        "id": "151445788",
+        "digits": null,
+        "classification": "unknown",
+        "rawCategory": "electricity_mechanical",
+        "displayState": "numeric_text_present_display_unverified",
+        "registerStatus": "non_consumption",
+        "elapsedMilliseconds": 3780
+      },
+      {
+        "id": "136480279",
+        "digits": null,
+        "classification": "unknown",
+        "rawCategory": "electricity_digital",
+        "displayState": "numeric_text_present_display_unverified",
+        "registerStatus": "unverified",
+        "elapsedMilliseconds": 2712
+      }
+    ],
+    "rawReceiptSha256": "50169a2e026732fa4680faa47d82327433f54ae44e36dfdf1f5d70c0b962346e",
+    "latencyScope": "Observed five-image diagnostic run only; not a p95/SLA or physical-device acceptance measurement."
+  },
+  "existingPpRoutingFix": {
+    "fixture": "known synthetic 123.45 kWh; structured weak overlapping detector boxes; real pinned PP ONNX",
+    "before": "fallback; multiple_meters",
+    "after": "editable 123.45 proposal; category remains unknown; Staff confirmation required",
+    "photoAccuracyClaim": false,
+    "strongContradictionsAndSeparateBodiesRejected": true
+  },
+  "classificationExperiment": {
+    "status": "REJECTED",
+    "retainedRuntimeSha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
+    "candidateSha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36",
+    "trainingInputs": 40,
+    "newTrainingImages": 2,
+    "newModelDataImagesIncludingProbe": 3,
+    "excludedSourceAliases": 3,
+    "thresholds": [
+      0.55,
+      0.75
+    ],
+    "validationBaseline": {
+      "inputs": 7,
+      "meters": 3,
+      "correct": 1,
+      "wrong": 0,
+      "unknown": 6,
+      "negativeFalseAccepted": 0
+    },
+    "validationCandidate": {
+      "inputs": 7,
+      "meters": 3,
+      "correct": 1,
+      "wrong": 0,
+      "unknown": 6,
+      "negativeFalseAccepted": 0
+    },
+    "historicalTestBaseline": {
+      "inputs": 9,
+      "meters": 7,
+      "correct": 1,
+      "wrong": 1,
+      "unknown": 7,
+      "negativeFalseAccepted": 0
+    },
+    "historicalTestCandidate": {
+      "inputs": 9,
+      "meters": 7,
+      "correct": 2,
+      "wrong": 1,
+      "unknown": 6,
+      "negativeFalseAccepted": 0
+    },
+    "newSourceSeparatedProbes": {
+      "baseline": {
+        "inputs": 4,
+        "correct": 0,
+        "wrong": 0,
+        "unknown": 4,
+        "acceptedPrecision": null,
+        "nonMeterFalseAccepted": 0,
+        "nonMeterInputs": 2,
+        "perClass": {
+          "electricity_mechanical": {
+            "positiveInputs": 1,
+            "acceptedCorrect": 0,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "positiveInputs": 1,
+            "acceptedCorrect": 0,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "positiveInputs": 0,
+            "acceptedCorrect": 0,
+            "recall": null
+          },
+          "water_digital": {
+            "positiveInputs": 0,
+            "acceptedCorrect": 0,
+            "recall": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 4,
+        "correct": 0,
+        "wrong": 0,
+        "unknown": 4,
+        "acceptedPrecision": null,
+        "nonMeterFalseAccepted": 0,
+        "nonMeterInputs": 2,
+        "perClass": {
+          "electricity_mechanical": {
+            "positiveInputs": 1,
+            "acceptedCorrect": 0,
+            "recall": 0.0
+          },
+          "electricity_digital": {
+            "positiveInputs": 1,
+            "acceptedCorrect": 0,
+            "recall": 0.0
+          },
+          "water_mechanical": {
+            "positiveInputs": 0,
+            "acceptedCorrect": 0,
+            "recall": null
+          },
+          "water_digital": {
+            "positiveInputs": 0,
+            "acceptedCorrect": 0,
+            "recall": null
+          }
+        }
+      }
+    },
+    "dotnetProbeObservations": [
+      {
+        "name": "baseline",
+        "id": "commons_135182584",
+        "expected": "electricity_digital",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.51981556,
+          "Candidates": [
+            2
+          ],
+          "Warnings": [
+            "experimental_model",
+            "category_requires_human_review"
+          ]
+        },
+        "guess": "electricity_mechanical",
+        "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
+      },
+      {
+        "name": "baseline",
+        "id": "commons_18649568",
+        "expected": "electricity_mechanical",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.5225445,
+          "Candidates": [
+            2
+          ],
+          "Warnings": [
+            "experimental_model",
+            "category_requires_human_review"
+          ]
+        },
+        "guess": "electricity_mechanical",
+        "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
+      },
+      {
+        "name": "baseline",
+        "id": "commons_6286401",
+        "expected": "not_meter",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.4841711,
+          "Candidates": null,
+          "Warnings": [
+            "not_meter_or_unsupported_image",
+            "experimental_model"
+          ]
+        },
+        "guess": null,
+        "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
+      },
+      {
+        "name": "baseline",
+        "id": "commons_37919761",
+        "expected": "not_meter",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.5029094,
+          "Candidates": null,
+          "Warnings": [
+            "not_meter_or_unsupported_image",
+            "experimental_model"
+          ]
+        },
+        "guess": null,
+        "sha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3"
+      },
+      {
+        "name": "candidate",
+        "id": "commons_135182584",
+        "expected": "electricity_digital",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.57820845,
+          "Candidates": [
+            4
+          ],
+          "Warnings": [
+            "experimental_model",
+            "category_requires_human_review"
+          ]
+        },
+        "guess": "electricity_digital",
+        "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
+      },
+      {
+        "name": "candidate",
+        "id": "commons_18649568",
+        "expected": "electricity_mechanical",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.53826326,
+          "Candidates": [
+            2
+          ],
+          "Warnings": [
+            "experimental_model",
+            "category_requires_human_review"
+          ]
+        },
+        "guess": "electricity_mechanical",
+        "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
+      },
+      {
+        "name": "candidate",
+        "id": "commons_6286401",
+        "expected": "not_meter",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.4980495,
+          "Candidates": null,
+          "Warnings": [
+            "not_meter_or_unsupported_image",
+            "experimental_model"
+          ]
+        },
+        "guess": null,
+        "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
+      },
+      {
+        "name": "candidate",
+        "id": "commons_37919761",
+        "expected": "not_meter",
+        "accepted": "unknown",
+        "Decision": {
+          "Status": "unknown",
+          "Kind": null,
+          "Source": "experimental_supervised_clip",
+          "Confidence": 0.51747,
+          "Candidates": null,
+          "Warnings": [
+            "not_meter_or_unsupported_image",
+            "experimental_model"
+          ]
+        },
+        "guess": null,
+        "sha256": "768d89b6398c49c64cbaa5f331b28149150463714c9949bc9f6df1b5e7cb9f36"
+      }
+    ],
+    "nativeOnnxParityMaxLogitDelta": 4.470348358154297e-06,
+    "rawTrainingReceiptSha256": "c2963c3bab702d3f3bd05c5660150e810fb9669d0d4ec6782c5d72af9d109cc7",
+    "whyRejected": "No validation coverage gain; no additional correct accepted classification on four frozen source-author-separated probes. Physical-device grouping and labels remain provisional."
+  },
+  "unitGeometryExperiment": {
+    "status": "REJECTED",
+    "codeReverted": true,
+    "method": "Use floating-point quadrilateral aspect for single-pass CTC48 warp instead of truncated native dimensions",
+    "549OldDirectMean": 0.8194435,
+    "549OldDirectMinimum": 0.5593938,
+    "549CandidateDirectMean": 0.7582562,
+    "549CandidateDirectMinimum": 0.41307816,
+    "independentViews": false,
+    "rawReceiptSha256": "bd37c02c27311223c87c91dc9c02eba58f8c80d2c0b7ab692856ccdcfa902130"
+  },
+  "mechanicalWaterRowMarginExperiment": {
+    "status": "REJECTED",
+    "registeredInApplication": false,
+    "marginPerSideInRowHeights": 0.25,
+    "results": {
+      "baseline": {
+        "inputs": 52,
+        "completeDigitLabels": 33,
+        "exact": 10,
+        "incorrectOnCompleteLabels": 0,
+        "unknownGroundTruthProposal": 0,
+        "isFallback": 42
+      },
+      "candidate": {
+        "inputs": 52,
+        "completeDigitLabels": 33,
+        "exact": 10,
+        "incorrectOnCompleteLabels": 0,
+        "unknownGroundTruthProposal": 0,
+        "isFallback": 42
+      }
+    },
+    "changedValues": 0,
+    "manifestSha256": "0F4E5E847F3026ED5FAEABBA2CC538DAF6211D78F273CADE9ACB3CD7EB58C565",
+    "rawReceiptSha256": "ee17893c36c4d98133e1c30afea76eb98fd0bc89849e02e71209a96a5822bbc3"
+  },
+  "review": {
+    "focusedImages": 6,
+    "draftPositives": 3,
+    "negativeControls": 3,
+    "blankOrInactiveControls": 2,
+    "independentlyVerifiedRegisterOrPrecisionLabels": 0,
+    "status": "BLOCKED_BY_DATA",
+    "package": ".tools/ocr-next-staff/review-v3/index.html",
+    "oldEightImagePilotPreserved": true
+  },
+  "hardware": {
+    "realMinio": "NOT_RUN",
+    "physicalCamera": "NOT_RUN",
+    "evidence": "No loopback9000/9001 listener or adb command found; storage substitute is explicit."
+  },
+  "runtimeSourceHead": "99709118195c4c1d489eec438462e7714780d4fd"
+}

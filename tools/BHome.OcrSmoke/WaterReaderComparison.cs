@@ -30,7 +30,8 @@ internal static class WaterReaderComparison
         Console.WriteLine($"English Python/.NET parity: {passed}, {rows.Count} public crops"); return passed ? 0 : 1;
     }
 
-    public static async Task<int> RunAsync(string models, string yolo, string english, string images, string manifestPath, string report)
+    public static async Task<int> RunAsync(string models, string yolo, string english, string images, string manifestPath, string report,
+        bool rowMarginStudy=false)
     {
         var manifest = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(manifestPath))!;
         var options = new OcrOptions { Enabled = true, ModelDirectory = models, MeterDetectionMinConfidence = .7f,
@@ -38,7 +39,8 @@ internal static class WaterReaderComparison
         using var detector = new YoloMeterSceneDetector(options); using var digits = new YoloWaterDigitRecognizer(options);
         using var candidate = new EnglishMeterTextRecognizer(english);
         using var baselineEngine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
-        var candidateEngine = new EnglishWaterCandidateEngine(options, detector, digits, baselineEngine, candidate);
+        IOcrEngine candidateEngine = rowMarginStudy ? new WaterRowMarginCandidate(options,detector,digits,baselineEngine) :
+            new EnglishWaterCandidateEngine(options, detector, digits, baselineEngine, candidate);
         var strictEngine = new EnglishWaterCandidateEngine(options, detector, digits, baselineEngine, candidate, preserveAllNumericDisagreements: true);
         using var baselineService = new LocalOcrService(options, new(() => baselineEngine), NullLogger<LocalOcrService>.Instance);
         using var candidateService = new LocalOcrService(options, new(() => candidateEngine), NullLogger<LocalOcrService>.Instance);
@@ -58,7 +60,9 @@ internal static class WaterReaderComparison
             Cv2.Resize(original, resized, new((int)(original.Width * scale), (int)(original.Height * scale)), 0, 0, InterpolationFlags.Area);
             var bytes = resized.ImEncode(".jpg", new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
             var observations = new List<object>();
-            foreach (var (mode, service) in new[] { ("baseline", baselineService), ("candidate", candidateService), ("preserve_all_numeric_disagreements", strictService) })
+            var modes=rowMarginStudy ? new[] {("baseline",baselineService),("candidate",candidateService)} :
+                new[] { ("baseline", baselineService), ("candidate", candidateService), ("preserve_all_numeric_disagreements", strictService) };
+            foreach (var (mode, service) in modes)
             {
                 using var input = new MemoryStream(bytes); var timer = Stopwatch.StartNew();
                 var result = await service.ExtractAsync(input, OcrDocumentKind.MechanicalWater, default);
@@ -71,11 +75,42 @@ internal static class WaterReaderComparison
             rows.Add(new { imageId = name, sha256 = manifest[name], expectedDigits = complete ? expected : null, observations });
             Array.Clear(bytes); Console.WriteLine($"Compared water reader {rows.Count}");
         }
-        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { minimumEnglishCharacterScore = .95,
+        await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { minimumEnglishCharacterScore = .95,rowMarginStudy,
             selection = "frozen_on_historical_validation_only", registeredInApplication = false,
             englishModelSha256 = EnglishMeterTextRecognizer.ModelSha256,
             manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifestPath))), rows }, OcrEvaluation.Json));
         return 0;
+    }
+}
+
+// Offline-only physical row-margin hypothesis. Never registered in application DI.
+internal sealed class WaterRowMarginCandidate(OcrOptions options,YoloMeterSceneDetector detector,
+    YoloWaterDigitRecognizer digits,OnnxOcrEngine baseline) : IOcrEngine
+{
+    public async Task<OcrText> RecognizeAsync(ReadOnlyMemory<byte> image,OcrDocumentKind kind,CancellationToken token)
+    {
+        var original=await baseline.RecognizeAsync(image,kind,token);
+        if(kind!=OcrDocumentKind.MechanicalWater || !OcrFieldParser.Parse(original,kind).IsFallback ||
+            original.Warnings.Any(w=>w is "recognizer_conflict" or "conflicting_reading" or "unclear_digit" or "orientation_uncertain" or "text_region_limit")) return original;
+        using var prepared=new ImagePreprocessor(options).Prepare(image,kind);
+        if(prepared.Warnings.Contains("blur_or_low_detail")) return original;
+        var selection=MeterSceneSelection.Select(detector.Detect(prepared.Image,token),prepared.Image.Size(),kind,.7f);
+        if(!selection.CanRecognize || selection.OrientedCrop is not {} pose || selection.Warnings.Contains("reading_region_unverified")) return original;
+        var shortSide=Math.Min(pose.Size.Width,pose.Size.Height);
+        var expanded=new RotatedRect(pose.Center,pose.Size.Width>=pose.Size.Height ?
+            new Size2f(pose.Size.Width+shortSide*.5f,pose.Size.Height):new Size2f(pose.Size.Width,pose.Size.Height+shortSide*.5f),pose.Angle);
+        if(expanded.Points().Any(p=>p.X<0||p.Y<0||p.X>=prepared.Image.Width||p.Y>=prepared.Image.Height)) return original;
+        using var oldCrop=OnnxOcrEngine.Crop(prepared.Image,pose);
+        var previousDigits=digits.Recognize(oldCrop,token);
+        if(previousDigits.Warnings.Contains("unclear_digit")) return original;
+        using var crop=OnnxOcrEngine.Crop(prepared.Image,expanded);
+        var recognized=digits.Recognize(crop,token);
+        if(previousDigits.Digits is {} old && old!=recognized.Digits) return original;
+        var previousPp=OcrFieldParser.Parse(baseline.InspectMeterCrop(oldCrop,false,token),kind).ProposedFields.GetValueOrDefault("reading");
+        if(previousPp is not null && previousPp.Replace(".","",StringComparison.Ordinal)!=recognized.Digits) return original;
+        var pp=baseline.InspectMeterCrop(crop,false,token);
+        pp=pp with {Warnings=[..prepared.Warnings,..selection.Warnings,..pp.Warnings,"offline_row_margin_probe"]};
+        return MeterRecognitionFusion.Combine(pp,recognized);
     }
 }
 
