@@ -33,6 +33,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.Infrastructure.UnitTe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.PlanIntegrationTests", "..\..\tests\backend\BHome.PlanIntegrationTests\BHome.PlanIntegrationTests.csproj", "{32EE157E-8D44-43B1-B588-93C6F33A5183}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{DADBFE4A-1372-4C5C-A23E-56D0811AF591}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.UnitTests", "..\digital-signing\tests\BHome.DigitalSigning.UnitTests\BHome.DigitalSigning.UnitTests.csproj", "{89BD996A-8ECA-49BF-8446-AC6E06F6228B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -95,6 +99,10 @@ Global
 		{32EE157E-8D44-43B1-B588-93C6F33A5183}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{32EE157E-8D44-43B1-B588-93C6F33A5183}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{32EE157E-8D44-43B1-B588-93C6F33A5183}.Release|Any CPU.Build.0 = Release|Any CPU
+		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -104,5 +112,6 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4} = {5FDE5147-F662-454B-8576-7994ADD6805B}
+		{89BD996A-8ECA-49BF-8446-AC6E06F6228B} = {DADBFE4A-1372-4C5C-A23E-56D0811AF591}
 	EndGlobalSection
 EndGlobal
