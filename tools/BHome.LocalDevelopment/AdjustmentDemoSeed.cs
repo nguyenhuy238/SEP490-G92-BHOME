@@ -23,8 +23,7 @@ internal static class AdjustmentDemoSeed
         if (location is null)
         {
             if (await db.Locations.AnyAsync(l => l.Name == "BHOME ADJUSTMENT DEMO", t)) throw new LocalTestAccountException("Trùng tên cơ sở ngoài fixture adjustment.");
-            Add(db, 10, new Location("BHOME ADJUSTMENT DEMO") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync(t), Address = "ĐỊA CHỈ TỔNG HỢP - ADJUSTMENT TEST ONLY" });
-            Add(db, 11, new RoomType { LocationId = Id(10), Name = "Phòng adjustment tổng hợp", DefaultCapacity = 3 });
+            Add(db, 10, new Location("BHOME ADJUSTMENT DEMO") { Address = "ĐỊA CHỈ TỔNG HỢP - ADJUSTMENT TEST ONLY" });
             db.Add(new StaffLocationAssignment(Id(10), User(2), User(1), today.AddYears(-1), today.AddYears(1)));
         }
         else if (location.Name != "BHOME ADJUSTMENT DEMO") throw new LocalTestAccountException("Trùng ID fixture adjustment.");
@@ -37,7 +36,7 @@ internal static class AdjustmentDemoSeed
                 if (existing.LocationId != Id(10) || existing.RoomNumber != labels[room]) throw new LocalTestAccountException("Trùng ID phòng adjustment ngoài fixture.");
                 continue;
             }
-            Add(db, 20 + room, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = labels[room], Capacity = 3, Status = RoomStatus.Available });
+            Add(db, 20 + room, new Room { LocationId = Id(10), RoomNumber = labels[room], Capacity = 3, Status = RoomStatus.Available });
             for (var person = 0; person < 3; person++) Add(db, 40 + room * 3 + person, new Resident
             {
                 RoomId = Id(20 + room),

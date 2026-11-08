@@ -17,22 +17,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.18,
-          0
-        ],
-        [
-          0.85,
-          0
-        ],
-        [
-          0.85,
-          0.98
-        ],
-        [
-          0.18,
-          0.98
-        ]
+        [0.18, 0],
+        [0.85, 0],
+        [0.85, 0.98],
+        [0.18, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -51,10 +39,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_45290164",
@@ -69,22 +54,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.09,
-          0.01
-        ],
-        [
-          0.68,
-          0.01
-        ],
-        [
-          0.68,
-          0.84
-        ],
-        [
-          0.09,
-          0.84
-        ]
+        [0.09, 0.01],
+        [0.68, 0.01],
+        [0.68, 0.84],
+        [0.09, 0.84]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -103,10 +76,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_4508761",
@@ -121,22 +91,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0.05
-        ],
-        [
-          0.89,
-          0.05
-        ],
-        [
-          0.89,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0.05],
+        [0.89, 0.05],
+        [0.89, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -155,10 +113,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_113793907",
@@ -173,22 +128,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.06
-        ],
-        [
-          0.83,
-          0.06
-        ],
-        [
-          0.83,
-          0.78
-        ],
-        [
-          0.13,
-          0.78
-        ]
+        [0.13, 0.06],
+        [0.83, 0.06],
+        [0.83, 0.78],
+        [0.13, 0.78]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -207,10 +150,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_4624561",
@@ -225,22 +165,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.09,
-          0
-        ],
-        [
-          0.87,
-          0
-        ],
-        [
-          0.87,
-          1
-        ],
-        [
-          0.09,
-          1
-        ]
+        [0.09, 0],
+        [0.87, 0],
+        [0.87, 1],
+        [0.09, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -259,10 +187,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_6262934",
@@ -277,22 +202,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.03,
-          0.04
-        ],
-        [
-          0.96,
-          0.04
-        ],
-        [
-          0.96,
-          0.99
-        ],
-        [
-          0.03,
-          0.99
-        ]
+        [0.03, 0.04],
+        [0.96, 0.04],
+        [0.96, 0.99],
+        [0.03, 0.99]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -311,10 +224,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_4262220",
@@ -329,22 +239,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0.05
-        ],
-        [
-          0.84,
-          0.05
-        ],
-        [
-          0.84,
-          1
-        ],
-        [
-          0.1,
-          1
-        ]
+        [0.1, 0.05],
+        [0.84, 0.05],
+        [0.84, 1],
+        [0.1, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -363,10 +261,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_322652",
@@ -381,22 +276,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.12,
-          0.04
-        ],
-        [
-          0.89,
-          0.04
-        ],
-        [
-          0.89,
-          0.97
-        ],
-        [
-          0.12,
-          0.97
-        ]
+        [0.12, 0.04],
+        [0.89, 0.04],
+        [0.89, 0.97],
+        [0.12, 0.97]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -415,10 +298,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_31937475",
@@ -433,22 +313,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.21,
-          0
-        ],
-        [
-          0.8,
-          0
-        ],
-        [
-          0.8,
-          1
-        ],
-        [
-          0.21,
-          1
-        ]
+        [0.21, 0],
+        [0.8, 0],
+        [0.8, 1],
+        [0.21, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -467,10 +335,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_33769214",
@@ -485,22 +350,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0
-        ],
-        [
-          1,
-          0
-        ],
-        [
-          1,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -519,10 +372,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_81372",
@@ -537,22 +387,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.01,
-          0.01
-        ],
-        [
-          0.82,
-          0.01
-        ],
-        [
-          0.82,
-          1
-        ],
-        [
-          0.01,
-          1
-        ]
+        [0.01, 0.01],
+        [0.82, 0.01],
+        [0.82, 1],
+        [0.01, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -571,10 +409,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_48290858",
@@ -589,22 +424,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0,
-          0
-        ],
-        [
-          1,
-          0
-        ],
-        [
-          1,
-          1
-        ],
-        [
-          0,
-          1
-        ]
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -623,10 +446,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_40388945",
@@ -641,22 +461,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.02,
-          0
-        ],
-        [
-          0.9,
-          0
-        ],
-        [
-          0.9,
-          1
-        ],
-        [
-          0.02,
-          1
-        ]
+        [0.02, 0],
+        [0.9, 0],
+        [0.9, 1],
+        [0.02, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -675,10 +483,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_6979762",
@@ -693,22 +498,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0
-        ],
-        [
-          0.97,
-          0
-        ],
-        [
-          0.97,
-          1
-        ],
-        [
-          0.1,
-          1
-        ]
+        [0.1, 0],
+        [0.97, 0],
+        [0.97, 1],
+        [0.1, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -727,10 +520,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_96717017",
@@ -745,22 +535,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.08
-        ],
-        [
-          0.82,
-          0.08
-        ],
-        [
-          0.82,
-          0.86
-        ],
-        [
-          0.2,
-          0.86
-        ]
+        [0.2, 0.08],
+        [0.82, 0.08],
+        [0.82, 0.86],
+        [0.2, 0.86]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -779,10 +557,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_99723143",
@@ -797,22 +572,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.3,
-          0.03
-        ],
-        [
-          0.7,
-          0.03
-        ],
-        [
-          0.7,
-          0.66
-        ],
-        [
-          0.3,
-          0.66
-        ]
+        [0.3, 0.03],
+        [0.7, 0.03],
+        [0.7, 0.66],
+        [0.3, 0.66]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -831,10 +594,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_141575682",
@@ -849,22 +609,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.15,
-          0.23
-        ],
-        [
-          0.95,
-          0.23
-        ],
-        [
-          0.95,
-          0.95
-        ],
-        [
-          0.15,
-          0.95
-        ]
+        [0.15, 0.23],
+        [0.95, 0.23],
+        [0.95, 0.95],
+        [0.15, 0.95]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -883,10 +631,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_157008234",
@@ -901,22 +646,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.07,
-          0
-        ],
-        [
-          0.91,
-          0
-        ],
-        [
-          0.91,
-          0.8
-        ],
-        [
-          0.07,
-          0.8
-        ]
+        [0.07, 0],
+        [0.91, 0],
+        [0.91, 0.8],
+        [0.07, 0.8]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -935,10 +668,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_159931512",
@@ -953,22 +683,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0.11
-        ],
-        [
-          0.95,
-          0.11
-        ],
-        [
-          0.95,
-          0.98
-        ],
-        [
-          0.1,
-          0.98
-        ]
+        [0.1, 0.11],
+        [0.95, 0.11],
+        [0.95, 0.98],
+        [0.1, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -987,10 +705,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_90475499",
@@ -1005,22 +720,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.02
-        ],
-        [
-          0.82,
-          0.02
-        ],
-        [
-          0.82,
-          0.9
-        ],
-        [
-          0.2,
-          0.9
-        ]
+        [0.2, 0.02],
+        [0.82, 0.02],
+        [0.82, 0.9],
+        [0.2, 0.9]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1039,10 +742,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_92381119",
@@ -1057,22 +757,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.1,
-          0.12
-        ],
-        [
-          0.78,
-          0.12
-        ],
-        [
-          0.78,
-          0.93
-        ],
-        [
-          0.1,
-          0.93
-        ]
+        [0.1, 0.12],
+        [0.78, 0.12],
+        [0.78, 0.93],
+        [0.1, 0.93]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1091,10 +779,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_136480278",
@@ -1109,22 +794,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.17
-        ],
-        [
-          0.7,
-          0.17
-        ],
-        [
-          0.7,
-          0.85
-        ],
-        [
-          0.2,
-          0.85
-        ]
+        [0.2, 0.17],
+        [0.7, 0.17],
+        [0.7, 0.85],
+        [0.2, 0.85]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1143,10 +816,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_136480279",
@@ -1161,22 +831,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.22,
-          0.08
-        ],
-        [
-          0.7,
-          0.08
-        ],
-        [
-          0.7,
-          0.93
-        ],
-        [
-          0.22,
-          0.93
-        ]
+        [0.22, 0.08],
+        [0.7, 0.08],
+        [0.7, 0.93],
+        [0.22, 0.93]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1195,10 +853,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_124829622",
@@ -1213,22 +868,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.03
-        ],
-        [
-          0.87,
-          0.03
-        ],
-        [
-          0.87,
-          0.95
-        ],
-        [
-          0.13,
-          0.95
-        ]
+        [0.13, 0.03],
+        [0.87, 0.03],
+        [0.87, 0.95],
+        [0.13, 0.95]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1247,10 +890,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_26507235",
@@ -1265,22 +905,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.28,
-          0.22
-        ],
-        [
-          0.85,
-          0.22
-        ],
-        [
-          0.85,
-          0.93
-        ],
-        [
-          0.28,
-          0.93
-        ]
+        [0.28, 0.22],
+        [0.85, 0.22],
+        [0.85, 0.93],
+        [0.28, 0.93]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1299,10 +927,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_50921769",
@@ -1317,22 +942,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.16,
-          0.08
-        ],
-        [
-          0.8,
-          0.08
-        ],
-        [
-          0.8,
-          0.98
-        ],
-        [
-          0.16,
-          0.98
-        ]
+        [0.16, 0.08],
+        [0.8, 0.08],
+        [0.8, 0.98],
+        [0.16, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1351,10 +964,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_50921772",
@@ -1369,22 +979,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.15,
-          0.17
-        ],
-        [
-          0.8,
-          0.17
-        ],
-        [
-          0.8,
-          1
-        ],
-        [
-          0.15,
-          1
-        ]
+        [0.15, 0.17],
+        [0.8, 0.17],
+        [0.8, 1],
+        [0.15, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1403,10 +1001,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_56487326",
@@ -1421,22 +1016,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.2,
-          0.1
-        ],
-        [
-          0.83,
-          0.1
-        ],
-        [
-          0.83,
-          0.86
-        ],
-        [
-          0.2,
-          0.86
-        ]
+        [0.2, 0.1],
+        [0.83, 0.1],
+        [0.83, 0.86],
+        [0.2, 0.86]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1455,10 +1038,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_56487325",
@@ -1473,22 +1053,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.22,
-          0.1
-        ],
-        [
-          0.9,
-          0.1
-        ],
-        [
-          0.9,
-          0.97
-        ],
-        [
-          0.22,
-          0.97
-        ]
+        [0.22, 0.1],
+        [0.9, 0.1],
+        [0.9, 0.97],
+        [0.22, 0.97]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1507,10 +1075,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_56487327",
@@ -1525,22 +1090,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.22,
-          0.06
-        ],
-        [
-          0.85,
-          0.06
-        ],
-        [
-          0.85,
-          0.94
-        ],
-        [
-          0.22,
-          0.94
-        ]
+        [0.22, 0.06],
+        [0.85, 0.06],
+        [0.85, 0.94],
+        [0.22, 0.94]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1559,10 +1112,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_56487328",
@@ -1577,22 +1127,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.04
-        ],
-        [
-          0.84,
-          0.04
-        ],
-        [
-          0.84,
-          0.98
-        ],
-        [
-          0.13,
-          0.98
-        ]
+        [0.13, 0.04],
+        [0.84, 0.04],
+        [0.84, 0.98],
+        [0.13, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1611,10 +1149,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_109241182",
@@ -1629,22 +1164,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.36
-        ],
-        [
-          0.81,
-          0.36
-        ],
-        [
-          0.81,
-          0.91
-        ],
-        [
-          0.13,
-          0.91
-        ]
+        [0.13, 0.36],
+        [0.81, 0.36],
+        [0.81, 0.91],
+        [0.13, 0.91]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1663,10 +1186,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_109241190",
@@ -1681,22 +1201,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.12,
-          0.13
-        ],
-        [
-          0.91,
-          0.13
-        ],
-        [
-          0.91,
-          0.99
-        ],
-        [
-          0.12,
-          0.99
-        ]
+        [0.12, 0.13],
+        [0.91, 0.13],
+        [0.91, 0.99],
+        [0.12, 0.99]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1715,10 +1223,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_109241180",
@@ -1733,22 +1238,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.39,
-          0.37
-        ],
-        [
-          0.72,
-          0.37
-        ],
-        [
-          0.72,
-          0.85
-        ],
-        [
-          0.39,
-          0.85
-        ]
+        [0.39, 0.37],
+        [0.72, 0.37],
+        [0.72, 0.85],
+        [0.39, 0.85]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1767,10 +1260,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_167896665",
@@ -1785,22 +1275,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.02,
-          0.2
-        ],
-        [
-          0.99,
-          0.2
-        ],
-        [
-          0.99,
-          0.97
-        ],
-        [
-          0.02,
-          0.97
-        ]
+        [0.02, 0.2],
+        [0.99, 0.2],
+        [0.99, 0.97],
+        [0.02, 0.97]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1819,10 +1297,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_117569252",
@@ -1837,22 +1312,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.35,
-          0.3
-        ],
-        [
-          0.79,
-          0.3
-        ],
-        [
-          0.79,
-          0.91
-        ],
-        [
-          0.35,
-          0.91
-        ]
+        [0.35, 0.3],
+        [0.79, 0.3],
+        [0.79, 0.91],
+        [0.35, 0.91]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1871,10 +1334,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_25228750",
@@ -1889,22 +1349,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.34,
-          0.24
-        ],
-        [
-          0.98,
-          0.24
-        ],
-        [
-          0.98,
-          0.74
-        ],
-        [
-          0.34,
-          0.74
-        ]
+        [0.34, 0.24],
+        [0.98, 0.24],
+        [0.98, 0.74],
+        [0.34, 0.74]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1923,10 +1371,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_32325922",
@@ -1941,22 +1386,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.35,
-          0.18
-        ],
-        [
-          0.77,
-          0.18
-        ],
-        [
-          0.77,
-          0.92
-        ],
-        [
-          0.35,
-          0.92
-        ]
+        [0.35, 0.18],
+        [0.77, 0.18],
+        [0.77, 0.92],
+        [0.35, 0.92]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -1975,10 +1408,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_28209935",
@@ -1993,22 +1423,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.07,
-          0.07
-        ],
-        [
-          0.94,
-          0.07
-        ],
-        [
-          0.94,
-          0.99
-        ],
-        [
-          0.07,
-          0.99
-        ]
+        [0.07, 0.07],
+        [0.94, 0.07],
+        [0.94, 0.99],
+        [0.07, 0.99]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2027,10 +1445,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_322704",
@@ -2045,22 +1460,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.12,
-          0.11
-        ],
-        [
-          0.78,
-          0.11
-        ],
-        [
-          0.78,
-          0.96
-        ],
-        [
-          0.12,
-          0.96
-        ]
+        [0.12, 0.11],
+        [0.78, 0.11],
+        [0.78, 0.96],
+        [0.12, 0.96]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2079,10 +1482,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_15941212",
@@ -2097,22 +1497,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.07,
-          0.1
-        ],
-        [
-          0.62,
-          0.1
-        ],
-        [
-          0.62,
-          0.98
-        ],
-        [
-          0.07,
-          0.98
-        ]
+        [0.07, 0.1],
+        [0.62, 0.1],
+        [0.62, 0.98],
+        [0.07, 0.98]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2131,10 +1519,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_98999103",
@@ -2149,22 +1534,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.05,
-          0
-        ],
-        [
-          0.99,
-          0
-        ],
-        [
-          0.99,
-          1
-        ],
-        [
-          0.05,
-          1
-        ]
+        [0.05, 0],
+        [0.99, 0],
+        [0.99, 1],
+        [0.05, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2183,10 +1556,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_107120332",
@@ -2201,22 +1571,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.28,
-          0.14
-        ],
-        [
-          0.77,
-          0.14
-        ],
-        [
-          0.77,
-          0.65
-        ],
-        [
-          0.28,
-          0.65
-        ]
+        [0.28, 0.14],
+        [0.77, 0.14],
+        [0.77, 0.65],
+        [0.28, 0.65]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2254,22 +1612,10 @@
       "category": "electricity_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.16,
-          0.26
-        ],
-        [
-          0.83,
-          0.26
-        ],
-        [
-          0.83,
-          0.91
-        ],
-        [
-          0.16,
-          0.91
-        ]
+        [0.16, 0.26],
+        [0.83, 0.26],
+        [0.83, 0.91],
+        [0.16, 0.91]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2288,10 +1634,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_86999625",
@@ -2306,22 +1649,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.41,
-          0.16
-        ],
-        [
-          0.91,
-          0.16
-        ],
-        [
-          0.91,
-          0.87
-        ],
-        [
-          0.41,
-          0.87
-        ]
+        [0.41, 0.16],
+        [0.91, 0.16],
+        [0.91, 0.87],
+        [0.41, 0.87]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2340,10 +1671,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_49855905",
@@ -2358,22 +1686,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.13,
-          0.02
-        ],
-        [
-          0.97,
-          0.02
-        ],
-        [
-          0.97,
-          1
-        ],
-        [
-          0.13,
-          1
-        ]
+        [0.13, 0.02],
+        [0.97, 0.02],
+        [0.97, 1],
+        [0.13, 1]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2392,10 +1708,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_77534681",
@@ -2410,22 +1723,10 @@
       "category": "electricity_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.03,
-          0.03
-        ],
-        [
-          0.99,
-          0.03
-        ],
-        [
-          0.99,
-          0.94
-        ],
-        [
-          0.03,
-          0.94
-        ]
+        [0.03, 0.03],
+        [0.99, 0.03],
+        [0.99, 0.94],
+        [0.03, 0.94]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2444,10 +1745,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_179987587",
@@ -2462,22 +1760,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.25,
-          0.08
-        ],
-        [
-          0.55,
-          0.08
-        ],
-        [
-          0.55,
-          0.58
-        ],
-        [
-          0.25,
-          0.58
-        ]
+        [0.25, 0.08],
+        [0.55, 0.08],
+        [0.55, 0.58],
+        [0.25, 0.58]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2496,10 +1782,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_141189268",
@@ -2514,22 +1797,10 @@
       "category": "water_digital",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.01,
-          0.015
-        ],
-        [
-          0.99,
-          0.015
-        ],
-        [
-          0.99,
-          0.99
-        ],
-        [
-          0.01,
-          0.99
-        ]
+        [0.01, 0.015],
+        [0.99, 0.015],
+        [0.99, 0.99],
+        [0.01, 0.99]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2548,10 +1819,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_141372353",
@@ -2566,22 +1834,10 @@
       "category": "water_mechanical",
       "annotationLevel": "meter",
       "meterPolygon": [
-        [
-          0.14,
-          0.25
-        ],
-        [
-          0.83,
-          0.25
-        ],
-        [
-          0.83,
-          0.78
-        ],
-        [
-          0.14,
-          0.78
-        ]
+        [0.14, 0.25],
+        [0.83, 0.25],
+        [0.83, 0.78],
+        [0.14, 0.78]
       ],
       "windowPolygon": null,
       "reading": null,
@@ -2600,10 +1856,7 @@
         "independentHumanReview": false,
         "qualityScope": "coarse visible blur/glare flags, not calibrated image-quality ground truth"
       },
-      "flags": [
-        "small_development_sample",
-        "body_only_no_exact_reading_ground_truth"
-      ]
+      "flags": ["small_development_sample", "body_only_no_exact_reading_ground_truth"]
     },
     {
       "id": "commons_161109743",

@@ -1,3 +1,5 @@
+import { conciseMessage } from '../../lib/toast';
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
@@ -12,6 +14,7 @@ import { useContractPreparation } from '../../../../../packages/client-core/src/
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
+import { showSuccess } from '../../lib/toast';
 
 export function ContractDraftForm({
   api,
@@ -28,7 +31,7 @@ export function ContractDraftForm({
   const [residents, setResidents] = useState<string[]>([]),
     [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useFeedbackState();
   const lock = useRef(false),
     [keys] = useState(() => mutationKeys(randomUUID));
   const query = useContractPreparation(api, location, role === 'Owner');
@@ -55,6 +58,7 @@ export function ContractDraftForm({
     try {
       const r = await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
       keys.confirmed('draft', body);
+      showSuccess('Đã tạo hợp đồng nháp.');
       onCreated(r.id);
     } catch (e) {
       setError(contractError(e));
@@ -70,7 +74,7 @@ export function ContractDraftForm({
         detail={`Bước ${step + 1}/3 · ${['Cấu hình', 'Phòng & Người ở', 'Điều khoản'][step]}`}
       />
       {query.loading && <Text>Đang tải lựa chọn…</Text>}
-      {!!query.error && <Text style={ui.red}>{query.error}</Text>}
+      {!!query.error && <Text style={ui.red}>{conciseMessage(query.error)}</Text>}
       <Box>
         {step === 0 && template && (
           <>

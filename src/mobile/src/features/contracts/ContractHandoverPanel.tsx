@@ -1,3 +1,5 @@
+import { conciseMessage } from '../../lib/toast';
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Checkbox, Text } from 'react-native-paper';
@@ -36,8 +38,8 @@ export function ContractHandoverPanel({
     [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
+    [error, setError] = useFeedbackState(),
+    [notice, setNotice] = useFeedbackState('success'),
     [safePhoto, setSafePhoto] = useState(false);
   const confirmationKey = `${contract.id}:${h?.version ?? ''}`;
   const [confirmation, setConfirmation] = useState({ key: '', checked: false, note: '' });
@@ -112,7 +114,7 @@ export function ContractHandoverPanel({
         detail="Tenant xác nhận nội dung · Staff hoàn tất cùng phiên bản"
       />
       {query.loading && <Text>Đang tải bàn giao…</Text>}
-      {!!query.error && <Text style={ui.red}>{query.error}</Text>}
+      {!!query.error && <Text style={ui.red}>{conciseMessage(query.error)}</Text>}
       {!query.loading && !query.error && !h && <Text>Chưa có biên bản nhận phòng.</Text>}
       {h && !editing && (
         <>

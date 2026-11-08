@@ -7,7 +7,7 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 public static class Compact24Schema
 {
-    public const string Version = "compact24-2026-11-04";
+    public const string Version = "compact24-2026-11-04-location-room";
     private static readonly string Script = ReadScript();
     public static string ScriptSha256 { get; } = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Script)));
     private static readonly string[] Tables = Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal).ToArray();
@@ -30,7 +30,13 @@ public static class Compact24Schema
         await using var command = new NpgsqlCommand(Script, connection); await command.ExecuteNonQueryAsync(token);
     }
 
-    internal static async Task<bool> VerifyAsync(Compact24DbContext db, CancellationToken token)
+    internal static Task<bool> VerifyAsync(Compact24DbContext db, CancellationToken token) => VerifyReferenceAsync(db, Script, token);
+    internal static Task<bool> VerifyPreviousPropertyAsync(Compact24DbContext db, CancellationToken token) =>
+        VerifyReferenceAsync(db, PreviousPropertyReference, token);
+    internal static string PreviousPropertyReference { get; } = ReadScript("BHome.Compact24.PreviousProperty.schema-reference");
+
+    // These profiles are used only for SELECT-based verification, never executed as SQL.
+    private static async Task<bool> VerifyReferenceAsync(Compact24DbContext db, string reference, CancellationToken token)
     {
         await db.Database.OpenConnectionAsync(token);
         var connection = (NpgsqlConnection)db.Database.GetDbConnection();
@@ -45,8 +51,8 @@ public static class Compact24Schema
             await using var reader = await query.ExecuteReaderAsync(token);
             while (await reader.ReadAsync(token)) columns.Add($"{reader.GetString(0)}.{reader.GetString(1)}:{reader.GetString(2)}:{reader.GetBoolean(3)}");
         }
-        var expected = ExpectedColumns();
-        if (columns.Count != 386 || !columns.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal)) ||
+        var expected = ExpectedColumns(reference);
+        if (columns.Count != expected.Length || !columns.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal)) ||
             !columns.Select(c => c.Split('.')[0]).Distinct().Order(StringComparer.Ordinal).SequenceEqual(Tables)) return false;
         var foreignKeys = new List<string>();
         await using (var query = new NpgsqlCommand("""
@@ -61,23 +67,23 @@ public static class Compact24Schema
             await using var reader = await query.ExecuteReaderAsync(token);
             while (await reader.ReadAsync(token)) foreignKeys.Add($"{reader.GetString(0)}({reader.GetString(1)})->{reader.GetString(2)}({reader.GetString(3)})");
         }
-        if (foreignKeys.Count != 83 || !foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys().Order(StringComparer.Ordinal))) return false;
+        if (foreignKeys.Count != 83 || !foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys(reference).Order(StringComparer.Ordinal))) return false;
         // Verify the original append-only/invoice/payment/refresh protections, including their bodies.
-        foreach (Match function in Regex.Matches(Script, @"CREATE FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;"))
+        foreach (Match function in Regex.Matches(reference, @"CREATE FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;"))
         {
             await using var query = new NpgsqlCommand("SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=@name", connection, transaction);
             query.Parameters.AddWithValue("name", function.Groups[1].Value);
             var actual = (string?)await query.ExecuteScalarAsync(token);
             if (actual?.Replace("\r\n", "\n", StringComparison.Ordinal).Trim() != function.Groups[2].Value.Replace("\r\n", "\n", StringComparison.Ordinal).Trim()) return false;
         }
-        var requiredTriggers = Regex.Matches(Script, @"(?m)^CREATE TRIGGER ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var requiredTriggers = Regex.Matches(reference, @"(?m)^CREATE TRIGGER ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         await using (var query = new NpgsqlCommand("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled='O'", connection, transaction))
         {
             await using var reader = await query.ExecuteReaderAsync(token);
             while (await reader.ReadAsync(token)) requiredTriggers.Remove(reader.GetString(0));
         }
         if (requiredTriggers.Count != 0) return false;
-        var requiredIndexes = Regex.Matches(Script, @"(?m)^CREATE (?:UNIQUE )?INDEX ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var requiredIndexes = Regex.Matches(reference, @"(?m)^CREATE (?:UNIQUE )?INDEX ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         await using (var query = new NpgsqlCommand("SELECT indexname FROM pg_indexes WHERE schemaname='public'", connection, transaction))
         {
             await using var reader = await query.ExecuteReaderAsync(token);
@@ -91,10 +97,10 @@ public static class Compact24Schema
             return (bool)(await query.ExecuteScalarAsync(token))!;
     }
 
-    private static string[] ExpectedColumns()
+    internal static string[] ExpectedColumns(string reference)
     {
         var columns = new List<string>();
-        foreach (Match table in Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+) \(([\s\S]*?)^\);"))
+        foreach (Match table in Regex.Matches(reference, @"(?m)^CREATE TABLE ([a-z_]+) \(([\s\S]*?)^\);"))
             foreach (Match column in Regex.Matches(table.Groups[2].Value, @"(?m)^    ([a-z_]+) ([a-z]+(?:\([0-9,]+\))?(?:\[\])?)([^\r\n]*)"))
             {
                 var type = column.Groups[2].Value.Replace("varchar", "character varying", StringComparison.Ordinal)
@@ -105,24 +111,24 @@ public static class Compact24Schema
         return columns.ToArray();
     }
 
-    private static string[] ExpectedForeignKeys()
+    private static string[] ExpectedForeignKeys(string reference)
     {
         var keys = new List<string>();
-        foreach (Match table in Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+) \(([\s\S]*?)^\);"))
+        foreach (Match table in Regex.Matches(reference, @"(?m)^CREATE TABLE ([a-z_]+) \(([\s\S]*?)^\);"))
         {
             foreach (Match column in Regex.Matches(table.Groups[2].Value, @"(?m)^    ([a-z_]+) [^\r\n]*?REFERENCES ([a-z_]+)\(([a-z_,]+)\)"))
                 keys.Add($"{table.Groups[1].Value}({column.Groups[1].Value})->{column.Groups[2].Value}({column.Groups[3].Value})");
             foreach (Match composite in Regex.Matches(table.Groups[2].Value, @"FOREIGN KEY\(([a-z_,]+)\) REFERENCES ([a-z_]+)\(([a-z_,]+)\)"))
                 keys.Add($"{table.Groups[1].Value}({composite.Groups[1].Value})->{composite.Groups[2].Value}({composite.Groups[3].Value})");
         }
-        foreach (Match alter in Regex.Matches(Script, @"ALTER TABLE ([a-z_]+) ADD CONSTRAINT [a-z_]+ FOREIGN KEY\(([a-z_,]+)\) REFERENCES ([a-z_]+)\(([a-z_,]+)\)"))
+        foreach (Match alter in Regex.Matches(reference, @"ALTER TABLE ([a-z_]+) ADD CONSTRAINT [a-z_]+ FOREIGN KEY\(([a-z_,]+)\) REFERENCES ([a-z_]+)\(([a-z_,]+)\)"))
             keys.Add($"{alter.Groups[1].Value}({alter.Groups[2].Value})->{alter.Groups[3].Value}({alter.Groups[4].Value})");
         return keys.ToArray();
     }
 
-    private static string ReadScript()
+    private static string ReadScript(string resource = "BHome.Compact24.Schema.sql")
     {
-        using var stream = typeof(Compact24Schema).Assembly.GetManifestResourceStream("BHome.Compact24.Schema.sql")!;
+        using var stream = typeof(Compact24Schema).Assembly.GetManifestResourceStream(resource)!;
         using var reader = new StreamReader(stream); return reader.ReadToEnd();
     }
 }

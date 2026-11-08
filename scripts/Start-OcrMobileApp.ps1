@@ -27,6 +27,16 @@ function Assert-LocalApiProcess {
     }
 }
 
+function Get-CheckoutApiProcess {
+    # A debugger can pause startup before Kestrel binds either port. Port checks
+    # alone must not launch a second API against the same database/checkout.
+    Get-CimInstance Win32_Process -Filter "Name = 'BHome.Api.exe' OR Name = 'dotnet.exe'" | Where-Object {
+        $identity = $_.CommandLine + ' ' + $_.ExecutablePath
+        $identity.IndexOf($repo, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            $identity -match 'BHome\.Api(?:\.dll|\.exe)?(?:\s|"|$)'
+    } | Select-Object -First 1
+}
+
 function Stop-OwnedProcess($Process) {
     if ($Process -and -not $Process.HasExited) {
         # Only processes created by this launcher; never stop a Visual Studio API or another Metro.
@@ -46,7 +56,7 @@ function Wait-MobileApi([string]$Address) {
     # can be stale when this launcher reuses a Visual Studio API.
     & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
     $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
-    throw "API HTTPS readiness failed. $logHint If readiness returns HTTP 503, run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check. If migrations are pending, back up the local database, stop the API, run the same command without -Check, then restart the API. Also check local database/storage and Development settings. No TLS checks were bypassed."
+    throw "API HTTPS readiness failed. $logHint ECONNREFUSED means no API listener; check startup exceptions or a paused debugger first. Run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check. For PROPERTY_UPGRADE_REQUIRED, back up the database, stop the API, then use -UpgradePropertySchema and restart. If the upgrade refuses populated retired catalog fields, preserve the data and resolve their migration explicitly; do not recreate the database to bypass it. Use no switch only for MISSING/EMPTY initialization, and -RecreateDatabase only for an explicitly approved legacy archive. Also check local database/storage and Development settings. No TLS checks were bypassed."
 }
 
 function Wait-MobileMetro([string]$Address) {
@@ -77,10 +87,14 @@ try {
     }
     & (Join-Path $PSScriptRoot 'Prepare-OcrMobile.ps1') -LanIp $lanIp -SkipDatabase
     if (-not (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue)) {
-        $apiLauncher = Join-Path $PSScriptRoot 'Start-OcrMobile.ps1'
-        $ownedApi = Start-Process powershell.exe -WindowStyle Hidden -WorkingDirectory $repo -PassThru -ArgumentList @(
-            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $apiLauncher + '"'), '-SkipDatabase'
-        ) -RedirectStandardOutput (Join-Path $repo '.tools/mobile-dev-api.stdout.log') -RedirectStandardError (Join-Path $repo '.tools/mobile-dev-api.stderr.log')
+        if (Get-CheckoutApiProcess) {
+            Write-Output 'An API process from this checkout is starting or paused before opening HTTPS. Continue/check Visual Studio startup output; waiting without starting a second API.'
+        } else {
+            $apiLauncher = Join-Path $PSScriptRoot 'Start-OcrMobile.ps1'
+            $ownedApi = Start-Process powershell.exe -WindowStyle Hidden -WorkingDirectory $repo -PassThru -ArgumentList @(
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $apiLauncher + '"'), '-SkipDatabase'
+            ) -RedirectStandardOutput (Join-Path $repo '.tools/mobile-dev-api.stdout.log') -RedirectStandardError (Join-Path $repo '.tools/mobile-dev-api.stderr.log')
+        }
     }
     Wait-MobileApi $lanIp
     while ($true) {
@@ -111,7 +125,6 @@ try {
         Write-Output "Metro status/iOS manifest OK from this computer. On iPhone Safari, test http://${lanIp}:$Port/status (expected: packager-status:running)."
         Write-Output 'Desktop probes do not confirm phone connectivity. If Safari fails, check Expo Go Local Network permission and router/device isolation.'
         $deviceSeen = $false
-        $deviceDeadline = (Get-Date).AddSeconds(30)
         $networkChanged = $false
         while (-not $metro.WaitForExit(3000)) {
             if (-not $deviceSeen) {
@@ -121,9 +134,6 @@ try {
                 if ($peer) {
                     $deviceSeen = $true
                     Write-Output 'Metro received a TCP connection from another device. Wait for iOS Bundled to confirm JavaScript transfer.'
-                } elseif ((Get-Date) -ge $deviceDeadline) {
-                    Write-Warning "No device TCP connection observed yet. Test http://${lanIp}:$Port/status in iPhone Safari; loading the API is a separate step."
-                    $deviceDeadline = (Get-Date).AddSeconds(60)
                 }
             }
             try { $currentIp = Get-MobileLanIp }

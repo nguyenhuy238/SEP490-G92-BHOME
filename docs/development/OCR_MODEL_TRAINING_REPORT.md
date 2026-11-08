@@ -135,3 +135,70 @@ CPU ORT2 threads p50/p95 forward-only khoảng29.64/41.62ms,25.23/31.42ms,
 
 Kết quả chưa đạt acceptance bốn loại hoặc ≥90% trên bộ ảnh đại diện. Các model
 mới giữ ngoài ứng dụng; không thay thế PP/Stage1/Stage2 hiện hành.
+
+## Lượt tiếp nối LCD ngày 06/11/2026
+
+Đã chạy GPU thật trên RTX 3070 Laptop, cùng base YOLOv8n/hash, môi trường,
+seed42 và config ở trên. Dataset: 206 train (163 Mendeley +43 LCD preview),
+2 val, 4 test; source mới giữ toàn bộ train. Giấy phép preview CC-BY-NC-4.0
+chỉ dùng nghiên cứu offline phi thương mại; không phân phối weights/ảnh.
+Dataset audit SHA256 `28049194dd1a8641e53c6f12719903eab5ca19a70f96fd3c0fa3231931c33570`.
+
+49 epoch thực tế, best fitness epoch29, early stopping patience20, thời gian
+229.062s. [CSV](ocr-20261106-lcd-training.csv) và
+[kết quả/provenance](ocr-20261106-lcd-results.json) được lưu trong Git.
+Checkpoint/ONNX/log/crop ở `.tools/ocr-20261106-lcd-*`, không commit.
+
+- PT SHA256: `0f686ac3f5d55b0f011fd792afe92efdcc3c46e848c4d60bd04dffd57fe109a2`.
+- ONNX SHA256: `a4c655bf7b5bd78fdb7200c0a0a177542e1f4fcd9b2628d93f5d29a3618976fc`.
+- FP32/opset17/input `[1,3,416,416]`, output `[1,14,3549]`, digit classes0..9.
+- Validation chọn threshold.25: exact0/1 readable, false0/2, fallback2/2.
+- Development test: exact2/3 readable, false2/4 inputs, fallback0/4; correct
+  proposal/all inputs2/4, conditional correct proposals2/4. Không suy đây là
+  kết quả billing vì chưa đánh giá precision/register/full-frame localization.
+- Native PyTorch/ORT parity6/6; .NET preprocessing/tensor parity6/6.
+- CPU forward-only p50=25.38ms, p95=27.62ms, max=27.76ms; không phải latency E2E.
+
+**REJECTED**: không cải thiện false proposals so với candidate hàng số trước,
+không qua validation và không phải four-class model. Không dùng test để tune
+thêm hoặc bật runtime. Đây là cùng development holdout đã dùng ngày05/11,
+không phải nghiệm thu độc lập mới. Chưa thể train detector bốn lớp vì nước
+điện tử vẫn không có train/val; không tạo head giả để điền checklist.
+
+## Four-class feasibility tiếp nối sau 83317cb
+
+Đã có thêm ba public water LCD previews thực sự, cùng một publisher TRAIN;
+ảnh water digital cũ được hạ từ development test thành validation, không train;
+blank LCD Commons mới ở test. [Dataset revision](../datasets/meter/four-class-development-v2.json)
+được freeze trước training:36 train /11 val /15 test,62 ảnh. Riêng nước LCD
+chỉ3/1/1, partial-body/low resolution; đây là feasibility, không đủ đại diện.
+
+Chạy YOLOv8n GPU thật cùng pinned base/hash/dependencies/config/seed42,29 epoch,
+best fitness epoch9,35.969s. Early stopping patience20; không tăng epoch để
+chạy lại theo test. Bốn supervised classes đúng thứ tự adapter, không có class
+head giả hoặc nhãn từ prediction. [CSV](ocr-next-four-class-training.csv),
+[provenance và kết quả đầy đủ](ocr-next-four-class-results.json).
+
+- PT SHA256 `57366ec4d8f477c812635b9644ef1e58c805e8adb63adec454c3996d03904593`.
+- ONNX SHA256 `c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7`.
+- FP32/opset17, `[1,3,416,416]`→`[1,8,3549]`, metadata có4 class names thật.
+- PyTorch/ORT10/10 và .NET tensor parity10/10 PASS. Adapter thật load/infer trên
+  11 val +15 test; ngưỡng hiện hành candidate.25/classification.9/NMS.45 được
+  giữ trước benchmark:0 classified,26 fallback,0 false classification. Không
+  gọi reject-all là thành công hoặc dùng nó để suy accuracy100%.
+- Grid selection Python trên validation không qua gate per-class/false positives.
+  Confusion, per-class P/R/mAP, raw tensor parity và latency nằm trong JSON.
+  Python argmax detection metrics và adapter multi-label rejection là hai phép
+  đo riêng; mAP không phải confidence calibration hoặc end-to-end reading.
+
+**REJECTED, KHÔNG ACTIVATE.** Four-class weights hiện đã tồn tại local và chạy
+thật qua ONNX/.NET, nhưng chưa đủ chất lượng để dùng trong HTTP workflow.
+Artifacts trong `.tools/ocr-next-four-class-*`, không commit weights/ảnh. Test
+ba lớp cũ đã từng được xem là development history; không tái gọi chúng là final
+acceptance độc lập. One new blank LCD source không thay được50 ảnh/lớp.
+
+Chạy lại: preparer với manifest trên và image root repository; trainer hiện có
+không dùng `--allow-partial-development`; export `--name body`; OcrSmoke
+`--trained-yolo-parity <export> <report>` và
+`--visual-category-benchmark <export> <dataset> <report>`. Benchmark mới luôn
+gọi chính `YoloMeterCategoryClassifier`, không register model trong appsettings.

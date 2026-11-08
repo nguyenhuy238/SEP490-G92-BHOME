@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-06",
+  "datasetAuditSha256": "28049194dd1a8641e53c6f12719903eab5ca19a70f96fd3c0fa3231931c33570",
+  "preview": {
+    "revision": "4b0837a012d2062ac702d7f400e991cedfd6f64d",
+    "receiptSha256": "fda7fcda23f7dcca822d7a2e6bfb915f8d876764f817a02927c79cee7866890a",
+    "exclusions": {
+      "8": "blank_display_with_unreliable_zero_labels",
+      "37": "blank_display_with_unreliable_zero_labels",
+      "48": "segment_test_not_consumption",
+      "7": "annotation_review_required: Digit outside annotated display",
+      "9": "annotation_review_required: Digit outside annotated display",
+      "17": "annotation_review_required: Digit outside annotated display",
+      "38": "annotation_review_required: Digit outside annotated display"
+    },
+    "usage": "noncommercial offline research; no runtime activation"
+  },
+  "counts": {
+    "train": 206,
+    "val": 2,
+    "test": 4
+  },
+  "sourcePerceptualPairs": [],
+  "limitation": "Publisher training labels; same-source captures all TRAIN; reused development holdout, not independent acceptance; no precision or register GT."
+}

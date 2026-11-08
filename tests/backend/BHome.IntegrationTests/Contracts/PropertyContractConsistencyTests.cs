@@ -18,8 +18,7 @@ public sealed partial class ContractLifecycleApiTests
         var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var room = await db.Set<Room>().Include(r => r.Location).SingleAsync(r => r.Id == workspace.Room);
         room.Location.Address = "Synthetic address";
-        var type = new RoomType { LocationId = workspace.Location, Name = "Synthetic type", DefaultCapacity = 2 };
-        db.Add(type); room.RoomTypeId = type.Id; room.Capacity = 2;
+        room.RoomTypeId = null; room.Capacity = 2;
         await db.SaveChangesAsync();
         return (await workspace.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{room.Id}"))!;
     }
@@ -36,7 +35,8 @@ public sealed partial class ContractLifecycleApiTests
             await SettledBoundary(w, id);
         }
         var before = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
-        var input = new RoomWrite(w.Location, before.RoomTypeId!.Value, "RENAMED", before.Floor, before.Capacity, before.Status, before.Version, "Synthetic rename");
+        var input = new RoomWrite(w.Location, "RENAMED", before.Floor, before.Capacity, before.Status,
+            before.Version, "Synthetic rename");
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         async Task<HttpResponseMessage> Property() { await release.Task; return await w.Owner.Client.PutAsJsonAsync($"/api/v1/rooms/{w.Room}", input); }
         async Task<HttpResponseMessage> Transition()
@@ -122,7 +122,7 @@ public sealed partial class ContractLifecycleApiTests
         {
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
             return await scope.ServiceProvider.GetRequiredService<IPropertyRepository>()
-                .ObligationsAsync(w.Location, null, w.Room, Today, default);
+                .ObligationsAsync(w.Location, w.Room, Today, default);
         }
         var draft = await Read();
         Assert.True(draft.HasResidentRecords); Assert.False(draft.HasCurrentOccupancy);

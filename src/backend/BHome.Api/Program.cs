@@ -15,7 +15,10 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Api:ReadDevel
 if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("DevelopmentDatabase:InitializeOnStartup"))
 {
     var prepared = await Compact24DevelopmentDatabase.PrepareAsync(app.Environment.EnvironmentName,
-        app.Configuration.GetConnectionString("Database") ?? "");
+        app.Configuration.GetConnectionString("Database") ?? "",
+        allowPreviousPropertySchema: app.Configuration.GetValue<bool>("DevelopmentDatabase:AllowPreviousPropertySchema"));
+    if (prepared.State == "READY_PREVIOUS_PROPERTY_COMPATIBILITY")
+        app.Logger.LogWarning("Using the verified previous Compact24 property schema in Development; no schema or data migration was performed.");
     app.Logger.LogInformation("Compact24 Development database: {DatabaseState}; schema {SchemaVersion}", prepared.State, Compact24Schema.Version);
 }
 app.UseMiddleware<CorrelationMiddleware>();
@@ -33,7 +36,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("Clients");
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture") || context.Request.Path.StartsWithSegments("/api/v1/contracts") || context.Request.Path.StartsWithSegments("/api/v1/digital-signing") || context.Request.Path.StartsWithSegments("/api/v1/operational-tasks"))
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Path.StartsWithSegments("/api/v1/ocr") || context.Request.Path.StartsWithSegments("/api/v1/capture") || context.Request.Path.StartsWithSegments("/api/v1/contracts") || context.Request.Path.StartsWithSegments("/api/v1/digital-signing") || context.Request.Path.StartsWithSegments("/api/v1/operational-tasks") || context.Request.Path.StartsWithSegments("/api/v1/incidents") || context.Request.Path.StartsWithSegments("/api/v1/work-orders") || context.Request.Path.StartsWithSegments("/api/v1/maintenance-history"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";

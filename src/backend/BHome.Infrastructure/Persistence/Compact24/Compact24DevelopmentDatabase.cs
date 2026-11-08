@@ -7,7 +7,7 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 public sealed record DevelopmentDatabaseResult(string State, string? BackupDatabase = null);
 public sealed class DevelopmentDatabaseException(string code) : InvalidOperationException(
     "Compact24 Development database: " + code + ". Use scripts/Update-LocalDatabase.ps1 -Check; " +
-    "for the one-time legacy replacement use -RecreateDatabase. No tables are dropped.")
+    "for Compact24 without Chain/RoomType use -UpgradePropertySchema; for legacy replacement use -RecreateDatabase.")
 {
     public string Code { get; } = code;
 }
@@ -17,7 +17,8 @@ public sealed class DevelopmentDatabaseException(string code) : InvalidOperation
 public static class Compact24DevelopmentDatabase
 {
     public static async Task<DevelopmentDatabaseResult> PrepareAsync(string? environment, string connectionString,
-        bool archiveLegacy = false, bool checkOnly = false, CancellationToken token = default)
+        bool archiveLegacy = false, bool checkOnly = false, CancellationToken token = default,
+        bool allowPreviousPropertySchema = false)
     {
         var settings = ValidateTarget(environment, connectionString);
         if (archiveLegacy && checkOnly) throw new DevelopmentDatabaseException("incompatible_modes");
@@ -46,6 +47,21 @@ public static class Compact24DevelopmentDatabase
                 return new("INITIALIZED");
             }
             if (await ReadyAsync(target, token)) return new("READY");
+            if (allowPreviousPropertySchema)
+            {
+                await using var compatible = new Compact24DbContext(
+                    new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(target).Options, new(true));
+                if (await Compact24Schema.VerifyPreviousPropertyAsync(compatible, token)) return new("READY_PREVIOUS_PROPERTY_COMPATIBILITY");
+            }
+            if (tables.Length == 24 && tables.Contains("locations") && tables.Contains("billing_policies"))
+            {
+                await using var previous = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='locations' AND column_name='room_types'", target);
+                if ((long)(await previous.ExecuteScalarAsync(token))! == 1)
+                {
+                    if (checkOnly) return new("PROPERTY_UPGRADE_REQUIRED");
+                    throw new DevelopmentDatabaseException("property_upgrade_requires_explicit_command");
+                }
+            }
             var legacy = tables.Order(StringComparer.Ordinal).SequenceEqual(
                 Compact24MigrationMap.Tables.Keys.Append("__EFMigrationsHistory").Order(StringComparer.Ordinal));
             if (!legacy) throw new DevelopmentDatabaseException("unrecognized_existing_schema");

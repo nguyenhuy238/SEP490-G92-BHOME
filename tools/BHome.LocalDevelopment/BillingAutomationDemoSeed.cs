@@ -32,8 +32,7 @@ internal static class BillingAutomationDemoSeed
         if (existing is null)
         {
             if (await db.Locations.AnyAsync(l => l.Name == "BHOME AUTOMATION DEMO", t)) throw new LocalTestAccountException("Automation fixture name conflict.");
-            Add(db, 10, new Location("BHOME AUTOMATION DEMO") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync(t), Address = "SYNTHETIC JOB09/10 ONLY" });
-            Add(db, 11, new RoomType { LocationId = Id(10), Name = "Phòng tự động tổng hợp", DefaultCapacity = 3 });
+            Add(db, 10, new Location("BHOME AUTOMATION DEMO") { Address = "SYNTHETIC JOB09/10 ONLY" });
             db.Add(new StaffLocationAssignment(Id(10), ContractDemoSeed.Id(2), ContractDemoSeed.Id(1), today.AddYears(-1), today.AddYears(1)));
         }
         else if (existing.Name != "BHOME AUTOMATION DEMO") throw new LocalTestAccountException("Automation fixture ID conflict.");
@@ -42,7 +41,7 @@ internal static class BillingAutomationDemoSeed
         {
             var r = await db.Set<Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == Id(20 + room), t);
             if (r is not null) { if (r.LocationId != Id(10) || r.RoomNumber != names[room]) throw new LocalTestAccountException("Automation room conflict."); continue; }
-            Add(db, 20 + room, new Room { LocationId = Id(10), RoomTypeId = Id(11), RoomNumber = names[room], Capacity = 3, Status = RoomStatus.Available });
+            Add(db, 20 + room, new Room { LocationId = Id(10), RoomNumber = names[room], Capacity = 3, Status = RoomStatus.Available });
             for (var person = 0; person < (room == 0 ? 3 : 1); person++) Add(db, 40 + room * 3 + person, new Resident { RoomId = Id(20 + room), TenantUserId = ContractDemoSeed.Id(3 + person), OwnerUserId = ContractDemoSeed.Id(1), DisplayLabel = $"Khách tổng hợp {(char)('A' + person)} ({names[room]})", ResidentType = ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Verified, ConfirmedByUserId = ContractDemoSeed.Id(2), ConfirmedAt = DateTimeOffset.UtcNow });
             for (var type = 0; type < (room == 1 ? 1 : 2); type++) Add(db, 60 + room * 2 + type, new Meter { RoomId = Id(20 + room), Code = $"SYN-AUTO-{room}-{type}", UtilityType = (UtilityType)type, Display = MeterDisplay.Digital, InstalledOn = period.AddMonths(-1) });
         }

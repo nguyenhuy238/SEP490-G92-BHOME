@@ -1,0 +1,315 @@
+{
+  "date": "2026-11-07",
+  "officialModel": {
+    "repository": "PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx",
+    "revision": "3fafbc3b5dcf93dd72add9f48368be8a3a2cd33b",
+    "license": "Apache-2.0",
+    "modelSha256": "b5f833dfc5d0eb71da397b4efa06ebeee9b431b690a47d6af40d77d8eabc557f",
+    "charsetSha256": "3a3e5abea6e7d403209043c8d67b052414ae59ece49922cc7e3ac205d59060a8"
+  },
+  "validationInputs": 100,
+  "publisherCompleteDigits": 69,
+  "rawEnglishStage2Agreement": {
+    "predicted_window": {
+      "inputs": 75,
+      "proposed": 21,
+      "exact": 19,
+      "false": 1,
+      "unknown": 1
+    },
+    "oracle_window": {
+      "inputs": 100,
+      "proposed": 19,
+      "exact": 17,
+      "false": 1,
+      "unknown": 1
+    }
+  },
+  "mixedPolicyComparison": {
+    "baseline": {
+      "inputs": 100,
+      "exactDigits": 12,
+      "incorrectOnPublisherCompleteLabels": 0,
+      "unknownGroundTruthProposals": 0,
+      "fallback": 88,
+      "correctOverAllInputs": 0.12,
+      "correctAmongEmitted": 1.0,
+      "p95ObservedDiagnosticMs": 831.8499999999999
+    },
+    "candidate": {
+      "inputs": 100,
+      "exactDigits": 13,
+      "incorrectOnPublisherCompleteLabels": 0,
+      "unknownGroundTruthProposals": 0,
+      "fallback": 87,
+      "correctOverAllInputs": 0.13,
+      "correctAmongEmitted": 1.0,
+      "p95ObservedDiagnosticMs": 1911.3
+    },
+    "preserve_all_numeric_disagreements": {
+      "inputs": 100,
+      "exactDigits": 11,
+      "incorrectOnPublisherCompleteLabels": 0,
+      "unknownGroundTruthProposals": 0,
+      "fallback": 89,
+      "correctOverAllInputs": 0.11,
+      "correctAmongEmitted": 1.0,
+      "p95ObservedDiagnosticMs": 1789.4999999999995
+    }
+  },
+  "positiveOracleObservations": [
+    {
+      "id": "commons_88598855",
+      "sha256": "6268edda29670dbca1491d430230258c43e8e43837fb01e953537e8685bd317f",
+      "mode": "oracle_crop_only",
+      "inputTransform": "mobile-1600-jpeg85",
+      "expectedDigits": "35558",
+      "raw": "35558",
+      "minimumCharacterScore": 0.9941451549530029,
+      "confidence": 0.9957802891731262,
+      "exactRawDigits": true,
+      "forwardMs": 12.612399999852641,
+      "billingAccuracy": null,
+      "applicationProposal": null,
+      "humanIndependentReview": false
+    },
+    {
+      "id": "commons_52855795",
+      "sha256": "e3075e5219ff14ff5a22fd9ddfee532b0898a21012dce924712ef3e467caeeba",
+      "mode": "oracle_crop_only",
+      "inputTransform": "mobile-1600-jpeg85",
+      "expectedDigits": "000059",
+      "raw": "000059\"",
+      "minimumCharacterScore": 0.6197639107704163,
+      "confidence": 0.9442809990474156,
+      "exactRawDigits": false,
+      "forwardMs": 12.685699999565259,
+      "billingAccuracy": null,
+      "applicationProposal": null,
+      "humanIndependentReview": false
+    }
+  ],
+  "decisions": {
+    "uncalibratedEnglishAgreement": "REJECTED: one incorrect proposal on publisher-complete annotations plus one unknown-GT proposal. Suspected annotation defect is not silently repaired.",
+    "confidenceGatedPrimarySubstitution": "REJECTED: +1 exact but removes an original valid numeric disagreement; not accepted under task safeguards.",
+    "preserveAllNumericDisagreements": "REJECTED: -1 correct exact and +1 fallback versus baseline.",
+    "cropLevelReader": "English correctly decodes one source-disjoint mechanical-water oracle crop35558; no end-to-end/register/precision acceptance.",
+    "productionActivation": false,
+    "fourClassActivation": false,
+    "candidateOnHeldOutTest": "NOT RUN: validation/safety gates failed"
+  },
+  "pythonDotnetParity": {
+    "passed": true,
+    "rows": [
+      {
+        "file": "wm_clean_000023-predicted_window.png",
+        "passed": true,
+        "meanDelta": 0,
+        "minimumDelta": 0
+      },
+      {
+        "file": "wm_clean_000177-predicted_window.png",
+        "passed": true,
+        "meanDelta": 0,
+        "minimumDelta": 0
+      },
+      {
+        "file": "wm_clean_000317-predicted_window.png",
+        "passed": true,
+        "meanDelta": 1.1920929e-07,
+        "minimumDelta": 0
+      },
+      {
+        "file": "wm_clean_000502-predicted_window.png",
+        "passed": true,
+        "meanDelta": 0,
+        "minimumDelta": 0
+      }
+    ]
+  },
+  "changes": [
+    {
+      "imageId": "wm_clean_000177.jpg",
+      "sha256": "0c7f14ab0690745fb9f363a31df455e16b962fb0a84450f715ebf2934f1a502b",
+      "expectedDigits": "00429509",
+      "observations": [
+        {
+          "mode": "baseline",
+          "value": null,
+          "exact": false,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": true,
+          "warnings": [
+            "meter_category_unverified",
+            "recognizer_conflict",
+            "reading_not_recognized"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+          "elapsedMs": 242
+        },
+        {
+          "mode": "candidate",
+          "value": "00429509",
+          "exact": true,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": false,
+          "warnings": [
+            "meter_category_unverified",
+            "english_meter_candidate",
+            "recognizers_agree"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-candidate95",
+          "elapsedMs": 499
+        },
+        {
+          "mode": "preserve_all_numeric_disagreements",
+          "value": null,
+          "exact": false,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": true,
+          "warnings": [
+            "meter_category_unverified",
+            "recognizer_conflict",
+            "reading_not_recognized"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-strict95",
+          "elapsedMs": 472
+        }
+      ]
+    },
+    {
+      "imageId": "wm_clean_000275.jpg",
+      "sha256": "147cc3d9904b2d258ac501a2e12a6f4b020a461860bd6d9a8e12a89955919a7a",
+      "expectedDigits": "00043851",
+      "observations": [
+        {
+          "mode": "baseline",
+          "value": "00043851",
+          "exact": true,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": false,
+          "warnings": [
+            "meter_category_unverified",
+            "stage2_only_review",
+            "decimal_separator_unverified",
+            "low_confidence"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+          "elapsedMs": 392
+        },
+        {
+          "mode": "candidate",
+          "value": null,
+          "exact": false,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": true,
+          "warnings": [
+            "meter_category_unverified",
+            "english_meter_candidate",
+            "recognizer_conflict",
+            "reading_not_recognized"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-candidate95",
+          "elapsedMs": 789
+        },
+        {
+          "mode": "preserve_all_numeric_disagreements",
+          "value": null,
+          "exact": false,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": true,
+          "warnings": [
+            "meter_category_unverified",
+            "english_meter_candidate",
+            "recognizer_conflict",
+            "reading_not_recognized"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-candidate95",
+          "elapsedMs": 871
+        }
+      ]
+    },
+    {
+      "imageId": "wm_clean_000502.jpg",
+      "sha256": "a3f8286a80a261ae7712e014a48895546930750bb35d05be7f7a47d8db8dabc1",
+      "expectedDigits": "00130437",
+      "observations": [
+        {
+          "mode": "baseline",
+          "value": null,
+          "exact": false,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": true,
+          "warnings": [
+            "meter_category_unverified",
+            "recognizer_conflict",
+            "reading_not_recognized"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+          "elapsedMs": 246
+        },
+        {
+          "mode": "candidate",
+          "value": "00130437",
+          "exact": true,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": false,
+          "warnings": [
+            "meter_category_unverified",
+            "english_meter_candidate",
+            "recognizers_agree"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-candidate95",
+          "elapsedMs": 535
+        },
+        {
+          "mode": "preserve_all_numeric_disagreements",
+          "value": null,
+          "exact": false,
+          "incorrectOnCompleteLabels": false,
+          "unknownGroundTruthProposal": false,
+          "isFallback": true,
+          "warnings": [
+            "meter_category_unverified",
+            "recognizer_conflict",
+            "reading_not_recognized"
+          ],
+          "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-en5-strict95",
+          "elapsedMs": 458
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".tools/ocr-recovery-reader-validation-final.json",
+      "sha256": "38dd16dc88d1d1854a71d4009da961db6c09a7799d956789c6d93716f8e608fa"
+    },
+    {
+      "path": ".tools/ocr-recovery-english-validation.json",
+      "sha256": "7f0c2e6d5699cd9c507c9aeab76f94215e38af2bf97df4ee74678ff53f624d57"
+    },
+    {
+      "path": ".tools/ocr-recovery-english-reference.json",
+      "sha256": "caab0f8d6c95fd2ac30e6c058de3a953cb2a7370009515af78ef48520f50f139"
+    },
+    {
+      "path": ".tools/ocr-recovery-english-dotnet-parity.json",
+      "sha256": "1bc173687244bade5c30411388671ee09bc229a4533c8a87683218b0fc8da7bc"
+    }
+  ],
+  "limitations": [
+    "Validation is a historical author corpus; physical-meter/site separation unknown.",
+    "No independent human-reviewed decimal/register ground truth.",
+    "Candidate engines are offline tools, not runtime implementations.",
+    "Offline mixed policy invokes the baseline again; latency includes diagnostic duplication and concurrent local work, not optimized production cost."
+  ]
+}

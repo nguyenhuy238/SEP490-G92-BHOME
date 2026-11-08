@@ -40,32 +40,6 @@ export const workflowFixtures = {
       bank: 'Chuyển khoản ngân hàng • Mã đối soát mẫu 08',
     },
   ],
-  shifts: [
-    {
-      date: '30/10/2026',
-      day: 'Thứ sáu',
-      hours: '07:30 – 16:30',
-      location: 'BHOME Đống Đa - Tòa B',
-      status: 'Đã phân công',
-      detail: 'Kiểm tra điện nước tầng 5 • 4 tác vụ',
-    },
-    {
-      date: '31/10/2026',
-      day: 'Thứ bảy',
-      hours: '08:00 – 17:00',
-      location: 'BHOME Đống Đa - Tòa B',
-      status: 'Đã điều chỉnh',
-      detail: 'Owner cập nhật giờ bắt đầu từ 07:30 sang 08:00 • Lịch sử giữ lại',
-    },
-    {
-      date: '01/11/2026',
-      day: 'Chủ nhật',
-      hours: 'Không có ca',
-      location: '—',
-      status: 'Nghỉ',
-      detail: 'Không có phân công trong lịch mẫu',
-    },
-  ],
   debts: [
     {
       id: 'debt-301',

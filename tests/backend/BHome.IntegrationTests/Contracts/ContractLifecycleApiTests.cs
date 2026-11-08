@@ -53,7 +53,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var location = new Location("Synthetic Contract Location") { ChainId = await db.Set<Chain>().Select(c => c.Id).SingleAsync() };
+        var location = new Location("Synthetic Contract Location") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
@@ -89,8 +89,6 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
             var setupDb = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC TYPE", DefaultCapacity = 2 };
-            setupDb.Add(type); (await setupDb.Set<Room>().FindAsync(w.Room))!.RoomTypeId = type.Id; await setupDb.SaveChangesAsync();
         }
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {

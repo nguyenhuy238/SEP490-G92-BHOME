@@ -2,9 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { ActivityIndicator, Text } from 'react-native-paper';
-import { Action, Box, Heading, Metric, QuickActions, ui } from '../components/WorkspaceKit';
+import { Action, ui } from '../components/WorkspaceKit';
+import {
+  DashboardCard as Box,
+  DashboardSection,
+  DashboardMetric as Metric,
+  DashboardActions as QuickActions,
+  DashboardSummary,
+} from '../components/DashboardKit';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage } from '../lib/api';
+import { conciseMessage, showError } from '../lib/toast';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { loadOwnerOverview, type OwnerOverview } from '../services/ownerOverview';
 
@@ -25,8 +33,11 @@ export function OwnerOverviewScreen() {
         if (!controller.signal.aborted) setState({ data, error: '', loading: false });
       },
       (error) => {
-        if (!controller.signal.aborted)
-          setState({ data: null, error: errorMessage(error), loading: false });
+        if (!controller.signal.aborted) {
+          const message = conciseMessage(errorMessage(error));
+          setState({ data: null, error: message, loading: false });
+          showError(message);
+        }
       },
     );
     return () => controller.abort();
@@ -35,27 +46,23 @@ export function OwnerOverviewScreen() {
     return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
   return (
     <>
-      <Heading title="Tổng quan BHOME" detail="Cơ sở, phòng và hợp đồng trong phạm vi tài khoản" />
-      <Box style={ui.dark}>
-        <Text variant="labelSmall" style={ui.white}>
-          CHỦ CƠ SỞ
-        </Text>
-        <Text variant="headlineSmall" style={ui.white}>
-          Theo dõi vận hành BHOME
-        </Text>
-        <Text style={ui.white}>Cơ sở, công việc và hợp đồng của bạn</Text>
-      </Box>
-      <QuickActions
-        items={[
-          { label: 'Phê duyệt', icon: 'clipboard-check-outline', onPress: () => go('approvals') },
-          { label: 'Vận hành', icon: 'tune-variant', onPress: () => go('operations') },
-          {
-            label: 'Thiết lập',
-            icon: 'office-building-outline',
-            onPress: () => router.push('/setup'),
-          },
-        ]}
+      <DashboardSummary
+        title="Tổng quan BHOME"
+        detail="Cơ sở, phòng và hợp đồng trong phạm vi tài khoản"
       />
+      <DashboardSection title="THAO TÁC NHANH">
+        <QuickActions
+          items={[
+            { label: 'Phê duyệt', icon: 'clipboard-check-outline', onPress: () => go('approvals') },
+            { label: 'Vận hành', icon: 'tune-variant', onPress: () => go('operations') },
+            {
+              label: 'Thiết lập',
+              icon: 'office-building-outline',
+              onPress: () => router.push('/setup'),
+            },
+          ]}
+        />
+      </DashboardSection>
       <Action
         secondary
         disabled={state.loading}
@@ -66,46 +73,45 @@ export function OwnerOverviewScreen() {
       >
         Tải lại dữ liệu
       </Action>
-      {state.loading && <ActivityIndicator accessibilityLabel="Đang tải tổng quan" />}
-      {!!state.error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {state.error}
-        </Text>
-      )}
-      {state.data && (
-        <View style={ui.wrap}>
-          <Metric
-            label="Cơ sở"
-            value={String(state.data.locations)}
-            icon="office-building-outline"
-            detail="Tổng số cơ sở"
-          />
-          <Metric
-            label="Phòng"
-            value={String(state.data.rooms)}
-            icon="door-open"
-            detail="Tổng số phòng"
-          />
-          <Metric
-            label="Phòng đang ở"
-            value={String(state.data.occupiedRooms)}
-            icon="home-account"
-            detail="Phòng hiện đang có người thuê"
-          />
-          <Metric
-            label="Tỷ lệ trạng thái Occupied"
-            value={`${state.data.operationalOccupancyRate.toFixed(1)}%`}
-            icon="chart-donut"
-            detail={`${state.data.occupiedRooms}/${state.data.rooms} phòng; không phải tỷ lệ nghĩa vụ hợp đồng`}
-          />
-          <Metric
-            label="Hợp đồng"
-            value={String(state.data.contracts)}
-            icon="file-document-outline"
-            detail="Tất cả trạng thái"
-          />
-        </View>
-      )}
+      <DashboardSection title="TỔNG QUAN CƠ SỞ">
+        {state.loading && <ActivityIndicator accessibilityLabel="Đang tải tổng quan" />}
+        {!!state.error && (
+          <Text accessibilityRole="alert" style={ui.red}>
+            {state.error}
+          </Text>
+        )}
+        {state.data && (
+          <View style={ui.wrap}>
+            <Metric
+              label="Cơ sở"
+              value={String(state.data.locations)}
+              icon="office-building-outline"
+              detail="Tổng số cơ sở"
+            />
+            <Metric
+              label="Phòng"
+              value={String(state.data.rooms)}
+              icon="door-open"
+              detail="Tổng số phòng"
+            />
+            <Metric
+              label="Phòng đang ở"
+              value={String(state.data.occupiedRooms)}
+              icon="home-account"
+              detail="Phòng hiện đang có người thuê"
+            />
+            <Metric
+              label="Hợp đồng"
+              value={String(state.data.contracts)}
+              icon="file-document-outline"
+              detail="Tất cả trạng thái"
+            />
+          </View>
+        )}
+      </DashboardSection>
+      <Action icon="tools" onPress={() => go('owner-incidents')}>
+        Sự cố và bảo trì
+      </Action>
       <Action icon="file-document-outline" onPress={() => go('signing')}>
         Hợp đồng & Vòng đời
       </Action>

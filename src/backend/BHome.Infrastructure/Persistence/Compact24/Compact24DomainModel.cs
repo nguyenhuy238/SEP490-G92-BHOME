@@ -16,6 +16,16 @@ internal static class Compact24DomainModel
         model.ConfigureCapture();
         model.ConfigureContracts();
         model.ApplyConfigurationsFromAssembly(typeof(Compact24DomainModel).Assembly);
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentReportConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentReport>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.WorkOrderConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentActivityConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentActivity>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentEvidenceConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentEvidence>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.EmergencyActionConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.EmergencyAction>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.MaintenanceExpenseConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.MaintenanceExpense>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.MaintenanceHistoryConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.MaintenanceHistory>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentCommandConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentCommand>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentNotificationConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentNotification>());
+        new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentFileUploadConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentFileUpload>());
         model.Ignore<AuthenticationSession>();
         model.Ignore<RefreshTokenRecord>();
         model.Ignore<PasswordResetGrant>();

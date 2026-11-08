@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
-using System.Runtime.InteropServices;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
@@ -13,10 +11,6 @@ namespace BHome.Infrastructure.Contracts;
 internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock, IHostEnvironment? environment = null) : IMainDraftRenderer
 {
     public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
-    [DllImport("libc")]
-    private static extern uint geteuid();
-    [DllImport("libc")]
-    private static extern uint getegid();
     public string TemplateHash
     {
         get { using var stream = typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503, "contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }
@@ -98,65 +92,10 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
     }
     public async Task<byte[]> PdfAsync(byte[] docx, CancellationToken t)
     {
-        var executable = configuration["MainDraft:LibreOfficePath"];
-        var image = configuration["MainDraft:LibreOfficeContainerImage"];
-        var container = !string.IsNullOrWhiteSpace(image);
-        if (!container && (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))) throw new ContractException(503, "contract_pdf_converter_unavailable");
-        var directory = Path.Combine(Path.GetTempPath(), "bhome-contract-" + Guid.NewGuid().ToString("N"));
-        var containerName = "bhome-contract-convert-" + Guid.NewGuid().ToString("N");
-        Directory.CreateDirectory(directory);
-        if (OperatingSystem.IsLinux()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        try
-        {
-            var input = Path.Combine(directory, "draft.docx"); await File.WriteAllBytesAsync(input, docx, t);
-            var start = new ProcessStartInfo(container ? "docker" : executable!) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            if (container)
-            {
-                foreach (var arg in new[] { "run", "--rm", "--name", containerName, "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--memory=512m", "--cpus=1", "--pids-limit=128", "--tmpfs", "/tmp:rw,nosuid,size=256m", "--mount", $"type=bind,source={directory},target=/work" }) start.ArgumentList.Add(arg);
-                // Native Linux bind mounts preserve ownership: use the API user's IDs so the
-                // converter can write into its private 0700 workspace without opening permissions.
-                if (OperatingSystem.IsLinux())
-                {
-                    start.ArgumentList.Add("--user");
-                    start.ArgumentList.Add($"{geteuid()}:{getegid()}");
-                }
-                start.ArgumentList.Add(image!);
-            }
-            foreach (var arg in new[] { "-env:UserInstallation=" + (container ? "file:///tmp/profile" : new Uri(Path.Combine(directory, "profile")).AbsoluteUri), "--headless", "--convert-to", "pdf", "--outdir", container ? "/work" : directory, container ? "/work/draft.docx" : input }) start.ArgumentList.Add(arg);
-            Process process;
-            try { process = Process.Start(start) ?? throw new ContractException(503, "contract_pdf_conversion_failed"); }
-            catch (System.ComponentModel.Win32Exception) { throw new ContractException(503, "contract_pdf_converter_unavailable"); }
-            using var ownedProcess = process;
-            var stdout = process.StandardOutput.ReadToEndAsync(t); var stderr = process.StandardError.ReadToEndAsync(t);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(45));
-            try { await process.WaitForExitAsync(timeout.Token); await Task.WhenAll(stdout, stderr); }
-            catch (OperationCanceledException) { if (!process.HasExited) process.Kill(true); t.ThrowIfCancellationRequested(); throw new ContractException(503, "contract_pdf_conversion_timeout"); }
-            var output = Path.Combine(directory, "draft.pdf");
-            if (process.ExitCode != 0 || !File.Exists(output)) throw new ContractException(503, "contract_pdf_conversion_failed");
-            var bytes = await File.ReadAllBytesAsync(output, t);
-            if (bytes.Length is < 5 or > 10_485_760 || !bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw new ContractException(503, "contract_pdf_conversion_failed");
-            return bytes;
-        }
-        finally
-        {
-            if (container)
-            {
-                // Killing the Docker client alone can leave the converter alive with a mounted private directory.
-                try
-                {
-                    var cleanup = new ProcessStartInfo("docker") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-                    foreach (var arg in new[] { "rm", "-f", containerName }) cleanup.ArgumentList.Add(arg);
-                    using var process = Process.Start(cleanup);
-                    if (process is not null)
-                    {
-                        var a = process.StandardOutput.ReadToEndAsync(); var b = process.StandardError.ReadToEndAsync();
-                        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        try { await process.WaitForExitAsync(limit.Token); await Task.WhenAll(a, b); } catch (OperationCanceledException) { if (!process.HasExited) process.Kill(true); }
-                    }
-                }
-                catch (System.ComponentModel.Win32Exception) { /* Docker was unavailable before any container could start. */ }
-            }
-            if (Directory.Exists(directory)) Directory.Delete(directory, true);
-        }
+        var bytes = await PrivateContractConversion.RunAsync(configuration, docx, "draft.docx", "draft.pdf",
+            configuration["MainDraft:LibreOfficePath"], null,
+            ["-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", "{work}", "{work}/draft.docx"], t);
+        if (!bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw new ContractException(503, "contract_pdf_conversion_failed");
+        return bytes;
     }
 }

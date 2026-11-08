@@ -1,3 +1,5 @@
+import { IncidentInbox } from '../features/incidents/IncidentScreens';
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Text } from 'react-native-paper';
@@ -24,7 +26,7 @@ export function NotificationsScreen() {
     [category, setCategory] = useState(''),
     [unread, setUnread] = useState('');
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useFeedbackState();
   const lock = useRef(false);
   const query = useWorkspaceQuery<Page<NotificationItem>>(
     `/api/v1/notifications?page=${page}&pageSize=20${category ? '&category=' + category : ''}${unread ? '&unread=' + unread : ''}`,
@@ -74,11 +76,16 @@ export function NotificationsScreen() {
       await client.read(id);
       go('task-detail', { taskId: target.objectId });
     } else {
-      setError('Hồ sơ này được xử lý trên Owner Web. Mở đúng tài khoản Owner để tiếp tục.');
+      setError(
+        role === 'Tenant'
+          ? 'Thông báo này chưa có màn hình chi tiết dành cho khách thuê. Bạn vẫn có thể đánh dấu đã đọc.'
+          : 'Hồ sơ này được xử lý trên Owner Web. Mở đúng tài khoản Owner để tiếp tục.',
+      );
     }
   }
   return (
     <>
+      <IncidentInbox />
       <Heading
         title="Thông báo của tôi"
         detail="Hộp thông báo theo tài khoản, quyền hồ sơ được kiểm tra lại khi mở."

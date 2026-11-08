@@ -157,6 +157,9 @@ export function errorMessage(error: unknown): string {
     reading_date_or_precision: 'Kiểm tra ngày ghi và số chữ số thập phân của đồng hồ.',
     staff_not_currently_assigned: 'Staff chưa được phân công Location có hiệu lực.',
     invalid_citizen_number: 'Số CCCD cần đúng 12 chữ số.',
+    invalid_confirmed_identity:
+      'Kiểm tra họ tên, ngày sinh và ngày cấp CCCD. Ngày sinh và ngày cấp không được ở tương lai.',
+    invalid_input: 'Kiểm tra các ô bắt buộc và độ dài thông tin đã nhập.',
     stale_version: 'Công việc đã thay đổi. Hãy tải lại và kiểm tra trước khi gửi tiếp.',
     no_responsible_staff:
       'Cơ sở chưa có nhân viên phụ trách có hiệu lực. Owner cần cập nhật phân công.',

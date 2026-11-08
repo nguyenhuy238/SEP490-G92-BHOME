@@ -1,3 +1,5 @@
+> Quy?t ??nh 04/11/2026: b? Chain/RoomType; SQL hi?n h?nh c? 24 b?ng / 383 c?t / 83 FK. Thi?t k? API m?i ? [LOCATION_ROOM_API.md](../../../api/LOCATION_ROOM_API.md); m? t? catalog c? b?n d??i ???c gi? ?? truy v?t.
+
 # Thiết kế database BHOME với 24 bảng
 
 ## 1 Kết luận và phạm vi áp dụng

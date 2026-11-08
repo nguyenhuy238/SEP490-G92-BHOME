@@ -1,4 +1,8 @@
-# API quản lý Location, Room Type, Room, Asset và giá phí
+> C?p nh?t 04/11/2026: Chain/RoomType ?? b?; contract hi?n h?nh ? [LOCATION_ROOM_API.md](LOCATION_ROOM_API.md). C?c ph?n m? t? hai c?p c? b?n d??i l? l?ch s?.
+
+# API quản lý Location, Room, Asset và giá/phí
+
+> Baseline hiện hành 06/11/2026: Chain và RoomType đã bị loại khỏi API và Compact24 runtime. Location là cấp cao nhất; Room thuộc trực tiếp Location; giá/phí áp dụng theo Location hoặc Room. Các mô tả Chain/RoomType bên dưới chỉ là lịch sử thiết kế cũ và không được dùng để triển khai endpoint mới.
 
 Cập nhật trạng thái **06/11/2026**: API chạy trên Compact24; [danh mục runtime](API_RUNTIME_ROUTES.md)
 và [bàn giao client/phần còn thiếu](API_IMPLEMENTATION_STATUS.md). Backend có route không đồng nghĩa
@@ -295,11 +299,11 @@ Ba API Phase 1B chỉ đọc, dùng `property.view`: Owner xem toàn hệ thốn
 Tenant không truy cập. Resource ngoài scope trả 404. Không API nào lưu readiness, đổi Room/Contract,
 hay tạo audit mới.
 
-| Method | Route                                  | Hành vi                                                                |
-| ------ | -------------------------------------- | ---------------------------------------------------------------------- |
-| GET    | `/rooms/{id}/readiness?purpose=Holding` hoặc `purpose=MoveIn`                                                      | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId` |
-| GET    | `/rooms/{id}/history`                  | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
-| GET    | `/locations/{id}/occupancy-summary`    | Snapshot Room; room-day lịch sử chỉ khi đủ evidence                    |
+| Method | Route                                                         | Hành vi                                                                |
+| ------ | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| GET    | `/rooms/{id}/readiness?purpose=Holding` hoặc `purpose=MoveIn` | Blocker/warning/điều kiện chưa thể xác minh; MoveIn cần `contractId`   |
+| GET    | `/rooms/{id}/history`                                         | Audit cấu hình, Contract và khoảng cư trú đã lưu, có filter/phân trang |
+| GET    | `/locations/{id}/occupancy-summary`                           | Snapshot Room; room-day lịch sử chỉ khi đủ evidence                    |
 
 Readiness nhận `effectiveOn` tùy chọn (mặc định ngày Việt Nam). Response có `status` (`Ready`, `Blocked`,
 `Indeterminate`), `blockers`, `warnings`, `unverifiedConditions`. Holding luôn có

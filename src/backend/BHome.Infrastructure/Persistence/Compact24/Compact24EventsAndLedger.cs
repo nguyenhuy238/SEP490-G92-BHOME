@@ -23,6 +23,15 @@ public sealed partial class Compact24DbContext
         };
         var id = entry.Metadata.FindProperty("Id") is not null ? (Guid)entry.Property("Id").CurrentValue! : DeterministicId(spec.Name + "/" + key);
         var inbox = entry.Entity as BHome.Domain.Notifications.UserNotification;
+        if (entry.Entity is BHome.Domain.IncidentMaintenance.IncidentNotification incidentNotice && entry.State == EntityState.Modified)
+        {
+            if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not
+                ("ReadAt" or "DeliveryState" or "DeliveryReference" or "DeliveryError" or "UpdatedAt")))
+                throw new InvalidOperationException("Incident notification event is immutable.");
+            await ExecuteAsync("UPDATE notifications SET read_at=@read,delivery_status=@status,delivery_history=delivery_history||jsonb_build_array(@envelope::jsonb) WHERE id=@id AND record_kind='OUTBOX'", token,
+                ("id", id), ("read", incidentNotice.ReadAt), ("status", incidentNotice.DeliveryState), ("envelope", envelope));
+            return;
+        }
         if (entry.Entity is BHome.Domain.StaffOperations.OperationalTaskNotification taskNotice && entry.State == EntityState.Modified)
         {
             if (entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not ("ReadAt" or "UpdatedAt")))
@@ -33,7 +42,7 @@ public sealed partial class Compact24DbContext
         }
         if (inbox is not null && entry.State == EntityState.Modified)
         {
-            var immutable = new[] { "RecipientUserId", "EventKey", "AudienceRole", "Category", "Title", "Summary", "RelatedObjectType", "RelatedObjectId", "LocationId", "CreatedAt", "SourceTaskNotificationId" };
+            var immutable = new[] { "RecipientUserId", "EventKey", "AudienceRole", "Category", "EventType", "Priority", "Source", "Channels", "Title", "Summary", "RelatedObjectType", "RelatedObjectId", "LocationId", "CreatedAt", "SourceTaskNotificationId" };
             if (immutable.Any(name => entry.Property(name).IsModified)) throw new InvalidOperationException("Notification event is immutable.");
             await ExecuteAsync("""
                 UPDATE notifications SET read_at=@read,delivery_status=@status,next_delivery_at=@next,locked_until=@locked,lease_token=@lease,

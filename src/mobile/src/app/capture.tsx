@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -12,7 +13,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [locations, setLocations] = useState<Named[]>([]);
   const [location, setLocation] = useState('');
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -30,7 +31,7 @@ export default function Home() {
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, [api]);
+  }, [api, setError]);
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -50,7 +51,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [api, location]);
+  }, [api, location, setError]);
   if (!ready)
     return (
       <Page>

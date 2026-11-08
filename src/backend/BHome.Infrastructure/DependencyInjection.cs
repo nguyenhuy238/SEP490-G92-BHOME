@@ -19,6 +19,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace BHome.Infrastructure;
@@ -33,6 +34,10 @@ public static class DependencyInjection
             .Validate(options => !string.IsNullOrWhiteSpace(options.Database),
                 "Configure ConnectionStrings:Database using user-secrets or environment variables.")
             .ValidateOnStart();
+        services.AddScoped(provider => Compact24Compatibility.Resolve(
+            provider.GetService<IHostEnvironment>()?.EnvironmentName,
+            provider.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentDatabase:AllowPreviousPropertySchema"),
+            provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddDbContext<Compact24DbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddScoped<BHomePersistenceContext>(p => p.GetRequiredService<Compact24DbContext>());
@@ -105,7 +110,19 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
-        services.AddScoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>();
+        services.AddScoped<IPasswordResetDelivery, BHome.Infrastructure.Modules.Notifications.PasswordEmailDelivery>();
+        services.AddScoped<IAccountInvitations, AccountInvitations>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
+        services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
+        services.AddScoped<BHome.Application.Notifications.NotificationWorkspaceService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
+        services.AddOptions<BHome.Application.Notifications.NotificationChannelOptions>().BindConfiguration("NotificationChannels")
+            .Validate(o => o.Mode is "Unconfigured" or "Sandbox" or "Smtp" && o.MaxAttempts is >= 1 and <= 10 && o.RetrySeconds is >= 1 and <= 3600 && o.TimeoutSeconds is >= 1 and <= 45, "Invalid notification channel options.").ValidateOnStart();
+        services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
+        services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>());
         services.AddScoped<CompactLocationAssignments>();
         services.AddScoped<ILocationAssignments>(provider => provider.GetRequiredService<CompactLocationAssignments>());
         services.AddScoped<IStaffLocationAccess>(provider => provider.GetRequiredService<CompactLocationAssignments>());
@@ -121,11 +138,24 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.StaffOperations.ITaskEvidenceFiles, BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceFiles>();
         services.AddScoped<BHome.Application.StaffOperations.OperationalTaskService>();
         services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
+        services.AddScoped<BHome.Application.Operations.IOperationsRepository,
+            BHome.Infrastructure.Modules.Operations.CompactOperationsRepository>();
+        services.AddScoped<BHome.Application.Operations.IOperationsFiles,
+            BHome.Infrastructure.Modules.Operations.OperationsFiles>();
+        services.AddScoped<BHome.Application.Operations.OperationsService>();
+        services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
         services.AddScoped<BHome.Application.PropertyManagement.IPropertyRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresPropertyRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
+        services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
@@ -146,6 +176,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Finance.FinancialScenarioService>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftData, BHome.Infrastructure.Contracts.MainDraftData>();
         services.AddScoped<BHome.Application.Contracts.IMainDraftRenderer, BHome.Infrastructure.Contracts.MainDraftRenderer>();
+        services.AddScoped<BHome.Application.Contracts.IMainDraftPreviewRenderer, BHome.Infrastructure.Contracts.MainDraftPreviewRenderer>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
@@ -185,6 +216,8 @@ public static class DependencyInjection
         services.AddSingleton<IImagePreprocessor, ImagePreprocessor>();
         services.AddSingleton<IMeterSceneDetector, YoloMeterSceneDetector>();
         services.AddSingleton<YoloWaterDigitRecognizer>();
+        services.AddSingleton<IImageCategoryClassifier>(provider => new YoloMeterCategoryClassifier(
+            provider.GetRequiredService<OcrOptions>(), provider.GetRequiredService<IHostEnvironment>().IsDevelopment()));
         services.AddSingleton<IOcrEngine, OnnxOcrEngine>();
         services.AddSingleton(provider => new Lazy<IOcrEngine>(provider.GetRequiredService<IOcrEngine>));
         services.AddSingleton<LocalOcrService>();

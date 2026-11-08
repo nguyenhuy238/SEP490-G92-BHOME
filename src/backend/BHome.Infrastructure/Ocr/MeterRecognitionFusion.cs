@@ -19,7 +19,7 @@ internal static class MeterRecognitionFusion
         // author validation set, the already-guarded digit model can supply a
         // review-only proposal here. Multiple regions, type contradictions and
         // valid numeric disagreements remain hard rejections.
-        if (proposal.Warnings.Any(w => w is "multiple_reading_regions" or "meter_type_mismatch") ||
+        if (proposal.Warnings.Any(w => w is "multiple_reading_regions" or "meter_type_mismatch" or "billing_register_unverified") ||
             (proposal.Warnings.Contains("ambiguous_reading") && pp.Lines.Count != 1))
             return new([], pp.EngineVersion, [.. proposal.Warnings, "recognizer_conflict"]);
         // Digit checkpoint has no decimal class. Compare characters without

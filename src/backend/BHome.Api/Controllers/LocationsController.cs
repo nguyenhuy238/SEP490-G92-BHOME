@@ -100,7 +100,34 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
         return assignments is null ? NotFound() : Ok(assignments);
     }
 
+    [HttpPut("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<ChangeAssignmentResult>> Replace(Guid locationId,
+        ChangeStaffAssignmentRequest request, CancellationToken t) =>
+        Result(await locations.ReplaceAssignmentAsync(UserId, locationId, request.StaffUserId,
+            request.EffectiveFrom, request.LocationVersion, request.Reason, t));
+
+    [HttpDelete("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<ChangeAssignmentResult>> Remove(Guid locationId,
+        [FromBody] RemoveStaffAssignmentRequest request, CancellationToken t) =>
+        Result(await locations.RemoveAssignmentAsync(UserId, locationId, request.EffectiveFrom,
+            request.LocationVersion, request.Reason, t));
+
+    private ActionResult<ChangeAssignmentResult> Result(ChangeAssignmentResult result) => result.Status switch
+    {
+        ChangeAssignmentStatus.Changed => Ok(result),
+        ChangeAssignmentStatus.Invalid => Problem(statusCode: 400, title: "Invalid assignment change."),
+        ChangeAssignmentStatus.LocationNotFound => NotFound(),
+        ChangeAssignmentStatus.StaffUnavailable => Problem(statusCode: 400, title: "Staff is unavailable."),
+        ChangeAssignmentStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Location version is stale." }),
+        ChangeAssignmentStatus.NoCurrentAssignment => Conflict(new ProblemDetails { Status = 409, Title = "Location has no current Staff assignment." }),
+        _ => throw new InvalidOperationException("Unsupported assignment change result.")
+    };
+
     private Guid UserId => currentUser.UserId ?? throw new InvalidOperationException("Authenticated user is unavailable.");
 }
 
 public sealed record CreateStaffAssignmentRequest(Guid LocationId, Guid StaffUserId, DateOnly StartDate, DateOnly EndDate);
+public sealed record ChangeStaffAssignmentRequest(Guid StaffUserId, DateOnly EffectiveFrom,
+    [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);
+public sealed record RemoveStaffAssignmentRequest(DateOnly EffectiveFrom,
+    [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);

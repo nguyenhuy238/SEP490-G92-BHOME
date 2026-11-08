@@ -1,0 +1,134 @@
+{
+  "scope": "provisional_oracle_development_no_billing_claim",
+  "runtimeEnabled": false,
+  "modelHashes": {
+    "pp": "767305D37D06728FE9578FF8132595CE23F66139DF5E2937FD4131BD1DC34F12",
+    "english": "B5F833DFC5D0EB71DA397B4EFA06EBEEE9B431B690A47D6AF40D77D8EABC557F",
+    "stage2": "2100D78AE1D762327CB871EE521A8DD9E84AFC34DE1CD8CF58876332E5834006"
+  },
+  "manifestSha256": "D8CA04F24B121F097953A1EBE169E45EF1B378A572FC813F603E1FE8C3CF0F84",
+  "rows": [
+    {
+      "id": "commons_49855905",
+      "mode": "baseline_direct",
+      "expectedDigits": "003443",
+      "raw": "KO3\u00C0/4",
+      "confidence": 0.5524063,
+      "draftMatch": false,
+      "warnings": [],
+      "observedMs": 84.9051
+    },
+    {
+      "id": "commons_49855905",
+      "mode": "baseline_page",
+      "expectedDigits": "003443",
+      "raw": "HOK\u0102\u0102M",
+      "confidence": 0.69402856,
+      "draftMatch": false,
+      "warnings": [],
+      "observedMs": 191.2076
+    },
+    {
+      "id": "commons_49855905",
+      "mode": "english_direct",
+      "expectedDigits": "003443",
+      "raw": "03444",
+      "confidence": 0.5789937,
+      "draftMatch": false,
+      "warnings": [],
+      "observedMs": 23.4394
+    },
+    {
+      "id": "commons_49855905",
+      "mode": "water_stage2_transfer",
+      "expectedDigits": "003443",
+      "raw": "0034",
+      "confidence": 0.5910676,
+      "draftMatch": false,
+      "warnings": [],
+      "observedMs": 118.0315
+    },
+    {
+      "id": "commons_77534681",
+      "mode": "baseline_direct",
+      "expectedDigits": "011049",
+      "raw": "0/049",
+      "confidence": 0.8140581,
+      "draftMatch": false,
+      "warnings": [],
+      "observedMs": 58.5696
+    },
+    {
+      "id": "commons_77534681",
+      "mode": "baseline_page",
+      "expectedDigits": "011049",
+      "raw": "0049",
+      "confidence": 0.9079253,
+      "draftMatch": false,
+      "warnings": [],
+      "observedMs": 153.7227
+    },
+    {
+      "id": "commons_77534681",
+      "mode": "english_direct",
+      "expectedDigits": "011049",
+      "raw": "011049",
+      "confidence": 0.8989733,
+      "draftMatch": true,
+      "warnings": [],
+      "observedMs": 16.0525
+    },
+    {
+      "id": "commons_77534681",
+      "mode": "water_stage2_transfer",
+      "expectedDigits": "011049",
+      "raw": null,
+      "confidence": null,
+      "draftMatch": false,
+      "warnings": [
+        "unclear_digit"
+      ],
+      "observedMs": 35.2848
+    },
+    {
+      "id": "commons_4508761",
+      "mode": "baseline_direct",
+      "expectedDigits": null,
+      "raw": "239659",
+      "confidence": 0.9044671,
+      "draftMatch": null,
+      "warnings": [],
+      "observedMs": 57.5063
+    },
+    {
+      "id": "commons_4508761",
+      "mode": "baseline_page",
+      "expectedDigits": null,
+      "raw": "239659",
+      "confidence": 0.95325714,
+      "draftMatch": null,
+      "warnings": [],
+      "observedMs": 98.9413
+    },
+    {
+      "id": "commons_4508761",
+      "mode": "english_direct",
+      "expectedDigits": null,
+      "raw": "239657",
+      "confidence": 0.9495337,
+      "draftMatch": null,
+      "warnings": [],
+      "observedMs": 14.371
+    },
+    {
+      "id": "commons_4508761",
+      "mode": "water_stage2_transfer",
+      "expectedDigits": null,
+      "raw": "239654",
+      "confidence": 0.7112006,
+      "draftMatch": null,
+      "warnings": [],
+      "observedMs": 33.5315
+    }
+  ]
+}

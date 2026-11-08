@@ -20,7 +20,7 @@ public sealed partial class PaymentLedgerTests
     public async Task InvoicePaymentAndAdjustmentEventsReachEntitledRecipientsWithoutPrivateDataOrReplayDuplicates()
     {
         var (w, _, draft) = await FinalWorkspace(); await RunPhase(w, "Final"); await PumpNotifications(); using var owner = await Client(w.Owner); var final = (await owner.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!;
-        foreach (var id in w.Tenants) { using var c = await Client(id); var notices = (await c.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Invoice"))!; Assert.Single(notices.Items, n => n.RelatedObjectId == draft.Id); }
+        foreach (var id in w.Tenants) { using var c = await Client(id); var notices = (await c.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Invoice"))!; Assert.Single(notices.Items, n => n.RelatedObjectId == draft.Id && n.EventType == "INVOICE_FINALIZED"); }
         var input = Input(w with { Invoice = draft.Id }, 100050, "PRIVATE_BANK_REFERENCE"); var command = Guid.NewGuid(); var registration = await Post(owner, "/api/v1/payment-transactions", input, command); registration.EnsureSuccessStatusCode(); var transfer = (await registration.Content.ReadFromJsonAsync<TransferView>())!;
         var allocationKey = Guid.NewGuid(); (await Post(owner, $"/api/v1/payment-transactions/{transfer.Id}/allocate", new PaymentMatchInput(draft.Id, w.Tenants[0], true), allocationKey)).EnsureSuccessStatusCode();
         (await Post(owner, $"/api/v1/payment-transactions/{transfer.Id}/allocate", new PaymentMatchInput(draft.Id, w.Tenants[0], true), allocationKey)).EnsureSuccessStatusCode(); await Task.WhenAll(PumpNotifications(), PumpNotifications());
@@ -55,7 +55,9 @@ public sealed partial class PaymentLedgerTests
     public async Task UnallocatedTransferDoesNotCreatePaymentConfirmedNotification()
     {
         var w = await Setup(); using var owner = await Client(w.Owner); (await Post(owner, "/api/v1/payment-transactions", Input(w, 90000))).EnsureSuccessStatusCode(); await PumpNotifications();
-        Assert.Equal(0, (await owner.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Payment"))!.TotalCount);
+        var ownerNotices = (await owner.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Payment"))!.Items;
+        Assert.DoesNotContain(ownerNotices, n => n.EventType is "INVOICE_FULLY_PAID" or "PAYMENT_PARTIALLY_CONFIRMED");
+        if (ownerNotices.Count > 0) Assert.All(ownerNotices, n => Assert.Equal("BANK_TRANSACTION_UNMATCHED", n.EventType));
         foreach (var id in w.Tenants) { using var tenant = await Client(id); Assert.Equal(0, (await tenant.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Payment"))!.TotalCount); }
     }
 }

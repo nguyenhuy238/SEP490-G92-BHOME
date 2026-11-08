@@ -112,6 +112,7 @@ dưới thư mục manifest. Có thể dùng baseline executable đã lưu riên
 **Chưa thực hiện:** thu/gán nhãn dataset thật, training/fine-tune, kiểm chứng model
 detector/classifier, so sánh native/ONNX hoặc đo recall/classification accuracy. Chưa
 có căn cứ nhận diện đúng phòng/serial từ ảnh hoặc xác định register tính tiền tự động.
+
 ## Bổ sung đánh giá pretrained 04/11/2026
 
 Đã dùng10 ảnh test công khai của tác giả model analog-water, lưu riêng trong

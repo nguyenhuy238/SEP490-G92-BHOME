@@ -1,3 +1,5 @@
+> API sau reset DB 04/11/2026: [Location/Room/Asset/gi? ph?](LOCATION_ROOM_API.md) v? [incident-core](INCIDENT_MAINTENANCE.md). B? Chain/RoomType; m? t? c?c c?p c? trong t?i li?u n?y ?? ???c thay th?.
+
 # API conventions
 
 Cập nhật trạng thái **06/11/2026**. Runtime chính là `BHome.Api` + Compact24; xem
@@ -126,7 +128,7 @@ See [audit, migration and verification](../development/AUTH_SECURITY_AUDIT.md).
 `POST /api/v1/ocr/identity/{residentId}/front`, `/back` and
 `POST /api/v1/ocr/meter-tasks/{taskId}` accept bounded binary PNG/JPEG bodies with Bearer
 authentication. They return human-review proposals only, never confirmation or persistence.
-Resource lookup now uses Chain/Location/Room/Resident/Meter/OperationalTask and effective Staff
+Resource lookup now uses Location/Room/Resident/Meter/OperationalTask and effective Staff
 assignments in PostgreSQL. Every request checks server-loaded ownership/assignment; a missing or
 out-of-scope resource returns 404, a closed workflow 409, and unavailable model/resource lookup 503.
 Do not use caller-supplied ownership or Location IDs as authorization. See
@@ -176,6 +178,32 @@ disagreement, multiple regions, wrong utility or unclear digits. The diagnostic
 Mobile screen can re-read the same bounded meter image with user-confirmed
 precision after capture; production task precision remains server-authoritative.
 
+Meter parsing also checks nearby separately detected unit boxes. A bare number
+next to a flow-rate/electrical-parameter/TDS/unsupported volume unit (for example
+`m³/h`, `V`, `Hz`, `ppm` or gallons) is not an accumulated kWh/m³ reading; it
+returns fallback with `billing_register_unverified`. A distant parameter label
+does not suppress a properly associated billing unit. No unit conversion or
+client precision change is introduced.
+Stage2 fusion also retains this rejection for a single PP line with an explicit
+non-billing quantity; it cannot treat that line as malformed text to bypass the veto.
+
+An experimental four-class YOLO category adapter is available through
+`Ocr:VisualClassifier` but remains disabled by default and refuses inference
+outside Development. No validated four-class weights are bundled. It requires
+an explicitly configured model path/SHA256, exact four-class metadata and tensor
+contract. Unknown/multiple/conflicting detections remain review cases; an adapter
+outage preserves existing OCR with `visual_classifier_unavailable`. In Staff
+tasks, confident visual mismatch suppresses the reading with `meter_type_mismatch`;
+visual evidence never changes server Meter kind, ownership or precision. No new
+endpoint or response fields. See [architecture and activation gates](../development/OCR_MODEL_ARCHITECTURE.md).
+
+When an evaluated visual adapter identifies mechanical water and Stage1 verifies
+one reading display, automatic OCR now uses the existing PP/Stage2 fusion and
+returns the same optional crop preview/detection confidence as other localized
+results. Category confidence remains separate. Unsafe crop evidence suppresses
+the reading; a body-only crop does not authorize Stage2. Other profiles retain
+their existing readers. This wiring does not enable the rejected four-class model.
+
 ## Contracts and status codes
 
 D011/D012 Contract APIs, quyền, request/response, idempotency và các dependency đang chờ được
@@ -191,9 +219,9 @@ reads use a query parameter rather than a GET body. Every Owner can manage every
 any active Staff account. Overlapping assignments return 409 and unknown Location IDs return 404.
 
 The minimal Location create/list slice is now superseded by the approved
-[property configuration APIs](PROPERTY_MANAGEMENT.md): creation requires name/address and automatically uses the sole system Chain,
-listing is paginated, Room creation requires a Location-owned Room Type, and effective-dated
-prices are immutable versions. `assigned-to-me` keeps its existing small list contract.
+[property configuration APIs](PROPERTY_MANAGEMENT.md): creation requires name/address without a Chain,
+listing is paginated, Room creation belongs directly to Location, and effective-dated
+prices have Location or Room scope with immutable historical versions. See [current API](LOCATION_ROOM_API.md). `assigned-to-me` keeps its existing small list contract.
 
 JSON properties use camelCase. Use explicit request/response DTOs, never EF entities. Require and
 validate bounded string lengths, supported enum values, sizes and page parameters at the API edge;
@@ -221,7 +249,7 @@ Errors use `application/problem+json`, with `type`, `title`, `status` and `corre
 `ValidationProblemDetails.errors` keyed by field. Never echo rejected passwords/tokens/CCCD values.
 Expected business errors should be mapped explicitly, rather than exposing exception messages.
 
-Property/Chain service rejections preserve their explicit 400/403/404/409 status and safe `code`.
+Property service rejections preserve their explicit 400/403/404/409 status and safe `code`.
 Exception responses retain `application/problem+json` and `correlationId` even when a private-file
 client sends `Accept: application/pdf`, `application/octet-stream` or an image media type.
 Unsupported error content negotiation must not replace an expected business rejection with 500.
@@ -246,7 +274,7 @@ Protected requests send `Authorization: Bearer <access-token>`. Default server a
 authentication. Guest is anonymous and has no role. Anonymous public endpoints explicitly opt in
 and return only Owner-approved non-sensitive projections.
 
-Restrict roles for each operation and enforce chain ownership, Staff Location assignment or Tenant
+Restrict roles for each operation and enforce the approved Owner role, Staff Location assignment or Tenant
 ownership in the application service. Scope must come from authoritative server data. Apply scope
 predicates in database queries before sorting, counting and paging. Return the documented 403/404
 consistently to prevent resource enumeration. CORS is an origin policy, not authorization.
@@ -286,12 +314,12 @@ provider status check or audited pending-review/manual-verification path.
 
 ## Upload và financial workflows hiện tại
 
-| Module | Request body / kiểm tra phía client |
-| --- | --- |
-| OCR proposal | Raw PNG/JPEG theo endpoint; không multipart và không tự confirm/persist |
-| Adjustment evidence | PUT raw PNG/JPEG, tối đa 5 MiB; nhận ID rồi link vào request |
-| Expense evidence | POST raw PNG/JPEG, tối đa 5 MiB, UUID `Idempotency-Key`; PendingUpload chưa tải được |
-| Refund execution | POST `multipart/form-data`, ảnh PNG/JPEG tối đa 5 MiB và execution metadata; UUID key + expectedVersion + humanConfirmed |
+| Module              | Request body / kiểm tra phía client                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| OCR proposal        | Raw PNG/JPEG theo endpoint; không multipart và không tự confirm/persist                                                  |
+| Adjustment evidence | PUT raw PNG/JPEG, tối đa 5 MiB; nhận ID rồi link vào request                                                             |
+| Expense evidence    | POST raw PNG/JPEG, tối đa 5 MiB, UUID `Idempotency-Key`; PendingUpload chưa tải được                                     |
+| Refund execution    | POST `multipart/form-data`, ảnh PNG/JPEG tối đa 5 MiB và execution metadata; UUID key + expectedVersion + humanConfirmed |
 
 Khi gửi `FormData`, để fetch/browser sinh `Content-Type` cùng boundary; không ép
 `application/json` hoặc tự đặt multipart header thiếu boundary. Private download vẫn dùng Bearer,

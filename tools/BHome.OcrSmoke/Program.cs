@@ -5,6 +5,22 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 7 && args[0] == "--mechanical-electric-window-study")
+    return await MechanicalElectricWindowStudy.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6]);
+if (args.Length == 6 && args[0] == "--reviewed-window-compare")
+    return await ReviewedWindowComparison.RunAsync(args[1], args[2], args[3], args[4], args[5]);
+if (args.Length == 5 && args[0] == "--english-meter-parity")
+    return await WaterReaderComparison.ParityAsync(args[1], args[2], args[3], args[4]);
+if (args.Length == 7 && args[0] == "--water-reader-compare")
+    return await WaterReaderComparison.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6]);
+if (args.Length == 5 && args[0] == "--water-localization-audit")
+    return await WaterLocalizationAudit.RunAsync(args[1], args[2], args[3], args[4]);
+if (args.Length == 6 && args[0] == "--meter-failure-diagnostic")
+    return await MeterFailureDiagnostic.RunAsync(args[1], args[2], args[3], args[4], args[5]);
+if (args.Length == 6 && args[0] == "--reviewed-positive-evaluate")
+    return await ReviewedPositiveEvaluation.RunAsync(args[1], args[2], args[3], args[4], args[5]);
+if (args.Length == 7 && args[0] == "--water-digit-alignment-study")
+    return await WaterDigitAlignmentStudy.RunAsync(args[1], args[2], args[3], args[4], args[5], args[6]);
 if (args.Length == 5 && args[0] == "--pretrained-yolo-evaluate")
     return await PretrainedYoloEvaluation.RunAsync(args[1], args[2], args[3], args[4]);
 if (args.Length == 5 && args[0] == "--meter-recognition-compare")
@@ -15,6 +31,18 @@ if (args.Length == 4 && args[0] == "--stage2-parity")
     return Stage2Parity.Run(args[1], args[2], args[3]);
 if (args.Length == 3 && args[0] == "--trained-yolo-parity")
     return TrainedYoloParity.Run(args[1], args[2]);
+if (args.Length == 4 && args[0] == "--visual-category-benchmark")
+    return VisualCategoryEvaluation.Run(args[1], args[2], args[3]);
+if (args.Length == 5 && args[0] == "--meter-reading-controls")
+{
+    var controlOptions = new OcrOptions { Enabled = true, ModelDirectory = args[1], MeterDetectionMinConfidence = .7f,
+        MeterDetector = new() { Enabled = true, WaterDigitsEnabled = true, ModelDirectory = args[2] } };
+    using var controlDetector = new YoloMeterSceneDetector(controlOptions);
+    using var controlDigits = new YoloWaterDigitRecognizer(controlOptions);
+    using var controlEngine = new OnnxOcrEngine(controlOptions, new ImagePreprocessor(controlOptions), controlDetector, waterDigits: controlDigits);
+    using var controlService = new LocalOcrService(controlOptions, new Lazy<IOcrEngine>(() => controlEngine), NullLogger<LocalOcrService>.Instance);
+    return await OcrEvaluation.RunAsync(controlService, args[3], args[4]);
+}
 if (args.Length == 4 && args[0] == "--public-lcd-baseline")
     return PublicMeterEvaluation.Lcd(args[1], args[2], args[3]);
 if (args.Length == 6 && args[0] == "--public-category-baseline")
@@ -38,7 +66,7 @@ var generation = args.Length == 3 && args[0] == "--generate-evaluation";
 var evaluation = args.Length is 3 or 4 && args[1] == "--evaluate";
 var smoke = args.Length == 2 && args[0] != "--generate-evaluation" && args[1] != "--evaluate";
 if (!generation && !evaluation && !smoke)
-{ Console.Error.WriteLine("Usage: BHome.OcrSmoke <model-directory> <synthetic-fixture-directory> | <model-directory> --evaluate <manifest.json> [report.json] | --generate-evaluation <synthetic-fixture-directory> <output-directory> | --meter-scene-smoke <model-directory> <meter-safety-fixture-directory> | --auto-evaluate <model-directory> <manifest.json> <report.json> | --pretrained-yolo-evaluate <ocr-models> <yolo-models> <public-images> <report.json> | --meter-recognition-compare <ocr-models> <yolo-models> <public-images> <output-dir> | --meter-completion-evaluate <ocr-models> <yolo-models> <public-images> <report.json> | --stage2-parity <yolo-models> <crop-dir> <report.json> | --digit-crop-probe <ocr-models> <yolo-models> <crop-dir> <report.json> | --pretrained-yolo-challenges <ocr-models> <yolo-models> <public-water.jpg> <synthetic-images> <report.json>"); return 2; }
+{ Console.Error.WriteLine("Usage: BHome.OcrSmoke <model-directory> <synthetic-fixture-directory> | <model-directory> --evaluate <manifest.json> [report.json] | --generate-evaluation <synthetic-fixture-directory> <output-directory> | --meter-scene-smoke <model-directory> <meter-safety-fixture-directory> | --auto-evaluate <model-directory> <manifest.json> <report.json> | --pretrained-yolo-evaluate <ocr-models> <yolo-models> <public-images> <report.json> | --meter-recognition-compare <ocr-models> <yolo-models> <public-images> <output-dir> | --meter-completion-evaluate <ocr-models> <yolo-models> <public-images> <report.json> | --stage2-parity <yolo-models> <crop-dir> <report.json> | --digit-crop-probe <ocr-models> <yolo-models> <crop-dir> <report.json> | --pretrained-yolo-challenges <ocr-models> <yolo-models> <public-water.jpg> <synthetic-images> <report.json> | --water-digit-alignment-study <ocr-models> <yolo-models> <validation-images> <validation-manifest.json> <excluded-test-manifest.json> <report.json> | --reviewed-positive-evaluate <ocr-models> <yolo-models> <manifest.json> <repository-root> <report.json>"); return 2; }
 if (generation)
 {
     SyntheticEvaluation.Generate(args[1], args[2]);

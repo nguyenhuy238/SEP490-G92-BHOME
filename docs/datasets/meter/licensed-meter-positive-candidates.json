@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "annotationLicense": "CC-BY-SA-4.0; original image licenses preserved",
+  "frozenOn": "2026-11-06",
+  "purpose": "Source-disjoint digit-sequence evaluation candidates, not independent billing acceptance; no numeric proposals inferred from these labels",
+  "referenceManifests": {
+    "four-class-development-v2.json": "3592bc6d3d4e3ce7b05f01d06b7130aac8f01de01b9a24034b25e9b85c183197",
+    "lcd-evaluation.json": "0718769b7d431d4cfdfb6ff3c458d1019ab17f38c942b82839e82d3404ff3a59",
+    "independent-reading-controls.json": "5ec730ac313c5afdf7aa4e66956a58fa4e59f50422d96f79e1c50a4e454bd91b"
+  },
+  "samples": [
+    {
+      "id": "commons_88598855",
+      "image": ".tools/ocr-next-public-images-expanded/commons_88598855.jpg",
+      "sha256": "6268edda29670dbca1491d430230258c43e8e43837fb01e953537e8685bd317f",
+      "siteGroup": "commons_author_0f0cf56746a0c196e1f1",
+      "meterGroup": "commons_author_0f0cf56746a0c196e1f1",
+      "sourceGroup": "commons_author_0f0cf56746a0c196e1f1",
+      "captureGroup": "commons_author_0f0cf56746a0c196e1f1",
+      "nearDuplicateGroup": "commons_author_0f0cf56746a0c196e1f1",
+      "split": "test",
+      "category": "water_mechanical",
+      "annotationLevel": "complete",
+      "meterPolygon": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.45625,
+          0.4140625
+        ],
+        [
+          0.6359375,
+          0.57578125
+        ],
+        [
+          0.60546875,
+          0.61640625
+        ],
+        [
+          0.425,
+          0.45390625
+        ]
+      ],
+      "reading": {
+        "digits": "35558",
+        "digitCount": 5,
+        "decimalPlaces": null,
+        "billingRegister": "total_volume",
+        "displayState": "single",
+        "unreadablePositions": [],
+        "visibility": "readable"
+      },
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hydrometer_GmbH_DE-07-MI004-PTB023_water_meter-6095.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false,
+        "scope": "digit_sequence_in_selected_window_only",
+        "reason": "Five settled wheel digits beside printed m3; precision is deliberately unverified, no billing-value ground truth."
+      },
+      "sourceIndependence": {
+        "authorAbsentFromBhomeReferences": true,
+        "nearestBodyCorpusPhashDistance": 24,
+        "nearestBodyCorpusId": "commons_32325922",
+        "phash": "1070edb1a2cac776"
+      },
+      "flags": [
+        "digit_only_positive",
+        "not_for_model_selection",
+        "billing_accuracy_not_measured",
+        "second_human_annotation_review_pending"
+      ]
+    },
+    {
+      "id": "commons_52855795",
+      "image": ".tools/master-dataset/commons/commons_52855795.jpg",
+      "sha256": "e3075e5219ff14ff5a22fd9ddfee532b0898a21012dce924712ef3e467caeeba",
+      "siteGroup": "commons_author_c21a6ffaee420fd61735",
+      "meterGroup": "commons_author_c21a6ffaee420fd61735",
+      "sourceGroup": "commons_author_c21a6ffaee420fd61735",
+      "captureGroup": "commons_author_c21a6ffaee420fd61735",
+      "nearDuplicateGroup": "commons_author_c21a6ffaee420fd61735",
+      "split": "test",
+      "category": "electricity_digital",
+      "annotationLevel": "complete",
+      "meterPolygon": [
+        [
+          0.58984375,
+          0.06321839080459771
+        ],
+        [
+          0.971875,
+          0.06321839080459771
+        ],
+        [
+          0.971875,
+          0.4663382594417077
+        ],
+        [
+          0.58984375,
+          0.4663382594417077
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.72265625,
+          0.26683087027914615
+        ],
+        [
+          0.825,
+          0.26683087027914615
+        ],
+        [
+          0.825,
+          0.29310344827586204
+        ],
+        [
+          0.72265625,
+          0.29310344827586204
+        ]
+      ],
+      "reading": {
+        "digits": "000059",
+        "digitCount": 6,
+        "decimalPlaces": null,
+        "billingRegister": "unknown",
+        "displayState": "multiple",
+        "unreadablePositions": [],
+        "visibility": "readable"
+      },
+      "quality": {
+        "blur": false,
+        "glare": false
+      },
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:CFE_electric_power_meters_2016.jpg"
+      },
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false,
+        "scope": "digit_sequence_in_selected_window_only",
+        "reason": "Top-right LCD numeric row only. Three meter bodies in full frame; kWh visible but register eligibility/decimal not established. Full frame must not choose a device automatically."
+      },
+      "sourceIndependence": {
+        "authorAbsentFromBhomeReferences": true,
+        "nearestBodyCorpusPhashDistance": 22,
+        "nearestBodyCorpusId": "commons_113793907",
+        "phash": "4e54b96e1eee9082"
+      },
+      "flags": [
+        "digit_only_positive",
+        "not_for_model_selection",
+        "billing_accuracy_not_measured",
+        "second_human_annotation_review_pending"
+      ]
+    }
+  ],
+  "limitations": [
+    "Only two images/two author groups; not representative or final acceptance.",
+    "No verified decimal ground truth for either sample.",
+    "Electricity image is three devices; selected-window scoring must be separate from full-frame rejection.",
+    "Missing mechanical-electricity and digital-water positive ground truth; no numeric labels invented.",
+    "Unknown foundation-model pretraining overlap."
+  ]
+}

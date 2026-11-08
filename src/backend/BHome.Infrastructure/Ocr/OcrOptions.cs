@@ -18,6 +18,7 @@ public sealed class OcrOptions
     public float AutomaticClassificationMinConfidence { get; set; } = .9f;
     public ImageProfile AutomaticProfile { get; set; } = new();
     public YoloMeterOptions MeterDetector { get; set; } = new();
+    public YoloCategoryOptions VisualClassifier { get; set; } = new();
     public Dictionary<OcrDocumentKind, ImageProfile> Profiles { get; set; } = Enum.GetValues<OcrDocumentKind>()
         .ToDictionary(x => x, _ => new ImageProfile());
 
@@ -27,10 +28,25 @@ public sealed class OcrOptions
         InferenceThreads is >= 1 and <= 4 && MaxTextRegions is >= 1 and <= 64 &&
         float.IsFinite(MeterDetectionMinConfidence) && MeterDetectionMinConfidence is > 0 and <= 1 &&
         float.IsFinite(AutomaticClassificationMinConfidence) && AutomaticClassificationMinConfidence is > 0 and <= 1 &&
-        MeterDetector.IsValid() &&
+        MeterDetector.IsValid() && VisualClassifier.IsValid() &&
+        (!VisualClassifier.Enabled || VisualClassifier.CandidateThreshold <= AutomaticClassificationMinConfidence) &&
         AutomaticProfile.ClockwiseQuarterTurns is >= 0 and <= 3 && AutomaticProfile.MinLaplacianVariance >= 0 &&
         Enum.GetValues<OcrDocumentKind>().All(x => Profiles.TryGetValue(x, out var p) &&
             p.ClockwiseQuarterTurns is >= 0 and <= 3 && p.MinLaplacianVariance >= 0);
+}
+
+// Experimental four-class YOLOv8 detect export, FP32/416/no embedded NMS.
+// Disabled by default; the adapter additionally requires a Development host.
+public sealed class YoloCategoryOptions
+{
+    public bool Enabled { get; set; }
+    public string ModelPath { get; set; } = "";
+    public string Sha256 { get; set; } = "";
+    public float CandidateThreshold { get; set; } = .25f;
+    public float NmsThreshold { get; set; } = .45f;
+    public bool IsValid() => float.IsFinite(CandidateThreshold) && CandidateThreshold is > 0 and <= 1 &&
+        float.IsFinite(NmsThreshold) && NmsThreshold is > 0 and <= 1 &&
+        (!Enabled || !string.IsNullOrWhiteSpace(ModelPath) && Sha256.Length == 64 && Sha256.All(Uri.IsHexDigit));
 }
 
 public sealed class YoloMeterOptions

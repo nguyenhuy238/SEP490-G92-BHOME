@@ -8,6 +8,14 @@ export function meterOcrFeedback(proposal: Proposal): string {
       : 'Chỉ số OCR đề xuất: hãy đối chiếu ảnh và sửa nếu cần.',
   ];
   const warnings = new Set(proposal.warnings);
+  if (
+    ['meter_profile_unavailable', 'invalid_meter_precision', 'invalid_previous_reading'].some(
+      (code) => warnings.has(code),
+    )
+  )
+    messages.push(
+      'Thông tin cấu hình đồng hồ chưa hợp lệ. Hãy báo Owner kiểm tra loại đồng hồ, độ chính xác và chỉ số trước.',
+    );
   if (warnings.has('meter_not_detected'))
     messages.push('Chưa tìm thấy đồng hồ trong ảnh. Hãy chụp lại đúng đồng hồ của tác vụ.');
   if (

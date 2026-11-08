@@ -131,3 +131,59 @@ Build baseline Release đã chạy: 0 warning/error. Application OCR: 125/125 PA
 Chạy lại automatic baseline trên đúng 15 ảnh public development holdout; đây
 không phải tập độc lập mới hoặc số liệu production. Báo cáo tiếp nối sẽ ghi
 metrics thực tế, kết quả huấn luyện và các commit mới.
+
+## Master implementation tiếp nối tại 83317cb ngày 06/11/2026
+
+Working tree sạch, `member/QHuy`, đã có merge của nhóm sau ac73254; không đổi
+history. SRS cục bộ `BHome_Report-3_Software Requirement Specification.docx`
+đã kiểm UC-20/GBR-07: chỉ Staff-confirmed dùng cho billing, OCR/manual fallback
+trong10s ở workload đánh giá. Không đổi quyền, precision hoặc xác nhận.
+
+Tìm bằng English/Vietnamese/German/French, thêm truy vấn brand/ultrasonic và
+Commons search ngoài category cũ. Sau lọc giấy phép, đã tải và xem **70 ảnh
+Commons mới**,0 lỗi trong lượt dùng URL đúng và User-Agent có project contact.
+[Catalog](../datasets/meter/public-sources-expanded.json) lưu author/license/
+URL/SHA256/dimensions từng asset. 137 candidates có license trước lọc title;
+70 ảnh tải không đồng nghĩa70 ảnh train. Có meter covers/buildings, analog
+gauges, multiple meters và ảnh thiếu display; không tự gán chúng thành bốn loại.
+
+- [Water meter2](https://commons.wikimedia.org/wiki/File:Water_meter_2.jpg),
+  Vaibhavratnaparkhi, CC BY-SA4.0: nước LCD, nhưng có meter tiền cảnh bị mờ;
+  giữ cho challenge multi-meter, không gán một body box bỏ sót đối tượng.
+- [WMBUS water](https://commons.wikimedia.org/wiki/File:WMBUS_Water_Meter_for_submetering.jpg),
+  Boutboul, CC0: nước LCD màn hình trống; body classification vẫn là water
+  digital, nhưng expected reading là no proposal. Giữ group mới trong test.
+- [MeterOCR water digital](https://universe.roboflow.com/meterocr-vt9ic/water-digital-meter)
+  công bố CC BY4.0 và292 ảnh. Chỉ tải **ba example thumbnail200×150 được chính
+  trang công khai liên kết**, không export dataset/login hoặc đoán URL gốc.
+  Ảnh thật là nước LCD, thân bị cắt ở mép ảnh. Toàn ba preview cùng TRAIN theo
+  publisher group; không có numeric GT được suy từ thumbnail. Catalog và
+  downloader pinned trong `water-lcd-public-previews.json`/`download_meter_previews.py`.
+- [Seeed dataset guide](https://wiki.seeedstudio.com/ModelAssistant_Tutorials_Datasets/)
+  có link public `meter.zip`: tải124775623 bytes, SHA256
+  `e200ce178fcc170dd457aed6328d3f273fd484448f12ecdf211a90cbd99b2cb3`.
+  Archive6160 JPEG +2 annotations.txt, sample review30 ảnh là **pointer pressure
+  gauges MPa**, không phải billing water LCD. Không dùng tên “meter” hay giấy
+  phép của dự án Roboflow khác để gán nhãn/quyền cho archive này; không train.
+  Seeed Roboflow digital-meter-water examples thực tế là bánh số cơ, không phải LCD.
+- UtilityMeters HF vẫn auto/manual gated; các dự án Roboflow có sign-in export
+  không bị vượt quyền. Trang Roboflow trả403 cho HTTP client được ghi là hạn
+  chế; chỉ dùng ba link preview công khai đã có từ trang nguồn, không đổi sang
+  endpoint nội bộ để lấy full dataset. Manufacturer/customer manuals không có
+  quyền training ảnh rõ ràng được giữ ngoài supervised corpus.
+
+Body revision [four-class-development-v2](../datasets/meter/four-class-development-v2.json)
+gồm62 ảnh:21 điện cơ,13 điện tử,15 nước cơ,5 nước LCD,8 negatives. Ba nước LCD
+TRAIN là partial-body previews; một ảnh Commons cũ đã từng dùng development
+test được **hạ thành validation**, không chuyển vào train và không gọi là test
+nghiệm thu mới. Blank LCD từ group mới ở test. Các group/hashes/labels cũ khác
+giữ nguyên. Corpus đủ bốn supervised class để chạy **feasibility training**,
+nhưng nước LCD chỉ3 train/1 val/1 test nên chưa đủ diversity để activation hoặc
+claim≥95%. Chưa có independent human annotation review, đại diện Việt Nam hay
+50 acceptance images/lớp. Augmentation không được cộng như ảnh thiết bị mới.
+
+Kế hoạch: validate/leakage audit → fine-tune4-class seed42 → val-only calibration
+→ native/ONNX/.NET inference → activation chỉ nếu evidence đủ scope; song song
+lập challenge reading với blank/multiple/status/serial controls và sửa nhánh
+automatic đang chưa dùng water Stage2 khi visual classification đã xác định
+mechanical water. Tests phải giữ crop/ambiguity/metadata/Staff confirmation.

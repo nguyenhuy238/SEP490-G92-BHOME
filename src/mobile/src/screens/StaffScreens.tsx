@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 /* eslint-disable @typescript-eslint/no-require-imports -- Metro requires static asset paths. */
 import React, { useState } from 'react';
 import { Image, View } from 'react-native';
@@ -112,7 +113,7 @@ export function MeterReading() {
   const [filter, setFilter] = useState('Chưa ghi (4)');
   const [reading, setReading] = useState('1525.8');
   const [manual, setManual] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   return (
     <>
       <Pill>Kỳ đối soát định kỳ</Pill>

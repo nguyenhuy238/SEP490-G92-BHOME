@@ -21,7 +21,7 @@ export const colors = {
   amberSoft: '#fff8e8',
 };
 
-// Staff dashboard tokens are scoped so Owner and Tenant keep their current palette.
+// The existing Staff dashboard palette is the shared workspace design reference.
 export const staffColors = {
   navy: '#193653',
   background: '#F5F7FB',

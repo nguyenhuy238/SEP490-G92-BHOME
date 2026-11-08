@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "frozenOn": "2026-11-06",
+  "purpose": "Independent negative-reading controls only; no claim of positive accuracy or four-class acceptance",
+  "samples": [
+    {
+      "id": "commons_156125142",
+      "split": "test",
+      "reason": "blank_lcd",
+      "profiles": [
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_6780055",
+      "split": "test",
+      "reason": "flow_rate_not_accumulated_volume",
+      "profiles": [
+        "MechanicalWater",
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_177890994",
+      "split": "test",
+      "reason": "tds_probe_not_consumption_meter",
+      "profiles": [
+        "MechanicalWater",
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_21978614",
+      "split": "test",
+      "reason": "water_tower_no_meter",
+      "profiles": [
+        "MechanicalElectricity",
+        "DigitalElectricity",
+        "MechanicalWater",
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_92903699",
+      "split": "test",
+      "reason": "symbol_no_meter",
+      "profiles": [
+        "MechanicalElectricity",
+        "DigitalElectricity",
+        "MechanicalWater",
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_195349404",
+      "split": "test",
+      "reason": "cover_no_visible_display",
+      "profiles": [
+        "MechanicalWater",
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_107725262",
+      "split": "test",
+      "reason": "gallons_register_not_supported_m3_reading",
+      "profiles": [
+        "MechanicalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    },
+    {
+      "id": "commons_152002068",
+      "split": "test",
+      "reason": "multiple_devices_one_foreground_unreadable",
+      "profiles": [
+        "DigitalWater"
+      ],
+      "expectedReading": null,
+      "review": {
+        "method": "agent_visual_inspection",
+        "independentHumanReview": false
+      },
+      "flags": [
+        "public_source",
+        "not_used_for_training_or_threshold_selection"
+      ]
+    }
+  ]
+}

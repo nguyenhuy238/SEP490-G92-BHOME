@@ -14,12 +14,14 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
     {
         var status = exception switch
         {
+            BHome.Application.Operations.OperationsException operations => operations.Status,
             BHome.Application.Finance.FinanceException finance => finance.Status,
             BHome.Application.Notifications.NotificationException notification => notification.Status,
             BHome.Application.Billing.AdjustmentException adjustment => adjustment.Status,
             BHome.Application.PaymentsDebt.PaymentException payment => payment.Status,
             BHome.Application.Billing.InvoiceException invoice => invoice.Status,
             PropertyException property => property.Status,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Status,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
             ContractException contract => contract.Status,
             DigitalSigningException signing => signing.Error switch
@@ -48,18 +50,20 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             StatusCodes.Status503ServiceUnavailable => "Service temporarily unavailable.",
             _ => "An unexpected error occurred."
         };
-        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
+        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning, exception,
             "Request {CorrelationId} failed with {ErrorCode}", context.TraceIdentifier, exception.GetType().Name);
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
         var code = exception switch
         {
+            BHome.Application.Operations.OperationsException operations => operations.Code,
             BHome.Application.Finance.FinanceException finance => finance.Code,
             BHome.Application.Notifications.NotificationException notification => notification.Code,
             BHome.Application.Billing.AdjustmentException adjustment => adjustment.Code,
             BHome.Application.PaymentsDebt.PaymentException payment => payment.Code,
             BHome.Application.Billing.InvoiceException invoice => invoice.Code,
             PropertyException property => property.Code,
+            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Code,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Code,
             ContractException contract => contract.Code,
             CaptureConflictException conflict => conflict.Code,

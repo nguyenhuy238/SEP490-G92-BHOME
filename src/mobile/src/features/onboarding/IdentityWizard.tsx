@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, Icon, Text, TextInput } from 'react-native-paper';
@@ -26,6 +27,7 @@ import {
 } from './onboarding';
 import { IdentityFlowFrame } from './IdentityFlowFrame';
 import { identityFieldErrors } from './identityFieldErrors';
+import { showSuccess, showWarning } from '../../lib/toast';
 import { colors as c } from '../../theme/theme';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 
@@ -86,8 +88,8 @@ export function IdentityWizard({
   const fieldOrigin = useRef<Partial<Record<keyof IdentityFields, IdentitySide | 'manual'>>>({});
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useFeedbackState();
+  const [notice, setNotice] = useFeedbackState('info');
   const [warnings, setWarnings] = useState<string[]>([]);
   const sideWarnings = useRef<Record<IdentitySide, string[]>>({ front: [], back: [] });
   const [placeOfIssue, setPlaceOfIssue] = useState('');
@@ -163,7 +165,7 @@ export function IdentityWizard({
       sub.remove();
       if (Platform.OS === 'ios') void disableAppSwitcherProtectionAsync().catch(() => {});
     };
-  }, [modal]);
+  }, [modal, setNotice]);
   const acceptProposal = (proposal: Proposal, face: IdentitySide = side) => {
     // Replace only this side's earlier OCR suggestions. Never overwrite Staff edits or the other side.
     const before = { ...current.current };
@@ -215,6 +217,8 @@ export function IdentityWizard({
         ? 'OCR không đọc đủ dữ liệu. Chụp lại hoặc chuyển sang nhập thủ công.'
         : `Đã nhận đề xuất, chưa xác minh. ${merged.conflicts.length ? 'Có thông tin khác với lần nhập trước; hãy đối chiếu lại giấy tờ.' : ''} ${proposal.warnings.length || proposal.missingFields.length ? 'Có cảnh báo hoặc thiếu trường. Hãy kiểm tra toàn bộ.' : ''}`,
     );
+    if (!preview && (proposal.isFallback || proposal.warnings.length > 0))
+      showWarning('OCR cần được kiểm tra lại. Bạn có thể sửa thông tin hoặc nhập thủ công.');
   };
   const scan = async (bytes: Uint8Array<ArrayBuffer>) => {
     if (!api || lock.current || preview) return;
@@ -283,6 +287,7 @@ export function IdentityWizard({
       }
       if (epoch !== generation.current) return;
       confirmed.current = true;
+      if (!preview) showSuccess('Đã xác nhận và lưu thông tin CCCD.');
       statusCallback.current?.('confirmed');
       onConfirmed?.();
       current.current = emptyIdentity();

@@ -22,7 +22,12 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
-        var session = await login.LoginAsync(request.Email, request.Password, cancellationToken, request.Device);
+        if (string.IsNullOrWhiteSpace(request.Email) == string.IsNullOrWhiteSpace(request.Phone))
+        {
+            ModelState.AddModelError("identifier", "Provide exactly one email or phone number.");
+            return ValidationProblem(ModelState);
+        }
+        var session = await login.LoginAsync(request.Phone ?? request.Email, request.Password, cancellationToken, request.Device);
         return session is null
             ? Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Sign-in failed.")
             : Ok(Transport(session));
@@ -100,7 +105,8 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
 }
 
 public sealed record LoginRequest(
-    [Required, EmailAddress, StringLength(LoginService.MaxEmailLength)] string? Email,
+    [EmailAddress, StringLength(LoginService.MaxEmailLength)] string? Email,
+    [StringLength(LoginIdentifier.MaxPhoneLength), RegularExpression(@"^\+?[0-9 .()\-]{8,30}$")] string? Phone,
     [Required, StringLength(LoginService.MaxPasswordLength)] string? Password,
     [StringLength(256)] string? Device = null);
 

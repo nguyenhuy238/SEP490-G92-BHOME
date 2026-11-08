@@ -1,0 +1,708 @@
+{
+  "version": 1,
+  "purpose": "small provisional LCD state/digit pilot; not independent acceptance or training",
+  "humanReviewsReceived": 0,
+  "independentExactLabels": 0,
+  "sourcePolicy": "unknown physical meters stay in one source group; no random split",
+  "frozenHistoricalLabelsChanged": false,
+  "samples": [
+    {
+      "id": "kgl_008",
+      "image": ".tools/ocr-next-phase/pilot-source/kgl_008.jpg",
+      "sha256": "9cbb0524a9cdd09e80526720ce40c8ee316ac9f9d0543d719429c9d9a6ba9d6b",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "physicalMeterGroup": null,
+      "split": "development_only",
+      "category": "electricity_digital",
+      "meterPolygon": null,
+      "windowPolygon": [
+        [
+          0.1111111111111111,
+          0.24921875
+        ],
+        [
+          0.6625,
+          0.24921875
+        ],
+        [
+          0.6625,
+          0.35
+        ],
+        [
+          0.1111111111111111,
+          0.35
+        ]
+      ],
+      "digits": "003475",
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "high_for_visible_digits_only",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "bodyExtentReviewed": false,
+      "provenance": {
+        "kind": "public",
+        "license": "MIT",
+        "sourceUrl": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data"
+      }
+    },
+    {
+      "id": "kgl_039",
+      "image": ".tools/ocr-next-phase/pilot-source/kgl_039.jpg",
+      "sha256": "49f35089e84a7ec4552d1166a404904033022069ad026f296d7da739044234cd",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "physicalMeterGroup": null,
+      "split": "development_only",
+      "category": "electricity_digital",
+      "meterPolygon": null,
+      "windowPolygon": [
+        [
+          0.12777777777777777,
+          0.465625
+        ],
+        [
+          0.8111111111111111,
+          0.465625
+        ],
+        [
+          0.8111111111111111,
+          0.56375
+        ],
+        [
+          0.12777777777777777,
+          0.56375
+        ]
+      ],
+      "digits": "069156",
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "high_for_visible_digits_only",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "bodyExtentReviewed": false,
+      "provenance": {
+        "kind": "public",
+        "license": "MIT",
+        "sourceUrl": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data"
+      }
+    },
+    {
+      "id": "kgl_043",
+      "image": ".tools/ocr-next-phase/pilot-source/kgl_043.jpg",
+      "sha256": "dfdc88e63ae81cfaed504171dbf5edc4263a3d37061f12df2452a3c2dbef1948",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "physicalMeterGroup": null,
+      "split": "development_only",
+      "category": "electricity_digital",
+      "meterPolygon": null,
+      "windowPolygon": [
+        [
+          0.23418573351278602,
+          0.26843657817109146
+        ],
+        [
+          0.5464333781965006,
+          0.26843657817109146
+        ],
+        [
+          0.5464333781965006,
+          0.3893805309734513
+        ],
+        [
+          0.23418573351278602,
+          0.3893805309734513
+        ]
+      ],
+      "digits": "007696",
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "high_for_visible_digits_only",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "bodyExtentReviewed": false,
+      "provenance": {
+        "kind": "public",
+        "license": "MIT",
+        "sourceUrl": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data"
+      }
+    },
+    {
+      "id": "kgl_050",
+      "image": ".tools/ocr-next-phase/pilot-source/kgl_050.jpg",
+      "sha256": "d9385e2e13a02a3a83a12a35694d678a440eaef5191aae8abfc3794652df613f",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "physicalMeterGroup": null,
+      "split": "development_only",
+      "category": "electricity_digital",
+      "meterPolygon": null,
+      "windowPolygon": [
+        [
+          0.23229166666666667,
+          0.359375
+        ],
+        [
+          0.675,
+          0.359375
+        ],
+        [
+          0.675,
+          0.45703125
+        ],
+        [
+          0.23229166666666667,
+          0.45703125
+        ]
+      ],
+      "digits": "020355",
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "high_for_visible_digits_only",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "bodyExtentReviewed": false,
+      "provenance": {
+        "kind": "public",
+        "license": "MIT",
+        "sourceUrl": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data"
+      }
+    },
+    {
+      "id": "kgl_057",
+      "image": ".tools/ocr-next-phase/pilot-source/kgl_057.jpg",
+      "sha256": "edd978ec987408d16630ed62bdeeb8baf849454cd369288d543a426deb4bd1aa",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "physicalMeterGroup": null,
+      "split": "development_only",
+      "category": "electricity_digital",
+      "meterPolygon": null,
+      "windowPolygon": [
+        [
+          0.13111111111111112,
+          0.1925
+        ],
+        [
+          0.7855555555555556,
+          0.1925
+        ],
+        [
+          0.7855555555555556,
+          0.301875
+        ],
+        [
+          0.13111111111111112,
+          0.301875
+        ]
+      ],
+      "digits": "053308",
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "high_for_visible_digits_only",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "bodyExtentReviewed": false,
+      "provenance": {
+        "kind": "public",
+        "license": "MIT",
+        "sourceUrl": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data"
+      }
+    },
+    {
+      "id": "kgl_067",
+      "image": ".tools/ocr-next-phase/pilot-source/kgl_067.jpg",
+      "sha256": "ccb0df39ac1a11c0ac22d4dd6699536af9129cf5714e22bf02b43dfd7d685362",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "physicalMeterGroup": null,
+      "split": "development_only",
+      "category": "electricity_digital",
+      "meterPolygon": null,
+      "windowPolygon": [
+        [
+          0.22803114571746386,
+          0.31832395247029394
+        ],
+        [
+          0.899888765294772,
+          0.31832395247029394
+        ],
+        [
+          0.899888765294772,
+          0.43026891807379614
+        ],
+        [
+          0.22803114571746386,
+          0.43026891807379614
+        ]
+      ],
+      "digits": "014962",
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "high_for_visible_digits_only",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "bodyExtentReviewed": false,
+      "provenance": {
+        "kind": "public",
+        "license": "MIT",
+        "sourceUrl": "https://www.kaggle.com/datasets/saarthaksrivastav/meter-data"
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "image": ".tools/ocr-next-phase/pilot-source/commons_136480278.jpg",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "sourceGroup": "commons_author_4ffec1e37be7ee092f5d",
+      "physicalMeterGroup": null,
+      "split": "val",
+      "category": "electricity_digital",
+      "meterPolygon": [
+        [
+          0.2,
+          0.17
+        ],
+        [
+          0.7,
+          0.17
+        ],
+        [
+          0.7,
+          0.85
+        ],
+        [
+          0.2,
+          0.85
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.41796875,
+          0.31217481789802287
+        ],
+        [
+          0.5828125,
+          0.31217481789802287
+        ],
+        [
+          0.5828125,
+          0.4162330905306972
+        ],
+        [
+          0.41796875,
+          0.4162330905306972
+        ]
+      ],
+      "digits": "74590",
+      "frozenExpectedDigits": "74590",
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "agent_visual_provisional",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Aclara_I-210%2B_single_phase_smart_electricity_meter.jpg"
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "image": ".tools/ocr-next-phase/pilot-source/commons_136480279.jpg",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "sourceGroup": "commons_author_4ffec1e37be7ee092f5d",
+      "physicalMeterGroup": null,
+      "split": "val",
+      "category": "electricity_digital",
+      "meterPolygon": [
+        [
+          0.22,
+          0.08
+        ],
+        [
+          0.7,
+          0.08
+        ],
+        [
+          0.7,
+          0.93
+        ],
+        [
+          0.22,
+          0.93
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.37890625,
+          0.4006243496357961
+        ],
+        [
+          0.58359375,
+          0.4006243496357961
+        ],
+        [
+          0.58359375,
+          0.4921956295525494
+        ],
+        [
+          0.37890625,
+          0.4921956295525494
+        ]
+      ],
+      "digits": null,
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "blank_or_unpowered",
+      "readable": false,
+      "uncertainPositions": [],
+      "annotationConfidence": "agent_visual_provisional",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Aclara_kV2c_FITZALL_3-phase_smart_electricity_meter.jpg"
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "image": ".tools/ocr-next-phase/pilot-source/commons_141575682.jpg",
+      "sha256": "fcf6cfa6830bddcb074895177af34f55dc9b22a6e33051bf9d530565e9006f35",
+      "sourceGroup": "commons_author_fda561d482705c44bfcc",
+      "physicalMeterGroup": null,
+      "split": "test",
+      "category": "electricity_digital",
+      "meterPolygon": [
+        [
+          0.15,
+          0.23
+        ],
+        [
+          0.95,
+          0.23
+        ],
+        [
+          0.95,
+          0.95
+        ],
+        [
+          0.15,
+          0.95
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.453125,
+          0.5517241379310345
+        ],
+        [
+          0.6015625,
+          0.5517241379310345
+        ],
+        [
+          0.6015625,
+          0.6273209549071618
+        ],
+        [
+          0.453125,
+          0.6273209549071618
+        ]
+      ],
+      "digits": "004046",
+      "frozenExpectedDigits": "004046",
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "agent_visual_provisional",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:2023-11-18_TibberPulse.jpg"
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "image": ".tools/ocr-next-phase/pilot-source/commons_26507235.jpg",
+      "sha256": "f08028545baabada7715eb39724edf45a38602ae56759d995408c149595cd810",
+      "sourceGroup": "commons_author_24e41388bd6a3fd90c9b",
+      "physicalMeterGroup": null,
+      "split": "test",
+      "category": "electricity_digital",
+      "meterPolygon": [
+        [
+          0.28,
+          0.22
+        ],
+        [
+          0.85,
+          0.22
+        ],
+        [
+          0.85,
+          0.93
+        ],
+        [
+          0.28,
+          0.93
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.4765625,
+          0.42105263157894735
+        ],
+        [
+          0.58046875,
+          0.42105263157894735
+        ],
+        [
+          0.58046875,
+          0.4756335282651072
+        ],
+        [
+          0.4765625,
+          0.4756335282651072
+        ]
+      ],
+      "digits": "21594",
+      "frozenExpectedDigits": "21594",
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [],
+      "annotationConfidence": "agent_visual_provisional",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:DWP_meter.jpg"
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "image": ".tools/ocr-next-phase/pilot-source/commons_111639614.jpg",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "sourceGroup": "commons_author_9b4f2e38fe03196c619f",
+      "physicalMeterGroup": null,
+      "split": "test",
+      "category": "electricity_digital",
+      "meterPolygon": [
+        [
+          0.16,
+          0.26
+        ],
+        [
+          0.83,
+          0.26
+        ],
+        [
+          0.83,
+          0.91
+        ],
+        [
+          0.16,
+          0.91
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.36328125,
+          0.45694200351493847
+        ],
+        [
+          0.58359375,
+          0.45694200351493847
+        ],
+        [
+          0.58359375,
+          0.5313415348564734
+        ],
+        [
+          0.36328125,
+          0.5313415348564734
+        ]
+      ],
+      "digits": null,
+      "frozenExpectedDigits": null,
+      "decimalPlaces": null,
+      "unit": "kWh",
+      "register": "unknown",
+      "readabilityState": "blank_or_unpowered",
+      "readable": false,
+      "uncertainPositions": [],
+      "annotationConfidence": "agent_visual_provisional",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "provenance": {
+        "kind": "public",
+        "license": "CC BY-SA 4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Meridian105037.jpg"
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "image": ".tools/ocr-next-phase/pilot-source/commons_141189268.jpg",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "sourceGroup": "commons_author_b046fcd7de5e048d7d72",
+      "physicalMeterGroup": null,
+      "split": "test",
+      "category": "water_digital",
+      "meterPolygon": [
+        [
+          0.01,
+          0.015
+        ],
+        [
+          0.99,
+          0.015
+        ],
+        [
+          0.99,
+          0.99
+        ],
+        [
+          0.01,
+          0.99
+        ]
+      ],
+      "windowPolygon": [
+        [
+          0.175,
+          0.428125
+        ],
+        [
+          0.6359375,
+          0.428125
+        ],
+        [
+          0.6359375,
+          0.52265625
+        ],
+        [
+          0.175,
+          0.52265625
+        ]
+      ],
+      "digits": null,
+      "frozenExpectedDigits": "000880578",
+      "decimalPlaces": null,
+      "unit": "m3",
+      "register": "unknown",
+      "readabilityState": "readable_consumption",
+      "readable": true,
+      "uncertainPositions": [
+        7
+      ],
+      "annotationConfidence": "disputed_digit",
+      "reviewStatus": "provisional_agent_visual_no_human_review",
+      "billingRegisterVerified": false,
+      "provenance": {
+        "kind": "public",
+        "license": "CC0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digitaler_Wasserzaehler.jpg"
+      },
+      "dispute": {
+        "index": 7,
+        "possibleGlyphs": [
+          "1",
+          "7"
+        ],
+        "action": "preserve_frozen_label_do_not_correct_from_model_output"
+      }
+    }
+  ],
+  "views": {
+    "A_classification": [
+      "kgl_008",
+      "kgl_039",
+      "kgl_043",
+      "kgl_050",
+      "kgl_057",
+      "kgl_067",
+      "commons_136480278",
+      "commons_136480279",
+      "commons_141575682",
+      "commons_26507235",
+      "commons_111639614",
+      "commons_141189268"
+    ],
+    "B_localization": [
+      "kgl_008",
+      "kgl_039",
+      "kgl_043",
+      "kgl_050",
+      "kgl_057",
+      "kgl_067",
+      "commons_136480278",
+      "commons_136480279",
+      "commons_141575682",
+      "commons_26507235",
+      "commons_111639614",
+      "commons_141189268"
+    ],
+    "C_provisional_digits": [
+      "kgl_008",
+      "kgl_039",
+      "kgl_043",
+      "kgl_050",
+      "kgl_057",
+      "kgl_067",
+      "commons_136480278",
+      "commons_141575682",
+      "commons_26507235"
+    ],
+    "D_negative_or_uncertain": [
+      "commons_136480279",
+      "commons_111639614",
+      "commons_141189268"
+    ]
+  },
+  "perceptualPairs": [],
+  "mendeleySourceCorrection": {
+    "url": "https://data.mendeley.com/datasets/fnn44p4mj8/1",
+    "actualDomain": "seven_segment_digital_energy_meter_displays_not_mechanical_water",
+    "license": "CC0-1.0"
+  }
+}

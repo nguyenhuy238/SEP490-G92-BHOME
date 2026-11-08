@@ -73,7 +73,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
     public Task<Contract?> FindAsync(Guid id, CancellationToken t) => db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
         .Include(c => c.Room).ThenInclude(r => r.RoomType)
         .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery().SingleOrDefaultAsync(c => c.Id == id, t);
-    public Task<Room?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().Include(r => r.Location).Include(r => r.RoomType).SingleOrDefaultAsync(r => r.Id == id, t);
+    public Task<Room?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == id, t);
     public async Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t)
         => await db.Set<Resident>().Where(r => r.RoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t);
     public Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t) =>

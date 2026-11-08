@@ -1,3 +1,4 @@
+/* global document */
 // Continuation of the real disposable Main Draft client scenario. No synthetic readings are
 // written directly to DB: evidence upload and human confirmation pass through shipped APIs.
 const assert = require('node:assert/strict');

@@ -49,6 +49,103 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             .OrderByDescending(a => a.StartDate).ThenBy(a => a.Id).Select(a => new StaffAssignmentSummary(a.Id, a.StaffUserId, a.StartDate, a.EndDate)).ToArray();
     }
 
+    public Task<ChangeAssignmentResult> ReplaceAssignmentAsync(Guid actorId, Guid locationId, Guid staffUserId,
+        DateOnly effectiveFrom, int expectedLocationVersion, string reason, CancellationToken token) =>
+        ChangeAsync(actorId, locationId, staffUserId, effectiveFrom, expectedLocationVersion, reason, token);
+
+    public Task<ChangeAssignmentResult> RemoveAssignmentAsync(Guid actorId, Guid locationId, DateOnly effectiveFrom,
+        int expectedLocationVersion, string reason, CancellationToken token) =>
+        ChangeAsync(actorId, locationId, null, effectiveFrom, expectedLocationVersion, reason, token);
+
+    private async Task<ChangeAssignmentResult> ChangeAsync(Guid actor, Guid locationId, Guid? nextStaff,
+        DateOnly effectiveFrom, int expectedVersion, string reason, CancellationToken token)
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
+            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        if (actor == Guid.Empty || locationId == Guid.Empty || expectedVersion < 1 || effectiveFrom != today ||
+            string.IsNullOrWhiteSpace(reason) || nextStaff == Guid.Empty) return new(ChangeAssignmentStatus.Invalid);
+        await using var tx = await db.Database.BeginTransactionAsync(token); await db.Database.OpenConnectionAsync(token);
+        await using var select = Command("SELECT staff_assignments::text,version FROM locations WHERE id=@id FOR UPDATE");
+        select.Parameters.AddWithValue("id", locationId); string stored; int version;
+        await using (var reader = await select.ExecuteReaderAsync(token))
+        {
+            if (!await reader.ReadAsync(token)) return new(ChangeAssignmentStatus.LocationNotFound);
+            stored = reader.GetString(0); version = reader.GetInt32(1);
+        }
+        if (version != expectedVersion) return new(ChangeAssignmentStatus.StaleVersion, LocationVersion: version);
+        if (!await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token))
+            throw new UnauthorizedAccessException("Owner authorization is required.");
+        if (nextStaff is { } staff && !await db.Users.AnyAsync(u => u.Id == staff && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff), token))
+            return new(ChangeAssignmentStatus.StaffUnavailable);
+        var assignments = (JsonSerializer.Deserialize<Assignment[]>(stored, Json) ?? throw new InvalidOperationException("Invalid assignment data.")).ToList();
+        var current = assignments.SingleOrDefault(a => a.StartDate <= today && a.EndDate >= today);
+        if (current is null) return new(ChangeAssignmentStatus.NoCurrentAssignment);
+        assignments.Remove(current);
+        if (current.StartDate < effectiveFrom) assignments.Add(current with { EndDate = effectiveFrom.AddDays(-1) });
+        var now = clock.GetUtcNow(); Assignment? added = null;
+        if (nextStaff is { } replacement)
+        {
+            added = new(Guid.NewGuid(), replacement, actor, now, effectiveFrom, DateOnly.MaxValue);
+            assignments.Add(added);
+        }
+        var json = JsonSerializer.Serialize(assignments.OrderBy(x => x.StartDate).ThenBy(x => x.Id), Json);
+        var history = JsonSerializer.Serialize(new[] { new
+        {
+            action = nextStaff.HasValue ? "StaffReplaced" : "StaffUnassigned", actorId = actor, occurredAt = now,
+            previousStaffUserId = current.StaffUserId, staffUserId = nextStaff, reason = reason.Trim()
+        } }, Json);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE locations SET staff_assignments=CAST({json} AS jsonb),version=version+1,
+              history=history||CAST({history} AS jsonb) WHERE id={locationId}
+            """, token);
+        await ReassignOpenTasks(locationId, current.StaffUserId, added, actor, now, reason.Trim(), token);
+        await NotifyAssignmentChange(locationId, current.StaffUserId, nextStaff, actor, now, token);
+        await tx.CommitAsync(token);
+        return new(ChangeAssignmentStatus.Changed,
+            added is null ? null : new(added.Id, added.StaffUserId, added.StartDate, added.EndDate), version + 1);
+    }
+
+    private async Task ReassignOpenTasks(Guid locationId, Guid oldStaff, Assignment? next, Guid actor,
+        DateTimeOffset now, string reason, CancellationToken token)
+    {
+        await using var command = Command("""
+            UPDATE operational_tasks SET assigned_user_id=@next,assigned_at=CASE WHEN @next IS NULL THEN NULL ELSE @now END,
+              version=version+1,
+              task_data=jsonb_set(jsonb_set(task_data,'{state,assignedStaffUserId}',COALESCE(to_jsonb(@next::uuid),'null'::jsonb),true),
+                '{state,assignmentId}',COALESCE(to_jsonb(@assignment::uuid),'null'::jsonb),true),
+              history=history||jsonb_build_array(jsonb_build_object('action','assignment-replaced','actorId',@actor,
+                'occurredAt',@now,'previousStaffUserId',@old,'staffUserId',@next,'reason',@reason))
+            WHERE location_id=@location AND task_type='GENERAL' AND assigned_user_id=@old AND status NOT IN ('2','3')
+            """);
+        command.Parameters.AddWithValue("location", locationId); command.Parameters.AddWithValue("old", oldStaff);
+        command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("reason", reason);
+        command.Parameters.Add(new NpgsqlParameter("next", NpgsqlTypes.NpgsqlDbType.Uuid)
+        { Value = (object?)next?.StaffUserId ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("assignment", NpgsqlTypes.NpgsqlDbType.Uuid)
+        { Value = (object?)next?.Id ?? DBNull.Value });
+        await command.ExecuteNonQueryAsync(token);
+    }
+
+    private async Task NotifyAssignmentChange(Guid locationId, Guid oldStaff, Guid? nextStaff, Guid actor,
+        DateTimeOffset now, CancellationToken token)
+    {
+        foreach (var recipient in new Guid?[] { oldStaff, nextStaff }.Where(x => x.HasValue).Select(x => x!.Value).Distinct())
+        {
+            await using var command = Command("""
+                INSERT INTO notifications(id,record_kind,recipient_user_id,actor_user_id,location_id,event_key,
+                  notification_type,related_entity_type,related_entity_id,title,message,event_data,event_at,delivery_status,delivery_history)
+                VALUES(@id,'INBOX',@recipient,@actor,@location,@key,'STAFF_ASSIGNMENT_CHANGED','Location',@location,
+                  'Location assignment changed','Your Location responsibility has changed.',
+                  jsonb_build_object('category','Task','audienceRole','Staff'),@now,'Unconfigured','[]')
+                ON CONFLICT(recipient_user_id,event_key) WHERE record_kind='INBOX' DO NOTHING
+                """);
+            command.Parameters.AddWithValue("id", Guid.NewGuid()); command.Parameters.AddWithValue("recipient", recipient);
+            command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("location", locationId);
+            command.Parameters.AddWithValue("key", $"staff-assignment:{locationId:N}:{now.UtcTicks}:{recipient:N}");
+            command.Parameters.AddWithValue("now", now); await command.ExecuteNonQueryAsync(token);
+        }
+    }
+
     public async Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffId, DateOnly date, CancellationToken token)
     {
         await db.Database.OpenConnectionAsync(token);

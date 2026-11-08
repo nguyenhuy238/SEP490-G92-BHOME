@@ -35,7 +35,7 @@ public sealed class RoomInsightsServiceTests
     private static (Location Location, Room Room) Scope(IPropertyRepository property)
     {
         var location = new Location("Synthetic") { IsActive = true };
-        var room = new Room { LocationId = location.Id, RoomTypeId = Guid.NewGuid(), Capacity = 3 };
+        var room = new Room { LocationId = location.Id, Capacity = 3 };
         property.FindAsync<Location>(location.Id, Arg.Any<CancellationToken>()).Returns(location);
         property.FindAsync<Room>(room.Id, Arg.Any<CancellationToken>()).Returns(room);
         return (location, room);
@@ -43,7 +43,7 @@ public sealed class RoomInsightsServiceTests
     private static RoomReadinessEvidence Evidence(RoomStatus status = RoomStatus.Available,
         bool rent = true, bool electricity = true, bool water = true, bool electricityBaseline = true,
         bool waterBaseline = true, RoomObligations obligations = default,
-        MoveInContractEvidence? contract = null) => new(true, true, status, 3, obligations, rent, 0,
+        MoveInContractEvidence? contract = null) => new(true, status, 3, obligations, rent, 0,
             electricity, water, electricityBaseline, waterBaseline, false, contract);
 
     [Fact]

@@ -90,6 +90,8 @@ public sealed class Compact24InvoiceRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24PaymentRegressionTests
 {
+    [CompactPostgresFact] public Task DebtNotificationStops() => Run(t => t.DebtRemindersDeduplicateAndStopAfterVerifiedPayment());
+    [CompactPostgresFact] public Task PartialAndPaidNotifications() => Run(t => t.DelayedNotificationWorkerPreservesPartialSnapshotAndOnePaidTransitionForAllThreeTenants());
     [CompactPostgresFact] public Task DamageDeductionAndRemainder() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(100000));
     [CompactPostgresFact] public Task FullDamageDeduction() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(400000));
     [CompactPostgresFact] public Task DamageDeductionHistoryAndEvidence() => Run(t => t.DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle());
@@ -158,13 +160,14 @@ public sealed class Compact24PropertyRegressionTests
         try { await scenario(new BHome.IntegrationTests.PropertyManagement.PropertyApiTests(fixture)); }
         finally { await fixture.DisposeAsync(); await database.DisposeAsync(); }
     }
+    [CompactPostgresFact] public Task ConfigurationAudit() => Run(t => t.FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots());
     [CompactPostgresFact] public Task ScopedStaff() => Run(t => t.StaffReadsOnlyCurrentAssignmentsBeforeCountingAndCannotMutate());
     [CompactPostgresFact] public Task InvalidScopes() => Run(t => t.InvalidScopesReservedStatesAndDeactivationAreRejected());
     [CompactPostgresFact] public Task DuplicateRaces() => Run(t => t.DuplicateRoomAndPolicyRacesHaveOneWinnerAndNoOrphanAudit());
     [CompactPostgresFact] public Task PricePrecedence() => Run(t => t.PriceResolutionUsesPerChargeSpecificityAndPreservesMissingAndZero());
     [CompactPostgresFact] public Task PolicyReplacement() => Run(t => t.ReplacementSplitsInclusiveDatesAndFailedReplacementRollsBackOldVersion());
     [CompactPostgresFact] public Task InvalidPrices() => Run(t => t.NegativeAmountsUnsupportedMethodsRetroactiveDatesAndInvalidPagingAreRejected());
-    [CompactPostgresFact] public Task NormalizedCodes() => Run(t => t.NormalizedTypeAndAssetCodesAreUniqueWithinLocationAndOwnerAccessIsGlobal());
+    [CompactPostgresFact] public Task NormalizedCodes() => Run(t => t.NormalizedAssetCodesAreUniqueWithinLocationAndOwnerAccessIsGlobal());
     [CompactPostgresFact] public Task OccupiedRoom() => Run(t => t.ExistingResidentsBlockClosureAndCaptureCannotBypassUnavailableRoom());
     [CompactPostgresFact] public Task CrossLocationReferences() => Run(t => t.ParallelEditsUseExpectedVersionAndDatabaseEnforcesCrossLocationReferences());
     [CompactPostgresFact] public Task FuturePriceEdit() => Run(t => t.OwnerEditsUnusedFuturePriceInPlaceWithVersionAndAudit());

@@ -9,7 +9,7 @@ namespace BHome.Infrastructure.Modules.Notifications;
 
 internal sealed class NotificationDeliveryStore(BHomePersistenceContext db, INotificationRepository inbox) : INotificationDeliveryStore
 {
-    public async Task<IReadOnlyList<DeliveryWork>> DueAsync(DateTimeOffset now, CancellationToken t) => await db.Set<UserNotification>().AsNoTracking().Where(n => n.DeliveryState == "Unconfigured" && n.DeliveryAttempts == 0 || n.DeliveryState == "Pending" && n.NextDeliveryAt <= now || n.DeliveryState == "Processing" && n.DeliveryLockedUntil <= now).OrderBy(n => n.CreatedAt).Take(50).Select(n => new DeliveryWork(n.Id, n.DeliveryAttempts + 1)).ToArrayAsync(t);
+    public async Task<IReadOnlyList<DeliveryWork>> DueAsync(DateTimeOffset now, CancellationToken t) => await db.Set<UserNotification>().AsNoTracking().Where(n => n.Channels.Length == 0).Where(n => n.DeliveryState == "Unconfigured" && n.DeliveryAttempts == 0 || n.DeliveryState == "Pending" && n.NextDeliveryAt <= now || n.DeliveryState == "Processing" && n.DeliveryLockedUntil <= now).OrderBy(n => n.CreatedAt).Take(50).Select(n => new DeliveryWork(n.Id, n.DeliveryAttempts + 1)).ToArrayAsync(t);
     public async Task<PagedResult<DeliveryView>> ListAsync(DeliveryQuery q, CancellationToken t)
     {
         var rows = db.Set<UserNotification>().AsNoTracking().Where(n => (q.State == null || n.DeliveryState == q.State) && (q.LocationId == null || n.LocationId == q.LocationId)); var count = await rows.CountAsync(t);
@@ -19,6 +19,8 @@ internal sealed class NotificationDeliveryStore(BHomePersistenceContext db, INot
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
         var n = await db.Locked<UserNotification>(id, skipLocked: true).SingleOrDefaultAsync(t);
+        // V2 notices are delivered independently by channel; the legacy external adapter must not double-send them.
+        if (n?.Channels.Length > 0) return null;
         if (n is null || n.DeliveryState is "Delivered" or "Failed" or "PendingReview" or "Suppressed" || n.NextDeliveryAt > now || n.DeliveryLockedUntil > now) return null;
         var active = await (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join role in db.Roles on grant.RoleId equals role.Id where u.Id == n.RecipientUserId && u.IsActive && role.Name == n.AudienceRole select u.Id).AnyAsync(t);
         var scope = new NotificationScope(n.RecipientUserId, n.AudienceRole == Roles.Owner, n.AudienceRole == Roles.Staff, n.AudienceRole == Roles.Tenant, BillingAutomationDates.BusinessDate(now));

@@ -168,7 +168,7 @@ public sealed partial class Compact24DbContext
         }
         var values = new Dictionary<string, string>(spec.Write, StringComparer.Ordinal);
         if (entry.Entity is BHome.Domain.Locations.Location)
-            values["operating_settings"] = "COALESCE((SELECT operating_settings FROM locations WHERE id=(@state::jsonb->>'id')::uuid),'{}'::jsonb)||jsonb_build_object('chainId',@state::jsonb->'chainId','contractSettings',(@state::jsonb->>'contractSettings')::jsonb)";
+            values["operating_settings"] = "COALESCE((SELECT operating_settings FROM locations WHERE id=(@state::jsonb->>'id')::uuid),'{}'::jsonb)||jsonb_build_object('contractSettings',(@state::jsonb->>'contractSettings')::jsonb)";
         if (entry.Entity is Invoice invoice)
         {
             var ids = invoice.Recipients.Select(r => r.TenantUserId).Distinct().ToArray();
@@ -242,6 +242,18 @@ public sealed partial class Compact24DbContext
             assignments += ",history=history||jsonb_build_array(@envelope::jsonb)";
         var count = await CommandAsync($"UPDATE {spec.Table} SET {assignments} WHERE {where}", state, envelope, key, token, entry);
         if (count != 1) throw new DbUpdateConcurrencyException("Compact24 containing record is unavailable.");
+        if (entry.Entity is BHome.Domain.IncidentMaintenance.EmergencyAction emergency)
+            await ExecuteAsync("UPDATE incident_reports SET emergency_actions=emergency_actions||jsonb_build_array(@envelope::jsonb) WHERE id=@id", token,
+                ("id", emergency.IncidentId), ("envelope", envelope));
+        if (entry.Entity is BHome.Domain.IncidentMaintenance.IncidentEvidence evidence)
+        {
+            // Report photos have their own five-image limit. Inspection/completion
+            // evidence belongs to the Work Order and must not consume that limit.
+            var table = evidence.WorkOrderId.HasValue ? "operational_tasks" : "incident_reports";
+            if (evidence.WorkOrderId.HasValue || evidence.Kind == BHome.Domain.IncidentMaintenance.IncidentEvidenceKind.Report)
+                await ExecuteAsync($"UPDATE {table} SET evidence=COALESCE((SELECT jsonb_agg(e) FROM jsonb_array_elements(evidence) e WHERE e->>'id'<>@key),'[]'::jsonb)||jsonb_build_array(@state::jsonb||jsonb_build_object('recordType','IncidentEvidence')) WHERE id=@id", token,
+                    ("id", evidence.WorkOrderId ?? evidence.IncidentId), ("key", evidence.Id.ToString()), ("state", state));
+        }
     }
 
     private async Task WriteTechnicalAsync(EntityEntry entry, CompactRecordSql spec, string state, string key, string envelope, CancellationToken token)

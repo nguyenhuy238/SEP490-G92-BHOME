@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { KeyboardFormScrollView } from './KeyboardFormScrollView';
 import { Button, Text, TextInput } from 'react-native-paper';
 import type { Named } from '../lib/api';
 export const styles = StyleSheet.create({
@@ -11,9 +12,16 @@ export const styles = StyleSheet.create({
 });
 export function Page({ children }: { children: React.ReactNode }) {
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
-      {children}
-    </ScrollView>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <KeyboardFormScrollView
+        contentContainerStyle={[styles.page, { flexGrow: 1, paddingBottom: 32 }]}
+      >
+        {children}
+      </KeyboardFormScrollView>
+    </KeyboardAvoidingView>
   );
 }
 export function Field({

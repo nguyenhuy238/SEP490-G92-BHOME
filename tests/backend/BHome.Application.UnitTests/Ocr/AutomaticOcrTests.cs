@@ -4,6 +4,39 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class AutomaticOcrTests
 {
+    [Fact]
+    public void ClassifiedMeterUsesVerifiedReadingCropInsteadOfPageSerials()
+    {
+        var visual = new OcrCategoryDecision("classified", OcrDocumentKind.MechanicalWater, "visual_model", .99f);
+        var result = AutomaticOcrRouter.Route(new(Text("S/N: 987654321"), visual,
+            new(Text("00123.45"), .96f, "data:image/jpeg;base64,AA==")), .9f);
+        Assert.Equal("water_mechanical", result.DetectedCategory);
+        Assert.Equal("00123.45", result.MeterProposal!.ProposedFields["reading"]);
+        Assert.Equal(.99f, result.ClassificationConfidence); Assert.Equal(.96f, result.DetectionConfidence);
+        Assert.NotNull(result.CropPreviewDataUri); Assert.True(result.MeterProposal.RequiresConfirmation);
+        Assert.DoesNotContain("reading_region_unverified", result.MeterProposal.Warnings);
+    }
+
+    [Theory]
+    [InlineData("recognizer_conflict")]
+    [InlineData("unclear_digit")]
+    [InlineData("blur_or_low_detail")]
+    public void VisualCategoryCannotOverrideUnsafeCropEvidence(string warning)
+    {
+        var visual = new OcrCategoryDecision("classified", OcrDocumentKind.MechanicalWater, "visual_model", .99f);
+        var result = AutomaticOcrRouter.Route(new(Text(), visual,
+            new(Text("00123") with { Warnings = [warning] }, .96f)), .9f);
+        Assert.True(result.MeterProposal!.IsFallback); Assert.Empty(result.MeterProposal.ProposedFields);
+    }
+
+    [Fact]
+    public void InvalidClassifiedCropCannotReuseAValidWholePageNumber()
+    {
+        var visual = new OcrCategoryDecision("classified", OcrDocumentKind.MechanicalWater, "visual_model", .99f);
+        var result = AutomaticOcrRouter.Route(new(Text("00123 m3"), visual, new(Text("00999"), float.NaN, "data:image/jpeg;base64,AA==")), .9f);
+        Assert.Empty(result.MeterProposal!.ProposedFields); Assert.Null(result.CropPreviewDataUri); Assert.Null(result.DetectionConfidence);
+    }
+
     [Theory]
     [InlineData("CÔNG TƠ ĐIỆN TỬ 1 PHA 2 DÂY", "00123 kWh", "electricity_digital")]
     [InlineData("DIGITAL WATER METER", "00123 m3", "water_digital")]

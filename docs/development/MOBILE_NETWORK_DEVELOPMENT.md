@@ -31,6 +31,16 @@ Nếu API của checkout đang debug thì dùng lại; nếu chưa chạy, scrip
 sau khi HTTPS `/health/ready` trả 200 với chain/hostname hợp lệ theo CA local.
 Không tự dừng API/Metro của checkout khác khi cổng bị chiếm.
 
+Nếu Visual Studio đang dừng ở exception trước khi Kestrel mở cổng, launcher chờ
+tiến trình API của checkout đó, không tạo API thứ hai. `ECONNREFUSED` nghĩa là chưa
+có listener; kiểm tra Output/exception hoặc trạng thái pause trước khi kiểm TLS.
+Với lỗi `property_upgrade_requires_explicit_command`, chạy
+`scripts/Update-LocalDatabase.ps1 -Check`. Nếu báo `PROPERTY_UPGRADE_REQUIRED`, sao lưu,
+dừng API/debugging rồi dùng `-UpgradePropertySchema`, kiểm tra lại `READY` và khởi động lại.
+Lệnh nâng cấp từ chối xóa RoomType cũ còn dữ liệu; cần quyết định xử lý dữ liệu rõ ràng.
+Không chạy lệnh mặc định hoặc `-RecreateDatabase` thay cho bước này. Xem
+[hướng dẫn Compact24](LOCAL_DEVELOPMENT.md#existing-compact24-property-schema).
+
 Khi đổi Wi-Fi trong lúc chạy, script phát hiện theo chu kỳ khoảng 3 giây (cộng thời gian truy vấn
 mạng), cấp lại chứng chỉ server bằng CA cũ, cập nhật cấu hình API và restart Metro do nó tạo.
 **Quét QR mới** để Expo Go tải manifest trên mạng mới; không sửa cấu hình IP.

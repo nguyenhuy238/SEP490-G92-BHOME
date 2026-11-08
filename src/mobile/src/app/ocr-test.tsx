@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useFeedbackState } from '../lib/useFeedbackState';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Image, Platform, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
@@ -42,14 +43,14 @@ export default function OcrTest() {
   const [preview, setPreview] = useState('');
   const [manualProfile, setManualProfile] = useState('');
   const [decimalPlaces, setDecimalPlaces] = useState('auto');
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const generation = useRef(0);
   const lock = useRef(false);
   const mounted = useRef(true);
   const abort = useRef<AbortController | null>(null);
   const image = useRef(new TemporaryOcrImage());
   const expiry = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clear = () => {
+  const clear = useCallback(() => {
     generation.current++;
     abort.current?.abort();
     image.current.clear();
@@ -60,7 +61,7 @@ export default function OcrTest() {
     setManualProfile('');
     setDecimalPlaces('auto');
     setError('');
-  };
+  }, [setError]);
   usePreventScreenCapture('ocr-test');
   useEffect(() => {
     mounted.current = true;
@@ -81,7 +82,7 @@ export default function OcrTest() {
       listener.remove();
       if (Platform.OS === 'ios') void disableAppSwitcherProtectionAsync().catch(() => {});
     };
-  }, []);
+  }, [clear]);
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -109,7 +110,7 @@ export default function OcrTest() {
       controller.abort();
       clear();
     };
-  }, [api, allowed, checkAttempt]);
+  }, [api, allowed, checkAttempt, clear, setError]);
   const apply = (result: AutomaticAnalysis) => {
     setAnalysis(result);
     const proposal = result.identityProposal ?? result.meterProposal;

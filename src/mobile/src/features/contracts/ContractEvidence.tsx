@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { Button, Text } from 'react-native-paper';
@@ -30,7 +31,7 @@ export function ContractEvidence({
   number?: number;
 }) {
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useFeedbackState();
   const lock = useRef(false),
     abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);

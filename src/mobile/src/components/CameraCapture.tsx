@@ -1,3 +1,4 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Image, Platform, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -8,6 +9,8 @@ import { styles } from './Controls';
 import { ownCapture } from '../lib/captureFiles';
 import { captureLensOptions } from '../lib/captureLenses';
 import { DocumentCameraView } from './DocumentCameraView';
+import { MeterCameraView } from './MeterCameraView';
+import { useFocusEffect } from 'expo-router';
 
 // Only URIs created by this component in the application's cache are accepted for deletion.
 function remove(uri: string) {
@@ -29,6 +32,9 @@ export function CameraCapture({
   presentation = 'inline',
   onManual,
   onPhotoCaptured,
+  onPhotoCleared,
+  meterStep = 1,
+  autoOpen = false,
 }: {
   label: string;
   buttonMode?: 'outlined' | 'contained';
@@ -39,9 +45,12 @@ export function CameraCapture({
   reviewActionLabel?: string;
   reviewNotice?: string;
   documentSide?: 'front' | 'back';
-  presentation?: 'inline' | 'document';
+  presentation?: 'inline' | 'document' | 'meter';
+  meterStep?: number;
+  autoOpen?: boolean;
   onManual?: () => void;
   onPhotoCaptured?: () => void;
+  onPhotoCleared?: () => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
@@ -49,7 +58,7 @@ export function CameraCapture({
   const [ready, setReady] = useState(false);
   const [working, setWorking] = useState(false);
   const [preview, setPreview] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useFeedbackState();
   const [lens, setLens] = useState('');
   const [lenses, setLenses] = useState<{ id: string; label: string }[]>([]);
   const [zoom, setZoom] = useState(0);
@@ -61,6 +70,10 @@ export function CameraCapture({
   const workingLock = useRef(false);
   const permissionLock = useRef(false);
   const permissionAccess = useRef({ permission, requestPermission });
+  const clearCallback = useRef(onPhotoCleared);
+  useEffect(() => {
+    clearCallback.current = onPhotoCleared;
+  }, [onPhotoCleared]);
   const [requestingPermission, setRequestingPermission] = useState(false);
   useEffect(() => {
     permissionAccess.current = { permission, requestPermission };
@@ -69,7 +82,20 @@ export function CameraCapture({
     for (const uri of files.current) remove(uri);
     files.current.clear();
     pending.current = '';
+    clearCallback.current?.();
   }, []);
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        if (presentation !== 'meter') return;
+        generation.current++;
+        clearFiles();
+        setPreview('');
+        setOpen(false);
+      },
+      [clearFiles, presentation],
+    ),
+  );
   const openCamera = useCallback(async () => {
     if (permissionLock.current || workingLock.current) return;
     permissionLock.current = true;
@@ -84,7 +110,11 @@ export function CameraCapture({
       const allowed = access.permission?.granted || (await access.requestPermission()).granted;
       if (!alive.current || epoch !== generation.current) return;
       if (!allowed) {
-        setError('Cần cấp quyền camera trong Cài đặt để chụp ảnh. Nhập thủ công vẫn khả dụng.');
+        setError(
+          presentation === 'meter'
+            ? 'Cần cấp quyền camera trong Cài đặt để chụp ảnh.'
+            : 'Cần cấp quyền camera trong Cài đặt để chụp ảnh. Nhập thủ công vẫn khả dụng.',
+        );
         return;
       }
       setLens('');
@@ -94,12 +124,16 @@ export function CameraCapture({
       setOpen(true);
     } catch {
       if (alive.current && epoch === generation.current)
-        setError('Không mở được camera. Bạn có thể thử lại hoặc nhập thủ công.');
+        setError(
+          presentation === 'meter'
+            ? 'Không mở được camera. Hãy thử lại.'
+            : 'Không mở được camera. Bạn có thể thử lại hoặc nhập thủ công.',
+        );
     } finally {
       permissionLock.current = false;
       if (alive.current) setRequestingPermission(false);
     }
-  }, [clearFiles]);
+  }, [clearFiles, setError, presentation]);
   useEffect(() => {
     alive.current = true;
     const sub = AppState.addEventListener('change', (state) => {
@@ -121,11 +155,11 @@ export function CameraCapture({
     };
   }, [clearFiles]);
   useEffect(() => {
-    if (presentation !== 'document') return;
+    if (presentation !== 'document' && !(presentation === 'meter' && autoOpen)) return;
     // Let the modal mount before requesting the native camera permission/view.
     const start = setTimeout(() => void openCamera(), 0);
     return () => clearTimeout(start);
-  }, [presentation, openCamera]);
+  }, [presentation, openCamera, autoOpen]);
   const take = async () => {
     if (!camera.current || workingLock.current || disabled || !ready) return;
     workingLock.current = true;
@@ -181,7 +215,12 @@ export function CameraCapture({
         bytes.fill(0);
       }
     } catch {
-      if (alive.current) setError('Không xử lý được ảnh. Bạn có thể chụp lại hoặc nhập thủ công.');
+      if (alive.current)
+        setError(
+          presentation === 'meter'
+            ? 'Không xử lý được ảnh. Hãy chụp lại.'
+            : 'Không xử lý được ảnh. Bạn có thể chụp lại hoặc nhập thủ công.',
+        );
     } finally {
       if (
         (!retainPreview && pending.current !== saved) ||
@@ -211,18 +250,69 @@ export function CameraCapture({
         bytes.fill(0);
       }
     } catch {
-      if (alive.current) setError('Không xử lý được ảnh. Hãy chụp lại hoặc nhập thủ công.');
+      if (alive.current)
+        setError(
+          presentation === 'meter'
+            ? 'Không xử lý được ảnh. Hãy chụp lại.'
+            : 'Không xử lý được ảnh. Hãy chụp lại hoặc nhập thủ công.',
+        );
     } finally {
-      remove(uri);
-      files.current.delete(uri);
-      if (pending.current === uri) pending.current = '';
+      // Meter evidence stays available for review/retry; identity captures keep their
+      // existing immediate cleanup behavior. All captures are removed on exit/background.
+      const keep = retainPreview && alive.current && epoch === generation.current;
+      if (!keep) {
+        remove(uri);
+        files.current.delete(uri);
+        if (pending.current === uri) pending.current = '';
+      }
       if (alive.current) {
         setWorking(false);
-        setPreview('');
+        if (!keep) setPreview('');
       }
       workingLock.current = false;
     }
   };
+  if (presentation === 'meter')
+    return (
+      <MeterCameraView
+        camera={
+          open ? (
+            <CameraView
+              ref={camera}
+              key={cameraGeneration}
+              style={{ flex: 1 }}
+              facing="back"
+              mode="picture"
+              autofocus="off"
+              onCameraReady={() => setReady(true)}
+              onMountError={() => {
+                setOpen(false);
+                setReady(false);
+                setError('Không mở được camera. Hãy thử lại.');
+              }}
+            />
+          ) : null
+        }
+        label={label}
+        step={meterStep}
+        preview={preview}
+        disabled={disabled}
+        working={working}
+        ready={ready}
+        requestingPermission={requestingPermission}
+        error={error}
+        onOpen={() => void openCamera()}
+        onTake={() => void take()}
+        onClose={() => setOpen(false)}
+        onUse={() => void submitPending()}
+        onRetake={() => {
+          clearFiles();
+          setPreview('');
+          setReady(false);
+          setOpen(true);
+        }}
+      />
+    );
   if (presentation === 'document')
     return (
       <DocumentCameraView
@@ -398,6 +488,7 @@ export function CameraCapture({
       )}
       {!!preview && (
         <Image
+          accessibilityLabel="Ảnh vừa chụp"
           source={{ uri: preview }}
           resizeMode="contain"
           style={{ width: '100%', height: 200 }}
@@ -415,7 +506,7 @@ export function CameraCapture({
             {reviewActionLabel}
           </Button>
           <Button
-            disabled={working}
+            disabled={disabled || working}
             onPress={() => {
               clearFiles();
               setPreview('');
@@ -426,7 +517,7 @@ export function CameraCapture({
             Chụp lại
           </Button>
           <Button
-            disabled={working}
+            disabled={disabled || working}
             onPress={() => {
               clearFiles();
               setPreview('');

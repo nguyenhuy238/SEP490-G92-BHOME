@@ -1,0 +1,50 @@
+{
+  "validationInputs": 100,
+  "orientedMembershipCandidate": {
+    "originalAllowed": 75,
+    "candidateAllowed": 75,
+    "changedSelections": 0,
+    "unclearCandidatesInsideAabbOutsideOriented": 0,
+    "decision": "NOT_INTEGRATED_NO_MEASURED_GAIN"
+  },
+  "digitBoxMatching": {
+    "predicted_window": {
+      "knownAnnotatedDigits": 571,
+      "unknownAnnotatedPositions": 13,
+      "predictedBoxes": 596,
+      "missingKnownDigits": 6,
+      "extraBoxes": 18,
+      "matchedCorrectDigits": 544,
+      "matchedWrongDigits": 13,
+      "unknownPredictionAtKnownDigit": 8,
+      "orderingInversions": 0
+    },
+    "oracle_window": {
+      "knownAnnotatedDigits": 739,
+      "unknownAnnotatedPositions": 33,
+      "predictedBoxes": 783,
+      "missingKnownDigits": 10,
+      "extraBoxes": 22,
+      "matchedCorrectDigits": 696,
+      "matchedWrongDigits": 20,
+      "unknownPredictionAtKnownDigit": 13,
+      "orderingInversions": 0
+    }
+  },
+  "matchingIoU": 0.3,
+  "productionThresholdsChanged": false,
+  "dataLimitations": [
+    "Publisher annotation omissions remain missing GT; no labels repaired using model predictions.",
+    "Unknown physical-meter independence. Matching errors are not confirmed billing errors."
+  ],
+  "evidence": [
+    {
+      "path": ".tools/ocr-recovery-localization.json",
+      "sha256": "008fe6e73fbfd0d7fa76ec3f3e93d7e8f559cb5c0ed9a34543852fb5e3466f7d"
+    },
+    {
+      "path": ".tools/ocr-recovery-digit-boxes-validation.json",
+      "sha256": "f1ea8f8f5bf3f2870fd40da093ea18605bd17ab730ac845198e4a63fb94f01d9"
+    }
+  ]
+}

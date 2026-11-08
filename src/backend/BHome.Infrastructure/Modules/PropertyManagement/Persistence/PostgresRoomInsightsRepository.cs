@@ -19,16 +19,13 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         {
             x.LocationId,
             LocationActive = x.Location.IsActive,
-            x.RoomTypeId,
-            RoomTypeValid = x.RoomTypeId != null && x.RoomType != null && x.RoomType.IsActive,
             x.Status,
             x.Capacity
         }).SingleAsync(token);
         var obligations = await Obligations(roomId, effectiveOn, token);
         var hasRent = await db.Set<BillingPolicy>().AsNoTracking().AnyAsync(x =>
             x.LocationId == room.LocationId && x.Category == ChargeCategory.Rent && x.ChargeCode == "RENT" &&
-            (x.RoomId == roomId || x.RoomTypeId == room.RoomTypeId && x.RoomTypeId != null ||
-             x.RoomId == null && x.RoomTypeId == null) && x.EffectiveFrom <= effectiveOn &&
+            (x.RoomId == roomId || x.RoomId == null && x.RoomTypeId == null) && x.EffectiveFrom <= effectiveOn &&
             (x.EffectiveTo == null || x.EffectiveTo >= effectiveOn), token);
         var meters = await db.Set<Meter>().AsNoTracking().Where(x => x.RoomId == roomId && x.IsActive)
             .Select(x => new { x.Id, x.UtilityType }).ToArrayAsync(token);
@@ -86,7 +83,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         }
         bool Has(UtilityType type) => meters.Any(x => x.UtilityType == type);
         bool Baseline(UtilityType type) => meters.Where(x => x.UtilityType == type).Any(x => baselines.Contains(x.Id));
-        return new(room.LocationActive, room.RoomTypeValid, room.Status, room.Capacity, obligations, hasRent,
+        return new(room.LocationActive, room.Status, room.Capacity, obligations, hasRent,
             currentOccupants, Has(UtilityType.Electricity), Has(UtilityType.Water), Baseline(UtilityType.Electricity),
             Baseline(UtilityType.Water), blockingAsset, contract);
     }

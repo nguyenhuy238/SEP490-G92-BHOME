@@ -1,0 +1,226 @@
+{
+  "date": "2026-11-07",
+  "independentHumanReviewsReceived": 0,
+  "newIndependentExactLabels": 0,
+  "A_classification": {
+    "imageCount": 62,
+    "counts": [
+      {
+        "split": "test",
+        "category": "electricity_digital",
+        "images": 3
+      },
+      {
+        "split": "test",
+        "category": "electricity_mechanical",
+        "images": 3
+      },
+      {
+        "split": "test",
+        "category": "not_meter",
+        "images": 6
+      },
+      {
+        "split": "test",
+        "category": "water_digital",
+        "images": 1
+      },
+      {
+        "split": "test",
+        "category": "water_mechanical",
+        "images": 2
+      },
+      {
+        "split": "train",
+        "category": "electricity_digital",
+        "images": 7
+      },
+      {
+        "split": "train",
+        "category": "electricity_mechanical",
+        "images": 15
+      },
+      {
+        "split": "train",
+        "category": "not_meter",
+        "images": 1
+      },
+      {
+        "split": "train",
+        "category": "water_digital",
+        "images": 3
+      },
+      {
+        "split": "train",
+        "category": "water_mechanical",
+        "images": 10
+      },
+      {
+        "split": "validation",
+        "category": "electricity_digital",
+        "images": 3
+      },
+      {
+        "split": "validation",
+        "category": "electricity_mechanical",
+        "images": 3
+      },
+      {
+        "split": "validation",
+        "category": "not_meter",
+        "images": 1
+      },
+      {
+        "split": "validation",
+        "category": "water_digital",
+        "images": 1
+      },
+      {
+        "split": "validation",
+        "category": "water_mechanical",
+        "images": 3
+      }
+    ],
+    "sourceManifestSha256": "3592bc6d3d4e3ce7b05f01d06b7130aac8f01de01b9a24034b25e9b85c183197",
+    "status": "existing_agent_reviewed_development_not_retrained"
+  },
+  "B_localization": {
+    "counts": {
+      "train": 300,
+      "val": 2,
+      "test": 4
+    },
+    "excludedKaggleImages": [
+      {
+        "id": "kgl_004",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_007",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_010",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_015",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_052",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_058",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_059",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_070",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_081",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_083",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_104",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_119",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_129",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_136",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_147",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_163",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_211",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_217",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_222",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_223",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_235",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_243",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_256",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_267",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_279",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_290",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      },
+      {
+        "id": "kgl_299",
+        "reason": "invalid_label_or_missing_reading_annotation"
+      }
+    ],
+    "status": "publisher_boxes_train_agent_region_proxies_val_test_not_billing_GT"
+  },
+  "C_recognition": {
+    "trainPublisherDigits": 163,
+    "validationReadable": 1,
+    "validationNegative": 1,
+    "testReadable": 3,
+    "testNegative": 1,
+    "additionalKaggleDrafts": 12,
+    "additionalKaggleDraftsAdmittedToTrainOrAcceptance": 0
+  },
+  "digitalWaterExpansion": {
+    "newIndependentFullMeterImagesAcquired": 0,
+    "commonsDownloads": "HTTP429, bounded delayed retry still429 Retry-After10; stopped",
+    "mramrSource": "https://www.kaggle.com/datasets/ayush02102001/watermeter-data-recognition",
+    "mramrLicense": "CC BY-NC 3.0 stated in publisher description; digit-only binarized/augmented data, not diverse full LCD meters; not acquired"
+  },
+  "reviewPackage": {
+    "images": 327,
+    "modelSuggestionsIncluded": false,
+    "path": ".tools/ocr-four-review",
+    "status": "awaiting_actual_human_review"
+  }
+}

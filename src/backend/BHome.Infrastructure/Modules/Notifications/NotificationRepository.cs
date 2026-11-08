@@ -21,7 +21,7 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
         if (q.Unread is { } unread) rows = unread ? Unread(rows) : rows.Where(n => n.ReadAt != null || n.SourceTaskNotificationId != null && db.Set<OperationalTaskNotification>().Any(old => old.Id == n.SourceTaskNotificationId && old.ReadAt != null));
         var count = await rows.CountAsync(t);
         var items = await rows.OrderByDescending(n => n.CreatedAt).ThenBy(n => n.Id).Skip((q.Page - 1) * q.PageSize).Take(q.PageSize)
-            .Select(n => new NotificationView(n.Id, n.Category, n.Title, n.Summary, n.RelatedObjectType, n.RelatedObjectId, n.CreatedAt, n.ReadAt ?? db.Set<OperationalTaskNotification>().Where(old => old.Id == n.SourceTaskNotificationId).Select(old => old.ReadAt).FirstOrDefault(), n.DeliveryState)).ToArrayAsync(t);
+            .Select(n => new NotificationView(n.Id, n.Category, n.Title, n.Summary, n.RelatedObjectType, n.RelatedObjectId, n.CreatedAt, n.ReadAt ?? db.Set<OperationalTaskNotification>().Where(old => old.Id == n.SourceTaskNotificationId).Select(old => old.ReadAt).FirstOrDefault(), n.DeliveryState, n.EventType, n.Priority, n.Source)).ToArrayAsync(t);
         return new(items, q.Page, q.PageSize, count);
     }
     public async Task ReadAsync(NotificationScope s, Guid? id, DateTimeOffset now, CancellationToken t)

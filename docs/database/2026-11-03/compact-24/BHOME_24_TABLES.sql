@@ -92,7 +92,6 @@ CREATE TABLE locations (
     address text NOT NULL,
     is_active boolean NOT NULL DEFAULT true,
     staff_assignments jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(staff_assignments)='array'),
-    room_types jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(room_types)='array'),
     operating_settings jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(operating_settings)='object'),
     public_profile jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(public_profile)='object'),
     published_at timestamptz,
@@ -101,12 +100,11 @@ CREATE TABLE locations (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array')
 );
 
--- 05 Room Type id refers to locations.room_types, validated by the adapted service.
+-- 05 Rooms belong directly to Locations; RoomType is retired by the 2026-11-04 decision.
 CREATE TABLE rooms (
     id uuid PRIMARY KEY,
     location_id uuid NOT NULL REFERENCES locations(id),
     room_number varchar(50) NOT NULL,
-    room_type_id uuid,
     floor varchar(30),
     capacity smallint NOT NULL CHECK (capacity>0),
     status smallint NOT NULL CHECK (status BETWEEN 0 AND 3),
@@ -361,7 +359,6 @@ CREATE TABLE billing_policies (
     id uuid PRIMARY KEY,
     location_id uuid NOT NULL REFERENCES locations(id),
     room_id uuid,
-    room_type_id uuid,
     charge_code varchar(80) NOT NULL,
     category smallint NOT NULL CHECK (category BETWEEN 0 AND 3),
     calculation_method varchar(30) NOT NULL,
@@ -373,8 +370,7 @@ CREATE TABLE billing_policies (
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     FOREIGN KEY(room_id,location_id) REFERENCES rooms(id,location_id),
-    CHECK (effective_to IS NULL OR effective_to>=effective_from),
-    CHECK (room_id IS NULL OR room_type_id IS NULL)
+    CHECK (effective_to IS NULL OR effective_to>=effective_from)
 );
 CREATE INDEX ix_policy_effective ON billing_policies(location_id,charge_code,effective_from);
 
@@ -585,6 +581,32 @@ CREATE UNIQUE INDEX ux_notification_system ON notifications(record_kind,event_ke
 CREATE INDEX ix_notification_list ON notifications(recipient_user_id,event_at) WHERE record_kind='INBOX';
 CREATE INDEX ix_audit_target ON notifications(related_entity_type,related_entity_id,event_at) WHERE record_kind='AUDIT';
 
+-- Incident API writes reuse these native aggregates. Validate critical workflow
+-- invariants even if an administrative writer bypasses the application service.
+CREATE FUNCTION bhome24_work_order_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE s jsonb := NEW.task_data->'state'; report_location uuid;
+BEGIN
+    IF NEW.task_type<>'WORK_ORDER' THEN RETURN NEW; END IF;
+    SELECT location_id INTO report_location FROM incident_reports WHERE id=NEW.incident_report_id;
+    IF report_location IS DISTINCT FROM NEW.location_id OR NEW.assigned_user_id IS NULL OR
+       NEW.status NOT IN ('Assigned','PendingApproval','InProgress','PendingVerification','Verified','Cancelled') OR
+       s IS NULL OR (s->>'incidentId')::uuid IS DISTINCT FROM NEW.incident_report_id OR
+       (s->>'assignedStaffId')::uuid IS DISTINCT FROM NEW.assigned_user_id THEN
+        RAISE EXCEPTION 'Invalid Work Order scope or state' USING ERRCODE='23514';
+    END IF;
+    IF NEW.status IN ('InProgress','PendingVerification','Verified') AND
+       (NEW.cost_approved_at IS NULL OR NEW.cost_approved_by_user_id IS NULL OR
+        s->>'approvedProposalVersion' IS NULL OR s->>'approvedProposalVersion' IS DISTINCT FROM s->>'proposalVersion') THEN
+        RAISE EXCEPTION 'Work Order requires approved current plan' USING ERRCODE='23514';
+    END IF;
+    IF NEW.status='Verified' AND (NEW.verified_at IS NULL OR NEW.verified_by_user_id IS NULL OR
+       s->>'actualCost' IS NULL OR s->>'completionActivityId' IS NULL) THEN
+        RAISE EXCEPTION 'Work Order requires completion and verification' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $fn$;
+CREATE TRIGGER work_order_consistent BEFORE INSERT OR UPDATE ON operational_tasks FOR EACH ROW EXECUTE FUNCTION bhome24_work_order_guard();
+
 -- Runtime migration 2026-11-04: retain the existing normalized property keys and
 -- inclusive, deferred policy exclusion. These add no table, column or foreign key.
 CREATE UNIQUE INDEX ux_room_normalized_number ON rooms(location_id,upper(btrim(room_number)));
@@ -592,7 +614,6 @@ CREATE UNIQUE INDEX ux_asset_normalized_code ON assets(location_id,upper(btrim(a
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 ALTER TABLE billing_policies ADD CONSTRAINT ex_policy_scope_charge_period EXCLUDE USING gist (
     location_id WITH =,
-    (COALESCE(room_type_id,'00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
     (COALESCE(room_id,'00000000-0000-0000-0000-000000000000'::uuid)) WITH =,
     charge_code WITH =,
     daterange(effective_from,effective_to,'[]') WITH &&
@@ -603,7 +624,7 @@ DECLARE business_today date := (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh
 BEGIN
     IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Policy history cannot be deleted' USING ERRCODE='23514'; END IF;
     IF NEW.id IS DISTINCT FROM OLD.id OR NEW.location_id IS DISTINCT FROM OLD.location_id OR
-       NEW.room_id IS DISTINCT FROM OLD.room_id OR NEW.room_type_id IS DISTINCT FROM OLD.room_type_id OR
+       NEW.room_id IS DISTINCT FROM OLD.room_id OR
        NEW.charge_code IS DISTINCT FROM OLD.charge_code OR NEW.category IS DISTINCT FROM OLD.category OR
        NEW.calculation_method IS DISTINCT FROM OLD.calculation_method THEN
         RAISE EXCEPTION 'Policy scope and charging method are immutable' USING ERRCODE='23514';
@@ -630,35 +651,6 @@ BEGIN
     RETURN NEW;
 END $fn$;
 CREATE TRIGGER policy_history_immutable BEFORE UPDATE OR DELETE ON billing_policies FOR EACH ROW EXECUTE FUNCTION bhome24_policy_history_guard();
-
-CREATE FUNCTION bhome24_location_catalog_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
-BEGIN
-    IF EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.room_types) t GROUP BY upper(btrim(t->>'name')) HAVING count(*)>1) OR
-       EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.room_types) t GROUP BY t->>'id' HAVING count(*)>1) THEN
-        RAISE EXCEPTION 'Duplicate normalized Room Type catalog key' USING ERRCODE='23505';
-    END IF;
-    IF EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.room_types) t WHERE (t->>'locationId')::uuid IS DISTINCT FROM NEW.id) OR
-       EXISTS(SELECT 1 FROM rooms r WHERE r.location_id=NEW.id AND r.room_type_id IS NOT NULL AND
-           NOT EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.room_types) t WHERE (t->>'id')::uuid=r.room_type_id)) OR
-       EXISTS(SELECT 1 FROM billing_policies p WHERE p.location_id=NEW.id AND p.room_type_id IS NOT NULL AND
-           NOT EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.room_types) t WHERE (t->>'id')::uuid=p.room_type_id)) THEN
-        RAISE EXCEPTION 'Invalid Location Room Type catalog reference' USING ERRCODE='23503';
-    END IF;
-    RETURN NEW;
-END $fn$;
-CREATE TRIGGER location_catalog_consistent BEFORE INSERT OR UPDATE OF room_types ON locations FOR EACH ROW EXECUTE FUNCTION bhome24_location_catalog_guard();
-
-CREATE FUNCTION bhome24_property_catalog_reference_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
-BEGIN
-    IF NEW.room_type_id IS NOT NULL AND NOT EXISTS(
-        SELECT 1 FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.room_types) t
-        WHERE l.id=NEW.location_id AND (t->>'id')::uuid=NEW.room_type_id) THEN
-        RAISE EXCEPTION 'Room Type must belong to the same Location' USING ERRCODE='23503';
-    END IF;
-    RETURN NEW;
-END $fn$;
-CREATE TRIGGER room_catalog_reference BEFORE INSERT OR UPDATE OF location_id,room_type_id ON rooms FOR EACH ROW EXECUTE FUNCTION bhome24_property_catalog_reference_guard();
-CREATE TRIGGER policy_catalog_reference BEFORE INSERT OR UPDATE OF location_id,room_type_id ON billing_policies FOR EACH ROW EXECUTE FUNCTION bhome24_property_catalog_reference_guard();
 
 -- Keep revocation atomic even for a controlled administrative SQL update. Restoring an
 -- old role/stamp or reactivating an account must not resurrect a previously revoked session.
