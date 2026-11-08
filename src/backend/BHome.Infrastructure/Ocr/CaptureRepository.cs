@@ -56,7 +56,12 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         await using var tx = await db.Database.BeginTransactionAsync(t);
         var u = new ApplicationUser { UserName = x.UserName.Trim(), Email = x.Email.Trim(), LockoutEnabled = true };
         db.PrepareUserRole(u, Roles.Staff);
-        if (!(await users.CreateAsync(u, x.Password)).Succeeded) throw new CaptureValidationException("staff_account_not_created");
+        var identityResult = await users.CreateAsync(u, x.Password);
+        if (!identityResult.Succeeded)
+        {
+            var errs = string.Join(", ", identityResult.Errors.Select(e => $"{e.Code}: {e.Description}"));
+            throw new CaptureValidationException(errs);
+        }
         if (!await users.IsInRoleAsync(u, Roles.Staff) && !(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
         Audit("StaffCreated", "User", u.Id); await Save(t); await tx.CommitAsync(t); return new(u.Id);
     }
