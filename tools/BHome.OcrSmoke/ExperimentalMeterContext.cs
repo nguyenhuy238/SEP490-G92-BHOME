@@ -7,7 +7,7 @@ using OpenCvSharp;
 // Caller-supplied public evaluation manifest only; never attached to API logging.
 internal static class ExperimentalMeterContext
 {
-    public static async Task<int> Run(string models,string english,string manifest,string root,string output)
+    public static async Task<int> Run(string models,string english,string manifest,string root,string output,int maximumEdge=1280)
     {
         Directory.CreateDirectory(output);
         using var input=JsonDocument.Parse(await File.ReadAllTextAsync(manifest));
@@ -21,7 +21,7 @@ internal static class ExperimentalMeterContext
                 !Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(path))).Equals(sample.GetProperty("sha256").GetString(),StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Public source changed.");
             using var prepared=new ImagePreprocessor(options).PrepareUnclassified(await File.ReadAllBytesAsync(path));var image=prepared.Image;
             var lines=new List<object>();var evidence=new List<OcrLine>();var index=0;
-            var detected=engine.InspectTextRegions(image,1280,default).Take(48).ToArray();
+            var detected=engine.InspectTextRegions(image,maximumEdge,default).Take(48).ToArray();
             var regions=detected.Select(r=>r.BoundingRect().Intersect(new Rect(0,0,image.Width,image.Height))).ToArray();
             foreach(var region in detected)
             {
