@@ -78,7 +78,7 @@ Unit gần vùng là bằng chứng chọn ứng viên, chưa chứng minh billi
 
 Pipeline thực: neutral pixels → supervised CLIP ONNX → PP-OCRv6 text regions →
 English CTC, margin theo chiều cao hàng và giới hạn vùng cạnh → active-ink gate →
-unit/register selector. OCR không dùng tên file, nhãn dataset hay task metadata.
+unit/register selector. Free-form OCR không dùng tên file, nhãn dataset hay task metadata.
 Không fuzzy đổi `kvVh` thành `kWh`, không cắt/bổ sung digits để khớp label.
 
 `RefineUnitCrops` mặc định true trong pipeline experimental. Khi một label chưa
@@ -116,3 +116,32 @@ chạy. Python reference generator là `verify_runtime_classifier.py`; test đ�
 9 tensor/logits thật. Model binary và ảnh local không nằm trong Git.
 Kết quả và acceptance blockers: [runtime report](../development/OCR_RUNTIME_ACTIVATION_RESULTS.md).
 Kết quả cải thiện unit tiếp theo: [Staff activation progress](../development/OCR_STAFF_ACTIVATION_PROGRESS.md).
+
+## Assigned Staff task trong Development
+
+Cùng endpoint hỗ trợ `POST /api/v1/ocr/diagnostics/auto?experimental=true&taskId=<guid>`.
+Chỉ Staff được phân công hiện tại tại Location của task, với task còn được phép
+capture, mới dùng được nhánh này. Backend đọc Meter profile/precision từ DB;
+query `kind` hoặc `decimalPlaces` không được dùng. Không có endpoint mới.
+Thiếu opt-in, taskId lặp hoặc sai Guid trả 400; không đủ quyền hoặc hết phân
+công trả lỗi scope theo workflow hiện có, trước khi đọc ảnh. Development,
+MobileDevelopment và ExperimentalMeter guards vẫn bắt buộc.
+
+Profile DB chọn reader; `classification` và `candidateCategory` vẫn báo kết quả
+thị giác thật, có thể unknown hoặc khác profile. Dự đoán yếu không tự chặn
+reader, nhưng mâu thuẫn mạnh/nhiều đồng hồ vẫn yêu cầu retake. Warnings thêm
+`trusted_meter_profile` và `trusted_meter_precision_available` hoặc
+`meter_precision_unavailable`. Precision DB chỉ được báo là có sẵn, chưa được
+dùng đổi chuỗi diagnostic thành billing value. Unit/register/digit gates giữ nguyên.
+
+Nhánh này **read-only**: không tạo/lưu OcrProposal, không sửa proposal/version/hash
+đã có, không xác nhận task, không tạo MeterReading hay cập nhật invoice.
+`businessProposalEnabled=false` và `requiresConfirmation=true`. Không được gửi
+readingCandidate trực tiếp tới nghiệp vụ xác nhận. Model English/CLIP mới vẫn
+chưa được bật cho Staff proposals khi thiếu nhãn độc lập.
+
+Reader PP hiện có trong workflow Staff phân biệt các giả thuyết category yếu
+trên cùng một body (mọi cặp IoU ≥ .8) với nhiều body. Trường hợp đầu giữ category
+unknown và warning, cho phép profile DB chọn reader; nhiều body hoặc bất kỳ
+giả thuyết mạnh vẫn bị chặn. Đây là sửa routing, không phải tăng accuracy của
+classifier. [Kết quả và giới hạn](../development/OCR_NEXT_STAFF_RECOGNITION_RESULTS.md).

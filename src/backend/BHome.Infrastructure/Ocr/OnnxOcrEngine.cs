@@ -451,12 +451,18 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
     }
 
     public Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeterAsync(ReadOnlyMemory<byte> image, CancellationToken token)
+        => AnalyzeExperimentalMeter(image,null,token);
+
+    public Task<ExperimentalMeterOcrResult> AnalyzeAssignedMeterAsync(ReadOnlyMemory<byte> image, OcrDocumentKind trustedKind, CancellationToken token)
+        => AnalyzeExperimentalMeter(image,trustedKind,token);
+
+    private Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeter(ReadOnlyMemory<byte> image,OcrDocumentKind? trustedKind,CancellationToken token)
     {
         if(experimentalMeter is null) return Task.FromResult(ExperimentalMeterOcrResult.Unavailable("experimental_model_unavailable"));
         try
         {
             using var prepared=preprocessor.PrepareUnclassified(image);
-            return Task.FromResult(experimentalMeter.Recognize(prepared.Image,this,token));
+            return Task.FromResult(experimentalMeter.Recognize(prepared.Image,this,token,trustedKind));
         }
         catch(OnnxRuntimeException) when(token.IsCancellationRequested) { throw new OperationCanceledException(token); }
     }

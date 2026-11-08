@@ -14,14 +14,21 @@ public sealed class ExperimentalMeterRecognizer : IDisposable
         this.options=options;this.classifier=classifier;this.development=development;
         reader=new(()=>new EnglishMeterTextRecognizer(options.ExperimentalMeter.EnglishModelDirectory));
     }
-    public ExperimentalMeterOcrResult Recognize(Mat image, OnnxOcrEngine detector, CancellationToken token)
+    public ExperimentalMeterOcrResult Recognize(Mat image, OnnxOcrEngine detector, CancellationToken token,OcrDocumentKind? trustedKind = null)
     {
         if(!development || !options.ExperimentalMeter.Enabled) return ExperimentalMeterOcrResult.Unavailable("experimental_ocr_disabled");
         var visual=classifier.Classify(image,token);
         var category=visual.Guess is {} guess?OcrCategories.Name(guess):null;
         ExperimentalMeterOcrResult Fallback(string warning,string state="unknown",string register="unverified") =>
             new("review_required",visual.Decision,category,null,state,register,["experimental_ocr",warning]);
-        if(visual.Guess is not {} kind) return Fallback("category_unknown");
+        if(trustedKind is {} expected)
+        {
+            var check=MeterCategoryValidation.Check(visual.Decision,expected,options.AutomaticClassificationMinConfidence);
+            var nonMeter=(visual.Decision.Warnings??[]).Contains("not_meter_or_unsupported_image") &&
+                visual.Decision.Confidence>=options.AutomaticClassificationMinConfidence;
+            if(!check.CanRecognize || nonMeter) return Fallback("meter_type_mismatch");
+        }
+        if((trustedKind??visual.Guess) is not {} kind) return Fallback("category_unknown");
         if(!options.ExperimentalMeter.Categories.Contains(kind)) return Fallback("experimental_category_disabled");
         if(kind is not (OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater)) return Fallback("experimental_reader_unsupported_for_category");
         var lines=new List<OcrLine>();var activeNumeric=false;

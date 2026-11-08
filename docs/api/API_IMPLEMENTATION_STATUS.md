@@ -1,5 +1,7 @@
 # BHOME — trạng thái API và bàn giao phát triển
 
+**OCR 08/11/2026:** diagnostics hiện có hỗ trợ `experimental=true&taskId=<guid>` để đọc profile DB của task Staff được phân công; nhánh này read-only, không lưu proposal/reading. Sửa routing PP cho các giả thuyết category yếu trên cùng body; model experimental mới chưa đủ nhãn độc lập để bật Staff proposals. [Contract](OCR_EXPERIMENTAL_DIAGNOSTICS.md), [kết quả OCR](../development/OCR_NEXT_STAFF_RECOGNITION_RESULTS.md). Không thêm route hoặc thay kết quả audit cũ bên dưới.
+
 Rà soát **06/11/2026**, nhánh `member/QHuy`; SHA từng slice và lệnh kiểm chứng trong [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Bổ sung BE-19/BE-X07: calculation, hoàn cọc thủ công, khấu trừ TenantDamage có evidence, Owner UI và browser hai nhánh; không đổi schema hoặc dữ liệu làm việc.
 
 **Rà soát bổ sung báo cáo tiến độ trên HEAD `8f5c751`:** Backend chạy lại Domain 90/Application 276/Integration 626 đạt, 1 OCR skip; Digital Signing 41 và Mobile 381 đạt. Owner Web full suite mới có 154 pass/1 timeout; chạy lại riêng router 37/37 đạt, không đổi code/timeout và không coi đó là full suite 155/155. Build/lint Owner và typecheck/lint Mobile đạt. Audit mới giữ 216 routes/211 protected trả 401/106 Owner GET không 5xx. Chi tiết, log mới và bài báo cáo nhóm/cá nhân: [báo cáo tiến độ 06/11](../reports/BHOME_PROGRESS_REPORT_NGUYEN_QUOC_HUY_2026-11-06.md). Bảng regression phía dưới là bằng chứng lượt bàn giao trước đó, không thay cho kết quả bổ sung này.

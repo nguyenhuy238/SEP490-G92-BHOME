@@ -132,7 +132,10 @@ public sealed class ExperimentalMeterRuntimeTests
     {
         var directory = Environment.GetEnvironmentVariable("BHOME_OCR_LOCAL_EVALUATION_ROOT")!;
         using var root = new ApiFactory(); using var factory = Configure(root, directory); using var client = factory.CreateClient();
-        foreach (var query in new[] { "?experimental=true&experimental=false", "?experimental=perhaps" })
+        foreach (var query in new[] { "?experimental=true&experimental=false", "?experimental=perhaps",
+            "?taskId=00000000-0000-0000-0000-000000000001",
+            "?experimental=true&taskId=invalid",
+            "?experimental=true&taskId=00000000-0000-0000-0000-000000000001&taskId=00000000-0000-0000-0000-000000000002" })
         {
             using var request = Request(query, Roles.Owner, []);
             Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(request)).StatusCode);

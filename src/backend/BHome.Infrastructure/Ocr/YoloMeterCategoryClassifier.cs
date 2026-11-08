@@ -152,8 +152,19 @@ public sealed class YoloMeterCategoryClassifier : IImageCategoryClassifier, IDis
         if (!float.IsFinite(minimumConfidence) || minimumConfidence is <= 0 or > 1)
             throw new InvalidDataException("Unsupported category confidence threshold.");
         if (detections.Count == 0) return new("unknown", null, "visual_model", Warnings: ["classification_insufficient_evidence"]);
-        if (detections.Count != 1) return new("ambiguous", null, "visual_model",
-            Candidates: detections.Select(d => d.Category).ToArray(), Warnings: ["multiple_meters"]);
+        if (detections.Count != 1)
+        {
+            // Class-wise NMS can retain several weak category hypotheses for
+            // the very same body. They are not evidence of multiple meters.
+            var weakSameBody=detections.All(d=>Categories.Contains(d.Category) && float.IsFinite(d.Confidence) &&
+                d.Confidence>0 && d.Confidence<minimumConfidence) &&
+                detections.Select(d=>d.Category).Distinct().Count()==detections.Count &&
+                detections.All(a=>detections.All(b=>IoU(a.Bounds,b.Bounds)>=.8));
+            if(weakSameBody) return new("ambiguous",null,"visual_model",detections.Max(d=>d.Confidence),
+                Candidates:detections.Select(d=>d.Category).ToArray(),Warnings:["overlapping_category_hypotheses","classification_requires_review"]);
+            return new("ambiguous", null, "visual_model",
+                Candidates: detections.Select(d => d.Category).ToArray(), Warnings: ["multiple_meters"]);
+        }
         var found = detections[0];
         if (!Categories.Contains(found.Category) || !float.IsFinite(found.Confidence) || found.Confidence < minimumConfidence || found.Confidence > 1)
             return new("ambiguous", null, "visual_model", Candidates: [found.Category], Warnings: ["classification_requires_review"]);

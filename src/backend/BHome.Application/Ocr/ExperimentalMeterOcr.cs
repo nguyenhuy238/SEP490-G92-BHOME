@@ -18,11 +18,13 @@ public sealed record ExperimentalMeterOcrResult(string Status, OcrCategoryDecisi
 public interface IExperimentalMeterOcrService
 {
     Task<ExperimentalMeterOcrResult> ExtractExperimentalMeterAsync(Stream input, CancellationToken token);
+    Task<ExperimentalMeterOcrResult> ExtractAssignedMeterAsync(Stream input, OcrDocumentKind trustedKind, CancellationToken token);
 }
 
 public interface IExperimentalMeterAnalysisEngine
 {
     Task<ExperimentalMeterOcrResult> AnalyzeExperimentalMeterAsync(ReadOnlyMemory<byte> image, CancellationToken token);
+    Task<ExperimentalMeterOcrResult> AnalyzeAssignedMeterAsync(ReadOnlyMemory<byte> image, OcrDocumentKind trustedKind, CancellationToken token);
 }
 
 public sealed record ExperimentalRegisterDecision(OcrLine? Candidate, string Status, IReadOnlyList<string> Warnings);
