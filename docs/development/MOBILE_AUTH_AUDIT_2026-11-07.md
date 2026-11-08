@@ -12,11 +12,11 @@ Phát hiện đáng chú ý nhất: nếu logout gặp lỗi mạng **đồng th
 
 Quy ước: ✅ Implemented / Connected; ⚠️ Partially implemented; ❌ Missing / Not connected; ❓ Not verified. Cột Tested phân biệt test đã chạy với runtime toàn hệ thống; không dùng kết quả unit/component test làm bằng chứng nghiệm thu production.
 
-| Feature | Backend | Mobile UI | API Service | FE-BE Connected | Tested | Result |
-|---|---|---|---|---|---|---|
-| Refresh Token | ✅ Implemented | ✅ Tự động, không cần nút riêng | ✅ `MobileSessions.refresh` + `MobileApi.request` | ✅ Đối chiếu source/DTO | ✅ Test giả lập đã chạy; ❓ DB/device thật | ⚠️ Có kết nối; chưa nghiệm thu E2E |
-| Logout | ✅ Implemented | ✅ Profile Owner/Staff/Tenant; màn capture | ✅ `MobileSessions.logout` | ✅ POST thật, Bearer, xử lý 204 | ✅ Test provider/UI và probe lỗi; ❓ DB/device thật | ⚠️ Có lỗi khi xóa credential thất bại và hạn chế thông báo lỗi |
-| Change Password | ✅ Implemented | ✅ `AccountSecurityScreen` | ✅ `MobileApi.json` | ✅ Body khớp DTO, xử lý 204 | ✅ Test UI/transport đã chạy; ❓ DB/device thật | ⚠️ Thiếu validation chi tiết, gọi logout/refresh dư sau thành công |
+| Feature         | Backend        | Mobile UI                                  | API Service                                       | FE-BE Connected                 | Tested                                              | Result                                                             |
+| --------------- | -------------- | ------------------------------------------ | ------------------------------------------------- | ------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+| Refresh Token   | ✅ Implemented | ✅ Tự động, không cần nút riêng            | ✅ `MobileSessions.refresh` + `MobileApi.request` | ✅ Đối chiếu source/DTO         | ✅ Test giả lập đã chạy; ❓ DB/device thật          | ⚠️ Có kết nối; chưa nghiệm thu E2E                                 |
+| Logout          | ✅ Implemented | ✅ Profile Owner/Staff/Tenant; màn capture | ✅ `MobileSessions.logout`                        | ✅ POST thật, Bearer, xử lý 204 | ✅ Test provider/UI và probe lỗi; ❓ DB/device thật | ⚠️ Có lỗi khi xóa credential thất bại và hạn chế thông báo lỗi     |
+| Change Password | ✅ Implemented | ✅ `AccountSecurityScreen`                 | ✅ `MobileApi.json`                               | ✅ Body khớp DTO, xử lý 204     | ✅ Test UI/transport đã chạy; ❓ DB/device thật     | ⚠️ Thiếu validation chi tiết, gọi logout/refresh dư sau thành công |
 
 ## 2. Backend: endpoint, DTO, quyền và business logic
 
