@@ -93,6 +93,12 @@ export function OwnerOverviewScreen() {
             detail="Phòng hiện đang có người thuê"
           />
           <Metric
+            label="Tỷ lệ trạng thái Occupied"
+            value={`${state.data.operationalOccupancyRate.toFixed(1)}%`}
+            icon="chart-donut"
+            detail={`${state.data.occupiedRooms}/${state.data.rooms} phòng; không phải tỷ lệ nghĩa vụ hợp đồng`}
+          />
+          <Metric
             label="Hợp đồng"
             value={String(state.data.contracts)}
             icon="file-document-outline"

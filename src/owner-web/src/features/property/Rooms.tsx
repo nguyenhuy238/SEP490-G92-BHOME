@@ -39,6 +39,8 @@ import {
   roomSummary,
 } from './model';
 import { usePropertyMutation } from './usePropertyMutation';
+import { isMockMode } from '../../services/config';
+import { LiveRoomDetail } from '../property-api/LivePropertyPages';
 
 export function Rooms() {
   return <PropertyBoundary>{(db) => <RoomsContent db={db} />}</PropertyBoundary>;
@@ -769,6 +771,10 @@ const detailTabs = [
   'Đầu tư & Chi phí',
 ];
 export function RoomDetail() {
+  if (!isMockMode) return <LiveRoomDetail />;
+  return <DemoRoomDetail />;
+}
+function DemoRoomDetail() {
   return <PropertyBoundary>{(db) => <RoomDetailContent db={db} />}</PropertyBoundary>;
 }
 function RoomDetailContent({ db }: { db: DemoDatabase }) {

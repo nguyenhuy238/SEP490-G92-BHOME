@@ -29,6 +29,7 @@ import { LocationRulesTab } from '../components/tabs/LocationRulesTab';
 import { LocationSettingsTab } from '../components/tabs/LocationSettingsTab';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
 import { isMockMode } from '../../../services/config';
+import { LiveLocationWorkspace } from '../../property-api/LivePropertyPages';
 
 const LOCATION_WORKSPACE_TABS = [
   ['overview', 'Tổng quan', Building2],
@@ -42,6 +43,11 @@ const LOCATION_WORKSPACE_TABS = [
 ] as const;
 
 export function LocationWorkspace() {
+  if (!isMockMode) return <LiveLocationWorkspace />;
+  return <DemoLocationWorkspace />;
+}
+
+function DemoLocationWorkspace() {
   const { locationId = '' } = useParams();
   const route = useLocation();
   const portal = usePortal();
@@ -65,8 +71,6 @@ export function LocationWorkspace() {
 
   // Finance has its own real API data source. The Location prototype provider must
   // not prevent the implemented finance child route from loading in API mode.
-  if (!isMockMode && activeTab === 'investment') return <Outlet />;
-
   if (query.isPending) return <LoadingState />;
   if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
 

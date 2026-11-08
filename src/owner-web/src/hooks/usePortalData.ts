@@ -1,8 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePortal } from '../app/PortalProvider';
+import { isMockMode } from '../services/config';
 export function usePortalData() {
   const { repository } = usePortal();
-  return useQuery({ queryKey: ['portal'], queryFn: ({ signal }) => repository.read(signal) });
+  return useQuery({
+    queryKey: ['portal'],
+    queryFn: ({ signal }) => repository.read(signal),
+    enabled: isMockMode,
+  });
 }
 export function usePortalAction() {
   const queryClient = useQueryClient();

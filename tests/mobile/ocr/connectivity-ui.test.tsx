@@ -72,7 +72,14 @@ it('shows loading, an explicit failure, and a retry that really reloads the Owne
           reject = fail;
         }),
     )
-    .mockResolvedValueOnce({ locations: 0, rooms: 0, occupiedRooms: 0, contracts: 0 });
+    .mockResolvedValueOnce({
+      locations: 0,
+      rooms: 0,
+      occupiedRooms: 0,
+      availableRooms: 0,
+      operationalOccupancyRate: 0,
+      contracts: 0,
+    });
   render(<OwnerOverviewScreen />);
   expect(screen.getByText('Đang tải tổng quan')).toBeTruthy();
   reject(new MobileApiError(500, undefined, '/api/v1/rooms'));
