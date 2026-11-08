@@ -17,6 +17,7 @@ CATEGORIES = {'electricity_mechanical', 'electricity_digital', 'water_mechanical
 READABILITY_STATES = {'readable_consumption','blank_or_unpowered','segment_test','status_only','wrong_register','blurred_or_obscured','unknown'}
 NEGATIVE_STATES = READABILITY_STATES-{'readable_consumption','unknown'}
 FIELDS = ('category','physicalMeterGroup','displayState','readable','digits','decimalPlaces','unit','register','uncertainPositions','readabilityState','annotationConfidence')
+UNITS = {None,'kWh','m3','kW','kVA','V','A','Hz','imp/kWh','m3/h','L/min','h','other'}
 
 
 def valid_box(box):
@@ -52,7 +53,7 @@ def validate_review(document, package):
             if row.get(field) is not None and not valid_box(row[field]):raise ValueError('Invalid reviewed normalized box')
         group=row.get('physicalMeterGroup')
         if group is not None and not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',group):raise ValueError('Opaque physical-meter group required')
-        if row.get('unit') not in (None,'kWh','m3') or row.get('register') not in ('total_energy','total_volume','other','unknown'):
+        if row.get('unit') not in UNITS or row.get('register') not in ('total_energy','total_volume','other','unknown'):
             raise ValueError('Unsupported reviewed unit/register')
         if row.get('displayState') not in ('single','multiple','unknown') or (row.get('readable') is not None and type(row['readable']) is not bool):
             raise ValueError('Unknown display/readability state must be explicit')

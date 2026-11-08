@@ -1,0 +1,28 @@
+{
+  "startingHead": "f766b0d29f204d9d83ceb12262844918bfd292a9",
+  "date": "2026-11-08",
+  "traceability": "BF-05/UC-20/GBR-07 -> authorized server Meter profile -> existing diagnostics/reader -> no persistence; UC-21/JOB-10/GBR-09 -> only Staff-confirmed readings reach billing.",
+  "implementation": "Reuse current models, scope resolver and review tool. Separate image-only classification from task-guided diagnostic reading. Do not retrain the failed38/41-image corpus.",
+  "diagnosticAcceptance": {
+    "retainExactDraftCandidates": ["74590", "000501"],
+    "case16254": "Measure category, unit/register and digits independently; no forced type/unit/precision",
+    "maximumInvalidNumericCandidates": 0,
+    "strongVisualContradictionRequiresReview": true,
+    "singleDigitsPreservedWithValidContext": true,
+    "maximumRequestMilliseconds": 9000,
+    "nearIdenticalUnitViewsAreIndependentEvidence": false
+  },
+  "staffAcceptance": {
+    "requiresTwoIndependentHumanReviewsWhereFeasible": true,
+    "requiresVerifiedRegisterAndPrecision": true,
+    "requiresSourceAndPhysicalMeterSeparatedEvaluation": true,
+    "positiveReadingTarget": "At least90% on at least50 images from existing project target; tiny development pilot does not establish acceptance",
+    "maximumUnacceptableFalseProposals": 0,
+    "requiresTrustedProfileAndStaffConfirmation": true,
+    "humanReviewsAvailable": 0,
+    "activation": "BLOCKED_BY_DATA; no business proposal promotion without independent labels"
+  },
+  "classifierReplacement": "Select on validation only; improve positive coverage without increasing wrong acceptance, then measure new source-separated probes; do not use the final test to choose thresholds.",
+  "newSourceClassifierGate": {"minimumAdditionalCorrect": 1, "maximumAdditionalWrong": 0, "retainBaselineCorrect": true, "humanIndependentAcceptance": false},
+  "hardware": "Run camera/MinIO if accessible; otherwise explicitly NOT_RUN"
+}
