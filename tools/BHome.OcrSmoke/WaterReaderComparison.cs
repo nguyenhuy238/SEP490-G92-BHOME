@@ -31,7 +31,7 @@ internal static class WaterReaderComparison
     }
 
     public static async Task<int> RunAsync(string models, string yolo, string english, string images, string manifestPath, string report,
-        bool rowMarginStudy=false, bool fullRowStudy=false)
+        bool rowMarginStudy=false, bool fullRowStudy=false, bool digitGeometryStudy=false)
     {
         var manifest = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(manifestPath))!;
         var options = new OcrOptions { Enabled = true, ModelDirectory = models, MeterDetectionMinConfidence = .7f,
@@ -39,13 +39,16 @@ internal static class WaterReaderComparison
         using var detector = new YoloMeterSceneDetector(options); using var digits = new YoloWaterDigitRecognizer(options);
         using var candidate = new EnglishMeterTextRecognizer(english);
         using var baselineEngine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
-        IOcrEngine candidateEngine = fullRowStudy ? new WaterFullRowCandidate(options,detector,digits,baselineEngine) :
+        var fullRowEngine=new WaterFullRowCandidate(options,detector,digits,baselineEngine);
+        IOcrEngine candidateEngine = digitGeometryStudy ? new WaterDigitGeometryCandidate(options,detector,digits,baselineEngine,fullRowEngine) :
+            fullRowStudy ? fullRowEngine :
             rowMarginStudy ? new WaterRowMarginCandidate(options,detector,digits,baselineEngine) :
             new EnglishWaterCandidateEngine(options, detector, digits, baselineEngine, candidate);
         var strictEngine = new EnglishWaterCandidateEngine(options, detector, digits, baselineEngine, candidate, preserveAllNumericDisagreements: true);
         using var baselineService = new LocalOcrService(options, new(() => baselineEngine), NullLogger<LocalOcrService>.Instance);
         using var candidateService = new LocalOcrService(options, new(() => candidateEngine), NullLogger<LocalOcrService>.Instance);
         using var strictService = new LocalOcrService(options, new(() => strictEngine), NullLogger<LocalOcrService>.Instance);
+        using var fullRowService = new LocalOcrService(options, new(() => fullRowEngine), NullLogger<LocalOcrService>.Instance);
         var rows = new List<object>();
         foreach (var name in manifest.Keys.Where(k => k.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)).Order())
         {
@@ -61,7 +64,8 @@ internal static class WaterReaderComparison
             Cv2.Resize(original, resized, new((int)(original.Width * scale), (int)(original.Height * scale)), 0, 0, InterpolationFlags.Area);
             var bytes = resized.ImEncode(".jpg", new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
             var observations = new List<object>();
-            var modes=rowMarginStudy || fullRowStudy ? new[] {("baseline",baselineService),("candidate",candidateService)} :
+            var modes=digitGeometryStudy ? new[] {("baseline",baselineService),("full_row",fullRowService),("candidate",candidateService)} :
+                rowMarginStudy || fullRowStudy ? new[] {("baseline",baselineService),("candidate",candidateService)} :
                 new[] { ("baseline", baselineService), ("candidate", candidateService), ("preserve_all_numeric_disagreements", strictService) };
             foreach (var (mode, service) in modes)
             {
@@ -77,12 +81,50 @@ internal static class WaterReaderComparison
             Array.Clear(bytes); Console.WriteLine($"Compared water reader {rows.Count}");
         }
         await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new {
-            minimumEnglishCharacterScore = rowMarginStudy || fullRowStudy ? (float?)null : .95f,
-            minimumDirectPpMeanConfidence = fullRowStudy ? (float?).95f : null,rowMarginStudy,fullRowStudy,
+            minimumEnglishCharacterScore = rowMarginStudy || fullRowStudy || digitGeometryStudy ? (float?)null : .95f,
+            minimumDirectPpMeanConfidence = fullRowStudy || digitGeometryStudy ? (float?).95f : null,rowMarginStudy,fullRowStudy,digitGeometryStudy,
             selection = "frozen_on_historical_validation_only", registeredInApplication = false,
             englishModelSha256 = EnglishMeterTextRecognizer.ModelSha256,
             manifestSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(manifestPath))), rows }, OcrEvaluation.Json));
         return 0;
+    }
+}
+
+// All crop geometry is predicted. Never delete a detected glyph or reconcile
+// competing complete numbers. Offline only, not registered for Staff proposals.
+internal sealed class WaterDigitGeometryCandidate(OcrOptions options,YoloMeterSceneDetector detector,
+    YoloWaterDigitRecognizer digits,OnnxOcrEngine baseline,WaterFullRowCandidate fullRow) : IOcrEngine
+{
+    public async Task<OcrText> RecognizeAsync(ReadOnlyMemory<byte> image,OcrDocumentKind kind,CancellationToken token)
+    {
+        var original=await fullRow.RecognizeAsync(image,kind,token);
+        if(kind!=OcrDocumentKind.MechanicalWater || !OcrFieldParser.Parse(original,kind).IsFallback) return original;
+        using var prepared=new ImagePreprocessor(options).Prepare(image,kind);
+        if(prepared.Warnings.Any(w=>w is "blur_or_low_detail" or "orientation_uncertain")) return original;
+        var selection=MeterSceneSelection.Select(detector.Detect(prepared.Image,token),prepared.Image.Size(),kind,.7f);
+        if(!selection.CanRecognize || selection.OrientedCrop is not {} pose || selection.Warnings.Contains("reading_region_unverified")) return original;
+        using var crop=OnnxOcrEngine.Crop(prepared.Image,pose);
+        var predicted=digits.Recognize(crop,token);
+        if(predicted.Digits is null || predicted.Warnings.Count>0 || predicted.Detections.Count==0) return original;
+        foreach(var old in new[] {baseline.InspectMeterCrop(crop,false,token),baseline.InspectMeterCrop(crop,true,token)})
+        {
+            if(old.Warnings.Any(w=>w is "conflicting_reading" or "orientation_uncertain" or "text_region_limit")) return original;
+            var previous=OcrFieldParser.Parse(old,kind).ProposedFields.GetValueOrDefault("reading");
+            if(previous is not null && previous.Replace(".","",StringComparison.Ordinal)!=predicted.Digits) return original;
+        }
+        var points=predicted.Detections.SelectMany(d=>d.Box.Points()).ToArray();
+        var row=Cv2.MinAreaRect(points);
+        var glyphHeight=predicted.Detections.Select(d=>d.Box.BoundingRect().Height).Order().ElementAt(predicted.Detections.Count/2);
+        row=new(row.Center,new(row.Size.Width+glyphHeight*.3f,row.Size.Height+glyphHeight*.3f),row.Angle);
+        if(row.Points().Any(p=>p.X<0||p.Y<0||p.X>=crop.Width||p.Y>=crop.Height)) return original;
+        using var refined=OnnxOcrEngine.Crop(crop,row);
+        var observed=digits.Recognize(refined,token);
+        if(observed.Warnings.Count>0 || observed.Digits!=predicted.Digits) return original;
+        var pp=baseline.InspectMeterCrop(refined,true,token);
+        var next=OcrFieldParser.Parse(pp,kind);
+        if(next.ProposedFields.GetValueOrDefault("reading")?.Replace(".","",StringComparison.Ordinal)!=predicted.Digits ||
+            next.Confidence.GetValueOrDefault("reading")<.95f) return original;
+        return MeterRecognitionFusion.Combine(pp with {Warnings=[..prepared.Warnings,..selection.Warnings,"offline_digit_geometry_probe"]},observed);
     }
 }
 
