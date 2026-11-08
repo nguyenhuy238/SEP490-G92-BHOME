@@ -1,0 +1,219 @@
+{
+  "date": "2026-11-07",
+  "regressionSourceHead": "e063b22190a48db522bccaa3bf23f39a8faa2aec",
+  "fullImageBenchmarkHead": "c61f2db5cec75c6e485783affbeb6eb6ec2f0f83",
+  "applicationSourceChanged": false,
+  "checks": [
+    {
+      "name": "backend_build",
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-continued/regression/build.log",
+      "logSha256": "7467a33aa86c0beb267b7ae6e79d1e42c385acaf28b846b0a240aea94d6839cf"
+    },
+    {
+      "name": "application",
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 325,
+      "localLog": ".tools/ocr-continued/regression/application.log",
+      "logSha256": "acf027fb7474df34ea25132c8848a2cd702a4415db05761218ed12ce0897a99a"
+    },
+    {
+      "name": "domain",
+      "command": "dotnet test tests/backend/BHome.Domain.UnitTests -c Release --no-build --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 106,
+      "localLog": ".tools/ocr-continued/regression/domain.log",
+      "logSha256": "7aab92b540c820c8627474b3f8f3b3efc14d9af6488baf89605c466ae5e70641"
+    },
+    {
+      "name": "ocr_integration",
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~Ocr&Category!=Docker&Category!=CompactPostgres",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 125,
+      "localLog": ".tools/ocr-continued/regression/ocr-integration.log",
+      "logSha256": "f7b9f7f689389b0c96954dffdddb377a771112050bc75a1e2ebba61b7e208889"
+    },
+    {
+      "name": "postgres_workflows",
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; BHOME_COMPACT24_TEST_ADMIN=<authorized disposable loopback55493 test role>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 7,
+      "localLog": ".tools/ocr-continued/regression/postgres-workflows.log",
+      "logSha256": "e070ad25efed15a09ac0f617fb5b924f9922f767a5184184345bca71d9745bef"
+    },
+    {
+      "name": "python_scripts",
+      "command": ".tools/yolo-python/python.exe -m unittest discover -s tests/scripts -p test_*.py",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 59,
+      "localLog": ".tools/ocr-continued/regression/python.log",
+      "logSha256": "8accbc4a95a60b023ccfa8d99f6ca33c04ba726fba45613385472999b1d1bbb6"
+    },
+    {
+      "name": "node_dataset",
+      "command": ".tools/node-v22.23.4-win-x64/node.exe --test tests/scripts/MeterDataset.test.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 29,
+      "localLog": ".tools/ocr-continued/regression/dataset-node.log",
+      "logSha256": "7d45913fcf9e0cfeeff33939d361d39b3e49e4303775fe2e600fb720478a269d"
+    },
+    {
+      "name": "mobile_vitest",
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/vitest/vitest.mjs run --config vitest.config.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 576,
+      "localLog": ".tools/ocr-continued/regression/mobile.log",
+      "logSha256": "b81705e410b8586d417446f48bf5afb793838f11526dc3660596342091e8cc0e"
+    },
+    {
+      "name": "mobile_typescript",
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe node_modules/typescript/bin/tsc --noEmit",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-continued/regression/typescript.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "mobile_eslint",
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/eslint/bin/eslint.js src --max-warnings 0",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-continued/regression/eslint.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "stage2_parity",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops .tools/ocr-continued/regression/stage2-parity.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 10,
+      "localLog": ".tools/ocr-continued/regression/stage2-parity.log",
+      "logSha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd"
+    },
+    {
+      "name": "english_parity",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json .tools/ocr-continued/regression/english-parity.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 4,
+      "localLog": ".tools/ocr-continued/regression/english-parity.log",
+      "logSha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79"
+    }
+  ],
+  "modelExperiments": [
+    {
+      "name": "classifier",
+      "status": "EXECUTED",
+      "rawReport": ".tools/ocr-continued/classifier/report.json",
+      "sha256": "324dc27dfde3207e791f85228935052df5401256837d2f1c14eb7f49d6de9994",
+      "positiveAccuracyAccepted": false
+    },
+    {
+      "name": "localization",
+      "status": "EXECUTED",
+      "rawReport": ".tools/ocr-continued/localization/report.json",
+      "sha256": "7c92f7da55335f8c93dedd629ae11a914cbbdb15907d131722c804de77a62c1f",
+      "positiveAccuracyAccepted": false
+    },
+    {
+      "name": "readability-v2",
+      "status": "EXECUTED",
+      "rawReport": ".tools/ocr-continued/readability-v2/report.json",
+      "sha256": "7dbc1ad28c9a91781b6c4b3f4d103ba82346f0649cd68b68b3a602b7bac8955c",
+      "positiveAccuracyAccepted": false
+    },
+    {
+      "name": "numeric-v2",
+      "status": "EXECUTED",
+      "rawReport": ".tools/ocr-continued/numeric-v2/report.json",
+      "sha256": "90683750a9bf2048a6423df9b2ec58a4d77bdc9fc420cc749c95307001705e87",
+      "positiveAccuracyAccepted": false
+    },
+    {
+      "name": "wheels-v2",
+      "status": "EXECUTED",
+      "rawReport": ".tools/ocr-continued/wheels-v2/report.json",
+      "sha256": "9e0cfe661efa16466709058248c7b96977078129293c3be0e6831752e3e14bae",
+      "positiveAccuracyAccepted": false
+    },
+    {
+      "name": "full_image_localize_to_digits",
+      "status": "EXECUTED",
+      "rawReport": ".tools/ocr-continued/full-image-benchmark.json",
+      "sha256": "a71be073f9b12d3dd85c23c9e6edf3875435fd9083af4fc6ddddd281cd83fd39",
+      "actualSummary": {
+        "yolo416": {
+          "inputs": 5,
+          "positives": 2,
+          "exact": 0,
+          "incorrectPositiveNumeric": 0,
+          "invalidControlNumeric": 0,
+          "fallback": 5,
+          "p95FullImagePipelineMs": 55.426879998412915
+        },
+        "native_text": {
+          "inputs": 5,
+          "positives": 2,
+          "exact": 1,
+          "incorrectPositiveNumeric": 1,
+          "invalidControlNumeric": 1,
+          "fallback": 2,
+          "p95FullImagePipelineMs": 2049.381739999808
+        },
+        "native_text_row_margin": {
+          "inputs": 5,
+          "positives": 2,
+          "exact": 2,
+          "incorrectPositiveNumeric": 0,
+          "invalidControlNumeric": 1,
+          "fallback": 2,
+          "p95FullImagePipelineMs": 2108.1129200007126
+        }
+      },
+      "billingAccuracyAccepted": false
+    }
+  ],
+  "newAcceptedRuntimeModels": 0,
+  "humanReviewsReceived": 0,
+  "postgres": {
+    "port": 55493,
+    "scope": "disposable loopback tests",
+    "evidenceStorage": "in_memory_not_MinIO",
+    "stoppedAfterTests": true
+  },
+  "notRun": [
+    {
+      "name": "physical_camera",
+      "reason": "No accessible adb/device session"
+    },
+    {
+      "name": "real_MinIO",
+      "reason": "No local9000/9001 listeners; Docker Desktop Linux daemon missing pipe"
+    },
+    {
+      "name": "new_model_ONNX_dotnet_activation",
+      "reason": "Quality gates failed; no new runtime adapter/export accepted"
+    }
+  ],
+  "acquisitionBlockers": [
+    {
+      "name": "MeterOCR_public_browse",
+      "httpStatus": 403,
+      "accessBypassed": false
+    }
+  ],
+  "independentAcceptance": "NOT_MEASURED"
+}

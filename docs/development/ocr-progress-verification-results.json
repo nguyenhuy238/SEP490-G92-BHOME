@@ -1,0 +1,154 @@
+{
+  "date": "2026-11-07",
+  "testedSourceHead": "3648d46",
+  "modelAccuracyProvenByTests": false,
+  "checks": [
+    {
+      "name": "backend_build",
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-next-phase/backend-build.log",
+      "logSha256": "952cc5cef54ce7485f8db6e610a26d2ae8c96ce4aeaef343357ee68794711456"
+    },
+    {
+      "name": "application",
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 325,
+      "localLog": ".tools/ocr-next-phase/application-tests.log",
+      "logSha256": "f12b3ae21545de41fa936b3eb7c9990943a8fd11410fd6f5643f215c5487744d"
+    },
+    {
+      "name": "domain",
+      "command": "dotnet test tests/backend/BHome.Domain.UnitTests -c Release --no-build --no-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 106,
+      "localLog": ".tools/ocr-next-phase/domain-tests.log",
+      "logSha256": "763dd39898809d3dd654f6f30b62e1824cc40aa404d7d41f1b9600e472bf20d8"
+    },
+    {
+      "name": "ocr_integration",
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repository>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~Ocr&Category!=Docker&Category!=CompactPostgres",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 125,
+      "localLog": ".tools/ocr-next-phase/ocr-integration-tests.log",
+      "logSha256": "c9850484e23c472bbc25e3ad8b639bfba4de2f3fdd282795d02f56fb6cfc91aa"
+    },
+    {
+      "name": "postgres_workflows",
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repository>; BHOME_COMPACT24_TEST_ADMIN=<disposable loopback test admin>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 7,
+      "localLog": ".tools/ocr-next-phase/postgres-workflow-tests.log",
+      "logSha256": "e0f7aef3859a7f2fd39ddd40dbfcedd1e9e991cd541422398e3623acaa754620"
+    },
+    {
+      "name": "python_scripts",
+      "command": ".tools/yolo-python/python.exe -m unittest discover -s tests/scripts -p test_*.py",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 49,
+      "localLog": ".tools/ocr-next-phase/python-tests.log",
+      "logSha256": "52570ecc621d39301ce04ebef467cd6649722a839e2017fbe0113c9655f47052"
+    },
+    {
+      "name": "node_dataset",
+      "command": ".tools/node-v22.23.4-win-x64/node.exe --test tests/scripts/MeterDataset.test.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 29,
+      "localLog": ".tools/ocr-next-phase/node-tests.log",
+      "logSha256": "322b05c50c8cb95d849e0f794571c04831e29eabeebcaeff6dea6edef1226b46"
+    },
+    {
+      "name": "mobile_vitest",
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/vitest/vitest.mjs run --config vitest.config.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 576,
+      "localLog": ".tools/ocr-next-phase/mobile-tests.log",
+      "logSha256": "886bf57b25081fef4cccca587a6c309178ffb78f53bb8a363f25653a0d39a99f"
+    },
+    {
+      "name": "mobile_typescript",
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe node_modules/typescript/bin/tsc --noEmit",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-next-phase/mobile-typecheck.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "mobile_eslint",
+      "command": "cwd src/mobile: ../../.tools/node-v22.23.4-win-x64/node.exe ../../node_modules/eslint/bin/eslint.js src --max-warnings 0",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-next-phase/mobile-lint.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "stage2_native_dotnet_parity",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops .tools/ocr-next-phase/stage2-parity.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 10,
+      "localLog": ".tools/ocr-next-phase/stage2-parity.log",
+      "logSha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd"
+    },
+    {
+      "name": "english_python_dotnet_parity",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json .tools/ocr-next-phase/english-parity.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": 4,
+      "localLog": ".tools/ocr-next-phase/english-parity.log",
+      "logSha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79"
+    },
+    {
+      "name": "mechanical_component_study",
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-restore -- --mechanical-electric-window-study .tools/ocr-models .tools/meter-detection-models .tools/ocr-recovery-english docs/datasets/meter/mechanical-electric-provisional-pilot.json . .tools/ocr-next-phase/mechanical-electric-results.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "passed": null,
+      "localLog": ".tools/ocr-next-phase/mechanical-run.log",
+      "logSha256": "c1c0389a4b2800b553a1d8a0eafb832172401326051ad71e2b9f65f10146bc08"
+    }
+  ],
+  "postgres": {
+    "scope": "disposable loopback 55493",
+    "storage": "in_memory_substitute_not_MinIO",
+    "stoppedAfterTests": true
+  },
+  "notRun": [
+    {
+      "name": "physical_camera",
+      "reason": "adb unavailable; no physical-device session available"
+    },
+    {
+      "name": "real_MinIO",
+      "reason": "No local 9000/9001 listener; Docker Desktop Linux daemon unavailable"
+    },
+    {
+      "name": "independent_four_class_or_billing_accuracy",
+      "reason": "Zero human reviews; no representative independent labels"
+    }
+  ],
+  "resolvedFailures": [
+    {
+      "name": "initial_mechanical_smoke_build",
+      "reason": "C# parenthesis syntax error; corrected before benchmark and commit",
+      "log": ".tools/ocr-next-phase/mechanical-build.log"
+    },
+    {
+      "name": "optional_model_dependency_in_policy_tests",
+      "resolution": "Pure policies extracted; 49 script tests passed without optional Transformers import"
+    }
+  ]
+}

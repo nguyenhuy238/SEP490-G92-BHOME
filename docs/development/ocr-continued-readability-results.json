@@ -1,0 +1,833 @@
+{
+  "scope": "provisional_source_group_cv_not_independent_readability_acceptance",
+  "choices": {
+    "learned_pixel": null,
+    "learned_combined": {
+      "regularization": 1,
+      "threshold": 0.65
+    }
+  },
+  "crossValidationGrid": {
+    "learned_pixel:(0.1, 0.5)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 1,
+      "fallback": 10
+    },
+    "learned_pixel:(0.1, 0.65)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 1,
+      "fallback": 10
+    },
+    "learned_pixel:(0.1, 0.8)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(0.1, 0.9)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(0.1, 0.95)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(1, 0.5)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 1,
+      "fallback": 10
+    },
+    "learned_pixel:(1, 0.65)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(1, 0.8)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(1, 0.9)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(1, 0.95)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(10, 0.5)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 2,
+      "fallback": 9
+    },
+    "learned_pixel:(10, 0.65)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(10, 0.8)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(10, 0.9)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_pixel:(10, 0.95)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(0.1, 0.5)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 1,
+      "invalidAccepted": 0,
+      "fallback": 10
+    },
+    "learned_combined:(0.1, 0.65)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 1,
+      "invalidAccepted": 0,
+      "fallback": 10
+    },
+    "learned_combined:(0.1, 0.8)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(0.1, 0.9)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(0.1, 0.95)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(1, 0.5)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 1,
+      "invalidAccepted": 0,
+      "fallback": 10
+    },
+    "learned_combined:(1, 0.65)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 1,
+      "invalidAccepted": 0,
+      "fallback": 10
+    },
+    "learned_combined:(1, 0.8)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(1, 0.9)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(1, 0.95)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(10, 0.5)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 1,
+      "invalidAccepted": 2,
+      "fallback": 8
+    },
+    "learned_combined:(10, 0.65)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(10, 0.8)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(10, 0.9)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    },
+    "learned_combined:(10, 0.95)": {
+      "inputs": 11,
+      "readable": 7,
+      "retained": 0,
+      "invalidAccepted": 0,
+      "fallback": 11
+    }
+  },
+  "calibrationSourceGroups": [
+    "commons_author_4ffec1e37be7ee092f5d",
+    "kaggle_all_unknown_physical_id",
+    "preview_all_unknown_physical_id"
+  ],
+  "models": {
+    "learned_pixel": {
+      "mean": [
+        0.27629233511586454,
+        0.06884416508802114,
+        0.5124777183600713,
+        4.293200977495088,
+        2.3636363636363638,
+        0.8964285714285712
+      ],
+      "std": [
+        0.11256229323385677,
+        0.04522284288154131,
+        0.1902526198686047,
+        1.801240299527458,
+        2.6379305688267105,
+        0.7477946343012045
+      ],
+      "weights": [
+        0.6788154814879275,
+        -0.17874934149634644,
+        -0.12660862564898687,
+        0.486788934891,
+        -0.6549336397680949,
+        0.6289250695753735,
+        0.7730951759062779
+      ]
+    },
+    "learned_combined": {
+      "mean": [
+        0.27629233511586454,
+        0.06884416508802114,
+        0.5124777183600713,
+        4.293200977495088,
+        2.3636363636363638,
+        0.8964285714285712,
+        0.3353834063746035,
+        0.1292269732379778,
+        0.0426718115975911,
+        0.3856575409458442,
+        0.1070602559061213
+      ],
+      "std": [
+        0.11256229323385677,
+        0.04522284288154131,
+        0.1902526198686047,
+        1.801240299527458,
+        2.6379305688267105,
+        0.7477946343012045,
+        0.3129880249630789,
+        0.09302977358000226,
+        0.03834208158517027,
+        0.24508396248181025,
+        0.12305397443641247
+      ],
+      "weights": [
+        0.9175607370656191,
+        -0.05714956008944729,
+        -0.3025598300114743,
+        0.2629750890414657,
+        -0.6883924315129242,
+        0.19050113153278336,
+        0.5767131965121808,
+        0.6083088283211457,
+        -0.4246641718482446,
+        0.2934414434110112,
+        -0.2604183978602412,
+        -0.7989483041025729
+      ]
+    }
+  },
+  "runtimeEnabled": false,
+  "status": "EXPERIMENTAL",
+  "numericTextUsedAsFeature": false,
+  "metrics": {
+    "new_provisional": {
+      "frozen_shape_combined": {
+        "inputs": 4,
+        "readable": 2,
+        "retained": 1,
+        "invalidAccepted": 1,
+        "fallback": 2
+      },
+      "learned_pixel": {
+        "inputs": 4,
+        "readable": 2,
+        "retained": 0,
+        "invalidAccepted": 0,
+        "fallback": 4
+      },
+      "learned_combined": {
+        "inputs": 4,
+        "readable": 2,
+        "retained": 1,
+        "invalidAccepted": 1,
+        "fallback": 2
+      }
+    },
+    "historical_test": {
+      "frozen_shape_combined": {
+        "inputs": 5,
+        "readable": 3,
+        "retained": 1,
+        "invalidAccepted": 0,
+        "fallback": 4
+      },
+      "learned_pixel": {
+        "inputs": 5,
+        "readable": 3,
+        "retained": 0,
+        "invalidAccepted": 0,
+        "fallback": 5
+      },
+      "learned_combined": {
+        "inputs": 5,
+        "readable": 3,
+        "retained": 3,
+        "invalidAccepted": 2,
+        "fallback": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "commons_141575682",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_141575682.jpg",
+      "cropSha256": "a275e7db1c00e6ce76df48a22f5177af8cae5ead33d01f9d10d8c469b1e4880b",
+      "sourceGroup": "commons_author_fda561d482705c44bfcc",
+      "role": "historical_test",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "004046",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.44313725490196076,
+        "localContrast95": 0.19400671940223843,
+        "innerMedian": 0.3411764705882353,
+        "laplacianVariance": 1535.962890625,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 3.6666666666666665
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.41368427872657776,
+          "blank_or_unpowered": 0.15937243402004242,
+          "segment_test": 0.02504783682525158,
+          "blurred_or_obscured": 0.3132053315639496,
+          "unknown": 0.08869007229804993
+        },
+        "score": 0.41368427872657776,
+        "margin": 0.10047894716262817,
+        "forwardMs": 9.286300002713688
+      },
+      "recognition": {
+        "english": {
+          "raw": "004046",
+          "digits": "004046",
+          "minimumCharacterScore": 0.5900585651397705,
+          "meanCharacterScore": 0.8330611189206442,
+          "forwardMs": 13.21989999996731
+        },
+        "server": {
+          "raw": "004046",
+          "digits": "004046",
+          "minimumCharacterScore": 0.7646772265434265,
+          "meanCharacterScore": 0.9492034514745077,
+          "forwardMs": 66.41730000046664
+        }
+      },
+      "learned_pixelProbability": 0.6939506963142702,
+      "learned_combinedProbability": 0.6540551784642306,
+      "decisions": {
+        "frozen_shape_combined": false,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_26507235.jpg",
+      "cropSha256": "ef67645c2bc46d8fbdb8689dec4e0f45b95d77539630d29494f5fcba2d9c3916",
+      "sourceGroup": "commons_author_24e41388bd6a3fd90c9b",
+      "role": "historical_test",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "21594",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.20392156862745098,
+        "localContrast95": 0.08780893512800629,
+        "innerMedian": 0.34901960784313724,
+        "laplacianVariance": 124.24215698242188,
+        "foregroundSupportComponents": 5,
+        "smallHolesPerEstimatedGlyph": 0.0
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.8115252256393433,
+          "blank_or_unpowered": 0.03652182221412659,
+          "segment_test": 0.0070329573936760426,
+          "blurred_or_obscured": 0.052616704255342484,
+          "unknown": 0.09230329096317291
+        },
+        "score": 0.8115252256393433,
+        "margin": 0.7192219495773315,
+        "forwardMs": 9.122300001763506
+      },
+      "recognition": {
+        "english": {
+          "raw": "21594",
+          "digits": "21594",
+          "minimumCharacterScore": 0.9980098605155945,
+          "meanCharacterScore": 0.9991522431373596,
+          "forwardMs": 13.252600001578685
+        },
+        "server": {
+          "raw": "21594",
+          "digits": "21594",
+          "minimumCharacterScore": 0.9689104557037354,
+          "meanCharacterScore": 0.9766300082206726,
+          "forwardMs": 53.45049999959883
+        }
+      },
+      "learned_pixelProbability": 0.45733807589476816,
+      "learned_combinedProbability": 0.8054651361251378,
+      "decisions": {
+        "frozen_shape_combined": true,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_111639614.jpg",
+      "cropSha256": "984dfeb153c21d2b1930a058f6986077d0569b54fcb8065c6f2afa64e1fe9c06",
+      "sourceGroup": "commons_author_9b4f2e38fe03196c619f",
+      "role": "historical_test",
+      "expectedReadable": false,
+      "expectedState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.1607843137254902,
+        "localContrast95": 0.05771010230569274,
+        "innerMedian": 0.11764705882352941,
+        "laplacianVariance": 57.548763275146484,
+        "foregroundSupportComponents": 17,
+        "smallHolesPerEstimatedGlyph": 3.0
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.8857952952384949,
+          "blank_or_unpowered": 0.039913110435009,
+          "segment_test": 0.019767921417951584,
+          "blurred_or_obscured": 0.04244840517640114,
+          "unknown": 0.012075317092239857
+        },
+        "score": 0.8857952952384949,
+        "margin": 0.843346893787384,
+        "forwardMs": 9.422799997992115
+      },
+      "recognition": {
+        "english": {
+          "raw": "88888",
+          "digits": "88888",
+          "minimumCharacterScore": 0.9204443693161011,
+          "meanCharacterScore": 0.9773115873336792,
+          "forwardMs": 13.922199999797158
+        },
+        "server": {
+          "raw": "88888",
+          "digits": "88888",
+          "minimumCharacterScore": 0.8786580562591553,
+          "meanCharacterScore": 0.9470785856246948,
+          "forwardMs": 53.34460000085528
+        }
+      },
+      "learned_pixelProbability": 0.9964195396280482,
+      "learned_combinedProbability": 0.9961397389792672,
+      "decisions": {
+        "frozen_shape_combined": false,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_141189268.jpg",
+      "cropSha256": "0c20ce83fb692963312f29256ae10bda14c7546abc9d4cc332307d715716258f",
+      "sourceGroup": "commons_author_b046fcd7de5e048d7d72",
+      "role": "historical_test",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "000880578",
+      "numericGroundTruthStatus": "disputed_frozen_label_retained",
+      "pixel": {
+        "innerRange90": 0.2980392156862745,
+        "localContrast95": 0.08011301078048406,
+        "innerMedian": 0.403921568627451,
+        "laplacianVariance": 135.1536407470703,
+        "foregroundSupportComponents": 9,
+        "smallHolesPerEstimatedGlyph": 0.375
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.4021937847137451,
+          "blank_or_unpowered": 0.12133512645959854,
+          "segment_test": 0.017974691465497017,
+          "blurred_or_obscured": 0.38945692777633667,
+          "unknown": 0.06903953105211258
+        },
+        "score": 0.4021937847137451,
+        "margin": 0.012736856937408447,
+        "forwardMs": 9.157399999821791
+      },
+      "recognition": {
+        "english": {
+          "raw": "000880518",
+          "digits": "000880518",
+          "minimumCharacterScore": 0.7409048676490784,
+          "meanCharacterScore": 0.9703493979242113,
+          "forwardMs": 13.218199997936608
+        },
+        "server": {
+          "raw": "00088058",
+          "digits": "00088058",
+          "minimumCharacterScore": 0.9591178894042969,
+          "meanCharacterScore": 0.9813720211386681,
+          "forwardMs": 53.43730000095093
+        }
+      },
+      "learned_pixelProbability": 0.7599629364538263,
+      "learned_combinedProbability": 0.6771488792586563,
+      "decisions": {
+        "frozen_shape_combined": false,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_156125142",
+      "path": ".tools/ocr-next-readability-final/blank-water.png",
+      "role": "historical_test",
+      "sourceGroup": "Boutboul",
+      "cropSha256": "93d78b0923bd50f178af31e1c2d998b43b41a83d13162c242936c3bb5c82f79d",
+      "expectedReadable": false,
+      "expectedState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "provisional_blank_control_coarse_crop",
+      "pixel": {
+        "innerRange90": 0.6862745098039216,
+        "localContrast95": 0.11977697335037535,
+        "innerMedian": 0.5607843137254902,
+        "laplacianVariance": 362.973388671875,
+        "foregroundSupportComponents": 1,
+        "smallHolesPerEstimatedGlyph": 7.5
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.8850200176239014,
+          "blank_or_unpowered": 0.009104379452764988,
+          "segment_test": 0.008192304521799088,
+          "blurred_or_obscured": 0.022916976362466812,
+          "unknown": 0.07476644963026047
+        },
+        "score": 0.8850200176239014,
+        "margin": 0.8102535605430603,
+        "forwardMs": 8.802500000456348
+      },
+      "recognition": {
+        "english": {
+          "raw": "I",
+          "digits": null,
+          "minimumCharacterScore": 0.32646870613098145,
+          "meanCharacterScore": 0.32646870613098145,
+          "forwardMs": 13.042800001130672
+        },
+        "server": {
+          "raw": "",
+          "digits": null,
+          "minimumCharacterScore": 0,
+          "meanCharacterScore": 0,
+          "forwardMs": 53.26290000084555
+        }
+      },
+      "learned_pixelProbability": 0.9973418808725254,
+      "learned_combinedProbability": 0.9988474056380676,
+      "decisions": {
+        "frozen_shape_combined": false,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_105770219:screen",
+      "role": "new_provisional",
+      "sourceGroup": "commons_105770219",
+      "expectedReadable": true,
+      "expectedState": "readable_consumption",
+      "expectedDigits": "16254",
+      "pixel": {
+        "innerRange90": 0.2901960784313726,
+        "localContrast95": 0.034227573170381415,
+        "innerMedian": 0.7647058823529411,
+        "laplacianVariance": 168.8905029296875,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 0.5
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "score": 0.7457514405250549,
+        "margin": 0.561206579208374,
+        "scores": {
+          "readable_candidate": 0.03618749603629112,
+          "blank_or_unpowered": 0.1845448911190033,
+          "segment_test": 0.017555931583046913,
+          "blurred_or_obscured": 0.7457514405250549,
+          "unknown": 0.015960272401571274
+        }
+      },
+      "recognition": {
+        "english": {
+          "raw": "AG254",
+          "digits": null,
+          "minimumCharacterScore": 0.23413234949111938,
+          "meanCharacterScore": 0.45724149942398074,
+          "forwardMs": 13.927099997090409
+        },
+        "server": {
+          "raw": "152547",
+          "digits": "152547",
+          "minimumCharacterScore": 0.40793555974960327,
+          "meanCharacterScore": 0.7152356306711832,
+          "forwardMs": 53.791399997862754
+        }
+      },
+      "learned_pixelProbability": 0.5298414606514676,
+      "learned_combinedProbability": 0.4688305991835973,
+      "decisions": {
+        "frozen_shape_combined": false,
+        "learned_pixel": false,
+        "learned_combined": false
+      }
+    },
+    {
+      "id": "commons_54903199:screen",
+      "role": "new_provisional",
+      "sourceGroup": "commons_54903199",
+      "expectedReadable": true,
+      "expectedState": "readable_consumption",
+      "expectedDigits": "000501",
+      "pixel": {
+        "innerRange90": 0.3176470588235294,
+        "localContrast95": 0.1235939773858762,
+        "innerMedian": 0.42745098039215684,
+        "laplacianVariance": 270.21295166015625,
+        "foregroundSupportComponents": 5,
+        "smallHolesPerEstimatedGlyph": 0.6
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "score": 0.8916730880737305,
+        "margin": 0.8412933349609375,
+        "scores": {
+          "readable_candidate": 0.8916730880737305,
+          "blank_or_unpowered": 0.016316678375005722,
+          "segment_test": 0.017324380576610565,
+          "blurred_or_obscured": 0.05037974566221237,
+          "unknown": 0.024306125938892365
+        }
+      },
+      "recognition": {
+        "english": {
+          "raw": "000501",
+          "digits": "000501",
+          "minimumCharacterScore": 0.5668120980262756,
+          "meanCharacterScore": 0.7945105930169424,
+          "forwardMs": 12.987300000531832
+        },
+        "server": {
+          "raw": "00050",
+          "digits": "00050",
+          "minimumCharacterScore": 0.5969805121421814,
+          "meanCharacterScore": 0.8067869544029236,
+          "forwardMs": 54.02650000178255
+        }
+      },
+      "learned_pixelProbability": 0.5220340912920551,
+      "learned_combinedProbability": 0.8975349061427341,
+      "decisions": {
+        "frozen_shape_combined": true,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_54903199:status_row",
+      "role": "new_provisional",
+      "sourceGroup": "commons_54903199",
+      "expectedReadable": false,
+      "expectedState": "status_only",
+      "expectedDigits": null,
+      "pixel": {
+        "innerRange90": 0.29411764705882354,
+        "localContrast95": 0.12200033000871242,
+        "innerMedian": 0.4117647058823529,
+        "laplacianVariance": 263.1378479003906,
+        "foregroundSupportComponents": 8,
+        "smallHolesPerEstimatedGlyph": 0.5454545454545454
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "score": 0.7249199151992798,
+        "margin": 0.5877954959869385,
+        "scores": {
+          "readable_candidate": 0.7249199151992798,
+          "blank_or_unpowered": 0.05730409175157547,
+          "segment_test": 0.045256275683641434,
+          "blurred_or_obscured": 0.13712440431118011,
+          "unknown": 0.035395316779613495
+        }
+      },
+      "recognition": {
+        "english": {
+          "raw": "11.180= 4kwh",
+          "digits": null,
+          "minimumCharacterScore": 0.5337626934051514,
+          "meanCharacterScore": 0.7884912540515264,
+          "forwardMs": 13.285699998959899
+        },
+        "server": {
+          "raw": "180h",
+          "digits": null,
+          "minimumCharacterScore": 0.35236072540283203,
+          "meanCharacterScore": 0.6751212030649185,
+          "forwardMs": 53.15839999821037
+        }
+      },
+      "learned_pixelProbability": 0.680996005179724,
+      "learned_combinedProbability": 0.8692274714725639,
+      "decisions": {
+        "frozen_shape_combined": true,
+        "learned_pixel": false,
+        "learned_combined": true
+      }
+    },
+    {
+      "id": "commons_33635608:screen",
+      "role": "new_provisional",
+      "sourceGroup": "commons_33635608",
+      "expectedReadable": false,
+      "expectedState": "blurred_or_obscured",
+      "expectedDigits": null,
+      "pixel": {
+        "innerRange90": 0.23921568627450981,
+        "localContrast95": 0.07944575440649891,
+        "innerMedian": 0.3333333333333333,
+        "laplacianVariance": 301.2158508300781,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 0.0
+      },
+      "visual": {
+        "prediction": "unknown",
+        "score": 0.5998246073722839,
+        "margin": 0.3836076855659485,
+        "scores": {
+          "readable_candidate": 0.21621690690517426,
+          "blank_or_unpowered": 0.035164330154657364,
+          "segment_test": 0.004234972409904003,
+          "blurred_or_obscured": 0.1445591151714325,
+          "unknown": 0.5998246073722839
+        }
+      },
+      "recognition": {
+        "english": {
+          "raw": "955C0",
+          "digits": null,
+          "minimumCharacterScore": 0.29412612318992615,
+          "meanCharacterScore": 0.6547735393047333,
+          "forwardMs": 13.144699998520082
+        },
+        "server": {
+          "raw": "95580",
+          "digits": "95580",
+          "minimumCharacterScore": 0.4574267268180847,
+          "meanCharacterScore": 0.8217622637748718,
+          "forwardMs": 53.39480000111507
+        }
+      },
+      "learned_pixelProbability": 0.14726608070663835,
+      "learned_combinedProbability": 0.02133858653688789,
+      "decisions": {
+        "frozen_shape_combined": false,
+        "learned_pixel": false,
+        "learned_combined": false
+      }
+    }
+  ],
+  "rawReportSha256": "7dbc1ad28c9a91781b6c4b3f4d103ba82346f0649cd68b68b3a602b7bac8955c",
+  "activationDecision": "REJECTED",
+  "reason": "Learned combination retains historical readable screens but accepts both historical invalid controls and a new invalid state; pixel-only has no positive cross-validated policy."
+}

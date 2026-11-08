@@ -1,0 +1,1503 @@
+{
+  "scope": "zero_shot_whole_image_research_not_detection",
+  "prompts": [
+    [
+      "a photograph of a mechanical electricity meter with rotating number wheels and an aluminum disc",
+      "an analog electric kilowatt hour meter with a mechanical number counter"
+    ],
+    [
+      "a photograph of a digital electricity meter with an LCD screen showing kilowatt hours",
+      "an electronic electric power utility meter with a digital numeric display"
+    ],
+    [
+      "a photograph of a mechanical water meter with a number wheel counter and small round dials",
+      "an analog water consumption meter with rotating digits and pointer dials"
+    ],
+    [
+      "a photograph of an ultrasonic digital water meter with an LCD numeric screen",
+      "an electronic water consumption meter showing cubic meters on a digital display"
+    ],
+    [
+      "a photograph of a room without a utility meter",
+      "a photograph of an identity document",
+      "a photograph of an ordinary object that is not an electricity or water meter"
+    ]
+  ],
+  "classes": [
+    "electricity_mechanical",
+    "electricity_digital",
+    "water_mechanical",
+    "water_digital",
+    "not_meter"
+  ],
+  "modelRevision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+  "modelSha256": "a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f",
+  "manifestSha256": "3592bc6d3d4e3ce7b05f01d06b7130aac8f01de01b9a24034b25e9b85c183197",
+  "validationGrid": {
+    "0.35": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 6,
+        "incorrectAccepted": 1,
+        "unknown": 4,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->electricity_mechanical": 2,
+        "electricity_mechanical->electricity_digital": 1,
+        "electricity_digital->electricity_digital": 1,
+        "electricity_digital->unknown": 2,
+        "water_mechanical->water_mechanical": 3,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.6666666666666666,
+          "precision": 1.0
+        },
+        "electricity_digital": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 0.5
+        },
+        "water_mechanical": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "recall": 1.0,
+          "precision": 1.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    },
+    "0.5": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 6,
+        "incorrectAccepted": 1,
+        "unknown": 4,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->electricity_mechanical": 2,
+        "electricity_mechanical->electricity_digital": 1,
+        "electricity_digital->electricity_digital": 1,
+        "electricity_digital->unknown": 2,
+        "water_mechanical->water_mechanical": 3,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.6666666666666666,
+          "precision": 1.0
+        },
+        "electricity_digital": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 0.5
+        },
+        "water_mechanical": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "recall": 1.0,
+          "precision": 1.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    },
+    "0.65": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 5,
+        "incorrectAccepted": 1,
+        "unknown": 5,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->unknown": 1,
+        "electricity_mechanical->electricity_digital": 1,
+        "electricity_mechanical->electricity_mechanical": 1,
+        "electricity_digital->electricity_digital": 1,
+        "electricity_digital->unknown": 2,
+        "water_mechanical->water_mechanical": 3,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 1.0
+        },
+        "electricity_digital": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 0.5
+        },
+        "water_mechanical": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "recall": 1.0,
+          "precision": 1.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    },
+    "0.75": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 5,
+        "incorrectAccepted": 0,
+        "unknown": 6,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->unknown": 2,
+        "electricity_mechanical->electricity_mechanical": 1,
+        "electricity_digital->electricity_digital": 1,
+        "electricity_digital->unknown": 2,
+        "water_mechanical->water_mechanical": 3,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 1.0
+        },
+        "electricity_digital": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 1.0
+        },
+        "water_mechanical": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "recall": 1.0,
+          "precision": 1.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    },
+    "0.85": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 1,
+        "incorrectAccepted": 0,
+        "unknown": 10,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->unknown": 3,
+        "electricity_digital->unknown": 3,
+        "water_mechanical->water_mechanical": 1,
+        "water_mechanical->unknown": 2,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "electricity_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "water_mechanical": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 2,
+          "recall": 0.3333333333333333,
+          "precision": 1.0
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    },
+    "0.9": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 0,
+        "incorrectAccepted": 0,
+        "unknown": 11,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->unknown": 3,
+        "electricity_digital->unknown": 3,
+        "water_mechanical->unknown": 3,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "electricity_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "water_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    },
+    "0.95": {
+      "counts": {
+        "inputs": 11,
+        "meters": 10,
+        "correctAccepted": 0,
+        "incorrectAccepted": 0,
+        "unknown": 11,
+        "openSetFalseAccepted": 0
+      },
+      "confusion": {
+        "electricity_mechanical->unknown": 3,
+        "electricity_digital->unknown": 3,
+        "water_mechanical->unknown": 3,
+        "water_digital->unknown": 1,
+        "not_meter->unknown": 1
+      },
+      "perClass": {
+        "electricity_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "electricity_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "water_mechanical": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3,
+          "recall": 0.0,
+          "precision": null
+        },
+        "water_digital": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "recall": 0.0,
+          "precision": null
+        }
+      }
+    }
+  },
+  "selectedThreshold": 0.75,
+  "testThreshold": 0.75,
+  "test": {
+    "counts": {
+      "inputs": 15,
+      "meters": 9,
+      "correctAccepted": 2,
+      "incorrectAccepted": 0,
+      "unknown": 13,
+      "openSetFalseAccepted": 0
+    },
+    "confusion": {
+      "electricity_mechanical->unknown": 3,
+      "electricity_digital->electricity_digital": 2,
+      "electricity_digital->unknown": 1,
+      "water_mechanical->unknown": 2,
+      "not_meter->unknown": 6,
+      "water_digital->unknown": 1
+    },
+    "perClass": {
+      "electricity_mechanical": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 3,
+        "recall": 0.0,
+        "precision": null
+      },
+      "electricity_digital": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 1,
+        "recall": 0.6666666666666666,
+        "precision": 1.0
+      },
+      "water_mechanical": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "recall": 0.0,
+        "precision": null
+      },
+      "water_digital": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "recall": 0.0,
+        "precision": null
+      }
+    }
+  },
+  "testRawTop1Correct": 11,
+  "testInputs": 15,
+  "p95ForwardMs": 14.451355000028341,
+  "limitations": [
+    "Not a detector: no boxes, counts or mAP",
+    "Historical agent-reviewed data; pretraining overlap unknown",
+    "No independent human acceptance or activation"
+  ],
+  "runtimeEnabled": false,
+  "rows": [
+    {
+      "id": "commons_14926242",
+      "sha256": "8df8cd168fe4c8a1e639f5481456b4b3ad995da7fc7f106897f39b9e6fb74dc2",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.7030771970748901,
+      "margin": 0.4505646526813507,
+      "scores": {
+        "electricity_mechanical": 0.7030771970748901,
+        "electricity_digital": 0.25251254439353943,
+        "water_mechanical": 0.0210468340665102,
+        "water_digital": 0.022709183394908905,
+        "not_meter": 0.0006542162736877799
+      },
+      "forwardMs": 142.57350000025326
+    },
+    {
+      "id": "commons_45290164",
+      "sha256": "fc0ec9c57fd385acb274e82122ed350b7ab0cb2852325f29811b3419fdcf1be6",
+      "split": "validation",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.6043216586112976,
+      "margin": 0.3806093633174896,
+      "scores": {
+        "electricity_mechanical": 0.6043216586112976,
+        "electricity_digital": 0.22371229529380798,
+        "water_mechanical": 0.13337264955043793,
+        "water_digital": 0.03816186264157295,
+        "not_meter": 0.0004315270925872028
+      },
+      "forwardMs": 10.58999999986554
+    },
+    {
+      "id": "commons_4508761",
+      "sha256": "f09edb957f13cb8a7c59c83af4f8e73f93611e21cae90180a674d19f10eb2940",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.7473235130310059,
+      "margin": 0.543739378452301,
+      "scores": {
+        "electricity_mechanical": 0.7473235130310059,
+        "electricity_digital": 0.20358413457870483,
+        "water_mechanical": 0.011317032389342785,
+        "water_digital": 0.03676529973745346,
+        "not_meter": 0.0010101074585691094
+      },
+      "forwardMs": 17.996900000071037
+    },
+    {
+      "id": "commons_113793907",
+      "sha256": "b9a71cf08a8afdaf18d07f5698645203f3eb75e63ba6f856fed2ea6b9bb45cd8",
+      "split": "validation",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.671855628490448,
+      "margin": 0.45326918363571167,
+      "scores": {
+        "electricity_mechanical": 0.21858645975589752,
+        "electricity_digital": 0.671855628490448,
+        "water_mechanical": 0.007227637805044651,
+        "water_digital": 0.06167348474264145,
+        "not_meter": 0.04065684229135513
+      },
+      "forwardMs": 10.638200000357756
+    },
+    {
+      "id": "commons_4624561",
+      "sha256": "04407a540183be5b8a0ef0e19a665b585c67ba3b386d47ef75869ebe6755156b",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.5749216079711914,
+      "margin": 0.34867703914642334,
+      "scores": {
+        "electricity_mechanical": 0.5749216079711914,
+        "electricity_digital": 0.22624455392360687,
+        "water_mechanical": 0.07906804233789444,
+        "water_digital": 0.1192261353135109,
+        "not_meter": 0.0005396463093347847
+      },
+      "forwardMs": 16.4439999998649
+    },
+    {
+      "id": "commons_6262934",
+      "sha256": "0cb5365612f406ba4bc8adde77543820244fbff4dd973c379af5498d842fe51c",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.8910812139511108,
+      "margin": 0.8085019588470459,
+      "scores": {
+        "electricity_mechanical": 0.8910812139511108,
+        "electricity_digital": 0.08257923275232315,
+        "water_mechanical": 0.01926281489431858,
+        "water_digital": 0.007012924179434776,
+        "not_meter": 6.385675078490749e-05
+      },
+      "forwardMs": 9.84470000003057
+    },
+    {
+      "id": "commons_4262220",
+      "sha256": "029d95d685674b4ad8fd8f4923586b2d8a151a246c48e9576cdc653345fbb9df",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.5539857149124146,
+      "margin": 0.15235492587089539,
+      "scores": {
+        "electricity_mechanical": 0.5539857149124146,
+        "electricity_digital": 0.40163078904151917,
+        "water_mechanical": 0.017891593277454376,
+        "water_digital": 0.02181421034038067,
+        "not_meter": 0.004677603021264076
+      },
+      "forwardMs": 11.128399999506655
+    },
+    {
+      "id": "commons_322652",
+      "sha256": "80a52f5f4dc3eefc36a72336c811cc01e5aa890a12325d1a7b50e3ee03c500d7",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.5473611354827881,
+      "margin": 0.2675328850746155,
+      "scores": {
+        "electricity_mechanical": 0.12438447773456573,
+        "electricity_digital": 0.5473611354827881,
+        "water_mechanical": 0.04193112254142761,
+        "water_digital": 0.2798282504081726,
+        "not_meter": 0.006495110224932432
+      },
+      "forwardMs": 10.577400000329362
+    },
+    {
+      "id": "commons_31937475",
+      "sha256": "5c2d47cd45e7622db3a344b1f8d0a9e15d0d0db27b88a6429178a9c40bfe89ea",
+      "split": "test",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.562705397605896,
+      "margin": 0.15521025657653809,
+      "scores": {
+        "electricity_mechanical": 0.562705397605896,
+        "electricity_digital": 0.4074951410293579,
+        "water_mechanical": 0.00667675631120801,
+        "water_digital": 0.02303600311279297,
+        "not_meter": 8.668913505971432e-05
+      },
+      "forwardMs": 10.790999999699125
+    },
+    {
+      "id": "commons_33769214",
+      "sha256": "4ab27980512f22001b029722edb9166236353b0c638b0fa866cb201b34197986",
+      "split": "validation",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.7998985648155212,
+      "margin": 0.609397292137146,
+      "scores": {
+        "electricity_mechanical": 0.7998985648155212,
+        "electricity_digital": 0.19050130248069763,
+        "water_mechanical": 0.004588312469422817,
+        "water_digital": 0.004564412869513035,
+        "not_meter": 0.0004474548331927508
+      },
+      "forwardMs": 10.698600000068836
+    },
+    {
+      "id": "commons_81372",
+      "sha256": "45d5aee7c578cc69b25d32eb95722d4aba0177f5e3671e247c66b60bd3ea3e67",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.46266046166419983,
+      "margin": 0.006616532802581787,
+      "scores": {
+        "electricity_mechanical": 0.45604392886161804,
+        "electricity_digital": 0.46266046166419983,
+        "water_mechanical": 0.01945272460579872,
+        "water_digital": 0.06134866550564766,
+        "not_meter": 0.000494223611894995
+      },
+      "forwardMs": 11.973300000136078
+    },
+    {
+      "id": "commons_48290858",
+      "sha256": "358bd176ad228a47cad9d214f3ac78d5d67a7f4d16799eed16a4751d052b121e",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.5885211229324341,
+      "margin": 0.22728568315505981,
+      "scores": {
+        "electricity_mechanical": 0.5885211229324341,
+        "electricity_digital": 0.36123543977737427,
+        "water_mechanical": 0.015269662253558636,
+        "water_digital": 0.03489891439676285,
+        "not_meter": 7.487177208531648e-05
+      },
+      "forwardMs": 10.89849999971193
+    },
+    {
+      "id": "commons_40388945",
+      "sha256": "f75b71bccfe80ec6c49f18e06f1f3fb7ada399449bafaa2169be4c3f905ffe97",
+      "split": "test",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.408031165599823,
+      "margin": 0.04803147912025452,
+      "scores": {
+        "electricity_mechanical": 0.3599996864795685,
+        "electricity_digital": 0.408031165599823,
+        "water_mechanical": 0.03513919189572334,
+        "water_digital": 0.19661296904087067,
+        "not_meter": 0.00021694407041650265
+      },
+      "forwardMs": 10.96030000007886
+    },
+    {
+      "id": "commons_6979762",
+      "sha256": "e2e96b792458589fc9b3db159c68d6662ca258299e751d11a6829ff93a00b947",
+      "split": "test",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.6707123517990112,
+      "margin": 0.37996453046798706,
+      "scores": {
+        "electricity_mechanical": 0.6707123517990112,
+        "electricity_digital": 0.29074782133102417,
+        "water_mechanical": 0.017652034759521484,
+        "water_digital": 0.020850418135523796,
+        "not_meter": 3.745378853636794e-05
+      },
+      "forwardMs": 14.026799999555806
+    },
+    {
+      "id": "commons_96717017",
+      "sha256": "bc35e03c5de690640cca08dc02e2902f1beeec869d9f0bbbe908056edba1606c",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.4959142208099365,
+      "margin": 0.1940557360649109,
+      "scores": {
+        "electricity_mechanical": 0.30185848474502563,
+        "electricity_digital": 0.4959142208099365,
+        "water_mechanical": 0.04378379136323929,
+        "water_digital": 0.15785683691501617,
+        "not_meter": 0.000586748996283859
+      },
+      "forwardMs": 10.688399999708054
+    },
+    {
+      "id": "commons_99723143",
+      "sha256": "17796205e8dd74c7155d8fd5e90399693a65f764750c7e0d3d7275209dd07d39",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "water_digital",
+      "score": 0.3782694935798645,
+      "margin": 0.1485024243593216,
+      "scores": {
+        "electricity_mechanical": 0.2297670692205429,
+        "electricity_digital": 0.12056553363800049,
+        "water_mechanical": 0.21810120344161987,
+        "water_digital": 0.3782694935798645,
+        "not_meter": 0.05329672247171402
+      },
+      "forwardMs": 10.196300000643532
+    },
+    {
+      "id": "commons_141575682",
+      "sha256": "fcf6cfa6830bddcb074895177af34f55dc9b22a6e33051bf9d530565e9006f35",
+      "split": "test",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.8319288492202759,
+      "margin": 0.6869714260101318,
+      "scores": {
+        "electricity_mechanical": 0.14495742321014404,
+        "electricity_digital": 0.8319288492202759,
+        "water_mechanical": 0.002138859126716852,
+        "water_digital": 0.02055792324244976,
+        "not_meter": 0.000416939816204831
+      },
+      "forwardMs": 9.948500000064087
+    },
+    {
+      "id": "commons_157008234",
+      "sha256": "c2b3ca54c93b79e8369ced9b21b31e09ec282db4b2e277cd966e84352faeb28d",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.6074608564376831,
+      "margin": 0.2803579270839691,
+      "scores": {
+        "electricity_mechanical": 0.327102929353714,
+        "electricity_digital": 0.6074608564376831,
+        "water_mechanical": 0.0076226890087127686,
+        "water_digital": 0.05684543401002884,
+        "not_meter": 0.0009679929353296757
+      },
+      "forwardMs": 10.820599999533442
+    },
+    {
+      "id": "commons_159931512",
+      "sha256": "867fbb1462130f38941ad635aed3376418dc8318f3773d082f4f48b381eb59b3",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.6853948831558228,
+      "margin": 0.5298885703086853,
+      "scores": {
+        "electricity_mechanical": 0.15550631284713745,
+        "electricity_digital": 0.6853948831558228,
+        "water_mechanical": 0.007084307260811329,
+        "water_digital": 0.13980287313461304,
+        "not_meter": 0.012211599387228489
+      },
+      "forwardMs": 10.903700000199024
+    },
+    {
+      "id": "commons_90475499",
+      "sha256": "63e39acc60103073e11954e7b4c907d0e98a55b432eababb59aa0ee8682705db",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "electricity_mechanical",
+      "score": 0.4149468243122101,
+      "margin": 0.2116016298532486,
+      "scores": {
+        "electricity_mechanical": 0.4149468243122101,
+        "electricity_digital": 0.2032528966665268,
+        "water_mechanical": 0.1775747537612915,
+        "water_digital": 0.2033451944589615,
+        "not_meter": 0.0008803230011835694
+      },
+      "forwardMs": 11.151099999551661
+    },
+    {
+      "id": "commons_92381119",
+      "sha256": "0c274821813fd891baa7a62d4ff11cf039eed598fda5b168d0dd6c77474ab232",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "water_digital",
+      "score": 0.3923165798187256,
+      "margin": 0.09544870257377625,
+      "scores": {
+        "electricity_mechanical": 0.29686787724494934,
+        "electricity_digital": 0.264408677816391,
+        "water_mechanical": 0.04626568406820297,
+        "water_digital": 0.3923165798187256,
+        "not_meter": 0.0001411851408192888
+      },
+      "forwardMs": 9.801400000469584
+    },
+    {
+      "id": "commons_136480278",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "split": "validation",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.8010315895080566,
+      "margin": 0.6756705045700073,
+      "scores": {
+        "electricity_mechanical": 0.1253611147403717,
+        "electricity_digital": 0.8010315895080566,
+        "water_mechanical": 0.00430533429607749,
+        "water_digital": 0.06911329180002213,
+        "not_meter": 0.00018862061551772058
+      },
+      "forwardMs": 13.676700000360142
+    },
+    {
+      "id": "commons_136480279",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "split": "validation",
+      "category": "electricity_digital",
+      "prediction": "electricity_mechanical",
+      "score": 0.5147914290428162,
+      "margin": 0.0652819275856018,
+      "scores": {
+        "electricity_mechanical": 0.5147914290428162,
+        "electricity_digital": 0.44950950145721436,
+        "water_mechanical": 0.009713535197079182,
+        "water_digital": 0.025537535548210144,
+        "not_meter": 0.0004479853087104857
+      },
+      "forwardMs": 10.715600000366976
+    },
+    {
+      "id": "commons_124829622",
+      "sha256": "5daab331ca49a31914058ab7b70ada664b48eb30ad6cebfbb58dfc1973959a55",
+      "split": "train",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.5996197462081909,
+      "margin": 0.2955443859100342,
+      "scores": {
+        "electricity_mechanical": 0.30407536029815674,
+        "electricity_digital": 0.5996197462081909,
+        "water_mechanical": 0.04378090798854828,
+        "water_digital": 0.04934198036789894,
+        "not_meter": 0.003182003041729331
+      },
+      "forwardMs": 9.495899999819812
+    },
+    {
+      "id": "commons_26507235",
+      "sha256": "f08028545baabada7715eb39724edf45a38602ae56759d995408c149595cd810",
+      "split": "test",
+      "category": "electricity_digital",
+      "prediction": "electricity_mechanical",
+      "score": 0.4721928536891937,
+      "margin": 0.024487972259521484,
+      "scores": {
+        "electricity_mechanical": 0.4721928536891937,
+        "electricity_digital": 0.44770488142967224,
+        "water_mechanical": 0.015541826374828815,
+        "water_digital": 0.06446971744298935,
+        "not_meter": 9.072341345017776e-05
+      },
+      "forwardMs": 9.970499999326421
+    },
+    {
+      "id": "commons_50921769",
+      "sha256": "8ccc4374543a9d44d7f948c05dad24d8ac518ae85b88f340aa221c2b083cc33e",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_digital",
+      "score": 0.8110489845275879,
+      "margin": 0.6403166651725769,
+      "scores": {
+        "electricity_mechanical": 0.009392652660608292,
+        "electricity_digital": 0.008790018036961555,
+        "water_mechanical": 0.17073233425617218,
+        "water_digital": 0.8110489845275879,
+        "not_meter": 3.6024688597535715e-05
+      },
+      "forwardMs": 11.043799999242765
+    },
+    {
+      "id": "commons_50921772",
+      "sha256": "16d6a6f511b80cee89a18d59e46da88a3fdd493c2e1ef9912c187740368adb27",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_digital",
+      "score": 0.6106030941009521,
+      "margin": 0.2254902720451355,
+      "scores": {
+        "electricity_mechanical": 0.0029550243634730577,
+        "electricity_digital": 0.001315379748120904,
+        "water_mechanical": 0.38511282205581665,
+        "water_digital": 0.6106030941009521,
+        "not_meter": 1.3656396731676068e-05
+      },
+      "forwardMs": 12.589699999807635
+    },
+    {
+      "id": "commons_56487326",
+      "sha256": "2679e0325cd400d0bb997ebc2d61a8cd56bb243967184dc7fbc40bac1bad9387",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.5924019813537598,
+      "margin": 0.23418891429901123,
+      "scores": {
+        "electricity_mechanical": 0.35821306705474854,
+        "electricity_digital": 0.008714258670806885,
+        "water_mechanical": 0.5924019813537598,
+        "water_digital": 0.039802778512239456,
+        "not_meter": 0.000867900438606739
+      },
+      "forwardMs": 9.739900000568014
+    },
+    {
+      "id": "commons_56487325",
+      "sha256": "934e920f7a7ac8e6591562c930f3a2d05c2c4e00e9df564d207dcd35eb3d20b5",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.4813344478607178,
+      "margin": 0.1368057131767273,
+      "scores": {
+        "electricity_mechanical": 0.4813344478607178,
+        "electricity_digital": 0.03896729275584221,
+        "water_mechanical": 0.3445287346839905,
+        "water_digital": 0.13402988016605377,
+        "not_meter": 0.0011396824847906828
+      },
+      "forwardMs": 10.465400000612135
+    },
+    {
+      "id": "commons_56487327",
+      "sha256": "40f1d4579617fb4dd4f372a6cf195b1cb9b82dcaacaf386f3cb612bf5170d642",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.6158445477485657,
+      "margin": 0.42676815390586853,
+      "scores": {
+        "electricity_mechanical": 0.1787709891796112,
+        "electricity_digital": 0.01600482128560543,
+        "water_mechanical": 0.6158445477485657,
+        "water_digital": 0.18907639384269714,
+        "not_meter": 0.00030332067399285734
+      },
+      "forwardMs": 10.854699999981676
+    },
+    {
+      "id": "commons_56487328",
+      "sha256": "8b7fb2c13d9e68713f78ab1661f19bc2978f4a4ea239f21e8f6d37030c6f769e",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.5393364429473877,
+      "margin": 0.22389349341392517,
+      "scores": {
+        "electricity_mechanical": 0.5393364429473877,
+        "electricity_digital": 0.06423971056938171,
+        "water_mechanical": 0.3154429495334625,
+        "water_digital": 0.07872931659221649,
+        "not_meter": 0.0022515307646244764
+      },
+      "forwardMs": 12.165800000730087
+    },
+    {
+      "id": "commons_109241182",
+      "sha256": "fd41aba72b26fe9fd4e021283d87376894257c345b9e10388c9a4951b31ddc90",
+      "split": "validation",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.8612613677978516,
+      "margin": 0.7292065620422363,
+      "scores": {
+        "electricity_mechanical": 0.005231446586549282,
+        "electricity_digital": 0.0006922148750163615,
+        "water_mechanical": 0.8612613677978516,
+        "water_digital": 0.13205477595329285,
+        "not_meter": 0.000760214461479336
+      },
+      "forwardMs": 8.521799999471114
+    },
+    {
+      "id": "commons_109241190",
+      "sha256": "61ddabbf6964f7e3fbd338e3c4f7f5852dd478aac8cb3f1881313c98f836c64f",
+      "split": "validation",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.79375159740448,
+      "margin": 0.620316207408905,
+      "scores": {
+        "electricity_mechanical": 0.027301959693431854,
+        "electricity_digital": 0.00499831885099411,
+        "water_mechanical": 0.79375159740448,
+        "water_digital": 0.17343537509441376,
+        "not_meter": 0.000512818165589124
+      },
+      "forwardMs": 11.570200000278419
+    },
+    {
+      "id": "commons_109241180",
+      "sha256": "91eca12fe2062366f61bc17235f67f33cc43bb59cfed1054a015f8ac4af3106a",
+      "split": "validation",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.8298114538192749,
+      "margin": 0.6669094562530518,
+      "scores": {
+        "electricity_mechanical": 0.00415301788598299,
+        "electricity_digital": 0.0007840153411962092,
+        "water_mechanical": 0.8298114538192749,
+        "water_digital": 0.16290196776390076,
+        "not_meter": 0.0023495429195463657
+      },
+      "forwardMs": 10.296999999809486
+    },
+    {
+      "id": "commons_167896665",
+      "sha256": "8480d4b61077dff0478e19508a7c88f9981de0067e219dbf3ae8b8de439e192e",
+      "split": "test",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.484485000371933,
+      "margin": 0.1309046745300293,
+      "scores": {
+        "electricity_mechanical": 0.3535803258419037,
+        "electricity_digital": 0.03694091737270355,
+        "water_mechanical": 0.484485000371933,
+        "water_digital": 0.0946323424577713,
+        "not_meter": 0.030361393466591835
+      },
+      "forwardMs": 14.473700000053213
+    },
+    {
+      "id": "commons_117569252",
+      "sha256": "8f79d969e153e00e432f4f2ea783bae20b0848876b46b9931f6480f943369c5f",
+      "split": "test",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.5874861478805542,
+      "margin": 0.30691492557525635,
+      "scores": {
+        "electricity_mechanical": 0.11201168596744537,
+        "electricity_digital": 0.019239041954278946,
+        "water_mechanical": 0.5874861478805542,
+        "water_digital": 0.28057122230529785,
+        "not_meter": 0.0006918123690411448
+      },
+      "forwardMs": 11.077600000135135
+    },
+    {
+      "id": "commons_25228750",
+      "sha256": "b75a8883f5e9ce3fa457742d77767d93448f83c53d36b2a4c3dfa3bc1a3b8c60",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.6864875555038452,
+      "margin": 0.5105410814285278,
+      "scores": {
+        "electricity_mechanical": 0.1111714243888855,
+        "electricity_digital": 0.01975567638874054,
+        "water_mechanical": 0.6864875555038452,
+        "water_digital": 0.17594647407531738,
+        "not_meter": 0.006638889666646719
+      },
+      "forwardMs": 10.655799999767623
+    },
+    {
+      "id": "commons_32325922",
+      "sha256": "1579cd8833bfe88a19f40dad163c6c88d49f63999675a3b39c298bf00ecaddf8",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.7420294880867004,
+      "margin": 0.5130206942558289,
+      "scores": {
+        "electricity_mechanical": 0.0253125187009573,
+        "electricity_digital": 0.003002461977303028,
+        "water_mechanical": 0.7420294880867004,
+        "water_digital": 0.2290087789297104,
+        "not_meter": 0.0006467484054155648
+      },
+      "forwardMs": 9.519299999737996
+    },
+    {
+      "id": "commons_28209935",
+      "sha256": "cc7d9577b7dd17d7e436c60d5cc5d1793c9cbf99cbd0247670fe512bc89708c4",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.5514596700668335,
+      "margin": 0.20024529099464417,
+      "scores": {
+        "electricity_mechanical": 0.35121437907218933,
+        "electricity_digital": 0.5514596700668335,
+        "water_mechanical": 0.008825058117508888,
+        "water_digital": 0.08395257592201233,
+        "not_meter": 0.004548290744423866
+      },
+      "forwardMs": 10.252799999761919
+    },
+    {
+      "id": "commons_322704",
+      "sha256": "6b0d67b668c5f6d7858532c4a22f6c3551e2199e7c0b856b6c9e1d2f83c507f7",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.5370543599128723,
+      "margin": 0.26663637161254883,
+      "scores": {
+        "electricity_mechanical": 0.2704179883003235,
+        "electricity_digital": 0.5370543599128723,
+        "water_mechanical": 0.016250893473625183,
+        "water_digital": 0.17408153414726257,
+        "not_meter": 0.002195212058722973
+      },
+      "forwardMs": 10.438099999191763
+    },
+    {
+      "id": "commons_15941212",
+      "sha256": "b8b5f7e80961ff55e2ccba84422600568d488fd45fe338c7a6836182d9199a99",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.5116764307022095,
+      "margin": 0.04170745611190796,
+      "scores": {
+        "electricity_mechanical": 0.4699689745903015,
+        "electricity_digital": 0.5116764307022095,
+        "water_mechanical": 0.005671389866620302,
+        "water_digital": 0.006269387900829315,
+        "not_meter": 0.006413791328668594
+      },
+      "forwardMs": 9.771799999725772
+    },
+    {
+      "id": "commons_98999103",
+      "sha256": "c2e761cdac555fe95da4408198e310ef2fc03e369d11f30068af1f571ef00705",
+      "split": "validation",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.5385674834251404,
+      "margin": 0.09168314933776855,
+      "scores": {
+        "electricity_mechanical": 0.4468843340873718,
+        "electricity_digital": 0.5385674834251404,
+        "water_mechanical": 0.003969644661992788,
+        "water_digital": 0.007858839817345142,
+        "not_meter": 0.0027196486480534077
+      },
+      "forwardMs": 10.444499999721302
+    },
+    {
+      "id": "commons_107120332",
+      "sha256": "aa0a72be91be1dccda92bc309e7e075670653f1a89878c6c75e07cd9d3ba1268",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "water_digital",
+      "score": 0.522233784198761,
+      "margin": 0.2760152816772461,
+      "scores": {
+        "electricity_mechanical": 0.1383449137210846,
+        "electricity_digital": 0.07100079208612442,
+        "water_mechanical": 0.2462185174226761,
+        "water_digital": 0.522233784198761,
+        "not_meter": 0.022202014923095703
+      },
+      "forwardMs": 10.911899999882735
+    },
+    {
+      "id": "commons_111639614",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "split": "test",
+      "category": "electricity_digital",
+      "prediction": "electricity_digital",
+      "score": 0.8404448628425598,
+      "margin": 0.7140277624130249,
+      "scores": {
+        "electricity_mechanical": 0.031077146530151367,
+        "electricity_digital": 0.8404448628425598,
+        "water_mechanical": 0.001756087178364396,
+        "water_digital": 0.1264171302318573,
+        "not_meter": 0.00030473180231638253
+      },
+      "forwardMs": 10.074299999359937
+    },
+    {
+      "id": "commons_86999625",
+      "sha256": "d173419d27701a027a89f06927a6fc4736740422d3fe0a3703296fa5988f36a2",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.45753127336502075,
+      "margin": 0.10749316215515137,
+      "scores": {
+        "electricity_mechanical": 0.3500381112098694,
+        "electricity_digital": 0.45753127336502075,
+        "water_mechanical": 0.03784487396478653,
+        "water_digital": 0.14220882952213287,
+        "not_meter": 0.012376917526125908
+      },
+      "forwardMs": 10.942000000795815
+    },
+    {
+      "id": "commons_49855905",
+      "sha256": "e9d6542f43ccc6c21a90fa2803a2b84f1e665b98dbb03298a5c4d16cf903e354",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_mechanical",
+      "score": 0.7445476055145264,
+      "margin": 0.6229680776596069,
+      "scores": {
+        "electricity_mechanical": 0.7445476055145264,
+        "electricity_digital": 0.06583025306463242,
+        "water_mechanical": 0.12157952785491943,
+        "water_digital": 0.04734589159488678,
+        "not_meter": 0.02069675549864769
+      },
+      "forwardMs": 11.358100000506965
+    },
+    {
+      "id": "commons_77534681",
+      "sha256": "1e1873eb55637d24658cd1ca605f43e4d17d861cacde0483f7f19c3bdfb5aa4a",
+      "split": "train",
+      "category": "electricity_mechanical",
+      "prediction": "electricity_digital",
+      "score": 0.7430323362350464,
+      "margin": 0.5288466811180115,
+      "scores": {
+        "electricity_mechanical": 0.037103071808815,
+        "electricity_digital": 0.7430323362350464,
+        "water_mechanical": 0.00504308519884944,
+        "water_digital": 0.2141856551170349,
+        "not_meter": 0.0006358538521453738
+      },
+      "forwardMs": 10.71090000004915
+    },
+    {
+      "id": "commons_179987587",
+      "sha256": "fea61703e2a2c7d1e81b9891cd30c316a281300db75885f43446e81a15ed244b",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.5955796837806702,
+      "margin": 0.3285994231700897,
+      "scores": {
+        "electricity_mechanical": 0.0790013000369072,
+        "electricity_digital": 0.042990367859601974,
+        "water_mechanical": 0.5955796837806702,
+        "water_digital": 0.26698026061058044,
+        "not_meter": 0.015448294579982758
+      },
+      "forwardMs": 10.607300000629039
+    },
+    {
+      "id": "commons_141189268",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "split": "validation",
+      "category": "water_digital",
+      "prediction": "water_digital",
+      "score": 0.4553494155406952,
+      "margin": 0.09252366423606873,
+      "scores": {
+        "electricity_mechanical": 0.15022705495357513,
+        "electricity_digital": 0.36282575130462646,
+        "water_mechanical": 0.03156735375523567,
+        "water_digital": 0.4553494155406952,
+        "not_meter": 3.0425226213992573e-05
+      },
+      "forwardMs": 8.69059999968158
+    },
+    {
+      "id": "commons_141372353",
+      "sha256": "29d568268219f562ccbeccdf49d664096758bc6609b43d7d99706e6d335d38c0",
+      "split": "train",
+      "category": "water_mechanical",
+      "prediction": "water_mechanical",
+      "score": 0.3422439694404602,
+      "margin": 0.02516290545463562,
+      "scores": {
+        "electricity_mechanical": 0.24662666022777557,
+        "electricity_digital": 0.08663058280944824,
+        "water_mechanical": 0.3422439694404602,
+        "water_digital": 0.3170810639858246,
+        "not_meter": 0.007417737971991301
+      },
+      "forwardMs": 11.808299999756855
+    },
+    {
+      "id": "commons_161109743",
+      "sha256": "f954fd131917a220afd527aa1e75a8377629fbc3bca22c62f02c77e5a7eae52c",
+      "split": "test",
+      "category": "not_meter",
+      "prediction": "not_meter",
+      "score": 0.5207892060279846,
+      "margin": 0.27508825063705444,
+      "scores": {
+        "electricity_mechanical": 0.1283521056175232,
+        "electricity_digital": 0.04869188368320465,
+        "water_mechanical": 0.05646580085158348,
+        "water_digital": 0.24570095539093018,
+        "not_meter": 0.5207892060279846
+      },
+      "forwardMs": 10.775799999464653
+    },
+    {
+      "id": "commons_157635897",
+      "sha256": "b128c7bf901993881ee5a950f11a832dc53a5bd4d9c4ab9106915cd37c3baa56",
+      "split": "test",
+      "category": "not_meter",
+      "prediction": "not_meter",
+      "score": 0.865976095199585,
+      "margin": 0.8126335144042969,
+      "scores": {
+        "electricity_mechanical": 0.03623713552951813,
+        "electricity_digital": 0.00869356282055378,
+        "water_mechanical": 0.053342562168836594,
+        "water_digital": 0.03575066849589348,
+        "not_meter": 0.865976095199585
+      },
+      "forwardMs": 13.292900000124064
+    },
+    {
+      "id": "commons_161110829",
+      "sha256": "fa22b1073d30acf3ff8a238b8f72dd02d126ecd1d18aefb69aeb7bc4bee8d233",
+      "split": "test",
+      "category": "not_meter",
+      "prediction": "not_meter",
+      "score": 0.8834046125411987,
+      "margin": 0.811201274394989,
+      "scores": {
+        "electricity_mechanical": 0.07220331579446793,
+        "electricity_digital": 0.0348980687558651,
+        "water_mechanical": 0.003441925160586834,
+        "water_digital": 0.00605201069265604,
+        "not_meter": 0.8834046125411987
+      },
+      "forwardMs": 8.992500000204018
+    },
+    {
+      "id": "commons_161108186",
+      "sha256": "95009b554aab1089d2633dc239a2175fa76f4ea0cb555f524a2f6d634a55513d",
+      "split": "test",
+      "category": "not_meter",
+      "prediction": "not_meter",
+      "score": 0.318604439496994,
+      "margin": 0.0874185562133789,
+      "scores": {
+        "electricity_mechanical": 0.23105277121067047,
+        "electricity_digital": 0.2311858832836151,
+        "water_mechanical": 0.03918055072426796,
+        "water_digital": 0.17997632920742035,
+        "not_meter": 0.318604439496994
+      },
+      "forwardMs": 10.131100000762672
+    },
+    {
+      "id": "commons_85653618",
+      "sha256": "4c9f34ed01d7c8546b8b3801a0d17a77060c935d66488b2a60183d9e6b7f6969",
+      "split": "validation",
+      "category": "not_meter",
+      "prediction": "not_meter",
+      "score": 0.9659229516983032,
+      "margin": 0.9480883479118347,
+      "scores": {
+        "electricity_mechanical": 0.017834605649113655,
+        "electricity_digital": 0.008413567207753658,
+        "water_mechanical": 0.004890928976237774,
+        "water_digital": 0.0029378714971244335,
+        "not_meter": 0.9659229516983032
+      },
+      "forwardMs": 10.394999999334686
+    },
+    {
+      "id": "commons_138131787",
+      "sha256": "d71be3d0041f9af31bcf8f94315c2dede62cc05c8b767cedaa3c18e672f8fc7b",
+      "split": "test",
+      "category": "not_meter",
+      "prediction": "electricity_mechanical",
+      "score": 0.5839934349060059,
+      "margin": 0.18426665663719177,
+      "scores": {
+        "electricity_mechanical": 0.5839934349060059,
+        "electricity_digital": 0.007255345582962036,
+        "water_mechanical": 0.3997267782688141,
+        "water_digital": 0.008147857151925564,
+        "not_meter": 0.0008766365353949368
+      },
+      "forwardMs": 11.010900000655965
+    },
+    {
+      "id": "commons_73857634",
+      "sha256": "aa4187e4f9b46208cff4c646a53bad2228ceca936b52d60d3cc989df42336817",
+      "split": "train",
+      "category": "not_meter",
+      "prediction": "electricity_mechanical",
+      "score": 0.47946399450302124,
+      "margin": 0.2512562870979309,
+      "scores": {
+        "electricity_mechanical": 0.47946399450302124,
+        "electricity_digital": 0.18621331453323364,
+        "water_mechanical": 0.03147772699594498,
+        "water_digital": 0.07463724166154861,
+        "not_meter": 0.22820770740509033
+      },
+      "forwardMs": 11.289999999462452
+    },
+    {
+      "id": "commons_157780137",
+      "sha256": "5bcfe706c4fc70e4d2e6f7f36ce7eb999853f16a105b2c2a7e8b22ebbe2c5866",
+      "split": "test",
+      "category": "not_meter",
+      "prediction": "water_digital",
+      "score": 0.48305991291999817,
+      "margin": 0.2108684778213501,
+      "scores": {
+        "electricity_mechanical": 0.014077801257371902,
+        "electricity_digital": 0.21029512584209442,
+        "water_mechanical": 0.02037561498582363,
+        "water_digital": 0.48305991291999817,
+        "not_meter": 0.27219143509864807
+      },
+      "forwardMs": 11.917499999981374
+    },
+    {
+      "id": "meterocr_089j4CRbYLmnBVWRKauk",
+      "sha256": "525664c38c86c7c9a0987e5fe8323baf8df6dba93deed50cedf4fc0eddbef809",
+      "split": "train",
+      "category": "water_digital",
+      "prediction": "electricity_digital",
+      "score": 0.39628639817237854,
+      "margin": 0.08127081394195557,
+      "scores": {
+        "electricity_mechanical": 0.22295427322387695,
+        "electricity_digital": 0.39628639817237854,
+        "water_mechanical": 0.05307003855705261,
+        "water_digital": 0.315015584230423,
+        "not_meter": 0.012673655524849892
+      },
+      "forwardMs": 10.395000000244181
+    },
+    {
+      "id": "meterocr_0MlNSNipRwsqs9DqoiQO",
+      "sha256": "4bc0a2f66b193ae5b0a1e67b74264b96acef1bfa7128d91c053dc63e841f083e",
+      "split": "train",
+      "category": "water_digital",
+      "prediction": "water_digital",
+      "score": 0.4941941797733307,
+      "margin": 0.31685972213745117,
+      "scores": {
+        "electricity_mechanical": 0.16196423768997192,
+        "electricity_digital": 0.16263817250728607,
+        "water_mechanical": 0.1773344725370407,
+        "water_digital": 0.4941941797733307,
+        "not_meter": 0.0038688406348228455
+      },
+      "forwardMs": 8.357800000339921
+    },
+    {
+      "id": "meterocr_0QOVwGDjB9WO5inVcJN0",
+      "sha256": "89840cd77ee9a95bfe47b823047ea51efbdb3862ec0de092acd66d90e80523f4",
+      "split": "train",
+      "category": "water_digital",
+      "prediction": "electricity_digital",
+      "score": 0.3559281826019287,
+      "margin": 0.011731564998626709,
+      "scores": {
+        "electricity_mechanical": 0.344196617603302,
+        "electricity_digital": 0.3559281826019287,
+        "water_mechanical": 0.059492915868759155,
+        "water_digital": 0.2385399490594864,
+        "not_meter": 0.0018423182191327214
+      },
+      "forwardMs": 9.88000000052125
+    },
+    {
+      "id": "commons_156125142",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "split": "test",
+      "category": "water_digital",
+      "prediction": "water_digital",
+      "score": 0.42816391587257385,
+      "margin": 0.21741114556789398,
+      "scores": {
+        "electricity_mechanical": 0.17369282245635986,
+        "electricity_digital": 0.21075277030467987,
+        "water_mechanical": 0.18090637028217316,
+        "water_digital": 0.42816391587257385,
+        "not_meter": 0.006484149489551783
+      },
+      "forwardMs": 10.674400000425521
+    }
+  ],
+  "baselineSameTestInputs": {
+    "inputs": 15,
+    "correctAccepted": 0,
+    "incorrectAccepted": 0,
+    "unknown": 15,
+    "rawSha256": "6ee556ab940184eccf34e4f70daa4eee402d8340b566dcf726f60c14a1c780f6"
+  },
+  "activationDecision": "rejected_for_runtime_missing_three_class_recall_boxes_counts_and_independent_acceptance",
+  "sourceUrl": "https://huggingface.co/openai/clip-vit-base-patch32",
+  "licenseSource": "https://github.com/openai/CLIP/blob/main/LICENSE",
+  "license": "MIT"
+}

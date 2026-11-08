@@ -1,0 +1,2140 @@
+{
+  "experiment": "digit-polygon-aligned-pp-v1",
+  "selectionSet": "historical_author_validation_deduplicated",
+  "inputs": 100,
+  "fullyDigitLabeled": 69,
+  "manifestSha256": "94DBCF13AFA03CD09507FF0BA87C972798CF70DB97D26164874187F49B566013",
+  "excludedManifestSha256": "0F4E5E847F3026ED5FAEABBA2CC538DAF6211D78F273CADE9ACB3CD7EB58C565",
+  "rawEvidenceSha256": "edb39a93cc50efe26a2afc216da95412f056ea3ed915801ab975331326d7da02",
+  "metrics": {
+    "runtime_baseline": {
+      "proposed": 12,
+      "exactDigits": 12,
+      "falseProposal": 0,
+      "unknownGroundTruth": 0
+    },
+    "digit_polygon_aligned_primary_pp": {
+      "proposed": 13,
+      "exactDigits": 13,
+      "falseProposal": 0,
+      "unknownGroundTruth": 0
+    },
+    "aligned_pp_must_agree": {
+      "proposed": 7,
+      "exactDigits": 7,
+      "falseProposal": 0,
+      "unknownGroundTruth": 0
+    }
+  },
+  "decision": "REJECTED",
+  "runtimeEnabled": false,
+  "testEvaluated": false,
+  "reason": "Validation study only. Strict aligned PP agreement reduces coverage. The permissive variant can erase valid original numeric disagreement through malformed PP; it is not accepted. No runtime policy or threshold selected.",
+  "rows": [
+    {
+      "imageId": "wm_clean_000023.jpg",
+      "sourceSha256": "befc226dad8fc4673189b4b4bde382e5a5e2f1c3e5702c8e351d78a9afcc35c7",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000024.jpg",
+      "sourceSha256": "d5852d7c6fa0511ceb89cde0a85819af48b4fa91657a5f20c146b119cdf1ce5b",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "reading_region_uncertain"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000025.jpg",
+      "sourceSha256": "47b428fbbbaffc2ff620c949a06c2f4776a3f0f8e56b76113dc84ef65ccbfe30",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000029.jpg",
+      "sourceSha256": "f56596eea503de9f0c19efab4977740cfebd85f18a3fe52f1ab2d63ac4de16c3",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000034.jpg",
+      "sourceSha256": "e948de752667a2be29c4d26b1e37d1d17bcd547840ff17efc7ddc1c6643693d0",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000036.jpg",
+      "sourceSha256": "eb609585d2267061aad976b099cfc9528c7738e2d09fb86541f574f45e089d81",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000037.jpg",
+      "sourceSha256": "dce8b9392ee40a21436deeb7d31359293e0859e2a127e06bc0c94f949c9b79ec",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000041.jpg",
+      "sourceSha256": "defaef3000866babe5c2ab538075095f0e9eb255e9b758e7af86460755e754b5",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000047.jpg",
+      "sourceSha256": "eb588b29f0a94d9170b6c5eeb8f92d69fa05905423083cb15bec56b0b560791e",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000050.jpg",
+      "sourceSha256": "c974a9300a705a923c62b31c38b290a42d930574e97b5443e8ff721cae493a02",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000052.jpg",
+      "sourceSha256": "0de3f25f3990b2e634e41f02b212e0c9e7b359a195c72f5c8a8b65a7646d9261",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000057.jpg",
+      "sourceSha256": "fb5a492502cea429d0e6c4b60223dd0b6385ab4e88d658bec16b6bacd3ce30a1",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000064.jpg",
+      "sourceSha256": "99536d23cb392dc17b401531a5f390ed3326ce768be0352bf0c21142cc5deb75",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000071.jpg",
+      "sourceSha256": "0855921c02f176cb59399f09d3c48e30df6fa288917e061798b99a21e903f638",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000074.jpg",
+      "sourceSha256": "12427947dc53ee3ece087d2f329810441d9cbb603a76ed95ab0c21a7f437fc2c",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000079.jpg",
+      "sourceSha256": "67f481ba843f3c0fb7516a8575aa33ac5b3a90503c4a48d51517a51c4b53201f",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000084.jpg",
+      "sourceSha256": "c98219dc1f44c8cd8e7ce2f98eb69ca100c65d388f41475ec41071e6e000147f",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000088.jpg",
+      "sourceSha256": "c52382e63a713d4a86e68da4667213a2ea1acb23e205ee15b2c2b3e07b04d81b",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000099.jpg",
+      "sourceSha256": "bcb6872a4b887c865b8f2012a221d8157ebea90309f61eeccd7c51fe6dc3185b",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000108.jpg",
+      "sourceSha256": "20a29349882fc29acde0da3b6854156f260fb03f85a3242d9dcb6f3fdee41d7e",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000109.jpg",
+      "sourceSha256": "debe146b131922467185c78bfa1725e4987c0267c01aa5576575b0f62916b8a0",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000117.jpg",
+      "sourceSha256": "14dfb2f58d364574c1d2e468cd02da830671e6310227e498a9ef0e31e65ce505",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "meter_region_invalid"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000118.jpg",
+      "sourceSha256": "b2d28022c2129667686a2c93b48ea52632445ce4ceb7041799ba74a0bb50f244",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000127.jpg",
+      "sourceSha256": "88dc1c05dd815c0ba3142d8e332120aa3347563fb205cb3065438d9d2ad6e7e0",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000135.jpg",
+      "sourceSha256": "45c5d91175cc7ffd0b74ffb865305bf2d2e24560a2cb9512b1e91ab8f6df1480",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000136.jpg",
+      "sourceSha256": "042e041f1a917b74cf0ec172f2feecea8845e69d64772b707004f5bdd0c56906",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000137.jpg",
+      "sourceSha256": "d0aa6342ad4cc9dd1966f75c685f9ac2c441a9787d34abd77d370ab63190ea6e",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000138.jpg",
+      "sourceSha256": "c892ff2aae3126fa4534223c3e30ccc40d386879bff65d07c5640333b6521f57",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "meter_region_invalid"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000139.jpg",
+      "sourceSha256": "c6d732fca78d0aea52e4a17d673e011a9750845349d97ebf239d1a53b5376f27",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000149.jpg",
+      "sourceSha256": "b02e773f49b8ab4912945e47a17fda3fcf92961f6de09aa86b19b23df4d16e2e",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000151.jpg",
+      "sourceSha256": "6149010f4efe0d975f811ce539a54fef8e088b8a084b5492e53b608bd3d540bb",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000162.jpg",
+      "sourceSha256": "d670b6bfeef5be4ea2f8ada9f232a9f4696f275914fd8a55314fe1e67bd6b429",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000167.jpg",
+      "sourceSha256": "f2c9cbbe36796e48658fa1d259bfa78e3158fffaa3ebf719af33247c0d84555f",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000177.jpg",
+      "sourceSha256": "0c7f14ab0690745fb9f363a31df455e16b962fb0a84450f715ebf2934f1a502b",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000182.jpg",
+      "sourceSha256": "96c31e5f9e340ace9dca0745abbcb3296c38d0721082455c5570201ef210a170",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000184.jpg",
+      "sourceSha256": "55bbac62e3780aba29ca5d55379a067863132a70b3b43294b7da5a80a7ec2e86",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000186.jpg",
+      "sourceSha256": "9f802b5963c865bc0e5e2fd408c60575bf37ed7a9c71ad58256bbef5927870f8",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000187.jpg",
+      "sourceSha256": "29039f7fac8a6e64baa40d15748556ebb20a3da61248168874d0d8714879ddfd",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000190.jpg",
+      "sourceSha256": "d39a65fd01d1795079f5c251b1ca62ca920f2b23ebb6369957b75d44be6a9806",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000194.jpg",
+      "sourceSha256": "94037076617e89a45e29f2576069ad52bb349d8ef93cbd5d89c9283fc003e04d",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000195.jpg",
+      "sourceSha256": "54d9d5fc28d4f7156e0646bc9bed72f17cfcd81cc5e72a9ee73d347b218e059f",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000203.jpg",
+      "sourceSha256": "8ae48ba4eb37d5b3fba4ff5e9eb71bb8e8ac145a3959c8f8bfcf9f539dc94db7",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000205.jpg",
+      "sourceSha256": "85f3f799de56357fcd62c064b50097233c9bc4b37f021e8587e677ebe7c2abc0",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000206.jpg",
+      "sourceSha256": "b8f7a120bed7e76d9bab9bcac4f186aa0a1ed2cf23afef4da60e857635e385a2",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000220.jpg",
+      "sourceSha256": "18d7c537d75a6a23489d9cdf50596e7933a2eadfabc190497b9cdf6883052a64",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000233.jpg",
+      "sourceSha256": "316a9360fc590d981d71830a7ecee5fc6775128d113270984d904cf511565a8f",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000235.jpg",
+      "sourceSha256": "a90b8d24e3801c0f61ed35333e39669a3da406f6fb48dd048782960a41fd69ed",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000236.jpg",
+      "sourceSha256": "3fc8a9999e92051e36c01b705a8ad3071af52b70f79aeb755e1448729d084f77",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000237.jpg",
+      "sourceSha256": "7d517d4c3755443bc02f1923b0a9a4922c16586799d981e345e2092987c7d59b",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000253.jpg",
+      "sourceSha256": "3ccacc18ac4e0c5c7af51339ab2d6669d4e60ae1a4e80b642e92adea50c290ae",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000256.jpg",
+      "sourceSha256": "e0487bbb6ce4bd5a8b3fe17c4318db110377d0649beb237a7f08a5dd53b9c1dd",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000261.jpg",
+      "sourceSha256": "888527069a10f6c39139565eece4dec7fb6f01c85ebf5afa65a862afc5ea7567",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "reading_region_uncertain"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000274.jpg",
+      "sourceSha256": "42582bffd52c8a083a368befd1fbb84affe7dda1a4a4e857e850de635ef103cb",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_body_unverified",
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000275.jpg",
+      "sourceSha256": "147cc3d9904b2d258ac501a2e12a6f4b020a461860bd6d9a8e12a89955919a7a",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000276.jpg",
+      "sourceSha256": "9f0c1a25e1290d148fde1447436a7c87dcf79a288479edb4e0facf68f7357fa1",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_body_unverified",
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000283.jpg",
+      "sourceSha256": "92f33c4d2742586c15de6d782f91d8aaf78ff254dac5f74a7d33464cf47e85d3",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000286.jpg",
+      "sourceSha256": "1079737e3dda9ff88441e5141357684fa4da2dbb3c5191a6feb378f313fa6c91",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000291.jpg",
+      "sourceSha256": "190730bad536119de6c566b8d72da40569e304f659a2cf6f4f7eedb750156482",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000296.jpg",
+      "sourceSha256": "99e5099d120b65381ea4d27af0e01eda030af757c2f2a74438059950f07e1fa0",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000299.jpg",
+      "sourceSha256": "204313b8fdad1df47c165c5c2ec47590887aba52597daffcc71a626b0301e923",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000300.jpg",
+      "sourceSha256": "fa3f9b3df4c30908a7985c510a3509b239f2fce9e24d596cb594f7da01922fc7",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000310.jpg",
+      "sourceSha256": "3a77d61b6a677374c8315cb7b0b0881bf91589e030ea93d062976e1f4e377795",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000312.jpg",
+      "sourceSha256": "23fbb75880f24ba13e7b66b2649533de2808fe37878ab2354dfccfc4a2422308",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000317.jpg",
+      "sourceSha256": "440fc73f0f6779d15b11ea41e98303926aa373f12656c30f15869ce912aac91c",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000322.jpg",
+      "sourceSha256": "462fd6fa34d8c0aa0eddd5b5f9ae7b76ad8cdff243e44e69a912b35235b315ab",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000326.jpg",
+      "sourceSha256": "de3803e9f5ec4739d48641654a787a59203d69162a5d5f7f8f50af85a8fc7c7e",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000330.jpg",
+      "sourceSha256": "8dfa86d8241ffdcb269d34e35dc7f7e42635de6ca97d9a9f200069c31bdd03d6",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000332.jpg",
+      "sourceSha256": "ce0ecb1d87473ebe02bd9fc442c19dd1fd903c02b049745edb0fddbc4777b4d0",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000336.jpg",
+      "sourceSha256": "9c70e49dce3c652758aacf6122d14982b271c288f66776cf013bddfa88e47f15",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000339.jpg",
+      "sourceSha256": "76c0be0aef771f7b0f0a9a478b24e29735a26800f1901510236cb82bee5542b7",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000344.jpg",
+      "sourceSha256": "641f12a715e910484fc80310d9005cf140219eb0bd8b6d177c8a5125f24eb47d",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000350.jpg",
+      "sourceSha256": "93f4292347483633a27428942802af70aad89314f37ce7cab733872cbab5db8f",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000351.jpg",
+      "sourceSha256": "d2468555b9316b967470d31b8833261f633a5bca500f2dfc3ac0bea66831f9d0",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000353.jpg",
+      "sourceSha256": "133d4c6b530c9f7ac92f72fda32f4a0a837dfd02aba03008f5272cb6b0304ef1",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000361.jpg",
+      "sourceSha256": "f4aa9f3b79514f6a274a2c7004b2f83c6571ac15f664d4eeddcb878e180c80b6",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000368.jpg",
+      "sourceSha256": "dbea3e417b38b6bb96b317b72e5b9c32493085f3d29845dc67c0672ade66f5df",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000374.jpg",
+      "sourceSha256": "01adf46a11d5efc5bcb16ae63799bbdada5fcefe678b61e59ac74f2ee49c65b1",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000390.jpg",
+      "sourceSha256": "68c73b2cefe584ab96689ceb23855373d69c77472a2dcd86d7a5f2f895e8b40e",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000396.jpg",
+      "sourceSha256": "2cc65d41db74d48c9945b6f9125058d8b7d8cf33f262cd04fe87a19353f5603c",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000414.jpg",
+      "sourceSha256": "0b5e4837b4766fb9f529b71ab06510c7fcd81b394880fb8cfcc9a48e80f13ca9",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000419.jpg",
+      "sourceSha256": "2a9c482407f9ce497d28e47aea0ab1c83e364100b65b3d1171bd0d73d279152e",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000421.jpg",
+      "sourceSha256": "c0c0995278d858807d6ab0a7e6913d4d485840e763d174eb3a2486653b9cd9ca",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000424.jpg",
+      "sourceSha256": "90a8af80d35772bb4ee5f809dd95a32bebbe0c6ac8ce698643384bc63716cf0e",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000425.jpg",
+      "sourceSha256": "41d034fda722882b543a79080eb660f0473646fe0a79cfe29ca599b3bf391293",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000429.jpg",
+      "sourceSha256": "d4227e61030d15ae7f14b3f8079c7e064344b06ec87da84c2b071d2f29b2362e",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000434.jpg",
+      "sourceSha256": "6b036d5ec109e528c931fe5e0f8571b2b628d6a6c301d68df37e959399787f14",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000437.jpg",
+      "sourceSha256": "1dff4a59ee69a77920a1f97047bdaaf34682ab881ec99106ac3882b1044bc96a",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000443.jpg",
+      "sourceSha256": "7a7e610b3b09580e7bc62e74264fec6eec06797c4d14e345b38a85f074f9e0e2",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": true,
+          "exactDigits": true,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000448.jpg",
+      "sourceSha256": "9a96460ba6d8b9b58d0b2b3ce7c80431b659c6aaf73ae727cfa5fd251149c981",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000451.jpg",
+      "sourceSha256": "6d1b67b90bb83ca5a3c8523fbabbc92c1e78d4e1272fca7de08c6946b1720858",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "reading_region_uncertain"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000464.jpg",
+      "sourceSha256": "029311e9b9a810f1c7d12dc5fd60a63551ca8297447ff276c98df22b150523fe",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000477.jpg",
+      "sourceSha256": "daa17a49cc5fe6f5c3e2267286fccda38d8e238a1b75f4f3e9764893fb463f70",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000480.jpg",
+      "sourceSha256": "e3fcf78fb45127fe9d73b12d8910fe565c042d216be0286c6a983aaca21cf8ce",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000484.jpg",
+      "sourceSha256": "09f789161ef57fa74c21c2debc23125d2d58b01d972bc14cfe3bf43cb14cee49",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "meter_detection_uncertain"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000488.jpg",
+      "sourceSha256": "acc0128afbd66e590159a0e76ca558587eddfe21455e79052e2344859d602b08",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    },
+    {
+      "imageId": "wm_clean_000492.jpg",
+      "sourceSha256": "bbcabe270aa517187ac8d945f716f16d933c0e9486e196dfac19717840b1cd40",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000497.jpg",
+      "sourceSha256": "2e12fb471b19547cde26bef179e5f71b44b2aed254daff6d11c94a1f59c4d363",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      }
+    },
+    {
+      "imageId": "wm_clean_000502.jpg",
+      "sourceSha256": "a3f8286a80a261ae7712e014a48895546930750bb35d05be7f7a47d8db8dabc1",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": true
+    },
+    {
+      "imageId": "wm_clean_000504.jpg",
+      "sourceSha256": "e4b562d9d272c83ef0e26e256be42a9518fc3c449f85b8fea35c9666340e0cd3",
+      "fullyDigitLabeled": true,
+      "sceneAllowed": true,
+      "sceneWarnings": [
+        "meter_category_unverified"
+      ],
+      "outcomes": {
+        "runtime_baseline": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "digit_polygon_aligned_primary_pp": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        },
+        "aligned_pp_must_agree": {
+          "proposed": false,
+          "exactDigits": false,
+          "falseProposal": false,
+          "unknownGroundTruth": false
+        }
+      },
+      "originalNumericDisagreement": false
+    },
+    {
+      "imageId": "wm_clean_000509.jpg",
+      "sourceSha256": "fc72a9bb69d8caea103dc97124267e41fe067c5b76cbda0c9405b8c04c0be13b",
+      "fullyDigitLabeled": false,
+      "sceneAllowed": false,
+      "sceneWarnings": [
+        "unclear_digit"
+      ],
+      "outcomes": {}
+    }
+  ],
+  "limitations": [
+    "Digit-only labels; no decimal/register ground truth.",
+    "Shared source/physical-meter independence unknown.",
+    "New digit-polygon ROI, not a repeat of display-margin/CLAHE probes.",
+    "Reject if false/unknown proposals increase or exact coverage does not improve on validation; do not select using test."
+  ]
+}

@@ -1,0 +1,4666 @@
+{
+  "scope": "historical_development_classification_not_independent_acceptance",
+  "modelSha256": "a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f",
+  "manifestSha256": "3592bc6d3d4e3ce7b05f01d06b7130aac8f01de01b9a24034b25e9b85c183197",
+  "utilityPrompts": [
+    [
+      "a photograph of an electricity utility meter measuring electric energy in kilowatt hours",
+      "an electric power consumption meter"
+    ],
+    [
+      "a photograph of a water utility meter measuring consumed water volume",
+      "a water consumption meter connected to water pipes"
+    ],
+    [
+      "a photograph of an object that is not an electricity or water meter",
+      "an identity document, room, landscape or ordinary object without a utility meter"
+    ]
+  ],
+  "technologyPrompts": [
+    [
+      "a mechanical utility meter with rotating number wheels or pointer dials",
+      "an analog meter that displays its reading using a mechanical counter or circular pointer scales"
+    ],
+    [
+      "a digital utility meter with an electronic LCD or LED numeric screen",
+      "an electronic meter that displays its reading on a digital screen"
+    ]
+  ],
+  "selectedOnValidation": {
+    "full_frame": {
+      "direct": 0.75,
+      "hierarchy": [
+        0.85,
+        0.65
+      ]
+    },
+    "oracle_meter_body": {
+      "direct": 0.85,
+      "hierarchy": [
+        0.9,
+        0.65
+      ]
+    }
+  },
+  "validationGrid": {
+    "full_frame": {
+      "direct": {
+        "0.35": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 1,
+            "unknown": 4,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.5": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 1,
+            "unknown": 4,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.65": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 1,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 1,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.75": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 0,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.85": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 1,
+            "water_mechanical->unknown": 2,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.9": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 0,
+            "incorrectlyAccepted": 0,
+            "unknown": 11,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.95": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 0,
+            "incorrectlyAccepted": 0,
+            "unknown": 11,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        }
+      },
+      "hierarchy": {
+        "(0.65, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 7,
+            "incorrectlyAccepted": 1,
+            "unknown": 3,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_mechanical->unknown": 1,
+            "electricity_digital->electricity_digital": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 3,
+              "fp": 1,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 0.75
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 1,
+            "unknown": 4,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_mechanical->unknown": 1,
+            "electricity_digital->electricity_digital": 2,
+            "water_mechanical->water_mechanical": 3,
+            "electricity_digital->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 1,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 0.6666666666666666
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 1,
+            "unknown": 7,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 7,
+            "incorrectlyAccepted": 0,
+            "unknown": 4,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->unknown": 2,
+            "electricity_digital->electricity_digital": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 0,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->unknown": 2,
+            "electricity_digital->electricity_digital": 2,
+            "water_mechanical->water_mechanical": 3,
+            "electricity_digital->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 0,
+            "unknown": 7,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 7,
+            "incorrectlyAccepted": 0,
+            "unknown": 4,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->unknown": 2,
+            "electricity_digital->electricity_digital": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 0,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->unknown": 2,
+            "electricity_digital->electricity_digital": 2,
+            "water_mechanical->water_mechanical": 3,
+            "electricity_digital->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 0,
+            "unknown": 7,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 0,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->unknown": 2,
+            "electricity_digital->electricity_digital": 2,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 0,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_mechanical->unknown": 2,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 0,
+            "unknown": 7,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 2,
+            "incorrectlyAccepted": 0,
+            "unknown": 9,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 0,
+            "incorrectlyAccepted": 0,
+            "unknown": 11,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        }
+      }
+    },
+    "oracle_meter_body": {
+      "direct": {
+        "0.35": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 4,
+            "unknown": 1,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_digital": 2,
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->electricity_mechanical": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->water_digital": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 2,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.3333333333333333
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 2,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.3333333333333333
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            }
+          }
+        },
+        "0.5": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 6,
+            "incorrectlyAccepted": 4,
+            "unknown": 1,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_digital": 2,
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->electricity_mechanical": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->water_digital": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 2,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.3333333333333333
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 2,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.3333333333333333
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            }
+          }
+        },
+        "0.65": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 3,
+            "unknown": 3,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->electricity_digital": 2,
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->electricity_mechanical": 1,
+            "water_mechanical->water_mechanical": 3,
+            "electricity_digital->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 2,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.3333333333333333
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.75": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_mechanical": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->electricity_mechanical": 1,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "electricity_digital->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.85": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 2,
+            "incorrectlyAccepted": 0,
+            "unknown": 9,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.9": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 2,
+            "water_mechanical->water_mechanical": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "0.95": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 0,
+            "incorrectlyAccepted": 0,
+            "unknown": 11,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        }
+      },
+      "hierarchy": {
+        "(0.65, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 1,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 2,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 1,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 0.6666666666666666
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.65, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 2,
+            "water_mechanical->water_mechanical": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 1,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 2,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 1,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 0.6666666666666666
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.75, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 2,
+            "water_mechanical->water_mechanical": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 1,
+            "unknown": 5,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 2,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 1,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 0.6666666666666666
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 1,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 2,
+            "electricity_mechanical->electricity_digital": 1,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 1,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 0.5
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.85, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 2,
+            "water_mechanical->water_mechanical": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 5,
+            "incorrectlyAccepted": 0,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 2,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 0,
+            "unknown": 7,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 4,
+            "incorrectlyAccepted": 0,
+            "unknown": 7,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->electricity_digital": 1,
+            "electricity_digital->unknown": 2,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 3,
+            "incorrectlyAccepted": 0,
+            "unknown": 8,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 3,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 3,
+              "fp": 0,
+              "fn": 0,
+              "recall": 1.0,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.9, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 2,
+            "water_mechanical->water_mechanical": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.65)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 2,
+            "incorrectlyAccepted": 0,
+            "unknown": 9,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.75)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 2,
+            "incorrectlyAccepted": 0,
+            "unknown": 9,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.85)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 2,
+            "incorrectlyAccepted": 0,
+            "unknown": 9,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.9)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 2,
+            "incorrectlyAccepted": 0,
+            "unknown": 9,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->water_mechanical": 2,
+            "water_mechanical->unknown": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.6666666666666666,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        },
+        "(0.95, 0.95)": {
+          "counts": {
+            "inputs": 11,
+            "positiveMeters": 10,
+            "correctlyAccepted": 1,
+            "incorrectlyAccepted": 0,
+            "unknown": 10,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 3,
+            "electricity_digital->unknown": 3,
+            "water_mechanical->unknown": 2,
+            "water_mechanical->water_mechanical": 1,
+            "water_digital->unknown": 1,
+            "not_meter->unknown": 1
+          },
+          "perClass": {
+            "electricity_mechanical": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "electricity_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "precision": null
+            },
+            "water_mechanical": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 2,
+              "recall": 0.3333333333333333,
+              "precision": 1.0
+            },
+            "water_digital": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "precision": null
+            }
+          }
+        }
+      }
+    }
+  },
+  "test": {
+    "full_frame": {
+      "direct": {
+        "counts": {
+          "inputs": 15,
+          "positiveMeters": 9,
+          "correctlyAccepted": 2,
+          "incorrectlyAccepted": 0,
+          "unknown": 13,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->unknown": 3,
+          "electricity_digital->electricity_digital": 2,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 2,
+          "not_meter->unknown": 6,
+          "water_digital->unknown": 1
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "recall": 0.0,
+            "precision": null
+          },
+          "electricity_digital": {
+            "tp": 2,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.6666666666666666,
+            "precision": 1.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "precision": null
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.0,
+            "precision": null
+          }
+        }
+      },
+      "hierarchy": {
+        "counts": {
+          "inputs": 15,
+          "positiveMeters": 9,
+          "correctlyAccepted": 5,
+          "incorrectlyAccepted": 0,
+          "unknown": 10,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_mechanical->electricity_mechanical": 1,
+          "electricity_digital->electricity_digital": 3,
+          "water_mechanical->unknown": 1,
+          "water_mechanical->water_mechanical": 1,
+          "not_meter->unknown": 6,
+          "water_digital->unknown": 1
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 2,
+            "recall": 0.3333333333333333,
+            "precision": 1.0
+          },
+          "electricity_digital": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "recall": 1.0,
+            "precision": 1.0
+          },
+          "water_mechanical": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.5,
+            "precision": 1.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.0,
+            "precision": null
+          }
+        }
+      }
+    },
+    "oracle_meter_body": {
+      "direct": {
+        "counts": {
+          "inputs": 15,
+          "positiveMeters": 9,
+          "correctlyAccepted": 1,
+          "incorrectlyAccepted": 0,
+          "unknown": 14,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->unknown": 3,
+          "electricity_digital->electricity_digital": 1,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "not_meter->unknown": 6,
+          "water_digital->unknown": 1
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "recall": 0.0,
+            "precision": null
+          },
+          "electricity_digital": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 2,
+            "recall": 0.3333333333333333,
+            "precision": 1.0
+          },
+          "water_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "precision": null
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.0,
+            "precision": null
+          }
+        }
+      },
+      "hierarchy": {
+        "counts": {
+          "inputs": 15,
+          "positiveMeters": 9,
+          "correctlyAccepted": 3,
+          "incorrectlyAccepted": 1,
+          "unknown": 11,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->electricity_digital": 1,
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->electricity_digital": 2,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->unknown": 1,
+          "water_mechanical->water_mechanical": 1,
+          "not_meter->unknown": 6,
+          "water_digital->unknown": 1
+        },
+        "perClass": {
+          "electricity_mechanical": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "recall": 0.0,
+            "precision": null
+          },
+          "electricity_digital": {
+            "tp": 2,
+            "fp": 1,
+            "fn": 1,
+            "recall": 0.6666666666666666,
+            "precision": 0.6666666666666666
+          },
+          "water_mechanical": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.5,
+            "precision": 1.0
+          },
+          "water_digital": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "recall": 0.0,
+            "precision": null
+          }
+        }
+      }
+    }
+  },
+  "directBaselineMaxScoreDelta": 0.0,
+  "runtimeEnabled": false,
+  "hardware": "cuda",
+  "pretrainingOverlapUnknown": true,
+  "rows": [
+    {
+      "id": "commons_45290164",
+      "sha256": "fc0ec9c57fd385acb274e82122ed350b7ab0cb2852325f29811b3419fdcf1be6",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.6043216586112976,
+        "electricity_digital": 0.22371229529380798,
+        "water_mechanical": 0.13337264955043793,
+        "water_digital": 0.03816186264157295,
+        "not_meter": 0.0004315270925872028
+      },
+      "utility": {
+        "electricity": 0.9160134792327881,
+        "water": 0.07572131603956223,
+        "not_meter": 0.00826510414481163
+      },
+      "technology": {
+        "mechanical": 0.7786614894866943,
+        "digital": 0.22133852541446686
+      },
+      "forwardMs": 81.9580000024871
+    },
+    {
+      "id": "commons_45290164",
+      "sha256": "fc0ec9c57fd385acb274e82122ed350b7ab0cb2852325f29811b3419fdcf1be6",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.2675171196460724,
+        "electricity_digital": 0.6762837767601013,
+        "water_mechanical": 0.010477914474904537,
+        "water_digital": 0.04548899456858635,
+        "not_meter": 0.00023222758318297565
+      },
+      "utility": {
+        "electricity": 0.9481555223464966,
+        "water": 0.04741740599274635,
+        "not_meter": 0.004427033476531506
+      },
+      "technology": {
+        "mechanical": 0.3894413113594055,
+        "digital": 0.6105586886405945
+      },
+      "forwardMs": 8.828199999697972
+    },
+    {
+      "id": "commons_113793907",
+      "sha256": "b9a71cf08a8afdaf18d07f5698645203f3eb75e63ba6f856fed2ea6b9bb45cd8",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.21858645975589752,
+        "electricity_digital": 0.671855628490448,
+        "water_mechanical": 0.007227637805044651,
+        "water_digital": 0.06167348474264145,
+        "not_meter": 0.04065684229135513
+      },
+      "utility": {
+        "electricity": 0.6782731413841248,
+        "water": 0.3003138303756714,
+        "not_meter": 0.021413056179881096
+      },
+      "technology": {
+        "mechanical": 0.05673474445939064,
+        "digital": 0.9432652592658997
+      },
+      "forwardMs": 10.089700001117308
+    },
+    {
+      "id": "commons_113793907",
+      "sha256": "b9a71cf08a8afdaf18d07f5698645203f3eb75e63ba6f856fed2ea6b9bb45cd8",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.2487114518880844,
+        "electricity_digital": 0.6923154592514038,
+        "water_mechanical": 0.0034567692782729864,
+        "water_digital": 0.05338441580533981,
+        "not_meter": 0.002131860237568617
+      },
+      "utility": {
+        "electricity": 0.8954057693481445,
+        "water": 0.09846264868974686,
+        "not_meter": 0.006131655070930719
+      },
+      "technology": {
+        "mechanical": 0.1210336983203888,
+        "digital": 0.8789662718772888
+      },
+      "forwardMs": 18.241599998873426
+    },
+    {
+      "id": "commons_33769214",
+      "sha256": "4ab27980512f22001b029722edb9166236353b0c638b0fa866cb201b34197986",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.7998985648155212,
+        "electricity_digital": 0.19050130248069763,
+        "water_mechanical": 0.004588312469422817,
+        "water_digital": 0.004564412869513035,
+        "not_meter": 0.0004474548331927508
+      },
+      "utility": {
+        "electricity": 0.9178149104118347,
+        "water": 0.07377055287361145,
+        "not_meter": 0.008414546959102154
+      },
+      "technology": {
+        "mechanical": 0.6399646401405334,
+        "digital": 0.36003538966178894
+      },
+      "forwardMs": 18.681300000025658
+    },
+    {
+      "id": "commons_33769214",
+      "sha256": "4ab27980512f22001b029722edb9166236353b0c638b0fa866cb201b34197986",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.7998985648155212,
+        "electricity_digital": 0.19050130248069763,
+        "water_mechanical": 0.004588312469422817,
+        "water_digital": 0.004564412869513035,
+        "not_meter": 0.0004474548331927508
+      },
+      "utility": {
+        "electricity": 0.9178149104118347,
+        "water": 0.07377055287361145,
+        "not_meter": 0.008414546959102154
+      },
+      "technology": {
+        "mechanical": 0.6399646401405334,
+        "digital": 0.36003538966178894
+      },
+      "forwardMs": 17.72300000084215
+    },
+    {
+      "id": "commons_136480278",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.1253611147403717,
+        "electricity_digital": 0.8010315895080566,
+        "water_mechanical": 0.00430533429607749,
+        "water_digital": 0.06911329180002213,
+        "not_meter": 0.00018862061551772058
+      },
+      "utility": {
+        "electricity": 0.9106785655021667,
+        "water": 0.07846912741661072,
+        "not_meter": 0.01085231639444828
+      },
+      "technology": {
+        "mechanical": 0.027262955904006958,
+        "digital": 0.9727370142936707
+      },
+      "forwardMs": 16.729300001316005
+    },
+    {
+      "id": "commons_136480278",
+      "sha256": "567c63822bd1e15c1e8d4e5ef5c8b6613a9c7a20710109585da9a604afe2dbae",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.13419868052005768,
+        "electricity_digital": 0.7692933678627014,
+        "water_mechanical": 0.007589275483042002,
+        "water_digital": 0.0888357013463974,
+        "not_meter": 8.299090404761955e-05
+      },
+      "utility": {
+        "electricity": 0.9173808097839355,
+        "water": 0.07766513526439667,
+        "not_meter": 0.004954068921506405
+      },
+      "technology": {
+        "mechanical": 0.14841611683368683,
+        "digital": 0.8515838980674744
+      },
+      "forwardMs": 16.332899998815265
+    },
+    {
+      "id": "commons_136480279",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.5147914290428162,
+        "electricity_digital": 0.44950950145721436,
+        "water_mechanical": 0.009713535197079182,
+        "water_digital": 0.025537535548210144,
+        "not_meter": 0.0004479853087104857
+      },
+      "utility": {
+        "electricity": 0.8609605431556702,
+        "water": 0.11336810886859894,
+        "not_meter": 0.02567136660218239
+      },
+      "technology": {
+        "mechanical": 0.20187558233737946,
+        "digital": 0.798124372959137
+      },
+      "forwardMs": 9.149499997874955
+    },
+    {
+      "id": "commons_136480279",
+      "sha256": "90e8ef78bef84d5a5e32cd054d49e49844c11bd298754b5d3e0dd36ee2f08d3b",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.7954908013343811,
+        "electricity_digital": 0.17938555777072906,
+        "water_mechanical": 0.010457316413521767,
+        "water_digital": 0.014179789461195469,
+        "not_meter": 0.000486568984342739
+      },
+      "utility": {
+        "electricity": 0.8666217923164368,
+        "water": 0.103988416492939,
+        "not_meter": 0.029389746487140656
+      },
+      "technology": {
+        "mechanical": 0.5961723923683167,
+        "digital": 0.4038276672363281
+      },
+      "forwardMs": 8.797999998932937
+    },
+    {
+      "id": "commons_109241182",
+      "sha256": "fd41aba72b26fe9fd4e021283d87376894257c345b9e10388c9a4951b31ddc90",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.005231446586549282,
+        "electricity_digital": 0.0006922148750163615,
+        "water_mechanical": 0.8612613677978516,
+        "water_digital": 0.13205477595329285,
+        "not_meter": 0.000760214461479336
+      },
+      "utility": {
+        "electricity": 0.001600281335413456,
+        "water": 0.9924436211585999,
+        "not_meter": 0.005956027656793594
+      },
+      "technology": {
+        "mechanical": 0.9323275685310364,
+        "digital": 0.06767245382070541
+      },
+      "forwardMs": 9.10469999871566
+    },
+    {
+      "id": "commons_109241182",
+      "sha256": "fd41aba72b26fe9fd4e021283d87376894257c345b9e10388c9a4951b31ddc90",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.009751813486218452,
+        "electricity_digital": 0.00121303740888834,
+        "water_mechanical": 0.8792563080787659,
+        "water_digital": 0.10895988345146179,
+        "not_meter": 0.000818888540379703
+      },
+      "utility": {
+        "electricity": 0.0029607813339680433,
+        "water": 0.9905536770820618,
+        "not_meter": 0.006485518999397755
+      },
+      "technology": {
+        "mechanical": 0.9476050138473511,
+        "digital": 0.052395015954971313
+      },
+      "forwardMs": 9.031099998537684
+    },
+    {
+      "id": "commons_109241190",
+      "sha256": "61ddabbf6964f7e3fbd338e3c4f7f5852dd478aac8cb3f1881313c98f836c64f",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.027301959693431854,
+        "electricity_digital": 0.00499831885099411,
+        "water_mechanical": 0.79375159740448,
+        "water_digital": 0.17343537509441376,
+        "not_meter": 0.000512818165589124
+      },
+      "utility": {
+        "electricity": 0.019684121012687683,
+        "water": 0.9709737300872803,
+        "not_meter": 0.009342207573354244
+      },
+      "technology": {
+        "mechanical": 0.9055615663528442,
+        "digital": 0.09443846344947815
+      },
+      "forwardMs": 8.75860000087414
+    },
+    {
+      "id": "commons_109241190",
+      "sha256": "61ddabbf6964f7e3fbd338e3c4f7f5852dd478aac8cb3f1881313c98f836c64f",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.05463290587067604,
+        "electricity_digital": 0.011899211443960667,
+        "water_mechanical": 0.6983581185340881,
+        "water_digital": 0.23230889439582825,
+        "not_meter": 0.002800766611471772
+      },
+      "utility": {
+        "electricity": 0.05337630212306976,
+        "water": 0.923360288143158,
+        "not_meter": 0.023263469338417053
+      },
+      "technology": {
+        "mechanical": 0.9192524552345276,
+        "digital": 0.08074750006198883
+      },
+      "forwardMs": 8.827400000882335
+    },
+    {
+      "id": "commons_109241180",
+      "sha256": "91eca12fe2062366f61bc17235f67f33cc43bb59cfed1054a015f8ac4af3106a",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.00415301788598299,
+        "electricity_digital": 0.0007840153411962092,
+        "water_mechanical": 0.8298114538192749,
+        "water_digital": 0.16290196776390076,
+        "not_meter": 0.0023495429195463657
+      },
+      "utility": {
+        "electricity": 0.0007783849723637104,
+        "water": 0.9955635070800781,
+        "not_meter": 0.0036581552121788263
+      },
+      "technology": {
+        "mechanical": 0.8866803646087646,
+        "digital": 0.11331965774297714
+      },
+      "forwardMs": 9.057300001586555
+    },
+    {
+      "id": "commons_109241180",
+      "sha256": "91eca12fe2062366f61bc17235f67f33cc43bb59cfed1054a015f8ac4af3106a",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.011713789775967598,
+        "electricity_digital": 0.0008386662229895592,
+        "water_mechanical": 0.936602771282196,
+        "water_digital": 0.050679467618465424,
+        "not_meter": 0.0001653259532758966
+      },
+      "utility": {
+        "electricity": 0.0032307838555425406,
+        "water": 0.9921731948852539,
+        "not_meter": 0.004596058279275894
+      },
+      "technology": {
+        "mechanical": 0.9747695922851562,
+        "digital": 0.025230344384908676
+      },
+      "forwardMs": 8.902800000214484
+    },
+    {
+      "id": "commons_98999103",
+      "sha256": "c2e761cdac555fe95da4408198e310ef2fc03e369d11f30068af1f571ef00705",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.4468843340873718,
+        "electricity_digital": 0.5385674834251404,
+        "water_mechanical": 0.003969644661992788,
+        "water_digital": 0.007858839817345142,
+        "not_meter": 0.0027196486480534077
+      },
+      "utility": {
+        "electricity": 0.9456145167350769,
+        "water": 0.04209604486823082,
+        "not_meter": 0.012289426289498806
+      },
+      "technology": {
+        "mechanical": 0.25517722964286804,
+        "digital": 0.7448227405548096
+      },
+      "forwardMs": 9.223300003213808
+    },
+    {
+      "id": "commons_98999103",
+      "sha256": "c2e761cdac555fe95da4408198e310ef2fc03e369d11f30068af1f571ef00705",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.5553109049797058,
+        "electricity_digital": 0.4202914834022522,
+        "water_mechanical": 0.007792466785758734,
+        "water_digital": 0.012661600485444069,
+        "not_meter": 0.00394354248419404
+      },
+      "utility": {
+        "electricity": 0.9135427474975586,
+        "water": 0.0723303034901619,
+        "not_meter": 0.014126992784440517
+      },
+      "technology": {
+        "mechanical": 0.25817033648490906,
+        "digital": 0.7418296337127686
+      },
+      "forwardMs": 9.827400001086062
+    },
+    {
+      "id": "commons_141189268",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_digital",
+      "direct": {
+        "electricity_mechanical": 0.15022705495357513,
+        "electricity_digital": 0.36282575130462646,
+        "water_mechanical": 0.03156735375523567,
+        "water_digital": 0.4553494155406952,
+        "not_meter": 3.0425226213992573e-05
+      },
+      "utility": {
+        "electricity": 0.6477558612823486,
+        "water": 0.35110560059547424,
+        "not_meter": 0.0011386115802451968
+      },
+      "technology": {
+        "mechanical": 0.3832976818084717,
+        "digital": 0.6167023181915283
+      },
+      "forwardMs": 8.816100002150051
+    },
+    {
+      "id": "commons_141189268",
+      "sha256": "ccf43d05980bfa45c0e9444ade40a953b7849a20609a13dd38f3d59a2aabb096",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_digital",
+      "direct": {
+        "electricity_mechanical": 0.07717984914779663,
+        "electricity_digital": 0.24517789483070374,
+        "water_mechanical": 0.03219864144921303,
+        "water_digital": 0.6454182863235474,
+        "not_meter": 2.5277879103668965e-05
+      },
+      "utility": {
+        "electricity": 0.49851563572883606,
+        "water": 0.49988290667533875,
+        "not_meter": 0.001601448399014771
+      },
+      "technology": {
+        "mechanical": 0.368351548910141,
+        "digital": 0.6316484808921814
+      },
+      "forwardMs": 9.106099998462014
+    },
+    {
+      "id": "commons_85653618",
+      "sha256": "4c9f34ed01d7c8546b8b3801a0d17a77060c935d66488b2a60183d9e6b7f6969",
+      "split": "validation",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.017834605649113655,
+        "electricity_digital": 0.008413567207753658,
+        "water_mechanical": 0.004890928976237774,
+        "water_digital": 0.0029378714971244335,
+        "not_meter": 0.9659229516983032
+      },
+      "utility": {
+        "electricity": 0.07064419239759445,
+        "water": 0.10414817184209824,
+        "not_meter": 0.8252076506614685
+      },
+      "technology": {
+        "mechanical": 0.7132623791694641,
+        "digital": 0.2867376506328583
+      },
+      "forwardMs": 8.76099999732105
+    },
+    {
+      "id": "commons_85653618",
+      "sha256": "4c9f34ed01d7c8546b8b3801a0d17a77060c935d66488b2a60183d9e6b7f6969",
+      "split": "validation",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.017834605649113655,
+        "electricity_digital": 0.008413567207753658,
+        "water_mechanical": 0.004890928976237774,
+        "water_digital": 0.0029378714971244335,
+        "not_meter": 0.9659229516983032
+      },
+      "utility": {
+        "electricity": 0.07064419239759445,
+        "water": 0.10414817184209824,
+        "not_meter": 0.8252076506614685
+      },
+      "technology": {
+        "mechanical": 0.7132623791694641,
+        "digital": 0.2867376506328583
+      },
+      "forwardMs": 8.67649999781861
+    },
+    {
+      "id": "commons_31937475",
+      "sha256": "5c2d47cd45e7622db3a344b1f8d0a9e15d0d0db27b88a6429178a9c40bfe89ea",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.562705397605896,
+        "electricity_digital": 0.4074951410293579,
+        "water_mechanical": 0.00667675631120801,
+        "water_digital": 0.02303600311279297,
+        "not_meter": 8.668913505971432e-05
+      },
+      "utility": {
+        "electricity": 0.9933232665061951,
+        "water": 0.0047500221990048885,
+        "not_meter": 0.001926711993291974
+      },
+      "technology": {
+        "mechanical": 0.5894939303398132,
+        "digital": 0.41050609946250916
+      },
+      "forwardMs": 8.827999998175073
+    },
+    {
+      "id": "commons_31937475",
+      "sha256": "5c2d47cd45e7622db3a344b1f8d0a9e15d0d0db27b88a6429178a9c40bfe89ea",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.3689626157283783,
+        "electricity_digital": 0.5925226807594299,
+        "water_mechanical": 0.004749041050672531,
+        "water_digital": 0.03367228806018829,
+        "not_meter": 9.331633191322908e-05
+      },
+      "utility": {
+        "electricity": 0.9934959411621094,
+        "water": 0.005652380641549826,
+        "not_meter": 0.0008517101523466408
+      },
+      "technology": {
+        "mechanical": 0.23656034469604492,
+        "digital": 0.7634396553039551
+      },
+      "forwardMs": 9.304800001700642
+    },
+    {
+      "id": "commons_40388945",
+      "sha256": "f75b71bccfe80ec6c49f18e06f1f3fb7ada399449bafaa2169be4c3f905ffe97",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.3599996864795685,
+        "electricity_digital": 0.408031165599823,
+        "water_mechanical": 0.03513919189572334,
+        "water_digital": 0.19661296904087067,
+        "not_meter": 0.00021694407041650265
+      },
+      "utility": {
+        "electricity": 0.6154691576957703,
+        "water": 0.3713989853858948,
+        "not_meter": 0.013131910935044289
+      },
+      "technology": {
+        "mechanical": 0.31451916694641113,
+        "digital": 0.6854808926582336
+      },
+      "forwardMs": 9.899100001348415
+    },
+    {
+      "id": "commons_40388945",
+      "sha256": "f75b71bccfe80ec6c49f18e06f1f3fb7ada399449bafaa2169be4c3f905ffe97",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.29994601011276245,
+        "electricity_digital": 0.6244475245475769,
+        "water_mechanical": 0.006353557109832764,
+        "water_digital": 0.06897829473018646,
+        "not_meter": 0.00027460837736725807
+      },
+      "utility": {
+        "electricity": 0.7842637896537781,
+        "water": 0.20553632080554962,
+        "not_meter": 0.010199806652963161
+      },
+      "technology": {
+        "mechanical": 0.1402980536222458,
+        "digital": 0.859701931476593
+      },
+      "forwardMs": 9.558999998262152
+    },
+    {
+      "id": "commons_6979762",
+      "sha256": "e2e96b792458589fc9b3db159c68d6662ca258299e751d11a6829ff93a00b947",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.6707123517990112,
+        "electricity_digital": 0.29074782133102417,
+        "water_mechanical": 0.017652034759521484,
+        "water_digital": 0.020850418135523796,
+        "not_meter": 3.745378853636794e-05
+      },
+      "utility": {
+        "electricity": 0.8747768402099609,
+        "water": 0.12349413335323334,
+        "not_meter": 0.0017289447132498026
+      },
+      "technology": {
+        "mechanical": 0.7152662873268127,
+        "digital": 0.28473368287086487
+      },
+      "forwardMs": 10.642700002790662
+    },
+    {
+      "id": "commons_6979762",
+      "sha256": "e2e96b792458589fc9b3db159c68d6662ca258299e751d11a6829ff93a00b947",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.6344594955444336,
+        "electricity_digital": 0.3037639260292053,
+        "water_mechanical": 0.015403809025883675,
+        "water_digital": 0.046306077390909195,
+        "not_meter": 6.672772724414244e-05
+      },
+      "utility": {
+        "electricity": 0.7570417523384094,
+        "water": 0.23913151025772095,
+        "not_meter": 0.003826674772426486
+      },
+      "technology": {
+        "mechanical": 0.5945117473602295,
+        "digital": 0.4054882824420929
+      },
+      "forwardMs": 12.507799998275004
+    },
+    {
+      "id": "commons_141575682",
+      "sha256": "fcf6cfa6830bddcb074895177af34f55dc9b22a6e33051bf9d530565e9006f35",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.14495742321014404,
+        "electricity_digital": 0.8319288492202759,
+        "water_mechanical": 0.002138859126716852,
+        "water_digital": 0.02055792324244976,
+        "not_meter": 0.000416939816204831
+      },
+      "utility": {
+        "electricity": 0.978590726852417,
+        "water": 0.01813209429383278,
+        "not_meter": 0.0032771523110568523
+      },
+      "technology": {
+        "mechanical": 0.11996239423751831,
+        "digital": 0.8800376057624817
+      },
+      "forwardMs": 10.94799999918905
+    },
+    {
+      "id": "commons_141575682",
+      "sha256": "fcf6cfa6830bddcb074895177af34f55dc9b22a6e33051bf9d530565e9006f35",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.0739264041185379,
+        "electricity_digital": 0.8851009607315063,
+        "water_mechanical": 0.0014266206417232752,
+        "water_digital": 0.03945208713412285,
+        "not_meter": 9.398391557624564e-05
+      },
+      "utility": {
+        "electricity": 0.9604243040084839,
+        "water": 0.03604991361498833,
+        "not_meter": 0.0035258084535598755
+      },
+      "technology": {
+        "mechanical": 0.1830117106437683,
+        "digital": 0.8169882893562317
+      },
+      "forwardMs": 9.735499999806052
+    },
+    {
+      "id": "commons_26507235",
+      "sha256": "f08028545baabada7715eb39724edf45a38602ae56759d995408c149595cd810",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.4721928536891937,
+        "electricity_digital": 0.44770488142967224,
+        "water_mechanical": 0.015541826374828815,
+        "water_digital": 0.06446971744298935,
+        "not_meter": 9.072341345017776e-05
+      },
+      "utility": {
+        "electricity": 0.8840010762214661,
+        "water": 0.11143739521503448,
+        "not_meter": 0.004561514127999544
+      },
+      "technology": {
+        "mechanical": 0.3355660140514374,
+        "digital": 0.664434015750885
+      },
+      "forwardMs": 9.27400000000489
+    },
+    {
+      "id": "commons_26507235",
+      "sha256": "f08028545baabada7715eb39724edf45a38602ae56759d995408c149595cd810",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.4629490077495575,
+        "electricity_digital": 0.4713115096092224,
+        "water_mechanical": 0.012443353421986103,
+        "water_digital": 0.05249900370836258,
+        "not_meter": 0.0007970276637934148
+      },
+      "utility": {
+        "electricity": 0.7656314969062805,
+        "water": 0.2194993942975998,
+        "not_meter": 0.014869042672216892
+      },
+      "technology": {
+        "mechanical": 0.269990473985672,
+        "digital": 0.7300094962120056
+      },
+      "forwardMs": 9.439600002224324
+    },
+    {
+      "id": "commons_167896665",
+      "sha256": "8480d4b61077dff0478e19508a7c88f9981de0067e219dbf3ae8b8de439e192e",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.3535803258419037,
+        "electricity_digital": 0.03694091737270355,
+        "water_mechanical": 0.484485000371933,
+        "water_digital": 0.0946323424577713,
+        "not_meter": 0.030361393466591835
+      },
+      "utility": {
+        "electricity": 0.129377543926239,
+        "water": 0.8076008558273315,
+        "not_meter": 0.06302159279584885
+      },
+      "technology": {
+        "mechanical": 0.8389987349510193,
+        "digital": 0.1610012799501419
+      },
+      "forwardMs": 9.43340000230819
+    },
+    {
+      "id": "commons_167896665",
+      "sha256": "8480d4b61077dff0478e19508a7c88f9981de0067e219dbf3ae8b8de439e192e",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.6036407947540283,
+        "electricity_digital": 0.07256116718053818,
+        "water_mechanical": 0.24552981555461884,
+        "water_digital": 0.06749024987220764,
+        "not_meter": 0.010778036899864674
+      },
+      "utility": {
+        "electricity": 0.1873418390750885,
+        "water": 0.7816994786262512,
+        "not_meter": 0.030958618968725204
+      },
+      "technology": {
+        "mechanical": 0.8902146220207214,
+        "digital": 0.10978533327579498
+      },
+      "forwardMs": 9.30569999763975
+    },
+    {
+      "id": "commons_117569252",
+      "sha256": "8f79d969e153e00e432f4f2ea783bae20b0848876b46b9931f6480f943369c5f",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.11201168596744537,
+        "electricity_digital": 0.019239041954278946,
+        "water_mechanical": 0.5874861478805542,
+        "water_digital": 0.28057122230529785,
+        "not_meter": 0.0006918123690411448
+      },
+      "utility": {
+        "electricity": 0.040253788232803345,
+        "water": 0.9550332427024841,
+        "not_meter": 0.004712951369583607
+      },
+      "technology": {
+        "mechanical": 0.7417945861816406,
+        "digital": 0.2582054138183594
+      },
+      "forwardMs": 9.3127000000095
+    },
+    {
+      "id": "commons_117569252",
+      "sha256": "8f79d969e153e00e432f4f2ea783bae20b0848876b46b9931f6480f943369c5f",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_mechanical",
+      "direct": {
+        "electricity_mechanical": 0.15886346995830536,
+        "electricity_digital": 0.008364411070942879,
+        "water_mechanical": 0.7649155259132385,
+        "water_digital": 0.0637279748916626,
+        "not_meter": 0.004128704313188791
+      },
+      "utility": {
+        "electricity": 0.03882507234811783,
+        "water": 0.9001502990722656,
+        "not_meter": 0.06102463975548744
+      },
+      "technology": {
+        "mechanical": 0.9005622863769531,
+        "digital": 0.09943775832653046
+      },
+      "forwardMs": 8.90599999911501
+    },
+    {
+      "id": "commons_111639614",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.031077146530151367,
+        "electricity_digital": 0.8404448628425598,
+        "water_mechanical": 0.001756087178364396,
+        "water_digital": 0.1264171302318573,
+        "not_meter": 0.00030473180231638253
+      },
+      "utility": {
+        "electricity": 0.9038856029510498,
+        "water": 0.09463118761777878,
+        "not_meter": 0.001483147032558918
+      },
+      "technology": {
+        "mechanical": 0.026375526562333107,
+        "digital": 0.9736244678497314
+      },
+      "forwardMs": 9.080699997866759
+    },
+    {
+      "id": "commons_111639614",
+      "sha256": "ea650e782a313cdc7fc6f9d81b79a4745afe6b3164fe6f9d068be0fb55ba82e0",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "electricity_digital",
+      "direct": {
+        "electricity_mechanical": 0.08517535775899887,
+        "electricity_digital": 0.7531771659851074,
+        "water_mechanical": 0.0062250373885035515,
+        "water_digital": 0.15429620444774628,
+        "not_meter": 0.0011262324405834079
+      },
+      "utility": {
+        "electricity": 0.936393678188324,
+        "water": 0.061921097338199615,
+        "not_meter": 0.0016852151602506638
+      },
+      "technology": {
+        "mechanical": 0.06126215681433678,
+        "digital": 0.9387378096580505
+      },
+      "forwardMs": 8.788499999354826
+    },
+    {
+      "id": "commons_161109743",
+      "sha256": "f954fd131917a220afd527aa1e75a8377629fbc3bca22c62f02c77e5a7eae52c",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.1283521056175232,
+        "electricity_digital": 0.04869188368320465,
+        "water_mechanical": 0.05646580085158348,
+        "water_digital": 0.24570095539093018,
+        "not_meter": 0.5207892060279846
+      },
+      "utility": {
+        "electricity": 0.06882117688655853,
+        "water": 0.800274670124054,
+        "not_meter": 0.1309041529893875
+      },
+      "technology": {
+        "mechanical": 0.5436418056488037,
+        "digital": 0.4563581943511963
+      },
+      "forwardMs": 17.18320000145468
+    },
+    {
+      "id": "commons_161109743",
+      "sha256": "f954fd131917a220afd527aa1e75a8377629fbc3bca22c62f02c77e5a7eae52c",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.1283521056175232,
+        "electricity_digital": 0.04869188368320465,
+        "water_mechanical": 0.05646580085158348,
+        "water_digital": 0.24570095539093018,
+        "not_meter": 0.5207892060279846
+      },
+      "utility": {
+        "electricity": 0.06882117688655853,
+        "water": 0.800274670124054,
+        "not_meter": 0.1309041529893875
+      },
+      "technology": {
+        "mechanical": 0.5436418056488037,
+        "digital": 0.4563581943511963
+      },
+      "forwardMs": 18.664600000192877
+    },
+    {
+      "id": "commons_157635897",
+      "sha256": "b128c7bf901993881ee5a950f11a832dc53a5bd4d9c4ab9106915cd37c3baa56",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.03623713552951813,
+        "electricity_digital": 0.00869356282055378,
+        "water_mechanical": 0.053342562168836594,
+        "water_digital": 0.03575066849589348,
+        "not_meter": 0.865976095199585
+      },
+      "utility": {
+        "electricity": 0.12675444781780243,
+        "water": 0.3565407693386078,
+        "not_meter": 0.516704797744751
+      },
+      "technology": {
+        "mechanical": 0.735527753829956,
+        "digital": 0.26447227597236633
+      },
+      "forwardMs": 9.115999997447943
+    },
+    {
+      "id": "commons_157635897",
+      "sha256": "b128c7bf901993881ee5a950f11a832dc53a5bd4d9c4ab9106915cd37c3baa56",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.03623713552951813,
+        "electricity_digital": 0.00869356282055378,
+        "water_mechanical": 0.053342562168836594,
+        "water_digital": 0.03575066849589348,
+        "not_meter": 0.865976095199585
+      },
+      "utility": {
+        "electricity": 0.12675444781780243,
+        "water": 0.3565407693386078,
+        "not_meter": 0.516704797744751
+      },
+      "technology": {
+        "mechanical": 0.735527753829956,
+        "digital": 0.26447227597236633
+      },
+      "forwardMs": 8.912600002076942
+    },
+    {
+      "id": "commons_161110829",
+      "sha256": "fa22b1073d30acf3ff8a238b8f72dd02d126ecd1d18aefb69aeb7bc4bee8d233",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.07220331579446793,
+        "electricity_digital": 0.0348980687558651,
+        "water_mechanical": 0.003441925160586834,
+        "water_digital": 0.00605201069265604,
+        "not_meter": 0.8834046125411987
+      },
+      "utility": {
+        "electricity": 0.12194372713565826,
+        "water": 0.17907704412937164,
+        "not_meter": 0.6989792585372925
+      },
+      "technology": {
+        "mechanical": 0.5098744630813599,
+        "digital": 0.49012550711631775
+      },
+      "forwardMs": 9.349399999337038
+    },
+    {
+      "id": "commons_161110829",
+      "sha256": "fa22b1073d30acf3ff8a238b8f72dd02d126ecd1d18aefb69aeb7bc4bee8d233",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.07220331579446793,
+        "electricity_digital": 0.0348980687558651,
+        "water_mechanical": 0.003441925160586834,
+        "water_digital": 0.00605201069265604,
+        "not_meter": 0.8834046125411987
+      },
+      "utility": {
+        "electricity": 0.12194372713565826,
+        "water": 0.17907704412937164,
+        "not_meter": 0.6989792585372925
+      },
+      "technology": {
+        "mechanical": 0.5098744630813599,
+        "digital": 0.49012550711631775
+      },
+      "forwardMs": 9.191999997710809
+    },
+    {
+      "id": "commons_161108186",
+      "sha256": "95009b554aab1089d2633dc239a2175fa76f4ea0cb555f524a2f6d634a55513d",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.23105277121067047,
+        "electricity_digital": 0.2311858832836151,
+        "water_mechanical": 0.03918055072426796,
+        "water_digital": 0.17997632920742035,
+        "not_meter": 0.318604439496994
+      },
+      "utility": {
+        "electricity": 0.37040790915489197,
+        "water": 0.37758246064186096,
+        "not_meter": 0.25200963020324707
+      },
+      "technology": {
+        "mechanical": 0.5870125889778137,
+        "digital": 0.4129873812198639
+      },
+      "forwardMs": 9.182999998301966
+    },
+    {
+      "id": "commons_161108186",
+      "sha256": "95009b554aab1089d2633dc239a2175fa76f4ea0cb555f524a2f6d634a55513d",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.23105277121067047,
+        "electricity_digital": 0.2311858832836151,
+        "water_mechanical": 0.03918055072426796,
+        "water_digital": 0.17997632920742035,
+        "not_meter": 0.318604439496994
+      },
+      "utility": {
+        "electricity": 0.37040790915489197,
+        "water": 0.37758246064186096,
+        "not_meter": 0.25200963020324707
+      },
+      "technology": {
+        "mechanical": 0.5870125889778137,
+        "digital": 0.4129873812198639
+      },
+      "forwardMs": 9.364599998662015
+    },
+    {
+      "id": "commons_138131787",
+      "sha256": "d71be3d0041f9af31bcf8f94315c2dede62cc05c8b767cedaa3c18e672f8fc7b",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.5839934349060059,
+        "electricity_digital": 0.007255345582962036,
+        "water_mechanical": 0.3997267782688141,
+        "water_digital": 0.008147857151925564,
+        "not_meter": 0.0008766365353949368
+      },
+      "utility": {
+        "electricity": 0.4782542288303375,
+        "water": 0.5086641311645508,
+        "not_meter": 0.013081670738756657
+      },
+      "technology": {
+        "mechanical": 0.9809580445289612,
+        "digital": 0.019041882827878
+      },
+      "forwardMs": 9.196700000757119
+    },
+    {
+      "id": "commons_138131787",
+      "sha256": "d71be3d0041f9af31bcf8f94315c2dede62cc05c8b767cedaa3c18e672f8fc7b",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.5839934349060059,
+        "electricity_digital": 0.007255345582962036,
+        "water_mechanical": 0.3997267782688141,
+        "water_digital": 0.008147857151925564,
+        "not_meter": 0.0008766365353949368
+      },
+      "utility": {
+        "electricity": 0.4782542288303375,
+        "water": 0.5086641311645508,
+        "not_meter": 0.013081670738756657
+      },
+      "technology": {
+        "mechanical": 0.9809580445289612,
+        "digital": 0.019041882827878
+      },
+      "forwardMs": 9.048699997947551
+    },
+    {
+      "id": "commons_157780137",
+      "sha256": "5bcfe706c4fc70e4d2e6f7f36ce7eb999853f16a105b2c2a7e8b22ebbe2c5866",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.014077801257371902,
+        "electricity_digital": 0.21029512584209442,
+        "water_mechanical": 0.02037561498582363,
+        "water_digital": 0.48305991291999817,
+        "not_meter": 0.27219143509864807
+      },
+      "utility": {
+        "electricity": 0.21185843646526337,
+        "water": 0.3967939019203186,
+        "not_meter": 0.39134764671325684
+      },
+      "technology": {
+        "mechanical": 0.1178659126162529,
+        "digital": 0.8821340799331665
+      },
+      "forwardMs": 9.23289999991539
+    },
+    {
+      "id": "commons_157780137",
+      "sha256": "5bcfe706c4fc70e4d2e6f7f36ce7eb999853f16a105b2c2a7e8b22ebbe2c5866",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": false,
+      "expected": "not_meter",
+      "direct": {
+        "electricity_mechanical": 0.014077801257371902,
+        "electricity_digital": 0.21029512584209442,
+        "water_mechanical": 0.02037561498582363,
+        "water_digital": 0.48305991291999817,
+        "not_meter": 0.27219143509864807
+      },
+      "utility": {
+        "electricity": 0.21185843646526337,
+        "water": 0.3967939019203186,
+        "not_meter": 0.39134764671325684
+      },
+      "technology": {
+        "mechanical": 0.1178659126162529,
+        "digital": 0.8821340799331665
+      },
+      "forwardMs": 16.806800002086675
+    },
+    {
+      "id": "commons_156125142",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "split": "test",
+      "scope": "full_frame",
+      "usedOracleBody": false,
+      "expected": "water_digital",
+      "direct": {
+        "electricity_mechanical": 0.17369282245635986,
+        "electricity_digital": 0.21075277030467987,
+        "water_mechanical": 0.18090637028217316,
+        "water_digital": 0.42816391587257385,
+        "not_meter": 0.006484149489551783
+      },
+      "utility": {
+        "electricity": 0.3941967785358429,
+        "water": 0.5335384607315063,
+        "not_meter": 0.07226472347974777
+      },
+      "technology": {
+        "mechanical": 0.5274425148963928,
+        "digital": 0.4725574851036072
+      },
+      "forwardMs": 17.007499998726416
+    },
+    {
+      "id": "commons_156125142",
+      "sha256": "44b18446780e2328f200953440f29294d1895d98a0b1daa7322518fb83cf7d12",
+      "split": "test",
+      "scope": "oracle_meter_body",
+      "usedOracleBody": true,
+      "expected": "water_digital",
+      "direct": {
+        "electricity_mechanical": 0.17369282245635986,
+        "electricity_digital": 0.21075277030467987,
+        "water_mechanical": 0.18090637028217316,
+        "water_digital": 0.42816391587257385,
+        "not_meter": 0.006484149489551783
+      },
+      "utility": {
+        "electricity": 0.3941967785358429,
+        "water": 0.5335384607315063,
+        "not_meter": 0.07226472347974777
+      },
+      "technology": {
+        "mechanical": 0.5274425148963928,
+        "digital": 0.4725574851036072
+      },
+      "forwardMs": 17.37959999809391
+    }
+  ],
+  "limitations": [
+    "Oracle body crops are not production inputs",
+    "Neither model counts or localizes meters",
+    "No independent human labels or billing acceptance"
+  ]
+}

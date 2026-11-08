@@ -30,8 +30,10 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
             return await scope.VisibleTasks.Where(t => t.Id == id).Select(t => new OcrWorkflowResource(
             new ResourceScope(t.Meter.Room.LocationId, null),
             t.Meter.IsActive && (t.Status == MeterTaskStatus.Assigned || t.Status == MeterTaskStatus.InProgress),
-            t.Meter.UtilityType == UtilityType.Water ? (t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalWater : OcrDocumentKind.DigitalWater)
-                : (t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalElectricity : OcrDocumentKind.DigitalElectricity),
+            t.Meter.UtilityType == UtilityType.Water && t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalWater :
+                t.Meter.UtilityType == UtilityType.Water && t.Meter.Display == MeterDisplay.Digital ? OcrDocumentKind.DigitalWater :
+                t.Meter.UtilityType == UtilityType.Electricity && t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalElectricity :
+                t.Meter.UtilityType == UtilityType.Electricity && t.Meter.Display == MeterDisplay.Digital ? OcrDocumentKind.DigitalElectricity : (OcrDocumentKind?)null,
             t.Meter.DecimalPlaces,
             db.Set<MeterReading>().Where(reading => reading.MeterId == t.MeterId)
                 .OrderByDescending(reading => reading.ConfirmedAt).ThenBy(reading => reading.Id)

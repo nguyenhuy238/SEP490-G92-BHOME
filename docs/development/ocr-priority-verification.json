@@ -1,0 +1,207 @@
+{
+  "date": "2026-11-06",
+  "startHead": "9932bdd607fc9e7812c931aa39ca68b3cb3e5d9a",
+  "branch": "member/QHuy",
+  "implementationHead": "f061811",
+  "status": "partial_not_production_ready",
+  "traceability": [
+    "BF-05",
+    "UC-20",
+    "UC-21",
+    "GBR-01/02/07",
+    "JOB-09/10"
+  ],
+  "acceptedRuntimeChange": "Server metadata validated before image consumption; unresolved profiles, unsupported precision and invalid previous baseline return explicit review without choosing another category. Confirmation and financial rules unchanged.",
+  "waterFrozenHistoricalBaseline": {
+    "typed": {
+      "inputs": 52,
+      "fullyDigitLabeled": 33,
+      "emittedProposals": 10,
+      "exactDigitSequences": 10,
+      "incorrectProposalsOnFullyLabeled": 0,
+      "proposalsWithoutFullDigitGroundTruth": 0,
+      "manualFallbacks": 42,
+      "correctProposalsOverAllInputs": 0.19230769230769232,
+      "correctProposalsOverEmittedProposals": 1.0,
+      "billingReadingAccuracy": null,
+      "latencyMs": {
+        "p50": 203.0,
+        "p95": 779.8,
+        "max": 866
+      }
+    },
+    "automatic": {
+      "inputs": 52,
+      "fullyDigitLabeled": 33,
+      "emittedProposals": 1,
+      "exactDigitSequences": 1,
+      "incorrectProposalsOnFullyLabeled": 0,
+      "proposalsWithoutFullDigitGroundTruth": 0,
+      "manualFallbacks": 51,
+      "correctProposalsOverAllInputs": 0.019230769230769232,
+      "correctProposalsOverEmittedProposals": 1.0,
+      "billingReadingAccuracy": null,
+      "latencyMs": {
+        "p50": 2873.5,
+        "p95": 5940.5,
+        "max": 7494
+      }
+    }
+  },
+  "alignmentExperiment": {
+    "set": "historical_validation100_after_exact_dedup",
+    "fullyDigitLabeled": 69,
+    "baselineExact": 12,
+    "permissiveCandidateExact": 13,
+    "strictCandidateExact": 7,
+    "observedFalse": 0,
+    "decision": "REJECTED",
+    "testEvaluated": false,
+    "reason": "Permissive erases original numeric disagreements through malformed PP; strict loses coverage."
+  },
+  "data": {
+    "downloadedDigitCrops": 4548,
+    "uniqueSha256Images": 4546,
+    "physicalMeterGroups": 1,
+    "admittedSupervised": 0,
+    "status": "quarantined_pending_review",
+    "sourceDisjointPositiveCandidates": 2,
+    "positiveIndependentHumanAcceptance": false,
+    "newReadableDigitalWater": 0
+  },
+  "models": {
+    "trainingPerformed": false,
+    "weightsChanged": false,
+    "fourClassActivated": false,
+    "reason": "New data do not resolve four-class/independent-positive coverage; previous rejection preserved."
+  },
+  "checks": {
+    "releaseBuild": {
+      "passed": true,
+      "warnings": 0,
+      "errors": 0
+    },
+    "application": {
+      "passed": 321
+    },
+    "domain": {
+      "passed": 102
+    },
+    "ocrIntegrationWithLocalModelsWithoutDockerOrPostgres": {
+      "passed": 125,
+      "skipped": 0
+    },
+    "postgresMetadataConfirmationAndBilling": {
+      "passed": 6,
+      "skipped": 0,
+      "storage": "explicit in-memory test substitute"
+    },
+    "realOnnxAuthenticatedTaskCorrectionEvidenceReplay": {
+      "passed": 1,
+      "skipped": 0,
+      "postgres": true,
+      "storage": "explicit in-memory test substitute",
+      "precision": "synthetic configured2, not independently labeled billing GT"
+    },
+    "mobileSupportedNode22": {
+      "passed": 389,
+      "failed": 0,
+      "typecheck": true,
+      "lint": true
+    },
+    "nodeDataset": {
+      "passed": 29
+    },
+    "pythonMeterTools": {
+      "passed": 29
+    },
+    "pythonAlignmentSummary": {
+      "passed": 3
+    },
+    "newPositiveManifestValidator": {
+      "valid": true,
+      "samples": 2
+    },
+    "stage2DotnetToPinnedNativeReferenceParity": {
+      "passed": 10,
+      "inputMaxDelta": 0,
+      "freshNativePytorchRun": false
+    },
+    "negativeReadingControls": {
+      "correctRejections": 17,
+      "falseProposals": 0,
+      "allInputs": 17
+    },
+    "heldOutExactOverlapGuard": {
+      "rejected": true,
+      "outputCreated": false
+    },
+    "physicalCamera": "NOT RUN: no controlled Android/iOS camera session or adb available",
+    "realMinio": "NOT RUN: no local MinIO service or usable Docker daemon available",
+    "representativeFourCategoryPositiveAcceptance": "NOT RUN: insufficient verified independent data"
+  },
+  "initialFailuresResolved": [
+    {
+      "check": "mobile npm under global Node",
+      "result": "12 startup tests failed under unsupported global Node; rerun supported local Node22 passed389, no source workaround."
+    },
+    {
+      "check": "temporary PostgreSQL init",
+      "result": "WIN1252 JSON Unicode failure; discarded test cluster process and initialized separate UTF8 cluster, final6 business checks passed."
+    },
+    {
+      "check": "profile integration fixture",
+      "result": "Duplicate active water meter in same Room was correctly rejected409; isolated profile cases in separate Rooms, rerun passed."
+    },
+    {
+      "check": "real task integration fixture",
+      "result": "Token from a different test host signing key was rejected401; logged in on target host, rerun passed."
+    },
+    {
+      "check": "overlapping build/evaluation",
+      "result": "Initial build had2 file-lock retry warnings; final sequenced Release build0 warnings/errors."
+    }
+  ],
+  "evidence": [
+    {
+      "path": "docs/development/ocr-priority-failure-taxonomy.json",
+      "sha256": "eca9ffa9819865f2c84ceca245df32ef3f67970788c1321d6099549e71510538"
+    },
+    {
+      "path": "docs/development/ocr-priority-alignment-results.json",
+      "sha256": "8d49ecf157943dca09178efd1b5e83eeb2236acb3b3fab71d1fca85a346acc88"
+    },
+    {
+      "path": "docs/development/ocr-priority-positive-results.json",
+      "sha256": "9acc900ec2f511d548062d3776e05e2d9c71b082acbbcc3198f41aaffe08a23d"
+    },
+    {
+      "path": "docs/development/ocr-priority-negative-results.json",
+      "sha256": "b31222b678eca58c1491b089d0e8dd481b3ab9614c04edc49eeb8a475386dea0"
+    },
+    {
+      "path": "docs/datasets/meter/licensed-meter-source-audit-badger.json",
+      "sha256": "25d36b76dc3990a919382c18e66eee915ab8d5fb8d07a13ccfea091d471d9452"
+    },
+    {
+      "path": "docs/datasets/meter/licensed-meter-positive-candidates.json",
+      "sha256": "2e84e24486df8862446133df1f75182a6e038e7dff644568fa83962a9668719d"
+    },
+    {
+      "path": ".tools/ocr-priority-baseline.json",
+      "sha256": "c21d9c2b3fbd7599c16f41d95359fe28b1cb1ec5ba021a717f742be7d542ee4d"
+    },
+    {
+      "path": ".tools/ocr-priority-stage2-parity.json",
+      "sha256": "53d1aad92df6d2017d408fb8fb7c4d79f93503b52de0502cec9a95adbde3a4c4"
+    }
+  ],
+  "remainingBlockers": [
+    "No observed improvement in frozen full-frame mechanical-water accuracy/fallback.",
+    "Source-disjoint positives: water full frame0/1 exact; selected electricity LCD window0/1; full-frame electricity is multi-meter rejection, not a reading positive.",
+    "Mechanical-electricity/digital-water verified positive coverage and all-category billing precision/register GT missing.",
+    "No new category reader or four-class checkpoint has passed activation gates.",
+    "Private object-store transport and physical camera workflow remain unverified in this session."
+  ],
+  "finalGitState": "See ignored .tools/ocr-priority-final-state.json generated after report commit; working-tree expected clean."
+}

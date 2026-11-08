@@ -21,7 +21,8 @@ internal static class TrainedYoloParity
             var classes = manifest.GetProperty("classes").EnumerateArray().Select(x => x.GetString()).ToArray();
             string?[] meterClasses = ["electricity_mechanical", "electricity_digital", "water_mechanical", "water_digital"];
             if (!(classes.Length is 3 or 4 && classes.SequenceEqual(meterClasses.Take(classes.Length))) &&
-                !classes.SequenceEqual(Enumerable.Range(0, 10).Select(x => x.ToString(System.Globalization.CultureInfo.InvariantCulture))))
+                !classes.SequenceEqual(Enumerable.Range(0, 10).Select(x => x.ToString(System.Globalization.CultureInfo.InvariantCulture))) &&
+                !classes.SequenceEqual(new[] { "reading_region", "serial_region" }))
                 throw new InvalidDataException("Unsupported class order");
             using var options = new SessionOptions { IntraOpNumThreads = 2, InterOpNumThreads = 1 };
             using var session = new InferenceSession(model, options);

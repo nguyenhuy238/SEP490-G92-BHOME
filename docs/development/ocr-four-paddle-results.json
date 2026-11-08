@@ -1,0 +1,482 @@
+{
+  "diagnosticSha256": "8c26a63a15bb8fa4732ca17dfe9c1a2be83852f0c95e82c31122c613f16bb884",
+  "models": {
+    "english_mobile": [
+      "b5f833dfc5d0eb71da397b4efa06ebeee9b431b690a47d6af40d77d8eabc557f",
+      "27e91d0582f40168aa218303c76e184bc78fa7a5d105aad0cfbad8458b441067"
+    ],
+    "multilingual_server": [
+      "d9dc333c9c7b042c6dffb8e33d72b6f65c9c1d463d0a3c2f78174fea55e94752",
+      "2c719dba044c4e2228aef8ff92f5f575394d75d24c16de096a33b7cfd902f66d"
+    ]
+  },
+  "scope": "offline_component_only_no_runtime_activation",
+  "metrics": {
+    "predicted_window:english_mobile": {
+      "inputs": 75,
+      "numeric": 64,
+      "completeLabel": 63,
+      "exact": 34,
+      "incorrect": 19,
+      "p95ForwardMs": 22.208869999849412
+    },
+    "predicted_window:multilingual_server": {
+      "inputs": 75,
+      "numeric": 64,
+      "completeLabel": 63,
+      "exact": 33,
+      "incorrect": 23,
+      "p95ForwardMs": 73.3070700000098
+    },
+    "oracle_window:english_mobile": {
+      "inputs": 100,
+      "numeric": 87,
+      "completeLabel": 69,
+      "exact": 36,
+      "incorrect": 25,
+      "p95ForwardMs": 22.049885000706126
+    },
+    "oracle_window:multilingual_server": {
+      "inputs": 100,
+      "numeric": 81,
+      "completeLabel": 69,
+      "exact": 39,
+      "incorrect": 19,
+      "p95ForwardMs": 76.13272499997947
+    },
+    "lcd_agent_draft:english_mobile": {
+      "inputs": 12,
+      "numeric": 8,
+      "matchesAgentDraft": 4,
+      "p95ForwardMs": 13.371755000662233
+    },
+    "lcd_agent_draft:multilingual_server": {
+      "inputs": 12,
+      "numeric": 9,
+      "matchesAgentDraft": 4,
+      "p95ForwardMs": 55.40545500039116
+    }
+  },
+  "rawSha256": "e88c1119aa6c23a78735322f0759e1a644d8fbf3392c78b0a3217a1c3bb3fddb",
+  "officialServerModel": {
+    "repository": "PaddlePaddle/PP-OCRv5_server_rec_onnx",
+    "revision": "b70df217f4fd99d14f970bad092cebe7d74cc4d1",
+    "license": "apache-2.0",
+    "files": {
+      "README.md": {
+        "sha256": "806a481f4c15a38feb7103a64ec0e14f83f6a211abb4b0a345bdc3b13145c821",
+        "bytes": 1770
+      },
+      "inference.yml": {
+        "sha256": "2c719dba044c4e2228aef8ff92f5f575394d75d24c16de096a33b7cfd902f66d",
+        "bytes": 148345
+      },
+      "inference.onnx": {
+        "sha256": "d9dc333c9c7b042c6dffb8e33d72b6f65c9c1d463d0a3c2f78174fea55e94752",
+        "bytes": 84503027
+      }
+    }
+  },
+  "lcdReviewedCropBaselines": {
+    "scope": "agent_reviewed_development_oracle_crops_no_billing_claim",
+    "rows": [
+      {
+        "id": "commons_136480278",
+        "mode": "baseline_direct",
+        "expectedDigits": "74590",
+        "raw": "7459\u0110",
+        "confidence": 0.7872429,
+        "exactRaw": false,
+        "observedMs": 91.9756
+      },
+      {
+        "id": "commons_136480278",
+        "mode": "baseline_page",
+        "expectedDigits": "74590",
+        "raw": "7459\u1ee3 kWh",
+        "confidence": 0.83828676,
+        "exactRaw": false,
+        "observedMs": 164.8689
+      },
+      {
+        "id": "commons_136480278",
+        "mode": "english_direct",
+        "expectedDigits": "74590",
+        "raw": "74590",
+        "confidence": 0.9981392,
+        "exactRaw": true,
+        "observedMs": 21.2248
+      },
+      {
+        "id": "commons_136480279",
+        "mode": "baseline_direct",
+        "expectedDigits": null,
+        "raw": "LD",
+        "confidence": 0.82552946,
+        "exactRaw": false,
+        "observedMs": 55.2668
+      },
+      {
+        "id": "commons_136480279",
+        "mode": "baseline_page",
+        "expectedDigits": null,
+        "raw": "8 lP",
+        "confidence": 0.6434834,
+        "exactRaw": false,
+        "observedMs": 142.5033
+      },
+      {
+        "id": "commons_136480279",
+        "mode": "english_direct",
+        "expectedDigits": null,
+        "raw": "F",
+        "confidence": 0.13175814,
+        "exactRaw": false,
+        "observedMs": 15.3723
+      },
+      {
+        "id": "commons_141575682",
+        "mode": "baseline_direct",
+        "expectedDigits": "004046",
+        "raw": "004045",
+        "confidence": 0.9138765,
+        "exactRaw": false,
+        "observedMs": 55.1252
+      },
+      {
+        "id": "commons_141575682",
+        "mode": "baseline_page",
+        "expectedDigits": "004046",
+        "raw": "004045",
+        "confidence": 0.9284865,
+        "exactRaw": false,
+        "observedMs": 69.1765
+      },
+      {
+        "id": "commons_141575682",
+        "mode": "english_direct",
+        "expectedDigits": "004046",
+        "raw": "004046",
+        "confidence": 0.83306104,
+        "exactRaw": true,
+        "observedMs": 14.3837
+      },
+      {
+        "id": "commons_26507235",
+        "mode": "baseline_direct",
+        "expectedDigits": "21594",
+        "raw": "P1594",
+        "confidence": 0.92145616,
+        "exactRaw": false,
+        "observedMs": 55.7805
+      },
+      {
+        "id": "commons_26507235",
+        "mode": "baseline_page",
+        "expectedDigits": "21594",
+        "raw": "P1594",
+        "confidence": 0.95412016,
+        "exactRaw": false,
+        "observedMs": 65.0861
+      },
+      {
+        "id": "commons_26507235",
+        "mode": "english_direct",
+        "expectedDigits": "21594",
+        "raw": "21594",
+        "confidence": 0.9991523,
+        "exactRaw": true,
+        "observedMs": 15.1843
+      },
+      {
+        "id": "commons_111639614",
+        "mode": "baseline_direct",
+        "expectedDigits": null,
+        "raw": "0N",
+        "confidence": 0.46122825,
+        "exactRaw": false,
+        "observedMs": 56.0534
+      },
+      {
+        "id": "commons_111639614",
+        "mode": "baseline_page",
+        "expectedDigits": null,
+        "raw": "",
+        "confidence": 0,
+        "exactRaw": false,
+        "observedMs": 37.133
+      },
+      {
+        "id": "commons_111639614",
+        "mode": "english_direct",
+        "expectedDigits": null,
+        "raw": "88888",
+        "confidence": 0.9773116,
+        "exactRaw": false,
+        "observedMs": 13.0943
+      },
+      {
+        "id": "commons_141189268",
+        "mode": "baseline_direct",
+        "expectedDigits": "000880578",
+        "raw": "000990518",
+        "confidence": 0.76904076,
+        "exactRaw": false,
+        "observedMs": 55.2586
+      },
+      {
+        "id": "commons_141189268",
+        "mode": "baseline_page",
+        "expectedDigits": "000880578",
+        "raw": "",
+        "confidence": 0,
+        "exactRaw": false,
+        "observedMs": 74.482
+      },
+      {
+        "id": "commons_141189268",
+        "mode": "english_direct",
+        "expectedDigits": "000880578",
+        "raw": "000880518",
+        "confidence": 0.97034943,
+        "exactRaw": false,
+        "observedMs": 13.0297
+      }
+    ]
+  },
+  "lcdReviewedCropServer": [
+    {
+      "id": "commons_136480278",
+      "split": "val",
+      "expectedDigits": "74590",
+      "raw": "74590",
+      "digits": "74590",
+      "minimumCharacterScore": 0.5977588295936584,
+      "meanCharacterScore": 0.8718731164932251,
+      "forwardMs": 53.00470000020141
+    },
+    {
+      "id": "commons_136480279",
+      "split": "val",
+      "expectedDigits": null,
+      "raw": "\u95e8",
+      "digits": null,
+      "minimumCharacterScore": 0.21313144266605377,
+      "meanCharacterScore": 0.21313144266605377,
+      "forwardMs": 53.39499999990949
+    },
+    {
+      "id": "commons_141575682",
+      "split": "test",
+      "expectedDigits": "004046",
+      "raw": "004046",
+      "digits": "004046",
+      "minimumCharacterScore": 0.7646772265434265,
+      "meanCharacterScore": 0.9492034514745077,
+      "forwardMs": 54.5548999998573
+    },
+    {
+      "id": "commons_26507235",
+      "split": "test",
+      "expectedDigits": "21594",
+      "raw": "21594",
+      "digits": "21594",
+      "minimumCharacterScore": 0.9689104557037354,
+      "meanCharacterScore": 0.9766300082206726,
+      "forwardMs": 54.139199999553966
+    },
+    {
+      "id": "commons_111639614",
+      "split": "test",
+      "expectedDigits": null,
+      "raw": "88888",
+      "digits": "88888",
+      "minimumCharacterScore": 0.8786580562591553,
+      "meanCharacterScore": 0.9470785856246948,
+      "forwardMs": 54.226399999606656
+    },
+    {
+      "id": "commons_141189268",
+      "split": "test",
+      "expectedDigits": "000880578",
+      "raw": "00088058",
+      "digits": "00088058",
+      "minimumCharacterScore": 0.9591178894042969,
+      "meanCharacterScore": 0.9813720211386681,
+      "forwardMs": 53.34859999948094
+    }
+  ],
+  "activationDecision": "rejected_blank_display_hallucination_wrong_water_digits_and_missing_billing_gt",
+  "currentParserLcdBaseline": {
+    "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2",
+    "rows": [
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "variant": "pp_direct",
+        "expectedDigits": "74590",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 82,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_136480278",
+        "split": "val",
+        "variant": "pp_page",
+        "expectedDigits": "74590",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 166,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "variant": "pp_direct",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 56,
+        "warnings": [
+          "reading_not_recognized"
+        ]
+      },
+      {
+        "id": "commons_136480279",
+        "split": "val",
+        "variant": "pp_page",
+        "expectedDigits": null,
+        "actualDigits": "8",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 143,
+        "warnings": [
+          "low_confidence"
+        ]
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "004046",
+        "actualDigits": "004045",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 57,
+        "warnings": []
+      },
+      {
+        "id": "commons_141575682",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "004046",
+        "actualDigits": "004045",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 71,
+        "warnings": []
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "21594",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 57,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_26507235",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "21594",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 67,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 58,
+        "warnings": [
+          "ambiguous_reading"
+        ]
+      },
+      {
+        "id": "commons_111639614",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": null,
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 37,
+        "warnings": [
+          "no_text",
+          "reading_not_recognized"
+        ]
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "variant": "pp_direct",
+        "expectedDigits": "000880578",
+        "actualDigits": "000990518",
+        "exact": false,
+        "falseProposal": true,
+        "fallback": false,
+        "elapsedMs": 54,
+        "warnings": [
+          "low_confidence"
+        ]
+      },
+      {
+        "id": "commons_141189268",
+        "split": "test",
+        "variant": "pp_page",
+        "expectedDigits": "000880578",
+        "actualDigits": null,
+        "exact": false,
+        "falseProposal": false,
+        "fallback": true,
+        "elapsedMs": 71,
+        "warnings": [
+          "no_text",
+          "reading_not_recognized"
+        ]
+      }
+    ],
+    "limitation": "Reviewed display crops; digit sequence only, decimal/register eligibility excluded. No full-frame or billing accuracy claim."
+  }
+}

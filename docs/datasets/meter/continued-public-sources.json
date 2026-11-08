@@ -1,0 +1,29 @@
+{
+  "purpose": "Licensed public acquisitions, source captions are not category labels",
+  "assets": [
+    {
+      "id": "commons_195597533",
+      "title": "File:City water meter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:City_water_meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8e/City_water_meter.jpg/1280px-City_water_meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Arlo_Barnes\" title=\"User:Arlo Barnes\">Arlo Barnes</a>",
+      "credit": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+      "image": ".tools/ocr-continued/commons_195597533.jpg",
+      "sha256": "85ca26dfbd7539305d13cda797981dd03598b57bbe92bb7fd3e3c8d08e8a9306"
+    },
+    {
+      "id": "commons_179987587",
+      "title": "File:Digital Water Meter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digital_Water_Meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Digital_Water_Meter.jpg/1280px-Digital_Water_Meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Aliva_Sahoo\" title=\"User:Aliva Sahoo\">Aliva Sahoo</a>",
+      "credit": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+      "image": ".tools/ocr-continued/commons_179987587.jpg",
+      "sha256": "fea61703e2a2c7d1e81b9891cd30c316a281300db75885f43446e81a15ed244b"
+    }
+  ]
+}

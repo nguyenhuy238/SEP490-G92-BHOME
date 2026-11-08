@@ -1,0 +1,1211 @@
+{
+  "scope": "provisional_display_state_experiment_no_runtime_activation",
+  "prompts": [
+    [
+      "a closeup of an active LCD utility meter screen with clearly visible consumption numbers",
+      "a functioning digital meter display showing a readable numeric value"
+    ],
+    [
+      "a blank unpowered LCD screen with no active numbers",
+      "an unpowered seven segment LED display with faint outlines of unlit digits"
+    ],
+    [
+      "an LCD display showing all segments and all icons lit during a display test",
+      "a digital display in segment test mode showing every segment"
+    ],
+    [
+      "a blurred obscured reflective meter screen whose digits cannot be read",
+      "a digital display hidden by glare dirt or reflections"
+    ],
+    [
+      "a printed serial number or technical label instead of a consumption display",
+      "a status message instead of a numeric consumption reading"
+    ]
+  ],
+  "clipModelSha256": "a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f",
+  "preprocessing": "full-display RGB letterbox224 with CLIP mean-color padding",
+  "selectedOnCalibration": {
+    "pixel_contrast": null,
+    "visual_state": 0.5,
+    "combined": 0.5,
+    "shape_combined": 0.5,
+    "shape_primary": null
+  },
+  "calibrationGrid": {
+    "pixel_contrast": {
+      "0.015": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 7,
+        "incorrectReadableRejection": 0,
+        "correctlyRejectedNegative": 0,
+        "falseReadableAcceptance": 4
+      },
+      "0.025": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 6,
+        "incorrectReadableRejection": 1,
+        "correctlyRejectedNegative": 0,
+        "falseReadableAcceptance": 4
+      },
+      "0.04": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 3,
+        "incorrectReadableRejection": 4,
+        "correctlyRejectedNegative": 0,
+        "falseReadableAcceptance": 4
+      },
+      "0.06": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 1,
+        "falseReadableAcceptance": 3
+      },
+      "0.08": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 3,
+        "falseReadableAcceptance": 1
+      },
+      "0.1": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 3,
+        "falseReadableAcceptance": 1
+      }
+    },
+    "visual_state": {
+      "0.5": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 3,
+        "incorrectReadableRejection": 4,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.65": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.75": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.85": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.9": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.95": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      }
+    },
+    "combined": {
+      "0.5": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 3,
+        "incorrectReadableRejection": 4,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.65": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.75": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.85": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.9": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.95": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      }
+    },
+    "shape_combined": {
+      "0.5": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 3,
+        "incorrectReadableRejection": 4,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.65": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.75": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 2,
+        "incorrectReadableRejection": 5,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.85": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.9": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      },
+      "0.95": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 1,
+        "incorrectReadableRejection": 6,
+        "correctlyRejectedNegative": 4,
+        "falseReadableAcceptance": 0
+      }
+    },
+    "shape_primary": {
+      "0.5": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 4,
+        "incorrectReadableRejection": 3,
+        "correctlyRejectedNegative": 3,
+        "falseReadableAcceptance": 1
+      },
+      "0.65": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 4,
+        "incorrectReadableRejection": 3,
+        "correctlyRejectedNegative": 3,
+        "falseReadableAcceptance": 1
+      },
+      "0.75": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 4,
+        "incorrectReadableRejection": 3,
+        "correctlyRejectedNegative": 2,
+        "falseReadableAcceptance": 2
+      },
+      "0.85": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 4,
+        "incorrectReadableRejection": 3,
+        "correctlyRejectedNegative": 2,
+        "falseReadableAcceptance": 2
+      },
+      "0.9": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 4,
+        "incorrectReadableRejection": 3,
+        "correctlyRejectedNegative": 2,
+        "falseReadableAcceptance": 2
+      },
+      "0.95": {
+        "inputs": 11,
+        "readablePositives": 7,
+        "negativeControls": 4,
+        "correctlyAcceptedReadable": 4,
+        "incorrectReadableRejection": 3,
+        "correctlyRejectedNegative": 2,
+        "falseReadableAcceptance": 2
+      }
+    }
+  },
+  "historicalStateMetrics": {
+    "pixel_contrast": {
+      "inputs": 5,
+      "readablePositives": 3,
+      "negativeControls": 2,
+      "correctlyAcceptedReadable": 0,
+      "incorrectReadableRejection": 3,
+      "correctlyRejectedNegative": 2,
+      "falseReadableAcceptance": 0
+    },
+    "visual_state": {
+      "inputs": 5,
+      "readablePositives": 3,
+      "negativeControls": 2,
+      "correctlyAcceptedReadable": 1,
+      "incorrectReadableRejection": 2,
+      "correctlyRejectedNegative": 0,
+      "falseReadableAcceptance": 2
+    },
+    "combined": {
+      "inputs": 5,
+      "readablePositives": 3,
+      "negativeControls": 2,
+      "correctlyAcceptedReadable": 1,
+      "incorrectReadableRejection": 2,
+      "correctlyRejectedNegative": 0,
+      "falseReadableAcceptance": 2
+    },
+    "shape_combined": {
+      "inputs": 5,
+      "readablePositives": 3,
+      "negativeControls": 2,
+      "correctlyAcceptedReadable": 1,
+      "incorrectReadableRejection": 2,
+      "correctlyRejectedNegative": 2,
+      "falseReadableAcceptance": 0
+    },
+    "shape_primary": {
+      "inputs": 5,
+      "readablePositives": 3,
+      "negativeControls": 2,
+      "correctlyAcceptedReadable": 0,
+      "incorrectReadableRejection": 3,
+      "correctlyRejectedNegative": 2,
+      "falseReadableAcceptance": 0
+    }
+  },
+  "historicalNumericMetrics": {
+    "english:ungated": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 2,
+      "incorrectNumeric": 2,
+      "fallback": 1
+    },
+    "english:pixel_contrast": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 0,
+      "incorrectNumeric": 0,
+      "fallback": 5
+    },
+    "english:visual_state": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 1,
+      "incorrectNumeric": 1,
+      "fallback": 3
+    },
+    "english:combined": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 1,
+      "incorrectNumeric": 1,
+      "fallback": 3
+    },
+    "english:shape_combined": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 1,
+      "incorrectNumeric": 0,
+      "fallback": 4
+    },
+    "english:shape_primary": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 0,
+      "incorrectNumeric": 0,
+      "fallback": 5
+    },
+    "server:ungated": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 2,
+      "incorrectNumeric": 2,
+      "fallback": 1
+    },
+    "server:pixel_contrast": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 0,
+      "incorrectNumeric": 0,
+      "fallback": 5
+    },
+    "server:visual_state": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 1,
+      "incorrectNumeric": 1,
+      "fallback": 3
+    },
+    "server:combined": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 1,
+      "incorrectNumeric": 1,
+      "fallback": 3
+    },
+    "server:shape_combined": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 1,
+      "incorrectNumeric": 0,
+      "fallback": 4
+    },
+    "server:shape_primary": {
+      "inputs": 5,
+      "exactOnFrozenLabels": 0,
+      "incorrectNumeric": 0,
+      "fallback": 5
+    }
+  },
+  "independentHumanReviews": 0,
+  "billingRegisterVerified": false,
+  "runtimeEnabled": false,
+  "hardware": "cuda",
+  "rows": [
+    {
+      "id": "kgl_008",
+      "path": ".tools/ocr-recovery-kaggle/display-crops/kgl_008.png",
+      "cropSha256": "d80066be56b30c06ec92b41930eb7568169d01b081736d67976131bff99f870c",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "003475",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.2980392156862745,
+        "localContrast95": 0.037614434934129894,
+        "innerMedian": 0.49019607843137253,
+        "laplacianVariance": 21.61115264892578,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 2.4
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "scores": {
+          "readable_candidate": 0.00680428696796298,
+          "blank_or_unpowered": 0.1605270504951477,
+          "segment_test": 0.014210079796612263,
+          "blurred_or_obscured": 0.812640368938446,
+          "unknown": 0.005818205885589123
+        },
+        "score": 0.812640368938446,
+        "margin": 0.6521133184432983,
+        "forwardMs": 78.06100000016158
+      },
+      "recognition": {
+        "english": {
+          "raw": "003475",
+          "digits": "003475",
+          "minimumCharacterScore": 0.47559356689453125,
+          "meanCharacterScore": 0.8799368639787039,
+          "forwardMs": 13.599599998997292
+        },
+        "server": {
+          "raw": "003475",
+          "digits": "003475",
+          "minimumCharacterScore": 0.42081525921821594,
+          "meanCharacterScore": 0.6498523602883021,
+          "forwardMs": 53.07139999786159
+        }
+      }
+    },
+    {
+      "id": "kgl_039",
+      "path": ".tools/ocr-recovery-kaggle/display-crops/kgl_039.png",
+      "cropSha256": "5d4ca9c3e2917ba688bab1e1388cfd5616824948a906ce8e1519554ccd190eb6",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "069156",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.20784313725490197,
+        "localContrast95": 0.04681329614975873,
+        "innerMedian": 0.4470588235294118,
+        "laplacianVariance": 14.37535572052002,
+        "foregroundSupportComponents": 8,
+        "smallHolesPerEstimatedGlyph": 1.2
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.4492977261543274,
+          "blank_or_unpowered": 0.11185057461261749,
+          "segment_test": 0.06278043240308762,
+          "blurred_or_obscured": 0.3182196021080017,
+          "unknown": 0.057851601392030716
+        },
+        "score": 0.4492977261543274,
+        "margin": 0.13107812404632568,
+        "forwardMs": 8.965200002421625
+      },
+      "recognition": {
+        "english": {
+          "raw": "069156",
+          "digits": "069156",
+          "minimumCharacterScore": 0.9474804401397705,
+          "meanCharacterScore": 0.9848565459251404,
+          "forwardMs": 12.802500001271255
+        },
+        "server": {
+          "raw": "069156kh",
+          "digits": null,
+          "minimumCharacterScore": 0.551060676574707,
+          "meanCharacterScore": 0.8458277359604836,
+          "forwardMs": 52.43329999939306
+        }
+      }
+    },
+    {
+      "id": "kgl_043",
+      "path": ".tools/ocr-recovery-kaggle/display-crops/kgl_043.png",
+      "cropSha256": "b2e2027b66b928eed509feffc8d4721196f584c10e26b729763fad16ba100b07",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "007696",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.3333333333333333,
+        "localContrast95": 0.1080291269339767,
+        "innerMedian": 0.9137254901960784,
+        "laplacianVariance": 209.38656616210938,
+        "foregroundSupportComponents": 3,
+        "smallHolesPerEstimatedGlyph": 0.0
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.6195141673088074,
+          "blank_or_unpowered": 0.11553221195936203,
+          "segment_test": 0.12534064054489136,
+          "blurred_or_obscured": 0.10777745395898819,
+          "unknown": 0.03183556720614433
+        },
+        "score": 0.6195141673088074,
+        "margin": 0.494173526763916,
+        "forwardMs": 9.36329999967711
+      },
+      "recognition": {
+        "english": {
+          "raw": "007696",
+          "digits": "007696",
+          "minimumCharacterScore": 0.9332847595214844,
+          "meanCharacterScore": 0.9803375601768494,
+          "forwardMs": 13.068600001133746
+        },
+        "server": {
+          "raw": "001696",
+          "digits": "001696",
+          "minimumCharacterScore": 0.8526401519775391,
+          "meanCharacterScore": 0.938202848037084,
+          "forwardMs": 53.35949999789591
+        }
+      }
+    },
+    {
+      "id": "kgl_050",
+      "path": ".tools/ocr-recovery-kaggle/display-crops/kgl_050.png",
+      "cropSha256": "730ac95c033a381dcc02e36963cfbdca9bf76b15cfbd4916f5a49a051cf6be6d",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "020355",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.14901960784313725,
+        "localContrast95": 0.026483591117110905,
+        "innerMedian": 0.6549019607843137,
+        "laplacianVariance": 6.828876495361328,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 1.3333333333333333
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "scores": {
+          "readable_candidate": 0.34551799297332764,
+          "blank_or_unpowered": 0.1541825234889984,
+          "segment_test": 0.0344151072204113,
+          "blurred_or_obscured": 0.4088534414768219,
+          "unknown": 0.05703093856573105
+        },
+        "score": 0.4088534414768219,
+        "margin": 0.06333544850349426,
+        "forwardMs": 9.349100000690669
+      },
+      "recognition": {
+        "english": {
+          "raw": "2 020355",
+          "digits": null,
+          "minimumCharacterScore": 0.32549622654914856,
+          "meanCharacterScore": 0.8280015774071217,
+          "forwardMs": 13.16679999945336
+        },
+        "server": {
+          "raw": "020355",
+          "digits": "020355",
+          "minimumCharacterScore": 0.9474310874938965,
+          "meanCharacterScore": 0.9689943591753641,
+          "forwardMs": 52.90210000021034
+        }
+      }
+    },
+    {
+      "id": "kgl_057",
+      "path": ".tools/ocr-recovery-kaggle/display-crops/kgl_057.png",
+      "cropSha256": "dfaf875deb21093b9e0a7608d983fedb834ae06deee14830b305298542a3edeb",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "053308",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.24313725490196078,
+        "localContrast95": 0.015218549242206648,
+        "innerMedian": 0.5019607843137255,
+        "laplacianVariance": 5.90513277053833,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 0.8333333333333334
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "scores": {
+          "readable_candidate": 0.21136707067489624,
+          "blank_or_unpowered": 0.12899482250213623,
+          "segment_test": 0.04763272777199745,
+          "blurred_or_obscured": 0.5693972110748291,
+          "unknown": 0.04260813072323799
+        },
+        "score": 0.5693972110748291,
+        "margin": 0.35803014039993286,
+        "forwardMs": 9.391200001118705
+      },
+      "recognition": {
+        "english": {
+          "raw": "053308",
+          "digits": "053308",
+          "minimumCharacterScore": 0.7187320590019226,
+          "meanCharacterScore": 0.9051121671994528,
+          "forwardMs": 13.30210000014631
+        },
+        "server": {
+          "raw": "053308",
+          "digits": "053308",
+          "minimumCharacterScore": 0.9270530343055725,
+          "meanCharacterScore": 0.9588939646879832,
+          "forwardMs": 52.42739999812329
+        }
+      }
+    },
+    {
+      "id": "kgl_067",
+      "path": ".tools/ocr-recovery-kaggle/display-crops/kgl_067.png",
+      "cropSha256": "cd033eea899d8ac3a6dab7633e3b88f1eb0a5b27829f5c47d18f948b0485c0f9",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "014962",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.1607843137254902,
+        "localContrast95": 0.032478435740751314,
+        "innerMedian": 0.4549019607843137,
+        "laplacianVariance": 20.043691635131836,
+        "foregroundSupportComponents": 4,
+        "smallHolesPerEstimatedGlyph": 0.3333333333333333
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.7601327896118164,
+          "blank_or_unpowered": 0.03492328152060509,
+          "segment_test": 0.037311673164367676,
+          "blurred_or_obscured": 0.08724074065685272,
+          "unknown": 0.08039155602455139
+        },
+        "score": 0.7601327896118164,
+        "margin": 0.6728920340538025,
+        "forwardMs": 9.223999997630017
+      },
+      "recognition": {
+        "english": {
+          "raw": "7014962",
+          "digits": "7014962",
+          "minimumCharacterScore": 0.48940509557724,
+          "meanCharacterScore": 0.9098412394523621,
+          "forwardMs": 13.181800000893418
+        },
+        "server": {
+          "raw": "014962",
+          "digits": "014962",
+          "minimumCharacterScore": 0.6989405751228333,
+          "meanCharacterScore": 0.8364902039368948,
+          "forwardMs": 53.721100000984734
+        }
+      }
+    },
+    {
+      "id": "commons_136480278",
+      "path": ".tools/master-lcd-rows-dataset/images/val/commons_136480278.jpg",
+      "cropSha256": "c3da57fbc633a7560a357f772fbd126ab39426a20e15a88e2a884332173ec609",
+      "sourceGroup": "commons_author_4ffec1e37be7ee092f5d",
+      "role": "calibration",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "74590",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.5333333333333333,
+        "localContrast95": 0.173173796709846,
+        "innerMedian": 0.4235294117647059,
+        "laplacianVariance": 884.7926025390625,
+        "foregroundSupportComponents": 6,
+        "smallHolesPerEstimatedGlyph": 2.0
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.9734558463096619,
+          "blank_or_unpowered": 0.0019988431595265865,
+          "segment_test": 0.004687116947025061,
+          "blurred_or_obscured": 0.004112789407372475,
+          "unknown": 0.015745285898447037
+        },
+        "score": 0.9734558463096619,
+        "margin": 0.9577105641365051,
+        "forwardMs": 8.899199998268159
+      },
+      "recognition": {
+        "english": {
+          "raw": "74590",
+          "digits": "74590",
+          "minimumCharacterScore": 0.9951109290122986,
+          "meanCharacterScore": 0.9981391906738282,
+          "forwardMs": 13.107900002069073
+        },
+        "server": {
+          "raw": "74590",
+          "digits": "74590",
+          "minimumCharacterScore": 0.5977588295936584,
+          "meanCharacterScore": 0.8718731164932251,
+          "forwardMs": 53.42770000061137
+        }
+      }
+    },
+    {
+      "id": "commons_136480279",
+      "path": ".tools/master-lcd-rows-dataset/images/val/commons_136480279.jpg",
+      "cropSha256": "d34a832120591074d39dd9ed687df3653b07ab276943f09d13a19409e95182c6",
+      "sourceGroup": "commons_author_4ffec1e37be7ee092f5d",
+      "role": "calibration",
+      "expectedReadable": false,
+      "expectedState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.25098039215686274,
+        "localContrast95": 0.0591921937231924,
+        "innerMedian": 0.5294117647058824,
+        "laplacianVariance": 381.8026428222656,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 0.6
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "scores": {
+          "readable_candidate": 0.08517086505889893,
+          "blank_or_unpowered": 0.3179140090942383,
+          "segment_test": 0.02413768135011196,
+          "blurred_or_obscured": 0.5030333995819092,
+          "unknown": 0.0697440579533577
+        },
+        "score": 0.5030333995819092,
+        "margin": 0.1851193904876709,
+        "forwardMs": 8.961499999713851
+      },
+      "recognition": {
+        "english": {
+          "raw": "F",
+          "digits": null,
+          "minimumCharacterScore": 0.13175813853740692,
+          "meanCharacterScore": 0.13175813853740692,
+          "forwardMs": 13.23479999700794
+        },
+        "server": {
+          "raw": "\u95e8",
+          "digits": null,
+          "minimumCharacterScore": 0.21313144266605377,
+          "meanCharacterScore": 0.21313144266605377,
+          "forwardMs": 53.259000000252854
+        }
+      }
+    },
+    {
+      "id": "preview_48",
+      "path": ".tools/ocr-next-readability-final/segment-test.png",
+      "role": "calibration",
+      "cropSha256": "585f0cf322a704b3431b229828e4ba11f5f6f665746e3fe9a5436242f5757710",
+      "sourceGroup": "preview_all_unknown_physical_id",
+      "expectedReadable": false,
+      "expectedState": "segment_test",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "license": "CC-BY-NC-4.0_offline_research_only",
+      "pixel": {
+        "innerRange90": 0.1450980392156863,
+        "localContrast95": 0.06936597936293647,
+        "innerMedian": 0.07450980392156863,
+        "laplacianVariance": 947.884033203125,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 0.0
+      },
+      "visual": {
+        "prediction": "blank_or_unpowered",
+        "scores": {
+          "readable_candidate": 0.17433972656726837,
+          "blank_or_unpowered": 0.27676478028297424,
+          "segment_test": 0.10372445732355118,
+          "blurred_or_obscured": 0.2669088840484619,
+          "unknown": 0.1782621443271637
+        },
+        "score": 0.27676478028297424,
+        "margin": 0.009855896234512329,
+        "forwardMs": 9.040699998877244
+      },
+      "recognition": {
+        "english": {
+          "raw": "88888888",
+          "digits": "88888888",
+          "minimumCharacterScore": 0.48222213983535767,
+          "meanCharacterScore": 0.8257670104503632,
+          "forwardMs": 13.367999999900348
+        },
+        "server": {
+          "raw": "888888.8k",
+          "digits": null,
+          "minimumCharacterScore": 0.42270517349243164,
+          "meanCharacterScore": 0.8465125428305732,
+          "forwardMs": 53.05850000149803
+        }
+      }
+    },
+    {
+      "id": "serial_kgl_008",
+      "path": ".tools/ocr-next-readability-final/serial-kgl_008.png",
+      "role": "calibration",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "cropSha256": "eaa7cdf3873e1943b5816dd74032070c2394a6ffec347746fd4bacfea06b95a1",
+      "expectedReadable": false,
+      "expectedState": "unknown",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "publisher_serial_region_not_billing",
+      "pixel": {
+        "innerRange90": 0.396078431372549,
+        "localContrast95": 0.11912792430204504,
+        "innerMedian": 0.5980392156862745,
+        "laplacianVariance": 356.7984619140625,
+        "foregroundSupportComponents": 2,
+        "smallHolesPerEstimatedGlyph": 0.875
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "scores": {
+          "readable_candidate": 0.03476421907544136,
+          "blank_or_unpowered": 0.08070121705532074,
+          "segment_test": 0.011027703061699867,
+          "blurred_or_obscured": 0.6886135935783386,
+          "unknown": 0.18489329516887665
+        },
+        "score": 0.6886135935783386,
+        "margin": 0.5037202835083008,
+        "forwardMs": 8.992800001578871
+      },
+      "recognition": {
+        "english": {
+          "numericLength": 8,
+          "rawSha256": "e5ff232e7244ed40e30b471795479f84ee3b4bf747530389f8c8939b3324f9d5",
+          "minimumCharacterScore": 0.5499651432037354
+        },
+        "server": {
+          "numericLength": 8,
+          "rawSha256": "e5ff232e7244ed40e30b471795479f84ee3b4bf747530389f8c8939b3324f9d5",
+          "minimumCharacterScore": 0.9957584738731384
+        }
+      }
+    },
+    {
+      "id": "serial_kgl_067",
+      "path": ".tools/ocr-next-readability-final/serial-kgl_067.png",
+      "role": "calibration",
+      "sourceGroup": "kaggle_all_unknown_physical_id",
+      "cropSha256": "53a7cb7c6d6c61f226a11572628874be1b8070ba25ad06b7d7ba066f2cfca8e4",
+      "expectedReadable": false,
+      "expectedState": "unknown",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "publisher_serial_region_not_billing",
+      "pixel": {
+        "innerRange90": 0.3215686274509804,
+        "localContrast95": 0.06978848775227865,
+        "innerMedian": 0.5490196078431373,
+        "laplacianVariance": 32.75441360473633,
+        "foregroundSupportComponents": 3,
+        "smallHolesPerEstimatedGlyph": 0.2857142857142857
+      },
+      "visual": {
+        "prediction": "blurred_or_obscured",
+        "scores": {
+          "readable_candidate": 0.028852779418230057,
+          "blank_or_unpowered": 0.03810739144682884,
+          "segment_test": 0.004122307989746332,
+          "blurred_or_obscured": 0.4754354655742645,
+          "unknown": 0.4534820318222046
+        },
+        "score": 0.4754354655742645,
+        "margin": 0.021953433752059937,
+        "forwardMs": 9.191000001010252
+      },
+      "recognition": {
+        "english": {
+          "numericLength": 8,
+          "rawSha256": "2e8fdc59797aa5869804c039caad8c9d3dccc281b946a9c723edacade5ef2700",
+          "minimumCharacterScore": 0.5138571858406067
+        },
+        "server": {
+          "numericLength": 8,
+          "rawSha256": "2e8fdc59797aa5869804c039caad8c9d3dccc281b946a9c723edacade5ef2700",
+          "minimumCharacterScore": 0.9941127896308899
+        }
+      }
+    },
+    {
+      "id": "commons_141575682",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_141575682.jpg",
+      "cropSha256": "a275e7db1c00e6ce76df48a22f5177af8cae5ead33d01f9d10d8c469b1e4880b",
+      "sourceGroup": "commons_author_fda561d482705c44bfcc",
+      "role": "historical_test",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "004046",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.44313725490196076,
+        "localContrast95": 0.19400671940223843,
+        "innerMedian": 0.3411764705882353,
+        "laplacianVariance": 1535.962890625,
+        "foregroundSupportComponents": 0,
+        "smallHolesPerEstimatedGlyph": 3.6666666666666665
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.41368427872657776,
+          "blank_or_unpowered": 0.15937243402004242,
+          "segment_test": 0.02504783682525158,
+          "blurred_or_obscured": 0.3132053315639496,
+          "unknown": 0.08869007229804993
+        },
+        "score": 0.41368427872657776,
+        "margin": 0.10047894716262817,
+        "forwardMs": 9.286300002713688
+      },
+      "recognition": {
+        "english": {
+          "raw": "004046",
+          "digits": "004046",
+          "minimumCharacterScore": 0.5900585651397705,
+          "meanCharacterScore": 0.8330611189206442,
+          "forwardMs": 13.21989999996731
+        },
+        "server": {
+          "raw": "004046",
+          "digits": "004046",
+          "minimumCharacterScore": 0.7646772265434265,
+          "meanCharacterScore": 0.9492034514745077,
+          "forwardMs": 66.41730000046664
+        }
+      }
+    },
+    {
+      "id": "commons_26507235",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_26507235.jpg",
+      "cropSha256": "ef67645c2bc46d8fbdb8689dec4e0f45b95d77539630d29494f5fcba2d9c3916",
+      "sourceGroup": "commons_author_24e41388bd6a3fd90c9b",
+      "role": "historical_test",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "21594",
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.20392156862745098,
+        "localContrast95": 0.08780893512800629,
+        "innerMedian": 0.34901960784313724,
+        "laplacianVariance": 124.24215698242188,
+        "foregroundSupportComponents": 5,
+        "smallHolesPerEstimatedGlyph": 0.0
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.8115252256393433,
+          "blank_or_unpowered": 0.03652182221412659,
+          "segment_test": 0.0070329573936760426,
+          "blurred_or_obscured": 0.052616704255342484,
+          "unknown": 0.09230329096317291
+        },
+        "score": 0.8115252256393433,
+        "margin": 0.7192219495773315,
+        "forwardMs": 9.122300001763506
+      },
+      "recognition": {
+        "english": {
+          "raw": "21594",
+          "digits": "21594",
+          "minimumCharacterScore": 0.9980098605155945,
+          "meanCharacterScore": 0.9991522431373596,
+          "forwardMs": 13.252600001578685
+        },
+        "server": {
+          "raw": "21594",
+          "digits": "21594",
+          "minimumCharacterScore": 0.9689104557037354,
+          "meanCharacterScore": 0.9766300082206726,
+          "forwardMs": 53.45049999959883
+        }
+      }
+    },
+    {
+      "id": "commons_111639614",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_111639614.jpg",
+      "cropSha256": "984dfeb153c21d2b1930a058f6986077d0569b54fcb8065c6f2afa64e1fe9c06",
+      "sourceGroup": "commons_author_9b4f2e38fe03196c619f",
+      "role": "historical_test",
+      "expectedReadable": false,
+      "expectedState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "provisional_not_independent",
+      "pixel": {
+        "innerRange90": 0.1607843137254902,
+        "localContrast95": 0.05771010230569274,
+        "innerMedian": 0.11764705882352941,
+        "laplacianVariance": 57.548763275146484,
+        "foregroundSupportComponents": 17,
+        "smallHolesPerEstimatedGlyph": 3.0
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.8857952952384949,
+          "blank_or_unpowered": 0.039913110435009,
+          "segment_test": 0.019767921417951584,
+          "blurred_or_obscured": 0.04244840517640114,
+          "unknown": 0.012075317092239857
+        },
+        "score": 0.8857952952384949,
+        "margin": 0.843346893787384,
+        "forwardMs": 9.422799997992115
+      },
+      "recognition": {
+        "english": {
+          "raw": "88888",
+          "digits": "88888",
+          "minimumCharacterScore": 0.9204443693161011,
+          "meanCharacterScore": 0.9773115873336792,
+          "forwardMs": 13.922199999797158
+        },
+        "server": {
+          "raw": "88888",
+          "digits": "88888",
+          "minimumCharacterScore": 0.8786580562591553,
+          "meanCharacterScore": 0.9470785856246948,
+          "forwardMs": 53.34460000085528
+        }
+      }
+    },
+    {
+      "id": "commons_141189268",
+      "path": ".tools/master-lcd-rows-dataset/images/test/commons_141189268.jpg",
+      "cropSha256": "0c20ce83fb692963312f29256ae10bda14c7546abc9d4cc332307d715716258f",
+      "sourceGroup": "commons_author_b046fcd7de5e048d7d72",
+      "role": "historical_test",
+      "expectedReadable": true,
+      "expectedState": "readable_candidate",
+      "expectedDigits": "000880578",
+      "numericGroundTruthStatus": "disputed_frozen_label_retained",
+      "pixel": {
+        "innerRange90": 0.2980392156862745,
+        "localContrast95": 0.08011301078048406,
+        "innerMedian": 0.403921568627451,
+        "laplacianVariance": 135.1536407470703,
+        "foregroundSupportComponents": 9,
+        "smallHolesPerEstimatedGlyph": 0.375
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.4021937847137451,
+          "blank_or_unpowered": 0.12133512645959854,
+          "segment_test": 0.017974691465497017,
+          "blurred_or_obscured": 0.38945692777633667,
+          "unknown": 0.06903953105211258
+        },
+        "score": 0.4021937847137451,
+        "margin": 0.012736856937408447,
+        "forwardMs": 9.157399999821791
+      },
+      "recognition": {
+        "english": {
+          "raw": "000880518",
+          "digits": "000880518",
+          "minimumCharacterScore": 0.7409048676490784,
+          "meanCharacterScore": 0.9703493979242113,
+          "forwardMs": 13.218199997936608
+        },
+        "server": {
+          "raw": "00088058",
+          "digits": "00088058",
+          "minimumCharacterScore": 0.9591178894042969,
+          "meanCharacterScore": 0.9813720211386681,
+          "forwardMs": 53.43730000095093
+        }
+      }
+    },
+    {
+      "id": "commons_156125142",
+      "path": ".tools/ocr-next-readability-final/blank-water.png",
+      "role": "historical_test",
+      "sourceGroup": "Boutboul",
+      "cropSha256": "93d78b0923bd50f178af31e1c2d998b43b41a83d13162c242936c3bb5c82f79d",
+      "expectedReadable": false,
+      "expectedState": "blank_or_unpowered",
+      "expectedDigits": null,
+      "numericGroundTruthStatus": "provisional_blank_control_coarse_crop",
+      "pixel": {
+        "innerRange90": 0.6862745098039216,
+        "localContrast95": 0.11977697335037535,
+        "innerMedian": 0.5607843137254902,
+        "laplacianVariance": 362.973388671875,
+        "foregroundSupportComponents": 1,
+        "smallHolesPerEstimatedGlyph": 7.5
+      },
+      "visual": {
+        "prediction": "readable_candidate",
+        "scores": {
+          "readable_candidate": 0.8850200176239014,
+          "blank_or_unpowered": 0.009104379452764988,
+          "segment_test": 0.008192304521799088,
+          "blurred_or_obscured": 0.022916976362466812,
+          "unknown": 0.07476644963026047
+        },
+        "score": 0.8850200176239014,
+        "margin": 0.8102535605430603,
+        "forwardMs": 8.802500000456348
+      },
+      "recognition": {
+        "english": {
+          "raw": "I",
+          "digits": null,
+          "minimumCharacterScore": 0.32646870613098145,
+          "meanCharacterScore": 0.32646870613098145,
+          "forwardMs": 13.042800001130672
+        },
+        "server": {
+          "raw": "",
+          "digits": null,
+          "minimumCharacterScore": 0,
+          "meanCharacterScore": 0,
+          "forwardMs": 53.26290000084555
+        }
+      }
+    }
+  ],
+  "rawReportSha256": "bf48cb3072b02ea7fb51a6a7335ea043d11fc65b2ac537948a8d990b5dce9646",
+  "activationDecision": "REJECTED_low_positive_recall_no_independent_human_validation",
+  "serialRecognitionRedactedInCommittedSummary": true,
+  "previousAttemptHashes": {
+    ".tools/ocr-next-readability/report.json": "09f7e6075d7c21eaf2037202e937c166a62ae3bd3ae04136137c529b3b9ad3d5",
+    ".tools/ocr-next-readability-shape/report.json": "76bfc91b8c62c75f773f282ca079fdef0af81a72a92f3345fab44ddfed68408f"
+  }
+}
