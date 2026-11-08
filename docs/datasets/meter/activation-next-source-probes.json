@@ -1,0 +1,599 @@
+{
+  "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+  "licenseScope": "Publisher permits noncommercial use; offline research only, no redistribution or Staff promotion",
+  "gitBlobSha": "1cdc5bd0177e45b2baec02ee8bffbddcf53356b4",
+  "archiveSha256": "bdbeaa87c710c6fb003bf48eab68e8efab1c614ead65c0e84f2039618dfcb661",
+  "selection": "Indices0,1,2,100,101,102,200,201,202 frozen before visual review/inference; additional fixed archive indices300,400,500,600,700,800,900,1000 added before any inference after initial9 exposed few complete rows",
+  "samples": [
+    {
+      "id": "quanhui_water_00",
+      "image": ".tools/ocr-activation-next/fresh-water/water_00.jpg",
+      "archiveMember": "images/00000 (10).jpg",
+      "sha256": "bf2f8cdc560fc4deb715c8a8e17bc9f6039085a5458d5ce460116ced6576ac95",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_a",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 106,
+        "nearestHistoricalImage": "wm_clean_000425.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_01",
+      "image": ".tools/ocr-activation-next/fresh-water/water_01.jpg",
+      "archiveMember": "images/00000 (11).jpg",
+      "sha256": "431a32054f2d7c92dced7793743b42445ed64651026bf696ef15846b52c5f4f3",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_a",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 96,
+        "nearestHistoricalImage": "wm_clean_000437.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_02",
+      "image": ".tools/ocr-activation-next/fresh-water/water_02.jpg",
+      "archiveMember": "images/00000 (12).jpg",
+      "sha256": "66972227672a22bc184333b8b6946f86859cbef97533479c7f30c64c73ee9872",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_a",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": "00000",
+      "readability": "readable_draft",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 102,
+        "nearestHistoricalImage": "wm_clean_000004.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_03",
+      "image": ".tools/ocr-activation-next/fresh-water/water_03.jpg",
+      "archiveMember": "images/00001 (2).jpg",
+      "sha256": "393ae5484dac709866f6d88b59bd2e1b5880aadb6afd51331774354a803930ca",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_3",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 95,
+        "nearestHistoricalImage": "wm_clean_000109.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_04",
+      "image": ".tools/ocr-activation-next/fresh-water/water_04.jpg",
+      "archiveMember": "images/00001 (20).jpg",
+      "sha256": "a4adb71defadc45eb72d14f223159dc396a6327bda4b23a5c2152712050b7f54",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_a",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 104,
+        "nearestHistoricalImage": "wm_clean_000111.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_05",
+      "image": ".tools/ocr-activation-next/fresh-water/water_05.jpg",
+      "archiveMember": "images/00001 (21).jpg",
+      "sha256": "20d7e5bfd6021c8e11b60cf80dd331047b527ddf9479aa88414aed4de535324e",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_a",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 98,
+        "nearestHistoricalImage": "wm_clean_000137.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_06",
+      "image": ".tools/ocr-activation-next/fresh-water/water_06.jpg",
+      "archiveMember": "images/000114.jpg",
+      "sha256": "338ed1905a06c1c356400b555e5ab1f468ce2a0fc6c7497bcea2fe3c283bbe3c",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_6",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 96,
+        "nearestHistoricalImage": "wm_clean_000261.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_07",
+      "image": ".tools/ocr-activation-next/fresh-water/water_07.jpg",
+      "archiveMember": "images/000116.jpg",
+      "sha256": "3996f9ac6ec82f4ce8a19028e45a27add391b4f4b7fcf2437c00ee9e3807ad4a",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_7",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 97,
+        "nearestHistoricalImage": "wm_clean_000112.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_08",
+      "image": ".tools/ocr-activation-next/fresh-water/water_08.jpg",
+      "archiveMember": "images/00012.jpg",
+      "sha256": "0f7a4f436be5d8704fd0dea93a1c2968821d909efd7b2d48256b7ff8ea68247b",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_8",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 100,
+        "nearestHistoricalImage": "wm_clean_000230.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_09",
+      "image": ".tools/ocr-activation-next/fresh-water/water_09.jpg",
+      "archiveMember": "images/00035 (2).jpg",
+      "sha256": "b4518de3b73840919f141e6aaa249bde26be16c2f3422c57819da4c23f195dd0",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_9",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 97,
+        "nearestHistoricalImage": "wm_clean_000236.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_10",
+      "image": ".tools/ocr-activation-next/fresh-water/water_10.jpg",
+      "archiveMember": "images/00058 (3).jpg",
+      "sha256": "f4006f104f5774f999f1f232abf2e0c516f47f737475d8b082bc0c4fcd23da8e",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_10",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": "00058",
+      "readability": "readable_draft",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 98,
+        "nearestHistoricalImage": "wm_clean_000230.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_11",
+      "image": ".tools/ocr-activation-next/fresh-water/water_11.jpg",
+      "archiveMember": "images/00084 (2).jpg",
+      "sha256": "e753bc742fb426c073766a0fa87f03736b4707a6a656cf5052847bda6e5d894e",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_11",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 99,
+        "nearestHistoricalImage": "wm_clean_000350.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_12",
+      "image": ".tools/ocr-activation-next/fresh-water/water_12.jpg",
+      "archiveMember": "images/00110.jpg",
+      "sha256": "4ee12720824eeb43811336d882383bea7e6ad737c4be72f65c682ec214986858",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_12",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 110,
+        "nearestHistoricalImage": "wm_clean_000088.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_13",
+      "image": ".tools/ocr-activation-next/fresh-water/water_13.jpg",
+      "archiveMember": "images/001795.jpg",
+      "sha256": "cf74a1ebdc48f4b29df08d254c56a7c98b628053d349405daaf616fd134e936a",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_13",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 102,
+        "nearestHistoricalImage": "wm_clean_000113.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_14",
+      "image": ".tools/ocr-activation-next/fresh-water/water_14.jpg",
+      "archiveMember": "images/00458.jpg",
+      "sha256": "25dcaa74380589b762058d122fd4a9a85ab69b664e5c4430ac403c6cb47f46df",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_14",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": "00458",
+      "readability": "readable_draft",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 96,
+        "nearestHistoricalImage": "wm_clean_000236.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_15",
+      "image": ".tools/ocr-activation-next/fresh-water/water_15.jpg",
+      "archiveMember": "images/011723.jpg",
+      "sha256": "8a8e61ab3d3e7508f548a9d3cfd9d7000c7bd85f241488b24de591e1b24fcc7c",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_15",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 109,
+        "nearestHistoricalImage": "wm_clean_000259.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    },
+    {
+      "id": "quanhui_water_16",
+      "image": ".tools/ocr-activation-next/fresh-water/water_16.jpg",
+      "archiveMember": "images/071304.jpg",
+      "sha256": "c07d91b675d158dbf862b50245235f51d9e9aaf2b983f5ae5c20015195626941",
+      "dimensions": [
+        320,
+        240
+      ],
+      "sourceGroup": "quanhui_water_publisher",
+      "licenseScope": "noncommercial research per publisher README; no commercial promotion",
+      "sourceUrl": "https://github.com/QuanhuiZhao/water-datasets",
+      "registerVerified": false,
+      "decimalPlaces": null,
+      "humanReviews": 0,
+      "physicalMeterGroup": "provisional_device_16",
+      "physicalGroupVerified": false,
+      "category": "water_mechanical",
+      "expectedDigits": null,
+      "readability": "transition_or_partial_unverified",
+      "labelStatus": "agent_visual_provisional_before_new_model_inference",
+      "decimalVerified": false,
+      "modelPretrainingOverlap": "unknown",
+      "cohort": "fresh_source_provisional",
+      "split": "test",
+      "uncertainPositions": [
+        "requires_human_annotation"
+      ],
+      "duplicateAudit": {
+        "sameSha256": false,
+        "nearestDHash256Distance": 102,
+        "nearestHistoricalImage": "wm_clean_000451.jpg",
+        "samePhysicalDeviceIndependence": "not_proven"
+      }
+    }
+  ],
+  "scope": "New project-evaluation source, partial-body320x240 photographs, not proven absent from pretrained models; labels provisional; no fresh billing acceptance"
+}
