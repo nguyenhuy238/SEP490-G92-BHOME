@@ -42,22 +42,15 @@ async function selectMui(page, label, option) {
   await page.getByRole('combobox', { name: label }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
 }
-async function openTaskDetail(page, taskId, title) {
+async function openTaskDetail(page, title, locationName, statusName) {
   const back = page.getByRole('button', { name: 'Về danh sách' });
-  if (await back.isVisible().catch(() => false)) {
-    const listUrl = page.waitForURL((url) => !url.searchParams.has('taskId'));
-    await back.click();
-    await listUrl;
-  }
-  const detailResponse = page.waitForResponse((response) =>
-    response.request().method() === 'GET' &&
-    new URL(response.url()).pathname === `/api/v1/operational-tasks/${taskId}`,
-  );
-  await page.evaluate((id) => {
-    history.pushState({}, '', `/tasks?taskId=${id}`);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, taskId);
-  check((await detailResponse).status() === 200, 'Task detail refresh failed');
+  if (await back.isVisible().catch(() => false)) await back.click();
+  await selectMui(page, 'Cơ sở', 'Tất cả cơ sở');
+  await selectMui(page, 'Cơ sở', locationName);
+  await selectMui(page, 'Trạng thái', 'Tất cả trạng thái');
+  await selectMui(page, 'Trạng thái', statusName);
+  const row = page.locator('.MuiPaper-root').filter({ hasText: title });
+  await row.getByRole('button', { name: 'Xem chi tiết' }).click();
   await page.getByRole('heading', { name: title }).waitFor();
 }
 async function apiAction(page, method, pathname, action, allowed = [200, 201, 204]) {
@@ -388,7 +381,7 @@ async function scenario(id, run) {
       const submittedResponse = await command(staffToken, `/api/v1/operational-tasks/${created.id}/submit`, { version: started.version, note: 'Staff hoàn tất dữ liệu tổng hợp', evidenceIds: [] });
       check(submittedResponse.status === 200, `Staff submit returned ${submittedResponse.status}`);
 
-      await openTaskDetail(page, created.id, taskTitle);
+      await openTaskDetail(page, taskTitle, names.location, 'Chờ Owner kiểm tra');
       await page.getByRole('button', { name: 'Yêu cầu làm lại' }).click();
       const reworkDialog = page.getByRole('dialog');
       await reworkDialog.getByLabel(/Nội dung \/ lý do/).fill('Cần bổ sung xác nhận vận hành');
@@ -400,7 +393,7 @@ async function scenario(id, run) {
       const resubmitResponse = await command(staffToken, `/api/v1/operational-tasks/${created.id}/submit`, { version: reworked.version, note: 'Staff bổ sung và gửi lại', evidenceIds: [] });
       check(resubmitResponse.status === 200, 'Staff resubmit failed');
 
-      await openTaskDetail(page, created.id, taskTitle);
+      await openTaskDetail(page, taskTitle, names.location, 'Chờ Owner kiểm tra');
       await page.getByRole('button', { name: 'Xác nhận hoàn thành' }).click();
       const verifyDialog = page.getByRole('dialog');
       const verifyPromise = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/v1/operational-tasks/${created.id}/verify`);
@@ -411,7 +404,7 @@ async function scenario(id, run) {
       const cancelCreate = await command(ownerToken, '/api/v1/operational-tasks', { locationId, work: { ...work, title: cancelTitle } });
       check(cancelCreate.status() === 201, 'Cancel fixture create failed');
       const cancelTask = await cancelCreate.json();
-      await openTaskDetail(page, cancelTask.id, cancelTitle);
+      await openTaskDetail(page, cancelTitle, names.location, 'Cần làm');
       await page.getByRole('button', { name: 'Hủy công việc' }).click();
       const cancelDialog = page.getByRole('dialog');
       await cancelDialog.getByLabel(/Nội dung \/ lý do/).fill('Hủy fixture E2E theo trạng thái hợp lệ');

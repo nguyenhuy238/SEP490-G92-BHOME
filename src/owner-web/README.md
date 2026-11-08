@@ -13,20 +13,21 @@ npm run dev --workspace owner-web
 ```
 
 Mở URL Vite in ra, mặc định `http://localhost:5173`.
-Mock là chế độ mặc định, không cần backend hoặc file môi trường.
-Tài khoản demo công khai: **demo@bhome.vn** / **BhomeDemo!2024**.
-Mật khẩu không được lưu; phiên demo có dấu hiệu trong sessionStorage.
+Owner Web mặc định dùng Backend thật tại `https://localhost:7240`; Backend, PostgreSQL,
+HTTPS và CORS phải sẵn sàng. Chế độ demo chỉ được bật chủ động bằng
+`VITE_API_MODE=mock`.
 
 Nếu cần cấu hình, sao chép `.env.example` thành `.env.local`:
 
 ```dotenv
-VITE_API_MODE=mock
+VITE_API_MODE=api
 VITE_API_BASE_URL=https://localhost:7240
 VITE_SUPPORT_PHONE=
 ```
 
-`VITE_API_MODE=api` dùng lại auth client-core. Các API nghiệp vụ chưa có OpenAPI nên repository
-báo chưa cấu hình, không gọi endpoint suy đoán hoặc âm thầm trả mock.
+`VITE_API_MODE=api` dùng auth client-core và các màn đã tích hợp Backend. Những chức năng chưa có
+Backend contract hiển thị trạng thái không khả dụng, không gọi endpoint suy đoán hoặc âm thầm trả mock.
+Chỉ dùng `VITE_API_MODE=mock` khi cần xem dữ liệu demo cục bộ.
 Auth cookie thật cần HTTPS, cùng site, đúng `AuthWeb:AllowedOrigins` và CORS.
 
 ## Các route

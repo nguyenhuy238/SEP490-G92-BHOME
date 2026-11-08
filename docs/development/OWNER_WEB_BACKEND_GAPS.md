@@ -2,6 +2,14 @@
 
 Rà soát runtime `BHome.Api` + Compact24 ngày 08/11/2026. Tài liệu này không đặt tên endpoint mới và không cho phép thay đổi schema.
 
+## Final verification environment findings — 08/11/2026
+
+- Docker Desktop Linux engine có thể khởi động và container `bhome-dev-postgres-1` dùng `127.0.0.1:5433`; không có volume nào bị xóa hoặc recreate.
+- Backend chỉ khởi động được trong phiên test khi override runtime `Ocr__Enabled=false`, vì `.tools/ocr-models/detection.onnx` không tồn tại. Không sửa `.env`.
+- Owner Web HTTPS ở `https://localhost:5173` cần `AuthWeb__AllowedOrigins__0` và `Cors__AllowedOrigins__0` tương ứng. `.env` hiện chỉ cho phép `http://localhost:5173`; browser preflight HTTPS không nhận CORS header nếu không override runtime.
+- MinIO không khởi động được vì image `bhome/minio-local:2025-10-15` không pull được; vì vậy chưa thể nghiệm thu upload/download evidence không rỗng.
+- Sau khi Docker Desktop tự dừng và được khởi động lại, `scripts/Update-LocalDatabase.ps1 -Check` không còn báo `Compact24 ... READY`. Theo ràng buộc task, không chạy `-UpgradePropertySchema`, migration hoặc recreate; Browser E2E còn lại bị chặn tại đây.
+
 ## Staff lifecycle
 
 - Hiện có: capture Staff name/ID + create; Location assignment list/create.
