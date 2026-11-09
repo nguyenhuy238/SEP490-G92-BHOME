@@ -280,6 +280,14 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         await files.CopyAsync(file.ObjectKey, output, t); return file.ContentType;
     }
 
+    public async Task<string> CopyManagedPublicPhotoAsync(string targetType, Guid id, int index, Stream output, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        if (targetType is not ("location" or "room") || index < 0) throw OperationsException.Missing();
+        var file = await repository.PublicPhotoAsync(targetType, id, index, false, t) ?? throw OperationsException.Missing();
+        await files.CopyAsync(file.ObjectKey, output, t); return file.ContentType;
+    }
+
     public async Task<IReadOnlyList<RecurringTaskTemplateView>> TemplatesAsync(Guid locationId, CancellationToken t)
     {
         Require(Permissions.OperationalTasks.Manage);
