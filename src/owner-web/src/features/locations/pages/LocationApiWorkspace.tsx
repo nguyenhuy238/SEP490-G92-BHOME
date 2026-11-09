@@ -15,6 +15,7 @@ import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
+import { ApiConfigurationCopy } from '../../configuration/ApiConfigurationCopy';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { BillingConfigurationPage } from '../../invoices/BillingConfigurationPage';
 import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
@@ -53,9 +54,12 @@ export function LocationApiWorkspace() {
         title={location.data.name}
         subtitle={location.data.address}
         actions={
-          <Button component={Link} to="/locations">
-            Danh sách cơ sở
-          </Button>
+          <Stack direction="row">
+            <ApiConfigurationCopy sourceLocationId={locationId} />
+            <Button component={Link} to="/locations">
+              Danh sách cơ sở
+            </Button>
+          </Stack>
         }
       />
       <Tabs

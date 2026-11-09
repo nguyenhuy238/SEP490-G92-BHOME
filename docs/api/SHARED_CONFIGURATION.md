@@ -69,3 +69,17 @@ Room-scoped fees require mapping and are explicitly rejected by this operation.
 Assets and policies copy as Drafts. Room defaults remain reference data. Source IDs and
 versions are captured by the confirmed source-state hash and operation provenance.
 No Tenant, contract, financial transaction, physical Asset, meter or evidence is copied.
+
+## Owner Web integration
+
+API mode uses typed clients and server pagination for every library. Draft forms,
+published editions, duplication, archive confirmation, family history, application
+preview and persisted usage are connected. Asset packages select real published
+catalog editions. Decimal inputs remain strings. Failed writes retain the form;
+an ambiguous apply/copy retry retains the same payload and UUID key.
+
+Copy is available from Location management and the native Location workspace.
+Explicit Room creation can select applied local defaults to fill capacity; it still
+requires the user to save a new Room through the native API. The existing prototype
+library/context/copy wizard is isolated behind explicit development mock mode.
+Mutation invalidation refreshes persisted setup and usage queries.

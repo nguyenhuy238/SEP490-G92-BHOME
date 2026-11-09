@@ -3,12 +3,21 @@ import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { propertySetupClient } from '../../../../../packages/client-core/src/propertySetup';
+import { sharedConfigurationClient } from '../../../../../packages/client-core/src/sharedConfiguration';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { theme } from '../../theme/theme';
 import { PortalProvider } from '../../app/PortalProvider';
 import { PropertyApiPage } from './PropertyApiPages';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
+vi.mock('../configuration/useSharedConfigurationApi', () => ({
+  useSharedConfigurationApi: () =>
+    sharedConfigurationClient(<T,>(path: string, init?: RequestInit) =>
+      path.endsWith('/room-defaults')
+        ? (Promise.resolve([]) as Promise<T>)
+        : (state.request(path, init) as Promise<T>),
+    ),
+}));
 vi.mock('./usePropertySetupApi', () => ({
   usePropertySetupApi: () =>
     propertySetupClient(

@@ -37,6 +37,8 @@ import {
 import { usePortal } from '../../app/PortalProvider';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { AssetOperationsPanel } from './AssetOperationsPanel';
+import { ApiConfigurationCopy } from '../configuration/ApiConfigurationCopy';
+import { LocationRoomDefaultsPicker } from '../configuration/LocationRoomDefaultsPicker';
 
 type Kind = 'locations' | 'rooms' | 'assets';
 type Row = LocationConfiguration | RoomConfiguration | PhysicalAsset;
@@ -177,13 +179,16 @@ export function PropertyApiPage({
         subtitle="Cấu hình được đọc và lưu trực tiếp trên máy chủ."
         actions={
           canManage ? (
-            <Button
-              variant="contained"
-              disabled={kind !== 'locations' && !location}
-              onClick={() => edit(null)}
-            >
-              Thêm {kind === 'locations' ? 'cơ sở' : kind === 'rooms' ? 'phòng' : 'tài sản'}
-            </Button>
+            <Stack direction="row" spacing={1}>
+              {kind === 'locations' && <ApiConfigurationCopy />}
+              <Button
+                variant="contained"
+                disabled={kind !== 'locations' && !location}
+                onClick={() => edit(null)}
+              >
+                Thêm {kind === 'locations' ? 'cơ sở' : kind === 'rooms' ? 'phòng' : 'tài sản'}
+              </Button>
+            </Stack>
           ) : undefined
         }
       />
@@ -340,6 +345,15 @@ export function PropertyApiPage({
                 </>
               ) : kind === 'rooms' ? (
                 <>
+                  {!editing && (
+                    <LocationRoomDefaultsPicker
+                      key={location}
+                      location={location}
+                      choose={(capacity) =>
+                        setValues((old) => ({ ...old, capacity: String(capacity) }))
+                      }
+                    />
+                  )}
                   {field('roomNumber', 'Số phòng')}
                   {field('floor', 'Tầng', false)}
                   {field('capacity', 'Sức chứa', true, 'number')}
