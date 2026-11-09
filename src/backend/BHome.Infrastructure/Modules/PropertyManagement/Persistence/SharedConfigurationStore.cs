@@ -9,14 +9,14 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 internal sealed partial class SharedConfigurationStore(Compact24DbContext db, CompactNotificationWriter sql) : ISharedConfigurationStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    public async Task<T> TransactionAsync<T>(Guid[] locations, Func<Task<T>> work, CancellationToken t)
+    public async Task<T> TransactionAsync<T>(Guid[] locations, Func<Task<T>> work, CancellationToken t, bool validateActiveLocations = true)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('shared-configuration',0))", t);
         foreach (var location in locations.Distinct().Order())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
-            if (!await db.Locations.AnyAsync(l => l.Id == location && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
+            if (validateActiveLocations && !await db.Locations.AnyAsync(l => l.Id == location && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
         }
         var value = await work(); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return value;
     }

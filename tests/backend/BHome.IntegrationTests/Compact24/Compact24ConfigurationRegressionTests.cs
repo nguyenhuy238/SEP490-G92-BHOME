@@ -79,4 +79,25 @@ public sealed partial class Compact24OwnerSetupTests
         var second = await Published(owner, "fee-templates"); plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync($"/api/v1/shared-configuration/fee-templates/{second.Id}/apply-preview", new SharedApply(w.Location, second.Version)));
         Assert.False(plan.CanProceed); Assert.NotEmpty(plan.Conflicts);
     }
+    [CompactPostgresFact]
+    public async Task CompletedApplyAndCopyReplayOriginalResultAfterTargetDeactivation()
+    {
+        var source = await Seed(); using var owner = await Client(source.Owner);
+        async Task<LocationDto> Target() => await Read<LocationDto>(await owner.PostAsJsonAsync("/api/v1/locations", new LocationWrite("Synthetic replay target " + Guid.NewGuid().ToString("N"), "Synthetic address")));
+        var direct = await Target(); var copied = await Target(); var doc = await Published(owner, "room-type-templates"); var route = $"/api/v1/shared-configuration/room-type-templates/{doc.Id}";
+        async Task<(SharedApply Input, SharedOperation Result)> Apply(Guid location, Guid key)
+        {
+            var input = new SharedApply(location, doc.Version); var plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync(route + "/apply-preview", input));
+            input = input with { TargetState = plan.TargetState }; return (input, await Read<SharedOperation>(await Keyed(owner, route + "/apply", input, key)));
+        }
+        await Apply(source.Location, Guid.NewGuid()); var applyKey = Guid.NewGuid(); var applied = await Apply(direct.Id, applyKey);
+        var copyInput = new ConfigurationCopy(source.Location, copied.Id, ["RoomDefaults"]); var preview = await Read<ConfigurationCopyPlan>(await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", copyInput));
+        copyInput = copyInput with { SourceState = preview.SourceState, TargetState = preview.TargetState }; var copyKey = Guid.NewGuid(); var result = await Read<SharedOperation>(await Keyed(owner, "/api/v1/location-configuration/copy", copyInput, copyKey));
+        foreach (var target in new[] { direct, copied })
+            await Read<LocationDto>(await owner.PutAsJsonAsync($"/api/v1/locations/{target.Id}", new LocationWrite(target.Name, target.Address, false, target.Version, "Synthetic deactivation after completed command")));
+        Assert.Equal(applied.Result.Id, (await Read<SharedOperation>(await Keyed(owner, route + "/apply", applied.Input, applyKey))).Id);
+        Assert.Equal(result.Id, (await Read<SharedOperation>(await Keyed(owner, "/api/v1/location-configuration/copy", copyInput, copyKey))).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route + "/apply-preview", applied.Input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", copyInput)).StatusCode);
+    }
 }

@@ -29,12 +29,16 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         if (input.Groups.Contains("FeePolicies") && (input.EffectiveFrom is null || input.EffectiveFrom < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow()))) throw new PropertyException(400, "copy_fee_effective_date_required");
     }
     private sealed record ConfigurationState(LocationDto Location, IReadOnlyList<SetupDocument> Defaults, IReadOnlyList<SetupDocument> Assets, IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies);
-    private async Task<ConfigurationState> State(Guid location, ConfigurationCopy input, CancellationToken t) => new(
-        await properties.GetLocationAsync(location, t),
+    private async Task<ConfigurationState> State(Guid location, ConfigurationCopy input, CancellationToken t)
+    {
+        var target = await properties.GetLocationAsync(location, t);
+        if (!target.IsActive) throw new PropertyException(409, "location_inactive_or_missing");
+        return new(target,
         input.Groups.Contains("RoomDefaults") ? await local.ListAsync(location, "RoomDefaults", t) : [],
         input.Groups.Contains("AssetTemplates") ? await local.ListAsync(location, "AssetTemplate", t) : [],
         input.Groups.Contains("FeePolicies") ? await shared.PoliciesAsync(location, t) : [],
         input.Groups.Contains("OperatingPolicies") ? await local.ListAsync(location, "OperatingPolicy", t) : []);
+    }
     private static string Name(SetupDocument document) => document.Data.TryGetProperty("name", out var name) ? name.GetString() ?? "" : document.Data.GetProperty("title").GetString() ?? "";
     private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", _ => "Biểu phí" };
     private static IReadOnlyList<PolicyDto> EffectiveFees(ConfigurationState state, ConfigurationCopy input) => state.Fees.Where(p => p.EffectiveFrom <= input.EffectiveFrom && (p.EffectiveTo is null || p.EffectiveTo >= input.EffectiveFrom)).ToArray();
@@ -103,6 +107,6 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
                 .Concat(EffectiveFees(source, input).Select(p => new ConfigurationSourceReference(p.Id, p.Version, "BillingPolicy"))).ToArray();
             var operation = new SharedOperation(Guid.NewGuid(), "Copy", key, fingerprint, actor, clock.GetUtcNow(), input.SourceLocationId, input.SourceLocationId, Guid.Empty, 0, 0, string.Join(",", input.Groups), input.TargetLocationId, "Completed", created.ToArray(), references, plan.SourceState, plan.TargetState);
             await shared.SaveOperationAsync(operation, t); return operation;
-        }, t);
+        }, t, validateActiveLocations: false);
     }
 }

@@ -16,7 +16,7 @@ public sealed record SharedDuplicate(string Name, int ExpectedVersion);
 public sealed record SharedPage(IReadOnlyList<SharedDocument> Items, long Total, int Page, int PageSize);
 public interface ISharedConfigurationStore
 {
-    Task<T> TransactionAsync<T>(Guid[] locations, Func<Task<T>> work, CancellationToken t);
+    Task<T> TransactionAsync<T>(Guid[] locations, Func<Task<T>> work, CancellationToken t, bool validateActiveLocations = true);
     Task<SharedDocument?> GetAsync(Guid id, string resource, CancellationToken t);
     Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t);
     Task<IReadOnlyList<SharedDocument>> FamilyAsync(Guid family, string resource, CancellationToken t);

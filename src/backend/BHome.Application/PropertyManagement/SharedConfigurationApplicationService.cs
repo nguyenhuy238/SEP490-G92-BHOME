@@ -21,6 +21,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
     private async Task<object> State(Guid location, string resource, CancellationToken t)
     {
         var target = await properties.GetLocationAsync(location, t);
+        if (!target.IsActive) throw new PropertyException(409, "location_inactive_or_missing");
         return new { target, records = resource == "fee-templates" ? (object)await shared.PoliciesAsync(location, t) : await local.ListAsync(location, Kind(resource), t) };
     }
     private async Task<ConfigurationPlan> Plan(string resource, Guid id, SharedApply input, CancellationToken t)
@@ -80,7 +81,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
             }
             var operation = new SharedOperation(Guid.NewGuid(), "Apply", key, fingerprint, actor, clock.GetUtcNow(), source.Id, null, source.FamilyId, source.Version, source.Edition, resource, input.LocationId, "Completed", [created], [new(source.Id, source.Version, resource)], Hash(source), plan.TargetState);
             await shared.SaveOperationAsync(operation, t); return operation;
-        }, t);
+        }, t, validateActiveLocations: false);
     }
     public async Task<SharedUsage> ApplicationsAsync(string resource, Guid id, int page, int pageSize, CancellationToken t)
     {
