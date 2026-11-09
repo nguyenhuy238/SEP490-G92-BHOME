@@ -36,6 +36,11 @@ internal static class LegacyPersistenceRegistration
         // The explicit legacy regression host must not resolve those adapters through ordinary
         // controllers such as InvoiceService; their constructor ports are optional there.
         services.RemoveAll<ISetupWorkspaceStore>();
+        services.RemoveAll<ISharedConfigurationStore>();
+        services.RemoveAll<ISharedDataValidator>();
+        services.RemoveAll<SharedConfigurationService>();
+        services.RemoveAll<SharedConfigurationApplicationService>();
+        services.RemoveAll<LocationConfigurationCopyService>();
         services.RemoveAll<AssetInventoryService>();
         services.RemoveAll<SetupEvidenceService>();
         services.RemoveAll<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
@@ -65,6 +70,7 @@ internal static class LegacyPersistenceRegistration
         foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService) &&
             s.ImplementationType == typeof(NotificationAutomationWorker)).ToArray()) services.Remove(worker);
         services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
+        services.RemoveAll<IResidentAdministrationRepository>(); services.RemoveAll<ResidentAdministrationService>();
         services.RemoveAll<RecurringOperationsJob>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.Replace(ServiceDescriptor.Scoped<BHomePersistenceContext>(p => p.GetRequiredService<BHomeDbContext>()));

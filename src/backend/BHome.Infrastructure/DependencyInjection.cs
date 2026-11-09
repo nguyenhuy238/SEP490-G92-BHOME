@@ -143,6 +143,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Operations.IOperationsFiles,
             BHome.Infrastructure.Modules.Operations.OperationsFiles>();
         services.AddScoped<BHome.Application.Operations.OperationsService>();
+        services.AddScoped<BHome.Application.Operations.IResidentAdministrationRepository, BHome.Infrastructure.Modules.Operations.ResidentAdministrationRepository>();
+        services.AddScoped<BHome.Application.Operations.ResidentAdministrationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
@@ -153,6 +155,12 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
         services.AddScoped<BHome.Application.PropertyManagement.ISetupWorkspaceStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
+        services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
+            BHome.Infrastructure.Modules.PropertyManagement.Persistence.SharedConfigurationStore>();
+        services.AddScoped<BHome.Application.PropertyManagement.ISharedDataValidator, BHome.Application.PropertyManagement.SharedDataValidator>();
+        services.AddScoped<BHome.Application.PropertyManagement.SharedConfigurationService>();
+        services.AddScoped<BHome.Application.PropertyManagement.SharedConfigurationApplicationService>();
+        services.AddScoped<BHome.Application.PropertyManagement.LocationConfigurationCopyService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();

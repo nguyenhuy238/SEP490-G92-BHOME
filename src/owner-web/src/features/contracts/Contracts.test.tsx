@@ -7,6 +7,7 @@ import {
   contractClient,
   actionPayload,
   mutationKeys,
+  holdingDraftPayload,
   type ContractRequest,
   type ContractView,
   type MoveOut,
@@ -19,6 +20,30 @@ import { useContractDetail } from '../../../../../packages/client-core/src/useCo
 const owner = '00000000-0000-0000-0000-000000000001',
   tenant = '00000000-0000-0000-0000-000000000002',
   id = '00000000-0000-0000-0000-000000000003';
+it('creates Holding payload without requiring Main rent and preserves the expiry timezone', () => {
+  const body = holdingDraftPayload(
+    {
+      roomId: id,
+      ownerSignerId: owner,
+      tenantUserId: tenant,
+      representativeResidentId: id,
+      startDate: '2026-11-10',
+      endDate: '2027-11-10',
+      terms: 'Synthetic holding terms',
+      requiredDeposit: '1000000',
+      expiresAt: '2026-11-12T09:00',
+      reservedCapacity: '2',
+    },
+    [id],
+  );
+  expect(body).toMatchObject({
+    holdingDeposit: '1000000',
+    expiresAt: '2026-11-12T02:00:00.000Z',
+    reservedCapacity: 2,
+  });
+  expect(body).not.toHaveProperty('monthlyRent');
+  expect(body).not.toHaveProperty('holdingContractId');
+});
 const draft: ContractView = {
   id,
   roomId: id,
@@ -43,6 +68,40 @@ const draft: ContractView = {
   holdingContractId: null,
   appliedHoldingDeposit: '0',
 };
+
+it('keeps Holding actions separate from Main activation, renewal and move-out', () => {
+  const holding = {
+    ...draft,
+    kind: 'Holding',
+    status: 'PendingActivation',
+    approvedAt: '2026-01-01T00:00:00Z',
+    holdingExpiresAt: '2099-01-01T00:00:00Z',
+  };
+  const operations = contractActions(holding, null, 'Owner', owner).map((x) => x.operation);
+  expect(operations).toContain('holding-activation');
+  expect(operations).not.toContain('activate');
+  expect(operations).not.toContain('renewals');
+  expect(
+    contractActions({ ...holding, status: 'Active' }, null, 'Owner', owner).map((x) => x.operation),
+  ).toContain('holding-conversion');
+  expect(
+    contractActions({ ...holding, status: 'Active' }, null, 'Owner', owner).map((x) => x.operation),
+  ).not.toContain('expiry-move-out');
+  expect(contractActions(holding, null, 'Staff', tenant).map((x) => x.operation)).not.toContain(
+    'holding-activation',
+  );
+});
+it('does not offer conversion or activation for an expired Holding', () => {
+  const holding = {
+    ...draft,
+    kind: 'Holding',
+    status: 'Active',
+    holdingExpiresAt: '2000-01-01T00:00:00Z',
+  };
+  expect(contractActions(holding, null, 'Owner', owner).map((x) => x.operation)).not.toContain(
+    'holding-conversion',
+  );
+});
 
 it('uses a separate simulated action without a certificate and permits the second signer after a simulation', () => {
   const demo = {

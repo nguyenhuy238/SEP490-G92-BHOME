@@ -69,7 +69,6 @@ export interface BillingSchedule {
 export interface Policy {
   id: string;
   locationId: string;
-  roomTypeId: string | null;
   roomId: string | null;
   category: number;
   chargeCode: string;
@@ -80,13 +79,33 @@ export interface Policy {
   effectiveTo: string | null;
   version: number;
 }
-export type PolicyInput = Omit<Policy, 'id' | 'version'> & { reason: string };
+export type PolicyInput = Omit<Policy, 'id' | 'version' | 'rate'> & {
+  rate: string;
+  reason: string;
+};
+export function billingPolicyPayload(input: PolicyInput): PolicyInput {
+  return {
+    locationId: input.locationId,
+    roomId: input.roomId ?? null,
+    category: input.category,
+    chargeCode: input.chargeCode,
+    name: input.name,
+    method: input.method,
+    rate: input.rate,
+    effectiveFrom: input.effectiveFrom,
+    effectiveTo: input.effectiveTo ?? null,
+    reason: input.reason,
+  };
+}
 export function invoiceClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
   const json = <T>(path: string, body: unknown, method = 'POST') =>
     request<T>(path, { method, body: JSON.stringify(body) });
   return {
-    list: (page = 1, signal?: AbortSignal) =>
-      request<Page<Invoice>>(`/api/v1/invoices?page=${page}&pageSize=20`, { signal }),
+    list: (page = 1, signal?: AbortSignal, roomId = '') =>
+      request<Page<Invoice>>(
+        `/api/v1/invoices?page=${page}&pageSize=20${roomId ? `&roomId=${encodeURIComponent(roomId)}` : ''}`,
+        { signal },
+      ),
     get: (id: string, signal?: AbortSignal) =>
       request<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}`, { signal }),
     draft: (roomId: string, billingPeriod: string, representativeContractId: string) =>
@@ -110,15 +129,19 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
         `/api/v1/billing-policies?locationId=${encodeURIComponent(locationId)}&page=${page}&pageSize=20`,
         { signal },
       ),
-    createPolicy: (input: PolicyInput) => json<Policy>('/api/v1/billing-policies', input),
+    createPolicy: (input: PolicyInput) =>
+      json<Policy>('/api/v1/billing-policies', billingPolicyPayload(input)),
     replacePolicy: (id: string, policy: PolicyInput, expectedVersion: number) =>
       json<Policy>(`/api/v1/billing-policies/${encodeURIComponent(id)}/replacement`, {
-        policy,
+        policy: billingPolicyPayload(policy),
         expectedVersion,
       }),
   };
 }
 const messages: Record<string, string> = {
+  stale_version: 'Cấu hình đã thay đổi. Tải lại và kiểm tra phiên bản trước khi lưu.',
+  duplicate_or_overlapping_configuration:
+    'Cấu hình bị trùng hoặc có kỳ hiệu lực chồng lấn. Kiểm tra dữ liệu trước khi lưu.',
   billing_schedule_required: 'Owner cần cấu hình quy tắc và lịch lập hóa đơn cho cơ sở.',
   billing_schedule_changed: 'Cấu hình đã thay đổi. Hãy tải lại trước khi lưu.',
   invalid_billing_calendar_order:
@@ -141,11 +164,15 @@ export function invoiceError(error: unknown): string {
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   return (
     (code && messages[code]) ||
-    (value?.status === 403
-      ? 'Tài khoản không có quyền thực hiện thao tác này.'
-      : value?.status === 404
-        ? 'Không tìm thấy dữ liệu trong phạm vi tài khoản.'
-        : 'Chưa hoàn thành yêu cầu. Tải lại dữ liệu để kiểm tra trước khi thử lại.')
+    (value?.status === 409
+      ? 'Cấu hình đã thay đổi hoặc bị xung đột. Tải lại và kiểm tra trước khi lưu.'
+      : value?.status === 400
+        ? 'Dữ liệu chưa hợp lệ. Kiểm tra phạm vi, đơn giá và ngày hiệu lực.'
+        : value?.status === 403
+          ? 'Tài khoản không có quyền thực hiện thao tác này.'
+          : value?.status === 404
+            ? 'Không tìm thấy dữ liệu trong phạm vi tài khoản.'
+            : 'Chưa hoàn thành yêu cầu. Tải lại dữ liệu để kiểm tra trước khi thử lại.')
   );
 }
 export function missingBillingInput(code: string): string {

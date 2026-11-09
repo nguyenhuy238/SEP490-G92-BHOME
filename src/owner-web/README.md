@@ -1,7 +1,7 @@
 # BHOME Owner Web Portal
 
 React + TypeScript strict + MUI/MUI X, triển khai từ 25 bộ xuất Stitch trong workspace.
-Giao diện login được giữ; bổ sung luồng demo và 24 route nghiệp vụ.
+Các route nghiệp vụ dùng Backend thật mặc định; demo cục bộ chỉ bật khi cấu hình rõ `VITE_API_MODE=mock`.
 
 ## Chạy ứng dụng
 
@@ -13,20 +13,35 @@ npm run dev --workspace owner-web
 ```
 
 Mở URL Vite in ra, mặc định `http://localhost:5173`.
-Mock là chế độ mặc định, không cần backend hoặc file môi trường.
-Tài khoản demo công khai: **demo@bhome.vn** / **BhomeDemo!2024**.
-Mật khẩu không được lưu; phiên demo có dấu hiệu trong sessionStorage.
+Owner Web mặc định dùng Backend thật tại `https://localhost:7240`; Backend, PostgreSQL,
+HTTPS và CORS phải sẵn sàng. Chế độ demo chỉ được bật chủ động bằng
+`VITE_API_MODE=mock`.
+
+Khi chuyển từ demo sang API, dừng Vite bằng `Ctrl+C`, chạy lại `npm.cmd run dev`
+và tải lại toàn trang (`Ctrl+Shift+R`). Đăng nhập bằng tài khoản Owner của Backend;
+phiên đăng nhập demo không dùng được cho API. `.env.example` chỉ là file mẫu,
+Vite không tự đọc nó như `.env.local`.
+
+Nếu Backend chưa chạy, dùng cấu hình phát triển hiện có của dự án để khởi động:
+
+```powershell
+dotnet run --project src/backend/BHome.Api --launch-profile https
+```
+
+Lệnh trên chạy từ repository root; PostgreSQL, storage và cấu hình Backend phải sẵn sàng.
+Lỗi kết nối/401/403 được hiển thị hoặc đưa về đăng nhập; ứng dụng không thay dữ liệu lỗi bằng demo.
 
 Nếu cần cấu hình, sao chép `.env.example` thành `.env.local`:
 
 ```dotenv
-VITE_API_MODE=mock
+VITE_API_MODE=api
 VITE_API_BASE_URL=https://localhost:7240
 VITE_SUPPORT_PHONE=
 ```
 
-`VITE_API_MODE=api` dùng lại auth client-core. Các API nghiệp vụ chưa có OpenAPI nên repository
-báo chưa cấu hình, không gọi endpoint suy đoán hoặc âm thầm trả mock.
+`VITE_API_MODE=api` dùng auth client-core và các màn đã tích hợp Backend. Những chức năng chưa có
+Backend contract hiển thị trạng thái không khả dụng, không gọi endpoint suy đoán hoặc âm thầm trả mock.
+Chỉ dùng `VITE_API_MODE=mock` khi cần xem dữ liệu demo cục bộ.
 Auth cookie thật cần HTTPS, cùng site, đúng `AuthWeb:AllowedOrigins` và CORS.
 
 ## Các route
@@ -40,15 +55,15 @@ Auth cookie thật cần HTTPS, cùng site, đúng `AuthWeb:AllowedOrigins` và 
 - 07 `/assets`: tài sản, vị trí, tình trạng và lịch sử.
 - 08 `/pricing`: giá thuê, biểu phí, ngày hiệu lực và lịch sử.
 - 09 `/staff`: nhân viên, chức danh, phân công cơ sở.
-- 10 `/schedules`: tuần/tháng/nhân viên, sửa ca, sao chép tuần, xuất bản cục bộ.
+- 10 `/schedules`: phân ca chưa thuộc MVP; API mode hiển thị giới hạn và liên kết Staff/Tasks. Lịch minh họa chỉ tồn tại trong mock mode.
 - 11 `/tasks`: bảng/Kanban, người xử lý, tiến độ và nghiệm thu.
-- 12 `/tenants`: đại diện/người ở cùng, phòng, hợp đồng và liên hệ mẫu.
+- 12 `/tenants`: Resident/đồng cư trú, phòng, trạng thái xác minh, tenancy, account link và invitation từ API.
 - 13 `/contracts`: nháp, chờ ký/cọc, kích hoạt có điều kiện.
 - 14 `/handovers`: nhận/trả phòng, checklist và xác nhận hai bên.
 - 15 `/temporary-residence`: theo dõi bên ngoài và Owner xác nhận chỗ ở.
 - 16 `/meters`: chỉ số điện/nước cũ/mới, kiểm tra và chốt số.
 - 17 `/invoices`: nháp/phát hành, đề nghị và duyệt điều chỉnh.
-- 18 `/payments`: giao dịch mẫu, đối soát thủ công với hóa đơn.
+- 18 `/payments`: giao dịch đã lưu trên Backend, xác minh và phân bổ với hóa đơn; tích hợp ngân hàng thật cần provider configuration.
 - 19 `/debts`: công nợ theo hóa đơn, tuổi nợ, ghi chú và ngày hẹn.
 - 20 `/incidents`: khẩn cấp, phân công, trùng lặp, nghiệm thu/đóng.
 - 21 `/maintenance`: Work Orders, sự cố/tài sản, duyệt chi phí và nghiệm thu.

@@ -1,11 +1,11 @@
-> API sau reset DB 04/11/2026: [Location/Room/Asset/gi? ph?](LOCATION_ROOM_API.md) v? [incident-core](INCIDENT_MAINTENANCE.md). B? Chain/RoomType; m? t? c?c c?p c? trong t?i li?u n?y ?? ???c thay th?.
-
 # API conventions
 
-Cập nhật trạng thái **06/11/2026**. Runtime chính là `BHome.Api` + Compact24; xem
-[mục lục](README.md), [bàn giao](API_IMPLEMENTATION_STATUS.md) và [216 routes thực tế](API_RUNTIME_ROUTES.md).
-Các quy ước chung dưới đây không thay schema/DTO riêng của từng endpoint.
-
+Current configuration baseline: 2026-11-09, BHome.Api and Compact24, Location -> Room.
+See [current status](API_IMPLEMENTATION_STATUS.md), [runtime inventory](API_RUNTIME_ROUTES.md),
+[native contracts](LOCATION_ROOM_API.md) and [shared configuration](SHARED_CONFIGURATION.md).
+The old 216-route count and Chain/RoomType examples are superseded. The prior document
+is preserved in [history](history/API_CONVENTIONS_before_2026-11-09.md).
+These common conventions do not replace endpoint-specific DTOs or permissions.
 Operational Task create/assign/update, Staff execution, Owner verification, private evidence and in-app
 notifications are documented in [Operational Tasks](OPERATIONAL_TASKS.md). The unified Task schema
 preserves legacy capture/meter routes and their UC-20 completion behavior.
@@ -19,15 +19,13 @@ are offline/history artifacts; do not run them as a Compact24 deployment procedu
 
 ## Existing-account login
 
-`POST /api/v1/auth/login` allows anonymous JSON requests with required `email` (maximum 256
-characters, email format) and `password` (maximum 1024 characters). Email-only login was approved
-on 28 October 2026 (FE-02 / UC-01). Identity normalizes the trimmed email for a case-insensitive
-lookup; passwords remain unchanged. UserName and phone login are not accepted. Ambiguous legacy
-normalized emails receive the generic 401 denial without issuing a session. Account provisioning
-and tenant activation remain separate workflows.
-Passwords are passed unchanged to Identity. Kestrel limits this endpoint's request body to 16 KiB.
-Oversized bodies return sanitized HTTP 413 ProblemDetails; the global handler preserves that status.
-
+POST /api/v1/auth/login accepts exactly one email or phone, a password and optional
+device label. Email is bounded to 256 characters, phone to 30, password to 1024 and
+device to 256. Identity verifies normalized identifiers; ambiguous/invalid accounts
+fail without issuing a session. UserName is not a login request field. Passwords are
+passed unchanged to Identity. Login body limit is 16 KiB; oversized requests return
+sanitized 413 ProblemDetails. This describes the current LoginRequest/Controller;
+the former email-only convention was superseded by the implemented phone workflow.
 On success, HTTP 200 returns `userId`, `roles`, `accessToken`, ISO-8601 `expiresAt`, `sessionId`,
 `refreshToken` and `sessionExpiresAt`. An optional `device` label is bounded to 256 characters and
 never used as an authorization signal. Roles come

@@ -14,6 +14,10 @@ import { LocationHistoryTab } from './components/tabs/LocationHistoryTab';
 import { LocationAssetsTab } from './components/tabs/LocationAssetsTab';
 import { LocationRoomsTab } from './components/tabs/LocationRoomsTab';
 import type { HouseRuleItem } from './types/locationConfig';
+import { AuthProvider } from '../../../../../packages/client-core/src/auth';
+import { PortalProvider } from '../../app/PortalProvider';
+
+vi.mock('../../services/config', () => ({ isMockMode: true }));
 
 describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', () => {
   const db = prepareProperty(createSeed());
@@ -137,9 +141,13 @@ describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', 
 
   it('renders Pricing & Fee Policies in Vietnamese with statutory tariff notice and billing preview', () => {
     render(
-      <ThemeProvider theme={theme}>
-        <LocationPricingTab db={db} location={sampleLocation} />
-      </ThemeProvider>,
+      <AuthProvider>
+        <PortalProvider>
+          <ThemeProvider theme={theme}>
+            <LocationPricingTab db={db} location={sampleLocation} />
+          </ThemeProvider>
+        </PortalProvider>
+      </AuthProvider>,
     );
 
     expect(screen.getByText('Cơ chế phân cấp định giá phòng')).toBeInTheDocument();

@@ -43,6 +43,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
+import { isMockMode } from '../../../../services/config';
 import {
   INITIAL_ASSET_CATALOG,
   INITIAL_ROOM_TYPE_REQUIREMENTS,
@@ -64,16 +65,28 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
     'assignment',
   );
 
-  const [assetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
+  const locationAssets = db.records.assets.filter((item) => item.locationId === location.id);
+  const [assetCatalog] = useState<AssetCatalogItem[]>(() =>
+    isMockMode
+      ? INITIAL_ASSET_CATALOG
+      : locationAssets.map((item) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category as AssetCatalogItem['category'],
+          defaultCost: 0,
+          iconName: 'package',
+          description: item.description || item.category,
+        })),
+  );
   const roomTypes = db.records['room-types'].filter((item) => item.locationId === location.id);
-  const selectableRoomTypes = roomTypes.length ? roomTypes : INITIAL_ROOM_TYPES;
+  const selectableRoomTypes = roomTypes.length ? roomTypes : isMockMode ? INITIAL_ROOM_TYPES : [];
   const [selectedRoomType, setSelectedRoomType] = useState<string>(
     selectableRoomTypes[0]?.id || 'type-studio',
   );
   const [roomTypeTemplates, setRoomTypeTemplates] = useState<
     Record<string, RoomTypeAssetRequirement[]>
   >(() => {
-    const templates = structuredClone(INITIAL_ROOM_TYPE_REQUIREMENTS);
+    const templates = isMockMode ? structuredClone(INITIAL_ROOM_TYPE_REQUIREMENTS) : {};
     roomTypes.forEach((roomType, index) => {
       if (templates[roomType.id]) return;
       const sampleType = INITIAL_ROOM_TYPES[index % INITIAL_ROOM_TYPES.length];
@@ -85,72 +98,90 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
 
   // Mock initial room assignments
   const rooms = db.records.rooms.filter((r) => r.locationId === location.id);
-  const roomCodes = rooms.length ? rooms.map((r) => r.code) : ['P.101', 'P.102', 'P.201'];
+  const roomCodes = rooms.length
+    ? rooms.map((r) => r.code)
+    : isMockMode
+      ? ['P.101', 'P.102', 'P.201']
+      : [];
 
-  const [assignments, setAssignments] = useState<RoomAssetAssignmentDraft[]>([
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-ac',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-fridge',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-bed',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-heater',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.102',
-      catalogId: 'cat-ac',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.102',
-      catalogId: 'cat-fridge',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.201',
-      catalogId: 'cat-ac',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.201',
-      catalogId: 'cat-tv',
-      quantity: 1,
-      condition: 'Active',
-      source: 'OVERRIDE',
-    },
-  ]);
+  const [assignments, setAssignments] = useState<RoomAssetAssignmentDraft[]>(() =>
+    !isMockMode
+      ? locationAssets.map((asset) => ({
+          roomCode:
+            rooms.find((room) => room.id === asset.roomId)?.code ||
+            asset.attributes.commonArea ||
+            'Khu vá»±c chung',
+          catalogId: asset.id,
+          quantity: 1,
+          condition: asset.status === '0' ? 'Active' : 'Needs Repair',
+          source: 'OVERRIDE',
+        }))
+      : [
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-ac',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-fridge',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-bed',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-heater',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.102',
+            catalogId: 'cat-ac',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.102',
+            catalogId: 'cat-fridge',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.201',
+            catalogId: 'cat-ac',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.201',
+            catalogId: 'cat-tv',
+            quantity: 1,
+            condition: 'Active',
+            source: 'OVERRIDE',
+          },
+        ],
+  );
 
   const [filterRoom, setFilterRoom] = useState<string>('ALL');
   const [applyNotification, setApplyNotification] = useState<string | null>(null);
 
   // Apply template to all rooms of selected room type
   const handleApplyTemplate = (typeId: string) => {
+    if (!isMockMode) return;
     const templateReqs = roomTypeTemplates[typeId] || [];
     const targetRoomCodes = rooms
       .filter((room) => room.category === typeId)
@@ -182,6 +213,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
   };
 
   const handleAddRequirement = () => {
+    if (!isMockMode) return;
     if (!newRequirement) return;
     setRoomTypeTemplates((current) => {
       const requirements = current[selectedRoomType] || [];
@@ -265,6 +297,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
               label="Loại phòng áp dụng"
               value={selectedRoomType}
               onChange={(event) => setSelectedRoomType(event.target.value)}
+              disabled={!isMockMode}
               sx={{ minWidth: 230, bgcolor: '#fff' }}
             >
               {selectableRoomTypes.map((roomType) => (
@@ -277,12 +310,22 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
               variant="contained"
               startIcon={<Sparkles size={16} />}
               onClick={() => handleApplyTemplate(selectedRoomType)}
+              disabled={!isMockMode}
             >
               Áp dụng cho phòng cùng loại
             </Button>
           </Stack>
         )}
       </Stack>
+
+      {!isMockMode && (
+        <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 2 }}>
+          Backend hiện chỉ có tài sản thực tế theo phòng/khu vực và mẫu tài sản theo cơ sở, chưa có
+          quan hệ định mức theo loại phòng như giao diện này. Danh sách phân bổ bên dưới lấy từ API
+          thực; các thao tác định mức và áp dụng hàng loạt tạm thời bị khóa để tránh ghi sai dữ
+          liệu.
+        </Alert>
+      )}
 
       {applyNotification && (
         <Alert
@@ -371,6 +414,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                         <IconButton
                           size="small"
                           color="error"
+                          disabled={!isMockMode}
                           onClick={() => setAssignments((prev) => prev.filter((_, i) => i !== idx))}
                         >
                           <Trash2 size={16} />
@@ -407,6 +451,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
               size="small"
               value={selectedRoomType}
               onChange={(e) => setSelectedRoomType(e.target.value)}
+              disabled={!isMockMode}
               sx={{ minWidth: 240 }}
             >
               {selectableRoomTypes.map((rt) => (
@@ -425,6 +470,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                   isMandatory: true,
                 })
               }
+              disabled={!isMockMode}
             >
               Thêm thiết bị vào định mức
             </Button>
@@ -459,6 +505,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
                         <TextField
                           size="small"
                           type="number"
+                          disabled={!isMockMode}
                           value={req.quantity}
                           onChange={(event) =>
                             setRoomTypeTemplates((current) => ({

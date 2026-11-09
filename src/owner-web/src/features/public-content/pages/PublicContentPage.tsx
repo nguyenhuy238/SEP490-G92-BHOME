@@ -32,7 +32,12 @@ import {
 import { RecordEditor } from '../../../components/dialogs/RecordEditor';
 import type { PortalRecord } from '../../../types/portal';
 import { money } from '../../../utils/format';
+import { isMockMode } from '../../../services/config';
+import { PublicContentApiPage } from '../PublicContentApiPage';
 export default function PublicContentPage() {
+  return isMockMode ? <DemoPublicContentPage /> : <PublicContentApiPage />;
+}
+function DemoPublicContentPage() {
   const query = usePortalData(),
     portal = usePortal(),
     action = usePortalAction();

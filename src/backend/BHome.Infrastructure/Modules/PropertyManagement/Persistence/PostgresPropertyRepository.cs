@@ -76,7 +76,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
 
     public async Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(token);
+        await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(token) : null;
         // One lock order for configuration, deactivation, policy changes and legacy capture writes.
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", token);
@@ -84,7 +84,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         {
             var result = await operation();
             await db.SaveChangesAsync(token);
-            await tx.CommitAsync(token);
+            if (tx is not null) await tx.CommitAsync(token);
             return result;
         }
         catch (DbUpdateConcurrencyException) { throw new PropertyException(409, "stale_version"); }

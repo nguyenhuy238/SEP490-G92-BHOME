@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useAuth } from '../../../../packages/client-core/src/auth';
 import { Alert, Snackbar } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createMockRepository } from '../services/repositories/mockPortalRepository';
+import { createPortalRepository } from '../services/repositories/portalRepository';
 import { isMockMode } from '../services/config';
 import type { PortalRepository } from '../types/portal';
 
@@ -15,25 +16,30 @@ interface PortalContextValue {
 }
 const PortalContext = createContext<PortalContextValue | null>(null);
 export function PortalProvider({ children }: { children: ReactNode }) {
+  return isMockMode ? (
+    <PortalScope>{children}</PortalScope>
+  ) : (
+    <AuthenticatedPortalScope>{children}</AuthenticatedPortalScope>
+  );
+}
+function AuthenticatedPortalScope({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
+  const scope = JSON.stringify([
+    session?.userId,
+    session?.sessionId,
+    [...(session?.roles ?? [])].sort(),
+  ]);
+  return <PortalScope key={scope}>{children}</PortalScope>;
+}
+function PortalScope({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 10000 } } }),
   );
+  useEffect(() => () => queryClient.clear(), [queryClient]);
   const [locationId, setLocationId] = useState('all');
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState({ message: '', error: false });
-  const [repository] = useState(() => {
-    const mock = createMockRepository();
-    if (isMockMode) return mock;
-    // Business OpenAPI endpoints are not finalized; never silently return mock data in API mode.
-    const unavailable = async (): Promise<never> => {
-      throw new Error(
-        'Chưa có hợp đồng API nghiệp vụ. Đặt VITE_API_MODE=mock để dùng dữ liệu demo.',
-      );
-    };
-    return Object.fromEntries(
-      Object.keys(mock).map((key) => [key, unavailable]),
-    ) as unknown as PortalRepository;
-  });
+  const [repository] = useState(() => createPortalRepository(isMockMode));
   const value = useMemo(
     () => ({
       repository,

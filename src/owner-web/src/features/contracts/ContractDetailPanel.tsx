@@ -41,8 +41,10 @@ import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { HoldingDepositPanel } from './HoldingDepositPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
+import { ContractPolicyPanel } from './ContractPolicyPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -269,7 +271,9 @@ export function ContractDetailPanel({
                 variant={
                   a.operation === 'activate' || a.operation === 'signing' ? 'contained' : 'outlined'
                 }
-                disabled={busy || (a.operation === 'activate' && !r?.ready)}
+                disabled={
+                  busy || (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
+                }
                 onClick={() => {
                   setAction(a);
                   setNotice('');
@@ -343,6 +347,15 @@ export function ContractDetailPanel({
       </ChartCard>
 
       {/* 4. Reference material, folded away until needed */}
+      {c.kind === 'Holding' && (
+        <HoldingDepositPanel
+          contract={c}
+          changed={() => {
+            detail.reload();
+            onChanged();
+          }}
+        />
+      )}
       <Accordion disableGutters variant="outlined">
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography sx={{ fontWeight: 600 }}>Điều khoản đưa đi ký</Typography>
@@ -366,8 +379,19 @@ export function ContractDetailPanel({
         </AccordionDetails>
       </Accordion>
       <ContractWorkflowPanel api={api} contract={c} />
+      {c.kind !== 'Holding' && typeof api.transport === 'function' && (
+        <ContractPolicyPanel
+          api={api}
+          contract={c}
+          actorId={actorId}
+          onChanged={(next) => {
+            detail.reload();
+            onChanged(next);
+          }}
+        />
+      )}
 
-      {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
+      {c.kind !== 'Holding' && ['Active', 'Terminated', 'Superseded'].includes(c.status) && (
         <ContractHandoverPanel api={api} id={c.id} />
       )}
       {m && (
