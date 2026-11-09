@@ -22,15 +22,15 @@ working database was not migrated or used for writes.
 
 ## Configuration implementation
 
-| Gap | Result | Contract / evidence |
-| --- | --- | --- |
-| GAP-001 | DONE: policy versions returns revisions of the requested document; Staff sees Published revisions only | [Owner setup](OWNER_SETUP_COMPACT24.md) |
-| GAP-002 | DONE: Mobile uses native Location/Room and explicit capacity; loading failures are independent | [Location/Room](LOCATION_ROOM_API.md) |
-| GAP-003 | DONE: pricing uses exact rate strings and current Location/Room scope | [Location/Room](LOCATION_ROOM_API.md) |
-| GAP-004 | DONE: API-mode Owner configuration persists through native APIs, evidence, versions and refetch | [Owner setup](OWNER_SETUP_COMPACT24.md) |
-| GAP-005 | DONE: persistent shared resources, lifecycle, editions, preview/apply and database-derived usage | [Shared API](SHARED_CONFIGURATION.md) |
-| GAP-006 | DONE: configuration-only copy with explicit groups, hashes, conflicts, transactions and provenance | [Copy](SHARED_CONFIGURATION.md#location-configuration-copy) |
-| GAP-007 | DONE: runtime-generated inventory, exact count/schema methodology, archived obsolete snapshots | This document and inventory |
+| Gap     | Result                                                                                                                                         | Contract / evidence                                                 |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| GAP-001 | DONE: policy versions returns revisions of the requested document; Staff sees Published revisions only                                         | [Owner setup](OWNER_SETUP_COMPACT24.md)                             |
+| GAP-002 | DONE: Mobile uses native Location/Room and explicit capacity; loading failures are independent                                                 | [Location/Room](LOCATION_ROOM_API.md)                               |
+| GAP-003 | DONE: pricing uses exact rate strings and current Location/Room scope                                                                          | [Location/Room](LOCATION_ROOM_API.md)                               |
+| GAP-004 | DONE: API-mode Owner configuration persists through native APIs, evidence, versions and refetch                                                | [Owner setup](OWNER_SETUP_COMPACT24.md)                             |
+| GAP-005 | DONE: persistent shared resources, lifecycle, editions, preview/apply and database-derived usage                                               | [Shared API](SHARED_CONFIGURATION.md)                               |
+| GAP-006 | DONE: configuration-only copy with explicit groups, hashes, conflicts, transactions and provenance                                             | [Copy](SHARED_CONFIGURATION.md#location-configuration-copy)         |
+| GAP-007 | DONE: runtime-generated inventory, exact count/schema methodology, archived obsolete snapshots                                                 | This document and inventory                                         |
 | GAP-008 | PARTIAL: new workflows and focused regressions pass; broad acceptance retains three baseline migration failures and one logging-dependent skip | [Validation](../development/CONFIGURATION_VALIDATION_2026-11-09.md) |
 
 These statuses cover this configuration scope. They do not establish acceptance of

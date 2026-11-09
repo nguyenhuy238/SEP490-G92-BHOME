@@ -21,681 +21,681 @@ The client column links the configuration UI reviewed in this task. It is not an
 
 ## AccountInvitations
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/auth/accept-invitation` | Accept: input: AcceptInvitationRequest (Body) | Anonymous | Not assessed in this configuration inventory |
-| `POST /api/v1/residents/{id:guid}/invitation` | Invite: id: Guid (Path); input: TenantInvitationRequest (Body) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/staff/{id:guid}/invitation` | InviteStaff: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
+| Method and route                              | Action / parameters                                            | Entry authorization | Configuration client evidence                |
+| --------------------------------------------- | -------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `POST /api/v1/auth/accept-invitation`         | Accept: input: AcceptInvitationRequest (Body)                  | Anonymous           | Not assessed in this configuration inventory |
+| `POST /api/v1/residents/{id:guid}/invitation` | Invite: id: Guid (Path); input: TenantInvitationRequest (Body) | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/staff/{id:guid}/invitation`     | InviteStaff: id: Guid (Path)                                   | Owner               | Not assessed in this configuration inventory |
 
 ## AccountProfile
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/account/profile` | Get: No parameters | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/account/profile` | Update: input: ProfileUpdate (Body) | Authenticated | Not assessed in this configuration inventory |
+| Method and route              | Action / parameters                 | Entry authorization | Configuration client evidence                |
+| ----------------------------- | ----------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/account/profile` | Get: No parameters                  | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/account/profile` | Update: input: ProfileUpdate (Body) | Authenticated       | Not assessed in this configuration inventory |
 
 ## AssetInventory
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/asset-template-sync-runs/{id:guid}` | SyncRun: id: Guid (Path) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `GET /api/v1/asset-templates` | Templates: locationId: Guid (Query) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `POST /api/v1/asset-templates` | Create: input: AssetTemplateWrite (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `GET /api/v1/asset-templates/{id:guid}` | Template: id: Guid (Path) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `PUT /api/v1/asset-templates/{id:guid}/draft` | Update: id: Guid (Path); input: AssetTemplateWrite (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `POST /api/v1/asset-templates/{id:guid}/drafts` | Clone: id: Guid (Path) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `POST /api/v1/asset-templates/{id:guid}/publish` | Publish: id: Guid (Path); input: TemplatePublish (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `POST /api/v1/asset-templates/{id:guid}/sync` | Sync: id: Guid (Path) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `GET /api/v1/assets/{id:guid}/history` | History: id: Guid (Path) | Owner,Staff | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `GET /api/v1/assets/{id:guid}/metadata` | GetMetadata: id: Guid (Path) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `PUT /api/v1/assets/{id:guid}/metadata` | Metadata: id: Guid (Path); input: AssetMetadataWrite (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `POST /api/v1/assets/{id:guid}/replace` | Replace: id: Guid (Path); input: AssetReplacement (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `GET /api/v1/rooms/{id:guid}/asset-inventory` | Inventory: id: Guid (Path) | Owner,Staff | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `PUT /api/v1/rooms/{id:guid}/asset-template` | Assign: id: Guid (Path); input: AssetTemplateAssignment (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `POST /api/v1/rooms/{id:guid}/assets/verify` | Verify: id: Guid (Path); input: AssetVerification (Body) | Owner,Staff | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
-| `GET /api/v1/rooms/{id:guid}/desired-assets` | Inventory: id: Guid (Path) | Owner,Staff | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| Method and route                                 | Action / parameters                                            | Entry authorization | Configuration client evidence                                                    |
+| ------------------------------------------------ | -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+| `GET /api/v1/asset-template-sync-runs/{id:guid}` | SyncRun: id: Guid (Path)                                       | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `GET /api/v1/asset-templates`                    | Templates: locationId: Guid (Query)                            | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `POST /api/v1/asset-templates`                   | Create: input: AssetTemplateWrite (Body)                       | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `GET /api/v1/asset-templates/{id:guid}`          | Template: id: Guid (Path)                                      | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `PUT /api/v1/asset-templates/{id:guid}/draft`    | Update: id: Guid (Path); input: AssetTemplateWrite (Body)      | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `POST /api/v1/asset-templates/{id:guid}/drafts`  | Clone: id: Guid (Path)                                         | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `POST /api/v1/asset-templates/{id:guid}/publish` | Publish: id: Guid (Path); input: TemplatePublish (Body)        | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `POST /api/v1/asset-templates/{id:guid}/sync`    | Sync: id: Guid (Path)                                          | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `GET /api/v1/assets/{id:guid}/history`           | History: id: Guid (Path)                                       | Owner,Staff         | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `GET /api/v1/assets/{id:guid}/metadata`          | GetMetadata: id: Guid (Path)                                   | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `PUT /api/v1/assets/{id:guid}/metadata`          | Metadata: id: Guid (Path); input: AssetMetadataWrite (Body)    | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `POST /api/v1/assets/{id:guid}/replace`          | Replace: id: Guid (Path); input: AssetReplacement (Body)       | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `GET /api/v1/rooms/{id:guid}/asset-inventory`    | Inventory: id: Guid (Path)                                     | Owner,Staff         | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `PUT /api/v1/rooms/{id:guid}/asset-template`     | Assign: id: Guid (Path); input: AssetTemplateAssignment (Body) | Owner,Staff + Owner | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `POST /api/v1/rooms/{id:guid}/assets/verify`     | Verify: id: Guid (Path); input: AssetVerification (Body)       | Owner,Staff         | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
+| `GET /api/v1/rooms/{id:guid}/desired-assets`     | Inventory: id: Guid (Path)                                     | Owner,Staff         | [Local inventory](../../src/owner-web/src/features/property/LocalAssetSetup.tsx) |
 
 ## Assets
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/assets` | List: q: PropertyQuery (Query) | property.view | Not assessed in this configuration inventory |
-| `POST /api/v1/assets` | Create: input: AssetWrite (Body) | property.view + property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/assets/{id:guid}` | Get: id: Guid (Path) | property.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/assets/{id:guid}` | Update: id: Guid (Path); input: AssetWrite (Body) | property.view + property.manage | Not assessed in this configuration inventory |
+| Method and route                           | Action / parameters                                                  | Entry authorization                     | Configuration client evidence                |
+| ------------------------------------------ | -------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------- |
+| `GET /api/v1/assets`                       | List: q: PropertyQuery (Query)                                       | property.view                           | Not assessed in this configuration inventory |
+| `POST /api/v1/assets`                      | Create: input: AssetWrite (Body)                                     | property.view + property.manage         | Not assessed in this configuration inventory |
+| `GET /api/v1/assets/{id:guid}`             | Get: id: Guid (Path)                                                 | property.view                           | Not assessed in this configuration inventory |
+| `PUT /api/v1/assets/{id:guid}`             | Update: id: Guid (Path); input: AssetWrite (Body)                    | property.view + property.manage         | Not assessed in this configuration inventory |
 | `PATCH /api/v1/assets/{id:guid}/condition` | UpdateCondition: id: Guid (Path); input: AssetConditionUpdate (Body) | property.view + assets.update-condition | Not assessed in this configuration inventory |
 
 ## Auth
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
+| Method and route                    | Action / parameters                                   | Entry authorization     | Configuration client evidence                |
+| ----------------------------------- | ----------------------------------------------------- | ----------------------- | -------------------------------------------- |
 | `POST /api/v1/auth/change-password` | ChangePassword: request: ChangePasswordRequest (Body) | account.change-password | Not assessed in this configuration inventory |
-| `POST /api/v1/auth/forgot-password` | ForgotPassword: request: ForgotPasswordRequest (Body) | Anonymous | Not assessed in this configuration inventory |
-| `POST /api/v1/auth/login` | Login: request: LoginRequest (Body) | Anonymous | Not assessed in this configuration inventory |
-| `POST /api/v1/auth/logout` | Logout: No parameters | sessions.revoke-own | Not assessed in this configuration inventory |
-| `POST /api/v1/auth/logout-all` | LogoutAll: No parameters | sessions.revoke-own | Not assessed in this configuration inventory |
-| `GET /api/v1/auth/me` | Me: No parameters | account.view-own | Not assessed in this configuration inventory |
-| `POST /api/v1/auth/refresh` | Refresh: request: RefreshRequest (Body) | Anonymous | Not assessed in this configuration inventory |
-| `POST /api/v1/auth/reset-password` | ResetPassword: request: ResetPasswordRequest (Body) | Anonymous | Not assessed in this configuration inventory |
+| `POST /api/v1/auth/forgot-password` | ForgotPassword: request: ForgotPasswordRequest (Body) | Anonymous               | Not assessed in this configuration inventory |
+| `POST /api/v1/auth/login`           | Login: request: LoginRequest (Body)                   | Anonymous               | Not assessed in this configuration inventory |
+| `POST /api/v1/auth/logout`          | Logout: No parameters                                 | sessions.revoke-own     | Not assessed in this configuration inventory |
+| `POST /api/v1/auth/logout-all`      | LogoutAll: No parameters                              | sessions.revoke-own     | Not assessed in this configuration inventory |
+| `GET /api/v1/auth/me`               | Me: No parameters                                     | account.view-own        | Not assessed in this configuration inventory |
+| `POST /api/v1/auth/refresh`         | Refresh: request: RefreshRequest (Body)               | Anonymous               | Not assessed in this configuration inventory |
+| `POST /api/v1/auth/reset-password`  | ResetPassword: request: ResetPasswordRequest (Body)   | Anonymous               | Not assessed in this configuration inventory |
 
 ## BillingAutomation
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `PUT /api/v1/billing-automation` | Save: x: BillingAutomationWrite (Body) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/{locationId:guid}` | Get: locationId: Guid (Path); period: DateOnly (Query) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/{locationId:guid}/history` | History: locationId: Guid (Path) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/attempts` | Attempts: locationId: Guid (Query); period: DateOnly (Query) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/executions` | Executions: locationId: Guid (Query); period: DateOnly (Query) | locations.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/billing-automation/meter-tasks/{taskId:guid}/assignment` | Assign: taskId: Guid (Path); x: MeterAssignmentInput (Body) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/preview` | Preview: locationId: Guid (Query); period: DateOnly (Query) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/queue` | Queue: locationId: Guid (Query); period: DateOnly (Query) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-automation/representative` | Representative: roomId: Guid (Query); period: DateOnly (Query) | locations.manage | Not assessed in this configuration inventory |
-| `PUT /api/v1/billing-automation/representative` | Select: x: BillingRepresentativeInput (Body) | locations.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/billing-automation/run-now` | Run: x: BillingRunInput (Body) | locations.manage | Not assessed in this configuration inventory |
+| Method and route                                                       | Action / parameters                                            | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `PUT /api/v1/billing-automation`                                       | Save: x: BillingAutomationWrite (Body)                         | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/{locationId:guid}`                     | Get: locationId: Guid (Path); period: DateOnly (Query)         | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/{locationId:guid}/history`             | History: locationId: Guid (Path)                               | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/attempts`                              | Attempts: locationId: Guid (Query); period: DateOnly (Query)   | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/executions`                            | Executions: locationId: Guid (Query); period: DateOnly (Query) | locations.manage    | Not assessed in this configuration inventory |
+| `POST /api/v1/billing-automation/meter-tasks/{taskId:guid}/assignment` | Assign: taskId: Guid (Path); x: MeterAssignmentInput (Body)    | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/preview`                               | Preview: locationId: Guid (Query); period: DateOnly (Query)    | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/queue`                                 | Queue: locationId: Guid (Query); period: DateOnly (Query)      | locations.manage    | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-automation/representative`                        | Representative: roomId: Guid (Query); period: DateOnly (Query) | locations.manage    | Not assessed in this configuration inventory |
+| `PUT /api/v1/billing-automation/representative`                        | Select: x: BillingRepresentativeInput (Body)                   | locations.manage    | Not assessed in this configuration inventory |
+| `POST /api/v1/billing-automation/run-now`                              | Run: x: BillingRunInput (Body)                                 | locations.manage    | Not assessed in this configuration inventory |
 
 ## BillingPolicies
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/billing-policies` | List: q: PropertyQuery (Query) | property.view | Not assessed in this configuration inventory |
-| `POST /api/v1/billing-policies` | Create: input: PolicyWrite (Body) | property.view + property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-policies/{id:guid}` | Get: id: Guid (Path) | property.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/billing-policies/{id:guid}` | Update: id: Guid (Path); input: PolicyUpdate (Body) | property.view + property.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/billing-policies/{id:guid}/end` | End: id: Guid (Path); input: PolicyEnd (Body) | property.view + property.manage | Not assessed in this configuration inventory |
+| Method and route                                      | Action / parameters                                       | Entry authorization             | Configuration client evidence                |
+| ----------------------------------------------------- | --------------------------------------------------------- | ------------------------------- | -------------------------------------------- |
+| `GET /api/v1/billing-policies`                        | List: q: PropertyQuery (Query)                            | property.view                   | Not assessed in this configuration inventory |
+| `POST /api/v1/billing-policies`                       | Create: input: PolicyWrite (Body)                         | property.view + property.manage | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-policies/{id:guid}`              | Get: id: Guid (Path)                                      | property.view                   | Not assessed in this configuration inventory |
+| `PUT /api/v1/billing-policies/{id:guid}`              | Update: id: Guid (Path); input: PolicyUpdate (Body)       | property.view + property.manage | Not assessed in this configuration inventory |
+| `POST /api/v1/billing-policies/{id:guid}/end`         | End: id: Guid (Path); input: PolicyEnd (Body)             | property.view + property.manage | Not assessed in this configuration inventory |
 | `POST /api/v1/billing-policies/{id:guid}/replacement` | Replace: id: Guid (Path); input: PolicyReplacement (Body) | property.view + property.manage | Not assessed in this configuration inventory |
 
 ## BillingSchedules
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `PUT /api/v1/billing-schedules` | Save: x: BillingScheduleWrite (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/billing-schedules/{locationId:guid}` | Get: locationId: Guid (Path) | Owner | Not assessed in this configuration inventory |
+| Method and route                                  | Action / parameters                  | Entry authorization | Configuration client evidence                |
+| ------------------------------------------------- | ------------------------------------ | ------------------- | -------------------------------------------- |
+| `PUT /api/v1/billing-schedules`                   | Save: x: BillingScheduleWrite (Body) | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/billing-schedules/{locationId:guid}` | Get: locationId: Guid (Path)         | Owner               | Not assessed in this configuration inventory |
 
 ## Capture
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/capture/assignments` | Assignment: x: AssignmentInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/locations` | Locations: No parameters | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/locations` | Location: x: LocationInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/locations/{id:guid}/meters` | Meters: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/locations/{id:guid}/residents` | Residents: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/locations/{id:guid}/rooms` | Rooms: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/meter-tasks` | Tasks: q: MeterTaskQuery (Query) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/meter-tasks` | Task: x: MeterTaskInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/meter-tasks/{id:guid}` | TaskDetail: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
+| Method and route                                     | Action / parameters                                        | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------- | ---------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `POST /api/v1/capture/assignments`                   | Assignment: x: AssignmentInput (Body)                      | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/locations`                      | Locations: No parameters                                   | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/locations`                     | Location: x: LocationInput (Body)                          | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/locations/{id:guid}/meters`     | Meters: id: Guid (Path)                                    | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/locations/{id:guid}/residents`  | Residents: id: Guid (Path)                                 | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/locations/{id:guid}/rooms`      | Rooms: id: Guid (Path)                                     | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/meter-tasks`                    | Tasks: q: MeterTaskQuery (Query)                           | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/meter-tasks`                   | Task: x: MeterTaskInput (Body)                             | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/meter-tasks/{id:guid}`          | TaskDetail: id: Guid (Path)                                | Owner,Staff         | Not assessed in this configuration inventory |
 | `POST /api/v1/capture/meter-tasks/{id:guid}/confirm` | ConfirmMeter: id: Guid (Path); x: MeterConfirmation (Body) | Owner,Staff + Staff | Not assessed in this configuration inventory |
-| `PUT /api/v1/capture/meter-tasks/{id:guid}/evidence` | Evidence: id: Guid (Path) | Owner,Staff + Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/meters` | Meter: x: MeterInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/readings/{id:guid}` | Reading: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/readings/{id:guid}/evidence` | EvidenceFile: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/residents` | Resident: x: ResidentInput (Body) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/residents/{id:guid}/confirm` | Identity: id: Guid (Path); x: IdentityConfirmation (Body) | Owner,Staff + Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/rooms` | Room: x: RoomInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/capture/staff` | Staff: No parameters | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/capture/staff` | Staff: x: StaffInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `PUT /api/v1/capture/meter-tasks/{id:guid}/evidence` | Evidence: id: Guid (Path)                                  | Owner,Staff + Staff | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/meters`                        | Meter: x: MeterInput (Body)                                | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/readings/{id:guid}`             | Reading: id: Guid (Path)                                   | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/readings/{id:guid}/evidence`    | EvidenceFile: id: Guid (Path)                              | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/residents`                     | Resident: x: ResidentInput (Body)                          | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/residents/{id:guid}/confirm`   | Identity: id: Guid (Path); x: IdentityConfirmation (Body)  | Owner,Staff + Staff | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/rooms`                         | Room: x: RoomInput (Body)                                  | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `GET /api/v1/capture/staff`                          | Staff: No parameters                                       | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/capture/staff`                         | Staff: x: StaffInput (Body)                                | Owner,Staff + Owner | Not assessed in this configuration inventory |
 
 ## Contracts
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/contracts` | List: page: Int32 (Query); pageSize: Int32 (Query); locationId: Nullable`1 (Query); status: String (Query) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts` | Create: x: ContractDraftInput (Body) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}` | Get: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/activate` | Activate: id: Guid (Path) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/activation-readiness` | Readiness: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/deposit-verifications` | Deposits: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/deposit-verifications` | Deposit: id: Guid (Path); x: DepositInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/document` | Document: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/expiry-move-out` | Expiry: id: Guid (Path); x: TerminationInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/handover` | Handover: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/handover` | SaveHandover: id: Guid (Path); x: HandoverInput (Body) | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/handover/choices` | HandoverChoices: id: Guid (Path) | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/handover/disputes` | DisputeHandover: id: Guid (Path); x: HandoverDecision (Body) | Owner,Staff,Tenant + Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/handover/evidence` | UploadHandover: id: Guid (Path) | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/handover/evidence/{fileId:guid}` | HandoverFile: id: Guid (Path); fileId: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/handover/history` | HandoverHistory: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/handover/meter-evidence/{readingId:guid}` | HandoverMeterFile: id: Guid (Path); readingId: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/handover/staff-confirmation` | StaffHandover: id: Guid (Path); x: HandoverDecision (Body) | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/handover/tenant-confirmation` | TenantHandover: id: Guid (Path); x: HandoverDecision (Body) | Owner,Staff,Tenant + Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/history` | History: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/holding-activation` | ActivateHolding: id: Guid (Path) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/holding-approval` | ApproveHolding: id: Guid (Path); x: HoldingDecisionInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/holding-cancellation` | CancelHolding: id: Guid (Path); x: HoldingDecisionInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/holding-conversion` | ConvertHolding: id: Guid (Path); x: HoldingConversionInput (Body) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/holding-deposit` | HoldingDeposit: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out` | MoveOut: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/approve` | Approve: id: Guid (Path) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/complete` | Complete: id: Guid (Path); x: CompletionInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/evidence` | UploadEvidence: id: Guid (Path) | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out/evidence/{evidenceId:guid}` | Evidence: id: Guid (Path); evidenceId: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out/history` | MoveHistory: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/inspection` | Inspect: id: Guid (Path); x: InspectionInput (Body) | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out/inspection-preparation` | InspectionPreparation: id: Guid (Path) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/inspection-review` | InspectionReview: id: Guid (Path); x: InspectionReviewInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out/inspections` | Inspections: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/schedule` | Schedule: id: Guid (Path); x: InspectionScheduleInput (Body) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/move-out/settlement` | Settle: id: Guid (Path); x: SettlementInput (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out/settlement-history` | SettlementHistory: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/move-out/settlement-summary` | SettlementSummary: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/previews` | Previews: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/previews` | GeneratePreview: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/previews/{fileId:guid}` | PreviewFile: id: Guid (Path); fileId: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/renewal-cancellation` | CancelRenewal: id: Guid (Path) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/renewals` | Renewal: id: Guid (Path); x: RenewalInput (Body) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/signing` | Sign: id: Guid (Path); x: SigningInput (Body) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/signing/layout` | SigningLayout: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/signing/pages/{page:int}` | SigningPage: id: Guid (Path); page: Int32 (Path); width: Int32 (Query) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/signing/recover` | Recover: id: Guid (Path); x: SigningRecoveryInput (Body) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/signing/sync` | Sync: id: Guid (Path) | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/termination-requests` | Termination: id: Guid (Path); x: TerminationInput (Body) | Owner,Staff,Tenant + Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/{id:guid}/versions` | Versions: id: Guid (Path) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/configuration` | Configuration: No parameters | Owner,Staff,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/expiry-reminders` | ExpiryReminders: No parameters | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/holdings` | CreateHolding: x: HoldingDraftInput (Body) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/move-out-assignments` | Assignments: No parameters | Owner,Staff,Tenant + Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/preparation` | Preparation: locationId: Nullable`1 (Query) | Owner,Staff,Tenant + Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/preparation/accounts` | TenantAccounts: No parameters | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/preparation/residents/{residentId:guid}/account` | LinkTenant: residentId: Guid (Path); input: TenantAccountLink (Body) | Owner,Staff,Tenant + Owner | Not assessed in this configuration inventory |
+| Method and route                                                           | Action / parameters                                                                                        | Entry authorization               | Configuration client evidence                |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------- | -------------------------------------------- |
+| `GET /api/v1/contracts`                                                    | List: page: Int32 (Query); pageSize: Int32 (Query); locationId: Nullable`1 (Query); status: String (Query) | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts`                                                   | Create: x: ContractDraftInput (Body)                                                                       | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}`                                          | Get: id: Guid (Path)                                                                                       | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/activate`                                | Activate: id: Guid (Path)                                                                                  | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/activation-readiness`                     | Readiness: id: Guid (Path)                                                                                 | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/deposit-verifications`                    | Deposits: id: Guid (Path)                                                                                  | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/deposit-verifications`                   | Deposit: id: Guid (Path); x: DepositInput (Body)                                                           | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/document`                                 | Document: id: Guid (Path)                                                                                  | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/expiry-move-out`                         | Expiry: id: Guid (Path); x: TerminationInput (Body)                                                        | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/handover`                                 | Handover: id: Guid (Path)                                                                                  | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/handover`                                | SaveHandover: id: Guid (Path); x: HandoverInput (Body)                                                     | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/handover/choices`                         | HandoverChoices: id: Guid (Path)                                                                           | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/handover/disputes`                       | DisputeHandover: id: Guid (Path); x: HandoverDecision (Body)                                               | Owner,Staff,Tenant + Tenant       | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/handover/evidence`                       | UploadHandover: id: Guid (Path)                                                                            | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/handover/evidence/{fileId:guid}`          | HandoverFile: id: Guid (Path); fileId: Guid (Path)                                                         | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/handover/history`                         | HandoverHistory: id: Guid (Path)                                                                           | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/handover/meter-evidence/{readingId:guid}` | HandoverMeterFile: id: Guid (Path); readingId: Guid (Path)                                                 | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/handover/staff-confirmation`             | StaffHandover: id: Guid (Path); x: HandoverDecision (Body)                                                 | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/handover/tenant-confirmation`            | TenantHandover: id: Guid (Path); x: HandoverDecision (Body)                                                | Owner,Staff,Tenant + Tenant       | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/history`                                  | History: id: Guid (Path)                                                                                   | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/holding-activation`                      | ActivateHolding: id: Guid (Path)                                                                           | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/holding-approval`                        | ApproveHolding: id: Guid (Path); x: HoldingDecisionInput (Body)                                            | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/holding-cancellation`                    | CancelHolding: id: Guid (Path); x: HoldingDecisionInput (Body)                                             | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/holding-conversion`                      | ConvertHolding: id: Guid (Path); x: HoldingConversionInput (Body)                                          | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/holding-deposit`                          | HoldingDeposit: id: Guid (Path)                                                                            | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out`                                 | MoveOut: id: Guid (Path)                                                                                   | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/approve`                        | Approve: id: Guid (Path)                                                                                   | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/complete`                       | Complete: id: Guid (Path); x: CompletionInput (Body)                                                       | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/evidence`                       | UploadEvidence: id: Guid (Path)                                                                            | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out/evidence/{evidenceId:guid}`      | Evidence: id: Guid (Path); evidenceId: Guid (Path)                                                         | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out/history`                         | MoveHistory: id: Guid (Path)                                                                               | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/inspection`                     | Inspect: id: Guid (Path); x: InspectionInput (Body)                                                        | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out/inspection-preparation`          | InspectionPreparation: id: Guid (Path)                                                                     | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/inspection-review`              | InspectionReview: id: Guid (Path); x: InspectionReviewInput (Body)                                         | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out/inspections`                     | Inspections: id: Guid (Path)                                                                               | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/schedule`                       | Schedule: id: Guid (Path); x: InspectionScheduleInput (Body)                                               | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/move-out/settlement`                     | Settle: id: Guid (Path); x: SettlementInput (Body)                                                         | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out/settlement-history`              | SettlementHistory: id: Guid (Path)                                                                         | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/move-out/settlement-summary`              | SettlementSummary: id: Guid (Path)                                                                         | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/previews`                                 | Previews: id: Guid (Path)                                                                                  | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/previews`                                | GeneratePreview: id: Guid (Path)                                                                           | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/previews/{fileId:guid}`                   | PreviewFile: id: Guid (Path); fileId: Guid (Path)                                                          | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/renewal-cancellation`                    | CancelRenewal: id: Guid (Path)                                                                             | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/renewals`                                | Renewal: id: Guid (Path); x: RenewalInput (Body)                                                           | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/signing`                                 | Sign: id: Guid (Path); x: SigningInput (Body)                                                              | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/signing/layout`                           | SigningLayout: id: Guid (Path)                                                                             | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/signing/pages/{page:int}`                 | SigningPage: id: Guid (Path); page: Int32 (Path); width: Int32 (Query)                                     | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/signing/recover`                         | Recover: id: Guid (Path); x: SigningRecoveryInput (Body)                                                   | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/signing/sync`                            | Sync: id: Guid (Path)                                                                                      | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/termination-requests`                    | Termination: id: Guid (Path); x: TerminationInput (Body)                                                   | Owner,Staff,Tenant + Tenant       | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/{id:guid}/versions`                                 | Versions: id: Guid (Path)                                                                                  | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/configuration`                                      | Configuration: No parameters                                                                               | Owner,Staff,Tenant                | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/expiry-reminders`                                   | ExpiryReminders: No parameters                                                                             | Owner,Staff,Tenant + Owner,Tenant | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/holdings`                                          | CreateHolding: x: HoldingDraftInput (Body)                                                                 | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/move-out-assignments`                               | Assignments: No parameters                                                                                 | Owner,Staff,Tenant + Staff        | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/preparation`                                        | Preparation: locationId: Nullable`1 (Query)                                                                | Owner,Staff,Tenant + Owner,Staff  | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/preparation/accounts`                               | TenantAccounts: No parameters                                                                              | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/preparation/residents/{residentId:guid}/account`   | LinkTenant: residentId: Guid (Path); input: TenantAccountLink (Body)                                       | Owner,Staff,Tenant + Owner        | Not assessed in this configuration inventory |
 
 ## ContractSignatureImage
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `DELETE /api/v1/digital-signing/signature-image` | Remove: No parameters | Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/digital-signing/signature-image` | Mine: No parameters | Owner,Tenant | Not assessed in this configuration inventory |
-| `PUT /api/v1/digital-signing/signature-image` | Save: No parameters | Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/digital-signing/signature-image/content` | Content: No parameters | Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/digital-signing/signature-image/generate` | Generate: x: GenerateSignatureInput (Body); generator: SignaturePictureGenerator (Services) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route                                        | Action / parameters                                                                         | Entry authorization | Configuration client evidence                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `DELETE /api/v1/digital-signing/signature-image`        | Remove: No parameters                                                                       | Owner,Tenant        | Not assessed in this configuration inventory |
+| `GET /api/v1/digital-signing/signature-image`           | Mine: No parameters                                                                         | Owner,Tenant        | Not assessed in this configuration inventory |
+| `PUT /api/v1/digital-signing/signature-image`           | Save: No parameters                                                                         | Owner,Tenant        | Not assessed in this configuration inventory |
+| `GET /api/v1/digital-signing/signature-image/content`   | Content: No parameters                                                                      | Owner,Tenant        | Not assessed in this configuration inventory |
+| `POST /api/v1/digital-signing/signature-image/generate` | Generate: x: GenerateSignatureInput (Body); generator: SignaturePictureGenerator (Services) | Owner,Tenant        | Not assessed in this configuration inventory |
 
 ## ContractSigningCertificates
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/digital-signing/certificates` | Mine: No parameters | Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/digital-signing/certificates` | Declare: x: ContractCertificateInput (Body) | Owner,Tenant | Not assessed in this configuration inventory |
-| `DELETE /api/v1/digital-signing/certificates/{id:guid}` | Remove: id: Guid (Path) | Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/digital-signing/certificates/{id:guid}/lock` | Lock: id: Guid (Path); x: ContractCertificateLockInput (Body) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route                                           | Action / parameters                                           | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------------- | ------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/digital-signing/certificates`                 | Mine: No parameters                                           | Owner,Tenant        | Not assessed in this configuration inventory |
+| `POST /api/v1/digital-signing/certificates`                | Declare: x: ContractCertificateInput (Body)                   | Owner,Tenant        | Not assessed in this configuration inventory |
+| `DELETE /api/v1/digital-signing/certificates/{id:guid}`    | Remove: id: Guid (Path)                                       | Owner,Tenant        | Not assessed in this configuration inventory |
+| `POST /api/v1/digital-signing/certificates/{id:guid}/lock` | Lock: id: Guid (Path); x: ContractCertificateLockInput (Body) | Owner,Tenant        | Not assessed in this configuration inventory |
 
 ## ContractSigningSettings
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `DELETE /api/v1/digital-signing/settings/viettel` | Reset: No parameters | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/digital-signing/settings/viettel` | View: No parameters | Owner | Not assessed in this configuration inventory |
-| `PUT /api/v1/digital-signing/settings/viettel` | Save: x: SaveViettelSettings (Body) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/digital-signing/settings/viettel/test` | Test: x: SigningConnectionTestInput (Body) | Owner | Not assessed in this configuration inventory |
+| Method and route                                     | Action / parameters                        | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------- | ------------------------------------------ | ------------------- | -------------------------------------------- |
+| `DELETE /api/v1/digital-signing/settings/viettel`    | Reset: No parameters                       | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/digital-signing/settings/viettel`       | View: No parameters                        | Owner               | Not assessed in this configuration inventory |
+| `PUT /api/v1/digital-signing/settings/viettel`       | Save: x: SaveViettelSettings (Body)        | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/digital-signing/settings/viettel/test` | Test: x: SigningConnectionTestInput (Body) | Owner               | Not assessed in this configuration inventory |
 
 ## Debts
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/debts` | List: query: PaymentQuery (Query) | Owner,Staff,Tenant | Not assessed in this configuration inventory |
+| Method and route    | Action / parameters               | Entry authorization | Configuration client evidence                |
+| ------------------- | --------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/debts` | List: query: PaymentQuery (Query) | Owner,Staff,Tenant  | Not assessed in this configuration inventory |
 
 ## DepositDeductions
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/contracts/{id:guid}/deposit-deductions` | Approve: id: Guid (Path); input: DepositDeductionInput (Body) | Owner | Not assessed in this configuration inventory |
+| Method and route                                      | Action / parameters                                           | Entry authorization | Configuration client evidence                |
+| ----------------------------------------------------- | ------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `POST /api/v1/contracts/{id:guid}/deposit-deductions` | Approve: id: Guid (Path); input: DepositDeductionInput (Body) | Owner               | Not assessed in this configuration inventory |
 
 ## Expenses
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/expenses` | List: filter: ExpenseFilter (Query) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/expenses` | Create: input: ExpenseInput (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/expenses/{id:guid}` | Get: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `PUT /api/v1/expenses/{id:guid}` | Update: id: Guid (Path); input: ExpenseUpdate (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/expenses/{id:guid}/evidence` | Evidence: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/expenses/{id:guid}/evidence` | Upload: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/expenses/{id:guid}/evidence/{fileId:guid}` | Download: id: Guid (Path); fileId: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/expenses/reference-choices` | References: locationId: Guid (Query); roomId: Nullable`1 (Query) | Owner | Not assessed in this configuration inventory |
+| Method and route                                        | Action / parameters                                              | Entry authorization | Configuration client evidence                |
+| ------------------------------------------------------- | ---------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/expenses`                                  | List: filter: ExpenseFilter (Query)                              | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/expenses`                                 | Create: input: ExpenseInput (Body)                               | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/expenses/{id:guid}`                        | Get: id: Guid (Path)                                             | Owner               | Not assessed in this configuration inventory |
+| `PUT /api/v1/expenses/{id:guid}`                        | Update: id: Guid (Path); input: ExpenseUpdate (Body)             | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/expenses/{id:guid}/evidence`               | Evidence: id: Guid (Path)                                        | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/expenses/{id:guid}/evidence`              | Upload: id: Guid (Path)                                          | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/expenses/{id:guid}/evidence/{fileId:guid}` | Download: id: Guid (Path); fileId: Guid (Path)                   | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/expenses/reference-choices`                | References: locationId: Guid (Query); roomId: Nullable`1 (Query) | Owner               | Not assessed in this configuration inventory |
 
 ## FinancialReports
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/financial-reports` | Get: filter: ReportFilter (Query) | Owner | Not assessed in this configuration inventory |
+| Method and route                | Action / parameters               | Entry authorization | Configuration client evidence                |
+| ------------------------------- | --------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/financial-reports` | Get: filter: ReportFilter (Query) | Owner               | Not assessed in this configuration inventory |
 
 ## FinancialScenarios
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/financial-scenarios` | List: page: Int32 (Query); pageSize: Int32 (Query) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/financial-scenarios` | Save: input: ScenarioInput (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/financial-scenarios/{id:guid}` | Get: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/financial-scenarios/analyze` | Analyze: input: ScenarioInput (Body) | Owner | Not assessed in this configuration inventory |
+| Method and route                            | Action / parameters                                | Entry authorization | Configuration client evidence                |
+| ------------------------------------------- | -------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/financial-scenarios`           | List: page: Int32 (Query); pageSize: Int32 (Query) | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/financial-scenarios`          | Save: input: ScenarioInput (Body)                  | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/financial-scenarios/{id:guid}` | Get: id: Guid (Path)                               | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/financial-scenarios/analyze`  | Analyze: input: ScenarioInput (Body)               | Owner               | Not assessed in this configuration inventory |
 
 ## Foundation
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/session` | Get: No parameters | account.view-own | Not assessed in this configuration inventory |
+| Method and route      | Action / parameters | Entry authorization | Configuration client evidence                |
+| --------------------- | ------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/session` | Get: No parameters  | account.view-own    | Not assessed in this configuration inventory |
 
 ## IncidentReports
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/incidents` | List: query: IncidentQuery (Query) | incidents.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents` | Submit: input: IncidentSubmitForm (Form) | incidents.view + incidents.report | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/{id:guid}` | Get: id: Guid (Path) | incidents.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/acknowledge` | Acknowledge: id: Guid (Path); input: WorkOrderAction (Body) | incidents.view + incidents.respond | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/cancel` | Cancel: id: Guid (Path); input: IncidentDecision (Body) | incidents.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/direct-completion` | Direct: id: Guid (Path); input: DirectCompletion (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/duplicate` | Duplicate: id: Guid (Path); input: IncidentDecision (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/{id:guid}/emergency-actions` | EmergencyActions: id: Guid (Path) | incidents.view + work-orders.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/emergency-actions` | EmergencyAction: id: Guid (Path); input: EmergencyEntry (Body) | incidents.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/emergency-actions/{entryId:guid}/cost-decision` | EmergencyCost: id: Guid (Path); entryId: Guid (Path); input: EmergencyCostDecision (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/{id:guid}/evidence` | Evidence: id: Guid (Path) | incidents.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/incidents/{id:guid}/evidence` | Upload: id: Guid (Path); kind: IncidentEvidenceKind (Query); workOrderId: Nullable`1 (Query) | incidents.view | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/{id:guid}/evidence/{imageId:guid}` | Download: id: Guid (Path); imageId: Guid (Path) | incidents.view | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/{id:guid}/expenses` | Expenses: id: Guid (Path) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/{id:guid}/history` | History: id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | incidents.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/reject` | Reject: id: Guid (Path); input: IncidentDecision (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/resolve` | Resolve: id: Guid (Path); input: IncidentDecision (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/review` | Review: id: Guid (Path); input: IncidentReview (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/{id:guid}/work-orders` | Assign: id: Guid (Path); input: WorkOrderAssign (Body) | incidents.view + incidents.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/notifications` | Notifications: page: Int32 (Query); pageSize: Int32 (Query) | incidents.view | Not assessed in this configuration inventory |
-| `POST /api/v1/incidents/notifications/{id:guid}/read` | Read: id: Guid (Path) | incidents.view | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/reporting-assets` | ReportingAssets: query: IncidentLookupQuery (Query) | incidents.view + incidents.report | Not assessed in this configuration inventory |
-| `GET /api/v1/incidents/reporting-rooms` | ReportingRooms: query: IncidentLookupQuery (Query) | incidents.view + incidents.report | Not assessed in this configuration inventory |
+| Method and route                                                                  | Action / parameters                                                                          | Entry authorization                | Configuration client evidence                |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- |
+| `GET /api/v1/incidents`                                                           | List: query: IncidentQuery (Query)                                                           | incidents.view                     | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents`                                                          | Submit: input: IncidentSubmitForm (Form)                                                     | incidents.view + incidents.report  | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/{id:guid}`                                                 | Get: id: Guid (Path)                                                                         | incidents.view                     | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/acknowledge`                                    | Acknowledge: id: Guid (Path); input: WorkOrderAction (Body)                                  | incidents.view + incidents.respond | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/cancel`                                         | Cancel: id: Guid (Path); input: IncidentDecision (Body)                                      | incidents.view                     | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/direct-completion`                              | Direct: id: Guid (Path); input: DirectCompletion (Body)                                      | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/duplicate`                                      | Duplicate: id: Guid (Path); input: IncidentDecision (Body)                                   | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/{id:guid}/emergency-actions`                               | EmergencyActions: id: Guid (Path)                                                            | incidents.view + work-orders.view  | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/emergency-actions`                              | EmergencyAction: id: Guid (Path); input: EmergencyEntry (Body)                               | incidents.view                     | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/emergency-actions/{entryId:guid}/cost-decision` | EmergencyCost: id: Guid (Path); entryId: Guid (Path); input: EmergencyCostDecision (Body)    | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/{id:guid}/evidence`                                        | Evidence: id: Guid (Path)                                                                    | incidents.view                     | Not assessed in this configuration inventory |
+| `PUT /api/v1/incidents/{id:guid}/evidence`                                        | Upload: id: Guid (Path); kind: IncidentEvidenceKind (Query); workOrderId: Nullable`1 (Query) | incidents.view                     | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/{id:guid}/evidence/{imageId:guid}`                         | Download: id: Guid (Path); imageId: Guid (Path)                                              | incidents.view                     | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/{id:guid}/expenses`                                        | Expenses: id: Guid (Path)                                                                    | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/{id:guid}/history`                                         | History: id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query)                       | incidents.view                     | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/reject`                                         | Reject: id: Guid (Path); input: IncidentDecision (Body)                                      | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/resolve`                                        | Resolve: id: Guid (Path); input: IncidentDecision (Body)                                     | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/review`                                         | Review: id: Guid (Path); input: IncidentReview (Body)                                        | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/{id:guid}/work-orders`                                    | Assign: id: Guid (Path); input: WorkOrderAssign (Body)                                       | incidents.view + incidents.manage  | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/notifications`                                             | Notifications: page: Int32 (Query); pageSize: Int32 (Query)                                  | incidents.view                     | Not assessed in this configuration inventory |
+| `POST /api/v1/incidents/notifications/{id:guid}/read`                             | Read: id: Guid (Path)                                                                        | incidents.view                     | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/reporting-assets`                                          | ReportingAssets: query: IncidentLookupQuery (Query)                                          | incidents.view + incidents.report  | Not assessed in this configuration inventory |
+| `GET /api/v1/incidents/reporting-rooms`                                           | ReportingRooms: query: IncidentLookupQuery (Query)                                           | incidents.view + incidents.report  | Not assessed in this configuration inventory |
 
 ## InvoiceAdjustments
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/invoice-adjustments` | List: q: AdjustmentQuery (Query) | Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/invoice-adjustments/{id:guid}` | Get: id: Guid (Path) | Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/invoice-adjustments/{id:guid}/approve` | Approve: id: Guid (Path); x: AdjustmentDecisionInput (Body) | Owner,Tenant + invoice-adjustments.approve | Not assessed in this configuration inventory |
-| `GET /api/v1/invoice-adjustments/{id:guid}/evidence/{evidenceId:guid}` | Evidence: id: Guid (Path); evidenceId: Guid (Path) | Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/invoice-adjustments/{id:guid}/reject` | Reject: id: Guid (Path); x: AdjustmentDecisionInput (Body) | Owner,Tenant + invoice-adjustments.approve | Not assessed in this configuration inventory |
-| `PUT /api/v1/invoices/{invoiceId:guid}/adjustment-evidence` | Upload: invoiceId: Guid (Path) | Owner,Tenant + invoice-adjustments.request | Not assessed in this configuration inventory |
-| `POST /api/v1/invoices/{invoiceId:guid}/adjustment-requests` | Submit: invoiceId: Guid (Path); x: AdjustmentSubmit (Body) | Owner,Tenant + invoice-adjustments.request | Not assessed in this configuration inventory |
-| `GET /api/v1/invoices/{invoiceId:guid}/adjustments` | Effects: invoiceId: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route                                                       | Action / parameters                                                           | Entry authorization                        | Configuration client evidence                |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------- |
+| `GET /api/v1/invoice-adjustments`                                      | List: q: AdjustmentQuery (Query)                                              | Owner,Tenant                               | Not assessed in this configuration inventory |
+| `GET /api/v1/invoice-adjustments/{id:guid}`                            | Get: id: Guid (Path)                                                          | Owner,Tenant                               | Not assessed in this configuration inventory |
+| `POST /api/v1/invoice-adjustments/{id:guid}/approve`                   | Approve: id: Guid (Path); x: AdjustmentDecisionInput (Body)                   | Owner,Tenant + invoice-adjustments.approve | Not assessed in this configuration inventory |
+| `GET /api/v1/invoice-adjustments/{id:guid}/evidence/{evidenceId:guid}` | Evidence: id: Guid (Path); evidenceId: Guid (Path)                            | Owner,Tenant                               | Not assessed in this configuration inventory |
+| `POST /api/v1/invoice-adjustments/{id:guid}/reject`                    | Reject: id: Guid (Path); x: AdjustmentDecisionInput (Body)                    | Owner,Tenant + invoice-adjustments.approve | Not assessed in this configuration inventory |
+| `PUT /api/v1/invoices/{invoiceId:guid}/adjustment-evidence`            | Upload: invoiceId: Guid (Path)                                                | Owner,Tenant + invoice-adjustments.request | Not assessed in this configuration inventory |
+| `POST /api/v1/invoices/{invoiceId:guid}/adjustment-requests`           | Submit: invoiceId: Guid (Path); x: AdjustmentSubmit (Body)                    | Owner,Tenant + invoice-adjustments.request | Not assessed in this configuration inventory |
+| `GET /api/v1/invoices/{invoiceId:guid}/adjustments`                    | Effects: invoiceId: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | Owner,Tenant                               | Not assessed in this configuration inventory |
 
 ## InvoicePayment
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/invoices/{id:guid}/payment` | Get: id: Guid (Path) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route                                         | Action / parameters     | Entry authorization  | Configuration client evidence                |
+| -------------------------------------------------------- | ----------------------- | -------------------- | -------------------------------------------- |
+| `GET /api/v1/invoices/{id:guid}/payment`                 | Get: id: Guid (Path)    | Owner,Tenant         | Not assessed in this configuration inventory |
 | `GET /api/v1/invoices/{id:guid}/payment/eligible-payers` | Payers: id: Guid (Path) | Owner,Tenant + Owner | Not assessed in this configuration inventory |
 
 ## Invoices
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/invoices` | List: page: Int32 (Query); pageSize: Int32 (Query); roomId: Nullable`1 (Query) | Owner,Tenant | Not assessed in this configuration inventory |
-| `GET /api/v1/invoices/{id:guid}` | Get: id: Guid (Path) | Owner,Tenant | Not assessed in this configuration inventory |
-| `POST /api/v1/invoices/{id:guid}/finalize` | FinalizeInvoice: id: Guid (Path); x: InvoiceFinalizeInput (Body) | Owner,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/invoices/{id:guid}/refresh` | Refresh: id: Guid (Path); x: InvoiceFinalizeInput (Body) | Owner,Tenant + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/invoices/drafts` | Draft: x: DraftInvoiceInput (Body) | Owner,Tenant + Owner | Not assessed in this configuration inventory |
+| Method and route                           | Action / parameters                                                            | Entry authorization  | Configuration client evidence                |
+| ------------------------------------------ | ------------------------------------------------------------------------------ | -------------------- | -------------------------------------------- |
+| `GET /api/v1/invoices`                     | List: page: Int32 (Query); pageSize: Int32 (Query); roomId: Nullable`1 (Query) | Owner,Tenant         | Not assessed in this configuration inventory |
+| `GET /api/v1/invoices/{id:guid}`           | Get: id: Guid (Path)                                                           | Owner,Tenant         | Not assessed in this configuration inventory |
+| `POST /api/v1/invoices/{id:guid}/finalize` | FinalizeInvoice: id: Guid (Path); x: InvoiceFinalizeInput (Body)               | Owner,Tenant + Owner | Not assessed in this configuration inventory |
+| `POST /api/v1/invoices/{id:guid}/refresh`  | Refresh: id: Guid (Path); x: InvoiceFinalizeInput (Body)                       | Owner,Tenant + Owner | Not assessed in this configuration inventory |
+| `POST /api/v1/invoices/drafts`             | Draft: x: DraftInvoiceInput (Body)                                             | Owner,Tenant + Owner | Not assessed in this configuration inventory |
 
 ## LocationConfigurationCopy
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/location-configuration/copy` | Copy: input: ConfigurationCopy (Body) | Owner | [Location copy](../../src/owner-web/src/features/configuration/ApiConfigurationCopy.tsx) |
-| `POST /api/v1/location-configuration/copy-preview` | Preview: input: ConfigurationCopy (Body) | Owner | [Location copy](../../src/owner-web/src/features/configuration/ApiConfigurationCopy.tsx) |
+| Method and route                                   | Action / parameters                      | Entry authorization | Configuration client evidence                                                            |
+| -------------------------------------------------- | ---------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------- |
+| `POST /api/v1/location-configuration/copy`         | Copy: input: ConfigurationCopy (Body)    | Owner               | [Location copy](../../src/owner-web/src/features/configuration/ApiConfigurationCopy.tsx) |
+| `POST /api/v1/location-configuration/copy-preview` | Preview: input: ConfigurationCopy (Body) | Owner               | [Location copy](../../src/owner-web/src/features/configuration/ApiConfigurationCopy.tsx) |
 
 ## Locations
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/locations` | List: query: LocationQuery (Query) | property.view | Not assessed in this configuration inventory |
-| `POST /api/v1/locations` | Create: request: LocationWrite (Body) | locations.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/locations/{id:guid}` | Get: id: Guid (Path) | property.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/locations/{id:guid}` | Update: id: Guid (Path); input: LocationWrite (Body) | property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/locations/{id:guid}/closure-check` | ClosureCheck: id: Guid (Path) | property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/locations/{id:guid}/occupancy-summary` | OccupancySummary: id: Guid (Path); query: OccupancySummaryQuery (Query) | property.view | Not assessed in this configuration inventory |
-| `GET /api/v1/locations/{id:guid}/staff-change-preview` | StaffChangePreview: id: Guid (Path) | property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/locations/assigned-to-me` | ListAssigned: No parameters | locations.view-assigned | Not assessed in this configuration inventory |
+| Method and route                                       | Action / parameters                                                     | Entry authorization     | Configuration client evidence                |
+| ------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------- | -------------------------------------------- |
+| `GET /api/v1/locations`                                | List: query: LocationQuery (Query)                                      | property.view           | Not assessed in this configuration inventory |
+| `POST /api/v1/locations`                               | Create: request: LocationWrite (Body)                                   | locations.manage        | Not assessed in this configuration inventory |
+| `GET /api/v1/locations/{id:guid}`                      | Get: id: Guid (Path)                                                    | property.view           | Not assessed in this configuration inventory |
+| `PUT /api/v1/locations/{id:guid}`                      | Update: id: Guid (Path); input: LocationWrite (Body)                    | property.manage         | Not assessed in this configuration inventory |
+| `GET /api/v1/locations/{id:guid}/closure-check`        | ClosureCheck: id: Guid (Path)                                           | property.manage         | Not assessed in this configuration inventory |
+| `GET /api/v1/locations/{id:guid}/occupancy-summary`    | OccupancySummary: id: Guid (Path); query: OccupancySummaryQuery (Query) | property.view           | Not assessed in this configuration inventory |
+| `GET /api/v1/locations/{id:guid}/staff-change-preview` | StaffChangePreview: id: Guid (Path)                                     | property.manage         | Not assessed in this configuration inventory |
+| `GET /api/v1/locations/assigned-to-me`                 | ListAssigned: No parameters                                             | locations.view-assigned | Not assessed in this configuration inventory |
 
 ## MainDrafts
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/contracts/main-drafts` | Create: input: MainDraftInput (Body) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/main-drafts/{id:guid}` | Get: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `PUT /api/v1/contracts/main-drafts/{id:guid}` | Update: id: Guid (Path); input: MainDraftInput (Body) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/main-drafts/{id:guid}/documents` | Generate: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/main-drafts/{id:guid}/documents/{fileId:guid}` | Download: id: Guid (Path); fileId: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/main-drafts/{id:guid}/documents/{fileId:guid}/pages/{page:int}` | Page: id: Guid (Path); fileId: Guid (Path); page: Int32 (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/main-drafts/{id:guid}/documents/{fileId:guid}/preview` | Preview: id: Guid (Path); fileId: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/main-drafts/{id:guid}/release` | Release: id: Guid (Path); input: MainDraftReleaseInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/main-drafts/{id:guid}/signing-review` | SigningReview: id: Guid (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/main-drafts/preparation` | Prepare: roomId: Guid (Query); representativeResidentId: Guid (Query); residentIds: Guid[] (Query); effectiveOn: DateOnly (Query) | Owner,Staff | Not assessed in this configuration inventory |
-| `GET /api/v1/contracts/main-drafts/settings/{locationId:guid}` | Settings: locationId: Guid (Path) | Owner,Staff + Owner | Not assessed in this configuration inventory |
-| `PUT /api/v1/contracts/main-drafts/settings/{locationId:guid}` | Settings: locationId: Guid (Path); input: MainContractSettingsInput (Body) | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| Method and route                                                                       | Action / parameters                                                                                                               | Entry authorization | Configuration client evidence                |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `POST /api/v1/contracts/main-drafts`                                                   | Create: input: MainDraftInput (Body)                                                                                              | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/main-drafts/{id:guid}`                                          | Get: id: Guid (Path)                                                                                                              | Owner,Staff         | Not assessed in this configuration inventory |
+| `PUT /api/v1/contracts/main-drafts/{id:guid}`                                          | Update: id: Guid (Path); input: MainDraftInput (Body)                                                                             | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/main-drafts/{id:guid}/documents`                               | Generate: id: Guid (Path)                                                                                                         | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/main-drafts/{id:guid}/documents/{fileId:guid}`                  | Download: id: Guid (Path); fileId: Guid (Path)                                                                                    | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/main-drafts/{id:guid}/documents/{fileId:guid}/pages/{page:int}` | Page: id: Guid (Path); fileId: Guid (Path); page: Int32 (Path)                                                                    | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/main-drafts/{id:guid}/documents/{fileId:guid}/preview`          | Preview: id: Guid (Path); fileId: Guid (Path)                                                                                     | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/main-drafts/{id:guid}/release`                                 | Release: id: Guid (Path); input: MainDraftReleaseInput (Body)                                                                     | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/main-drafts/{id:guid}/signing-review`                          | SigningReview: id: Guid (Path)                                                                                                    | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/main-drafts/preparation`                                        | Prepare: roomId: Guid (Query); representativeResidentId: Guid (Query); residentIds: Guid[] (Query); effectiveOn: DateOnly (Query) | Owner,Staff         | Not assessed in this configuration inventory |
+| `GET /api/v1/contracts/main-drafts/settings/{locationId:guid}`                         | Settings: locationId: Guid (Path)                                                                                                 | Owner,Staff + Owner | Not assessed in this configuration inventory |
+| `PUT /api/v1/contracts/main-drafts/settings/{locationId:guid}`                         | Settings: locationId: Guid (Path); input: MainContractSettingsInput (Body)                                                        | Owner,Staff + Owner | Not assessed in this configuration inventory |
 
 ## MobileDevelopment
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /development/mobile-ca.cer` | Certificate: No parameters | Anonymous | Not assessed in this configuration inventory |
+| Method and route                 | Action / parameters        | Entry authorization | Configuration client evidence                |
+| -------------------------------- | -------------------------- | ------------------- | -------------------------------------------- |
+| `GET /development/mobile-ca.cer` | Certificate: No parameters | Anonymous           | Not assessed in this configuration inventory |
 
 ## NotificationAutomation
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/notifications/process-events` | Publish: No parameters | locations.manage | Not assessed in this configuration inventory |
+| Method and route                            | Action / parameters    | Entry authorization | Configuration client evidence                |
+| ------------------------------------------- | ---------------------- | ------------------- | -------------------------------------------- |
+| `POST /api/v1/notifications/process-events` | Publish: No parameters | locations.manage    | Not assessed in this configuration inventory |
 
 ## NotificationDelivery
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/notifications/delivery-status` | List: q: DeliveryQuery (Query) | locations.manage | Not assessed in this configuration inventory |
+| Method and route                            | Action / parameters            | Entry authorization | Configuration client evidence                |
+| ------------------------------------------- | ------------------------------ | ------------------- | -------------------------------------------- |
+| `GET /api/v1/notifications/delivery-status` | List: q: DeliveryQuery (Query) | locations.manage    | Not assessed in this configuration inventory |
 
 ## Notifications
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/notifications` | List: query: NotificationQuery (Query) | notifications.read-own | Not assessed in this configuration inventory |
-| `GET /api/v1/notifications/{id:guid}` | Get: id: Guid (Path) | notifications.read-own | Not assessed in this configuration inventory |
-| `PATCH /api/v1/notifications/{id:guid}/read` | Read: id: Guid (Path) | notifications.read-own | Not assessed in this configuration inventory |
-| `POST /api/v1/notifications/{id:guid}/read` | Read: id: Guid (Path) | notifications.read-own | Not assessed in this configuration inventory |
-| `GET /api/v1/notifications/{id:guid}/target` | Target: id: Guid (Path) | notifications.read-own | Not assessed in this configuration inventory |
-| `POST /api/v1/notifications/read-all` | ReadAll: No parameters | notifications.read-own | Not assessed in this configuration inventory |
-| `GET /api/v1/notifications/unread-count` | Unread: No parameters | notifications.read-own | Not assessed in this configuration inventory |
+| Method and route                             | Action / parameters                    | Entry authorization    | Configuration client evidence                |
+| -------------------------------------------- | -------------------------------------- | ---------------------- | -------------------------------------------- |
+| `GET /api/v1/notifications`                  | List: query: NotificationQuery (Query) | notifications.read-own | Not assessed in this configuration inventory |
+| `GET /api/v1/notifications/{id:guid}`        | Get: id: Guid (Path)                   | notifications.read-own | Not assessed in this configuration inventory |
+| `PATCH /api/v1/notifications/{id:guid}/read` | Read: id: Guid (Path)                  | notifications.read-own | Not assessed in this configuration inventory |
+| `POST /api/v1/notifications/{id:guid}/read`  | Read: id: Guid (Path)                  | notifications.read-own | Not assessed in this configuration inventory |
+| `GET /api/v1/notifications/{id:guid}/target` | Target: id: Guid (Path)                | notifications.read-own | Not assessed in this configuration inventory |
+| `POST /api/v1/notifications/read-all`        | ReadAll: No parameters                 | notifications.read-own | Not assessed in this configuration inventory |
+| `GET /api/v1/notifications/unread-count`     | Unread: No parameters                  | notifications.read-own | Not assessed in this configuration inventory |
 
 ## NotificationWorkspace
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/announcements` | Create: input: AnnouncementWrite (Body) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/announcements/{id:guid}/send` | Send: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/announcements/preview-recipients` | Preview: input: NotificationAudience (Body) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/announcements/sent` | Sent: page: Int32 (Query); pageSize: Int32 (Query) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/locations/{id:guid}/notification-policy` | Policy: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/locations/{id:guid}/notification-policy` | Policy: id: Guid (Path); input: NotificationReminderPolicy (Body) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/notifications/{id:guid}/deliveries` | Deliveries: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/notifications/channel-status` | ChannelOverview: No parameters | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/notifications/devices` | Register: input: PushDeviceWrite (Body) | Authenticated | Not assessed in this configuration inventory |
-| `DELETE /api/v1/notifications/devices/{id:guid}` | Remove: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/tenant/rooms` | Rooms: No parameters | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/tenant/rooms/{id:guid}` | Room: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
+| Method and route                                      | Action / parameters                                               | Entry authorization | Configuration client evidence                |
+| ----------------------------------------------------- | ----------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `POST /api/v1/announcements`                          | Create: input: AnnouncementWrite (Body)                           | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/announcements/{id:guid}/send`           | Send: id: Guid (Path)                                             | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/announcements/preview-recipients`       | Preview: input: NotificationAudience (Body)                       | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/announcements/sent`                      | Sent: page: Int32 (Query); pageSize: Int32 (Query)                | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/locations/{id:guid}/notification-policy` | Policy: id: Guid (Path)                                           | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/locations/{id:guid}/notification-policy` | Policy: id: Guid (Path); input: NotificationReminderPolicy (Body) | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/notifications/{id:guid}/deliveries`      | Deliveries: id: Guid (Path)                                       | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/notifications/channel-status`            | ChannelOverview: No parameters                                    | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/notifications/devices`                  | Register: input: PushDeviceWrite (Body)                           | Authenticated       | Not assessed in this configuration inventory |
+| `DELETE /api/v1/notifications/devices/{id:guid}`      | Remove: id: Guid (Path)                                           | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/tenant/rooms`                            | Rooms: No parameters                                              | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/tenant/rooms/{id:guid}`                  | Room: id: Guid (Path)                                             | Authenticated       | Not assessed in this configuration inventory |
 
 ## Occupancy
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/occupancy` | List: input: OccupancyQuery (Query) | Authenticated | Not assessed in this configuration inventory |
+| Method and route        | Action / parameters                 | Entry authorization | Configuration client evidence                |
+| ----------------------- | ----------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/occupancy` | List: input: OccupancyQuery (Query) | Authenticated       | Not assessed in this configuration inventory |
 
 ## Ocr
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/ocr/identity/{residentId:guid}/{side}` | Identity: residentId: Guid (Path); side: String (Path) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/ocr/meter-tasks/{taskId:guid}` | Meter: taskId: Guid (Path) | Staff | Not assessed in this configuration inventory |
+| Method and route                                     | Action / parameters                                    | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------- | ------------------------------------------------------ | ------------------- | -------------------------------------------- |
+| `POST /api/v1/ocr/identity/{residentId:guid}/{side}` | Identity: residentId: Guid (Path); side: String (Path) | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/ocr/meter-tasks/{taskId:guid}`         | Meter: taskId: Guid (Path)                             | Staff               | Not assessed in this configuration inventory |
 
 ## OcrDiagnostics
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/ocr/diagnostics` | Availability: No parameters | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/ocr/diagnostics/{profile}` | Extract: profile: String (Path); decimalPlaces: String (Query) | Owner,Staff | Not assessed in this configuration inventory |
-| `POST /api/v1/ocr/diagnostics/auto` | Automatic: experimental: Boolean (Query); taskId: Nullable`1 (Query) | Owner,Staff | Not assessed in this configuration inventory |
+| Method and route                         | Action / parameters                                                  | Entry authorization | Configuration client evidence                |
+| ---------------------------------------- | -------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/ocr/diagnostics`            | Availability: No parameters                                          | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/ocr/diagnostics/{profile}` | Extract: profile: String (Path); decimalPlaces: String (Query)       | Owner,Staff         | Not assessed in this configuration inventory |
+| `POST /api/v1/ocr/diagnostics/auto`      | Automatic: experimental: Boolean (Query); taskId: Nullable`1 (Query) | Owner,Staff         | Not assessed in this configuration inventory |
 
 ## OperatingPolicies
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/contracts/{id:guid}/agreed-operating-policy` | Agreed: id: Guid (Path) | Authenticated | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `POST /api/v1/contracts/{id:guid}/operating-policy-amendment-cancellation` | Cancel: id: Guid (Path); input: PolicyAmendmentCancellation (Body) | Authenticated + Owner | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `POST /api/v1/contracts/{id:guid}/operating-policy-amendments` | Amend: id: Guid (Path); input: PolicyAmendmentInput (Body) | Authenticated + Owner | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `GET /api/v1/operating-policies` | List: locationId: Guid (Query) | Authenticated + Owner,Staff | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `POST /api/v1/operating-policies` | Create: input: OperatingPolicyWrite (Body) | Authenticated + Owner | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `GET /api/v1/operating-policies/{id:guid}` | Get: id: Guid (Path) | Authenticated + Owner,Staff | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `PUT /api/v1/operating-policies/{id:guid}/draft` | Update: id: Guid (Path); input: OperatingPolicyWrite (Body) | Authenticated + Owner | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `POST /api/v1/operating-policies/{id:guid}/publish` | Publish: id: Guid (Path); input: TemplatePublish (Body) | Authenticated + Owner | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
-| `GET /api/v1/operating-policies/{id:guid}/versions` | Versions: id: Guid (Path) | Authenticated + Owner,Staff | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| Method and route                                                           | Action / parameters                                                | Entry authorization         | Configuration client evidence                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET /api/v1/contracts/{id:guid}/agreed-operating-policy`                  | Agreed: id: Guid (Path)                                            | Authenticated               | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `POST /api/v1/contracts/{id:guid}/operating-policy-amendment-cancellation` | Cancel: id: Guid (Path); input: PolicyAmendmentCancellation (Body) | Authenticated + Owner       | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `POST /api/v1/contracts/{id:guid}/operating-policy-amendments`             | Amend: id: Guid (Path); input: PolicyAmendmentInput (Body)         | Authenticated + Owner       | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `GET /api/v1/operating-policies`                                           | List: locationId: Guid (Query)                                     | Authenticated + Owner,Staff | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `POST /api/v1/operating-policies`                                          | Create: input: OperatingPolicyWrite (Body)                         | Authenticated + Owner       | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `GET /api/v1/operating-policies/{id:guid}`                                 | Get: id: Guid (Path)                                               | Authenticated + Owner,Staff | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `PUT /api/v1/operating-policies/{id:guid}/draft`                           | Update: id: Guid (Path); input: OperatingPolicyWrite (Body)        | Authenticated + Owner       | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `POST /api/v1/operating-policies/{id:guid}/publish`                        | Publish: id: Guid (Path); input: TemplatePublish (Body)            | Authenticated + Owner       | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
+| `GET /api/v1/operating-policies/{id:guid}/versions`                        | Versions: id: Guid (Path)                                          | Authenticated + Owner,Staff | [Operating policies](../../src/owner-web/src/features/property/OperatingPoliciesPanel.tsx) |
 
 ## OperationalTasks
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/operational-tasks` | List: query: TaskQuery (Query) | operational-tasks.view | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks` | Create: input: TaskCreate (Body) | operational-tasks.view + operational-tasks.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/operational-tasks/{id:guid}` | Get: id: Guid (Path) | operational-tasks.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/operational-tasks/{id:guid}` | Update: id: Guid (Path); input: TaskUpdate (Body) | operational-tasks.view + operational-tasks.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/assign` | Assign: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/blockers` | Blockers: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/cancel` | Cancel: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/coordinate` | Coordinate: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/operational-tasks/{id:guid}/evidence` | Evidence: id: Guid (Path) | operational-tasks.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/operational-tasks/{id:guid}/evidence` | Upload: id: Guid (Path) | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
-| `GET /api/v1/operational-tasks/{id:guid}/evidence/{evidenceId:guid}` | Download: id: Guid (Path); evidenceId: Guid (Path) | operational-tasks.view | Not assessed in this configuration inventory |
-| `GET /api/v1/operational-tasks/{id:guid}/history` | History: id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | operational-tasks.view | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/progress` | Progress: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/rework` | Rework: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.verify | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/start` | Start: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/submit` | Submit: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/{id:guid}/verify` | Verify: id: Guid (Path); input: TaskAction (Body) | operational-tasks.view + operational-tasks.verify | Not assessed in this configuration inventory |
-| `GET /api/v1/operational-tasks/notifications` | Notifications: page: Int32 (Query); pageSize: Int32 (Query) | operational-tasks.view + notifications.read-own | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-tasks/notifications/{id:guid}/read` | Read: id: Guid (Path) | operational-tasks.view + notifications.read-own | Not assessed in this configuration inventory |
+| Method and route                                                     | Action / parameters                                                    | Entry authorization                                | Configuration client evidence                |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------- |
+| `GET /api/v1/operational-tasks`                                      | List: query: TaskQuery (Query)                                         | operational-tasks.view                             | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks`                                     | Create: input: TaskCreate (Body)                                       | operational-tasks.view + operational-tasks.manage  | Not assessed in this configuration inventory |
+| `GET /api/v1/operational-tasks/{id:guid}`                            | Get: id: Guid (Path)                                                   | operational-tasks.view                             | Not assessed in this configuration inventory |
+| `PUT /api/v1/operational-tasks/{id:guid}`                            | Update: id: Guid (Path); input: TaskUpdate (Body)                      | operational-tasks.view + operational-tasks.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/assign`                    | Assign: id: Guid (Path); input: TaskAction (Body)                      | operational-tasks.view + operational-tasks.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/blockers`                  | Blockers: id: Guid (Path); input: TaskAction (Body)                    | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/cancel`                    | Cancel: id: Guid (Path); input: TaskAction (Body)                      | operational-tasks.view + operational-tasks.manage  | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/coordinate`                | Coordinate: id: Guid (Path); input: TaskAction (Body)                  | operational-tasks.view + operational-tasks.manage  | Not assessed in this configuration inventory |
+| `GET /api/v1/operational-tasks/{id:guid}/evidence`                   | Evidence: id: Guid (Path)                                              | operational-tasks.view                             | Not assessed in this configuration inventory |
+| `PUT /api/v1/operational-tasks/{id:guid}/evidence`                   | Upload: id: Guid (Path)                                                | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
+| `GET /api/v1/operational-tasks/{id:guid}/evidence/{evidenceId:guid}` | Download: id: Guid (Path); evidenceId: Guid (Path)                     | operational-tasks.view                             | Not assessed in this configuration inventory |
+| `GET /api/v1/operational-tasks/{id:guid}/history`                    | History: id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | operational-tasks.view                             | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/progress`                  | Progress: id: Guid (Path); input: TaskAction (Body)                    | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/rework`                    | Rework: id: Guid (Path); input: TaskAction (Body)                      | operational-tasks.view + operational-tasks.verify  | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/start`                     | Start: id: Guid (Path); input: TaskAction (Body)                       | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/submit`                    | Submit: id: Guid (Path); input: TaskAction (Body)                      | operational-tasks.view + operational-tasks.execute | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/{id:guid}/verify`                    | Verify: id: Guid (Path); input: TaskAction (Body)                      | operational-tasks.view + operational-tasks.verify  | Not assessed in this configuration inventory |
+| `GET /api/v1/operational-tasks/notifications`                        | Notifications: page: Int32 (Query); pageSize: Int32 (Query)            | operational-tasks.view + notifications.read-own    | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-tasks/notifications/{id:guid}/read`        | Read: id: Guid (Path)                                                  | operational-tasks.view + notifications.read-own    | Not assessed in this configuration inventory |
 
 ## OperationalTaskTemplates
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/operational-task-templates` | List: locationId: Guid (Query) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/operational-task-templates` | Create: input: RecurringTaskTemplateWrite (Body) | Authenticated | Not assessed in this configuration inventory |
-| `DELETE /api/v1/operational-task-templates/{id:guid}` | Delete: id: Guid (Path); locationId: Guid (Query); version: Int32 (Query) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/operational-task-templates/{id:guid}` | Update: id: Guid (Path); input: RecurringTaskTemplateWrite (Body) | Authenticated | Not assessed in this configuration inventory |
+| Method and route                                      | Action / parameters                                                       | Entry authorization | Configuration client evidence                |
+| ----------------------------------------------------- | ------------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/operational-task-templates`              | List: locationId: Guid (Query)                                            | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/operational-task-templates`             | Create: input: RecurringTaskTemplateWrite (Body)                          | Authenticated       | Not assessed in this configuration inventory |
+| `DELETE /api/v1/operational-task-templates/{id:guid}` | Delete: id: Guid (Path); locationId: Guid (Query); version: Int32 (Query) | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/operational-task-templates/{id:guid}`    | Update: id: Guid (Path); input: RecurringTaskTemplateWrite (Body)         | Authenticated       | Not assessed in this configuration inventory |
 
 ## PaymentHistory
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/payment-history` | List: query: PaymentQuery (Query) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route              | Action / parameters               | Entry authorization | Configuration client evidence                |
+| ----------------------------- | --------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/payment-history` | List: query: PaymentQuery (Query) | Owner,Tenant        | Not assessed in this configuration inventory |
 
 ## PaymentInvoices
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/payment-invoices` | List: query: PaymentQuery (Query) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route               | Action / parameters               | Entry authorization | Configuration client evidence                |
+| ------------------------------ | --------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/payment-invoices` | List: query: PaymentQuery (Query) | Owner,Tenant        | Not assessed in this configuration inventory |
 
 ## PaymentTransactions
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/payment-transactions` | List: query: PaymentQuery (Query) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/payment-transactions` | Register: input: PaymentTransferInput (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/payment-transactions/{id:guid}` | Get: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/payment-transactions/{id:guid}/allocate` | Allocate: id: Guid (Path); input: PaymentMatchInput (Body) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/payment-transactions/{id:guid}/allocate-holding-deposit` | AllocateDeposit: id: Guid (Path); input: PaymentDepositMatchInput (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/payment-transactions/{id:guid}/reconciliation-history` | History: id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/payment-transactions/{id:guid}/reject` | Reject: id: Guid (Path); input: PaymentRejectInput (Body) | Owner | Not assessed in this configuration inventory |
+| Method and route                                                       | Action / parameters                                                      | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------- | -------------------------------------------- |
+| `GET /api/v1/payment-transactions`                                     | List: query: PaymentQuery (Query)                                        | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/payment-transactions`                                    | Register: input: PaymentTransferInput (Body)                             | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/payment-transactions/{id:guid}`                           | Get: id: Guid (Path)                                                     | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/payment-transactions/{id:guid}/allocate`                 | Allocate: id: Guid (Path); input: PaymentMatchInput (Body)               | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/payment-transactions/{id:guid}/allocate-holding-deposit` | AllocateDeposit: id: Guid (Path); input: PaymentDepositMatchInput (Body) | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/payment-transactions/{id:guid}/reconciliation-history`    | History: id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query)   | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/payment-transactions/{id:guid}/reject`                   | Reject: id: Guid (Path); input: PaymentRejectInput (Body)                | Owner               | Not assessed in this configuration inventory |
 
 ## PublicContentAdministration
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/public-content/locations/{id:guid}` | Location: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/public-content/locations/{id:guid}` | UpdateLocation: id: Guid (Path); input: LocationPublicContentWrite (Body) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/public-content/locations/{id:guid}/photos` | LocationPhoto: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `DELETE /api/v1/public-content/locations/{id:guid}/photos/{index:int}` | RemoveLocationPhoto: id: Guid (Path); index: Int32 (Path) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/public-content/locations/{id:guid}/publish` | PublishLocation: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/public-content/locations/{id:guid}/unpublish` | UnpublishLocation: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/public-content/rooms/{id:guid}` | Room: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/public-content/rooms/{id:guid}` | UpdateRoom: id: Guid (Path); input: RoomPublicContentWrite (Body) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/public-content/rooms/{id:guid}/photos` | RoomPhoto: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `DELETE /api/v1/public-content/rooms/{id:guid}/photos/{index:int}` | RemoveRoomPhoto: id: Guid (Path); index: Int32 (Path) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/public-content/rooms/{id:guid}/publish` | PublishRoom: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/public-content/rooms/{id:guid}/unpublish` | UnpublishRoom: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
+| Method and route                                                       | Action / parameters                                                       | Entry authorization | Configuration client evidence                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/public-content/locations/{id:guid}`                       | Location: id: Guid (Path)                                                 | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/public-content/locations/{id:guid}`                       | UpdateLocation: id: Guid (Path); input: LocationPublicContentWrite (Body) | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/public-content/locations/{id:guid}/photos`                | LocationPhoto: id: Guid (Path)                                            | Authenticated       | Not assessed in this configuration inventory |
+| `DELETE /api/v1/public-content/locations/{id:guid}/photos/{index:int}` | RemoveLocationPhoto: id: Guid (Path); index: Int32 (Path)                 | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/public-content/locations/{id:guid}/publish`              | PublishLocation: id: Guid (Path)                                          | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/public-content/locations/{id:guid}/unpublish`            | UnpublishLocation: id: Guid (Path)                                        | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/public-content/rooms/{id:guid}`                           | Room: id: Guid (Path)                                                     | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/public-content/rooms/{id:guid}`                           | UpdateRoom: id: Guid (Path); input: RoomPublicContentWrite (Body)         | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/public-content/rooms/{id:guid}/photos`                    | RoomPhoto: id: Guid (Path)                                                | Authenticated       | Not assessed in this configuration inventory |
+| `DELETE /api/v1/public-content/rooms/{id:guid}/photos/{index:int}`     | RemoveRoomPhoto: id: Guid (Path); index: Int32 (Path)                     | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/public-content/rooms/{id:guid}/publish`                  | PublishRoom: id: Guid (Path)                                              | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/public-content/rooms/{id:guid}/unpublish`                | UnpublishRoom: id: Guid (Path)                                            | Authenticated       | Not assessed in this configuration inventory |
 
 ## PublicInformation
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/public/locations` | Locations: No parameters | Anonymous | Not assessed in this configuration inventory |
-| `GET /api/v1/public/locations/{id:guid}` | Location: id: Guid (Path) | Anonymous | Not assessed in this configuration inventory |
-| `GET /api/v1/public/locations/{id:guid}/photos/{index:int}` | LocationPhoto: id: Guid (Path); index: Int32 (Path) | Anonymous | Not assessed in this configuration inventory |
-| `GET /api/v1/public/locations/{id:guid}/rooms` | Rooms: id: Guid (Path) | Anonymous | Not assessed in this configuration inventory |
-| `GET /api/v1/public/rooms/{id:guid}` | Room: id: Guid (Path) | Anonymous | Not assessed in this configuration inventory |
-| `GET /api/v1/public/rooms/{id:guid}/photos/{index:int}` | RoomPhoto: id: Guid (Path); index: Int32 (Path) | Anonymous | Not assessed in this configuration inventory |
+| Method and route                                            | Action / parameters                                 | Entry authorization | Configuration client evidence                |
+| ----------------------------------------------------------- | --------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/public/locations`                              | Locations: No parameters                            | Anonymous           | Not assessed in this configuration inventory |
+| `GET /api/v1/public/locations/{id:guid}`                    | Location: id: Guid (Path)                           | Anonymous           | Not assessed in this configuration inventory |
+| `GET /api/v1/public/locations/{id:guid}/photos/{index:int}` | LocationPhoto: id: Guid (Path); index: Int32 (Path) | Anonymous           | Not assessed in this configuration inventory |
+| `GET /api/v1/public/locations/{id:guid}/rooms`              | Rooms: id: Guid (Path)                              | Anonymous           | Not assessed in this configuration inventory |
+| `GET /api/v1/public/rooms/{id:guid}`                        | Room: id: Guid (Path)                               | Anonymous           | Not assessed in this configuration inventory |
+| `GET /api/v1/public/rooms/{id:guid}/photos/{index:int}`     | RoomPhoto: id: Guid (Path); index: Int32 (Path)     | Anonymous           | Not assessed in this configuration inventory |
 
 ## ReceivingAccounts
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `PUT /api/v1/receiving-bank-accounts` | Save: input: ReceivingAccountInput (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/receiving-bank-accounts/{locationId:guid}` | Get: locationId: Guid (Path) | Owner | Not assessed in this configuration inventory |
+| Method and route                                        | Action / parameters                       | Entry authorization | Configuration client evidence                |
+| ------------------------------------------------------- | ----------------------------------------- | ------------------- | -------------------------------------------- |
+| `PUT /api/v1/receiving-bank-accounts`                   | Save: input: ReceivingAccountInput (Body) | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/receiving-bank-accounts/{locationId:guid}` | Get: locationId: Guid (Path)              | Owner               | Not assessed in this configuration inventory |
 
 ## Refunds
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/contracts/{id:guid}/deposit-refunds` | DepositSource: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/contracts/{id:guid}/deposit-refunds` | CreateDeposit: id: Guid (Path); input: DepositRefundInput (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/payment-transactions/{id:guid}/refunds` | Source: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/payment-transactions/{id:guid}/refunds` | Create: id: Guid (Path); input: RefundInput (Body) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/refund-requests/{id:guid}/decision` | Decision: id: Guid (Path); input: RefundDecision (Body) | Owner | Not assessed in this configuration inventory |
-| `GET /api/v1/refund-requests/{id:guid}/evidence` | Evidence: id: Guid (Path) | Owner | Not assessed in this configuration inventory |
-| `POST /api/v1/refund-requests/{id:guid}/execution` | Execute: id: Guid (Path); input: ExecutionForm (Form) | Owner | Not assessed in this configuration inventory |
+| Method and route                                      | Action / parameters                                              | Entry authorization | Configuration client evidence                |
+| ----------------------------------------------------- | ---------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/contracts/{id:guid}/deposit-refunds`     | DepositSource: id: Guid (Path)                                   | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/contracts/{id:guid}/deposit-refunds`    | CreateDeposit: id: Guid (Path); input: DepositRefundInput (Body) | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/payment-transactions/{id:guid}/refunds`  | Source: id: Guid (Path)                                          | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/payment-transactions/{id:guid}/refunds` | Create: id: Guid (Path); input: RefundInput (Body)               | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/refund-requests/{id:guid}/decision`     | Decision: id: Guid (Path); input: RefundDecision (Body)          | Owner               | Not assessed in this configuration inventory |
+| `GET /api/v1/refund-requests/{id:guid}/evidence`      | Evidence: id: Guid (Path)                                        | Owner               | Not assessed in this configuration inventory |
+| `POST /api/v1/refund-requests/{id:guid}/execution`    | Execute: id: Guid (Path); input: ExecutionForm (Form)            | Owner               | Not assessed in this configuration inventory |
 
 ## ResidenceTasks
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/residence-tasks` | List: input: ResidenceQuery (Query) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}` | Get: contractId: Guid (Path); residentId: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}` | Update: contractId: Guid (Path); residentId: Guid (Path); input: ResidenceUpdate (Body) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}/evidence` | Download: contractId: Guid (Path); residentId: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}/evidence` | Upload: contractId: Guid (Path); residentId: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}/owner-confirmation` | Confirm: contractId: Guid (Path); residentId: Guid (Path); input: ResidenceOwnerConfirmation (Body) | Authenticated | Not assessed in this configuration inventory |
+| Method and route                                                                      | Action / parameters                                                                                 | Entry authorization | Configuration client evidence                |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/residence-tasks`                                                         | List: input: ResidenceQuery (Query)                                                                 | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}`                     | Get: contractId: Guid (Path); residentId: Guid (Path)                                               | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}`                     | Update: contractId: Guid (Path); residentId: Guid (Path); input: ResidenceUpdate (Body)             | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}/evidence`            | Download: contractId: Guid (Path); residentId: Guid (Path)                                          | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}/evidence`            | Upload: contractId: Guid (Path); residentId: Guid (Path)                                            | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/residence-tasks/{contractId:guid}/{residentId:guid}/owner-confirmation` | Confirm: contractId: Guid (Path); residentId: Guid (Path); input: ResidenceOwnerConfirmation (Body) | Authenticated       | Not assessed in this configuration inventory |
 
 ## RoomOccupancy
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/rooms/{id:guid}/occupancy-history` | History: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
+| Method and route                                | Action / parameters      | Entry authorization | Configuration client evidence                |
+| ----------------------------------------------- | ------------------------ | ------------------- | -------------------------------------------- |
+| `GET /api/v1/rooms/{id:guid}/occupancy-history` | History: id: Guid (Path) | Authenticated       | Not assessed in this configuration inventory |
 
 ## Rooms
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/rooms` | List: q: PropertyQuery (Query) | property.view | Not assessed in this configuration inventory |
-| `POST /api/v1/rooms` | Create: input: RoomWrite (Body) | property.view + property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/rooms/{id:guid}` | Get: id: Guid (Path) | property.view | Not assessed in this configuration inventory |
-| `PUT /api/v1/rooms/{id:guid}` | Update: id: Guid (Path); input: RoomWrite (Body) | property.view + property.manage | Not assessed in this configuration inventory |
-| `GET /api/v1/rooms/{id:guid}/history` | History: id: Guid (Path); query: RoomHistoryQuery (Query) | property.view | Not assessed in this configuration inventory |
-| `GET /api/v1/rooms/{id:guid}/prices` | Prices: id: Guid (Path); effectiveOn: DateOnly (Query) | property.view | Not assessed in this configuration inventory |
-| `GET /api/v1/rooms/{id:guid}/readiness` | Readiness: id: Guid (Path); purpose: RoomReadinessPurpose (Query); contractId: Nullable`1 (Query); effectiveOn: Nullable`1 (Query) | property.view | Not assessed in this configuration inventory |
+| Method and route                        | Action / parameters                                                                                                                | Entry authorization             | Configuration client evidence                |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------- |
+| `GET /api/v1/rooms`                     | List: q: PropertyQuery (Query)                                                                                                     | property.view                   | Not assessed in this configuration inventory |
+| `POST /api/v1/rooms`                    | Create: input: RoomWrite (Body)                                                                                                    | property.view + property.manage | Not assessed in this configuration inventory |
+| `GET /api/v1/rooms/{id:guid}`           | Get: id: Guid (Path)                                                                                                               | property.view                   | Not assessed in this configuration inventory |
+| `PUT /api/v1/rooms/{id:guid}`           | Update: id: Guid (Path); input: RoomWrite (Body)                                                                                   | property.view + property.manage | Not assessed in this configuration inventory |
+| `GET /api/v1/rooms/{id:guid}/history`   | History: id: Guid (Path); query: RoomHistoryQuery (Query)                                                                          | property.view                   | Not assessed in this configuration inventory |
+| `GET /api/v1/rooms/{id:guid}/prices`    | Prices: id: Guid (Path); effectiveOn: DateOnly (Query)                                                                             | property.view                   | Not assessed in this configuration inventory |
+| `GET /api/v1/rooms/{id:guid}/readiness` | Readiness: id: Guid (Path); purpose: RoomReadinessPurpose (Query); contractId: Nullable`1 (Query); effectiveOn: Nullable`1 (Query) | property.view                   | Not assessed in this configuration inventory |
 
 ## SetupEvidence
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `POST /api/v1/locations/{locationId:guid}/setup-evidence` | Upload: locationId: Guid (Path) | Owner,Staff | [Private evidence](../../src/owner-web/src/features/property/SetupEvidenceField.tsx) |
-| `GET /api/v1/locations/{locationId:guid}/setup-evidence/{id:guid}` | Download: locationId: Guid (Path); id: Guid (Path) | Owner,Staff | [Private evidence](../../src/owner-web/src/features/property/SetupEvidenceField.tsx) |
+| Method and route                                                   | Action / parameters                                | Entry authorization | Configuration client evidence                                                        |
+| ------------------------------------------------------------------ | -------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| `POST /api/v1/locations/{locationId:guid}/setup-evidence`          | Upload: locationId: Guid (Path)                    | Owner,Staff         | [Private evidence](../../src/owner-web/src/features/property/SetupEvidenceField.tsx) |
+| `GET /api/v1/locations/{locationId:guid}/setup-evidence/{id:guid}` | Download: locationId: Guid (Path); id: Guid (Path) | Owner,Staff         | [Private evidence](../../src/owner-web/src/features/property/SetupEvidenceField.tsx) |
 
 ## SharedApplication
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/locations/{locationId:guid}/room-defaults` | Defaults: locationId: Guid (Path) | Owner | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
-| `GET /api/v1/shared-configuration/{resource}/{id:guid}/applications` | Applications: resource: String (Path); id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | Owner | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
-| `POST /api/v1/shared-configuration/{resource}/{id:guid}/apply` | Apply: resource: String (Path); id: Guid (Path); input: SharedApply (Body) | Owner | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
-| `POST /api/v1/shared-configuration/{resource}/{id:guid}/apply-preview` | Preview: resource: String (Path); id: Guid (Path); input: SharedApply (Body) | Owner | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
+| Method and route                                                       | Action / parameters                                                                                  | Entry authorization | Configuration client evidence                                                                     |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/locations/{locationId:guid}/room-defaults`                | Defaults: locationId: Guid (Path)                                                                    | Owner               | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
+| `GET /api/v1/shared-configuration/{resource}/{id:guid}/applications`   | Applications: resource: String (Path); id: Guid (Path); page: Int32 (Query); pageSize: Int32 (Query) | Owner               | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
+| `POST /api/v1/shared-configuration/{resource}/{id:guid}/apply`         | Apply: resource: String (Path); id: Guid (Path); input: SharedApply (Body)                           | Owner               | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
+| `POST /api/v1/shared-configuration/{resource}/{id:guid}/apply-preview` | Preview: resource: String (Path); id: Guid (Path); input: SharedApply (Body)                         | Owner               | [Apply and usage](../../src/owner-web/src/features/configuration/pages/SharedTemplateDetails.tsx) |
 
 ## SharedConfiguration
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/shared-configuration/{resource}` | List: resource: String (Path); search: String (Query); status: String (Query); page: Int32 (Query); pageSize: Int32 (Query) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `POST /api/v1/shared-configuration/{resource}` | Create: resource: String (Path); input: SharedWrite (Body) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `GET /api/v1/shared-configuration/{resource}/{id:guid}` | Get: resource: String (Path); id: Guid (Path) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `PUT /api/v1/shared-configuration/{resource}/{id:guid}` | Update: resource: String (Path); id: Guid (Path); input: SharedWrite (Body) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `POST /api/v1/shared-configuration/{resource}/{id:guid}/archive` | Archive: resource: String (Path); id: Guid (Path); input: SharedVersion (Body) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `POST /api/v1/shared-configuration/{resource}/{id:guid}/duplicate` | Duplicate: resource: String (Path); id: Guid (Path); input: SharedDuplicate (Body) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `GET /api/v1/shared-configuration/{resource}/{id:guid}/history` | History: resource: String (Path); id: Guid (Path) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `POST /api/v1/shared-configuration/{resource}/{id:guid}/publish` | Publish: resource: String (Path); id: Guid (Path); input: SharedVersion (Body) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `GET /api/v1/shared-configuration/{resource}/{id:guid}/versions` | Versions: resource: String (Path); id: Guid (Path) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
-| `POST /api/v1/shared-configuration/{resource}/{id:guid}/versions` | Edition: resource: String (Path); id: Guid (Path); input: SharedVersion (Body) | Owner | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| Method and route                                                   | Action / parameters                                                                                                         | Entry authorization | Configuration client evidence                                                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/shared-configuration/{resource}`                      | List: resource: String (Path); search: String (Query); status: String (Query); page: Int32 (Query); pageSize: Int32 (Query) | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `POST /api/v1/shared-configuration/{resource}`                     | Create: resource: String (Path); input: SharedWrite (Body)                                                                  | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `GET /api/v1/shared-configuration/{resource}/{id:guid}`            | Get: resource: String (Path); id: Guid (Path)                                                                               | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `PUT /api/v1/shared-configuration/{resource}/{id:guid}`            | Update: resource: String (Path); id: Guid (Path); input: SharedWrite (Body)                                                 | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `POST /api/v1/shared-configuration/{resource}/{id:guid}/archive`   | Archive: resource: String (Path); id: Guid (Path); input: SharedVersion (Body)                                              | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `POST /api/v1/shared-configuration/{resource}/{id:guid}/duplicate` | Duplicate: resource: String (Path); id: Guid (Path); input: SharedDuplicate (Body)                                          | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `GET /api/v1/shared-configuration/{resource}/{id:guid}/history`    | History: resource: String (Path); id: Guid (Path)                                                                           | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `POST /api/v1/shared-configuration/{resource}/{id:guid}/publish`   | Publish: resource: String (Path); id: Guid (Path); input: SharedVersion (Body)                                              | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `GET /api/v1/shared-configuration/{resource}/{id:guid}/versions`   | Versions: resource: String (Path); id: Guid (Path)                                                                          | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
+| `POST /api/v1/shared-configuration/{resource}/{id:guid}/versions`  | Edition: resource: String (Path); id: Guid (Path); input: SharedVersion (Body)                                              | Owner               | [Shared libraries](../../src/owner-web/src/features/configuration/pages/ApiConfigurationLibraryPage.tsx) |
 
 ## StaffAdministration
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/staff` | List: input: StaffQuery (Query) | Authenticated | Not assessed in this configuration inventory |
-| `POST /api/v1/staff` | Create: input: StaffCreate (Body) | Authenticated | Not assessed in this configuration inventory |
-| `GET /api/v1/staff/{id:guid}` | Get: id: Guid (Path) | Authenticated | Not assessed in this configuration inventory |
-| `PUT /api/v1/staff/{id:guid}` | Update: id: Guid (Path); input: StaffUpdate (Body) | Authenticated | Not assessed in this configuration inventory |
+| Method and route              | Action / parameters                                | Entry authorization | Configuration client evidence                |
+| ----------------------------- | -------------------------------------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/staff`           | List: input: StaffQuery (Query)                    | Authenticated       | Not assessed in this configuration inventory |
+| `POST /api/v1/staff`          | Create: input: StaffCreate (Body)                  | Authenticated       | Not assessed in this configuration inventory |
+| `GET /api/v1/staff/{id:guid}` | Get: id: Guid (Path)                               | Authenticated       | Not assessed in this configuration inventory |
+| `PUT /api/v1/staff/{id:guid}` | Update: id: Guid (Path); input: StaffUpdate (Body) | Authenticated       | Not assessed in this configuration inventory |
 
 ## StaffLocationAssignments
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/staff-location-assignments` | ListAssignments: locationId: Guid (Query) | staff-assignments.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/staff-location-assignments` | Assign: request: CreateStaffAssignmentRequest (Body) | staff-assignments.manage | Not assessed in this configuration inventory |
-| `DELETE /api/v1/staff-location-assignments/{locationId:guid}` | Remove: locationId: Guid (Path); request: RemoveStaffAssignmentRequest (Body) | staff-assignments.manage | Not assessed in this configuration inventory |
-| `PUT /api/v1/staff-location-assignments/{locationId:guid}` | Replace: locationId: Guid (Path); request: ChangeStaffAssignmentRequest (Body) | staff-assignments.manage | Not assessed in this configuration inventory |
+| Method and route                                              | Action / parameters                                                            | Entry authorization      | Configuration client evidence                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------ | -------------------------------------------- |
+| `GET /api/v1/staff-location-assignments`                      | ListAssignments: locationId: Guid (Query)                                      | staff-assignments.manage | Not assessed in this configuration inventory |
+| `POST /api/v1/staff-location-assignments`                     | Assign: request: CreateStaffAssignmentRequest (Body)                           | staff-assignments.manage | Not assessed in this configuration inventory |
+| `DELETE /api/v1/staff-location-assignments/{locationId:guid}` | Remove: locationId: Guid (Path); request: RemoveStaffAssignmentRequest (Body)  | staff-assignments.manage | Not assessed in this configuration inventory |
+| `PUT /api/v1/staff-location-assignments/{locationId:guid}`    | Replace: locationId: Guid (Path); request: ChangeStaffAssignmentRequest (Body) | staff-assignments.manage | Not assessed in this configuration inventory |
 
 ## TransferInstructions
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/invoices/{id:guid}/transfer-instructions` | Get: id: Guid (Path) | Owner,Tenant | Not assessed in this configuration inventory |
+| Method and route                                       | Action / parameters  | Entry authorization | Configuration client evidence                |
+| ------------------------------------------------------ | -------------------- | ------------------- | -------------------------------------------- |
+| `GET /api/v1/invoices/{id:guid}/transfer-instructions` | Get: id: Guid (Path) | Owner,Tenant        | Not assessed in this configuration inventory |
 
 ## UtilitySourceReadings
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/utility-source-readings` | List: locationId: Guid (Query) | Owner,Staff | [Utility operations](../../src/owner-web/src/features/property/UtilityWorkspaceOperations.tsx) |
-| `POST /api/v1/utility-source-readings` | Confirm: input: UtilitySourceReading (Body) | Owner,Staff | [Utility operations](../../src/owner-web/src/features/property/UtilityWorkspaceOperations.tsx) |
+| Method and route                       | Action / parameters                         | Entry authorization | Configuration client evidence                                                                  |
+| -------------------------------------- | ------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------- |
+| `GET /api/v1/utility-source-readings`  | List: locationId: Guid (Query)              | Owner,Staff         | [Utility operations](../../src/owner-web/src/features/property/UtilityWorkspaceOperations.tsx) |
+| `POST /api/v1/utility-source-readings` | Confirm: input: UtilitySourceReading (Body) | Owner,Staff         | [Utility operations](../../src/owner-web/src/features/property/UtilityWorkspaceOperations.tsx) |
 
 ## UtilityWorkspace
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/utility-meter-links` | Links: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-meter-links` | Link: input: UtilityMeterLink (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-period-breakdowns` | Breakdowns: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-period-breakdowns` | Breakdown: input: UtilityPeriodBreakdown (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-profiles` | Profiles: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-profiles` | Profile: input: UtilityProfileWrite (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-profiles/{id:guid}/replacement` | ReplaceProfile: id: Guid (Path); input: UtilityProfileWrite (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-quotas` | Quotas: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-quotas` | Quota: input: UtilityQuotaWrite (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-reconciliations` | Reconciliations: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-reconciliations` | Reconcile: input: UtilityReconcileInput (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-reconciliations/{id:guid}` | Reconciliation: id: Guid (Path) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-reconciliations/{id:guid}/review` | Review: id: Guid (Path); input: UtilityVarianceReview (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-reconciliations/preview` | Preview: input: UtilityReconcileInput (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-source-bills` | Bills: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-source-bills` | Bill: input: UtilitySourceBill (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-source-bills/{id:guid}` | Bill: id: Guid (Path) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-source-meters` | Meters: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-source-meters` | Meter: input: UtilitySourceMeter (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-tariffs` | Tariffs: locationId: Guid (Query) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-tariffs` | CreateTariff: input: UtilityTariffWrite (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `GET /api/v1/utility-tariffs/{id:guid}` | Tariff: id: Guid (Path) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
-| `POST /api/v1/utility-tariffs/{id:guid}/replacement` | ReplaceTariff: id: Guid (Path); input: UtilityTariffWrite (Body) | Owner | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| Method and route                                        | Action / parameters                                                | Entry authorization | Configuration client evidence                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------- |
+| `GET /api/v1/utility-meter-links`                       | Links: locationId: Guid (Query)                                    | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-meter-links`                      | Link: input: UtilityMeterLink (Body)                               | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-period-breakdowns`                 | Breakdowns: locationId: Guid (Query)                               | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-period-breakdowns`                | Breakdown: input: UtilityPeriodBreakdown (Body)                    | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-profiles`                          | Profiles: locationId: Guid (Query)                                 | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-profiles`                         | Profile: input: UtilityProfileWrite (Body)                         | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-profiles/{id:guid}/replacement`   | ReplaceProfile: id: Guid (Path); input: UtilityProfileWrite (Body) | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-quotas`                            | Quotas: locationId: Guid (Query)                                   | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-quotas`                           | Quota: input: UtilityQuotaWrite (Body)                             | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-reconciliations`                   | Reconciliations: locationId: Guid (Query)                          | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-reconciliations`                  | Reconcile: input: UtilityReconcileInput (Body)                     | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-reconciliations/{id:guid}`         | Reconciliation: id: Guid (Path)                                    | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-reconciliations/{id:guid}/review` | Review: id: Guid (Path); input: UtilityVarianceReview (Body)       | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-reconciliations/preview`          | Preview: input: UtilityReconcileInput (Body)                       | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-source-bills`                      | Bills: locationId: Guid (Query)                                    | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-source-bills`                     | Bill: input: UtilitySourceBill (Body)                              | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-source-bills/{id:guid}`            | Bill: id: Guid (Path)                                              | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-source-meters`                     | Meters: locationId: Guid (Query)                                   | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-source-meters`                    | Meter: input: UtilitySourceMeter (Body)                            | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-tariffs`                           | Tariffs: locationId: Guid (Query)                                  | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-tariffs`                          | CreateTariff: input: UtilityTariffWrite (Body)                     | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `GET /api/v1/utility-tariffs/{id:guid}`                 | Tariff: id: Guid (Path)                                            | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
+| `POST /api/v1/utility-tariffs/{id:guid}/replacement`    | ReplaceTariff: id: Guid (Path); input: UtilityTariffWrite (Body)   | Owner               | [Utility workspace](../../src/owner-web/src/features/property/UtilityWorkspace.tsx) |
 
 ## WorkOrders
 
-| Method and route | Action / parameters | Entry authorization | Configuration client evidence |
-| --- | --- | --- | --- |
-| `GET /api/v1/work-orders` | List: query: IncidentQuery (Query) | work-orders.view | Not assessed in this configuration inventory |
-| `GET /api/v1/work-orders/{id:guid}` | Get: id: Guid (Path) | work-orders.view | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/blocker` | Blocker: id: Guid (Path); input: WorkOrderAction (Body) | work-orders.view + work-orders.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/cancel` | Cancel: id: Guid (Path); input: IncidentDecision (Body) | work-orders.view + incidents.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/plan-decision` | Plan: id: Guid (Path); input: PlanDecision (Body) | work-orders.view + work-orders.approve-plan | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/progress` | Progress: id: Guid (Path); input: WorkOrderAction (Body) | work-orders.view + work-orders.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/proposal` | Propose: id: Guid (Path); input: RepairProposal (Body) | work-orders.view + work-orders.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/reassign` | Reassign: id: Guid (Path); input: WorkOrderReassign (Body) | work-orders.view + incidents.manage | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/rework` | Rework: id: Guid (Path); input: WorkOrderAction (Body) | work-orders.view + work-orders.verify | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/start` | Start: id: Guid (Path); input: WorkOrderAction (Body) | work-orders.view + work-orders.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/submit` | Submit: id: Guid (Path); input: WorkOrderAction (Body) | work-orders.view + work-orders.execute | Not assessed in this configuration inventory |
-| `POST /api/v1/work-orders/{id:guid}/verify` | Verify: id: Guid (Path); input: MaintenanceVerification (Body) | work-orders.view + work-orders.verify | Not assessed in this configuration inventory |
-| `GET /api/v1/work-orders/maintenance-history` | Maintenance: query: IncidentQuery (Query) | work-orders.view | Not assessed in this configuration inventory |
+| Method and route                                   | Action / parameters                                            | Entry authorization                         | Configuration client evidence                |
+| -------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| `GET /api/v1/work-orders`                          | List: query: IncidentQuery (Query)                             | work-orders.view                            | Not assessed in this configuration inventory |
+| `GET /api/v1/work-orders/{id:guid}`                | Get: id: Guid (Path)                                           | work-orders.view                            | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/blocker`       | Blocker: id: Guid (Path); input: WorkOrderAction (Body)        | work-orders.view + work-orders.execute      | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/cancel`        | Cancel: id: Guid (Path); input: IncidentDecision (Body)        | work-orders.view + incidents.manage         | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/plan-decision` | Plan: id: Guid (Path); input: PlanDecision (Body)              | work-orders.view + work-orders.approve-plan | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/progress`      | Progress: id: Guid (Path); input: WorkOrderAction (Body)       | work-orders.view + work-orders.execute      | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/proposal`      | Propose: id: Guid (Path); input: RepairProposal (Body)         | work-orders.view + work-orders.execute      | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/reassign`      | Reassign: id: Guid (Path); input: WorkOrderReassign (Body)     | work-orders.view + incidents.manage         | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/rework`        | Rework: id: Guid (Path); input: WorkOrderAction (Body)         | work-orders.view + work-orders.verify       | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/start`         | Start: id: Guid (Path); input: WorkOrderAction (Body)          | work-orders.view + work-orders.execute      | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/submit`        | Submit: id: Guid (Path); input: WorkOrderAction (Body)         | work-orders.view + work-orders.execute      | Not assessed in this configuration inventory |
+| `POST /api/v1/work-orders/{id:guid}/verify`        | Verify: id: Guid (Path); input: MaintenanceVerification (Body) | work-orders.view + work-orders.verify       | Not assessed in this configuration inventory |
+| `GET /api/v1/work-orders/maintenance-history`      | Maintenance: query: IncidentQuery (Query)                      | work-orders.view                            | Not assessed in this configuration inventory |
 
 ## Health endpoints
 
-| Route | Meaning |
-| --- | --- |
-| `GET /health/live` | Anonymous host liveness |
+| Route               | Meaning                                                |
+| ------------------- | ------------------------------------------------------ |
+| `GET /health/live`  | Anonymous host liveness                                |
 | `GET /health/ready` | Anonymous structural readiness; no secrets in response |
 
 ## Reproduction

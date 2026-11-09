@@ -7,23 +7,23 @@ Temporary credentials are generated at runtime and restored/removed after each r
 
 ## Executed checks before documentation handoff
 
-| Check | Passed | Failed | Skipped | Evidence |
-| --- | ---: | ---: | ---: | --- |
-| Application unit suite | 369 | 0 | 0 | `.tmp/config-final-unit/*.trx` |
-| Domain unit suite | 106 | 0 | 0 | `.tmp/config-final-unit/*.trx` |
-| Owner Web complete suite, Node 22 | 205 | 0 | 0 | `.tmp/config-final-web-tests.log` |
-| Mobile complete suite, Node 22 | 851 | 0 | 0 | `.tmp/config-mobile-node22-tests.log` |
-| Owner setup/shared/store/refund/finance subset | 42 | 0 | 0 | `.tmp/config-fixed-integration-final/*.trx` |
-| Final expanded configuration/refund/finance subset | 44 | 0 | 0 | `.tmp/config-phase10-44/*.trx` |
-| Configuration/refund/finance with deactivation replay | 45 | 0 | 0 | `.tmp/config-phase10-45/*.trx` |
-| Additional apply rollback/archive/overlap plus runtime-export checks | 3 | 0 | 0 | `.tmp/config-export-test-final/*.trx` |
-| Initial broad Compact24 regression | 249 | 9 | 1 | `.tmp/config-final-integration/*.trx` |
-| Baseline migration reproduction, audited HEAD 919c208 | 9 | 3 | 0 | `.tmp/config-baseline-migrations/*.trx` |
-| Broad Compact24 regression before final retry correction, d4388a3 | 257 | 3 | 1 | `.tmp/config-final-regression/*.trx` |
-| Final broad Compact24 regression, b9cff65 | 258 | 3 | 1 | `.tmp/config-delivery-regression/*.trx` |
-| Final Owner Web complete suite, Node 22 | 206 | 0 | 0 | `.tmp/config-final-web-206.log` |
-| Final Application unit suite | 369 | 0 | 0 | `.tmp/config-delivery-unit/*.trx` |
-| Final Domain unit suite | 106 | 0 | 0 | `.tmp/config-delivery-unit/*.trx` |
+| Check                                                                | Passed | Failed | Skipped | Evidence                                    |
+| -------------------------------------------------------------------- | -----: | -----: | ------: | ------------------------------------------- |
+| Application unit suite                                               |    369 |      0 |       0 | `.tmp/config-final-unit/*.trx`              |
+| Domain unit suite                                                    |    106 |      0 |       0 | `.tmp/config-final-unit/*.trx`              |
+| Owner Web complete suite, Node 22                                    |    205 |      0 |       0 | `.tmp/config-final-web-tests.log`           |
+| Mobile complete suite, Node 22                                       |    851 |      0 |       0 | `.tmp/config-mobile-node22-tests.log`       |
+| Owner setup/shared/store/refund/finance subset                       |     42 |      0 |       0 | `.tmp/config-fixed-integration-final/*.trx` |
+| Final expanded configuration/refund/finance subset                   |     44 |      0 |       0 | `.tmp/config-phase10-44/*.trx`              |
+| Configuration/refund/finance with deactivation replay                |     45 |      0 |       0 | `.tmp/config-phase10-45/*.trx`              |
+| Additional apply rollback/archive/overlap plus runtime-export checks |      3 |      0 |       0 | `.tmp/config-export-test-final/*.trx`       |
+| Initial broad Compact24 regression                                   |    249 |      9 |       1 | `.tmp/config-final-integration/*.trx`       |
+| Baseline migration reproduction, audited HEAD 919c208                |      9 |      3 |       0 | `.tmp/config-baseline-migrations/*.trx`     |
+| Broad Compact24 regression before final retry correction, d4388a3    |    257 |      3 |       1 | `.tmp/config-final-regression/*.trx`        |
+| Final broad Compact24 regression, b9cff65                            |    258 |      3 |       1 | `.tmp/config-delivery-regression/*.trx`     |
+| Final Owner Web complete suite, Node 22                              |    206 |      0 |       0 | `.tmp/config-final-web-206.log`             |
+| Final Application unit suite                                         |    369 |      0 |       0 | `.tmp/config-delivery-unit/*.trx`           |
+| Final Domain unit suite                                              |    106 |      0 |       0 | `.tmp/config-delivery-unit/*.trx`           |
 
 The initial broad run found six authentication failures in existing refund/finance
 tests: their login used a different synthetic password from WorkflowTestUsers.

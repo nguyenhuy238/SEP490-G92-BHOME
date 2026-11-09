@@ -106,7 +106,17 @@ lines.push(
   'Export through Compact24ApiAuditTests using BHOME_COMPACT24_EVIDENCE_DIRECTORY and BHOME_API_INVENTORY_COMMIT, then run this generator with the manifest path and verified date. Use the disposable runner described in [API status](API_IMPLEMENTATION_STATUS.md#reproduction).',
   '',
 );
-fs.writeFileSync(path.join(root, 'docs/api/API_RUNTIME_ROUTES.md'), lines.join('\n'));
-console.log(
-  `Wrote ${endpoints.length} registered pairs; ${audit.SwaggerMethodRoutePairs} OpenAPI operations; ${audit.SwaggerPathCount} path keys.`,
-);
+async function writeInventory() {
+  const prettier = require('prettier');
+  const output = path.join(root, 'docs/api/API_RUNTIME_ROUTES.md');
+  const options = await prettier.resolveConfig(output);
+  const formatted = await prettier.format(lines.join('\n'), { ...options, filepath: output });
+  fs.writeFileSync(output, formatted);
+  console.log(
+    `Wrote ${endpoints.length} registered pairs; ${audit.SwaggerMethodRoutePairs} OpenAPI operations; ${audit.SwaggerPathCount} path keys.`,
+  );
+}
+writeInventory().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

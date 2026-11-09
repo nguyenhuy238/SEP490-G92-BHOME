@@ -123,8 +123,14 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var saved = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-bills", new
         {
-            locationId = w.Location, meterId = meter.Id, utilityType = 0, period, consumption = "123.0001",
-            amount = "9007199254740993", reference = "SYN-EXACT", evidenceObjectKey = evidence
+            locationId = w.Location,
+            meterId = meter.Id,
+            utilityType = 0,
+            period,
+            consumption = "123.0001",
+            amount = "9007199254740993",
+            reference = "SYN-EXACT",
+            evidenceObjectKey = evidence
         }));
         Assert.Equal("9007199254740993", saved.Data.GetProperty("amount").GetString());
         Assert.Equal("123.0001", saved.Data.GetProperty("consumption").GetString());

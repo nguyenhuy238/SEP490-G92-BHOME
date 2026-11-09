@@ -1,4 +1,5 @@
 using BHome.Application.Jobs;
+using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Hosting;
@@ -32,6 +33,13 @@ public sealed class PersistenceCompositionTests
         var expected = compact ? shared.Concat(["asset-template-sync", "notification-channels", "recurring-operational-tasks"]) : shared;
         Assert.Equal(expected.Order(), names);
         Assert.Equal(compact ? 6 : 3, services.GetServices<IJobScheduleContributor>().Count());
+        var compactOnlyServices = new[] { typeof(ISharedConfigurationStore), typeof(ISharedDataValidator),
+            typeof(SharedConfigurationService), typeof(SharedConfigurationApplicationService), typeof(LocationConfigurationCopyService) };
+        foreach (var service in compactOnlyServices)
+        {
+            if (compact) Assert.NotNull(services.GetRequiredService(service));
+            else Assert.Null(services.GetService(service));
+        }
         if (!compact) Assert.Null(services.GetService<Compact24DbContext>());
     }
 }

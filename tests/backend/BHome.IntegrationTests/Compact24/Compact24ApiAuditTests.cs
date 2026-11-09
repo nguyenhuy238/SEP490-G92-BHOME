@@ -120,9 +120,17 @@ public sealed class Compact24ApiAuditTests
                 Assert.True(await evidenceDb.IsSchemaReadyAsync()); Assert.Equal(24, tableCount);
                 await File.WriteAllTextAsync(Path.Combine(directory, "swagger.json"), swaggerText);
                 await File.WriteAllTextAsync(Path.Combine(directory, "api-route-audit.json"), JsonSerializer.Serialize(new
-                { GeneratedAtUtc = DateTimeOffset.UtcNow, SourceCommit = Environment.GetEnvironmentVariable("BHOME_API_INVENTORY_COMMIT"), SchemaVersion = Compact24Schema.Version,
-                    TableCount = tableCount, SchemaVerified = true, SwaggerPathCount = paths.EnumerateObject().Count(), SwaggerMethodRoutePairs = swaggerMethods,
-                    Endpoints = manifest, OwnerGetProbes = gets }, new JsonSerializerOptions { WriteIndented = true }));
+                {
+                    GeneratedAtUtc = DateTimeOffset.UtcNow,
+                    SourceCommit = Environment.GetEnvironmentVariable("BHOME_API_INVENTORY_COMMIT"),
+                    SchemaVersion = Compact24Schema.Version,
+                    TableCount = tableCount,
+                    SchemaVerified = true,
+                    SwaggerPathCount = paths.EnumerateObject().Count(),
+                    SwaggerMethodRoutePairs = swaggerMethods,
+                    Endpoints = manifest,
+                    OwnerGetProbes = gets
+                }, new JsonSerializerOptions { WriteIndented = true }));
             }
         }
         finally { await fixture.DisposeAsync(); }

@@ -66,8 +66,19 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             var versions = edition ? await store.FamilyAsync(family, resource, t) : [];
             if (versions.Any(d => d.Status == "Draft")) throw new PropertyException(409, "shared_draft_already_exists");
             if (await store.NameExistsAsync(resource, name, family, t)) throw new PropertyException(409, "duplicate_shared_name");
-            var now = clock.GetUtcNow(); var document = before with { Id = Guid.NewGuid(), FamilyId = family, Edition = edition ? versions.Max(d => d.Edition) + 1 : 1,
-                Version = 1, Name = name, Status = "Draft", CreatedBy = actor, CreatedAt = now, UpdatedBy = actor, UpdatedAt = now };
+            var now = clock.GetUtcNow(); var document = before with
+            {
+                Id = Guid.NewGuid(),
+                FamilyId = family,
+                Edition = edition ? versions.Max(d => d.Edition) + 1 : 1,
+                Version = 1,
+                Name = name,
+                Status = "Draft",
+                CreatedBy = actor,
+                CreatedAt = now,
+                UpdatedBy = actor,
+                UpdatedAt = now
+            };
             await store.SaveAsync(document, 0, t); return document;
         }, t);
     }

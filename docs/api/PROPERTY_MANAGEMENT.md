@@ -4,12 +4,12 @@ Current baseline: **2026-11-09**, native **Location → Room**, Compact24.
 [Runtime inventory](API_RUNTIME_ROUTES.md) and [implementation status](API_IMPLEMENTATION_STATUS.md)
 record the implementation SHA, counting methodology and executed validation.
 
-| Resource | Current behavior |
-| --- | --- |
-| Location | Owner edits name/address/active state, with optimistic version and closure guards |
-| Room | Direct locationId, roomNumber, optional floor, capacity 1–32767; configuration cannot set OnHold/Occupied |
-| Physical Asset | Real Location/Room or common-area asset; condition, version, workflow guards, evidence and history |
-| BillingPolicy | Location or explicit Room scope; exact decimal rate; effective dates, overlap checks and audited replacement |
+| Resource       | Current behavior                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| Location       | Owner edits name/address/active state, with optimistic version and closure guards                            |
+| Room           | Direct locationId, roomNumber, optional floor, capacity 1–32767; configuration cannot set OnHold/Occupied    |
+| Physical Asset | Real Location/Room or common-area asset; condition, version, workflow guards, evidence and history           |
+| BillingPolicy  | Location or explicit Room scope; exact decimal rate; effective dates, overlap checks and audited replacement |
 
 Current DTOs: [PropertyContracts.cs](../../src/backend/BHome.Application/PropertyManagement/PropertyContracts.cs).
 LocationWrite, RoomWrite and PolicyWrite reject unmapped fields, including obsolete
