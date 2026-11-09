@@ -71,7 +71,8 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     }
     public async Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token) =>
         await db.Set<BillingPolicy>().AsNoTracking().Where(x => x.LocationId == room.LocationId &&
-            (x.RoomId == room.Id || x.RoomId == null) && x.RoomTypeId == null &&
+            (x.RoomId == room.Id || x.RoomId == null &&
+                (x.RoomTypeId == null || x.RoomTypeId == room.RoomTypeId)) &&
             x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date)).ToArrayAsync(token);
 
     public async Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token)

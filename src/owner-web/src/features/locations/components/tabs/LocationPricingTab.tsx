@@ -41,8 +41,11 @@ import {
   type BillingPolicyWrite,
 } from '../../api/locationConfigurationApi';
 
-const currentBusinessDate = () =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+const currentBusinessDate = (days = 0) => {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
+};
 
 interface LocationPricingTabProps {
   db: DemoDatabase;
@@ -75,6 +78,24 @@ const enumValue = (value: number | string) =>
   typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : value;
 
 const policyCategory = (policy: BillingPolicyDto) => enumValue(policy.category);
+
+const categoryNumber = (value: BillingPolicyDto['category']) => {
+  if (typeof value === 'number') return value;
+  if (/^\d+$/.test(value)) return Number(value);
+  return { Rent: 0, Electricity: 1, Water: 2, ServiceFee: 3 }[value] ?? 3;
+};
+
+const methodNumber = (value: BillingPolicyDto['method']) => {
+  if (typeof value === 'number') return value;
+  if (/^\d+$/.test(value)) return Number(value);
+  return (
+    {
+      FixedAmount: 0,
+      PerUnit: 1,
+      Percentage: 2,
+    }[value] ?? 0
+  );
+};
 
 const toFee = (policy: BillingPolicyDto): FeePolicyItem => {
   const category = policyCategory(policy);
@@ -203,7 +224,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           name: `Giá thuê phòng ${room.code}`,
           method: 0,
           rate: String(overrideValue),
-          effectiveFrom: currentBusinessDate(),
+          effectiveFrom: currentBusinessDate(existing ? 1 : 0),
           effectiveTo: null,
           reason: 'Điều chỉnh giá thuê riêng từ Owner Web',
         };
@@ -224,7 +245,16 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
     if (!editingFee || !editingFee.name.trim() || editingFee.unitPrice < 0) return;
     if (!isMockMode) {
       const existing = apiPolicies.find((policy) => policy.id === editingFee.id);
-      const input = feeWrite(location.id, editingFee);
+      const input = feeWrite(location.id, {
+        ...editingFee,
+        effectiveDate: existing ? currentBusinessDate(1) : editingFee.effectiveDate,
+      });
+      if (existing) {
+        input.roomId = existing.roomId;
+        input.category = categoryNumber(existing.category);
+        input.chargeCode = existing.chargeCode;
+        input.method = methodNumber(existing.method);
+      }
       policyMutation.mutate(
         () =>
           existing

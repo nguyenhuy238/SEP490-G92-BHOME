@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
@@ -32,6 +32,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
   const api = usePaymentApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
+  const cache = useQueryClient();
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [period, setPeriod] = useState(''),
@@ -40,6 +41,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
   const [page, setPage] = useState(1),
     [selected, setSelected] = useState(''),
     [transferPage, setTransferPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const [recordUnmatched, setRecordUnmatched] = useState(false);
   const filter = {
     page,
@@ -72,8 +74,8 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
     queryFn: ({ signal }) => api.transfers({ page: transferPage, locationId: location }, signal),
   });
   const history = useQuery({
-    queryKey: ['payment-history', actor, filter],
-    queryFn: ({ signal }) => api.history(filter, signal),
+    queryKey: ['payment-history', actor, { ...filter, page: historyPage }],
+    queryFn: ({ signal }) => api.history({ ...filter, page: historyPage }, signal),
   });
   return (
     <>
@@ -82,6 +84,22 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
         subtitle="Số dư dùng chung trên hóa đơn phòng. Owner xác minh sao kê; không sửa số tiền hóa đơn Final."
       />
       <Stack spacing={2}>
+        <Button
+          disabled={invoices.isFetching || history.isFetching}
+          onClick={() =>
+            void cache.invalidateQueries({
+              predicate: (q) =>
+                [
+                  'payment-invoices',
+                  'payment-history',
+                  'payment-transfers',
+                  'invoice-payment',
+                ].includes(String(q.queryKey[0])),
+            })
+          }
+        >
+          Làm mới đối soát và công nợ
+        </Button>
         {!debtOnly && (
           <Button onClick={() => setRecordUnmatched(true)}>
             Ghi nhận giao dịch chưa xác định hóa đơn
@@ -101,6 +119,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             setRoom('');
             setPage(1);
             setTransferPage(1);
+            setHistoryPage(1);
           }}
         >
           <MenuItem value="">Tất cả cơ sở</MenuItem>
@@ -117,6 +136,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
           onChange={(e) => {
             setRoom(e.target.value);
             setPage(1);
+            setHistoryPage(1);
           }}
         >
           <MenuItem value="">Tất cả phòng</MenuItem>
@@ -133,6 +153,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
           onChange={(e) => {
             setPeriod(e.target.value);
             setPage(1);
+            setHistoryPage(1);
           }}
           slotProps={{ inputLabel: { shrink: true } }}
         />
@@ -144,6 +165,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             onChange={(e) => {
               setStatus(e.target.value);
               setPage(1);
+              setHistoryPage(1);
             }}
           >
             <MenuItem value="">Tất cả</MenuItem>
@@ -158,6 +180,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
               onChange={(e) => {
                 setOverdue(e.target.checked);
                 setPage(1);
+                setHistoryPage(1);
               }}
             />
           }
@@ -268,6 +291,25 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                 {item.bankReference}
               </Typography>
             ))}
+            <Stack direction="row" spacing={1}>
+              <Button
+                disabled={historyPage === 1 || history.isFetching}
+                onClick={() => setHistoryPage(historyPage - 1)}
+              >
+                Lịch sử trước
+              </Button>
+              <Typography>
+                Trang lịch sử {historyPage} · {history.data?.totalCount ?? 0} thanh toán
+              </Typography>
+              <Button
+                disabled={
+                  history.isFetching || !history.data || historyPage * 20 >= history.data.totalCount
+                }
+                onClick={() => setHistoryPage(historyPage + 1)}
+              >
+                Lịch sử sau
+              </Button>
+            </Stack>
           </Stack>
         </Paper>
       </Stack>

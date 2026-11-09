@@ -9,6 +9,9 @@ export const contractStates = [
   'Terminated',
   'Superseded',
   'Cancelled',
+  'Expired',
+  'Converted',
+  'Applied',
 ] as const;
 export interface ContractSummary {
   onboardingDraft?: boolean;
@@ -60,6 +63,11 @@ export interface ContractView {
   roomNumber?: string;
   locationName?: string;
   occupants?: { id: string; label: string; representative: boolean }[] | null;
+  holdingExpiresAt?: string | null;
+  approvedAt?: string | null;
+  priceLockedAt?: string | null;
+  convertedMainContractId?: string | null;
+  reservedCapacity?: number | null;
   locationId: string;
 }
 export interface ContractTemplate {
@@ -566,6 +574,17 @@ export const labels: Record<string, string> = {
   Draft: 'Bản nháp',
   PendingSigning: 'Chờ ký',
   PendingActivation: 'Chờ kích hoạt',
+  Expired: 'Đã hết hạn',
+  Converted: 'Đã chuyển sang hợp đồng thuê',
+  Applied: 'Đã áp dụng',
+  holding_owner_approval_required: 'Cần Owner phê duyệt hợp đồng giữ chỗ.',
+  holding_deposit_insufficient: 'Cọc giữ chỗ đã xác minh chưa đủ.',
+  holding_expired: 'Hợp đồng giữ chỗ đã hết hạn.',
+  HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
+  HoldingApproved: 'Owner phê duyệt giữ chỗ',
+  HoldingActivated: 'Kích hoạt giữ chỗ',
+  HoldingCancelled: 'Hủy giữ chỗ',
+  HoldingConverted: 'Chuyển sang hợp đồng thuê chính',
   Active: 'Đang hiệu lực',
   Terminated: 'Đã kết thúc',
   Superseded: 'Đã thay thế',
@@ -826,17 +845,9 @@ export function contractActions(
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const open = c.signatures.some((s) => !['Signed', 'Simulated', 'Failed'].includes(s.status));
   const result: ContractAction[] = [];
-  if (owner && c.kind === 'Holding' && c.status === 'Draft')
-    result.push(
-      action(
-        'holding-approval',
-        'Phê duyệt hợp đồng giữ chỗ',
-        [{ name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 }],
-        'Kiểm tra phòng, thời hạn, giá và tiền giữ chỗ trước khi phê duyệt. Phê duyệt chưa đồng nghĩa phòng đã được giữ.',
-      ),
-    );
   if (
     signer &&
+    (c.kind !== 'Holding' || !!c.approvedAt) &&
     ['Draft', 'PendingSigning'].includes(c.status) &&
     !mine.some((s) => s.status !== 'Failed') &&
     !open
@@ -881,37 +892,6 @@ export function contractActions(
     );
   if (
     owner &&
-    c.kind === 'Holding' &&
-    ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status)
-  )
-    result.push(
-      action(
-        'holding-cancellation',
-        'Hủy hợp đồng giữ chỗ',
-        [{ name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 }],
-        'Hủy giữ lại lịch sử và có thể tạo hồ sơ quyết toán thủ công nếu đã nhận tiền.',
-      ),
-    );
-  if (owner && c.kind === 'Holding' && c.status === 'PendingActivation')
-    result.push(
-      action(
-        'holding-activation',
-        'Kích hoạt giữ chỗ',
-        [],
-        'Chỉ kích hoạt sau khi máy chủ xác nhận đủ phê duyệt, chữ ký, tiền giữ chỗ và phòng hợp lệ.',
-      ),
-    );
-  if (owner && c.kind === 'Holding' && c.status === 'Active')
-    result.push(
-      action(
-        'holding-conversion',
-        'Chuyển sang hợp đồng thuê chính',
-        [{ name: 'requiredSecurityDeposit', label: 'Tiền cọc thuê yêu cầu (VND)', type: 'money' }],
-        'Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
-      ),
-    );
-  if (
-    owner &&
     !c.previousContractId &&
     !['Terminated', 'Superseded', 'Cancelled'].includes(c.status)
   )
@@ -932,7 +912,47 @@ export function contractActions(
         'Chỉ xác minh giao dịch đã đối chiếu sao kê ngân hàng. Ảnh chuyển khoản riêng lẻ chưa đủ chứng minh tiền đã về.',
       ),
     );
-  if ((owner || staff) && active && !m && c.kind !== 'Holding')
+  if (c.kind === 'Holding') {
+    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= Date.now();
+    if (owner && c.status === 'Draft' && !c.approvedAt && !expired)
+      result.push(
+        action(
+          'holding-approval',
+          'Phê duyệt hợp đồng giữ chỗ',
+          [{ name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 }],
+          'Kiểm tra phòng, thời hạn, giá và tiền giữ chỗ trước khi phê duyệt. Phê duyệt chưa đồng nghĩa phòng đã được giữ.',
+        ),
+      );
+    if (owner && waiting && c.approvedAt && !expired)
+      result.push(
+        action(
+          'holding-activation',
+          'Kích hoạt giữ chỗ',
+          [],
+          'Chỉ kích hoạt sau khi máy chủ xác nhận đủ phê duyệt, chữ ký, tiền giữ chỗ và phòng hợp lệ.',
+        ),
+      );
+    if (owner && ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status))
+      result.push(
+        action(
+          'holding-cancellation',
+          'Hủy hợp đồng giữ chỗ',
+          [{ name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 }],
+          'Hủy giữ lại lịch sử và có thể tạo hồ sơ quyết toán thủ công nếu đã nhận tiền.',
+        ),
+      );
+    if ((owner || staff) && active && !expired && !c.convertedMainContractId)
+      result.push(
+        action(
+          'holding-conversion',
+          'Chuyển sang hợp đồng thuê chính',
+          [{ name: 'requiredSecurityDeposit', label: 'Tiền cọc thuê yêu cầu (VND)', type: 'money' }],
+          'Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
+        ),
+      );
+    return result;
+  }
+  if ((owner || staff) && active && !m)
     result.push(
       action(
         'renewals',
@@ -1058,7 +1078,7 @@ export function actionPayload(
   }
   return body;
 }
-export function draftPayload(values: Record<string, string>, residentIds: string[]) {
+function draftCore(values: Record<string, string>, residentIds: string[]) {
   const startDate = dateOnly(values.startDate ?? ''),
     endDate = dateOnly(values.endDate ?? '');
   if (endDate <= startDate) throw new Error('Ngày hết hạn phải sau ngày bắt đầu.');
@@ -1076,10 +1096,32 @@ export function draftPayload(values: Record<string, string>, residentIds: string
     residentIds: residentIds.map(guid),
     startDate,
     endDate,
+    terms: required(values.terms ?? '', 12000),
+  };
+}
+export function draftPayload(values: Record<string, string>, residentIds: string[]) {
+  return {
+    ...draftCore(values, residentIds),
     monthlyRent: vnd(values.monthlyRent ?? '', true),
     requiredDeposit: vnd(values.requiredDeposit ?? ''),
-    terms: required(values.terms ?? '', 12000),
     holdingContractId: values.holdingContractId ? guid(values.holdingContractId) : null,
+  };
+}
+export function holdingDraftPayload(values: Record<string, string>, residentIds: string[]) {
+  const capacity = Number(values.reservedCapacity || residentIds.length);
+  const expires = new Date((values.expiresAt ?? '') + ':00+07:00');
+  if (
+    !Number.isInteger(capacity) ||
+    capacity < residentIds.length ||
+    capacity > 32767 ||
+    !Number.isFinite(expires.getTime())
+  )
+    throw new Error('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
+  return {
+    ...draftCore(values, residentIds),
+    holdingDeposit: vnd(values.requiredDeposit ?? ''),
+    expiresAt: expires.toISOString(),
+    reservedCapacity: capacity,
   };
 }
 // Retain the same key after an ambiguous response. Forget only once the server confirms success.

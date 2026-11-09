@@ -73,6 +73,50 @@ public sealed class PropertyServiceTests
         Assert.Equal(403, exception.Status);
         Assert.Empty(repository.ReceivedCalls());
     }
+
+    [Fact]
+    public async Task OwnerCanCreateRoomLinkedToActiveRoomTypeInSameLocation()
+    {
+        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
+        var location = new Location("Synthetic") { Address = "Synthetic Address" };
+        var roomType = new RoomType
+        {
+            LocationId = location.Id,
+            Name = "Studio",
+            DefaultCapacity = 2,
+            IsActive = true
+        };
+        repository.FindAsync<Location>(location.Id, default).Returns(location);
+        repository.AnyAsync<RoomType>(Arg.Any<System.Linq.Expressions.Expression<Func<RoomType, bool>>>(), default)
+            .Returns(true);
+        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<RoomDto>>>(), default)
+            .Returns(call => call.Arg<Func<Task<RoomDto>>>()());
+
+        var result = await service.SaveRoomAsync(null,
+            new RoomWrite(location.Id, "A-01", "1", 2, RoomTypeId: roomType.Id), default);
+
+        Assert.Equal(roomType.Id, result.RoomTypeId);
+        repository.Received(1).Add(Arg.Is<Room>(room => room.RoomTypeId == roomType.Id));
+    }
+
+    [Fact]
+    public async Task BulkRoomCreationRejectsDuplicateNumbersBeforeAddingRows()
+    {
+        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
+        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<BulkRoomResult>>>(), default)
+            .Returns(call => call.Arg<Func<Task<BulkRoomResult>>>()());
+        var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
+        var locationId = location.Id;
+        var typeId = Guid.NewGuid();
+        repository.FindAsync<Location>(locationId, default).Returns(location);
+
+        var error = await Assert.ThrowsAsync<PropertyException>(() => service.BulkCreateRoomsAsync(
+            new BulkRoomWrite(locationId,
+            [new("A-01", "1", typeId), new(" a-01 ", "1", typeId)]), default));
+
+        Assert.Equal("duplicate_room_number", error.Code);
+        repository.DidNotReceive().Add(Arg.Any<Room>());
+    }
     [Theory]
     [InlineData(0, 20)]
     [InlineData(1, 101)]

@@ -25,6 +25,9 @@ function holding(status: string): ContractView {
     representativeResidentId: id,
     holdingContractId: null,
     appliedHoldingDeposit: '0',
+    holdingExpiresAt: '2027-11-10T00:00:00Z',
+    approvedAt: status === 'Draft' ? null : '2026-11-09T00:00:00Z',
+    convertedMainContractId: null,
   };
 }
 

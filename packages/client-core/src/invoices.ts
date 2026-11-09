@@ -101,8 +101,11 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
   const json = <T>(path: string, body: unknown, method = 'POST') =>
     request<T>(path, { method, body: JSON.stringify(body) });
   return {
-    list: (page = 1, signal?: AbortSignal) =>
-      request<Page<Invoice>>(`/api/v1/invoices?page=${page}&pageSize=20`, { signal }),
+    list: (page = 1, signal?: AbortSignal, roomId = '') =>
+      request<Page<Invoice>>(
+        `/api/v1/invoices?page=${page}&pageSize=20${roomId ? `&roomId=${encodeURIComponent(roomId)}` : ''}`,
+        { signal },
+      ),
     get: (id: string, signal?: AbortSignal) =>
       request<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}`, { signal }),
     draft: (roomId: string, billingPeriod: string, representativeContractId: string) =>

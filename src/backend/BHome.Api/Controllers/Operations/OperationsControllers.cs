@@ -69,6 +69,20 @@ public sealed class RoomOccupancyController(OperationsService service) : Control
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PublicContentAdministrationController(OperationsService service) : ControllerBase
 {
+    [HttpGet("locations/{id:guid}/photos/{index:int}")]
+    public Task<IActionResult> LocationPhotoPreview(Guid id, int index, CancellationToken t) => PhotoPreview("location", id, index, t);
+    [HttpGet("rooms/{id:guid}/photos/{index:int}")]
+    public Task<IActionResult> RoomPhotoPreview(Guid id, int index, CancellationToken t) => PhotoPreview("room", id, index, t);
+    private async Task<IActionResult> PhotoPreview(string target, Guid id, int index, CancellationToken t)
+    {
+        var output = new MemoryStream();
+        try
+        {
+            var type = await service.CopyManagedPublicPhotoAsync(target, id, index, output, t); output.Position = 0;
+            Response.Headers.XContentTypeOptions = "nosniff"; return File(output, type);
+        }
+        catch { await output.DisposeAsync(); throw; }
+    }
     [HttpGet("locations/{id:guid}")] public Task<LocationPublicContent> Location(Guid id, CancellationToken t) => service.LocationContentAsync(id, t);
     [HttpPut("locations/{id:guid}")] public Task<LocationPublicContent> UpdateLocation(Guid id, LocationPublicContentWrite input, CancellationToken t) => service.UpdateLocationContentAsync(id, input, t);
     [HttpPost("locations/{id:guid}/publish")] public Task<LocationPublicContent> PublishLocation(Guid id, CancellationToken t) => service.PublishLocationAsync(id, true, t);
