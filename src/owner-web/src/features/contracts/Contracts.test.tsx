@@ -44,6 +44,40 @@ const draft: ContractView = {
   appliedHoldingDeposit: '0',
 };
 
+it('keeps Holding actions separate from Main activation, renewal and move-out', () => {
+  const holding = {
+    ...draft,
+    kind: 'Holding',
+    status: 'PendingActivation',
+    approvedAt: '2026-01-01T00:00:00Z',
+    holdingExpiresAt: '2099-01-01T00:00:00Z',
+  };
+  const operations = contractActions(holding, null, 'Owner', owner).map((x) => x.operation);
+  expect(operations).toContain('holding-activation');
+  expect(operations).not.toContain('activate');
+  expect(operations).not.toContain('renewals');
+  expect(
+    contractActions({ ...holding, status: 'Active' }, null, 'Owner', owner).map((x) => x.operation),
+  ).toContain('holding-conversion');
+  expect(
+    contractActions({ ...holding, status: 'Active' }, null, 'Owner', owner).map((x) => x.operation),
+  ).not.toContain('expiry-move-out');
+  expect(contractActions(holding, null, 'Staff', tenant).map((x) => x.operation)).not.toContain(
+    'holding-activation',
+  );
+});
+it('does not offer conversion or activation for an expired Holding', () => {
+  const holding = {
+    ...draft,
+    kind: 'Holding',
+    status: 'Active',
+    holdingExpiresAt: '2000-01-01T00:00:00Z',
+  };
+  expect(contractActions(holding, null, 'Owner', owner).map((x) => x.operation)).not.toContain(
+    'holding-conversion',
+  );
+});
+
 it('uses a separate simulated action without a certificate and permits the second signer after a simulation', () => {
   const demo = {
     ...draft,

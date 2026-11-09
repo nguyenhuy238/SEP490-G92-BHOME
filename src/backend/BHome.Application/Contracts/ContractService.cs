@@ -326,7 +326,11 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (await repository.ConflictsAsync(c.RoomId, c.PreviousContractId ?? c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t)) blockers.Add("room_contract_conflict");
         return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
     }
-    public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t) => await Readiness(await Load(id, [Roles.Owner, Roles.Tenant], t), t);
+    public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t)
+    {
+        var contract = await Load(id, [Roles.Owner, Roles.Tenant], t);
+        return contract.Kind == ContractKind.Holding ? await HoldingReadiness(contract, t) : await Readiness(contract, t);
+    }
     public async Task<IReadOnlyList<string>> BlockersAsync(Guid contractId, Guid roomId, CancellationToken token)
     {
         var contract = await Load(contractId, [Roles.Owner, Roles.Staff], token);

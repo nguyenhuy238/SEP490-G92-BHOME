@@ -30,11 +30,13 @@ export function ContractDraftDialog({
   ownerId,
   onClose,
   onCreated,
+  kind = 'Main',
 }: {
   api: ContractClient;
   ownerId: string;
   onClose: () => void;
   onCreated: (id: string) => void;
+  kind?: 'Main' | 'Holding';
 }) {
   const [values, setValues] = useState<Record<string, string>>({ ownerSignerId: ownerId });
   const [location, setLocation] = useState(''),
@@ -84,7 +86,9 @@ export function ContractDraftDialog({
   };
   return (
     <Dialog open fullWidth maxWidth="md" onClose={() => !busy && onClose()}>
-      <DialogTitle>Tạo nháp hợp đồng thuê</DialogTitle>
+      <DialogTitle>
+        {kind === 'Holding' ? 'Tạo hợp đồng giữ chỗ' : 'Tạo nháp hợp đồng thuê'}
+      </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Stepper activeStep={step}>
@@ -258,9 +262,10 @@ export function ContractDraftDialog({
           {step === 2 && (
             <>
               <Alert severity="info">
-                Hợp đồng thuê chính · {p?.rooms.find((r) => r.id === values.roomId)?.label} ·{' '}
-                {representative?.label} · {residents.length} người ở. Giá thuê và cọc do hai bên
-                thống nhất; máy chủ kiểm tra lại toàn bộ điều kiện.
+                {kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng thuê chính'} ·{' '}
+                {p?.rooms.find((r) => r.id === values.roomId)?.label} · {representative?.label} ·{' '}
+                {residents.length} người ở. Giá thuê và cọc do hai bên thống nhất; máy chủ kiểm tra
+                lại toàn bộ điều kiện.
               </Alert>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 {['startDate', 'endDate'].map((key, i) => (
@@ -277,11 +282,16 @@ export function ContractDraftDialog({
                 ))}
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                {['monthlyRent', 'requiredDeposit'].map((key, i) => (
+                {(kind === 'Holding'
+                  ? ['requiredDeposit']
+                  : ['monthlyRent', 'requiredDeposit']
+                ).map((key) => (
                   <TextField
                     fullWidth
                     key={key}
-                    label={i ? 'Cọc yêu cầu (VND)' : 'Tiền thuê tháng (VND)'}
+                    label={
+                      key === 'requiredDeposit' ? 'Cọc yêu cầu (VND)' : 'Tiền thuê tháng (VND)'
+                    }
                     slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 18 } }}
                     value={values[key] ?? ''}
                     disabled={busy}
@@ -289,6 +299,28 @@ export function ContractDraftDialog({
                   />
                 ))}
               </Stack>
+              {kind === 'Holding' && (
+                <>
+                  <TextField
+                    label="Hết hạn giữ chỗ (giờ Việt Nam)"
+                    type="datetime-local"
+                    value={values.expiresAt ?? ''}
+                    onChange={(e) => set('expiresAt', e.target.value)}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <TextField
+                    label="Số chỗ giữ"
+                    type="number"
+                    value={values.reservedCapacity ?? residents.length}
+                    onChange={(e) => set('reservedCapacity', e.target.value)}
+                    slotProps={{ htmlInput: { min: residents.length, max: 32767 } }}
+                  />
+                  <Alert severity="info">
+                    Giá thuê được máy chủ lấy từ chính sách có hiệu lực của phòng; tiền cọc chưa xác
+                    minh không giữ phòng.
+                  </Alert>
+                </>
+              )}
               <TextField
                 multiline
                 minRows={4}
@@ -327,16 +359,37 @@ export function ContractDraftDialog({
             onClick={() =>
               void run(async () => {
                 const body = draftPayload(
-                  { ...values, tenantUserId: representative?.tenantUserId ?? '' },
+                  {
+                    ...values,
+                    ...(kind === 'Holding' ? { monthlyRent: '0' } : {}),
+                    tenantUserId: representative?.tenantUserId ?? '',
+                  },
                   residents,
                 );
-                const result = await api.mutate<{ id: string }>(
-                  null,
-                  '',
-                  body,
-                  keys.get('draft', body),
-                );
-                keys.confirmed('draft', body);
+                const {
+                  monthlyRent: _rent,
+                  requiredDeposit,
+                  holdingContractId: _holding,
+                  ...common
+                } = body;
+                const holding =
+                  kind === 'Holding'
+                    ? {
+                        ...common,
+                        holdingDeposit: requiredDeposit,
+                        expiresAt: new Date((values.expiresAt ?? '') + ':00+07:00').toISOString(),
+                        reservedCapacity: Number(values.reservedCapacity || residents.length),
+                      }
+                    : null;
+                const result = holding
+                  ? await api.transport<{ id: string }>('/api/v1/contracts/holdings', {
+                      method: 'POST',
+                      headers: { 'Idempotency-Key': keys.get('holding', holding) },
+                      body: JSON.stringify(holding),
+                    })
+                  : await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
+                if (holding) keys.confirmed('holding', holding);
+                else keys.confirmed('draft', body);
                 onCreated(result.id);
               })
             }
