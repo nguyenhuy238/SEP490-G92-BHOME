@@ -21,7 +21,6 @@ import {
 } from '../../../../../packages/client-core/src/invoices';
 import { PageHeader } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
-import { usePropertyApi, type RoomDto, type RoomTypeDto } from '../property-api/propertyApi';
 
 export function BillingConfigurationPage({
   initialLocationId = '',
@@ -56,7 +55,6 @@ export function BillingConfigurationPage({
         <TextField
           select
           label="Cơ sở cấu hình"
-          disabled={!!routeLocationId}
           value={location}
           disabled={!!initialLocationId}
           onChange={(e) => setLocation(e.target.value)}
@@ -75,7 +73,6 @@ export function BillingConfigurationPage({
 }
 function LocationBilling({ location }: { location: string }) {
   const api = useInvoiceApi();
-  const propertyApi = usePropertyApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const [page, setPage] = useState(1);
@@ -86,14 +83,6 @@ function LocationBilling({ location }: { location: string }) {
   const policies = useQuery({
     queryKey: ['billing-policies', actor, location, page],
     queryFn: ({ signal }) => api.policies(location, page, signal),
-  });
-  const roomTypes = useQuery({
-    queryKey: ['billing-room-types', actor, location],
-    queryFn: ({ signal }) => propertyApi.roomTypes(location, signal),
-  });
-  const rooms = useQuery({
-    queryKey: ['billing-rooms', actor, location],
-    queryFn: ({ signal }) => propertyApi.rooms(location, signal),
   });
   const [replacing, setReplacing] = useState<Policy | null>(null);
   return (
@@ -162,8 +151,6 @@ function LocationBilling({ location }: { location: string }) {
         key={replacing?.id ?? 'new'}
         location={location}
         previous={replacing}
-        roomTypes={roomTypes.data?.items ?? []}
-        rooms={rooms.data?.items ?? []}
         onSaved={() => {
           setReplacing(null);
           void policies.refetch();
@@ -305,15 +292,11 @@ function ScheduleForm({
 function PolicyForm({
   location,
   previous,
-  roomTypes,
-  rooms,
   onSaved,
   onCancel,
 }: {
   location: string;
   previous: Policy | null;
-  roomTypes: RoomTypeDto[];
-  rooms: RoomDto[];
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -328,7 +311,6 @@ function PolicyForm({
         { signal },
       ),
   });
-  const [roomId, setRoomId] = useState(previous?.roomId ?? '');
   const [category, setCategory] = useState(String(previous?.category ?? 1)),
     [rate, setRate] = useState(''),
     [date, setDate] = useState(''),
@@ -336,10 +318,8 @@ function PolicyForm({
   const [name, setName] = useState(previous?.name ?? ''),
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
-  const [scope, setScope] = useState(
-    previous?.roomId ? 'room' : previous?.roomTypeId ? 'type' : 'location',
-  );
-  const [scopeId, setScopeId] = useState(previous?.roomId ?? previous?.roomTypeId ?? '');
+  const [scope, setScope] = useState(previous?.roomId ? 'room' : 'location');
+  const [scopeId, setScopeId] = useState(previous?.roomId ?? '');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -364,7 +344,6 @@ function PolicyForm({
           const input: PolicyInput = {
             locationId: location,
             roomId: scope === 'room' ? scopeId : null,
-            roomTypeId: scope === 'type' ? scopeId : null,
             category: cat,
             chargeCode: cat === 3 ? code : ['RENT', 'ELECTRICITY', 'WATER'][cat],
             name,
@@ -407,21 +386,20 @@ function PolicyForm({
           }}
         >
           <MenuItem value="location">Toàn cơ sở</MenuItem>
-          <MenuItem value="type">Loại phòng</MenuItem>
           <MenuItem value="room">Phòng cụ thể</MenuItem>
         </TextField>
         {scope !== 'location' && (
           <TextField
             required
             select
-            label={scope === 'type' ? 'Loại phòng áp dụng' : 'Phòng áp dụng'}
+            label="Phòng áp dụng"
             value={scopeId}
             disabled={!!previous}
             onChange={(e) => setScopeId(e.target.value)}
           >
-            {(scope === 'type' ? roomTypes : rooms).map((item) => (
+            {(rooms.data ?? []).map((item) => (
               <MenuItem key={item.id} value={item.id}>
-                {'name' in item ? item.name : item.roomNumber}
+                {item.label}
               </MenuItem>
             ))}
           </TextField>

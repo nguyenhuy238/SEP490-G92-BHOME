@@ -50,7 +50,7 @@ import {
 } from '../../property-api/propertyApi';
 
 export function LocationsListPage() {
-  return isMockMode ? <MockLocationsListPage /> : <PropertyApiPage kind="locations" />;
+  return <MockLocationsListPage />;
 }
 
 function MockLocationsListPage() {
@@ -129,23 +129,9 @@ function MockLocationsListPage() {
     wizardData: InitialLocationSetupResult,
   ) => {
     if (!isMockMode) {
-      apiAction.mutate(
-        () =>
-          propertyApi.saveLocation({
-            name: newLocationRecord.name,
-            address: newLocationRecord.attributes.address || '',
-            isActive: newLocationRecord.status !== 'Tạm ngừng',
-            version: 0,
-            reason: 'Tạo thông tin cơ sở từ Owner Web',
-          }),
-        {
-          onSuccess: (created) => {
-            setSuccessToast(
-              `Đã lưu thông tin cơ sở "${created.name}". Loại phòng, phòng và cấu hình trong Wizard chưa được lưu vì Backend chưa có API commit nguyên tử.`,
-            );
-            navigate(`/locations/${created.id}/overview`);
-          },
-        },
+      portal.notify(
+        'Backend chưa có API commit nguyên tử cho toàn bộ Setup Wizard. Không có dữ liệu nào được lưu để tránh tạo cơ sở cấu hình dở dang.',
+        true,
       );
       return;
     }

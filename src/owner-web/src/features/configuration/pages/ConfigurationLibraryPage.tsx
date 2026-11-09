@@ -35,7 +35,6 @@ import {
   type PolicyTemplate,
   type RoomTemplate,
 } from '../SharedConfigurationContext';
-import { isMockMode } from '../../../services/config';
 
 export type LibraryKind = 'room' | 'asset' | 'fee' | 'policy';
 type AssetTemplateItem = AssetTemplate['items'][number];
