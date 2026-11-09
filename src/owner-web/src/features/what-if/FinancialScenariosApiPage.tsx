@@ -19,6 +19,8 @@ import {
 import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
 import { PageHeader } from '../../components/common/PortalUI';
 import { useFinanceApi } from '../expenses/useFinanceApi';
+import { OwnerTable } from '../../components/common/OwnerWorkspace';
+import { downloadFinance } from '../../services/financeExport';
 
 const initial: ScenarioInput = {
   name: '',
@@ -236,6 +238,61 @@ export function FinancialScenariosApiPage() {
         </form>
       </Paper>
       {view && <Result title={view.input.name} value={view} />}
+      {view && (
+        <Button
+          onClick={() =>
+            downloadFinance(
+              JSON.stringify({ current: view, comparison }, null, 2),
+              'kich-ban-va-du-lieu-nen.json',
+              'application/json',
+            )
+          }
+        >
+          Tải kịch bản và ảnh chụp dữ liệu nền
+        </Button>
+      )}
+      {view && comparison && (
+        <>
+          <Typography variant="h6">So sánh các kết quả máy chủ</Typography>
+          {JSON.stringify(view.input.baseline) !== JSON.stringify(comparison.input.baseline) && (
+            <Alert severity="warning">
+              Hai kịch bản dùng phạm vi hoặc kỳ dữ liệu nền khác nhau. Kiểm tra giả định trước khi
+              so sánh.
+            </Alert>
+          )}
+          <OwnerTable
+            rows={[
+              {
+                label: 'Lợi nhuận tháng',
+                current: view.result.monthlyProfit,
+                other: comparison.result.monthlyProfit,
+              },
+              {
+                label: 'Dòng tiền tháng',
+                current: view.result.monthlyNetCashFlow,
+                other: comparison.result.monthlyNetCashFlow,
+              },
+              {
+                label: 'Vốn còn lại cuối dự báo',
+                current: view.result.remainingCapitalAtEnd,
+                other: comparison.result.remainingCapitalAtEnd,
+              },
+            ]}
+            id={(r) => r.label}
+            columns={[
+              { label: 'Chỉ tiêu', render: (r) => r.label },
+              {
+                label: view.input.name,
+                render: (r) => (r.current == null ? 'Chưa xác định' : formatDraftMoney(r.current)),
+              },
+              {
+                label: comparison.input.name,
+                render: (r) => (r.other == null ? 'Chưa xác định' : formatDraftMoney(r.other)),
+              },
+            ]}
+          />
+        </>
+      )}
       {comparison && (
         <Paper sx={{ p: 2, my: 2 }}>
           <Button onClick={() => setComparison(null)}>Bỏ so sánh</Button>
