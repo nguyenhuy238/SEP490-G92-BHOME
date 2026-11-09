@@ -54,6 +54,7 @@ public sealed class UtilityWorkspaceController(UtilityWorkspaceService service) 
     [HttpGet("utility-source-meters")] public Task<IReadOnlyList<SetupDocument>> Meters([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilitySourceMeter", t);
     [HttpPost("utility-source-meters")] public Task<SetupDocument> Meter(UtilitySourceMeter input, CancellationToken t) => service.SourceMeterAsync(input, t);
     [HttpPost("utility-meter-links")] public Task<SetupDocument> Link(UtilityMeterLink input, CancellationToken t) => service.LinkAsync(input, t);
+    [HttpGet("utility-meter-links")] public Task<IReadOnlyList<SetupDocument>> Links([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilityMeterLink", t);
     [HttpPost("utility-quotas")] public Task<SetupDocument> Quota(UtilityQuotaWrite input, CancellationToken t) => service.QuotaAsync(input, t);
     [HttpGet("utility-quotas")] public Task<IReadOnlyList<SetupDocument>> Quotas([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilityQuota", t);
     [HttpPost("utility-profiles")] public Task<SetupDocument> Profile(UtilityProfileWrite input, CancellationToken t) => service.ProfileAsync(input, t);
@@ -63,13 +64,15 @@ public sealed class UtilityWorkspaceController(UtilityWorkspaceService service) 
     public Task<SetupDocument> Bill(UtilitySourceBill input, CancellationToken t) => service.SourceBillAsync(input, Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty, t);
     [HttpGet("utility-source-bills/{id:guid}")] public Task<SetupDocument> Bill(Guid id, CancellationToken t) => service.GetAsync(id, "UtilitySourceBill", t);
     [HttpGet("utility-source-bills")] public Task<IReadOnlyList<SetupDocument>> Bills([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilitySourceBill", t);
-    [HttpPost("utility-reconciliations/preview")] public Task<UtilityReconciliation> Preview(UtilityReconcileInput input, CancellationToken t) => service.PreviewAsync(input, t);
+    [HttpPost("utility-reconciliations/preview")] public async Task<UtilityReconciliationView> Preview(UtilityReconcileInput input, CancellationToken t) => UtilityReconciliationView.From(await service.PreviewAsync(input, t));
     [HttpPost("utility-reconciliations")] public Task<SetupDocument> Reconcile(UtilityReconcileInput input, CancellationToken t) => service.ReconcileAsync(input, t);
+    [HttpGet("utility-reconciliations")] public Task<IReadOnlyList<SetupDocument>> Reconciliations([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilityReconciliation", t);
     [HttpGet("utility-reconciliations/{id:guid}")] public Task<SetupDocument> Reconciliation(Guid id, CancellationToken t) => service.GetAsync(id, "UtilityReconciliation", t);
     [HttpPost("utility-reconciliations/{id:guid}/review")]
     public Task<SetupDocument> Review(Guid id, UtilityVarianceReview input, CancellationToken t) => service.ReviewVarianceAsync(id, input, t);
     [HttpPost("utility-period-breakdowns")]
     public Task<SetupDocument> Breakdown(UtilityPeriodBreakdown input, CancellationToken t) => service.PeriodBreakdownAsync(input, t);
+    [HttpGet("utility-period-breakdowns")] public Task<IReadOnlyList<SetupDocument>> Breakdowns([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilityPeriodBreakdown", t);
 }
 
 [ApiController, Route("api/v1/utility-source-readings"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
@@ -77,6 +80,7 @@ public sealed class UtilityWorkspaceController(UtilityWorkspaceService service) 
 public sealed class UtilitySourceReadingsController(UtilityWorkspaceService service) : ControllerBase
 {
     [HttpPost] public Task<SetupDocument> Confirm(UtilitySourceReading input, CancellationToken t) => service.SourceReadingAsync(input, t);
+    [HttpGet] public Task<IReadOnlyList<SetupDocument>> List([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "UtilitySourceReading", t);
 }
 
 [ApiController, Route("api/v1"), Authorize]

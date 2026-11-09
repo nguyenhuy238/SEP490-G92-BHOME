@@ -19,12 +19,14 @@ import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { BillingConfigurationPage } from '../../invoices/BillingConfigurationPage';
 import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
 import { LocalAssetSetup } from '../../property/LocalAssetSetup';
+import { UtilityWorkspace } from '../../property/UtilityWorkspace';
 
 const tabs = [
   ['overview', 'Tổng quan'],
   ['rooms', 'Phòng'],
   ['assets', 'Tài sản'],
   ['pricing', 'Giá & Phí'],
+  ['utilities', 'Điện & Nước'],
   ['rules', 'Nội quy'],
   ['history', 'Lịch sử phòng'],
   ['settings', 'Thiết lập'],
@@ -80,6 +82,8 @@ export function LocationApiWorkspace() {
         <Outlet />
       ) : active === 'pricing' ? (
         <BillingConfigurationPage initialLocationId={locationId} />
+      ) : active === 'utilities' ? (
+        <UtilityWorkspace locationId={locationId} />
       ) : active === 'rules' ? (
         <OperatingPoliciesPanel locationId={locationId} />
       ) : active === 'history' ? (

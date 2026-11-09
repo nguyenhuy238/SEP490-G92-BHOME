@@ -98,6 +98,43 @@ public sealed class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassF
     }
 
     [CompactPostgresFact]
+    public async Task UtilityReadWorkspacesPreserveOwnerAndAssignedStaffPermissions()
+    {
+        var w = await Seed(); var outside = await Seed(); using var owner = await Client(w.Owner);
+        using var staff = await Client(w.Staff); using var stranger = await Client(outside.Staff); using var tenant = await Client(w.Tenant);
+        foreach (var resource in new[] { "utility-meter-links", "utility-reconciliations", "utility-period-breakdowns", "utility-source-readings" })
+        {
+            var path = $"/api/v1/{resource}?locationId={w.Location}";
+            Assert.Empty((await owner.GetFromJsonAsync<SetupDocument[]>(path))!);
+            Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(path)).StatusCode);
+            Assert.Equal(resource == "utility-source-readings" ? HttpStatusCode.OK : HttpStatusCode.Forbidden, (await staff.GetAsync(path)).StatusCode);
+            Assert.Equal(resource == "utility-source-readings" ? HttpStatusCode.NotFound : HttpStatusCode.Forbidden, (await stranger.GetAsync(path)).StatusCode);
+        }
+    }
+
+    [CompactPostgresFact]
+    public async Task UtilitySourceBillKeepsLargeAmountsExactAcrossApiPersistenceAndReload()
+    {
+        var w = await Seed(); using var host = Host(); using var owner = await Client(w.Owner, host);
+        var period = new DateOnly(Today.Year, Today.Month, 1);
+        var meter = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-meters", new UtilitySourceMeter(w.Location, UtilityType.Electricity, "Source", "SYN-EXACT", null)));
+        string evidence;
+        await using (var scope = host.Services.CreateAsyncScope()) evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Owner.Id, default);
+        owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var saved = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-bills", new
+        {
+            locationId = w.Location, meterId = meter.Id, utilityType = 0, period, consumption = "123.0001",
+            amount = "9007199254740993", reference = "SYN-EXACT", evidenceObjectKey = evidence
+        }));
+        Assert.Equal("9007199254740993", saved.Data.GetProperty("amount").GetString());
+        Assert.Equal("123.0001", saved.Data.GetProperty("consumption").GetString());
+        var loaded = await owner.GetFromJsonAsync<SetupDocument>($"/api/v1/utility-source-bills/{saved.Id}");
+        Assert.Equal("9007199254740993", loaded!.Data.GetProperty("amount").GetString());
+        var listed = await owner.GetFromJsonAsync<SetupDocument[]>($"/api/v1/utility-source-bills?locationId={w.Location}");
+        Assert.Equal(saved.Id, Assert.Single(listed!).Id);
+    }
+
+    [CompactPostgresFact]
     public async Task ClosureShowsOpenWorkAndEmergencyReadinessAndDoesNotLeakToTenant()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenant);
@@ -186,10 +223,13 @@ public sealed class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(bill.Id, (await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-bills", input))).Id);
         var preview = await Read<UtilityReconciliation>(await owner.PostAsJsonAsync("/api/v1/utility-reconciliations/preview", new UtilityReconcileInput(w.Location, bill.Id, 0, "Synthetic review")));
         Assert.Equal("MissingConfirmedInputs", preview.Status); Assert.Equal(1200, preview.Variance);
+        await using (var readOnlyCheck = host.Services.CreateAsyncScope())
+            Assert.Empty(await readOnlyCheck.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().ListAsync(w.Location, "UtilityReconciliation", default));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/utility-source-bills", input with { Amount = 2000000 })).StatusCode);
         var pending = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-reconciliations", new UtilityReconcileInput(w.Location, bill.Id, 0, "Synthetic review")));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/v1/utility-reconciliations/{pending.Id}/review", new UtilityVarianceReview(true, "Missing inputs cannot be waived", pending.Version))).StatusCode);
         await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-readings", new UtilitySourceReading(meter.Id, period, 0, 1200, evidence, true)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/v1/utility-reconciliations/{pending.Id}/review", new UtilityVarianceReview(true, "Changed source inputs require a new saved preview", pending.Version))).StatusCode);
         var ready = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-reconciliations", new UtilityReconcileInput(w.Location, bill.Id, 0, "Confirmed source", pending.Version)));
         Assert.Equal("NeedsReview", ready.Status);
         var reviewed = await Read<SetupDocument>(await owner.PostAsJsonAsync($"/api/v1/utility-reconciliations/{ready.Id}/review", new UtilityVarianceReview(true, "Owner records unresolved variance without charging Tenant", ready.Version)));

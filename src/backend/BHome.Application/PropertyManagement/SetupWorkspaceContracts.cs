@@ -7,7 +7,8 @@ using BHome.Domain.TenantContracts;
 namespace BHome.Application.PropertyManagement;
 
 // Versioned documents use existing Compact24 JSON containers; physical assets and money remain native records.
-public sealed record SetupDocument(Guid Id, Guid LocationId, string Kind, string Status, int Version, JsonElement Data, DateTimeOffset? RecordedAt = null, Guid? RecordedBy = null);
+public sealed record SetupDocument(Guid Id, Guid LocationId, string Kind, string Status, int Version,
+    [property: JsonConverter(typeof(ExactSetupDataConverter))] JsonElement Data, DateTimeOffset? RecordedAt = null, Guid? RecordedBy = null);
 public interface ISetupWorkspaceStore
 {
     Task<T> TransactionAsync<T>(Guid locationId, Func<Task<T>> work, CancellationToken t);
@@ -41,7 +42,9 @@ public sealed record AssetSyncRoom(Guid RoomId, string Status);
 public sealed record AssetSyncRun(Guid TemplateId, int TemplateVersion, IReadOnlyList<AssetSyncRoom> Rooms, Guid? RunId = null);
 public sealed record AssetHistoryEntry(Guid Id, string Action, string Reason, DateTimeOffset OccurredAt, Guid ActorId, string Snapshot);
 public sealed record AssetVerification(Guid TemplateId, Guid ItemId, string Code, int Quantity, string Condition, string EvidenceObjectKey, int ExpectedVersion, Guid? ExistingAssetId = null);
-public sealed record AssetMetadata(string TrackingMode, int Quantity, decimal? PurchaseCost, DateOnly? PurchaseDate, int? UsefulLifeMonths);
+public sealed record AssetMetadata(string TrackingMode, int Quantity,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PurchaseCost,
+    DateOnly? PurchaseDate, int? UsefulLifeMonths);
 public sealed record AssetMetadataWrite(AssetMetadata Metadata, int ExpectedVersion, string Reason);
 public sealed record AssetReplacement(string Code, string Condition, string Reason, int ExpectedVersion);
 public sealed record AssetDiscrepancy(Guid AssetId, string Action);
@@ -65,6 +68,14 @@ public sealed record UtilitySourceBill(Guid LocationId, Guid MeterId, [property:
 public sealed record UtilityReconcileInput(Guid LocationId, Guid SourceBillId, [property: JsonRequired] decimal Tolerance, string Reason, int ExpectedVersion = 0);
 public sealed record UtilityReconciliation(Guid SourceBillId, decimal SourceConsumption, decimal RoomConsumption, decimal CommonConsumption,
     decimal Variance, decimal Tolerance, string Status, string Reason, string InputsHash);
+public sealed record UtilityReconciliationView(Guid SourceBillId, string SourceConsumption, string RoomConsumption, string CommonConsumption,
+    string Variance, string Tolerance, string Status, string Reason, string InputsHash)
+{
+    public static UtilityReconciliationView From(UtilityReconciliation value) => new(value.SourceBillId,
+        Exact(value.SourceConsumption), Exact(value.RoomConsumption), Exact(value.CommonConsumption), Exact(value.Variance), Exact(value.Tolerance),
+        value.Status, value.Reason, value.InputsHash);
+    private static string Exact(decimal value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
 public sealed record UtilityCalculation(decimal Amount, string Snapshot, IReadOnlyList<string> MissingInputs);
 public sealed record UtilityPeriodSegment(DateOnly From, DateOnly To, Guid TariffId, decimal Consumption, decimal FreeQuantity, string EvidenceObjectKey);
 public sealed record UtilityPeriodBreakdown(Guid LocationId, Guid RoomId, UtilityType UtilityType, DateOnly Period, UtilityPeriodSegment[] Segments, bool HumanConfirmed, int ExpectedVersion = 0);

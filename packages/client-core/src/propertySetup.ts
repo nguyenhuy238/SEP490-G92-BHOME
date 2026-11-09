@@ -121,6 +121,7 @@ export interface UtilityTier {
   rate: DecimalValue;
 }
 export interface UtilityTariffInput {
+  replacesId?: string;
   locationId: string;
   utilityType: number;
   effectiveFrom: string;
@@ -133,6 +134,7 @@ export interface UtilityTariffInput {
   verified: boolean;
 }
 export interface UtilityProfileInput {
+  replacesId?: string;
   locationId: string;
   roomId: string;
   utilityType: number;
@@ -394,6 +396,23 @@ export function propertySetupClient(request: SetupRequest) {
       effectiveFrom: string;
       effectiveTo: string | null;
     }) => write<SetupDocument<unknown>>('/api/v1/utility-meter-links', input),
+    meterLinks: (locationId: string, signal?: AbortSignal) =>
+      documents<{
+        meterId: string;
+        parentMeterId: string;
+        scope: 'Room';
+        effectiveFrom: string;
+        effectiveTo: string | null;
+      }>('utility-meter-links', locationId, signal),
+    sourceReadings: (locationId: string, signal?: AbortSignal) =>
+      documents<{
+        meterId: string;
+        period: string;
+        opening: DecimalValue;
+        closing: DecimalValue;
+        evidenceObjectKey: string;
+        humanConfirmed: boolean;
+      }>('utility-source-readings', locationId, signal),
     sourceReading: (input: {
       meterId: string;
       period: string;
@@ -410,6 +429,23 @@ export function propertySetupClient(request: SetupRequest) {
       write<Reconciliation>('/api/v1/utility-reconciliations/preview', input),
     saveReconciliation: (input: ReconcileInput) =>
       write<SetupDocument<Reconciliation>>('/api/v1/utility-reconciliations', input),
+    reconciliations: (locationId: string, signal?: AbortSignal) =>
+      documents<Reconciliation>('utility-reconciliations', locationId, signal),
+    breakdowns: (locationId: string, signal?: AbortSignal) =>
+      documents<{
+        roomId: string;
+        utilityType: number;
+        period: string;
+        segments: {
+          from: string;
+          to: string;
+          tariffId: string;
+          consumption: DecimalValue;
+          freeQuantity: DecimalValue;
+          evidenceObjectKey: string;
+        }[];
+        humanConfirmed: boolean;
+      }>('utility-period-breakdowns', locationId, signal),
     reconciliation: (id: string, signal?: AbortSignal) =>
       request<SetupDocument<Reconciliation>>(
         `/api/v1/utility-reconciliations/${encodeURIComponent(id)}`,

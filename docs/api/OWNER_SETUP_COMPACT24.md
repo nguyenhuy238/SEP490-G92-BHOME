@@ -142,3 +142,20 @@ Phụ lục dùng quy trình provider ký và activation hiện hữu của Cont
 Không thêm bảng/migration/dependency. Tài sản, hợp đồng, chỉ số, hóa đơn và tiền vẫn dùng record native; tài liệu setup versioned dùng JSON/history trong operational_tasks SYSTEM_JOB sẵn có. Khóa Location trong transaction, version check, stable key và audit/history bảo vệ replay và race. Đây là lựa chọn tương thích Compact24; JSON documents cần được tính vào bảo trì/query/index nếu dữ liệu tăng lớn.
 
 Chi tiết kiểm thử và traceability: [báo cáo triển khai](../development/OWNER_SETUP_DELIVERY_2026-11-08.md). Frontend integration, provider thật, load/performance và nghiệm thu người dùng vẫn cần thực hiện trước production.
+# Utility workspace integration — 2026-11-09
+
+The Owner Web Location utility workspace now uses the persisted tariff, profile,
+quota, source meter/reading, supplier bill, reconciliation and period-breakdown APIs.
+GET `/api/utility-meter-links`, `/api/utility-reconciliations`,
+`/api/utility-period-breakdowns` and `/api/utility-source-readings` accept `locationId`.
+The first three are Owner-only. Source readings also permit currently assigned Staff.
+Tenant access is rejected. Existing object and Location permission checks apply.
+
+Setup document data serializes fractional decimals and integers outside JavaScript's
+exact integer range as strings. Small integer counts remain numbers. Callers must
+preserve monetary/quantity strings rather than converting them through `Number`.
+Reconciliation preview quantities are strings; preview does not persist a review.
+Variance approval recalculates the input hash and rejects changed inputs until the
+Owner saves a fresh reconciliation. Upload evidence remains private and confirmed
+source readings remain separate from OCR proposals.
+
