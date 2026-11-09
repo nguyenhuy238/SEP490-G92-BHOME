@@ -80,7 +80,10 @@ public sealed record InspectionPreparation(HandoverView? Baseline, Guid? Baselin
 public sealed record SettlementInput([Required, StringLength(2000, MinimumLength = 1)] string Decision, string? ExpectedReference = null);
 public sealed record CompletionInput(DateOnly ActualEndDate);
 public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLength = 1)] string ProviderReference);
-public sealed record SignatureView(Guid Id, Guid SignerUserId, string Status, DateTimeOffset? SignedAt);
+// Method: OTP / UPLOAD_PROOF / VIETTEL_MYSIGN / SIMULATED. ExpiresAt: until when a pending signature can complete.
+// CertificateSubject/Issuer: the certificate that produced the signature (BHOME seal for OTP).
+public sealed record SignatureView(Guid Id, Guid SignerUserId, string Status, DateTimeOffset? SignedAt, string Method = "",
+    DateTimeOffset? ExpiresAt = null, string? CertificateSubject = null, string? CertificateIssuer = null);
 public sealed record ContractOccupantView(Guid Id, string Label, bool Representative);
 public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, string Terms, Guid? PreviousContractId,
@@ -123,7 +126,8 @@ public sealed record ContractDocument(Guid ContractId, Guid RoomId, Guid OwnerSi
 }
 public sealed record SigningPreparation(byte[] SourcePdf, byte[] PreparedPdf, string FieldName, string DocumentDigest,
     string DataToSignDigest, string CertificateChain, string ProviderUserId, string CredentialId);
-public sealed record SigningOutcome(string State, byte[]? SignedPdf = null);
+// CertificateChain (base64 DER, newline separated): set when the provider learns the signer's certificate only now.
+public sealed record SigningOutcome(string State, byte[]? SignedPdf = null, string? CertificateChain = null);
 public interface IContractSigningProvider
 {
     // Signs in the signer's box of the signature block with their picture when they have one.
