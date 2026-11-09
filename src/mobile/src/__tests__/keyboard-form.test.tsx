@@ -4,18 +4,30 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 vi.unmock('../components/KeyboardFormScrollView');
 const native = vi.hoisted(() => ({
-  reveal: vi.fn(),
-  listeners: new Set<() => void>(),
+  scrollTo: vi.fn(),
+  measure: vi.fn((_target: number, callback: (...values: number[]) => void) =>
+    callback(0, 450, 200, 60),
+  ),
+  listeners: new Map<
+    string,
+    Set<(event?: { endCoordinates: { screenY: number } }) => void>
+  >(),
   frames: new Map<number, () => void>(),
   sequence: 0,
 }));
 vi.mock('react-native', () => ({
   Keyboard: {
-    addListener: (_: string, cb: () => void) => {
-      native.listeners.add(cb);
-      return { remove: () => native.listeners.delete(cb) };
+    addListener: (
+      name: string,
+      cb: (event?: { endCoordinates: { screenY: number } }) => void,
+    ) => {
+      const listeners = native.listeners.get(name) ?? new Set();
+      listeners.add(cb);
+      native.listeners.set(name, listeners);
+      return { remove: () => listeners.delete(cb) };
     },
   },
+  UIManager: { measureInWindow: native.measure },
   ScrollView: forwardRef(function Scroll(
     {
       children,
@@ -27,7 +39,7 @@ vi.mock('react-native', () => ({
     ref,
   ) {
     useImperativeHandle(ref, () => ({
-      scrollResponderScrollNativeHandleToKeyboard: native.reveal,
+      scrollTo: native.scrollTo,
     }));
     return (
       <div onFocusCapture={() => onFocusCapture({ nativeEvent: { target: 42 } })}>{children}</div>
@@ -37,6 +49,7 @@ vi.mock('react-native', () => ({
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
 beforeEach(() => {
   vi.clearAllMocks();
+  native.listeners.clear();
   native.frames.clear();
   vi.stubGlobal('requestAnimationFrame', (cb: () => void) => {
     const id = ++native.sequence;
@@ -54,6 +67,10 @@ const flush = () => {
   native.frames.clear();
   callbacks.forEach((cb) => cb());
 };
+const flushLayout = () => {
+  flush();
+  flush();
+};
 it('reveals the focused input after focus and keyboard layout changes and releases listeners on close', () => {
   const view = render(
     <KeyboardFormScrollView>
@@ -61,13 +78,26 @@ it('reveals the focused input after focus and keyboard layout changes and releas
     </KeyboardFormScrollView>,
   );
   fireEvent.focus(screen.getByLabelText('Ghi chú'));
-  act(flush);
-  expect(native.reveal).toHaveBeenCalledWith(42, 24, true);
-  native.reveal.mockClear();
-  act(() => native.listeners.forEach((cb) => cb()));
-  act(flush);
-  expect(native.reveal).toHaveBeenCalledWith(42, 24, true);
+  act(flushLayout);
+  expect(native.scrollTo).not.toHaveBeenCalled();
+  act(() =>
+    native.listeners
+      .get('keyboardDidShow')
+      ?.forEach((cb) => cb({ endCoordinates: { screenY: 500 } })),
+  );
+  act(flushLayout);
+  expect(native.measure).toHaveBeenCalledWith(42, expect.any(Function));
+  expect(native.scrollTo).toHaveBeenCalledWith({ y: 26, animated: true });
+  native.scrollTo.mockClear();
+  act(() =>
+    native.listeners
+      .get('keyboardDidChangeFrame')
+      ?.forEach((cb) => cb({ endCoordinates: { screenY: 540 } })),
+  );
+  act(flushLayout);
+  expect(native.scrollTo).not.toHaveBeenCalled();
+  act(() => native.listeners.get('keyboardDidHide')?.forEach((cb) => cb()));
   view.unmount();
-  expect(native.listeners.size).toBe(0);
+  expect([...native.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true);
   expect(native.frames.size).toBe(0);
 });

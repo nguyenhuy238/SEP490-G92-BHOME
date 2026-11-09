@@ -61,6 +61,15 @@ import {
   TenantResidenceScreen,
 } from '../../screens/TenantServiceScreens';
 import { ProfileEditScreen } from '../../screens/ProfileEditScreen';
+import {
+  OwnerAdjustmentListScreen,
+  OwnerAdjustmentReviewScreen,
+  OwnerAnnouncementScreen,
+  OwnerApprovalCenterScreen,
+  OwnerFinanceScreen,
+  OwnerPaymentListScreen,
+  OwnerPaymentReviewScreen,
+} from '../../screens/OwnerDecisionScreens';
 import { useSession } from '../../lib/SessionProvider';
 import {
   ContractPreparation,
@@ -120,6 +129,12 @@ const screens = {
   'task-detail': TaskDetail,
   'owner-home': OwnerHome,
   approvals: ApprovalCenter,
+  'owner-adjustments': OwnerAdjustmentListScreen,
+  'owner-adjustment-detail': OwnerAdjustmentReviewScreen,
+  'owner-payments': OwnerPaymentListScreen,
+  'owner-payment-detail': OwnerPaymentReviewScreen,
+  'owner-announcements': OwnerAnnouncementScreen,
+  'owner-finance': OwnerFinanceScreen,
   operations: Operations,
   'staff-home': StaffHome,
   'work-orders': WorkOrders,
@@ -207,7 +222,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           content = <OperationalTasksScreen />;
           break;
         case 'approvals':
-          content = <OperationalTasksScreen approvals />;
+          content = <OwnerApprovalCenterScreen />;
           break;
         case 'operations':
           content = <OwnerOperationsScreen />;
@@ -229,6 +244,14 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           break;
         case 'profile-edit':
           content = <ProfileEditScreen />;
+          break;
+        case 'owner-adjustments':
+        case 'owner-adjustment-detail':
+        case 'owner-payments':
+        case 'owner-payment-detail':
+        case 'owner-announcements':
+        case 'owner-finance':
+          content = <Screen />;
           break;
         case 'incident-detail':
         case 'incident-inbox':

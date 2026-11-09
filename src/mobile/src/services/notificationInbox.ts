@@ -105,6 +105,11 @@ export async function notificationDestination(
     if (!adjustment || !validId(adjustment.invoiceId)) throw invalid();
     return { screen: 'invoice', params: { invoiceId: adjustment.invoiceId } };
   }
+  if (target.objectType === 'Adjustment' && role === 'Owner')
+    return {
+      screen: 'owner-adjustment-detail',
+      params: { adjustmentId: target.objectId },
+    };
   if (target.objectType === 'Contract' && role !== 'Staff')
     return {
       screen: role === 'Tenant' ? 'contract' : 'signing',
@@ -113,6 +118,12 @@ export async function notificationDestination(
   if (target.objectType === 'MeterTask' && role === 'Staff') return { meterId: target.objectId };
   if (target.objectType === 'OperationalTask' && role !== 'Tenant')
     return { screen: 'task-detail', params: { taskId: target.objectId } };
+  if (target.objectType === 'Incident')
+    return { screen: 'incident-detail', params: { incidentId: target.objectId } };
+  if (target.objectType === 'WorkOrder' && role !== 'Tenant')
+    return { screen: 'maintenance-detail', params: { workOrderId: target.objectId } };
+  if (target.objectType === 'PaymentTransaction' && role === 'Owner')
+    return { screen: 'owner-payment-detail', params: { paymentId: target.objectId } };
   return null; // The related record may only have an Owner Web destination.
 }
 export function hasNotificationTarget(item: NotificationItem) {
