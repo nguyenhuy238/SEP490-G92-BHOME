@@ -107,6 +107,33 @@ it('edits only a Draft with its loaded version and retains exact defaults', asyn
     data: { referenceRent: '12345678901234.0001' },
   });
 });
+it('accepts safe integer response quantities and writes them back as decimal strings', async () => {
+  state.request.mockImplementation(async (path: string, init?: RequestInit) =>
+    init?.method
+      ? doc
+      : path.startsWith(base + '?')
+        ? {
+            items: [
+              {
+                ...doc,
+                status: 'Draft',
+                data: { capacity: 3, area: 25, amenities: [], referenceRent: 3500000 },
+              },
+            ],
+            total: 1,
+          }
+        : reads(path),
+  );
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Sửa' }));
+  expect(screen.getByLabelText(/Diện tích/)).toHaveValue('25');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path === base + '/' + doc.id && init?.method === 'PUT',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({ area: '25', referenceRent: '3500000' });
+});
 it('duplicates a persisted edition with a distinct name and concurrency version', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Nhân bản' }));

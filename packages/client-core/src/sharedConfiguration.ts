@@ -1,4 +1,4 @@
-import type { SetupDocument } from './propertySetup';
+import type { DecimalValue, SetupDocument } from './propertySetup';
 
 export type SharedResource =
   | 'room-type-templates'
@@ -8,14 +8,14 @@ export type SharedResource =
   | 'policy-templates';
 export interface RoomTemplateData {
   capacity: number;
-  area: string;
+  area: DecimalValue;
   amenities: string[];
-  referenceRent: string | null;
+  referenceRent: DecimalValue | null;
 }
 export interface AssetCatalogData {
   category: string;
   unit: string;
-  referencePrice: string;
+  referencePrice: DecimalValue;
 }
 export interface SharedAssetItem {
   catalogId: string;
@@ -32,7 +32,7 @@ export interface FeeTemplateData {
   category: string;
   chargeCode: string;
   method: string;
-  referenceRate: string;
+  referenceRate: DecimalValue;
   unit: string;
   scope: 'Location' | 'Room';
   effectiveFrom: string;

@@ -16,6 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import type {
+  AssetCatalogData,
   SharedAssetItem,
   SharedDocument,
   SharedResource,
@@ -237,11 +238,7 @@ export function SharedTemplateEditor({
                         required: true,
                         trackingMode: 'Serialized',
                         catalog: {
-                          ...(selected.data as {
-                            category: string;
-                            unit: string;
-                            referencePrice: string;
-                          }),
+                          ...(selected.data as AssetCatalogData),
                           familyId: selected.familyId,
                           edition: selected.edition,
                           name: selected.name,
