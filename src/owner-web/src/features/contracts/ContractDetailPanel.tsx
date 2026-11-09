@@ -379,7 +379,7 @@ export function ContractDetailPanel({
         </AccordionDetails>
       </Accordion>
       <ContractWorkflowPanel api={api} contract={c} />
-      {typeof api.transport === 'function' && (
+      {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel
           api={api}
           contract={c}

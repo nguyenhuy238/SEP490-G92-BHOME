@@ -59,6 +59,23 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('sends supported residence filters and rejects a stale response after a filter change', async () => {
+  const api = residenceClient(state.transport);
+  const { result, rerender } = renderHook(
+    ({ location, status }) => useResidenceList(api, location, status),
+    {
+      initialProps: { location: task.locationId, status: 'Pending' },
+    },
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(state.transport.mock.calls.at(-1)?.[0]).toContain(
+    `locationId=${task.locationId}&status=Pending`,
+  );
+  rerender({ location: task.locationId, status: 'Completed' });
+  expect(result.current.data).toBeNull();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(state.transport.mock.calls.at(-1)?.[0]).toContain('status=Completed');
+});
 it('marks a list refresh as loading, keeps same-page data and ignores an aborted page response', async () => {
   const api = residenceClient(state.transport);
   const { result } = renderHook(() => useResidenceList(api));
