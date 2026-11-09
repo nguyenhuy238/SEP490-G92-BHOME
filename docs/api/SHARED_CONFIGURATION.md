@@ -51,3 +51,21 @@ explicit local change through its existing configuration workflow.
 
 Storage and ownership: see the shared configuration persistence decision. Staff,
 Tenant and anonymous requests cannot access the shared namespace.
+
+## Location configuration copy
+
+Owner-only POST `/api/v1/location-configuration/copy-preview` and `/copy` accept
+sourceLocationId, targetLocationId, groups, conflictStrategy Reject. Supported groups
+are RoomDefaults, AssetTemplates, FeePolicies and OperatingPolicies. Source and target
+must be distinct active Locations. Preview returns changes, conflicts, unsupported
+references, sourceState, targetState and canProceed. Execution requires both state
+hashes and a UUID Idempotency-Key; all selected writes and provenance commit together.
+
+FeePolicies additionally requires an explicit current/future effectiveFrom. It copies
+only source policies effective on that date, retaining their end dates and exact rates,
+and starts the independent target policies on the selected date. Empty source groups,
+overlapping target charges and repeated configuration names are reported as conflicts.
+Room-scoped fees require mapping and are explicitly rejected by this operation.
+Assets and policies copy as Drafts. Room defaults remain reference data. Source IDs and
+versions are captured by the confirmed source-state hash and operation provenance.
+No Tenant, contract, financial transaction, physical Asset, meter or evidence is copied.
