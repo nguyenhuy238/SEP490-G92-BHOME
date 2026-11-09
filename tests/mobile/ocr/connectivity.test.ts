@@ -350,7 +350,7 @@ it('distinguishes empty, populated, failed and malformed contract list responses
   });
 });
 it('loads Owner overview from paginated server counts, including real zero counts', async () => {
-  const totals = [2, 40, 30, 0];
+  const totals = [2, 40, 30, 10, 0];
   const fetcher = vi
     .fn<typeof fetch>()
     .mockImplementation(
@@ -360,9 +360,12 @@ it('loads Owner overview from paginated server counts, including real zero count
     locations: 2,
     rooms: 40,
     occupiedRooms: 30,
+    availableRooms: 10,
+    operationalOccupancyRate: 75,
     contracts: 0,
   });
   expect(fetcher.mock.calls[2]?.[0]).toContain('roomStatus=2');
+  expect(fetcher.mock.calls[3]?.[0]).toContain('roomStatus=0');
   expect(
     fetcher.mock.calls.every(
       ([, init]) => new Headers(init?.headers).get('Authorization') === 'Bearer synthetic-access',

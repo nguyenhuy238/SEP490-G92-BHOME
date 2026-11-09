@@ -39,8 +39,11 @@ import {
   roomSummary,
 } from './model';
 import { usePropertyMutation } from './usePropertyMutation';
+import { isMockMode } from '../../services/config';
+import { PropertyApiPage, RoomApiDetails } from './PropertyApiPages';
 
 export function Rooms() {
+  if (!isMockMode) return <PropertyApiPage kind="rooms" />;
   return <PropertyBoundary>{(db) => <RoomsContent db={db} />}</PropertyBoundary>;
 }
 function RoomsContent({ db }: { db: DemoDatabase }) {
@@ -505,6 +508,7 @@ function RoomOverview({ db, room }: { db: DemoDatabase; room: PortalRecord }) {
 }
 
 export function CreateRooms() {
+  if (!isMockMode) return <PropertyApiPage kind="rooms" createInitially />;
   return <PropertyBoundary>{(db) => <RoomWizard db={db} />}</PropertyBoundary>;
 }
 function RoomWizard({ db }: { db: DemoDatabase }) {
@@ -769,6 +773,7 @@ const detailTabs = [
   'Đầu tư & Chi phí',
 ];
 export function RoomDetail() {
+  if (!isMockMode) return <RoomApiDetails />;
   return <PropertyBoundary>{(db) => <RoomDetailContent db={db} />}</PropertyBoundary>;
 }
 function RoomDetailContent({ db }: { db: DemoDatabase }) {

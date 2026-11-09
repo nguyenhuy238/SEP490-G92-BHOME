@@ -25,6 +25,28 @@ internal static class LocalDevelopmentCli
                 return 1;
             }
         }
+        if (args.Length is 1 or 2 && args[0] == "seed-notification-inbox" &&
+            (args.Length == 1 || args[1] == "--preview"))
+        {
+            try
+            {
+                var settings = new ConfigurationBuilder()
+                    .AddJsonFile(Path.GetFullPath("src/backend/BHome.Api/appsettings.Development.json"), optional: false)
+                    .AddEnvironmentVariables().Build();
+                var setup = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(settings);
+                setup.AddInfrastructure(settings);
+                setup.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
+                await using var seedProvider = setup.BuildServiceProvider();
+                await NotificationInboxSeed.RunAsync(seedProvider, args.Length == 2);
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error is LocalTestAccountException ? error.Message :
+                    $"Notification seed failed ({error.GetType().Name}); no credentials or row data printed.");
+                return 1;
+            }
+        }
         var sharedSeed = args.SequenceEqual(new[] { "seed-shared-development-data" });
         if (sharedSeed || args.Length is 1 or 2 && args[0] == "seed-development-data" &&
             (args.Length == 1 || args[1] == "--set-sample-passwords"))

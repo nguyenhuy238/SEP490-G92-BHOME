@@ -36,6 +36,11 @@ internal static class LegacyPersistenceRegistration
         // The explicit legacy regression host must not resolve those adapters through ordinary
         // controllers such as InvoiceService; their constructor ports are optional there.
         services.RemoveAll<ISetupWorkspaceStore>();
+        services.RemoveAll<ISharedConfigurationStore>();
+        services.RemoveAll<ISharedDataValidator>();
+        services.RemoveAll<SharedConfigurationService>();
+        services.RemoveAll<SharedConfigurationApplicationService>();
+        services.RemoveAll<LocationConfigurationCopyService>();
         services.RemoveAll<AssetInventoryService>();
         services.RemoveAll<SetupEvidenceService>();
         services.RemoveAll<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();

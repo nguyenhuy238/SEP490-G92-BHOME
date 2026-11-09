@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -31,6 +32,17 @@ import { AlertTriangle, BadgeDollarSign, Coins, Edit2, Plus, Scale } from 'lucid
 import type { DemoDatabase, PortalRecord } from '../../../../types/portal';
 import { INITIAL_FEE_POLICIES, INITIAL_ROOM_TYPES } from '../../mock/locationConfigMock';
 import type { FeePolicyItem } from '../../types/locationConfig';
+import { isMockMode } from '../../../../services/config';
+import { usePortal } from '../../../../app/PortalProvider';
+import { propertyError } from '../../../property-api/propertyApi';
+import {
+  useLocationConfigurationApi,
+  type BillingPolicyDto,
+  type BillingPolicyWrite,
+} from '../../api/locationConfigurationApi';
+
+const currentBusinessDate = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
 
 interface LocationPricingTabProps {
   db: DemoDatabase;
@@ -59,7 +71,64 @@ const EMPTY_FEE: FeePolicyItem = {
   isRegulatoryControlled: false,
 };
 
+const enumValue = (value: number | string) =>
+  typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : value;
+
+const policyCategory = (policy: BillingPolicyDto) => enumValue(policy.category);
+
+const toFee = (policy: BillingPolicyDto): FeePolicyItem => {
+  const category = policyCategory(policy);
+  const type: FeePolicyItem['type'] =
+    category === 1 || category === 'Electricity'
+      ? 'ELECTRICITY'
+      : category === 2 || category === 'Water'
+        ? 'WATER'
+        : policy.chargeCode.includes('INTERNET')
+          ? 'INTERNET'
+          : policy.chargeCode.includes('PARKING')
+            ? 'PARKING'
+            : 'OTHER';
+  return {
+    id: policy.id,
+    name: policy.name,
+    type,
+    calculationMethod:
+      type === 'ELECTRICITY' ? 'PER_KWH' : type === 'WATER' ? 'PER_M3' : 'PER_ROOM',
+    unitPrice: Number(policy.rate),
+    unit:
+      type === 'ELECTRICITY' ? 'VND / kWh' : type === 'WATER' ? 'VND / m³' : 'VND / phòng / tháng',
+    applicationScope: policy.roomId ? 'PER_ROOM' : 'LOCATION_WIDE',
+    effectiveDate: policy.effectiveFrom,
+    description: '',
+    isRegulatoryControlled: type === 'ELECTRICITY' || type === 'WATER',
+  };
+};
+
+const feeWrite = (locationId: string, fee: FeePolicyItem): BillingPolicyWrite => {
+  const category = fee.type === 'ELECTRICITY' ? 1 : fee.type === 'WATER' ? 2 : 3;
+  return {
+    locationId,
+    roomId: null,
+    category,
+    chargeCode:
+      fee.type === 'ELECTRICITY'
+        ? 'ELECTRICITY'
+        : fee.type === 'WATER'
+          ? 'WATER'
+          : `SERVICE_${fee.type}`,
+    name: fee.name.trim(),
+    method: fee.type === 'ELECTRICITY' || fee.type === 'WATER' ? 1 : 0,
+    rate: String(fee.unitPrice),
+    effectiveFrom: fee.effectiveDate,
+    effectiveTo: null,
+    reason: fee.description.trim() || 'Cập nhật biểu phí từ Owner Web',
+  };
+};
+
 export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
+  const portal = usePortal();
+  const api = useLocationConfigurationApi();
+  const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab] = useState<'rates' | 'fees'>('rates');
 
   // Room rates state
@@ -71,21 +140,41 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
         floor: room.attributes.floor || '1',
         category: room.category,
       }))
-    : [
-        { id: 'r-1', code: 'P.101', floor: '1', category: 'type-studio' },
-        { id: 'r-2', code: 'P.102', floor: '1', category: 'type-studio' },
-        { id: 'r-3', code: 'P.201', floor: '2', category: 'type-mezzanine' },
-        { id: 'r-4', code: 'P.202', floor: '2', category: 'type-mezzanine' },
-        { id: 'r-5', code: 'P.301', floor: '3', category: 'type-1br' },
-      ];
+    : isMockMode
+      ? [
+          { id: 'r-1', code: 'P.101', floor: '1', category: 'type-studio' },
+          { id: 'r-2', code: 'P.102', floor: '1', category: 'type-studio' },
+          { id: 'r-3', code: 'P.201', floor: '2', category: 'type-mezzanine' },
+          { id: 'r-4', code: 'P.202', floor: '2', category: 'type-mezzanine' },
+          { id: 'r-5', code: 'P.301', floor: '3', category: 'type-1br' },
+        ]
+      : [];
 
-  const [rateOverrides, setRateOverrides] = useState<Record<string, number>>({
-    'P.202': 7200000,
-  });
+  const [rateOverrides, setRateOverrides] = useState<Record<string, number>>(
+    isMockMode ? { 'P.202': 7200000 } : {},
+  );
 
   // Fee Policies
-  const [feePolicies, setFeePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
+  const [mockFeePolicies, setMockFeePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
   const [editingFee, setEditingFee] = useState<FeePolicyItem | null>(null);
+
+  const policyQuery = useQuery({
+    queryKey: ['billing-policies', location.id],
+    queryFn: ({ signal }) => api.billingPolicies(location.id, signal),
+    enabled: !isMockMode && Boolean(location.id),
+  });
+  const policyMutation = useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['billing-policies', location.id] });
+      portal.notify('Đã lưu biểu phí vào Backend.');
+    },
+    onError: (error) => portal.notify(propertyError(error), true),
+  });
+  const apiPolicies = policyQuery.data?.items ?? [];
+  const feePolicies = isMockMode
+    ? mockFeePolicies
+    : apiPolicies.filter((policy) => ![0, 'Rent'].includes(policyCategory(policy))).map(toFee);
 
   // Estimator preview
   const [previewKwh, setPreviewKwh] = useState<number>(140);
@@ -97,6 +186,35 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
   const handleSaveOverride = () => {
     if (overrideTargetRoom) {
+      if (!isMockMode) {
+        const room = rooms.find((item) => item.code === overrideTargetRoom);
+        if (!room) {
+          portal.notify('Không tìm thấy phòng trong dữ liệu Backend.', true);
+          return;
+        }
+        const existing = apiPolicies.find(
+          (policy) => policy.roomId === room.id && [0, 'Rent'].includes(policyCategory(policy)),
+        );
+        const input: BillingPolicyWrite = {
+          locationId: location.id,
+          roomId: room.id,
+          category: 0,
+          chargeCode: 'RENT',
+          name: `Giá thuê phòng ${room.code}`,
+          method: 0,
+          rate: String(overrideValue),
+          effectiveFrom: currentBusinessDate(),
+          effectiveTo: null,
+          reason: 'Điều chỉnh giá thuê riêng từ Owner Web',
+        };
+        policyMutation.mutate(() =>
+          existing
+            ? api.replaceBillingPolicy(existing.id, input, existing.version)
+            : api.createBillingPolicy(input),
+        );
+        setOverrideTargetRoom(null);
+        return;
+      }
       setRateOverrides((prev) => ({ ...prev, [overrideTargetRoom]: overrideValue }));
       setOverrideTargetRoom(null);
     }
@@ -104,12 +222,24 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
   const handleSaveFee = () => {
     if (!editingFee || !editingFee.name.trim() || editingFee.unitPrice < 0) return;
+    if (!isMockMode) {
+      const existing = apiPolicies.find((policy) => policy.id === editingFee.id);
+      const input = feeWrite(location.id, editingFee);
+      policyMutation.mutate(
+        () =>
+          existing
+            ? api.replaceBillingPolicy(existing.id, input, existing.version)
+            : api.createBillingPolicy(input),
+        { onSuccess: () => setEditingFee(null) },
+      );
+      return;
+    }
     const savedFee = {
       ...editingFee,
       id: editingFee.id || `fee-${Date.now()}`,
       name: editingFee.name.trim(),
     };
-    setFeePolicies((current) => {
+    setMockFeePolicies((current) => {
       const exists = current.some((fee) => fee.id === savedFee.id);
       return exists
         ? current.map((fee) => (fee.id === savedFee.id ? savedFee : fee))
@@ -127,6 +257,13 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
         ['FIXED_AMOUNT', 'PER_ROOM', 'PER_BILLING_PERIOD'].includes(fee.calculationMethod),
     )
     .reduce((sum, fee) => sum + fee.unitPrice, 0);
+  const locationRentEstimate = isMockMode
+    ? 5_500_000
+    : Number(
+        apiPolicies.find(
+          (policy) => [0, 'Rent'].includes(policyCategory(policy)) && policy.roomId === null,
+        )?.rate ?? 0,
+      );
 
   return (
     <Box>
@@ -166,6 +303,12 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
       {/* VIEW 1: Rental Rates Hierarchy */}
       {activeSubTab === 'rates' && (
         <Box>
+          {!isMockMode && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Backend chưa có API loại phòng, vì vậy cột loại phòng chỉ hiển thị khi dữ liệu thật có
+              RoomTypeId. Giá thuê được đọc từ Billing Policy thực tế.
+            </Alert>
+          )}
           <Alert severity="info" icon={<Scale size={18} />} sx={{ mb: 2.5, borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
               Cơ chế phân cấp định giá phòng
@@ -196,8 +339,23 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                   const rType = INITIAL_ROOM_TYPES.find(
                     (t) => t.id === (room.category || 'type-studio'),
                   );
-                  const defaultRate = rType?.defaultRate || 5500000;
-                  const override = rateOverrides[room.code];
+                  const locationRent = apiPolicies.find(
+                    (policy) =>
+                      [0, 'Rent'].includes(policyCategory(policy)) && policy.roomId === null,
+                  );
+                  const roomRent = apiPolicies.find(
+                    (policy) =>
+                      [0, 'Rent'].includes(policyCategory(policy)) && policy.roomId === room.id,
+                  );
+                  const defaultRate = isMockMode
+                    ? rType?.defaultRate || 5500000
+                    : Number(locationRent?.rate ?? 0);
+                  const localOverride = rateOverrides[room.code];
+                  const override = isMockMode
+                    ? localOverride
+                    : roomRent
+                      ? Number(roomRent.rate)
+                      : undefined;
                   const isOverridden = override !== undefined;
                   const appliedRate = isOverridden ? override : defaultRate;
 
@@ -208,7 +366,9 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       <TableCell>
                         <Chip
                           size="small"
-                          label={rType?.name || 'Studio'}
+                          label={
+                            rType?.name || (room.category ? room.category : 'Chưa có loại phòng')
+                          }
                           sx={{ fontWeight: 700 }}
                         />
                       </TableCell>
@@ -229,7 +389,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                         />
                       </TableCell>
                       <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
-                        2026-01-01
+                        {roomRent?.effectiveFrom || locationRent?.effectiveFrom || '—'}
                       </TableCell>
                       <TableCell>
                         <Button
@@ -256,6 +416,26 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
       {/* VIEW 2: Fee Policies */}
       {activeSubTab === 'fees' && (
         <Box>
+          {!isMockMode && policyQuery.isPending && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Đang tải biểu phí từ Backend...
+            </Alert>
+          )}
+          {!isMockMode && policyQuery.isError && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              action={<Button onClick={() => void policyQuery.refetch()}>Thử lại</Button>}
+            >
+              {propertyError(policyQuery.error)}
+            </Alert>
+          )}
+          {!isMockMode && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              API Billing Policy hiện hỗ trợ phạm vi toàn cơ sở hoặc từng phòng; chưa hỗ trợ mẫu phí
+              cấp chuỗi và phạm vi theo loại phòng.
+            </Alert>
+          )}
           {/* Statutory Tariff Alert */}
           <Alert
             severity="warning"
@@ -391,7 +571,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       Tiền thuê phòng Studio:
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      5.500.000 VND
+                      {locationRentEstimate.toLocaleString()} VND
                     </Typography>
                   </Stack>
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -428,7 +608,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                     </Typography>
                     <Typography variant="subtitle1" sx={{ fontWeight: 850, color: 'primary.main' }}>
                       {(
-                        5500000 +
+                        locationRentEstimate +
                         previewKwh * (electricityFee?.unitPrice || 0) +
                         previewM3 * (waterFee?.unitPrice || 0) +
                         fixedServiceTotal
@@ -570,6 +750,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                     select
                     label="Phạm vi áp dụng"
                     value={editingFee.applicationScope}
+                    disabled={!isMockMode}
                     onChange={(event) =>
                       setEditingFee({
                         ...editingFee,
@@ -630,7 +811,9 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               </Button>
               <Button
                 variant="contained"
-                disabled={!editingFee.name.trim() || !editingFee.effectiveDate}
+                disabled={
+                  !editingFee.name.trim() || !editingFee.effectiveDate || policyMutation.isPending
+                }
                 onClick={handleSaveFee}
               >
                 Lưu cấu hình

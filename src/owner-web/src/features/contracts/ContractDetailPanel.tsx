@@ -43,6 +43,7 @@ import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
+import { ContractPolicyPanel } from './ContractPolicyPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -366,6 +367,17 @@ export function ContractDetailPanel({
         </AccordionDetails>
       </Accordion>
       <ContractWorkflowPanel api={api} contract={c} />
+      {typeof api.transport === 'function' && (
+        <ContractPolicyPanel
+          api={api}
+          contract={c}
+          actorId={actorId}
+          onChanged={(next) => {
+            detail.reload();
+            onChanged(next);
+          }}
+        />
+      )}
 
       {['Active', 'Terminated', 'Superseded'].includes(c.status) && (
         <ContractHandoverPanel api={api} id={c.id} />

@@ -167,6 +167,17 @@ it('preserves a session on a temporary refresh outage instead of pretending logo
   expect(client.token).toBe('access-one');
 });
 
+it('preserves the session when server logout fails so reload cannot masquerade as signed out', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValueOnce(json(session)).mockResolvedValueOnce(json({}, 503)),
+  );
+  const client = new SessionClient('https://api.example.invalid', 'web');
+  await client.login('synthetic@example.invalid', 'test-password');
+  await expect(client.logout()).rejects.toMatchObject({ status: 503 });
+  expect(client.session).toMatchObject({ accessToken: 'access-one' });
+});
+
 it('stops after one refresh and one retry when the protected API still returns 401', async () => {
   const fetchMock = vi
     .fn()

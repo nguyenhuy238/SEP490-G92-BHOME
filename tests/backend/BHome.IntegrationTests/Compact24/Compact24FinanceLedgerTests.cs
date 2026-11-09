@@ -43,7 +43,7 @@ public sealed class Compact24FinanceLedgerTests
                 await db.SaveChangesAsync();
             }
             using var client = fixture.Capture.Factory.CreateClient();
-            var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = "Synthetic-Payment-Test!123" }); login.EnsureSuccessStatusCode();
+            var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = WorkflowTestUsers.Password }); login.EnsureSuccessStatusCode();
             client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
             var response = await client.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());

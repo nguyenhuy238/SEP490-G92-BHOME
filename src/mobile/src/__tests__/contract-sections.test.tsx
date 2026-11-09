@@ -8,6 +8,7 @@ import { contractActionSection, groupContracts } from '../features/contracts/con
 const state = vi.hoisted(() => ({
   role: 'Staff',
   deep: true,
+  section: undefined as string | undefined,
   request: vi.fn(),
   contract: {} as Record<string, unknown>,
 }));
@@ -15,7 +16,7 @@ const id = 'bc050000-0000-4000-8000-000000004003';
 const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {} }));
 vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => (state.deep ? { contractId: id } : {}),
+  useLocalSearchParams: () => (state.deep ? { contractId: id, section: state.section } : {}),
   router: { setParams: vi.fn() },
 }));
 vi.mock('../lib/SessionProvider', () => ({
@@ -125,6 +126,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Staff';
   state.deep = true;
+  state.section = undefined;
   state.contract = {
     ...summary('Active'),
     id,
@@ -158,6 +160,21 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+
+it('opens the handover section directly for the selected Tenant contract', () => {
+  state.role = 'Tenant';
+  state.section = 'handover';
+  render(<ContractScreen />);
+  expect(screen.getByText('Handover panel')).toBeTruthy();
+  expect(screen.queryByText('Điều khoản đưa đi ký')).toBeNull();
+});
+it('ignores an invalid initial contract section', () => {
+  state.role = 'Tenant';
+  state.section = '../unknown';
+  render(<ContractScreen />);
+  expect(screen.getByText('Điều khoản đưa đi ký')).toBeTruthy();
+  expect(screen.queryByText('Handover panel')).toBeNull();
+});
 
 it('groups each contract exactly once and keeps closed renewals in history', () => {
   const items = [

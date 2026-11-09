@@ -32,7 +32,6 @@ import {
   Globe,
   KeyRound,
   LayoutDashboard,
-  LogOut,
   Menu,
   Package,
   Receipt,
@@ -52,11 +51,9 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { featureDefinitions } from '../../app/featureDefinitions';
 import { usePortal } from '../../app/PortalProvider';
 import { usePortalAction, usePortalData } from '../../hooks/usePortalData';
-import { demoAuth } from '../../services/demoAuth';
 import { isMockMode } from '../../services/config';
 import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
@@ -133,6 +130,7 @@ const navGroups = [
 ] as const;
 const navLabels: Record<string, string> = {
   dashboard: 'Tổng quan',
+  account: 'Tài khoản',
   notifications: 'Thông báo',
   locations: 'Cơ sở',
   'configuration/room-types': 'Mẫu loại phòng',
@@ -171,7 +169,6 @@ export function AppShell() {
   const { data } = usePortalData();
   const portal = usePortal();
   const action = usePortalAction();
-  const { client } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const current = location.pathname.split('/')[1] || 'dashboard';
@@ -402,31 +399,24 @@ export function AppShell() {
               </IconButton>
             </Tooltip>
           )}
-          <Tooltip title="Đăng xuất">
+          <Tooltip title="Quản lý tài khoản">
             <IconButton
-              aria-label="Đăng xuất"
-              onClick={() =>
-                action.mutate(async () => {
-                  if (isMockMode) await demoAuth.logout();
-                  else await client.logout();
-                  navigate('/login');
-                })
-              }
+              aria-label="Mở quản lý tài khoản"
+              onClick={() => navigate('/account/profile')}
+              sx={{ p: 0.5 }}
             >
-              <LogOut size={18} />
+              <Avatar
+                sx={{
+                  width: 30,
+                  height: 30,
+                  fontSize: 12,
+                  bgcolor: 'primary.main',
+                }}
+              >
+                NH
+              </Avatar>
             </IconButton>
           </Tooltip>
-          <Avatar
-            sx={{
-              width: 30,
-              height: 30,
-              fontSize: 12,
-              bgcolor: 'primary.main',
-              display: { xs: 'none', sm: 'flex' },
-            }}
-          >
-            NH
-          </Avatar>
         </Paper>
         <Box sx={{ px: { xs: 2, md: 4 }, py: 3.5, maxWidth: 1480, mx: 'auto' }}>
           <Breadcrumbs sx={{ fontSize: 10, mb: 1 }}>

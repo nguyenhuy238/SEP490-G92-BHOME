@@ -10,9 +10,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -27,12 +27,12 @@ jobs:
       - run: dotnet test src/backend/BHome.sln -c Release --no-build --logger trx
       - run: dotnet format src/backend/BHome.sln --verify-no-changes --no-restore
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       VITE_API_BASE_URL: https://api.example.com
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
