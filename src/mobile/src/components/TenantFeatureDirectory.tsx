@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+﻿import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button } from 'react-native-paper';
-import { DashboardHeading, dashboardStyles } from './DashboardKit';
-import { StaffFeatureCard } from './StaffFeatureCard';
+import { Icon, Text, TouchableRipple } from 'react-native-paper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import type { WorkspaceScreen } from '../features/workspace/navigation';
-import { staffColors as s } from '../theme/theme';
-
+import { colors as c, staffColors as s } from '../theme/theme';
+import { typography } from '../theme/typography';
+import { featureCardLayout } from './FeatureCardLayout';
 export const tenantFeatureGroups: {
   title: string;
   items: {
@@ -15,7 +14,6 @@ export const tenantFeatureGroups: {
     icon: string;
     screen: WorkspaceScreen;
     params?: Record<string, string>;
-    status?: string;
   }[];
 }[] = [
   {
@@ -44,7 +42,6 @@ export const tenantFeatureGroups: {
         detail: 'Hướng dẫn & kết quả',
         icon: 'card-account-details-outline',
         screen: 'residence',
-        status: 'Chưa lưu được kết quả',
       },
     ],
   },
@@ -88,76 +85,136 @@ export const tenantFeatureGroups: {
         detail: 'Mô tả & ảnh hiện trường',
         icon: 'wrench-outline',
         screen: 'incidents',
-        status: 'Chưa hỗ trợ gửi',
       },
       {
         title: 'Yêu cầu của tôi',
         detail: 'Theo dõi tiến độ xử lý',
         icon: 'clipboard-text-outline',
         screen: 'tenant-requests',
-        status: 'Chưa có dữ liệu máy chủ',
       },
     ],
   },
 ];
 
-export function TenantFeatureDirectory({ contractId }: { contractId?: string }) {
+export function TenantFeatureDirectory({
+  contractId,
+  all = false,
+}: {
+  contractId?: string;
+  all?: boolean;
+}) {
   const { go } = useWorkspace();
-  const [expanded, setExpanded] = useState(false);
+  const groups = all
+    ? tenantFeatureGroups
+    : [
+        {
+          title: 'Tiện ích cư dân',
+          items: [
+            tenantFeatureGroups[0].items[0],
+            tenantFeatureGroups[1].items[0],
+            ...tenantFeatureGroups[2].items,
+          ],
+        },
+      ];
   return (
-    <>
-      <Button
-        mode="outlined"
-        icon={expanded ? 'chevron-up' : 'view-grid-outline'}
-        onPress={() => setExpanded(!expanded)}
-        accessibilityState={{ expanded }}
-      >
-        {expanded ? 'Thu gọn chức năng' : 'Tất cả chức năng'}
-      </Button>
-      {(expanded
-        ? tenantFeatureGroups
-        : [
-            {
-              title: 'TIỆN ÍCH CƯ DÂN',
-              items: [
-                tenantFeatureGroups[0].items[0],
-                tenantFeatureGroups[1].items[0],
-                ...tenantFeatureGroups[2].items,
-              ],
-            },
-          ]
-      ).map((group) => (
-        <View key={group.title} style={dashboardStyles.section}>
-          <DashboardHeading title={group.title} />
-          <View style={styles.grid}>
-            {group.items.map((item) => (
-              <View key={item.title} style={styles.cell}>
-                <StaffFeatureCard
-                  compact
-                  title={item.title}
-                  description={item.detail}
-                  icon={item.icon}
-                  color={s.blue}
-                  background={s.blueSoft}
-                  status={item.status}
-                  onPress={() => {
-                    const params =
-                      contractId && ['contract', 'checklist'].includes(item.screen)
-                        ? { ...item.params, contractId }
-                        : item.params;
-                    if (params) go(item.screen, params);
-                    else go(item.screen);
-                  }}
-                />
-              </View>
-            ))}
-          </View>
+    <View style={styles.directory}>
+      {groups.map((group) => (
+        <View key={group.title} style={styles.section}>
+          <Text accessibilityRole="header" style={styles.heading}>
+            {all
+              ? group.title.charAt(0) + group.title.slice(1).toLocaleLowerCase('vi-VN')
+              : group.title}
+          </Text>
+          {Array.from({ length: Math.ceil(group.items.length / 2) }, (_, row) => (
+            <View key={row} style={styles.row}>
+              {group.items.slice(row * 2, row * 2 + 2).map((item) => (
+                <View key={item.title} style={styles.tile}>
+                  <TouchableRipple
+                    style={featureCardLayout.ripple}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.title}
+                    onPress={() => {
+                      const params =
+                        contractId && ['contract', 'checklist'].includes(item.screen)
+                          ? { ...item.params, contractId }
+                          : item.params;
+                      if (params) go(item.screen, params);
+                      else go(item.screen);
+                    }}
+                  >
+                    <View style={styles.tileContent}>
+                      <View style={styles.iconBox}>
+                        <Icon source={item.icon} size={22} color={s.blue} />
+                      </View>
+                      <Text style={styles.title} numberOfLines={2}>
+                        {item.title}
+                      </Text>
+                    </View>
+                  </TouchableRipple>
+                </View>
+              ))}
+              {group.items.length % 2 === 1 && row === Math.floor(group.items.length / 2) && (
+                <View style={styles.spacer} />
+              )}
+            </View>
+          ))}
         </View>
       ))}
-    </>
+      {!all && (
+        <TouchableRipple
+          accessibilityRole="button"
+          accessibilityLabel="Xem tất cả chức năng"
+          style={styles.allLink}
+          onPress={() =>
+            contractId ? go('tenant-features', { contractId }) : go('tenant-features')
+          }
+        >
+          <View style={styles.linkRow}>
+            <Icon source="view-grid-outline" size={18} color={s.blue} />
+            <Text style={styles.linkText}>Xem tất cả chức năng</Text>
+            <Icon source="chevron-right" size={18} color={c.muted} />
+          </View>
+        </TouchableRipple>
+      )}
+    </View>
   );
 }
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  cell: { flexBasis: '45%', flexGrow: 1, maxWidth: '48%' },
+  directory: { gap: 12 },
+  section: { gap: 12 },
+  heading: { ...typography.sectionHeading, color: s.navy },
+  row: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
+  tile: {
+    ...featureCardLayout.surface,
+    minWidth: 0,
+    height: 112,
+    backgroundColor: c.white,
+  },
+  tileContent: {
+    ...featureCardLayout.content,
+    ...featureCardLayout.compact,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  iconBox: {
+    ...featureCardLayout.icon,
+    ...featureCardLayout.compactIcon,
+    backgroundColor: s.blueSoft,
+  },
+  title: {
+    ...typography.cardTitle,
+    textAlign: 'center',
+    color: s.navy,
+    flexShrink: 1,
+  },
+  spacer: { flex: 1, minWidth: 0 },
+  allLink: { borderRadius: 12 },
+  linkRow: {
+    minHeight: 48,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  linkText: { ...typography.link, flex: 1, color: s.blue },
 });

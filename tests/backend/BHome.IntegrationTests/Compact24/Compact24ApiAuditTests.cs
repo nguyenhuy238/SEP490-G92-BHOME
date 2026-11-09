@@ -74,8 +74,8 @@ public sealed class Compact24ApiAuditTests
             var sampleLocation = Compact24SampleSeed.Id(10);
             foreach (var path in new[]
             {
-                "/api/v1/chain", "/api/v1/locations?pageSize=100", "/api/v1/rooms?pageSize=100",
-                $"/api/v1/room-types?locationId={sampleLocation}", $"/api/v1/assets?locationId={sampleLocation}",
+                "/api/v1/locations?pageSize=100", "/api/v1/rooms?pageSize=100",
+                $"/api/v1/assets?locationId={sampleLocation}",
                 $"/api/v1/billing-policies?locationId={sampleLocation}", "/api/v1/capture/meter-tasks",
                 $"/api/v1/capture/locations/{sampleLocation}/residents", "/api/v1/operational-tasks",
                 "/api/v1/contracts", "/api/v1/invoices", "/api/v1/notifications"

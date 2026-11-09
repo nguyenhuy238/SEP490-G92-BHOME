@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { MobileSessions, type CredentialStore } from '../../../src/mobile/src/lib/sessions';
 import { errorMessage } from '../../../src/mobile/src/lib/api';
+import { queryPolicies } from '../../../src/mobile/src/lib/queryPolicies';
 function store() {
   let value: string | null = null;
   return {
@@ -18,6 +19,66 @@ const session = (n: string) => ({
   roles: ['Staff'],
   accessToken: 'access-' + n,
   refreshToken: 'refresh-' + n,
+});
+it('clears private query data on logout and never reuses a previous account cache', async () => {
+  const transport = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      String(url).endsWith('/logout')
+        ? new Response(null, { status: 204 })
+        : new Response(JSON.stringify(session('login'))),
+    );
+  const manager = new MobileSessions(store(), 'https://api.test', transport);
+  await manager.login('https://api.test', 'first@example.invalid', 'synthetic');
+  const old = manager.snapshot.api!;
+  const entry = old.queryCache.query(
+    'first',
+    '/api/v1/contracts',
+    queryPolicies.contracts,
+    async () => 'PRIVATE-FIRST',
+  );
+  await old.queryCache.fetch(entry);
+  await manager.logout();
+  expect(entry.state.hasData).toBe(false);
+  expect(manager.snapshot.api).toBeNull();
+  await manager.login('https://api.test', 'second@example.invalid', 'synthetic');
+  expect(manager.snapshot.api).not.toBe(old);
+  const next = manager.snapshot.api!.queryCache.query(
+    'second',
+    '/api/v1/contracts',
+    queryPolicies.contracts,
+    async () => 'second',
+  );
+  expect(next.state.hasData).toBe(false);
+  await manager.clear();
+});
+it('preserves a cache across token rotation but retires it when refreshed roles change', async () => {
+  let role = 'Staff';
+  const transport = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      String(url).includes('/health')
+        ? new Response('Healthy')
+        : new Response(JSON.stringify({ ...session('next'), roles: [role] })),
+    );
+  const manager = new MobileSessions(store(), 'https://api.test', transport);
+  await manager.login('https://api.test', 'staff@example.invalid', 'synthetic');
+  const original = manager.snapshot.api!;
+  const entry = original.queryCache.query(
+    'staff',
+    '/api/v1/capture/locations',
+    queryPolicies.rooms,
+    async () => 'PRIVATE-STAFF',
+  );
+  await original.queryCache.fetch(entry);
+  await manager.refresh();
+  expect(manager.snapshot.api).toBe(original);
+  expect(entry.state.hasData).toBe(true);
+  role = 'Tenant';
+  await manager.refresh();
+  expect(manager.snapshot.api).not.toBe(original);
+  expect(entry.state.hasData).toBe(false);
+  await manager.clear();
 });
 it('logs in using the email API contract and preserves the password exactly', async () => {
   const storage = store();

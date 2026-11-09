@@ -105,6 +105,9 @@ export interface DebtInvoice {
   outstandingAmount: string;
   paymentStatus: 'Paid' | 'Unpaid';
   overdueDays: number;
+  originalIssuedAmount?: string | null;
+  approvedAdjustmentTotal?: string | null;
+  potentialExcessAmount?: string | null;
 }
 export interface PaymentHistory {
   id: string;

@@ -14,7 +14,7 @@ namespace BHome.Application.PropertyManagement;
 
 public sealed class PropertyService(IPropertyRepository repository, ICurrentUser user,
     PermissionAccess access, TimeProvider clock, IRoomInsightsRepository? insights = null,
-    IAdministrativeContractReadiness? contractReadiness = null)
+    IAdministrativeContractReadiness? contractReadiness = null, IPropertyLifecycleChecks? lifecycle = null)
 {
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
         clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -152,8 +152,9 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             if (id.HasValue)
             {
                 CheckVersion(x.Version, input.Version);
+                if (x.IsActive && !input.IsActive && lifecycle is not null && !(await lifecycle.ClosureAsync(x.Id, t)).CanClose)
+                    throw Error(409, "location_closure_blocked");
                 if (x.IsActive && !input.IsActive && (await repository.AnyAsync<Room>(r => r.LocationId == x.Id && r.Status != RoomStatus.Unavailable, t) ||
-                    await repository.AnyAsync<Resident>(r => r.Room.LocationId == x.Id, t) ||
                     (await repository.ObligationsAsync(x.Id, null, Today, t)).PreventsConfigurationChange))
                     throw Error(409, "location_has_operational_rooms");
                 x.Version++;
@@ -417,13 +418,26 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             else if (!data.HasElectricityBaseline) Block("ELECTRICITY_BASELINE_MISSING", "The electricity baseline has not been confirmed.");
             if (!data.HasWaterMeter) Block("WATER_METER_MISSING", "An active water meter is required.");
             else if (!data.HasWaterBaseline) Block("WATER_BASELINE_MISSING", "The water baseline has not been confirmed.");
-            unverified.Add(new("SAFETY_INCIDENT_DATA_UNAVAILABLE",
-                "The current data model cannot verify unresolved safety incidents for this Room."));
+            if (lifecycle is null) unverified.Add(new("SAFETY_INCIDENT_DATA_UNAVAILABLE",
+                "Safety incident evidence is unavailable."));
         }
+        if (lifecycle is not null)
+            foreach (var code in await lifecycle.RoomBlockersAsync(roomId, t)) Block(code.ToUpperInvariant(), "An unresolved operational restriction prevents use of this Room.");
         var status = blockers.Count > 0 ? "Blocked" : unverified.Count > 0 ? "Indeterminate" : "Ready";
         return new(roomId, purpose.ToString(), status, status == "Ready", date, clock.GetUtcNow(),
             blockers.DistinctBy(x => x.Code).ToArray(), warnings.DistinctBy(x => x.Code).ToArray(),
             unverified.DistinctBy(x => x.Code).ToArray());
+    }
+
+    public async Task<LocationClosureCheck> ClosureCheckAsync(Guid locationId, CancellationToken t)
+    {
+        Require(Permissions.Property.Manage); await LocationAsync(locationId, true, t);
+        return await (lifecycle ?? throw new InvalidOperationException("Lifecycle checks are unavailable.")).ClosureAsync(locationId, t);
+    }
+    public async Task<StaffChangePreview> StaffChangePreviewAsync(Guid locationId, CancellationToken t)
+    {
+        Require(Permissions.Property.Manage); await LocationAsync(locationId, true, t);
+        return await (lifecycle ?? throw new InvalidOperationException("Lifecycle checks are unavailable.")).StaffChangeAsync(locationId, t);
     }
 
     public async Task<RoomHistoryPage> RoomHistoryAsync(Guid roomId, RoomHistoryQuery query, CancellationToken t)

@@ -1,6 +1,9 @@
+import type { Href } from 'expo-router';
+
 export type MobileRole = 'Owner' | 'Staff' | 'Tenant';
 export const screenRoles = {
   'incident-detail': ['Owner', 'Staff', 'Tenant'],
+  'incident-inbox': ['Owner', 'Staff', 'Tenant'],
   'maintenance-detail': ['Owner', 'Staff'],
   'staff-incidents': ['Staff'],
   'owner-incidents': ['Owner'],
@@ -27,6 +30,7 @@ export const screenRoles = {
   'work-orders': ['Staff'],
   'meter-reading': ['Staff'],
   'tenant-home': ['Tenant'],
+  'tenant-features': ['Tenant'],
   'tenant-room': ['Tenant'],
   'tenant-requests': ['Tenant'],
   'tenant-meters': ['Tenant'],
@@ -35,6 +39,7 @@ export const screenRoles = {
   contract: ['Tenant'],
   checklist: ['Tenant'],
   profile: ['Owner', 'Staff', 'Tenant'],
+  'profile-edit': ['Owner', 'Staff', 'Tenant'],
   notifications: ['Owner', 'Staff', 'Tenant'],
   'send-notification': ['Staff'],
   'staff-assets': ['Staff'],
@@ -93,11 +98,12 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
   };
 
 export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): WorkspaceScreen {
+  if (screen === 'profile-edit') return 'profile';
   if (role === 'Tenant') {
     if (['profile', 'security', 'preferences'].includes(screen)) return 'profile';
     if (['invoice', 'billing-history', 'adjustment', 'tenant-meters'].includes(screen))
       return 'invoice';
-    if (['incidents', 'tenant-requests', 'incident-detail'].includes(screen))
+    if (['incidents', 'tenant-requests', 'incident-detail', 'incident-inbox'].includes(screen))
       return 'tenant-requests';
     return 'tenant-home';
   }
@@ -113,6 +119,7 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
         'staff-emergencies',
         'staff-incidents',
         'incident-detail',
+        'incident-inbox',
         'maintenance-detail',
       ].includes(screen)
     )
@@ -127,6 +134,7 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       'owner-maintenance',
       'owner-emergencies',
       'incident-detail',
+      'incident-inbox',
       'maintenance-detail',
     ].includes(screen)
   )
@@ -137,4 +145,22 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
   if (screen === 'task-detail') return role === 'Owner' ? 'operations' : 'work-orders';
   if (['adjustment', 'billing-history'].includes(screen)) return 'invoice';
   return screen;
+}
+
+// Only parameter-free section links switch tabs; invoiceId/focus/etc. open details.
+export function isWorkspaceTabDestination(
+  role: MobileRole,
+  screen: WorkspaceScreen,
+  params?: Record<string, unknown>,
+) {
+  return (
+    tabs[role].some((tab) => tab.screen === screen) &&
+    !Object.entries(params ?? {}).some(
+      ([key, value]) => key !== 'screen' && value !== undefined && value !== '',
+    )
+  );
+}
+
+export function workspaceTabHref(screen: WorkspaceScreen): Href {
+  return `/(tabs)/${screen}` as Href;
 }

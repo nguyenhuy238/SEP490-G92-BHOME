@@ -1,11 +1,11 @@
-import React from 'react';
+﻿import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple } from 'react-native-paper';
-import { dashboardStyles } from '../components/DashboardKit';
 import { TenantFeatureDirectory } from '../components/TenantFeatureDirectory';
 import { positiveAmount, tenantPaymentLabel } from '../features/tenant/paymentPresentation';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { colors as c, staffColors as s } from '../theme/theme';
+import { typography } from '../theme/typography';
 import type {
   ContractSummary,
   ContractExpiryNotice,
@@ -20,7 +20,14 @@ import { formatBillingDecimal } from '../../../../packages/client-core/src/invoi
 import type { InvoicePayment, DebtInvoice } from '../../../../packages/client-core/src/payments';
 import type { NotificationItem } from '../../../../packages/client-core/src/notifications';
 
-type LoadState = { loading: boolean; error: string; reload: () => void };
+type LoadState = {
+  loading: boolean;
+  error: string;
+  reload: () => void;
+  fetching?: boolean;
+  stale?: boolean;
+  updatedAt?: number;
+};
 export interface TenantDashboardProps {
   contracts?: ContractSummary[];
   invoice?: Invoice;
@@ -32,23 +39,31 @@ export interface TenantDashboardProps {
   notices?: NotificationItem[];
   expiryNotices?: ContractExpiryNotice[];
   alertsState?: LoadState;
-  reload?: () => void;
 }
-
 function Status({ state }: { state?: LoadState }) {
   if (state?.loading)
     return <ActivityIndicator accessibilityLabel="Đang tải dữ liệu" size="small" />;
-  if (!state?.error) return null;
+  if (!state?.error)
+    return state?.updatedAt && (state.fetching || state.stale) ? (
+      <Text style={styles.secondary}>
+        {state.fetching
+          ? 'Đang cập nhật dữ liệu…'
+          : 'Dữ liệu lần tải trước. Kéo xuống để cập nhật.'}
+      </Text>
+    ) : null;
   return (
     <View style={styles.statusRow}>
-      <Text style={styles.error}>Chưa tải được dữ liệu.</Text>
+      <Text accessibilityRole="alert" style={styles.error}>
+        {state.updatedAt
+          ? 'Đang hiển thị dữ liệu lần tải trước. Chưa cập nhật được.'
+          : 'Chưa tải được dữ liệu.'}
+      </Text>
       <Button compact onPress={state.reload}>
         Thử lại
       </Button>
     </View>
   );
 }
-
 function Section({
   title,
   detail,
@@ -60,8 +75,7 @@ function Section({
 }) {
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeading}>
-        <View style={dashboardStyles.accent} />
+      <View style={styles.between}>
         <Text accessibilityRole="header" style={styles.sectionTitle}>
           {title}
         </Text>
@@ -71,30 +85,193 @@ function Section({
     </View>
   );
 }
-
 function LinkRow({
   icon,
   title,
+  detail,
   label = title,
   onPress,
 }: {
   icon: string;
   title: string;
+  detail?: string;
   label?: string;
   onPress: () => void;
 }) {
   return (
     <TouchableRipple onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.link}>
-        <Icon source={icon} size={20} color={c.muted} />
-        <Text style={styles.rowTitle}>{title}</Text>
+        <Icon source={icon} size={20} color={s.blue} />
+        <View style={styles.grow}>
+          <Text style={styles.rowTitle} numberOfLines={2}>
+            {title}
+          </Text>
+          {detail && (
+            <Text style={styles.secondary} numberOfLines={1}>
+              {detail}
+            </Text>
+          )}
+        </View>
         <Icon source="chevron-right" size={18} color={c.muted} />
       </View>
     </TouchableRipple>
   );
 }
-
-// Tenant-only presentation. Existing endpoint data and navigation callbacks stay intact.
+function RoomSummary({ contract, state }: { contract?: ContractSummary; state?: LoadState }) {
+  const { go } = useWorkspace();
+  return (
+    <View style={styles.surface}>
+      <Status state={state} />
+      {contract ? (
+        <TouchableRipple
+          accessibilityRole="button"
+          accessibilityLabel="Xem hợp đồng phòng này"
+          onPress={() => go('contract', { contractId: contract.id })}
+        >
+          <View style={styles.room}>
+            <View style={styles.grow}>
+              <Text style={styles.roomTitle}>Phòng {contract.roomNumber}</Text>
+              <Text style={styles.secondary} numberOfLines={1}>
+                {contract.locationName}
+              </Text>
+              <View style={styles.contractRow}>
+                <View style={styles.activeDot} />
+                <Text style={styles.activeText}>{text(contract.status)}</Text>
+                <Text style={styles.secondary}>
+                  Hết hạn {displayContractDate(contract.endDate)}
+                </Text>
+              </View>
+            </View>
+            <Icon source="chevron-right" size={20} color={c.muted} />
+          </View>
+        </TouchableRipple>
+      ) : (
+        !state?.loading &&
+        !state?.error && (
+          <View style={styles.empty}>
+            <Icon source="home-outline" size={24} color={c.muted} />
+            <View style={styles.grow}>
+              <Text style={styles.cardTitle}>Thông tin phòng thuê</Text>
+              <Text style={styles.secondary}>Chưa có hợp đồng đang hiệu lực.</Text>
+            </View>
+          </View>
+        )
+      )}
+    </View>
+  );
+}
+function InvoiceSummary({
+  invoice,
+  payment,
+  debt,
+  invoiceState,
+  paymentState,
+}: Pick<TenantDashboardProps, 'invoice' | 'payment' | 'debt' | 'invoiceState' | 'paymentState'>) {
+  const { go } = useWorkspace();
+  const open = () => (invoice ? go('invoice', { invoiceId: invoice.id }) : go('invoice'));
+  if (!invoice)
+    return (
+      <View style={styles.surface}>
+        <View style={styles.empty}>
+          <Icon source="receipt-text-outline" size={24} color={c.muted} />
+          <View style={styles.grow}>
+            <Text style={styles.cardTitle}>Hóa đơn của bạn</Text>
+            {!invoiceState?.loading && !invoiceState?.error && (
+              <Text style={styles.secondary}>Chưa có hóa đơn tháng này.</Text>
+            )}
+            <Status state={invoiceState} />
+          </View>
+          <TouchableRipple
+            style={styles.iconAction}
+            accessibilityRole="button"
+            accessibilityLabel="Xem hóa đơn"
+            onPress={open}
+          >
+            <Icon source="chevron-right" size={20} color={s.blue} />
+          </TouchableRipple>
+        </View>
+      </View>
+    );
+  const period = invoice.billingPeriod.slice(0, 7).split('-').reverse().join('/');
+  const scopedDebt = debt?.invoiceId === invoice.id ? debt : undefined;
+  const canPay =
+    invoice.status === 'Final' &&
+    payment?.paymentStatus === 'Unpaid' &&
+    positiveAmount(payment.outstandingAmount);
+  const overdue = canPay && payment.overdueDays > 0 ? payment.overdueDays : 0;
+  const paid = invoice.status === 'Final' && payment?.paymentStatus === 'Paid';
+  const amount =
+    invoice.status === 'Draft'
+      ? invoice.total
+      : (payment?.outstandingAmount ?? scopedDebt?.outstandingAmount ?? invoice.total);
+  const amountLabel =
+    invoice.status === 'Draft'
+      ? 'Tổng tạm tính'
+      : payment || scopedDebt
+        ? 'Số tiền cần thanh toán'
+        : 'Tổng hóa đơn';
+  const stateLabel =
+    invoice.status === 'Draft'
+      ? 'Chưa phát hành'
+      : payment
+        ? tenantPaymentLabel(payment)
+        : 'Xem trạng thái trong chi tiết';
+  return (
+    <View style={[styles.surface, styles.payment]}>
+      <View style={styles.between}>
+        <Text style={styles.cardTitle}>Hóa đơn tháng {period}</Text>
+        <View
+          style={[
+            styles.badge,
+            overdue > 0 ? styles.badgeRed : paid ? styles.badgeGreen : styles.badgeBlue,
+          ]}
+        >
+          <Text
+            style={[styles.badgeText, { color: overdue > 0 ? c.red : paid ? s.green : s.blue }]}
+          >
+            {overdue > 0 ? `Quá hạn ${overdue} ngày` : stateLabel}
+          </Text>
+        </View>
+      </View>
+      <View style={{ gap: 2 }}>
+        <Text style={styles.secondary}>{amountLabel}</Text>
+        <Text style={[styles.amount, paid && { color: s.green }]}>
+          {formatContractMoney(amount)}
+        </Text>
+      </View>
+      <Text style={styles.secondary}>
+        Hạn thanh toán:{' '}
+        {(payment?.dueDate ?? invoice.dueDate)
+          ? displayContractDate(payment?.dueDate ?? invoice.dueDate)
+          : 'Chưa có dữ liệu'}
+      </Text>
+      {overdue > 0 && <Text style={styles.secondary}>{stateLabel}</Text>}
+      <Status state={invoiceState} />
+      <Status state={paymentState} />
+      <View style={styles.paymentActions}>
+        <Button
+          mode="contained"
+          buttonColor={s.blue}
+          style={styles.payButton}
+          contentStyle={{ minHeight: 46 }}
+          onPress={open}
+        >
+          {canPay ? 'Thanh toán ngay' : 'Xem hóa đơn'}
+        </Button>
+        {canPay && (
+          <Button
+            compact
+            style={{ flexShrink: 1 }}
+            accessibilityLabel="Xem chi tiết hóa đơn"
+            onPress={open}
+          >
+            Chi tiết
+          </Button>
+        )}
+      </View>
+    </View>
+  );
+}
 export function TenantDashboard({
   contracts = [],
   invoice,
@@ -106,262 +283,178 @@ export function TenantDashboard({
   notices = [],
   expiryNotices = [],
   alertsState,
-  reload,
 }: TenantDashboardProps) {
   const { go } = useWorkspace();
   const contract = contracts.find((item) => item.status === 'Active' && item.kind !== 'Holding');
-  const openInvoice = () => (invoice ? go('invoice', { invoiceId: invoice.id }) : go('invoice'));
+  const otherDebt = debt && debt.invoiceId !== invoice?.id ? debt : undefined;
+  const important = notices.filter(
+    (notice) =>
+      !(
+        invoice &&
+        notice.relatedObjectId === invoice.id &&
+        ['Invoice', 'Payment'].includes(notice.category)
+      ),
+  );
+  const hasAlerts = !!otherDebt || expiryNotices.length > 0 || important.length > 0;
   const period = invoice?.billingPeriod.slice(0, 7).split('-').reverse().join('/');
-  const utilities = [
-    { label: 'Điện', category: 'Electricity', unit: 'kWh', icon: 'lightning-bolt-outline' },
-    { label: 'Nước', category: 'Water', unit: 'm³', icon: 'water-outline' },
-  ];
   return (
     <View style={styles.page}>
-      <View style={[styles.surface, styles.overview]}>
-        <Text style={styles.greeting}>Xin chào bạn!</Text>
-        <Text style={styles.secondary}>
-          {contract
-            ? `Phòng ${contract.roomNumber} · ${contract.locationName}`
-            : 'Thông tin thuê của bạn'}
-        </Text>
-        <Status state={contractState} />
-        {contract && (
-          <>
-            <Text style={styles.cardTitle}>Hợp đồng: {text(contract.status)}</Text>
-            <Text style={styles.secondary}>Hết hạn: {displayContractDate(contract.endDate)}</Text>
-            <Button compact onPress={() => go('contract', { contractId: contract.id })}>
-              Xem hợp đồng phòng này
-            </Button>
-          </>
-        )}
-        {!contract && !contractState?.loading && !contractState?.error && (
-          <Text style={styles.secondary}>
-            Chưa có hợp đồng đang hiệu lực. Bạn vẫn có thể xem các hồ sơ được cấp quyền.
-          </Text>
-        )}
-        {reload && (
-          <Button compact icon="refresh" onPress={reload}>
-            Làm mới tổng quan
-          </Button>
-        )}
-      </View>
-
-      {invoice ? (
-        <View style={[styles.surface, styles.paymentCard]}>
-          <View style={styles.paymentHeading}>
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={styles.cardTitle}>
-                {debt ? 'Hóa đơn cần thanh toán' : 'Hóa đơn tháng này'}
-              </Text>
-              <Text style={styles.secondary}>Kỳ {period}</Text>
-            </View>
-            <Icon source="receipt-text-outline" size={22} color={s.navy} />
-          </View>
-          <View style={styles.amountBlock}>
-            <Text style={styles.secondary}>
-              {invoice.status === 'Draft'
-                ? 'Tổng tạm tính'
-                : payment
-                  ? 'Còn phải trả'
-                  : 'Tổng hóa đơn'}
-            </Text>
-            <Text style={styles.amount}>
-              {formatContractMoney(payment?.outstandingAmount ?? invoice.total)}
-            </Text>
-          </View>
-          <Status state={invoiceState} />
-          <Status state={paymentState} />
-          <Text
-            style={[
-              styles.paymentStatus,
-              { color: payment?.paymentStatus === 'Paid' ? s.green : s.orange },
-            ]}
-          >
-            {invoice.status === 'Draft'
-              ? 'Chưa phát hành'
-              : payment
-                ? tenantPaymentLabel(payment)
-                : 'Xem trạng thái thanh toán trong hóa đơn'}
-          </Text>
-          <Text style={styles.secondary}>
-            Hạn thanh toán:{' '}
-            {invoice.dueDate ? displayContractDate(invoice.dueDate) : 'Chưa có dữ liệu'}
-          </Text>
-          {!!payment?.overdueDays && payment.paymentStatus === 'Unpaid' && (
-            <Text style={styles.error}>Quá hạn {payment.overdueDays} ngày</Text>
-          )}
-          <Button
-            mode="contained"
-            buttonColor={s.blue}
-            style={styles.invoiceButton}
-            contentStyle={{ minHeight: 44 }}
-            onPress={openInvoice}
-          >
-            {invoice.status === 'Final' &&
-            payment?.paymentStatus === 'Unpaid' &&
-            positiveAmount(payment.outstandingAmount)
-              ? 'Thanh toán'
-              : 'Xem hóa đơn'}
-          </Button>
-        </View>
-      ) : (
-        <View style={[styles.surface, styles.emptyPayment]}>
-          <View style={styles.emptyInvoiceIcon}>
-            <Icon source="receipt-text-outline" size={22} color={c.muted} />
-          </View>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.cardTitle}>Hóa đơn tháng này</Text>
-            {!invoiceState?.loading && !invoiceState?.error && (
-              <Text style={styles.secondary}>Chưa có hóa đơn tháng này.</Text>
-            )}
-            <Status state={invoiceState} />
-          </View>
-          <TouchableRipple
-            onPress={openInvoice}
-            accessibilityRole="button"
-            accessibilityLabel="Xem hóa đơn"
-            style={styles.emptyInvoiceAction}
-          >
-            <Icon source="arrow-right" size={20} color={s.blue} />
-          </TouchableRipple>
-        </View>
-      )}
-
+      <RoomSummary contract={contract} state={contractState} />
+      <InvoiceSummary
+        invoice={invoice}
+        payment={payment}
+        debt={debt}
+        invoiceState={invoiceState}
+        paymentState={paymentState}
+      />
       <Status state={alertsState} />
-      {(!!debt || notices.length > 0 || expiryNotices.length > 0) && (
-        <Section title="Cần chú ý">
+      {hasAlerts && (
+        <Section title="Thông tin cần chú ý">
           <View style={styles.surface}>
-            {debt && (
+            {otherDebt && (
               <LinkRow
                 icon="receipt-text-clock-outline"
-                title={`${debt.overdueDays > 0 ? `Quá hạn ${debt.overdueDays} ngày` : 'Hóa đơn còn phải trả'} · ${formatContractMoney(debt.outstandingAmount)}`}
-                onPress={() => go('invoice', { invoiceId: debt.invoiceId })}
+                title="Có hóa đơn cần xem"
+                detail={`${formatContractMoney(otherDebt.outstandingAmount)}${otherDebt.overdueDays > 0 ? ` · Quá hạn ${otherDebt.overdueDays} ngày` : ''}`}
+                onPress={() => go('invoice', { invoiceId: otherDebt.invoiceId })}
               />
             )}
             {expiryNotices.slice(0, 2).map((notice) => (
               <LinkRow
                 key={notice.id}
-                icon="calendar-clock"
-                title={`Phòng ${notice.roomNumber} · ${notice.stage === 'Expired' ? 'Đã hết hạn' : 'Cần xem thông báo hết hạn'}`}
+                icon="calendar-clock-outline"
+                title={notice.stage === 'Expired' ? 'Hợp đồng đã hết hạn' : 'Cần xem hạn hợp đồng'}
+                detail={`Phòng ${notice.roomNumber} · ${displayContractDate(notice.endDate)}`}
                 onPress={() => go('contract', { contractId: notice.contractId })}
               />
             ))}
-            {notices.slice(0, 2).map((notice) => (
+            {important.slice(0, 2).map((notice) => (
               <LinkRow
                 key={notice.id}
                 icon="bell-outline"
                 title={notice.title}
+                detail="Xem thông báo"
                 onPress={() => go('notifications')}
               />
             ))}
           </View>
         </Section>
       )}
-
       <TenantFeatureDirectory contractId={contract?.id} />
-
-      <Section title="ĐIỆN NƯỚC" detail={invoice ? `Kỳ ${period}` : undefined}>
+      <Section title="Điện & nước" detail={invoice ? `Kỳ ${period}` : undefined}>
         <View style={styles.gridRow}>
-          {utilities.map((utility) => {
+          {[
+            { label: 'Điện', category: 'Electricity', unit: 'kWh', icon: 'lightning-bolt-outline' },
+            { label: 'Nước', category: 'Water', unit: 'm³', icon: 'water-outline' },
+          ].map((utility) => {
             const line = invoice?.lines?.find(
               (item) => item.category === utility.category && !!item.meterReadingId,
             );
             return (
-              <View key={utility.label} style={[styles.surface, styles.utilityCard]}>
+              <View key={utility.label} style={[styles.surface, styles.utility]}>
                 <View style={styles.utilityHeading}>
-                  <Icon source={utility.icon} size={20} color={c.muted} />
+                  <View style={styles.utilityIcon}>
+                    <Icon source={utility.icon} size={20} color={s.blue} />
+                  </View>
                   <Text style={styles.cardTitle}>{utility.label}</Text>
                 </View>
-                {line ? (
+                {line?.quantity != null ? (
                   <Text style={styles.utilityValue}>
-                    {formatBillingDecimal(line.quantity)} {utility.unit}
+                    {formatBillingDecimal(line.quantity)}{' '}
+                    <Text style={styles.unit}>{utility.unit}</Text>
                   </Text>
                 ) : (
-                  <Text style={styles.secondary}>Chưa có dữ liệu</Text>
+                  <Text style={styles.secondary}>Chưa có chỉ số</Text>
                 )}
               </View>
             );
           })}
         </View>
+        <View style={styles.surface}>
+          <LinkRow
+            icon="chart-line"
+            title="Lịch sử điện nước"
+            onPress={() => go('tenant-meters')}
+          />
+        </View>
       </Section>
-
-      <View style={styles.surface}>
-        <LinkRow icon="gauge" title="Xem lịch sử điện nước" onPress={() => go('tenant-meters')} />
-      </View>
     </View>
   );
 }
-
 const styles = StyleSheet.create({
-  page: { gap: 20, width: '100%' },
-  overview: { padding: 16, gap: 8 },
-  greeting: { color: s.navy, fontFamily: 'Inter-SemiBold', fontSize: 21, lineHeight: 28 },
-  secondary: { color: c.muted, fontSize: 12, lineHeight: 18, flexShrink: 1 },
-  cardTitle: {
-    color: s.navy,
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    flexShrink: 1,
-  },
+  page: { gap: 22, width: '100%' },
   surface: {
     backgroundColor: c.white,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: c.border,
     overflow: 'hidden',
   },
-  section: { gap: 12 },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  sectionTitle: {
-    color: s.navy,
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-    flexGrow: 1,
+  grow: { flex: 1, minWidth: 0, gap: 4 },
+  room: { padding: 16, gap: 12, flexDirection: 'row', alignItems: 'center', minHeight: 110 },
+  roomTitle: { ...typography.screenTitle, color: '#173654' },
+  secondary: { ...typography.secondary, color: c.muted, flexShrink: 1 },
+  cardTitle: {
+    color: '#173654',
+    ...typography.cardTitle,
     flexShrink: 1,
   },
-  paymentCard: { padding: 16, gap: 12 },
-  paymentHeading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  amountBlock: { gap: 4 },
-  amount: {
-    color: s.navy,
-    fontFamily: 'Inter-Bold',
-    fontSize: 26,
-    lineHeight: 34,
-    fontVariant: ['tabular-nums'],
-  },
-  paymentStatus: { fontSize: 12, lineHeight: 18 },
-  invoiceButton: { borderRadius: 10 },
-  emptyPayment: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
-  emptyInvoiceIcon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  emptyInvoiceAction: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gridRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
-  link: {
-    minHeight: 52,
+  contractRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 12,
+    gap: 6,
+    flexWrap: 'wrap',
+    paddingTop: 4,
   },
-  rowTitle: { flex: 1, color: s.navy, fontSize: 13, lineHeight: 20 },
-  utilityCard: { flex: 1, minWidth: 0, padding: 12, gap: 8 },
+  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: s.green },
+  activeText: { ...typography.label, color: s.green },
+  section: { gap: 12 },
+  between: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  sectionTitle: { ...typography.sectionHeading, color: '#173654' },
+  payment: { padding: 16, gap: 12 },
+  amount: {
+    color: '#173654',
+    ...typography.money,
+  },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, maxWidth: '100%' },
+  badgeBlue: { backgroundColor: s.blueSoft },
+  badgeRed: { backgroundColor: c.redSoft },
+  badgeGreen: { backgroundColor: c.greenSoft },
+  badgeText: typography.status,
+  paymentActions: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
+  payButton: { borderRadius: 12, flexGrow: 1 },
+  empty: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  iconAction: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  link: { minHeight: 52, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
+  rowTitle: { ...typography.link, color: '#173654' },
+  gridRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+  utility: { flex: 1, minWidth: 0, padding: 14, gap: 12, minHeight: 116 },
   utilityHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  utilityValue: {
-    color: s.navy,
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 22,
-    lineHeight: 30,
-    fontVariant: ['tabular-nums'],
+  utilityIcon: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+    backgroundColor: s.blueSoft,
   },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  error: { color: c.red, fontSize: 12, lineHeight: 18 },
+  utilityValue: {
+    color: '#173654',
+    ...typography.value,
+  },
+  unit: { ...typography.body, color: c.muted },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: 8 },
+  error: { ...typography.secondary, color: c.red },
 });

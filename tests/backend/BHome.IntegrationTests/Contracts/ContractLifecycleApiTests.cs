@@ -532,16 +532,23 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var holding = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", holdingInput))).Id;
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(holding, "holding-approval"), new HoldingDecisionInput("Not allowed"))).StatusCode);
         await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-approval"), new HoldingDecisionInput("Owner reviewed and approved")));
-        if (depositFirst) await Deposit(w, holding, 1000000);
-        await Signed(w, holding);
-        if (!depositFirst)
+        if (depositFirst)
         {
+            await Deposit(w, holding, 1000000);
+            Assert.Null((await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.PriceLockedAt);
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(holding, "holding-activation"))).StatusCode);
+            await Signed(w, holding);
+        }
+        else
+        {
+            await Signed(w, holding);
+            Assert.Null((await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.PriceLockedAt);
             Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(holding, "holding-activation"))).StatusCode);
             await Deposit(w, holding, 1000000);
         }
         var activeHolding = await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-activation")));
         Assert.Equal("Active", activeHolding.Status);
-        Assert.Equal(depositFirst ? "VerifiedDeposit" : "SigningCompleted", activeHolding.PriceLockTrigger);
+        Assert.Equal("SigningAndDepositCompleted", activeHolding.PriceLockTrigger);
         var conversionKey = Guid.NewGuid();
         var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id;
         Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id);
