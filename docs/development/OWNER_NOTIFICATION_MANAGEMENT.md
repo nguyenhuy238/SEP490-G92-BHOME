@@ -1,0 +1,11 @@
+# Owner notification management
+
+UC-35/36, JOB-01/04/07 and GBR-18: the existing recipient inbox/read/navigation stays in use. Owner management adds actual audience preview, reviewed draft creation, explicit send confirmation, sent history, delivery overview and per-Location debt/task/emergency/due-soon policy. IN_APP is mandatory and EMAIL is optional. Push is visibly unavailable pending a real provider (CAP05). Server receipt of Send is not proof of external delivery.
+
+Audience types follow `NotificationAudience`: ALL_TENANTS, LOCATION, ROOM, USER and SELECTED_USERS. Selected users are entered as UUIDs and revalidated on the server. Draft text and recipients are previewed; content/scope changes require another preview. Send retries use the persisted draft ID and existing transactional deduplication.
+
+Final hardening adds optional `Idempotency-Key` to announcement creation, preserving old clients without the header. Compact24 serializes matching actor/key intents under a PostgreSQL advisory transaction lock, stores a SHA-256 request fingerprint in the existing SYSTEM_JOB record, returns the same draft (or its actual Sent state) on replay, and rejects changed content with 409. Actor-scoped keys cannot collide between Staff and Owner. No table/migration is needed. Header validation rejects invalid/empty UUIDs.
+
+New Owner-only `GET /api/v1/announcements/drafts?page=1&pageSize=20` returns persisted drafts for recovery after refresh. The Owner UI opens the stored text/audience/channels and sends that exact persisted ID. Synthetic PostgreSQL coverage exercises concurrent duplicate create, changed-input conflict, distinct actors, Owner-only recovery, and replay after send. Component tests cover lost responses and reopening a draft without another create.
+
+Policy reads preserve all fields. The disputed JOB-08 residence settings remain read-only and are preserved on update; no default cadence is invented. This API has no concurrency version, so concurrent policy editing remains a limitation to test. No notification content, provider token or credential is logged. No external message was sent during development; component requests are mocked and integration data is disposable.

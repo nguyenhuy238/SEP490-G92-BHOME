@@ -29,7 +29,7 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var id = Guid.NewGuid();
         var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
-        user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password);
+        user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password, reuseOwner: true);
         id = user.Id;
         var client = fixture.Factory.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { user.Email, password = Password });

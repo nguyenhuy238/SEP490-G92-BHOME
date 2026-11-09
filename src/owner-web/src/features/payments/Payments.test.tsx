@@ -31,6 +31,16 @@ vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
 }));
 const id = '00000000-0000-0000-0000-000000000001';
+it('pages verified payment history independently of the debt invoice page', async () => {
+  mocks.api.history.mockResolvedValue({ items: [], totalCount: 41 });
+  mocks.api.debts.mockResolvedValue({ items: [], totalCount: 0 });
+  mount(<PaymentManagementPage debtOnly />);
+  await screen.findByText('Trang lịch sử 1 · 41 thanh toán');
+  fireEvent.click(screen.getByRole('button', { name: 'Lịch sử sau' }));
+  await screen.findByText('Trang lịch sử 2 · 41 thanh toán');
+  expect(mocks.api.history.mock.calls.at(-1)?.[0].page).toBe(2);
+  expect(mocks.api.debts.mock.calls.at(-1)?.[0].page).toBe(1);
+});
 const transfer = {
   id: 'transfer',
   providerIdentity: 'SYNTHETIC',
