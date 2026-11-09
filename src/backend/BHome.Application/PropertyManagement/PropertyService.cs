@@ -272,8 +272,11 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 var type = await repository.FindAsync<RoomType>(item.RoomTypeId, t) ?? throw Error(400, "room_type_scope_invalid");
                 var room = new Room
                 {
-                    LocationId = location.Id, RoomTypeId = type.Id, RoomNumber = Text(item.RoomNumber),
-                    Floor = Optional(item.Floor), Capacity = item.Capacity ?? type.DefaultCapacity,
+                    LocationId = location.Id,
+                    RoomTypeId = type.Id,
+                    RoomNumber = Text(item.RoomNumber),
+                    Floor = Optional(item.Floor),
+                    Capacity = item.Capacity ?? type.DefaultCapacity,
                     Status = RoomStatus.Available
                 };
                 repository.Add(room); Audit(location.Id, room, "Created", input.Reason, null); created.Add(Map(room));
