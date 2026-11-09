@@ -196,6 +196,7 @@ export function InitialLocationSetupWizard({
   const [editingFee, setEditingFee] = useState<FeePolicyItem | null>(null);
   const [previewKwh, setPreviewKwh] = useState<number>(150);
   const [previewM3, setPreviewM3] = useState<number>(12);
+  const [previewRoomTypeId, setPreviewRoomTypeId] = useState<string>('');
 
   // Step 7: House Rules
   const [houseRules, setHouseRules] = useState<HouseRuleItem[]>(
@@ -205,6 +206,24 @@ export function InitialLocationSetupWizard({
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
   const [libraryError, setLibraryError] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
+
+  const previewRoomType =
+    roomTypes.find((roomType) => roomType.id === previewRoomTypeId) ?? roomTypes[0];
+  const previewRent = previewRoomType?.defaultRate ?? 0;
+  const previewFeeAmount = (fee: FeePolicyItem) => {
+    if (fee.calculationMethod === 'PER_KWH') return previewKwh * fee.unitPrice;
+    if (fee.calculationMethod === 'PER_M3') return previewM3 * fee.unitPrice;
+    return fee.unitPrice;
+  };
+  const previewFeesTotal = feePolicies.reduce((total, fee) => total + previewFeeAmount(fee), 0);
+  const assignedAssetCatalogIds = [
+    ...new Set(
+      Object.values(roomTypeTemplates).flatMap((items) => items.map((item) => item.catalogId)),
+    ),
+  ];
+  const assignedAssetNames = assignedAssetCatalogIds.map(
+    (id) => assetCatalog.find((item) => item.id === id)?.name ?? id,
+  );
 
   useEffect(() => {
     if (!open || draftRestored) return;
@@ -336,6 +355,17 @@ export function InitialLocationSetupWizard({
           status: 'ACTIVE' as const,
         };
       });
+      setRooms((currentRooms) =>
+        currentRooms.map((room) => {
+          if (loadedRoomTypes.some((roomType) => roomType.id === room.roomTypeId)) return room;
+          const previousName = roomTypes.find((roomType) => roomType.id === room.roomTypeId)?.name;
+          const replacement = loadedRoomTypes.find(
+            (roomType) =>
+              roomType.name.trim().toLocaleLowerCase() === previousName?.trim().toLocaleLowerCase(),
+          );
+          return replacement ? { ...room, roomTypeId: replacement.id } : room;
+        }),
+      );
       setRoomTypes(loadedRoomTypes);
       setSelectedTemplateRoomType(loadedRoomTypes[0]?.id ?? '');
       setBulkRoomTypeId(loadedRoomTypes[0]?.id ?? '');
@@ -360,6 +390,7 @@ export function InitialLocationSetupWizard({
           return {
             id: document.id,
             name: document.name,
+            chargeCode: data.chargeCode,
             type:
               category === 'ELECTRICITY' ? 'ELECTRICITY' : category === 'WATER' ? 'WATER' : 'OTHER',
             calculationMethod: data.method.toUpperCase() === 'METERED' ? 'PER_KWH' : 'FIXED_AMOUNT',
@@ -367,6 +398,7 @@ export function InitialLocationSetupWizard({
             unit: data.unit,
             applicationScope: data.scope === 'Room' ? 'PER_ROOM' : 'LOCATION_WIDE',
             effectiveDate: data.effectiveFrom,
+            effectiveTo: data.effectiveTo,
             description: document.description,
           };
         }),
@@ -389,6 +421,43 @@ export function InitialLocationSetupWizard({
     } catch (error) {
       setLibraryError(
         error instanceof Error ? error.message : 'Không thể tải thư viện cấu hình dùng chung.',
+      );
+    } finally {
+      setIsLoadingLibrary(false);
+    }
+  };
+
+  const applySharedPolicyTemplates = async () => {
+    setIsLoadingLibrary(true);
+    setLibraryError('');
+    try {
+      const page = await sharedApi.list('policy-templates', '', 'Published', 1, 100);
+      const templates = page.items.map((document) => {
+        const data = document.data as PolicyTemplateData;
+        return {
+          id: document.id,
+          name: document.name,
+          category: 'OTHER_OPERATIONS' as const,
+          content: data.content,
+          effectiveDate: data.effectiveFrom,
+          status: 'ACTIVE' as const,
+          version: `V${document.edition}`,
+          isAppliedToContracts: false,
+        };
+      });
+      setHouseRules((current) => [
+        ...current,
+        ...templates.filter(
+          (template) =>
+            !current.some(
+              (rule) =>
+                rule.name.trim().toLocaleLowerCase() === template.name.trim().toLocaleLowerCase(),
+            ),
+        ),
+      ]);
+    } catch (error) {
+      setLibraryError(
+        error instanceof Error ? error.message : 'Không thể áp dụng nội quy dùng chung.',
       );
     } finally {
       setIsLoadingLibrary(false);
@@ -426,6 +495,7 @@ export function InitialLocationSetupWizard({
               method: number;
               rate: number | string;
               effectiveFrom: string;
+              effectiveTo: string | null;
             }>;
           }>(
             `/api/v1/billing-policies?locationId=${encodeURIComponent(sourceLocationId)}&page=1&pageSize=100`,
@@ -511,13 +581,17 @@ export function InitialLocationSetupWizard({
             .map((policy) => ({
               id: policy.id,
               name: policy.name,
+              chargeCode: policy.chargeCode,
               type:
                 policy.category === 1 ? 'ELECTRICITY' : policy.category === 2 ? 'WATER' : 'OTHER',
               calculationMethod: policy.method === 1 ? 'PER_KWH' : 'FIXED_AMOUNT',
               unitPrice: Number(policy.rate),
               unit: policy.category === 1 ? 'kWh' : policy.category === 2 ? 'm³' : 'tháng',
-              applicationScope: 'LOCATION_WIDE',
+              applicationScope: policy.roomId ? 'PER_ROOM' : 'LOCATION_WIDE',
+              targetRoomCode: sourceRooms.items.find((room) => room.id === policy.roomId)
+                ?.roomNumber,
               effectiveDate: policy.effectiveFrom,
+              effectiveTo: policy.effectiveTo,
               description: `Sao chép từ ${sourceLocationId}`,
             })),
         );
@@ -556,6 +630,7 @@ export function InitialLocationSetupWizard({
 
   // Bulk generate rooms
   const handleGenerateRooms = () => {
+    setFinishError('');
     const generated: GeneratedRoomDraft[] = [];
     const existingNumbers = rooms
       .filter((room) => room.floor === bulkFloor && room.code.startsWith(bulkPrefix))
@@ -578,6 +653,7 @@ export function InitialLocationSetupWizard({
   };
 
   const handleRemoveRoom = (code: string) => {
+    setFinishError('');
     setRooms((prev) => prev.filter((r) => r.code !== code));
     setRoomAssetAssignments((prev) => prev.filter((assignment) => assignment.roomCode !== code));
     setRateOverrides((prev) => {
@@ -612,7 +688,7 @@ export function InitialLocationSetupWizard({
 
     const typeName = roomTypes.find((t) => t.id === typeId)?.name || 'Loại phòng';
     setTemplateAppliedNotice(
-      `Đã áp dụng định mức gồm ${requirements.length} hạng mục từ loại phòng "${typeName}" cho ${targetRooms.length} phòng.`,
+      `Đã áp dụng ${requirements.length} tài sản của loại phòng "${typeName}" cho ${targetRooms.length} phòng.`,
     );
   };
 
@@ -640,8 +716,15 @@ export function InitialLocationSetupWizard({
       setActiveStep(2);
       return;
     }
-    if (rooms.some((room) => !roomTypes.some((roomType) => roomType.id === room.roomTypeId))) {
-      setFinishError('Có phòng chưa được gán loại phòng hợp lệ.');
+    const invalidRooms = rooms.filter(
+      (room) => !roomTypes.some((roomType) => roomType.id === room.roomTypeId),
+    );
+    if (invalidRooms.length) {
+      setFinishError(
+        `Không thể lưu vì ${invalidRooms.length} phòng chưa được gán loại phòng hợp lệ: ${invalidRooms
+          .map((room) => `${room.code || '(chưa có mã)'} (tầng ${room.floor})`)
+          .join(', ')}. Hãy bấm biểu tượng chỉnh sửa tại từng phòng và chọn lại loại phòng.`,
+      );
       setActiveStep(2);
       return;
     }
@@ -1265,6 +1348,7 @@ export function InitialLocationSetupWizard({
                   <Button
                     fullWidth
                     variant="contained"
+                    disabled={!roomTypes.some((roomType) => roomType.id === bulkRoomTypeId)}
                     onClick={handleGenerateRooms}
                     startIcon={<Sparkles size={16} />}
                   >
@@ -1359,8 +1443,8 @@ export function InitialLocationSetupWizard({
               Bước 4: Danh mục tài sản, Định mức & Phân bổ vào phòng
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              Cấu trúc 3 cấp độ: Danh mục tài sản (Cấp 1), Định mức theo loại phòng (Cấp 2), Phân bổ
-              tài sản vào từng phòng (Cấp 3).
+              Chọn tài sản dùng cho từng loại phòng, sau đó áp dụng danh sách đó cho các phòng tương
+              ứng.
             </Typography>
 
             {templateAppliedNotice && (
@@ -1381,7 +1465,7 @@ export function InitialLocationSetupWizard({
                     variant="subtitle2"
                     sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
                   >
-                    <Package size={18} /> Danh mục tài sản mẫu (Cấp 1)
+                    <Package size={18} /> Danh mục tài sản mẫu
                   </Typography>
                   <Typography
                     variant="caption"
@@ -1453,7 +1537,7 @@ export function InitialLocationSetupWizard({
                         variant="subtitle2"
                         sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}
                       >
-                        <Layers3 size={18} /> Định mức theo loại phòng (Cấp 2)
+                        <Layers3 size={18} /> Tài sản áp dụng theo loại phòng
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Định mức thiết bị tiêu chuẩn cho loại phòng được chọn.
@@ -1540,7 +1624,7 @@ export function InitialLocationSetupWizard({
                       startIcon={<Sparkles size={16} />}
                       onClick={() => handleApplyAssetTemplate(selectedTemplateRoomType)}
                     >
-                      Áp dụng cho tất cả phòng
+                      Áp dụng tất cả tài sản cho loại phòng
                     </Button>
                   </Stack>
                 </Paper>
@@ -1774,6 +1858,22 @@ export function InitialLocationSetupWizard({
                   </Typography>
 
                   <Grid container spacing={1.5} sx={{ mb: 2 }}>
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="Loại phòng mô phỏng"
+                        value={previewRoomType?.id ?? ''}
+                        onChange={(event) => setPreviewRoomTypeId(event.target.value)}
+                      >
+                        {roomTypes.map((roomType) => (
+                          <MenuItem key={roomType.id} value={roomType.id}>
+                            {roomType.name} · {roomType.defaultRate.toLocaleString()} VND/tháng
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
                     <Grid size={{ xs: 6 }}>
                       <TextField
                         fullWidth
@@ -1799,36 +1899,32 @@ export function InitialLocationSetupWizard({
                   <Stack spacing={1} sx={{ pt: 1, borderTop: '1px dashed #cbd5e1' }}>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
-                        Tiền thuê phòng Studio:
+                        Tiền thuê {previewRoomType?.name ?? 'loại phòng đã chọn'}:
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        5.500.000 VND
+                        {previewRent.toLocaleString()} VND
                       </Typography>
                     </Stack>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Tiền điện ({previewKwh} kWh × 3.800):
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {(previewKwh * 3800).toLocaleString()} VND
-                      </Typography>
-                    </Stack>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Tiền nước ({previewM3} m³ × 22.000):
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {(previewM3 * 22000).toLocaleString()} VND
-                      </Typography>
-                    </Stack>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Phí rác, an ninh & Wi-Fi:
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        300.000 VND
-                      </Typography>
-                    </Stack>
+                    {feePolicies.map((fee) => (
+                      <Stack
+                        key={fee.id}
+                        direction="row"
+                        sx={{ justifyContent: 'space-between', gap: 2 }}
+                      >
+                        <Typography variant="body2" color="text.secondary">
+                          {fee.name}
+                          {fee.calculationMethod === 'PER_KWH'
+                            ? ` (${previewKwh} kWh × ${fee.unitPrice.toLocaleString()})`
+                            : fee.calculationMethod === 'PER_M3'
+                              ? ` (${previewM3} m³ × ${fee.unitPrice.toLocaleString()})`
+                              : ''}
+                          :
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {previewFeeAmount(fee).toLocaleString()} VND
+                        </Typography>
+                      </Stack>
+                    ))}
 
                     <Divider sx={{ my: 0.5 }} />
 
@@ -1840,13 +1936,7 @@ export function InitialLocationSetupWizard({
                         variant="subtitle1"
                         sx={{ fontWeight: 850, color: 'primary.main' }}
                       >
-                        {(
-                          5500000 +
-                          previewKwh * 3800 +
-                          previewM3 * 22000 +
-                          300000
-                        ).toLocaleString()}{' '}
-                        VND
+                        {(previewRent + previewFeesTotal).toLocaleString()} VND
                       </Typography>
                     </Stack>
                   </Stack>
@@ -1872,26 +1962,42 @@ export function InitialLocationSetupWizard({
                   cọc.
                 </Typography>
               </Box>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Plus size={16} />}
-                onClick={() => {
-                  setEditingRule({
-                    id: `rule-${Date.now()}`,
-                    name: '',
-                    category: 'OTHER_OPERATIONS',
-                    content: '',
-                    effectiveDate: new Date().toISOString().slice(0, 10),
-                    status: 'DRAFT',
-                    version: 'V1',
-                    isAppliedToContracts: false,
-                  });
-                }}
-              >
-                Thêm quy định riêng
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={isLoadingLibrary}
+                  onClick={() => void applySharedPolicyTemplates()}
+                >
+                  {isLoadingLibrary ? 'Đang tải...' : 'Áp dụng nội quy dùng chung'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Plus size={16} />}
+                  onClick={() => {
+                    setEditingRule({
+                      id: `rule-${Date.now()}`,
+                      name: '',
+                      category: 'OTHER_OPERATIONS',
+                      content: '',
+                      effectiveDate: new Date().toISOString().slice(0, 10),
+                      status: 'DRAFT',
+                      version: 'V1',
+                      isAppliedToContracts: false,
+                    });
+                  }}
+                >
+                  Thêm quy định riêng
+                </Button>
+              </Stack>
             </Stack>
+
+            {libraryError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {libraryError}
+              </Alert>
+            )}
 
             <Grid container spacing={2}>
               {houseRules.map((rule) => (
@@ -2050,12 +2156,31 @@ export function InitialLocationSetupWizard({
                         color="primary"
                       />
                     </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {roomTypes.length
+                        ? roomTypes
+                            .map(
+                              (roomType) =>
+                                `${roomType.name} (${rooms.filter((room) => room.roomTypeId === roomType.id).length} phòng)`,
+                            )
+                            .join(' · ')
+                        : 'Chưa có loại phòng'}
+                    </Typography>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Tài sản & Tiện nghi:
                       </Typography>
-                      <Chip size="small" label="10 thiết bị danh mục đã gán" color="success" />
+                      <Chip
+                        size="small"
+                        label={`${assignedAssetNames.length} tài sản đã gán`}
+                        color="success"
+                      />
                     </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {assignedAssetNames.length
+                        ? assignedAssetNames.join(' · ')
+                        : 'Chưa gán tài sản cho loại phòng nào'}
+                    </Typography>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Biểu phí điện nước:
@@ -2066,6 +2191,15 @@ export function InitialLocationSetupWizard({
                         color="info"
                       />
                     </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {feePolicies.length
+                        ? feePolicies
+                            .map(
+                              (fee) => `${fee.name}: ${fee.unitPrice.toLocaleString()} ${fee.unit}`,
+                            )
+                            .join(' · ')
+                        : 'Chưa cấu hình khoản phí'}
+                    </Typography>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">
                         Nội quy cơ sở:
@@ -2076,6 +2210,11 @@ export function InitialLocationSetupWizard({
                         color="default"
                       />
                     </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {houseRules.length
+                        ? houseRules.map((rule) => rule.name).join(' · ')
+                        : 'Chưa áp dụng nội quy'}
+                    </Typography>
                   </Stack>
                 </Paper>
               </Grid>
@@ -2302,6 +2441,7 @@ export function InitialLocationSetupWizard({
                 delete next[editingRoomOriginalCode];
                 return next;
               });
+              setFinishError('');
               setEditingRoom(null);
             }}
           >
@@ -2320,8 +2460,19 @@ export function InitialLocationSetupWizard({
                 onChange={(event) => setEditingFee({ ...editingFee, name: event.target.value })}
               />
               <TextField
+                label="Mã khoản thu"
+                value={editingFee.chargeCode ?? ''}
+                onChange={(event) =>
+                  setEditingFee({
+                    ...editingFee,
+                    chargeCode: event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '_'),
+                  })
+                }
+                helperText="Mã duy nhất để đối soát và lập hóa đơn, ví dụ INTERNET hoặc PARKING."
+              />
+              <TextField
                 select
-                label="Loại phí"
+                label="Nhóm phí"
                 value={editingFee.type}
                 onChange={(event) => {
                   const type = event.target.value as FeePolicyItem['type'];
@@ -2345,7 +2496,29 @@ export function InitialLocationSetupWizard({
               >
                 <MenuItem value="ELECTRICITY">Điện</MenuItem>
                 <MenuItem value="WATER">Nước</MenuItem>
+                <MenuItem value="ENVIRONMENTAL_CLEANING">Vệ sinh & môi trường</MenuItem>
+                <MenuItem value="SECURITY">An ninh</MenuItem>
+                <MenuItem value="INTERNET">Internet</MenuItem>
+                <MenuItem value="PARKING">Giữ xe</MenuItem>
                 <MenuItem value="OTHER">Dịch vụ khác</MenuItem>
+              </TextField>
+              <TextField
+                select
+                label="Cách tính"
+                value={editingFee.calculationMethod}
+                onChange={(event) =>
+                  setEditingFee({
+                    ...editingFee,
+                    calculationMethod: event.target.value as FeePolicyItem['calculationMethod'],
+                  })
+                }
+              >
+                <MenuItem value="FIXED_AMOUNT">Cố định mỗi kỳ</MenuItem>
+                <MenuItem value="PER_KWH">Theo kWh</MenuItem>
+                <MenuItem value="PER_M3">Theo m³</MenuItem>
+                <MenuItem value="PER_PERSON">Theo người</MenuItem>
+                <MenuItem value="PER_ROOM">Theo phòng</MenuItem>
+                <MenuItem value="PER_BILLING_PERIOD">Theo kỳ hóa đơn</MenuItem>
               </TextField>
               <TextField
                 type="number"
@@ -2356,13 +2529,66 @@ export function InitialLocationSetupWizard({
                 }
               />
               <TextField
+                label="Đơn vị"
+                value={editingFee.unit}
+                onChange={(event) => setEditingFee({ ...editingFee, unit: event.target.value })}
+              />
+              <TextField
+                select
+                label="Phạm vi áp dụng"
+                value={editingFee.applicationScope}
+                onChange={(event) =>
+                  setEditingFee({
+                    ...editingFee,
+                    applicationScope: event.target.value as FeePolicyItem['applicationScope'],
+                  })
+                }
+              >
+                <MenuItem value="LOCATION_WIDE">Toàn cơ sở</MenuItem>
+                <MenuItem value="PER_ROOM">Theo phòng</MenuItem>
+              </TextField>
+              {editingFee.applicationScope === 'PER_ROOM' && (
+                <TextField
+                  select
+                  label="Phòng áp dụng"
+                  value={editingFee.targetRoomCode ?? ''}
+                  onChange={(event) =>
+                    setEditingFee({ ...editingFee, targetRoomCode: event.target.value })
+                  }
+                >
+                  {rooms.map((room) => (
+                    <MenuItem key={room.code} value={room.code}>
+                      {room.code} · {roomTypes.find((item) => item.id === room.roomTypeId)?.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              <TextField
                 type="date"
-                label="Ngày hiệu lực"
+                label="Hiệu lực từ"
                 value={editingFee.effectiveDate}
                 onChange={(event) =>
                   setEditingFee({ ...editingFee, effectiveDate: event.target.value })
                 }
                 slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                type="date"
+                label="Hiệu lực đến"
+                value={editingFee.effectiveTo ?? ''}
+                onChange={(event) =>
+                  setEditingFee({ ...editingFee, effectiveTo: event.target.value || null })
+                }
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                multiline
+                minRows={2}
+                label="Mô tả"
+                value={editingFee.description}
+                onChange={(event) =>
+                  setEditingFee({ ...editingFee, description: event.target.value })
+                }
               />
             </Stack>
           )}
@@ -2371,7 +2597,14 @@ export function InitialLocationSetupWizard({
           <Button onClick={() => setEditingFee(null)}>Hủy</Button>
           <Button
             variant="contained"
-            disabled={!editingFee?.name.trim() || editingFee.unitPrice < 0}
+            disabled={
+              !editingFee?.name.trim() ||
+              !editingFee.chargeCode?.trim() ||
+              !editingFee.unit.trim() ||
+              (editingFee.applicationScope === 'PER_ROOM' && !editingFee.targetRoomCode) ||
+              editingFee.unitPrice < 0 ||
+              (!!editingFee.effectiveTo && editingFee.effectiveTo < editingFee.effectiveDate)
+            }
             onClick={() => {
               if (!editingFee) return;
               setFeePolicies((current) =>

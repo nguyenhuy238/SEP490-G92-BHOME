@@ -270,26 +270,37 @@ function MockLocationsListPage() {
             ? 'WATER'
             : `SERVICE_${type}_${id}`.replace(/[^A-Z0-9_-]/g, '_').slice(0, 80);
       for (const fee of wizardData.feePolicies) {
-        const chargeCode = feeCode(fee.type, fee.id);
+        const chargeCode = fee.chargeCode?.trim() || feeCode(fee.type, fee.id);
+        const targetRoom =
+          fee.applicationScope === 'PER_ROOM'
+            ? createdRooms.find((room) => room.roomNumber === fee.targetRoomCode)
+            : undefined;
+        if (fee.applicationScope === 'PER_ROOM' && !targetRoom)
+          throw new Error(
+            `Khoản phí "${fee.name}" chưa chọn được phòng áp dụng (${fee.targetRoomCode || 'chưa chọn'}).`,
+          );
         if (
           existingPolicies.items.some(
-            (policy) => policy.roomId === null && policy.chargeCode === chargeCode,
+            (policy) =>
+              policy.roomId === (targetRoom?.id ?? null) && policy.chargeCode === chargeCode,
           )
         )
           continue;
+        const method =
+          fee.calculationMethod === 'PER_KWH' || fee.calculationMethod === 'PER_M3' ? 1 : 0;
         await setupApi.request('/api/v1/billing-policies', {
           method: 'POST',
           body: JSON.stringify({
             locationId: createdLocation.id,
-            roomId: null,
+            roomId: targetRoom?.id ?? null,
             roomTypeId: null,
             category: feeCategory(fee.type),
             chargeCode,
             name: fee.name,
-            method: fee.type === 'ELECTRICITY' || fee.type === 'WATER' ? 1 : 0,
+            method,
             rate: fee.unitPrice,
             effectiveFrom: effective(fee.effectiveDate),
-            effectiveTo: null,
+            effectiveTo: fee.effectiveTo || null,
             reason: 'Thiết lập biểu phí từ Setup Wizard',
           }),
         });
