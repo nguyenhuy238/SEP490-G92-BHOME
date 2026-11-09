@@ -318,8 +318,7 @@ function PolicyForm({
   const [name, setName] = useState(previous?.name ?? ''),
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
-  const [scope, setScope] = useState(previous?.roomId ? 'room' : 'location');
-  const [scopeId, setScopeId] = useState(previous?.roomId ?? '');
+  const [roomId, setRoomId] = useState(previous?.roomId ?? '');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -343,7 +342,7 @@ function PolicyForm({
           const cat = Number(category);
           const input: PolicyInput = {
             locationId: location,
-            roomId: scope === 'room' ? scopeId : null,
+            roomId: roomId || null,
             category: cat,
             chargeCode: cat === 3 ? code : ['RENT', 'ELECTRICITY', 'WATER'][cat],
             name,
@@ -377,33 +376,18 @@ function PolicyForm({
         </Typography>
         <TextField
           select
-          label="Phạm vi áp dụng"
-          value={scope}
+          label="Phạm vi biểu giá"
+          value={roomId}
           disabled={!!previous}
-          onChange={(e) => {
-            setScope(e.target.value);
-            setScopeId('');
-          }}
+          onChange={(e) => setRoomId(e.target.value)}
         >
-          <MenuItem value="location">Toàn cơ sở</MenuItem>
-          <MenuItem value="room">Phòng cụ thể</MenuItem>
+          <MenuItem value="">Toàn cơ sở</MenuItem>
+          {(rooms.data ?? []).map((item) => (
+            <MenuItem key={item.id} value={item.id}>
+              {item.label}
+            </MenuItem>
+          ))}
         </TextField>
-        {scope !== 'location' && (
-          <TextField
-            required
-            select
-            label="Phòng áp dụng"
-            value={scopeId}
-            disabled={!!previous}
-            onChange={(e) => setScopeId(e.target.value)}
-          >
-            {(rooms.data ?? []).map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
         <TextField
           select
           label="Khoản thu"
@@ -462,7 +446,7 @@ function PolicyForm({
         {error && <Alert severity="error">{error}</Alert>}
         <Button
           type="submit"
-          disabled={busy || (scope !== 'location' && !scopeId)}
+          disabled={busy}
           variant="contained"
         >
           Lưu biểu giá
