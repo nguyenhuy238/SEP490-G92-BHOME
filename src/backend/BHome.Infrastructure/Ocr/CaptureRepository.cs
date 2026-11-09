@@ -26,6 +26,9 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
     BHome.Application.PropertyManagement.IPropertyRepository properties) : ICaptureRepository
 {
     private Guid Actor => scope.UserId;
+    private Task<Guid> IdentityOwnerAsync(CancellationToken t) => db.Users.Where(u => u.IsActive &&
+        db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Owner)))
+        .Select(u => u.Id).SingleAsync(t);
     private void Audit(string action, string type, Guid id) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = Actor, Event = action, TargetType = type, TargetId = id, Succeeded = true, OccurredAt = clock.GetUtcNow() });
     private static void Validate(object input)
@@ -80,7 +83,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId && r.Location.IsActive &&
                     r.Status != RoomStatus.Unavailable, t))
                 throw new CaptureConflictException("room_unavailable");
-            var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = Actor };
+            var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = await IdentityOwnerAsync(t) };
             db.Add(resident); Audit("ResidentCreated", "Resident", resident.Id); return new IdResult(resident.Id);
         }, t);
     }
@@ -96,12 +99,15 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         if (!x.HumanConfirmed || string.IsNullOrWhiteSpace(x.FullName) || x.DateOfBirth == default || x.DateOfBirth > scope.Today || x.DateOfIssue > scope.Today)
             throw new CaptureValidationException("invalid_confirmed_identity");
         await using var tx = await db.Database.BeginTransactionAsync(t);
-        var identityOwner = await db.Set<Resident>().Where(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId)).Select(r => (Guid?)r.OwnerUserId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
-        // Serializes scoped duplicate checks, including the transition between HMAC key versions.
+        if (!await db.Set<Resident>().AnyAsync(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId), t)) throw new OcrAccessException();
+        var identityOwner = await IdentityOwnerAsync(t);
+        // One authoritative chain lock serializes all creators, including legacy Staff-scoped records.
         await db.Locked<ApplicationUser>(identityOwner).SingleAsync(t);
         var resident = await db.Locked<Resident>(id).SingleAsync(t);
         // Re-evaluate assignment after the lock, without trusting any incoming Location/Owner ID.
         if (!await scope.VisibleRooms.AnyAsync(r => r.Id == resident.RoomId, t)) throw new OcrAccessException();
+        // Unverified legacy rows have no encrypted identity to rebind. Verified envelopes retain their AAD.
+        if (resident.VerificationStatus == IdentityVerificationStatus.Pending) resident.OwnerUserId = identityOwner;
         var normalized = x with { FullName = x.FullName.Trim().Normalize(), CitizenIdentityNumber = x.CitizenIdentityNumber.Trim(), ResidentialAddress = x.ResidentialAddress?.Trim().Normalize() };
         IdentityMatchIndex index;
         try { index = protection.CreateMatchIndex(normalized.CitizenIdentityNumber, resident.OwnerUserId); }
@@ -119,8 +125,10 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             else
             {
                 if (resident.VerificationStatus != IdentityVerificationStatus.Pending) throw new CaptureConflictException("identity_not_pending");
-                var digests = protection.CreateMatchIndexes(normalized.CitizenIdentityNumber, resident.OwnerUserId).Select(i => i.Digest).ToArray();
-                if (await db.Set<Resident>().AnyAsync(r => r.OwnerUserId == resident.OwnerUserId && r.Id != resident.Id && r.IdentityHmac != null && digests.Contains(r.IdentityHmac), t))
+                var legacyScopes = await db.Set<Resident>().Where(r => r.IdentityHmac != null).Select(r => r.OwnerUserId).Distinct().ToArrayAsync(t);
+                var digests = legacyScopes.Append(identityOwner).Distinct()
+                    .SelectMany(owner => protection.CreateMatchIndexes(normalized.CitizenIdentityNumber, owner)).Select(i => i.Digest).ToArray();
+                if (await db.Set<Resident>().AnyAsync(r => r.Id != resident.Id && r.IdentityHmac != null && digests.Contains(r.IdentityHmac), t))
                     throw new CaptureConflictException("duplicate_or_conflicting_record");
                 resident.IdentityData = JsonSerializer.Serialize(protection.Encrypt(bytes, ps));
                 resident.IdentityHmac = index.Digest; resident.HmacKeyVersion = index.KeyVersion;

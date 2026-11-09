@@ -1,6 +1,6 @@
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
-import LiveStaffPage from './LiveStaffPage';
+import { StaffApiPage } from '../StaffApiPage';
 export default function StaffPage() {
-  return isMockMode ? <ResourcePage kind="staff" variant="table" /> : <LiveStaffPage />;
+  return isMockMode ? <ResourcePage kind="staff" variant="table" /> : <StaffApiPage />;
 }

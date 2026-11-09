@@ -1,4 +1,5 @@
 using BHome.Application.Jobs;
+using BHome.Application.Operations;
 using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -34,7 +35,8 @@ public sealed class PersistenceCompositionTests
         Assert.Equal(expected.Order(), names);
         Assert.Equal(compact ? 6 : 3, services.GetServices<IJobScheduleContributor>().Count());
         var compactOnlyServices = new[] { typeof(ISharedConfigurationStore), typeof(ISharedDataValidator),
-            typeof(SharedConfigurationService), typeof(SharedConfigurationApplicationService), typeof(LocationConfigurationCopyService) };
+            typeof(SharedConfigurationService), typeof(SharedConfigurationApplicationService), typeof(LocationConfigurationCopyService),
+            typeof(IResidentAdministrationRepository), typeof(ResidentAdministrationService) };
         foreach (var service in compactOnlyServices)
         {
             if (compact) Assert.NotNull(services.GetRequiredService(service));

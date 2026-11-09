@@ -76,6 +76,34 @@ public sealed class Compact24NotificationMvpTests(Compact24Fixture fixture) : IC
     private static AnnouncementWrite Announcement(Guid location) => new("Synthetic notice", "Synthetic maintenance information", new("LOCATION", LocationIds: [location]), ["IN_APP", "EMAIL", "PUSH"]);
 
     [CompactPostgresFact]
+    public async Task AnnouncementCreateReplaysConcurrentlyRejectsChangedPayloadAndRecoversDraftsForOwnerOnly()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff); using var tenant = await Client(w.Tenants[0]);
+        var key = Guid.NewGuid(); var input = Announcement(w.Location);
+        static Task<HttpResponseMessage> Create(HttpClient client, AnnouncementWrite body, Guid key)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/announcements") { Content = JsonContent.Create(body) };
+            request.Headers.Add("Idempotency-Key", key.ToString()); return client.SendAsync(request);
+        }
+        var responses = await Task.WhenAll(Create(owner, input, key), Create(owner, input, key));
+        foreach (var response in responses) response.EnsureSuccessStatusCode();
+        var draft = (await responses[0].Content.ReadFromJsonAsync<AnnouncementView>())!;
+        Assert.Equal(draft.Id, (await responses[1].Content.ReadFromJsonAsync<AnnouncementView>())!.Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await Create(owner, input with { Body = "Changed synthetic body" }, key)).StatusCode);
+        var staffDraftResponse = await Create(staff, input, key); staffDraftResponse.EnsureSuccessStatusCode();
+        Assert.NotEqual(draft.Id, (await staffDraftResponse.Content.ReadFromJsonAsync<AnnouncementView>())!.Id);
+        var drafts = (await owner.GetFromJsonAsync<AnnouncementView[]>("/api/v1/announcements/drafts?page=1&pageSize=100"))!;
+        Assert.Single(drafts, d => d.Id == draft.Id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync("/api/v1/announcements/drafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync("/api/v1/announcements/drafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync("/api/v1/announcements/drafts?pageSize=101")).StatusCode);
+        (await owner.PostAsync($"/api/v1/announcements/{draft.Id}/send", null)).EnsureSuccessStatusCode();
+        var replay = await Create(owner, input, key); replay.EnsureSuccessStatusCode();
+        Assert.Equal("Sent", (await replay.Content.ReadFromJsonAsync<AnnouncementView>())!.Status);
+        Assert.DoesNotContain((await owner.GetFromJsonAsync<AnnouncementView[]>("/api/v1/announcements/drafts?pageSize=100"))!, d => d.Id == draft.Id);
+    }
+
+    [CompactPostgresFact]
     public async Task RoomAndContractReadsRejectOtherTenantsEvenInTheSameRoom()
     {
         var w = await Seed(); var outside = await Seed(); using var a = await Client(w.Tenants[0]); using var stranger = await Client(outside.Tenants[0]);

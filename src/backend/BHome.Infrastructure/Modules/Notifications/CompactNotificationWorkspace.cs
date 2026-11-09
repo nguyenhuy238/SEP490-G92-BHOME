@@ -52,14 +52,30 @@ internal sealed class CompactNotificationWorkspace(Compact24DbContext db, Compac
         """, t, ("id", id), ("actor", s.Actor), ("today", s.Today));
     public async Task<RecipientPreview> PreviewAsync(NotificationScope scope, NotificationAudience audience, CancellationToken t)
     { var recipients = await Resolve(scope, audience, t); return new(recipients.Count, recipients.Count(r => !r.HasEmail)); }
-    public async Task<AnnouncementView> CreateAsync(NotificationScope scope, AnnouncementWrite input, CancellationToken t)
+    public async Task<AnnouncementView> CreateAsync(NotificationScope scope, AnnouncementWrite input, CancellationToken t, Guid? key = null)
     {
         _ = await Resolve(scope, input.Audience, t);
+        var requestKey = key is null ? null : $"announcement-request:{scope.Actor:N}:{key:N}";
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input, CompactNotificationWriter.Json))));
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        if (requestKey is not null)
+        {
+            await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended(@key,0))", t, ("key", requestKey));
+            var previous = await sql.Scalar<string>("SELECT task_data::text FROM operational_tasks WHERE source_key=@key AND assigned_user_id=@actor AND task_data->>'recordType'='Announcement'", t, ("key", requestKey), ("actor", scope.Actor));
+            if (previous is not null)
+            {
+                using var document = JsonDocument.Parse(previous);
+                if (document.RootElement.GetProperty("requestFingerprint").GetString() != fingerprint) throw new NotificationException(409, "announcement_idempotency_conflict");
+                var replay = document.RootElement.GetProperty("view").Deserialize<AnnouncementView>(CompactNotificationWriter.Json)!;
+                await tx.CommitAsync(t); return replay;
+            }
+        }
         var id = Guid.NewGuid(); var view = new AnnouncementView(id, input.Title, input.Body, input.Audience, input.Channels, input.Priority, "Draft", 0, null);
         await sql.Execute("""
             INSERT INTO operational_tasks(id,task_type,source_key,status,assigned_user_id,task_data)
-            VALUES(@id,'SYSTEM_JOB',@key,'Draft',@actor,jsonb_build_object('schemaVersion',1,'recordType','Announcement','createdBy',@actor::text,'view',@view::jsonb))
-            """, t, ("id", id), ("key", "announcement:" + id), ("actor", scope.Actor), ("view", JsonSerializer.Serialize(view, CompactNotificationWriter.Json)));
+            VALUES(@id,'SYSTEM_JOB',@key,'Draft',@actor,jsonb_build_object('schemaVersion',1,'recordType','Announcement','createdBy',@actor::text,'createdAt',@now::timestamptz,'requestFingerprint',@fingerprint::text,'view',@view::jsonb))
+            """, t, ("id", id), ("key", requestKey ?? "announcement:" + id), ("actor", scope.Actor), ("now", sql.Now), ("fingerprint", fingerprint), ("view", JsonSerializer.Serialize(view, CompactNotificationWriter.Json)));
+        await tx.CommitAsync(t);
         return view;
     }
     public async Task<AnnouncementView> SendAsync(NotificationScope scope, Guid id, CancellationToken t)
@@ -85,6 +101,16 @@ internal sealed class CompactNotificationWorkspace(Compact24DbContext db, Compac
         await using var cmd = await sql.Command("""
             SELECT task_data->'view' FROM operational_tasks WHERE task_data->>'recordType'='Announcement' AND status='Sent'
               AND (@owner OR assigned_user_id=@actor) ORDER BY (task_data->'view'->>'sentAt')::timestamptz DESC,id OFFSET @skip LIMIT @take
+            """, t, ("owner", scope.Owner), ("actor", scope.Actor), ("skip", (page - 1) * pageSize), ("take", pageSize));
+        var result = new List<AnnouncementView>(); await using var reader = await cmd.ExecuteReaderAsync(t);
+        while (await reader.ReadAsync(t)) result.Add(JsonSerializer.Deserialize<AnnouncementView>(reader.GetString(0), CompactNotificationWriter.Json)!);
+        return result;
+    }
+    public async Task<IReadOnlyList<AnnouncementView>> DraftsAsync(NotificationScope scope, int page, int pageSize, CancellationToken t)
+    {
+        await using var cmd = await sql.Command("""
+            SELECT task_data->'view' FROM operational_tasks WHERE task_data->>'recordType'='Announcement' AND status='Draft'
+              AND (@owner OR assigned_user_id=@actor) ORDER BY (task_data->>'createdAt')::timestamptz DESC NULLS LAST,id OFFSET @skip LIMIT @take
             """, t, ("owner", scope.Owner), ("actor", scope.Actor), ("skip", (page - 1) * pageSize), ("take", pageSize));
         var result = new List<AnnouncementView>(); await using var reader = await cmd.ExecuteReaderAsync(t);
         while (await reader.ReadAsync(t)) result.Add(JsonSerializer.Deserialize<AnnouncementView>(reader.GetString(0), CompactNotificationWriter.Json)!);

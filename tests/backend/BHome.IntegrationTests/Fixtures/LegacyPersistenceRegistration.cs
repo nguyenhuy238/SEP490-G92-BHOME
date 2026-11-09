@@ -70,6 +70,7 @@ internal static class LegacyPersistenceRegistration
         foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService) &&
             s.ImplementationType == typeof(NotificationAutomationWorker)).ToArray()) services.Remove(worker);
         services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
+        services.RemoveAll<IResidentAdministrationRepository>(); services.RemoveAll<ResidentAdministrationService>();
         services.RemoveAll<RecurringOperationsJob>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.Replace(ServiceDescriptor.Scoped<BHomePersistenceContext>(p => p.GetRequiredService<BHomeDbContext>()));

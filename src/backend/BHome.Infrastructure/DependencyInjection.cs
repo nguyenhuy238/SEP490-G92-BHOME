@@ -143,6 +143,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Operations.IOperationsFiles,
             BHome.Infrastructure.Modules.Operations.OperationsFiles>();
         services.AddScoped<BHome.Application.Operations.OperationsService>();
+        services.AddScoped<BHome.Application.Operations.IResidentAdministrationRepository, BHome.Infrastructure.Modules.Operations.ResidentAdministrationRepository>();
+        services.AddScoped<BHome.Application.Operations.ResidentAdministrationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
