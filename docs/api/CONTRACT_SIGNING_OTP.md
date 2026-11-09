@@ -65,6 +65,29 @@ Tất cả cần Bearer token của **Owner** hoặc **Tenant**, và người g�
 | 503 `signing_method_disabled` | Cách ký đang tắt trong cấu hình |
 | 503 `otp_email_unavailable` / `signing_seal_not_configured` / `otp_secret_not_configured` | Máy chủ thiếu cấu hình email, chứng thư đóng dấu hoặc khóa OTP |
 
+## Owner ký bằng chứng thư cá nhân rồi tải lên (`UPLOAD_PROOF`)
+
+Dùng khi Owner có chứng thư **Viettel MySign** (ví dụ đăng ký qua VNeID) nhưng BHOME **không có** Client ID/Secret để gọi API MySign. BHOME không ký thay. Owner tự ký file bằng MySign rồi tải lên, BHOME kiểm tra file.
+
+Công tắc: `ContractSigning:Methods:UploadProof` (mặc định `false`; Development bật `true`). Chỉ **Owner** dùng được; Tenant gọi sẽ nhận 403 `upload_proof_owner_only`. `GET /contracts/signing-methods` trả `default = "UPLOAD_PROOF"` cho Owner, còn Tenant không thấy cách này.
+
+| Bước | API |
+|---|---|
+| 1. Bắt đầu ký: BHOME lưu đúng bản PDF Owner phải ký, không gửi gì ra ngoài. Lượt ký `Pending`, hạn 72 giờ | `POST /contracts/{id}/signing` + `Idempotency-Key`, body `{ "method": "UPLOAD_PROOF", "certificateId": "000…0" }` |
+| 2. Tải bản để ký | `GET /contracts/{id}/signing/upload-source` → `application/pdf` |
+| 3. Owner ký file bằng MySign (bản Desktop hoặc app), chọn chứng thư của mình | (ngoài BHOME) |
+| 4. Tải bản đã ký lên | `PUT /contracts/{id}/signing/upload` + `Idempotency-Key`, `Content-Type: application/pdf`, body là file (≤ 10 MB) |
+
+Bước 4 chỉ nhận file khi **đạt hết các điều kiện sau**:
+1. Đầu file **giống từng byte** bản đã phát ở bước 2, tức là người ký chỉ nối thêm vào cuối. Nếu không: `signed_pdf_not_from_issued_contract`.
+2. Có **ít nhất một chữ ký mới**, mọi chữ ký nguyên vẹn, và chữ ký cuối phủ toàn bộ file. Nếu không: `signed_pdf_has_no_new_signature`, `signed_pdf_signature_invalid`, `signed_pdf_changed_after_signing`.
+3. Chứng thư ký do CA có tên nằm trong `ContractSigning:UploadProof:AllowedIssuers` cấp (mặc định `["Viettel"]`), và còn hiệu lực tại thời điểm ký. Nếu không: `signed_pdf_certificate_issuer_not_allowed`, `signed_pdf_certificate_not_valid`.
+4. Số trang và nội dung từng trang **không đổi**; chỉ được thêm ô chữ ký (widget, trường kiểu chữ ký). Nếu không: `signed_pdf_content_changed`.
+
+File bị từ chối thì không có gì thay đổi, Owner tải lại được. File đạt thì lượt ký Owner chuyển `Signed` (`provider_code = UPLOAD_PROOF`), PDF được lưu làm bằng chứng, và Tenant nhận email mời ký. **Tenant ký OTP nối thêm lên chính file này**, nên chữ ký Viettel của Owner vẫn hợp lệ.
+
+**Giới hạn:** BHOME chưa có bộ chứng thư gốc của Viettel-CA, nên mới kiểm tra **tên tổ chức cấp** chứ chưa kiểm tra đủ chuỗi tin cậy và tình trạng thu hồi (OCSP/CRL). Adobe Reader thì vẫn kiểm tra đủ khi mở file. Tên người trong chứng thư chưa được so với họ tên Owner.
+
 ## Dữ liệu và bằng chứng
 
 - Không thêm bảng hay migration.
