@@ -232,6 +232,7 @@ export function ConfirmDialog({
   title,
   children,
   busy,
+  error,
   onClose,
   onConfirm,
 }: {
@@ -239,13 +240,17 @@ export function ConfirmDialog({
   title: string;
   children: ReactNode;
   busy?: boolean;
+  error?: string;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
-      <DialogContent>{children}</DialogContent>
+      <DialogContent>
+        {error && <Alert severity="error">{error}</Alert>}
+        {children}
+      </DialogContent>
       <DialogActions>
         <Button disabled={busy} onClick={onClose}>
           Hủy

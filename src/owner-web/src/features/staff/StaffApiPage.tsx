@@ -146,6 +146,7 @@ export function StaffApiPage() {
         </Paper>
       )}
       <ConfirmDialog
+        error={action.error}
         open={invite}
         title="Gửi lời mời tài khoản"
         busy={action.busy}
@@ -335,6 +336,7 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
         </Button>
       </DialogActions>
       <ConfirmDialog
+        error={action.error}
         open={confirm}
         title="Xác nhận lưu hồ sơ"
         busy={action.busy}

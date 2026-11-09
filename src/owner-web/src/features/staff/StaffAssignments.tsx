@@ -183,6 +183,7 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
           </>
         )}
         <ConfirmDialog
+          error={action.error}
           open={!!confirm}
           title="Xác nhận thay đổi người phụ trách"
           busy={action.busy}

@@ -69,7 +69,7 @@ it('preserves account version and employment contract, and reports server respon
   });
   fireEvent.submit(document.getElementById('staff-editor')!);
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
-  expect(await screen.findByText(/Nhân viên còn trách nhiệm/)).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Nhân viên còn trách nhiệm/);
   const call = mocks.request.mock.calls.find(([, init]) => init?.method === 'PUT')!;
   expect(JSON.parse(call[1].body)).toMatchObject({
     accountVersion: 'v7',
