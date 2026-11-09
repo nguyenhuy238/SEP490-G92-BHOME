@@ -40,8 +40,8 @@ internal sealed class UploadProofContractSigningAdapter(ICurrentUser user, ICont
     public Task<SigningOutcome> CompleteUploadAsync(ContractSignature signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
     {
         if (signature.SignerUserId != Actor) throw new ContractException(403, "contract_signer_required");
-        verifier.Verify(issuedPdf, uploadedPdf);
-        return Task.FromResult(new SigningOutcome("Signed", uploadedPdf));
+        var certificate = verifier.Verify(issuedPdf, uploadedPdf);
+        return Task.FromResult(new SigningOutcome("Signed", uploadedPdf, certificate));
     }
 }
 
@@ -53,7 +53,8 @@ internal sealed class UploadProofContractSigningAdapter(ICurrentUser user, ICont
 //    signature fields, so text cannot be added or changed in the signer's revision.
 internal sealed class UploadedSignatureVerifier(IOptions<ContractSigningOptions> options)
 {
-    public void Verify(byte[] issued, byte[] uploaded)
+    // Returns the newest signer certificate (base64 DER) so the signature records who signed and which CA issued it.
+    public string Verify(byte[] issued, byte[] uploaded)
     {
         var settings = options.Value.UploadProof;
         if (uploaded.Length > settings.MaxMegabytes * 1024 * 1024) throw new ContractException(413, "signed_pdf_too_large");
@@ -77,6 +78,7 @@ internal sealed class UploadedSignatureVerifier(IOptions<ContractSigningOptions>
             if (!signatures.SignatureCoversWholeDocument(names[^1])) throw ContractException.Invalid("signed_pdf_changed_after_signing");
             foreach (var name in added) CheckCertificate(signatures.ReadSignatureData(name), settings.Issuers);
             CheckOnlySignaturesWereAdded(before, after);
+            return Convert.ToBase64String(signatures.ReadSignatureData(added[^1]).GetSigningCertificate().GetEncoded());
         }
         catch (ITextException) { throw ContractException.Invalid("signed_pdf_invalid"); }
     }

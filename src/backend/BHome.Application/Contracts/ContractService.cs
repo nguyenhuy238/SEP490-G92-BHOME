@@ -108,10 +108,34 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private static bool Intact(Contract c) => c.SnapshotHash == ContractDocumentSnapshot.Hash(Document(c));
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
         c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
-        c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(s => new SignatureView(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt)).ToArray(), c.ActivatedAt,
+        c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(SignatureOf).ToArray(), c.ActivatedAt,
         c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "", ActualEndDate: c.ActualEndDate, OnboardingDraft: c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
         HoldingExpiresAt: c.HoldingExpiryAt, ReservedCapacity: c.ReservedCapacity, ApprovedAt: c.ApprovedAt,
         PriceLockedAt: c.PriceLockedAt, PriceLockTrigger: c.PriceLockTrigger, ConvertedMainContractId: c.ConvertedMainContractId);
+    // What a signing screen shows: the method (from the provider credential), the deadline and the signing certificate.
+    private static SignatureView SignatureOf(ContractSignature s)
+    {
+        var method = s.CredentialId switch
+        {
+            OtpCredential => SigningMethods.Otp,
+            UploadCredential => SigningMethods.UploadProof,
+            "SIMULATED-NO-CERTIFICATE" => SigningMethods.Simulated,
+            _ => SigningMethods.ViettelMySign
+        };
+        string? subject = null, issuer = null;
+        var first = s.CertificateChain.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (first is not null)
+        {
+            try
+            {
+                using var certificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(Convert.FromBase64String(first));
+                subject = certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false);
+                issuer = certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, true);
+            }
+            catch (Exception e) when (e is FormatException or System.Security.Cryptography.CryptographicException) { }
+        }
+        return new(s.Id, s.SignerUserId, s.Status.ToString(), s.SignedAt, method, s.ExpiresAt, subject, issuer);
+    }
     private static MoveOutView View(ContractMoveOut m) => new(m.Id, m.Status.ToString(), m.ProposedDate, m.Reason, m.InspectionScheduledAt, m.PendingReason,
         m.InspectionNotes, m.InspectedAt, m.ElectricityReadingId, m.WaterReadingId, [], m.InspectionStaffId, m.Version);
     public async Task<ContractView> GetAsync(Guid id, CancellationToken t)
@@ -475,7 +499,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         var updated = await Load(id, [Roles.Owner, Roles.Tenant], t);
         var result = updated.Signatures.Single(s => s.Id == signatureId);
-        return new(result.Id, result.SignerUserId, result.Status.ToString(), result.SignedAt);
+        return SignatureOf(result);
     }
 
     public async Task<ContractView> SyncSigningAsync(Guid id, CancellationToken t)
@@ -619,6 +643,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             s.SignedObjectKey = $"contracts/{c.Id:N}/signatures/{s.Id:N}/signed.pdf";  // 372–377 (CopyDocumentAsync): Kiểm tra đúng quyền Owner/Tenant rồi gọi storage.CopyToAsync tải PDF từ MinIO.
             await files.PutAsync(c.RoomId, s.SignedObjectKey, pdf, "application/pdf", t);
             s.SignedHash = FileHash(pdf); s.Status = c.IsDevelopmentDemo ? SignatureStatus.Simulated : SignatureStatus.Signed; s.SignedAt = clock.GetUtcNow();
+            if (!string.IsNullOrEmpty(answer.CertificateChain)) s.CertificateChain = answer.CertificateChain;
             if (new[] { c.OwnerSignerId, c.TenantUserId }.All(signer => c.Signatures.Any(a => a.SignerUserId == signer && CompleteSignature(a, c))))
             {
                 c.Status = ContractStatus.PendingActivation;

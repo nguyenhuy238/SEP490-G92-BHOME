@@ -35,6 +35,11 @@ public sealed class ContractSignatureImageController(SignatureImageService image
     public Task<SignatureImageView> Generate(GenerateSignatureInput x, [FromServices] SignaturePictureGenerator generator, CancellationToken t)
         => images.SaveAsync(generator.FromName(x.Name), t);
 
+    // A signature drawn with a finger (mobile) or the mouse (web): the strokes, turned into a transparent PNG here.
+    [HttpPost("drawn"), RequestSizeLimit(512 * 1024)]
+    public Task<SignatureImageView> Drawn(DrawnSignatureInput x, [FromServices] SignaturePictureGenerator generator, CancellationToken t)
+        => images.SaveAsync(generator.FromStrokes(x), t);
+
     [HttpDelete]
     public async Task<IActionResult> Remove(CancellationToken t) { await images.RemoveAsync(t); return NoContent(); }
 }
