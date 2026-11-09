@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ThemeProvider } from '@mui/material';
+import { MemoryRouter } from 'react-router';
 import { AuthProvider } from '../../../../../../packages/client-core/src/auth';
 import { theme } from '../../../theme/theme';
 import { LoginPage } from './LoginPage';
@@ -21,15 +22,17 @@ function setup() {
   // Empty base skips startup refresh, while exercising real web SessionClient requests.
   return render(
     <ThemeProvider theme={theme}>
-      <AuthProvider transport="web">
-        <LoginPage />
-      </AuthProvider>
+      <MemoryRouter>
+        <AuthProvider transport="web">
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>
     </ThemeProvider>,
   );
 }
 
 function fillLogin() {
-  fireEvent.change(screen.getByLabelText('Email hoặc Số điện thoại'), {
+  fireEvent.change(screen.getByLabelText('Email'), {
     target: { value: ' synthetic-owner@example.invalid ' },
   });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), {
@@ -39,7 +42,7 @@ function fillLogin() {
 
 it('keeps required fields empty, masks the password, and explains unsupported remember-login', () => {
   setup();
-  const identifier = screen.getByLabelText('Email hoặc Số điện thoại');
+  const identifier = screen.getByLabelText('Email');
   expect(identifier).toBeRequired();
   expect(identifier).toHaveValue('');
   expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('type', 'password');
@@ -54,7 +57,7 @@ it('does not send an empty or whitespace-only identifier', () => {
   const fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   setup();
-  fireEvent.change(screen.getByLabelText('Email hoặc Số điện thoại'), { target: { value: '   ' } });
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: '   ' } });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'synthetic' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }).closest('form')!);
   expect(fetchMock).not.toHaveBeenCalled();
@@ -105,7 +108,11 @@ it.each([401, 429, 503])(
     fillLogin();
     fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      status === 429 ? 'quá nhiều lần' : 'Không thể đăng nhập',
+      status === 401
+        ? 'Email hoặc mật khẩu không đúng'
+        : status === 429
+          ? 'quá nhiều lần'
+          : 'không khả dụng',
     );
     await waitFor(() => expect(screen.getByLabelText('Mật khẩu')).toHaveValue(''));
     expect(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' })).toBeEnabled();
@@ -134,8 +141,8 @@ it('reports unavailable reset delivery without claiming an email was sent', asyn
   setup();
   fillLogin();
   fireEvent.click(screen.getByRole('button', { name: 'Quên mật khẩu?' }));
-  expect(screen.getByRole('textbox', { name: /Tên đăng nhập/ })).toHaveValue(
-    ' synthetic-owner@example.invalid ',
+  expect(screen.getByRole('textbox', { name: /Email/ })).toHaveValue(
+    'synthetic-owner@example.invalid',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Gửi hướng dẫn' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Chưa thể gửi hướng dẫn');

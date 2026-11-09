@@ -92,7 +92,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
   const [destination, setDestination] = useState('');
   const [notice, setNotice] = useState('');
 
-  const list =
+  const configuredList =
     kind === 'room'
       ? shared.roomTemplates
       : kind === 'fee'
@@ -102,6 +102,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
           : assetTab === 0
             ? shared.assetCatalog
             : shared.assetTemplates;
+  const list = isMockMode ? configuredList : [];
   const visible = list.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()));
   const activeItem = list.find((item) => item.id === preview || item.id === editor.id);
 
@@ -136,7 +137,12 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
         title={meta[kind].title}
         subtitle={meta[kind].subtitle}
         actions={
-          <Button variant="contained" startIcon={<Plus size={17} />} onClick={openCreate}>
+          <Button
+            variant="contained"
+            startIcon={<Plus size={17} />}
+            onClick={openCreate}
+            disabled={!isMockMode}
+          >
             {meta[kind].action}
           </Button>
         }
@@ -145,6 +151,13 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
         Mẫu dùng chung là nguồn cấu hình có thể tái sử dụng. Việc chỉnh sửa bản sao tại một cơ sở
         không làm thay đổi thư viện này hoặc cơ sở khác.
       </Alert>
+      {!isMockMode && (
+        <Alert severity="warning" sx={{ mb: 2.5 }}>
+          Backend hiện chỉ có cấu hình theo từng cơ sở, chưa có API thư viện mẫu dùng chung cấp
+          chuỗi. Dữ liệu demo không được hiển thị trong API mode và các thao tác tạo/sửa/áp dụng
+          đang bị khóa để tránh lưu sai nghiệp vụ.
+        </Alert>
+      )}
       {notice && (
         <Alert severity="success" onClose={() => setNotice('')} sx={{ mb: 2 }}>
           {notice}
@@ -180,7 +193,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
           <Typography color="text.secondary" sx={{ mb: 2 }}>
             Hãy thử từ khóa khác hoặc thêm một cấu hình dùng chung.
           </Typography>
-          <Button onClick={openCreate} startIcon={<Plus size={16} />}>
+          <Button onClick={openCreate} startIcon={<Plus size={16} />} disabled={!isMockMode}>
             {meta[kind].action}
           </Button>
         </Paper>

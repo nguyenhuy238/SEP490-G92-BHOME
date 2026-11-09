@@ -91,6 +91,13 @@ function MockLocationWorkspace() {
   };
 
   const handleSetupComplete = (newLocationRecord: PortalRecord) => {
+    if (!isMockMode) {
+      portal.notify(
+        'Backend chưa có API commit nguyên tử cho toàn bộ Wizard. Không có dữ liệu nào được thay đổi.',
+        true,
+      );
+      return;
+    }
     db.records.locations.push(newLocationRecord);
     setSuccessToast(`Đã hoàn tất cấu hình cơ sở mới: ${newLocationRecord.name}.`);
   };
@@ -113,14 +120,28 @@ function MockLocationWorkspace() {
             <Button
               variant="outlined"
               startIcon={<Copy size={16} />}
-              onClick={() => setIsCopyWizardOpen(true)}
+              onClick={() => {
+                if (isMockMode) setIsCopyWizardOpen(true);
+                else
+                  portal.notify(
+                    'Backend chưa có API sao chép cấu hình nguyên tử giữa hai cơ sở.',
+                    true,
+                  );
+              }}
             >
               Sao chép cấu hình
             </Button>
             <Button
               variant="contained"
               startIcon={<Sparkles size={16} />}
-              onClick={() => setIsSetupWizardOpen(true)}
+              onClick={() => {
+                if (isMockMode) setIsSetupWizardOpen(true);
+                else
+                  portal.notify(
+                    'Backend chưa có API commit nguyên tử cho toàn bộ Wizard cấu hình cơ sở.',
+                    true,
+                  );
+              }}
             >
               Cấu hình cơ sở
             </Button>
@@ -187,7 +208,7 @@ function MockLocationWorkspace() {
 
       {activeTab === 'pricing' && <LocationPricingTab db={db} location={selected} />}
 
-      {activeTab === 'rules' && <LocationRulesTab />}
+      {activeTab === 'rules' && <LocationRulesTab locationId={selected.id} />}
 
       {activeTab === 'history' && <LocationHistoryTab />}
 

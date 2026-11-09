@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
@@ -25,9 +26,10 @@ export function BillingConfigurationPage({
   initialLocationId = '',
 }: { initialLocationId?: string } = {}) {
   const api = useInvoiceApi();
+  const { locationId: routeLocationId } = useParams();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
-  const [location, setLocation] = useState(initialLocationId);
+  const [location, setLocation] = useState(routeLocationId ?? '');
   const locations = useQuery({
     queryKey: ['billing-locations', actor],
     queryFn: ({ signal }) =>
@@ -309,7 +311,6 @@ function PolicyForm({
         { signal },
       ),
   });
-  const [roomId, setRoomId] = useState(previous?.roomId ?? '');
   const [category, setCategory] = useState(String(previous?.category ?? 1)),
     [rate, setRate] = useState(''),
     [date, setDate] = useState(''),
@@ -317,6 +318,7 @@ function PolicyForm({
   const [name, setName] = useState(previous?.name ?? ''),
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
+  const [roomId, setRoomId] = useState(previous?.roomId ?? '');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -372,15 +374,6 @@ function PolicyForm({
         <Typography variant="h6">
           {previous ? 'Phiên bản giá kế tiếp: ' + previous.name : 'Thêm biểu giá'}
         </Typography>
-        {rooms.isPending && <LinearProgress />}
-        {rooms.error && (
-          <Alert
-            severity="error"
-            action={<Button onClick={() => void rooms.refetch()}>Thử lại</Button>}
-          >
-            {invoiceError(rooms.error)}
-          </Alert>
-        )}
         <TextField
           select
           label="Phạm vi biểu giá"
@@ -389,12 +382,9 @@ function PolicyForm({
           onChange={(e) => setRoomId(e.target.value)}
         >
           <MenuItem value="">Toàn cơ sở</MenuItem>
-          {previous?.roomId && !rooms.data?.some((room) => room.id === previous.roomId) && (
-            <MenuItem value={previous.roomId}>Phòng đã cấu hình</MenuItem>
-          )}
-          {rooms.data?.map((room) => (
-            <MenuItem key={room.id} value={room.id}>
-              {room.label}
+          {(rooms.data ?? []).map((item) => (
+            <MenuItem key={item.id} value={item.id}>
+              {item.label}
             </MenuItem>
           ))}
         </TextField>
@@ -454,11 +444,7 @@ function PolicyForm({
           slotProps={{ inputLabel: { shrink: true } }}
         />
         {error && <Alert severity="error">{error}</Alert>}
-        <Button
-          type="submit"
-          disabled={busy || !name.trim() || !date || !rate || !reason.trim()}
-          variant="contained"
-        >
+        <Button type="submit" disabled={busy} variant="contained">
           Lưu biểu giá
         </Button>
         {previous && (

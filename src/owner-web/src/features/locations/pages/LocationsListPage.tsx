@@ -30,6 +30,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { usePortalAction, usePortalData } from '../../../hooks/usePortalData';
@@ -42,17 +43,24 @@ import {
 } from '../components/InitialLocationSetupWizard';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
 import { isMockMode } from '../../../services/config';
-import { PropertyApiPage } from '../../property/PropertyApiPages';
+import { propertyError, usePropertyApi, type LocationDto } from '../../property-api/propertyApi';
 
 export function LocationsListPage() {
-  return isMockMode ? <MockLocationsListPage /> : <PropertyApiPage kind="locations" />;
+  return <MockLocationsListPage />;
 }
 
 function MockLocationsListPage() {
   const portal = usePortal();
   const query = usePortalData();
   const action = usePortalAction();
+  const propertyApi = usePropertyApi();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const apiAction = useMutation({
+    mutationFn: (run: () => Promise<LocationDto>) => run(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portal', 'api'] }),
+    onError: (error) => portal.notify(propertyError(error), true),
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -95,10 +103,19 @@ function MockLocationsListPage() {
   ).length;
   const overallOccupancy = totalRoomsAll
     ? Math.round((occupiedRoomsAll / totalRoomsAll) * 100)
-    : 85;
+    : isMockMode
+      ? 85
+      : 0;
 
   // Handlers
   const handleOpenCopyWizard = (sourceLocId?: string) => {
+    if (!isMockMode) {
+      portal.notify(
+        'Backend chưa có API sao chép cấu hình nguyên tử giữa hai cơ sở. Không có dữ liệu nào được thay đổi.',
+        true,
+      );
+      return;
+    }
     setSelectedSourceForCopy(sourceLocId || locations[0]?.id || '');
     setIsCopyWizardOpen(true);
   };
@@ -107,6 +124,13 @@ function MockLocationsListPage() {
     newLocationRecord: PortalRecord,
     wizardData: InitialLocationSetupResult,
   ) => {
+    if (!isMockMode) {
+      portal.notify(
+        'Backend chưa có API commit nguyên tử cho toàn bộ Setup Wizard. Không có dữ liệu nào được lưu để tránh tạo cơ sở cấu hình dở dang.',
+        true,
+      );
+      return;
+    }
     const roomTypes = wizardData.roomTypes.map((roomType) =>
       makeRecord('room-types', {
         id: `${roomType.id}-${newLocationRecord.id}`,
@@ -172,6 +196,28 @@ function MockLocationsListPage() {
   const handleSaveQuickEdit = () => {
     if (editingLocation) {
       const updatedLocation = structuredClone(editingLocation);
+      if (!isMockMode) {
+        apiAction.mutate(
+          () =>
+            propertyApi.saveLocation(
+              {
+                name: updatedLocation.name,
+                address: updatedLocation.attributes.address || '',
+                isActive: updatedLocation.status !== 'Tạm ngừng',
+                version: Number(updatedLocation.attributes.version || 0),
+                reason: 'Cập nhật thông tin cơ sở từ Owner Web',
+              },
+              updatedLocation.id,
+            ),
+          {
+            onSuccess: () => {
+              setEditingLocation(null);
+              setSuccessToast(`Đã lưu thay đổi cho cơ sở "${updatedLocation.name}".`);
+            },
+          },
+        );
+        return;
+      }
       action.mutate(() => portal.repository.save('locations', updatedLocation), {
         onSuccess: () => {
           setEditingLocation(null);
@@ -271,7 +317,7 @@ function MockLocationsListPage() {
                   TỔNG SỐ PHÒNG
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 850, mt: 0.5 }}>
-                  {totalRoomsAll || 48}
+                  {isMockMode ? totalRoomsAll || 48 : totalRoomsAll}
                 </Typography>
               </Box>
               <Box
@@ -398,7 +444,9 @@ function MockLocationsListPage() {
           ).length;
           const occupancyRate = locRooms.length
             ? Math.round((occupied / locRooms.length) * 100)
-            : 85;
+            : isMockMode
+              ? 85
+              : 0;
 
           const manager =
             db.records.staff.find((s) => s.id === loc.staffId)?.name ||

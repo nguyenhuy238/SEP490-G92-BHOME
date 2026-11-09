@@ -7,16 +7,19 @@ import { PortalProvider } from '../../app/PortalProvider';
 import { ResourcePage } from './ResourcePage';
 import { theme } from '../../theme/theme';
 import { createMockRepository } from '../../services/repositories/mockPortalRepository';
+import { AuthProvider } from '../../../../../packages/client-core/src/auth';
 vi.mock('../../services/config', () => ({ isMockMode: true }));
 beforeEach(() => localStorage.clear());
 function mount() {
   render(
     <ThemeProvider theme={theme}>
-      <PortalProvider>
-        <MemoryRouter>
-          <ResourcePage kind="locations" variant="cards" />
-        </MemoryRouter>
-      </PortalProvider>
+      <AuthProvider>
+        <PortalProvider>
+          <MemoryRouter>
+            <ResourcePage kind="locations" variant="cards" />
+          </MemoryRouter>
+        </PortalProvider>
+      </AuthProvider>
     </ThemeProvider>,
   );
 }
