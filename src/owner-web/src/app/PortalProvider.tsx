@@ -3,6 +3,7 @@ import { useAuth } from '../../../../packages/client-core/src/auth';
 import { Alert, Snackbar } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMockRepository } from '../services/repositories/mockPortalRepository';
+import { isMockMode } from '../services/config';
 import type { PortalRepository } from '../types/portal';
 
 interface PortalContextValue {
