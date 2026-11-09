@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     reject: vi.fn(),
     invoices: vi.fn(),
     debts: vi.fn(),
+    debtSummary: vi.fn(),
     history: vi.fn(),
     transfers: vi.fn(),
     request: vi.fn(),
@@ -114,6 +115,12 @@ beforeEach(() => {
   mocks.api.transfers.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.history.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.invoices.mockResolvedValue({ items: [], totalCount: 0 });
+  mocks.api.debtSummary.mockResolvedValue({
+    outstandingAmount: '0',
+    overdueAmount: '0',
+    invoiceCount: 0,
+    overdueInvoiceCount: 0,
+  });
 });
 afterEach(cleanup);
 it('shows server-owned balance and explicit missing receiving configuration', async () => {
@@ -191,12 +198,68 @@ it('refreshes invoice balance and history after successful allocation', async ()
   mocks.api.transfers.mockResolvedValue({ items: [transfer], totalCount: 1 });
   mocks.api.allocate.mockResolvedValue({ status: 'Allocated', reason: 'verified_full_payment' });
   mount(<PaymentManagementPage />);
-  await screen.findByText(/Chưa thanh toán · Còn phải trả 100.000/);
+  await screen.findByText(/Cơ sở tổng hợp · PAY-TEST/);
+  await screen.findByRole('cell', { name: /^100\.000\s₫$/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử đã xác minh' }));
+  await screen.findByText('Trang lịch sử 1 · 0 thanh toán');
+  fireEvent.click(screen.getByRole('tab', { name: 'Đối soát giao dịch' }));
   fireEvent.click(
     await screen.findByLabelText('Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng'),
   );
   fireEvent.click(screen.getByText('Xác nhận phân bổ tiền'));
   fireEvent.click(within(screen.getByRole('dialog')).getByText('Xác nhận đối soát'));
-  await screen.findByText(/Đã thanh toán · Còn phải trả 0/);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
+  await screen.findByRole('cell', { name: /^0\s₫$/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử đã xác minh' }));
+  await screen.findByText('Trang lịch sử 1 · 0 thanh toán');
   expect(mocks.api.history).toHaveBeenCalledTimes(2);
+});
+it('shows the server aggregate independently of the visible invoice page and keeps debt separate from reconciliation', async () => {
+  mocks.api.debts.mockResolvedValue({ items: [], totalCount: 100 });
+  mocks.api.debtSummary.mockResolvedValue({
+    outstandingAmount: '999999999999999999',
+    overdueAmount: '100000',
+    invoiceCount: 100,
+    overdueInvoiceCount: 2,
+  });
+  mount(<PaymentManagementPage debtOnly />);
+  expect(await screen.findByText('999.999.999.999.999.999 ₫')).toBeInTheDocument();
+  expect(screen.getByText('Tổng dư nợ trong bộ lọc')).toBeInTheDocument();
+  expect(mocks.api.transfers).not.toHaveBeenCalled();
+  expect(screen.queryByRole('tab', { name: 'Tài khoản nhận tiền' })).not.toBeInTheDocument();
+});
+it('does not replace a failed debt aggregate with zero and permits retry', async () => {
+  mocks.api.debts.mockResolvedValue({ items: [], totalCount: 0 });
+  mocks.api.debtSummary.mockRejectedValueOnce({ status: 503 });
+  mount(<PaymentManagementPage debtOnly />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thử lại tổng hợp' }));
+  expect(await screen.findByText('Tổng dư nợ trong bộ lọc')).toBeInTheDocument();
+});
+it('chooses a readable unpaid invoice for an unmatched transfer without entering its UUID', async () => {
+  mocks.api.transfer.mockResolvedValue({ ...transfer, proposedInvoiceId: null });
+  mocks.api.invoices.mockResolvedValue({
+    items: [
+      {
+        invoiceId: id,
+        locationName: 'Cơ sở chọn',
+        roomNumber: 'P102',
+        billingPeriod: '2026-11-01',
+        dueDate: '2026-12-01',
+        outstandingAmount: '100000',
+      },
+    ],
+    totalCount: 1,
+  });
+  mount(<ReconcileTransfer transfer={{ ...transfer, proposedInvoiceId: null }} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Chọn hóa đơn cần phân bổ' }));
+  const dialog = screen.getByRole('dialog', { name: 'Chọn hóa đơn cần phân bổ' });
+  fireEvent.click(await within(dialog).findByRole('button', { name: 'Chọn hóa đơn' }));
+  expect(screen.getByText('Cơ sở chọn · Phòng P102 · 2026-11')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Mã hóa đơn cần phân bổ')).not.toBeInTheDocument();
+  expect(mocks.api.invoices).toHaveBeenCalledWith(
+    expect.objectContaining({ paymentStatus: 'Unpaid' }),
+    expect.any(AbortSignal),
+  );
+  await waitFor(() => expect(mocks.api.payers).toHaveBeenCalledWith(id, expect.any(AbortSignal)));
 });

@@ -43,6 +43,7 @@ export function OwnerTable<T>({
   error,
   retry,
   label = 'Danh sách bản ghi',
+  selectLabel = 'Xem chi tiết',
 }: {
   rows: T[];
   columns: { label: string; render: (row: T) => ReactNode }[];
@@ -52,6 +53,7 @@ export function OwnerTable<T>({
   error?: unknown;
   retry?: () => void;
   label?: string;
+  selectLabel?: string;
 }) {
   if (error) return <ErrorState error={new Error(ownerError(error))} retry={retry ?? (() => {})} />;
   if (loading && !rows.length) return <LoadingState />;
@@ -75,7 +77,7 @@ export function OwnerTable<T>({
               ))}
               {select && (
                 <TableCell>
-                  <Button onClick={() => select(row)}>Xem chi tiết</Button>
+                  <Button onClick={() => select(row)}>{selectLabel}</Button>
                 </TableCell>
               )}
             </TableRow>

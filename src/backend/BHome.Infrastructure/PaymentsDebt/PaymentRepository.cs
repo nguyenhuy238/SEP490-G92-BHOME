@@ -163,12 +163,21 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
         (scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.ActorId) ||
             scope.Staff && db.Locations.Any(l => l.Id == i.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a => a.LocationId == i.LocationId &&
                 a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
-    public async Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope, PaymentQuery query, CancellationToken t)
+    private IQueryable<InvoiceFinancialRow> FilteredDebt(PaymentScope scope, PaymentQuery query)
     {
         var source = db.Financials(VisibleInvoices(scope).Where(i => (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) &&
             (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod) && (query.InvoiceIds == null || query.InvoiceIds.Contains(i.Id))));
-        var filtered = source.Where(i => (!query.OutstandingOnly || i.Original + i.Adjustments > i.Paid) && (!query.OverdueOnly || i.Original + i.Adjustments > i.Paid && i.DueDate < scope.Today) &&
+        return source.Where(i => (!query.OutstandingOnly || i.Original + i.Adjustments > i.Paid) && (!query.OverdueOnly || i.Original + i.Adjustments > i.Paid && i.DueDate < scope.Today) &&
             (query.PaymentStatus == null || query.PaymentStatus == "Paid" && i.Original + i.Adjustments <= i.Paid || query.PaymentStatus == "Unpaid" && i.Original + i.Adjustments > i.Paid));
+    }
+    public async Task<DebtSummary> DebtSummaryAsync(PaymentScope scope, PaymentQuery query, CancellationToken t) =>
+        await FilteredDebt(scope, query).GroupBy(_ => 1).Select(g => new DebtSummary(
+            g.Sum(i => Math.Max(0, i.Original + i.Adjustments - i.Paid)),
+            g.Sum(i => i.DueDate < scope.Today ? Math.Max(0, i.Original + i.Adjustments - i.Paid) : 0m),
+            g.Count(), g.Count(i => i.DueDate < scope.Today))).SingleOrDefaultAsync(t) ?? new(0m, 0m, 0, 0);
+    public async Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope, PaymentQuery query, CancellationToken t)
+    {
+        var filtered = FilteredDebt(scope, query);
         var count = await filtered.CountAsync(t);
         var rows = await filtered.OrderBy(i => i.DueDate).ThenBy(i => i.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);
         var entitled = scope.Staff && scope.Tenant && !scope.Owner

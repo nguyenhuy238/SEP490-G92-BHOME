@@ -298,6 +298,7 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
                       'invoices',
                       'invoice-payment',
                       'payment-invoices',
+                      'debt-summary',
                       'payment-history',
                       'transfer-instructions',
                     ].map((key) => cache.invalidateQueries({ queryKey: [key] })),

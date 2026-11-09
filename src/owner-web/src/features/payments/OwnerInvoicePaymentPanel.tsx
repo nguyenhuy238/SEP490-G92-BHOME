@@ -33,6 +33,7 @@ import {
 import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { RefundPanel } from './RefundPanel';
+import { PaymentInvoicePicker } from './PaymentInvoicePicker';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
@@ -354,6 +355,8 @@ export function ReconcileTransfer({
     queryFn: ({ signal }) => api.reviews(transfer.id, signal),
   });
   const [refundsOpen, setRefundsOpen] = useState(false);
+  const [choosing, setChoosing] = useState(false),
+    [invoiceLabel, setInvoiceLabel] = useState('');
   const data = latest.data ?? transfer;
   async function perform(rejection = false) {
     if (lock.current) return;
@@ -378,6 +381,7 @@ export function ReconcileTransfer({
           ['payment-reviews'],
           ['payment-invoices'],
           ['payment-history'],
+          ['debt-summary'],
         ].map((queryKey) => cache.invalidateQueries({ queryKey })),
       );
     } catch (e) {
@@ -392,6 +396,13 @@ export function ReconcileTransfer({
       <Stack spacing={2}>
         <Typography>
           {data.bankReference} · {formatContractMoney(data.amount)} · {paymentText(data.status)}
+        </Typography>
+        <Typography variant="body2">
+          Ngày giao dịch: {formatInstant(data.occurredAt)} · Nguồn {data.providerIdentity}
+        </Typography>
+        <Typography variant="body2">
+          Nội dung: {data.transferDescription || 'Không có nội dung'} · Sao kê:{' '}
+          {data.statementReference}
         </Typography>
         <Typography>
           {data.reason === 'verified_excess_payment_pending_review'
@@ -430,16 +441,31 @@ export function ReconcileTransfer({
         )}
         {data.status === 'PendingReview' && (
           <>
-            <TextField
-              label="Mã hóa đơn cần phân bổ"
-              value={invoiceId}
-              onChange={(e) => {
-                setInvoiceId(e.target.value);
-                setPayer('');
-                setChecked(false);
-                key.current = crypto.randomUUID();
-              }}
-            />
+            <Typography>
+              {invoiceLabel ||
+                (invoiceId
+                  ? 'Đang xem hóa đơn gợi ý từ giao dịch. Kiểm tra trước khi phân bổ.'
+                  : 'Chưa chọn hóa đơn để phân bổ.')}
+            </Typography>
+            <Button disabled={busy} onClick={() => setChoosing(true)}>
+              Chọn hóa đơn cần phân bổ
+            </Button>
+            {choosing && (
+              <PaymentInvoicePicker
+                open
+                close={() => setChoosing(false)}
+                choose={(i) => {
+                  setInvoiceId(i.invoiceId);
+                  setInvoiceLabel(
+                    `${i.locationName} · Phòng ${i.roomNumber} · ${i.billingPeriod.slice(0, 7)}`,
+                  );
+                  setPayer('');
+                  setChecked(false);
+                  setChoosing(false);
+                  key.current = crypto.randomUUID();
+                }}
+              />
+            )}
             <TextField
               select
               label="Người thực trả đã xác minh"

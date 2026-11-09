@@ -109,6 +109,12 @@ export interface DebtInvoice {
   approvedAdjustmentTotal?: string | null;
   potentialExcessAmount?: string | null;
 }
+export interface DebtSummary {
+  outstandingAmount: string;
+  overdueAmount: string;
+  invoiceCount: number;
+  overdueInvoiceCount: number;
+}
 export interface PaymentHistory {
   id: string;
   invoiceId: string;
@@ -166,6 +172,8 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       request<Page<DebtInvoice>>('/api/v1/payment-invoices?' + paymentQuery(filter), { signal }),
     debts: (filter: PaymentFilter, signal?: AbortSignal) =>
       request<Page<DebtInvoice>>('/api/v1/debts?' + paymentQuery(filter), { signal }),
+    debtSummary: (filter: PaymentFilter, signal?: AbortSignal) =>
+      request<DebtSummary>('/api/v1/debts/summary?' + paymentQuery(filter), { signal }),
     history: (filter: PaymentFilter, signal?: AbortSignal) =>
       request<Page<PaymentHistory>>('/api/v1/payment-history?' + paymentQuery(filter), { signal }),
     transfers: (filter: PaymentFilter, signal?: AbortSignal) =>
