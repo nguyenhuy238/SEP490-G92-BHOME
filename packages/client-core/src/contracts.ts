@@ -574,6 +574,17 @@ export const labels: Record<string, string> = {
   Draft: 'Bản nháp',
   PendingSigning: 'Chờ ký',
   PendingActivation: 'Chờ kích hoạt',
+  Expired: 'Đã hết hạn',
+  Converted: 'Đã chuyển sang hợp đồng thuê',
+  Applied: 'Đã áp dụng',
+  holding_owner_approval_required: 'Cần Owner phê duyệt hợp đồng giữ chỗ.',
+  holding_deposit_insufficient: 'Cọc giữ chỗ đã xác minh chưa đủ.',
+  holding_expired: 'Hợp đồng giữ chỗ đã hết hạn.',
+  HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
+  HoldingApproved: 'Owner phê duyệt giữ chỗ',
+  HoldingActivated: 'Kích hoạt giữ chỗ',
+  HoldingCancelled: 'Hủy giữ chỗ',
+  HoldingConverted: 'Chuyển sang hợp đồng thuê chính',
   Active: 'Đang hiệu lực',
   Terminated: 'Đã kết thúc',
   Superseded: 'Đã thay thế',
@@ -1058,7 +1069,7 @@ export function actionPayload(
   }
   return body;
 }
-export function draftPayload(values: Record<string, string>, residentIds: string[]) {
+function draftCore(values: Record<string, string>, residentIds: string[]) {
   const startDate = dateOnly(values.startDate ?? ''),
     endDate = dateOnly(values.endDate ?? '');
   if (endDate <= startDate) throw new Error('Ngày hết hạn phải sau ngày bắt đầu.');
@@ -1076,10 +1087,32 @@ export function draftPayload(values: Record<string, string>, residentIds: string
     residentIds: residentIds.map(guid),
     startDate,
     endDate,
+    terms: required(values.terms ?? '', 12000),
+  };
+}
+export function draftPayload(values: Record<string, string>, residentIds: string[]) {
+  return {
+    ...draftCore(values, residentIds),
     monthlyRent: vnd(values.monthlyRent ?? '', true),
     requiredDeposit: vnd(values.requiredDeposit ?? ''),
-    terms: required(values.terms ?? '', 12000),
     holdingContractId: values.holdingContractId ? guid(values.holdingContractId) : null,
+  };
+}
+export function holdingDraftPayload(values: Record<string, string>, residentIds: string[]) {
+  const capacity = Number(values.reservedCapacity || residentIds.length);
+  const expires = new Date((values.expiresAt ?? '') + ':00+07:00');
+  if (
+    !Number.isInteger(capacity) ||
+    capacity < residentIds.length ||
+    capacity > 32767 ||
+    !Number.isFinite(expires.getTime())
+  )
+    throw new Error('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
+  return {
+    ...draftCore(values, residentIds),
+    holdingDeposit: vnd(values.requiredDeposit ?? ''),
+    expiresAt: expires.toISOString(),
+    reservedCapacity: capacity,
   };
 }
 // Retain the same key after an ambiguous response. Forget only once the server confirms success.

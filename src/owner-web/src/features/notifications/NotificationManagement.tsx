@@ -28,6 +28,7 @@ interface Announcement {
   status: string;
   recipientCount: number;
   sentAt: string | null;
+  audience?: { type: string; locationIds?: string[]; roomIds?: string[]; userIds?: string[] };
 }
 interface ReminderPolicy {
   debtEnabled: boolean;
@@ -59,8 +60,8 @@ export function NotificationManagement() {
   } | null>(null);
   const [draft, setDraft] = useState<Announcement | null>(null),
     [confirm, setConfirm] = useState(false),
-    [uncertain, setUncertain] = useState(false),
     [page, setPage] = useState(1);
+  const [draftPage, setDraftPage] = useState(1);
   const action = useOwnerAction();
   const channels = useOwnerQuery<{
     enabled: boolean;
@@ -71,6 +72,10 @@ export function NotificationManagement() {
   const sent = useOwnerQuery<Announcement[]>(
     ['announcements-sent', page],
     `/api/v1/announcements/sent?page=${page}&pageSize=20`,
+  );
+  const drafts = useOwnerQuery<Announcement[]>(
+    ['announcements-drafts', draftPage],
+    `/api/v1/announcements/drafts?page=${draftPage}&pageSize=20`,
   );
   const fingerprint = JSON.stringify({ type, location, room, users, title, body, email, priority });
   function audience() {
@@ -96,7 +101,7 @@ export function NotificationManagement() {
       <Stack spacing={2}>
         <OwnerFeedback
           busy={action.busy || channels.isFetching || sent.isFetching}
-          error={action.error || channels.error || sent.error}
+          error={action.error || channels.error || sent.error || drafts.error}
           notice={action.notice}
         />
         {channels.data && (
@@ -197,7 +202,7 @@ export function NotificationManagement() {
         {!draft && (
           <>
             <Button
-              disabled={action.busy || uncertain}
+              disabled={action.busy}
               onClick={() =>
                 void action.run(async () => {
                   const result = await action.command<{
@@ -219,7 +224,6 @@ export function NotificationManagement() {
             <Button
               disabled={
                 action.busy ||
-                uncertain ||
                 !title.trim() ||
                 !body.trim() ||
                 preview?.fingerprint !== fingerprint ||
@@ -227,8 +231,6 @@ export function NotificationManagement() {
               }
               onClick={() =>
                 void action.run(async () => {
-                  // Create has no backend replay contract. An uncertain response must not silently create another draft.
-                  setUncertain(true);
                   const result = await action.command<Announcement>(
                     '/api/v1/announcements',
                     'POST',
@@ -241,25 +243,23 @@ export function NotificationManagement() {
                     },
                   );
                   setDraft(result);
-                  setUncertain(false);
                 }, 'Đã tạo nháp. Kiểm tra nội dung trước khi gửi.')
               }
             >
               Tạo nháp đã kiểm tra
             </Button>
-            {uncertain && !action.busy && (
-              <Alert severity="warning">
-                Chưa xác định được kết quả tạo nháp. Không tự gửi lại yêu cầu tạo; cần kiểm tra
-                trạng thái với quản trị hệ thống. API hiện chưa hỗ trợ tìm lại nháp theo mã yêu cầu.
-              </Alert>
-            )}
           </>
         )}
         {draft && (
           <>
             <Alert severity="info">
               Nháp {draft.id} · {draft.title} · {draft.body} · {draft.channels.join(', ')} ·{' '}
-              {draft.status}
+              {draft.status} · Phạm vi đã lưu:{' '}
+              {draft.audience?.type === 'ALL_TENANTS'
+                ? 'Tất cả Tenant'
+                : draft.audience
+                  ? `${({ LOCATION: 'Cơ sở', ROOM: 'Phòng', USER: 'Tài khoản', SELECTED_USERS: 'Tài khoản đã chọn' } as Record<string, string>)[draft.audience.type] ?? 'Phạm vi đã chọn'}: ${(draft.audience.locationIds ?? draft.audience.roomIds ?? draft.audience.userIds ?? []).join(', ')}`
+                  : 'Theo dữ liệu nháp máy chủ'}
             </Alert>
             <Button
               disabled={action.busy || draft.status === 'Sent'}
@@ -301,6 +301,55 @@ export function NotificationManagement() {
           Máy chủ xác định lại người nhận theo phạm vi hiện tại. Gửi lại cùng nháp được máy chủ
           chống trùng.
         </ConfirmDialog>
+        <Typography variant="h6">Nháp đã lưu trên máy chủ</Typography>
+        <Typography>
+          Thử lại cùng nội dung sau lỗi mạng giữ nguyên mã yêu cầu tạo. Có thể mở lại nháp từ danh
+          sách này sau khi tải lại trang.
+        </Typography>
+        <Button disabled={drafts.isFetching} onClick={() => void drafts.refetch()}>
+          Tải lại danh sách nháp
+        </Button>
+        <OwnerTable
+          rows={drafts.data ?? []}
+          id={(n) => n.id}
+          select={(n) => {
+            setDraft(n);
+            setTitle(n.title);
+            setBody(n.body);
+            setEmail(n.channels.includes('EMAIL'));
+            setConfirm(false);
+          }}
+          columns={[
+            { label: 'Nháp', render: (n) => `${n.title} · ${n.body}` },
+            { label: 'Kênh', render: (n) => n.channels.join(', ') },
+          ]}
+        />
+        <Stack direction="row">
+          <Button
+            disabled={draftPage === 1 || drafts.isFetching}
+            onClick={() => setDraftPage(draftPage - 1)}
+          >
+            Nháp trước
+          </Button>
+          <Typography>Trang nháp {draftPage}</Typography>
+          <Button
+            disabled={drafts.isFetching || drafts.data?.length !== 20}
+            onClick={() => setDraftPage(draftPage + 1)}
+          >
+            Nháp sau
+          </Button>
+        </Stack>
+        {draft && draft.status !== 'Sent' && (
+          <Button
+            disabled={action.busy}
+            onClick={() => {
+              setDraft(null);
+              setPreview(null);
+            }}
+          >
+            Quay lại soạn thông báo
+          </Button>
+        )}
         <Typography variant="h6">Thông báo đã gửi</Typography>
         <OwnerTable
           rows={sent.data ?? []}

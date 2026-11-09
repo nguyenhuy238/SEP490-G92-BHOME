@@ -7,6 +7,7 @@ import {
   contractClient,
   actionPayload,
   mutationKeys,
+  holdingDraftPayload,
   type ContractRequest,
   type ContractView,
   type MoveOut,
@@ -19,6 +20,30 @@ import { useContractDetail } from '../../../../../packages/client-core/src/useCo
 const owner = '00000000-0000-0000-0000-000000000001',
   tenant = '00000000-0000-0000-0000-000000000002',
   id = '00000000-0000-0000-0000-000000000003';
+it('creates Holding payload without requiring Main rent and preserves the expiry timezone', () => {
+  const body = holdingDraftPayload(
+    {
+      roomId: id,
+      ownerSignerId: owner,
+      tenantUserId: tenant,
+      representativeResidentId: id,
+      startDate: '2026-11-10',
+      endDate: '2027-11-10',
+      terms: 'Synthetic holding terms',
+      requiredDeposit: '1000000',
+      expiresAt: '2026-11-12T09:00',
+      reservedCapacity: '2',
+    },
+    [id],
+  );
+  expect(body).toMatchObject({
+    holdingDeposit: '1000000',
+    expiresAt: '2026-11-12T02:00:00.000Z',
+    reservedCapacity: 2,
+  });
+  expect(body).not.toHaveProperty('monthlyRent');
+  expect(body).not.toHaveProperty('holdingContractId');
+});
 const draft: ContractView = {
   id,
   roomId: id,

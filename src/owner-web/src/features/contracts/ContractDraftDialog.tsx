@@ -19,6 +19,7 @@ import {
 import {
   contractError,
   draftPayload,
+  holdingDraftPayload,
   mutationKeys,
   text,
   type ContractClient,
@@ -358,38 +359,21 @@ export function ContractDraftDialog({
             disabled={busy || query.loading || !!query.error}
             onClick={() =>
               void run(async () => {
-                const body = draftPayload(
-                  {
-                    ...values,
-                    ...(kind === 'Holding' ? { monthlyRent: '0' } : {}),
-                    tenantUserId: representative?.tenantUserId ?? '',
-                  },
-                  residents,
-                );
-                const {
-                  monthlyRent: _rent,
-                  requiredDeposit,
-                  holdingContractId: _holding,
-                  ...common
-                } = body;
-                const holding =
+                const input = { ...values, tenantUserId: representative?.tenantUserId ?? '' };
+                const body =
                   kind === 'Holding'
-                    ? {
-                        ...common,
-                        holdingDeposit: requiredDeposit,
-                        expiresAt: new Date((values.expiresAt ?? '') + ':00+07:00').toISOString(),
-                        reservedCapacity: Number(values.reservedCapacity || residents.length),
-                      }
-                    : null;
-                const result = holding
-                  ? await api.transport<{ id: string }>('/api/v1/contracts/holdings', {
-                      method: 'POST',
-                      headers: { 'Idempotency-Key': keys.get('holding', holding) },
-                      body: JSON.stringify(holding),
-                    })
-                  : await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
-                if (holding) keys.confirmed('holding', holding);
-                else keys.confirmed('draft', body);
+                    ? holdingDraftPayload(input, residents)
+                    : draftPayload(input, residents);
+                const scope = kind === 'Holding' ? 'holding' : 'draft';
+                const result =
+                  kind === 'Holding'
+                    ? await api.transport<{ id: string }>('/api/v1/contracts/holdings', {
+                        method: 'POST',
+                        headers: { 'Idempotency-Key': keys.get(scope, body) },
+                        body: JSON.stringify(body),
+                      })
+                    : await api.mutate<{ id: string }>(null, '', body, keys.get('draft', body));
+                keys.confirmed(scope, body);
                 onCreated(result.id);
               })
             }
