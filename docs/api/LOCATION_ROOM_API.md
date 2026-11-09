@@ -1,5 +1,16 @@
 # API cấu hình sau reset DB — 04/11/2026
 
+## Mobile Setup compatibility — 2026-11-09 (GAP-002)
+
+Mobile Setup now posts native `POST /api/v1/locations` with `name,address` and
+`POST /api/v1/rooms` with `locationId,roomNumber,capacity`. It reads current
+Location/Room lookup endpoints and no longer calls Chain or RoomType APIs.
+Capacity is explicitly entered by Owner and validated as an integer 1–32767;
+the server remains authoritative. Staff loading failure does not discard a
+successful Location lookup. Configuration actions remain Owner-only and only
+show persistence success after a confirmed server response. Staff assignment,
+meter setup and reading-task operations retain their existing capture APIs.
+
 Bổ sung ngày 08/11: [Owner setup P0–P2](OWNER_SETUP_COMPACT24.md) mô tả closure-check, Staff responsibility, asset template/inventory, điện nước nâng cao và nội quy/phụ lục.
 
 Quyết định mới: bỏ Chain và RoomType. Location là cấp cao nhất, Room thuộc trực tiếp Location. Tài liệu này thay các phần Chain/RoomType và thứ tự giá cũ trong PROPERTY_MANAGEMENT.md, SINGLE_SYSTEM_CHAIN.md và API_CONVENTIONS.md.
