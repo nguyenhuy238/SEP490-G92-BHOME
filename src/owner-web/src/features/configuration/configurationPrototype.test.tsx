@@ -2,21 +2,28 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PortalProvider } from '../../app/PortalProvider';
 import { theme } from '../../theme/theme';
 import { SharedConfigurationProvider } from './SharedConfigurationContext';
 import { ConfigurationLibraryPage } from './pages/ConfigurationLibraryPage';
+import { AuthProvider } from '../../../../../packages/client-core/src/auth';
+
+vi.mock('../../services/config', () => ({ isMockMode: true }));
+
+vi.mock('../../services/config', () => ({ isMockMode: true }));
 
 function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider theme={theme}>
-      <PortalProvider>
-        <SharedConfigurationProvider>
-          <MemoryRouter>{children}</MemoryRouter>
-        </SharedConfigurationProvider>
-      </PortalProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider theme={theme}>
+        <PortalProvider>
+          <SharedConfigurationProvider>
+            <MemoryRouter>{children}</MemoryRouter>
+          </SharedConfigurationProvider>
+        </PortalProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 

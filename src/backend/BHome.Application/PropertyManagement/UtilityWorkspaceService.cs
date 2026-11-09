@@ -250,6 +250,7 @@ public sealed partial class UtilityWorkspaceService(ISetupWorkspaceStore store, 
             var doc = await Document(id, "UtilityReconciliation", true, t); var saved = Read<UtilityReconciliation>(doc);
             var fresh = await PreviewCoreAsync(new(doc.LocationId, saved.SourceBillId, saved.Tolerance, input.Reason), t);
             if (fresh.Status == "MissingConfirmedInputs") throw new PropertyException(409, "confirmed_source_inputs_required");
+            if (fresh.InputsHash != saved.InputsHash) throw new PropertyException(409, "utility_reconciliation_stale");
             var status = input.AcceptVariance ? "VarianceReviewed" : "NeedsReview";
             return await Store.SaveAsync(id, doc.LocationId, doc.Kind, status, fresh with { Status = status }, input.ExpectedVersion, Actor, t);
         }, t);

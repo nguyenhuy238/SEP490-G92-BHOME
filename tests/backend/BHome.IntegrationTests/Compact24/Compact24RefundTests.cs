@@ -31,7 +31,7 @@ public sealed class Compact24RefundTests
         var owner = await db.Users.SingleAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner"));
         var source = await db.Set<PaymentTransfer>().Select(p => p.Id).SingleAsync();
         var client = fixture.Capture.Factory.CreateClient();
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = owner.Email, password = "Synthetic-Payment-Test!123" });
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = owner.Email, password = WorkflowTestUsers.Password });
         login.EnsureSuccessStatusCode(); client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
         return (client, source);
     }
@@ -191,7 +191,7 @@ public sealed class Compact24RefundTests
             {
                 var account = await db.Users.FirstAsync(u => EF.Property<string[]>(u, "roles").Contains(role));
                 using var other = fixture.Capture.Factory.CreateClient();
-                var login = await other.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = "Synthetic-Payment-Test!123" });
+                var login = await other.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = WorkflowTestUsers.Password });
                 login.EnsureSuccessStatusCode(); other.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
                 Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync(route)).StatusCode);
                 Assert.Equal(HttpStatusCode.Forbidden, (await Post(other, route, input, Guid.NewGuid())).StatusCode);

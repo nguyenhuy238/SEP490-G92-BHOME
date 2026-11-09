@@ -44,6 +44,24 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         if (items.Count > 1000) throw new PropertyException(409, "setup_workspace_page_limit");
         return items;
     }
+    public async Task<IReadOnlyList<SetupDocument>> HistoryAsync(Guid id, string kind, CancellationToken t)
+    {
+        await using var cmd = await sql.Command("""
+            SELECT revision->'document',revision->>'actorId'
+            FROM operational_tasks task CROSS JOIN LATERAL jsonb_array_elements(task.history) revision
+            WHERE task.id=@id AND task.task_type='SYSTEM_JOB' AND task.task_data->>'recordType'=@kind
+              AND revision->'document'->>'id'=@documentId
+            ORDER BY (revision->'document'->>'version')::integer
+            """, t, ("id", id), ("kind", "Setup" + kind), ("documentId", id.ToString()));
+        await using var reader = await cmd.ExecuteReaderAsync(t);
+        var revisions = new List<SetupDocument>();
+        while (await reader.ReadAsync(t))
+        {
+            var revision = JsonSerializer.Deserialize<SetupDocument>(reader.GetString(0), Json)!;
+            revisions.Add(revision with { RecordedBy = Guid.TryParse(reader.IsDBNull(1) ? null : reader.GetString(1), out var actor) ? actor : null });
+        }
+        return revisions;
+    }
     public async Task<SetupDocument> SaveAsync(Guid id, Guid locationId, string kind, string status, object data, int expectedVersion, Guid actor, CancellationToken t)
     {
         var before = await GetAsync(id, kind, t);
@@ -51,7 +69,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             throw new PropertyException(409, "stale_version");
         var payload = JsonSerializer.SerializeToNode(data, Json) as System.Text.Json.Nodes.JsonObject ?? throw new PropertyException(400, "invalid_setup_document");
         payload.Remove("expectedVersion");
-        var doc = new SetupDocument(id, locationId, kind, status, expectedVersion + 1, JsonSerializer.SerializeToElement(payload, Json), sql.Now);
+        var doc = new SetupDocument(id, locationId, kind, status, expectedVersion + 1, JsonSerializer.SerializeToElement(payload, Json), sql.Now, actor);
         var json = JsonSerializer.Serialize(new { recordType = "Setup" + kind, document = doc }, Json);
         var history = JsonSerializer.Serialize(new[] { new { actorId = actor, occurredAt = sql.Now, action = status, document = doc } }, Json);
         if (before is null)

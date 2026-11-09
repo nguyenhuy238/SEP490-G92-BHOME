@@ -34,6 +34,9 @@ import { RecordEditor } from '../../../components/dialogs/RecordEditor';
 import { featureDefinitions } from '../../../app/featureDefinitions';
 import { roomStatus } from '../../property/model';
 export default function DashboardPage() {
+  return <DemoDashboardPage />;
+}
+function DemoDashboardPage() {
   const query = usePortalData(),
     portal = usePortal(),
     navigate = useNavigate();

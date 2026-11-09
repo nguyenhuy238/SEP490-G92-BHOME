@@ -12,6 +12,7 @@ export interface Session {
 }
 interface AuthState {
   session: Session | null;
+  isRestoring: boolean;
   acceptSession: (session: Session) => void;
   clearSession: () => void;
   client: SessionClient;
@@ -27,14 +28,31 @@ export function AuthProvider({
   transport?: AuthTransport;
 }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [isRestoring, setIsRestoring] = useState(transport === 'web' && Boolean(apiBaseUrl));
   const [client] = useState(() => new SessionClient(apiBaseUrl, transport));
   useEffect(() => client.subscribe(setSession), [client]);
   useEffect(() => {
-    if (transport === 'web' && apiBaseUrl) void client.refresh().catch(() => undefined);
+    if (transport !== 'web' || !apiBaseUrl) return;
+    let active = true;
+    void client
+      .refresh()
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setIsRestoring(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [client, transport, apiBaseUrl]);
   const value = useMemo(
-    () => ({ session, acceptSession: client.accept, clearSession: client.clear, client }),
-    [session, client],
+    () => ({
+      session,
+      isRestoring,
+      acceptSession: client.accept,
+      clearSession: client.clear,
+      client,
+    }),
+    [session, isRestoring, client],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

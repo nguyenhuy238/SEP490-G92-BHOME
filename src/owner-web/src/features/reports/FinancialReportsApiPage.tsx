@@ -20,6 +20,8 @@ import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDr
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
 import { PageHeader } from '../../components/common/PortalUI';
 import { useFinanceApi } from '../expenses/useFinanceApi';
+import { downloadFinance, reportCsv } from '../../services/financeExport';
+import { formatInstant } from '../../../../../packages/client-core/src/localization';
 
 export function FinancialReportsApiPage() {
   const api = useFinanceApi();
@@ -28,6 +30,7 @@ export function FinancialReportsApiPage() {
     [to, setTo] = useState(''),
     [location, setLocation] = useState('');
   const [filter, setFilter] = useState<ReportFilter | null>(null);
+  const [room, setRoom] = useState('');
   const locations = useQuery({
     queryKey: ['finance-locations', session?.userId],
     queryFn: ({ signal }) => api.locations(signal),
@@ -65,7 +68,12 @@ export function FinancialReportsApiPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          setFilter({ from, to, locationId: location || undefined });
+          setFilter({
+            from,
+            to,
+            locationId: location || undefined,
+            ...(room ? { roomId: room } : {}),
+          });
         }}
       >
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ my: 2 }}>
@@ -101,6 +109,17 @@ export function FinancialReportsApiPage() {
           <Button type="submit" variant="contained" disabled={report.isFetching}>
             Xem báo cáo
           </Button>
+          <TextField
+            label="Mã phòng (tùy chọn)"
+            value={room}
+            onChange={(e) => setRoom(e.target.value.trim())}
+            slotProps={{
+              htmlInput: {
+                pattern:
+                  '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+              },
+            }}
+          />
         </Stack>
       </form>
       {(locations.isPending || report.isFetching) && <LinearProgress />}
@@ -123,6 +142,17 @@ export function FinancialReportsApiPage() {
       )}
       {!report.error && value && (
         <Stack spacing={2}>
+          <Typography>
+            Ảnh chụp dữ liệu:{' '}
+            {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
+          </Typography>
+          <Button
+            onClick={() =>
+              downloadFinance(reportCsv(value), 'bao-cao-kinh-doanh.csv', 'text/csv;charset=utf-8')
+            }
+          >
+            Tải CSV số liệu máy chủ
+          </Button>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Toàn bộ phạm vi đã chọn</Typography>
             <Totals value={value.total} />

@@ -28,8 +28,11 @@ import {
 import { currency, matches } from './propertyUtils';
 import { roomStatus, type Requirement } from './model';
 import { usePropertyMutation } from './usePropertyMutation';
+import { isMockMode } from '../../services/config';
+import { PropertyApiPage } from './PropertyApiPages';
 
 export function Locations() {
+  if (!isMockMode) return <PropertyApiPage kind="locations" />;
   return <PropertyBoundary>{(db) => <LocationContent db={db} />}</PropertyBoundary>;
 }
 function LocationContent({ db }: { db: DemoDatabase }) {

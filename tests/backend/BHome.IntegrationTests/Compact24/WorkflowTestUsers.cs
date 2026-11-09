@@ -15,10 +15,11 @@ internal static class WorkflowTestUsers
     // Compact24 has one Owner. Cross-module fixtures must authenticate that same synthetic
     // account with one password instead of depending on whichever test created it first.
     internal const string Password = "Synthetic-Workflow!2026";
-    internal static async Task<ApplicationUser> CreateAsync(IServiceProvider services, ApplicationUser user, string role, string password)
+    internal static async Task<ApplicationUser> CreateAsync(IServiceProvider services, ApplicationUser user, string role, string password, bool reuseOwner = false)
     {
         var db = services.GetRequiredService<BHomePersistenceContext>();
-        if (role == "Owner" && services.GetService<SingleOwnerMigrationFixture>() is not null)
+        // Legacy fixtures exercising deployment-wide identity rules explicitly share one Owner too.
+        if (role == "Owner" && (reuseOwner || services.GetService<SingleOwnerMigrationFixture>() is not null))
         {
             var owners = await services.GetRequiredService<UserManager<ApplicationUser>>().GetUsersInRoleAsync(role);
             if (owners.Count == 1) return owners[0];

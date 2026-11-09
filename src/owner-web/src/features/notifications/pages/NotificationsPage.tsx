@@ -23,6 +23,7 @@ import { formatInstant } from '../../../../../../packages/client-core/src/locali
 import { useNotifications, useUnreadNotifications } from '../useNotifications';
 import { PageHeader } from '../../../components/common/PortalUI';
 import { isMockMode } from '../../../services/config';
+import { NotificationManagement } from '../NotificationManagement';
 export default function NotificationsPage() {
   return isMockMode ? (
     <ResourcePage kind="notifications" variant="notifications" />
@@ -72,6 +73,7 @@ export function LiveNotificationsPage() {
         subtitle="Thông báo lưu trong tài khoản của bạn; quyền mở hồ sơ được kiểm tra lại khi truy cập."
       />
       <Stack spacing={2}>
+        {session?.roles?.includes('Owner') && <NotificationManagement />}
         <Stack direction="row" spacing={1}>
           <Button
             onClick={() => {

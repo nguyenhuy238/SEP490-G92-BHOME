@@ -55,7 +55,8 @@ dotnet dev-certs https --trust
 Bỏ Initialize-Local nếu `.env` tồn tại. Nhận profile riêng hoặc điền mẫu
 `.env.neon.example` qua secret manager. Shared process cần cùng JWT và key ring
 IdentityProtection riêng Neon development (`neon-dev-v1`); không tự sinh key khác nhau.
-Giữ `.env` cho local; HTTPS/certificate cấu hình riêng mỗi máy.
+Mặc định sau Initialize-Local, `.env` dùng local; HTTPS/certificate cấu hình riêng mỗi máy.
+Máy đã chọn Neon làm mặc định áp dụng cấu hình bên dưới.
 
 ```powershell
 git check-ignore .env.neon.dev01
@@ -67,6 +68,51 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -Envir
 Thay dev01 bằng mã được giao. Mong đợi Compact24 PASS, history 1 applied/0 pending,
 live/ready 200. User Secrets Kestrel có thể ghi đè `--urls`; kiểm tra port thực tế.
 Frontend chỉ đặt API URL, không PostgreSQL secret vào VITE/Expo config.
+
+## Neon mặc định trên máy phát triển
+
+Ngày 08/11/2026, máy setup đã chuyển `.env` và User Secrets
+`bhome-api-development` sang runtime profile `.env.neon.dev01` (`bhome_dev01`,
+`neondb`). F5 với profile Development, `dotnet run --project src/backend/BHome.Api`
+và `scripts/Start-Api.ps1` không cần chỉ định EnvironmentFile đều dùng Neon.
+Đây là cấu hình riêng trên máy, không tự áp dụng sau clone hoặc cho các thành viên khác.
+
+Khi cấu hình máy khác, đồng bộ connection runtime pooled, JWT và toàn bộ key ring
+IdentityProtection từ profile cá nhân được giao vào cả `.env` lẫn User Secrets.
+Chỉ đổi connection trong `.env` là chưa đủ vì User Secrets có độ ưu tiên cao hơn.
+Giữ HTTPS/certificate, OCR và MinIO phù hợp với máy; không chép direct/admin connection.
+Đặt `DevelopmentDatabase__InitializeOnStartup=false`,
+`DevelopmentDatabase__AllowPreviousPropertySchema=false`, `Jobs__Enabled=false` và
+`NotificationChannels__AutomationEnabled=false` ở cả hai nguồn cấu hình.
+Process environment/CLI vẫn có độ ưu tiên cao hơn; không trộn profile trong terminal cũ.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1
+dotnet run --project src/backend/BHome.Api
+# Hoặc, thay cho dotnet run:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1
+```
+
+Không chạy hai API đồng thời trên cùng cổng. Khi debug F5, dùng profile Development
+và khởi động lại phiên debug để nhận User Secrets mới. Kiểm tra `/health/live` và
+`/health/ready` trên cổng API thực tế. Việc đổi kết nối không chuyển dữ liệu local lên Neon.
+
+Compose vẫn giữ PostgreSQL/MinIO local; ảnh/file vẫn dùng MinIO local. Các script
+`Update-LocalDatabase.ps1`/`Seed-LocalDevelopmentData.ps1` chỉ dành cho database local;
+không chạy chúng với `.env` đang trỏ Neon. Nếu chuẩn bị mobile thủ công, dùng
+`Prepare-OcrMobile.ps1 -SkipDatabase` (launcher `npm run mobile:dev` đã dùng cờ này).
+Không chạy lại Initialize-Local để đổi database. Bản sao cấu hình trước khi chuyển
+trên máy setup nằm trong `.tools/local-config-backups/neon-default-20261108-204208/`,
+được Git ignore và chứa secret; không chia sẻ/commit thư mục này. Khôi phục cả `.env`
+và User Secrets từ bản sao nếu cần quay lại cấu hình cũ.
+
+Kiểm tra sau khi chuyển trên máy setup: `Test-Database.ps1` không truyền profile
+kết nối Neon bằng `bhome_dev01`, TLS VerifyFull/ChannelBinding Require, Compact24 PASS,
+1 migration applied/0 pending. Đã chạy riêng `dotnet run` và `Start-Api.ps1` mặc định:
+cả hai trả live/ready HTTPS 200, xác thực certificate và có kết nối PostgreSQL remote.
+Test cấu hình `DotEnvFallbackOverridesAppSettingsButPreservesExplicitOverridesAndDoesNotEvaluateText`
+đạt 1/1. Evidence riêng máy: `.tools/neon-default-verification/`. Hai process kiểm tra
+đã được dừng; chưa thao tác nút F5 trong IDE. Không chạy migration/seed hoặc chuyển dữ liệu.
 
 ## Dataset tổng hợp
 

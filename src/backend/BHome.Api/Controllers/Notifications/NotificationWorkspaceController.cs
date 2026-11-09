@@ -10,11 +10,19 @@ public sealed class NotificationWorkspaceController(NotificationWorkspaceService
     [HttpPost("api/v1/announcements/preview-recipients")]
     public Task<RecipientPreview> Preview(NotificationAudience input, CancellationToken t) => service.PreviewAsync(input, t);
     [HttpPost("api/v1/announcements")]
-    public Task<AnnouncementView> Create(AnnouncementWrite input, CancellationToken t) => service.CreateAsync(input, t);
+    public Task<AnnouncementView> Create(AnnouncementWrite input, CancellationToken t)
+    {
+        Guid? key = null;
+        if (Request.Headers.TryGetValue("Idempotency-Key", out var header))
+            key = Guid.TryParse(header, out var parsed) && parsed != Guid.Empty ? parsed : throw new NotificationException(400, "invalid_idempotency_key");
+        return service.CreateAsync(input, t, key);
+    }
     [HttpPost("api/v1/announcements/{id:guid}/send")]
     public Task<AnnouncementView> Send(Guid id, CancellationToken t) => service.SendAsync(id, t);
     [HttpGet("api/v1/announcements/sent")]
     public Task<IReadOnlyList<AnnouncementView>> Sent(CancellationToken t, int page = 1, int pageSize = 20) => service.SentAsync(page, pageSize, t);
+    [HttpGet("api/v1/announcements/drafts")]
+    public Task<IReadOnlyList<AnnouncementView>> Drafts(CancellationToken t, int page = 1, int pageSize = 20) => service.DraftsAsync(page, pageSize, t);
     [HttpPost("api/v1/notifications/devices")]
     public Task<PushDeviceView> Register(PushDeviceWrite input, CancellationToken t) => service.RegisterDeviceAsync(input, t);
     [HttpDelete("api/v1/notifications/devices/{id:guid}")]

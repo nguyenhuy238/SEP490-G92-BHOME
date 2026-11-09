@@ -34,8 +34,23 @@ export interface MeterTask {
 
 export function meterClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
   return {
-    tasks: (signal?: AbortSignal) =>
-      request<MeterTask[]>('/api/v1/capture/meter-tasks', { signal }),
+    tasks: (
+      signal?: AbortSignal,
+      filters: {
+        locationId?: string;
+        roomId?: string;
+        status?: string;
+        dueDate?: string;
+        page?: number;
+      } = {},
+    ) => {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(filters))
+        if (value !== '' && value != null) query.set(key, String(value));
+      return request<MeterTask[]>('/api/v1/capture/meter-tasks' + (query.size ? `?${query}` : ''), {
+        signal,
+      });
+    },
     task: (id: string, signal?: AbortSignal) =>
       request<MeterTask>(`/api/v1/capture/meter-tasks/${encodeURIComponent(id)}`, { signal }),
     reading: (id: string, signal?: AbortSignal) =>

@@ -34,6 +34,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private readonly CaptureFixture fixture;
     public CaptureWorkflowTests(CaptureFixture fixture) => this.fixture = fixture;
     private const string Password = "Synthetic-Test-Password!123";
+    private readonly string identityNumber = "000" + RandomNumberGenerator.GetInt32(1_000_000_000).ToString("D9");
 
     [Fact]
     public async Task MeterOcrUsesPersistedProfilesAndRejectsOtherLocationsBeforeInference()
@@ -326,7 +327,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var u = new ApplicationUser { Id = id, UserName = name, Email = name + "@example.invalid", LockoutEnabled = true };
-            u = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, u, role, Password);
+            u = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, u, role, Password, reuseOwner: true);
             id = u.Id; name = u.Email!;
         }
         var client = fixture.Factory.CreateClient();
@@ -348,11 +349,17 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01", 2));
         await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), Today.AddDays(365)));
         var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant));
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal(owner.UserId, (await db.Set<Resident>().SingleAsync(r => r.Id == resident)).OwnerUserId);
+            Assert.Equal(staff.UserId, (await db.SecurityAudit.SingleAsync(a => a.Event == "ResidentCreated" && a.TargetId == resident)).UserId);
+        }
         var meter = await Create(owner.Client, "meters", new MeterInput(room, "SYNTHETIC-METER", UtilityType.Water, MeterDisplay.Digital, 2, Today.AddDays(-20)));
         return (owner.Client, staff.Client, owner.UserId, staff.UserId, location, room, resident, meter);
     }
     private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-    private static IdentityConfirmation Identity(string number = "000000000000") => new(true, number, "NGƯỜI KIỂM THỬ", new(2000, 1, 1), "ĐỊA CHỈ GIẢ LẬP", null, null, null, null, null);
+    private IdentityConfirmation Identity() => new(true, identityNumber, "NGƯỜI KIỂM THỬ", new(2000, 1, 1), "ĐỊA CHỈ GIẢ LẬP", null, null, null, null, null);
     [Fact]
     public async Task ParallelDuplicateIdentitiesHaveOneWinnerAndNoAutomaticMerge()
     {
@@ -380,11 +387,11 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var saved = await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident);
         Assert.Equal(IdentityVerificationStatus.Verified, saved.VerificationStatus);
-        Assert.DoesNotContain("000000000000", saved.IdentityData); Assert.DoesNotContain("2000-01-01", saved.IdentityData);
+        Assert.DoesNotContain(identityNumber, saved.IdentityData); Assert.DoesNotContain("2000-01-01", saved.IdentityData);
         Assert.DoesNotContain("ĐỊA CHỈ", saved.IdentityData); Assert.Equal(64, saved.IdentityHmac!.Length);
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.Event == "IdentityConfirmed" && a.TargetId == w.Resident));
         var listing = await w.Staff.GetStringAsync($"/api/v1/capture/locations/{w.Location}/residents");
-        Assert.DoesNotContain("IdentityData", listing); Assert.DoesNotContain("000000000000", listing);
+        Assert.DoesNotContain("IdentityData", listing); Assert.DoesNotContain(identityNumber, listing);
     }
     [Fact]
     public async Task GlobalOwnerOtherStaffExpiredAssignmentAndTenantAuthorizationIsEnforced()

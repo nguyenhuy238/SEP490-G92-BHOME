@@ -26,9 +26,10 @@ public sealed record NotificationReminderPolicy(bool DebtEnabled = false, int? D
 public interface INotificationWorkspace
 {
     Task<RecipientPreview> PreviewAsync(NotificationScope scope, NotificationAudience audience, CancellationToken t);
-    Task<AnnouncementView> CreateAsync(NotificationScope scope, AnnouncementWrite input, CancellationToken t);
+    Task<AnnouncementView> CreateAsync(NotificationScope scope, AnnouncementWrite input, CancellationToken t, Guid? key = null);
     Task<AnnouncementView> SendAsync(NotificationScope scope, Guid id, CancellationToken t);
     Task<IReadOnlyList<AnnouncementView>> SentAsync(NotificationScope scope, int page, int pageSize, CancellationToken t);
+    Task<IReadOnlyList<AnnouncementView>> DraftsAsync(NotificationScope scope, int page, int pageSize, CancellationToken t);
     Task<PushDeviceView> RegisterDeviceAsync(Guid actor, PushDeviceWrite input, CancellationToken t);
     Task RemoveDeviceAsync(Guid actor, Guid id, CancellationToken t);
     Task<NotificationReminderPolicy> PolicyAsync(Guid location, CancellationToken t);
@@ -45,19 +46,25 @@ public sealed class NotificationWorkspaceService(INotificationWorkspace reposito
     private NotificationScope Sender() { var s = Scope; if (!s.Owner && !s.Staff) throw new NotificationException(403, "announcement_forbidden"); return s; }
     private Guid Owner() { var id = Actor; if (!user.IsInRole(Roles.Owner)) throw new NotificationException(403, "notification_owner_required"); return id; }
     public Task<RecipientPreview> PreviewAsync(NotificationAudience input, CancellationToken t) => repository.PreviewAsync(Sender(), input, t);
-    public Task<AnnouncementView> CreateAsync(AnnouncementWrite input, CancellationToken t)
+    public Task<AnnouncementView> CreateAsync(AnnouncementWrite input, CancellationToken t, Guid? key = null)
     {
         var scope = Sender();
         if (string.IsNullOrWhiteSpace(input.Title) || input.Title.Length > 150 || string.IsNullOrWhiteSpace(input.Body) || input.Body.Length > 1000 ||
             input.Priority is not ("P1" or "P2") || input.Channels is null || input.Channels.Length is < 1 or > 3 ||
             !input.Channels.Contains("IN_APP") || input.Channels.Any(c => c is not ("IN_APP" or "EMAIL" or "PUSH"))) throw new NotificationException(400, "invalid_announcement");
-        return repository.CreateAsync(scope, input with { Title = input.Title.Trim(), Body = input.Body.Trim(), Channels = input.Channels.Distinct().ToArray() }, t);
+        if (key == Guid.Empty) throw new NotificationException(400, "invalid_idempotency_key");
+        return repository.CreateAsync(scope, input with { Title = input.Title.Trim(), Body = input.Body.Trim(), Channels = input.Channels.Distinct().ToArray() }, t, key);
     }
     public Task<AnnouncementView> SendAsync(Guid id, CancellationToken t) => repository.SendAsync(Sender(), id, t);
     public Task<IReadOnlyList<AnnouncementView>> SentAsync(int page, int size, CancellationToken t)
     {
         var scope = Sender(); if (page < 1 || size is < 1 or > 100 || page > int.MaxValue / size) throw new NotificationException(400, "invalid_page");
         return repository.SentAsync(scope, page, size, t);
+    }
+    public Task<IReadOnlyList<AnnouncementView>> DraftsAsync(int page, int size, CancellationToken t)
+    {
+        Owner(); var scope = Scope; if (page < 1 || size is < 1 or > 100 || page > int.MaxValue / size) throw new NotificationException(400, "invalid_page");
+        return repository.DraftsAsync(scope, page, size, t);
     }
     public Task<PushDeviceView> RegisterDeviceAsync(PushDeviceWrite input, CancellationToken t)
     {

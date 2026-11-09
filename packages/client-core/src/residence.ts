@@ -126,8 +126,16 @@ export function residenceClient(request: Transport) {
   const path = (contract: string, resident: string) =>
     `${root}/${guid(contract)}/${guid(resident)}`;
   return {
-    list: (page = 1, signal?: AbortSignal) =>
-      request<ResidencePage>(`${root}?page=${page}&pageSize=20`, { signal }),
+    list: (
+      page = 1,
+      signal?: AbortSignal,
+      filters: { locationId?: string; status?: string } = {},
+    ) => {
+      const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+      if (filters.locationId) query.set('locationId', guid(filters.locationId));
+      if (filters.status) query.set('status', filters.status);
+      return request<ResidencePage>(`${root}?${query}`, { signal });
+    },
     get: (contract: string, resident: string, signal?: AbortSignal) =>
       request<ResidenceTask>(path(contract, resident), { signal }),
     update: (task: ResidenceTask, input: ResidenceUpdate) =>

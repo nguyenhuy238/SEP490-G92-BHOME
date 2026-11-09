@@ -16,19 +16,35 @@ import {
   Typography,
 } from '@mui/material';
 import { Apartment, LockOutlined, PhoneOutlined, VerifiedUserOutlined } from '@mui/icons-material';
+import { Link as RouterLink, useLocation } from 'react-router';
 import { LoginForm } from '../components/LoginForm';
 import { useOwnerLogin } from '../hooks/useOwnerLogin';
 
 export function LoginPage() {
   const auth = useOwnerLogin();
+  const location = useLocation();
+  const passwordChanged = Boolean(
+    (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
+  );
+  const passwordReset = Boolean(
+    (location.state as { passwordReset?: boolean } | null)?.passwordReset,
+  );
+  const loggedOutAll = Boolean((location.state as { loggedOutAll?: boolean } | null)?.loggedOutAll);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetUserName, setResetUserName] = useState('');
+  const [resetValidation, setResetValidation] = useState('');
   const supportPhone = import.meta.env.VITE_SUPPORT_PHONE as string | undefined;
   const supportHref = supportPhone?.replace(/[^+\d]/g, '');
 
   function submitReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (resetUserName.trim() && !auth.resetBusy) void auth.requestReset(resetUserName);
+    if (auth.resetBusy) return;
+    if (!/^\S+@\S+\.\S+$/.test(resetUserName.trim())) {
+      setResetValidation('Email không đúng định dạng.');
+      return;
+    }
+    setResetValidation('');
+    void auth.requestReset(resetUserName);
   }
 
   return (
@@ -88,6 +104,7 @@ export function LoginPage() {
           </Typography>
           {auth.authenticated ? (
             <Stack spacing={2}>
+              {auth.error && <Alert severity="error">{auth.error}</Alert>}
               <Alert severity="success">Đăng nhập thành công. Phiên Owner đã được xác thực.</Alert>
               <Typography variant="body2" color="text.secondary">
                 Phiên đã sẵn sàng để truy cập không gian quản lý BHOME.
@@ -97,15 +114,30 @@ export function LoginPage() {
               </Button>
             </Stack>
           ) : (
-            <LoginForm
-              busy={auth.busy}
-              error={auth.error}
-              onLogin={auth.login}
-              onForgotPassword={(value) => {
-                setResetUserName(value);
-                setResetOpen(true);
-              }}
-            />
+            <Stack spacing={2}>
+              {passwordChanged && (
+                <Alert severity="success">
+                  Đổi mật khẩu thành công. Tất cả phiên đã được đăng xuất; vui lòng đăng nhập lại.
+                </Alert>
+              )}
+              {passwordReset && (
+                <Alert severity="success">
+                  Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.
+                </Alert>
+              )}
+              {loggedOutAll && (
+                <Alert severity="success">Đã đăng xuất tất cả thiết bị thành công.</Alert>
+              )}
+              <LoginForm
+                busy={auth.busy}
+                error={auth.error}
+                onLogin={auth.login}
+                onForgotPassword={(value) => {
+                  setResetUserName(value);
+                  setResetOpen(true);
+                }}
+              />
+            </Stack>
           )}
 
           <Stack
@@ -185,19 +217,28 @@ export function LoginPage() {
           <DialogTitle>Quên mật khẩu?</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Nhập tên đăng nhập của tài khoản đã được cấp để yêu cầu hướng dẫn khôi phục.
+              Nhập email của tài khoản đã được cấp để yêu cầu hướng dẫn khôi phục.
             </Typography>
             <TextField
               autoFocus
               fullWidth
               required
-              label="Tên đăng nhập"
+              label="Email"
+              type="email"
               autoComplete="username"
               value={resetUserName}
               disabled={auth.resetBusy}
-              onChange={(event) => setResetUserName(event.target.value)}
+              onChange={(event) => {
+                setResetUserName(event.target.value);
+                if (resetValidation) setResetValidation('');
+              }}
               slotProps={{ htmlInput: { maxLength: 256 } }}
             />
+            {resetValidation && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {resetValidation}
+              </Alert>
+            )}
             {auth.resetMessage && (
               <Alert severity={auth.resetError ? 'error' : 'info'} sx={{ mt: 2 }}>
                 {auth.resetMessage}
@@ -205,6 +246,14 @@ export function LoginPage() {
             )}
           </DialogContent>
           <DialogActions>
+            <Button
+              component={RouterLink}
+              to="/reset-password"
+              disabled={auth.resetBusy}
+              onClick={() => setResetOpen(false)}
+            >
+              Tôi đã có mã
+            </Button>
             <Button disabled={auth.resetBusy} onClick={() => setResetOpen(false)}>
               Đóng
             </Button>

@@ -12,6 +12,7 @@ import { showSuccess } from '../lib/toast';
 import { errorMessage, type MeterTask, type Proposal } from '../lib/api';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 import { meterService } from '../services/meterService';
+import { meterOcrFeedback } from '../services/meterOcrFeedback';
 import { MeterRoomOverview } from '../screens/MeterRoomOverview';
 import { meterRoundLabel, roomMeterTasks } from '../features/workspace/roomMeterTasks';
 import {
@@ -390,7 +391,7 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
                   </Text>
                 )}
                 {!!proposal?.warnings.length && (
-                  <Text style={ui.muted}>Kiểm tra lại mặt số và dấu thập phân.</Text>
+                  <Text style={ui.muted}>{meterOcrFeedback(proposal)}</Text>
                 )}
                 <Field
                   label={`Chỉ số xác nhận (${unit})`}

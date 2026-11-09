@@ -62,6 +62,7 @@ function LiveContractsPage() {
   const [selected, setSelected] = useState(deepParams.get('contractId') ?? ''),
     [selectedLocation, setSelectedLocation] = useState('');
   const [mainDraft, setMainDraft] = useState(false);
+  const [holding, setHolding] = useState(false);
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
     [lookupError, setLookupError] = useState('');
@@ -83,9 +84,26 @@ function LiveContractsPage() {
         title="Hợp đồng thuê & Vòng đời"
         subtitle="UC-15 / UC-16 / UC-19 · Nháp → Ký điện tử → Xác minh cọc → Kích hoạt → Gia hạn / Trả phòng"
         actions={
-          <Button variant="contained" onClick={() => setDraft(true)}>
-            Tạo hợp đồng thuê
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setHolding(false);
+                setDraft(true);
+              }}
+            >
+              Tạo hợp đồng thuê
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setHolding(true);
+                setDraft(true);
+              }}
+            >
+              Tạo hợp đồng giữ chỗ
+            </Button>
+          </>
         }
       />
       <Stack spacing={2}>
@@ -310,6 +328,7 @@ function LiveContractsPage() {
       </Drawer>
       {draft && (
         <ContractDraftDialog
+          kind={holding ? 'Holding' : 'Main'}
           api={api}
           ownerId={actorId}
           onClose={() => setDraft(false)}

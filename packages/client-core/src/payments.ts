@@ -185,6 +185,12 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       ),
     reject: (id: string, reason: string, key: string) =>
       mutation(`${root}/${encodeURIComponent(id)}/reject`, { reason }, key),
+    allocateHolding: (id: string, contractId: string, paidByUserId: string, key: string) =>
+      mutation<{ status: string; reason: string }>(
+        `${root}/${encodeURIComponent(id)}/allocate-holding-deposit`,
+        { contractId, paidByUserId, humanVerified: true },
+        key,
+      ),
     account: async (locationId: string, signal?: AbortSignal) =>
       (await request<BankAccount | undefined>(
         `/api/v1/receiving-bank-accounts/${encodeURIComponent(locationId)}`,

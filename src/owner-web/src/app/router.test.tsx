@@ -38,7 +38,7 @@ it('protects deep links and returns to the requested screen after demo login', a
     </ThemeProvider>,
   );
   expect(await screen.findByRole('heading', { name: 'Đăng nhập tài khoản' })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Email hoặc Số điện thoại'), {
+  fireEvent.change(screen.getByLabelText('Email'), {
     target: { value: DEMO_USER },
   });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: DEMO_PASSWORD } });

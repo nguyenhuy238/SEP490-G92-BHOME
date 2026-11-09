@@ -1,4 +1,58 @@
+# Current configuration integration — 2026-11-09
+
+Owner Web API mode now connects native Location/Room/physical Asset management,
+local desired inventory, private verification evidence, asset metadata/history,
+advanced utilities, operating policies and contract policy amendments. Confirmed
+server responses determine persistence success; stale versions retain forms for review.
+The global library and Location configuration copy are separate, approved capabilities:
+see [Shared configuration](SHARED_CONFIGURATION.md), [runtime status](API_IMPLEMENTATION_STATUS.md)
+and [executed validation](../development/CONFIGURATION_VALIDATION_2026-11-09.md).
+Compact24 remains 24 physical tables; no migration or legacy operational RoomType
+was added. Previous sections retain their dated scope/history where marked.
+
 # Owner setup — API bổ sung P0–P2
+
+## Policy history correction — 2026-11-09 (GAP-001)
+
+`GET /api/v1/operating-policies/{id}/versions` returns persisted revisions of
+that document ID in ascending `version` order. It does not list unrelated policies
+in the same Location and does not infer a global policy family. Revision entries
+retain the existing SetupDocument shape and include `recordedAt` and `recordedBy`
+where available. Owner sees Draft and Published revisions. Assigned Staff can
+query a currently Published policy and receives Published revisions only; Draft
+history and other Locations remain hidden. Tenant uses its own Contract's
+`agreed-operating-policy` endpoint. Signed-contract snapshots are unchanged.
+
+## Owner Web native configuration — 2026-11-09 (GAP-004, property slice)
+
+API mode now uses native paginated Location, Room and physical Asset APIs instead
+of the prototype repository. Create/update requests carry current DTOs and loaded
+versions. Owner actions are hidden for other roles; server authorization remains
+authoritative. Rejected mutations retain the edit form and do not show success.
+Location deactivation requires confirmation and the existing server obligation
+checks. Location workspaces read their own server Location, preserve nested
+Room/Asset/finance routes, and show real policy/Room-history reads. Pricing is
+bound to the route Location. Demo mode continues through the existing explicit
+mock path. Shared-library apply/copy is addressed in the separately approved
+Shared Configuration phases, not by these native CRUD endpoints.
+
+## Asset and policy UI integration — 2026-11-09 (GAP-004)
+
+Location Assets now supports local template Draft item editing, clone, immutable
+publish, per-Room sync outcomes, assignment and physical inventory verification
+with private image upload. Inventory responses add `assignmentVersion` and
+`assignedTemplateId`, allowing safe assignment after reload. Desired-inventory
+`version`, assignment version and physical asset version are distinct. Verification
+retries retain an already uploaded evidence key after an uncertain response.
+Physical asset history, purchase metadata and confirmed replacement use the
+existing server workflows; template publication never creates verified assets.
+
+Location Rules supports Draft create/edit, publish and persisted document history.
+The Contract detail panel reads the agreed snapshot and prepares a signed-policy
+amendment using a retained UUID command key. It opens the resulting Contract for
+the existing signing and Owner activation controls, without automatically signing,
+activating or overwriting the parent agreement. Applied Addenda cannot be cancelled
+through the proposal UI. Server permission/scope/state guards remain authoritative.
 
 Ngày: 08/11/2026. Tài liệu mô tả implementation trong worktree; chưa phải biên bản nghiệm thu hay triển khai production. Base path: `/api/v1`. Schema runtime vẫn là Compact24, Location → Room; không Chain/RoomType.
 
@@ -100,3 +154,20 @@ Phụ lục dùng quy trình provider ký và activation hiện hữu của Cont
 Không thêm bảng/migration/dependency. Tài sản, hợp đồng, chỉ số, hóa đơn và tiền vẫn dùng record native; tài liệu setup versioned dùng JSON/history trong operational_tasks SYSTEM_JOB sẵn có. Khóa Location trong transaction, version check, stable key và audit/history bảo vệ replay và race. Đây là lựa chọn tương thích Compact24; JSON documents cần được tính vào bảo trì/query/index nếu dữ liệu tăng lớn.
 
 Chi tiết kiểm thử và traceability: [báo cáo triển khai](../development/OWNER_SETUP_DELIVERY_2026-11-08.md). Frontend integration, provider thật, load/performance và nghiệm thu người dùng vẫn cần thực hiện trước production.
+
+# Utility workspace integration — 2026-11-09
+
+The Owner Web Location utility workspace now uses the persisted tariff, profile,
+quota, source meter/reading, supplier bill, reconciliation and period-breakdown APIs.
+GET `/api/utility-meter-links`, `/api/utility-reconciliations`,
+`/api/utility-period-breakdowns` and `/api/utility-source-readings` accept `locationId`.
+The first three are Owner-only. Source readings also permit currently assigned Staff.
+Tenant access is rejected. Existing object and Location permission checks apply.
+
+Setup document data serializes fractional decimals and integers outside JavaScript's
+exact integer range as strings. Small integer counts remain numbers. Callers must
+preserve monetary/quantity strings rather than converting them through `Number`.
+Reconciliation preview quantities are strings; preview does not persist a review.
+Variance approval recalculates the input hash and rejects changed inputs until the
+Owner saves a fresh reconciliation. Upload evidence remains private and confirmed
+source readings remain separate from OCR proposals.

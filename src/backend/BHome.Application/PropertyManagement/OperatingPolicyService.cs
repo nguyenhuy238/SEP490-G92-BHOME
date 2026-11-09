@@ -43,6 +43,13 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
         if (doc.Status != "Published" && !User.IsInRole(Roles.Owner)) throw new PropertyException(404, "resource_not_found");
         return doc;
     }
+    public async Task<IReadOnlyList<SetupDocument>> RevisionsAsync(Guid id, CancellationToken t)
+    {
+        _ = await ReadPolicyAsync(id, t);
+        var revisions = await Store.HistoryAsync(id, "OperatingPolicy", t);
+        return revisions.Where(d => d.Id == id && (User.IsInRole(Roles.Owner) || d.Status == "Published"))
+            .OrderBy(d => d.Version).ToArray();
+    }
     private static OperatingPolicyBinding Binding(SetupDocument doc)
     {
         var p = Read<OperatingPolicyWrite>(doc); return new(doc.Id, doc.Version, Hash(new { p.Title, p.Content, p.EffectiveFrom }), p.Title, p.Content);

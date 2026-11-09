@@ -32,7 +32,10 @@ thực tế cùng xác nhận **383**. Không thêm ba cột giả để khớp 
 
 ## Cấu hình riêng
 
-`.env` giữ local. `.env.neon` là profile operator trên máy setup: runtime dùng
+Ở cấu hình ban đầu, `.env` giữ local. Máy setup sau đó đã chuyển `.env` và User Secrets
+sang Neon mặc định theo yêu cầu ngày 08/11/2026; xem
+[Neon mặc định trên máy phát triển](TEAM_DATABASE_GUIDE.md#neon-mặc-định-trên-máy-phát-triển).
+`.env.neon` là profile operator trên máy setup: runtime dùng
 `bhome_dev01`, direct giữ admin riêng. **Không phân phối nguyên profile operator.**
 `.env.neon.dev01` … `.env.neon.dev05` là profile cá nhân ignored, không có direct/admin
 PostgreSQL hoặc Compose root password. Mẫu commit được là `.env.neon.example`.
@@ -43,7 +46,8 @@ không phân phối credential MinIO root đang dùng local. Có thể giao riê
 PostgreSQL cá nhân trong thư mục developer-credentials qua kênh secret được duyệt.
 
 Đã tạo secret dành riêng Neon development: JWT mới và encryption/HMAC key độc lập ở
-version `neon-dev-v1`; không thay `.env`/User Secrets local. Các process shared cần
+version `neon-dev-v1`; lần setup ban đầu không thay `.env`/User Secrets local.
+Khi chọn Neon mặc định, cả hai nguồn đã được đồng bộ bộ secret Neon có sẵn. Các process shared cần
 cùng key ring; không tự sinh key khác nhau hoặc rotate khi đã có dữ liệu mã hóa.
 Secret chỉ được giao qua kênh được duyệt, không Git/chat. Profile mới cần HTTPS local
 riêng, không sao chép certificate/password của operator.
@@ -51,9 +55,10 @@ riêng, không sao chép certificate/password của operator.
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile .env.neon.dev01
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env.neon.dev01
-# Trở lại local trong terminal mới:
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 -EnvironmentFile .env
 ```
+
+Nếu đã chọn Neon mặc định, quay lại local cần khôi phục đồng bộ `.env` và User Secrets
+từ bản sao phù hợp. Chỉ đổi EnvironmentFile không tự khôi phục JWT/key ring local.
 
 API hỗ trợ User Secrets (`bhome-api-development`) và environment. Với `dotnet run`,
 secrets/env/CLI cao hơn `.env` fallback; `Start-Api.ps1` nạp file được chọn vào process

@@ -17,8 +17,11 @@ import {
 import { DataList, EditDrawer, ListView, Panel, PropertyBoundary, Select } from './PropertyUI';
 import { currency, dateLabel, matches } from './propertyUtils';
 import { usePropertyMutation } from './usePropertyMutation';
+import { isMockMode } from '../../services/config';
+import { PropertyApiPage } from './PropertyApiPages';
 
 export function Assets() {
+  if (!isMockMode) return <PropertyApiPage kind="assets" />;
   return <PropertyBoundary>{(db) => <AssetContent db={db} />}</PropertyBoundary>;
 }
 function AssetContent({ db }: { db: DemoDatabase }) {
@@ -459,6 +462,7 @@ function AssetContent({ db }: { db: DemoDatabase }) {
   );
 }
 export function AssetAllocation() {
+  if (!isMockMode) return <PropertyApiPage kind="assets" />;
   return <PropertyBoundary>{(db) => <AllocationContent db={db} />}</PropertyBoundary>;
 }
 function AllocationContent({ db }: { db: DemoDatabase }) {

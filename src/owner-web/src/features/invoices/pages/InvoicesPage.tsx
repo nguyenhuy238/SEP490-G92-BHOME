@@ -49,6 +49,7 @@ export function LiveInvoicesPage() {
     [period, setPeriod] = useState(''),
     [contractId, setContractId] = useState('');
   const [locationId, setLocationId] = useState('');
+  const [filterRoom, setFilterRoom] = useState('');
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [confirm, setConfirm] = useState(false);
@@ -76,8 +77,8 @@ export function LiveInvoicesPage() {
       }>(`/api/v1/contracts?locationId=${locationId}&pageSize=100`, { signal }),
   });
   const list = useQuery({
-    queryKey: ['invoices', actor, page],
-    queryFn: ({ signal }) => api.list(page, signal),
+    queryKey: ['invoices', actor, page, filterRoom],
+    queryFn: ({ signal }) => api.list(page, signal, filterRoom),
   });
   const detail = useQuery({
     queryKey: ['invoice', actor, selected],
@@ -110,6 +111,26 @@ export function LiveInvoicesPage() {
         subtitle="Nháp → Kiểm tra chi phí → Phát hành. Số tiền do hệ thống tính từ chỉ số đã xác nhận và cấu hình Owner."
       />
       <Stack spacing={2}>
+        <TextField
+          select
+          label="Lọc danh sách hóa đơn theo phòng"
+          value={filterRoom}
+          onChange={(e) => {
+            setFilterRoom(e.target.value);
+            setPage(1);
+          }}
+          helperText="Chọn cơ sở trong phần lập nháp để tải phòng. Bộ lọc áp dụng trên máy chủ."
+        >
+          <MenuItem value="">Tất cả phòng</MenuItem>
+          {filterRoom && !rooms.data?.some((r) => r.id === filterRoom) && (
+            <MenuItem value={filterRoom}>{filterRoom}</MenuItem>
+          )}
+          {rooms.data?.map((r) => (
+            <MenuItem key={r.id} value={r.id}>
+              {r.label}
+            </MenuItem>
+          ))}
+        </TextField>
         <Paper sx={{ p: 2 }}>
           <Stack spacing={2}>
             <Typography variant="h6">Lập hóa đơn nháp</Typography>

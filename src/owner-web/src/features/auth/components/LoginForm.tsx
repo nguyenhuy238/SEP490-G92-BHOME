@@ -24,20 +24,30 @@ import {
 interface LoginFormProps {
   busy: boolean;
   error: string;
-  onLogin: (userName: string, password: string) => Promise<void>;
-  onForgotPassword: (userName: string) => void;
+  onLogin: (email: string, password: string) => Promise<void>;
+  onForgotPassword: (email: string) => void;
 }
 
 export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormProps) {
-  const [userName, setUserName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
+  const [validationError, setValidationError] = useState('');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userName.trim() || !password || busy) return;
+    if (busy) return;
+    if (!email.trim() || !password) {
+      setValidationError('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setValidationError('Email không đúng định dạng.');
+      return;
+    }
+    setValidationError('');
     try {
-      await onLogin(userName, password);
+      await onLogin(email, password);
     } finally {
       setPassword('');
       setVisible(false);
@@ -47,7 +57,7 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
   return (
     <Box component="form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
       <Stack spacing={2.5}>
-        {error && <Alert severity="error">{error}</Alert>}
+        {(validationError || error) && <Alert severity="error">{validationError || error}</Alert>}
         <Box>
           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.75 }}>
             <Typography
@@ -56,7 +66,7 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
               variant="body2"
               sx={{ fontWeight: 500 }}
             >
-              Email hoặc Số điện thoại
+              Email
             </Typography>
             <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
               Bắt buộc
@@ -67,11 +77,15 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
             fullWidth
             required
             disabled={busy}
-            value={userName}
+            value={email}
+            type="email"
             autoComplete="username"
-            placeholder="admin@bhome.vn hoặc 0908123456"
-            onChange={(event) => setUserName(event.target.value)}
-            helperText="Dùng tên đăng nhập đã được cấp cho tài khoản hiện có."
+            placeholder="owner@bhome.vn"
+            onChange={(event) => {
+              setEmail(event.target.value);
+              if (validationError) setValidationError('');
+            }}
+            helperText="Nhập email đã được cấp cho tài khoản Owner."
             slotProps={{
               htmlInput: { maxLength: 256 },
               input: {
@@ -107,7 +121,10 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
             type={visible ? 'text' : 'password'}
             autoComplete="current-password"
             placeholder="Nhập mật khẩu truy cập"
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              if (validationError) setValidationError('');
+            }}
             slotProps={{
               htmlInput: { maxLength: 1024 },
               input: {
@@ -154,7 +171,7 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
           <Button
             type="button"
             disabled={busy}
-            onClick={() => onForgotPassword(userName)}
+            onClick={() => onForgotPassword(email)}
             sx={{ fontSize: 12, p: 0 }}
           >
             Quên mật khẩu?

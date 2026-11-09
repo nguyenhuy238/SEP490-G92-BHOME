@@ -15,6 +15,16 @@ namespace BHome.Application.UnitTests.Contracts;
 
 public sealed class ContractServiceTests
 {
+    [Fact]
+    public async Task HoldingReadinessUsesHoldingApprovalInsteadOfMainContractRules()
+    {
+        var rig = new Rig();
+        var id = await rig.Service.CreateHoldingAsync(rig.HoldingDraft, Guid.NewGuid(), default);
+        var result = await rig.Service.ReadinessAsync(id.Id, default);
+        Assert.False(result.Ready);
+        Assert.Contains("holding_owner_approval_required", result.Blockers);
+        Assert.DoesNotContain("main_contract_required", result.Blockers);
+    }
     private static readonly DateOnly Today = new(2026, 10, 29);
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => new(2026, 10, 29, 8, 0, 0, TimeSpan.Zero); }
     private sealed class User : ICurrentUser

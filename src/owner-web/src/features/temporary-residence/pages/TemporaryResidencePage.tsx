@@ -29,6 +29,7 @@ import { displayContractDate } from '../../../../../../packages/client-core/src/
 import { isMockMode } from '../../../services/config';
 import { PageHeader } from '../../../components/common/PortalUI';
 import { useContractsApi } from '../../contracts/useContractsApi';
+import { OwnerLocationPicker } from '../../../components/common/OwnerSelectors';
 export default function TemporaryResidencePage() {
   return isMockMode ? (
     <>
@@ -50,7 +51,9 @@ function LiveResidencePage() {
   return <OwnerResidenceList key={session.userId} api={api} />;
 }
 function OwnerResidenceList({ api }: { api: ResidenceClient }) {
-  const list = useResidenceList(api);
+  const [location, setLocation] = useState(''),
+    [status, setStatus] = useState('');
+  const list = useResidenceList(api, location, status);
   const [selected, setSelected] = useState('');
   const items = list.data?.items ?? [];
   const current = items.find((task) => residenceKey(task) === selected) ?? items[0];
@@ -65,6 +68,31 @@ function OwnerResidenceList({ api }: { api: ResidenceClient }) {
           </Button>
         }
       />
+      <OwnerLocationPicker
+        value={location}
+        change={(id) => {
+          setLocation(id);
+          list.setPage(1);
+          setSelected('');
+        }}
+      />
+      <TextField
+        select
+        label="Trạng thái tạm trú"
+        value={status}
+        onChange={(e) => {
+          setStatus(e.target.value);
+          list.setPage(1);
+          setSelected('');
+        }}
+      >
+        <MenuItem value="">Tất cả trạng thái</MenuItem>
+        {Object.entries(residenceStatus).map(([value, label]) => (
+          <MenuItem key={value} value={value}>
+            {label}
+          </MenuItem>
+        ))}
+      </TextField>
       {list.loading && <LinearProgress />}
       {!!list.error && (
         <Alert severity="error" action={<Button onClick={list.reload}>Thử lại</Button>}>
