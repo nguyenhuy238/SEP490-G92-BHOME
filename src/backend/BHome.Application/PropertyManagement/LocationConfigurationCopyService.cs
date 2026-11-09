@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 
 namespace BHome.Application.PropertyManagement;
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ConfigurationCopy(Guid SourceLocationId, Guid TargetLocationId, string[] Groups,
     DateOnly? EffectiveFrom = null, string ConflictStrategy = "Reject", string SourceState = "", string TargetState = "");
 public sealed record ConfigurationCopyPlan(Guid SourceLocationId, Guid TargetLocationId, string[] Groups,
@@ -34,6 +36,7 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         input.Groups.Contains("FeePolicies") ? await shared.PoliciesAsync(location, t) : [],
         input.Groups.Contains("OperatingPolicies") ? await local.ListAsync(location, "OperatingPolicy", t) : []);
     private static string Name(SetupDocument document) => document.Data.TryGetProperty("name", out var name) ? name.GetString() ?? "" : document.Data.GetProperty("title").GetString() ?? "";
+    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", _ => "Biểu phí" };
     private static IReadOnlyList<PolicyDto> EffectiveFees(ConfigurationState state, ConfigurationCopy input) => state.Fees.Where(p => p.EffectiveFrom <= input.EffectiveFrom && (p.EffectiveTo is null || p.EffectiveTo >= input.EffectiveFrom)).ToArray();
     private static ConfigurationCopyPlan Plan(ConfigurationCopy input, ConfigurationState source, ConfigurationState target)
     {
@@ -41,24 +44,24 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         void Documents(string group, IReadOnlyList<SetupDocument> from, IReadOnlyList<SetupDocument> to)
         {
             if (!input.Groups.Contains(group)) return;
-            if (from.Count == 0) conflicts.Add($"{group}: source contains no configuration.");
-            if (from.GroupBy(Name, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)) unsupported.Add($"{group}: source contains repeated names; select a unique local configuration before copying.");
+            if (from.Count == 0) conflicts.Add($"{Label(group)}: cơ sở nguồn chưa có cấu hình.");
+            if (from.GroupBy(Name, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)) unsupported.Add($"{Label(group)}: nguồn có nhiều cấu hình cùng tên. Phân biệt tên trước khi sao chép.");
             foreach (var document in from)
             {
-                changes.Add($"{group}: copy {Name(document)} (source {document.Id}, revision {document.Version}) as independent configuration.");
-                if (to.Any(d => string.Equals(Name(d), Name(document), StringComparison.OrdinalIgnoreCase))) conflicts.Add($"{group}: target already contains {Name(document)}.");
+                changes.Add($"{Label(group)}: sao chép {Name(document)} · lần cập nhật {document.Version} · lưu độc lập tại cơ sở đích.");
+                if (to.Any(d => string.Equals(Name(d), Name(document), StringComparison.OrdinalIgnoreCase))) conflicts.Add($"{Label(group)}: cơ sở đích đã có {Name(document)}.");
             }
         }
         Documents("RoomDefaults", source.Defaults, target.Defaults); Documents("AssetTemplates", source.Assets, target.Assets); Documents("OperatingPolicies", source.Policies, target.Policies);
         if (input.Groups.Contains("FeePolicies"))
         {
             var selected = EffectiveFees(source, input);
-            if (selected.Count == 0) conflicts.Add("FeePolicies: no source policies are effective on the selected date.");
+            if (selected.Count == 0) conflicts.Add("Biểu phí: nguồn không có biểu phí hiệu lực tại ngày đã chọn.");
             foreach (var fee in selected)
             {
-                changes.Add($"FeePolicies: copy {fee.Name} from {input.EffectiveFrom:yyyy-MM-dd} through {fee.EffectiveTo:yyyy-MM-dd}.");
-                if (fee.RoomId.HasValue) unsupported.Add($"FeePolicies: {fee.Id} references source Room {fee.RoomId}; Room mapping is required and is not supported by this copy operation.");
-                if (target.Fees.Any(p => p.RoomId is null && p.ChargeCode == fee.ChargeCode && p.EffectiveFrom <= (fee.EffectiveTo ?? DateOnly.MaxValue) && (p.EffectiveTo ?? DateOnly.MaxValue) >= input.EffectiveFrom)) conflicts.Add($"FeePolicies: overlapping target charge {fee.ChargeCode}.");
+                changes.Add($"Biểu phí: {fee.Name} · {fee.ChargeCode} · đơn giá {fee.Rate.ToString(System.Globalization.CultureInfo.InvariantCulture)} · từ {input.EffectiveFrom:dd/MM/yyyy} đến {(fee.EffectiveTo.HasValue ? fee.EffectiveTo.Value.ToString("dd/MM/yyyy") : "không giới hạn")}.");
+                if (fee.RoomId.HasValue) unsupported.Add($"Biểu phí {fee.Name} thuộc một phòng nguồn. Cần ánh xạ phòng; thao tác sao chép hiện chưa hỗ trợ ánh xạ này.");
+                if (target.Fees.Any(p => p.RoomId is null && p.ChargeCode == fee.ChargeCode && p.EffectiveFrom <= (fee.EffectiveTo ?? DateOnly.MaxValue) && (p.EffectiveTo ?? DateOnly.MaxValue) >= input.EffectiveFrom)) conflicts.Add($"Biểu phí: khoản thu {fee.ChargeCode} tại cơ sở đích bị trùng thời gian hiệu lực.");
             }
         }
         return new(input.SourceLocationId, input.TargetLocationId, input.Groups, SharedConfigurationApplicationService.Hash(source), SharedConfigurationApplicationService.Hash(target), conflicts.Count + unsupported.Count == 0, changes.ToArray(), conflicts.ToArray(), unsupported.ToArray());
@@ -96,7 +99,9 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
                 var data = policy.Data.Deserialize<OperatingPolicyWrite>(SharedDataValidator.Json) ?? throw new PropertyException(409, "invalid_source_configuration");
                 created.Add((await policies.SaveAsync(null, new(input.TargetLocationId, data.Title, data.Content, data.EffectiveFrom), t)).Id);
             }
-            var operation = new SharedOperation(Guid.NewGuid(), "Copy", key, fingerprint, actor, clock.GetUtcNow(), input.SourceLocationId, input.SourceLocationId, Guid.Empty, 0, 0, string.Join(",", input.Groups), input.TargetLocationId, "Completed", created.ToArray());
+            var references = source.Defaults.Concat(source.Assets).Concat(source.Policies).Select(d => new ConfigurationSourceReference(d.Id, d.Version, d.Kind))
+                .Concat(EffectiveFees(source, input).Select(p => new ConfigurationSourceReference(p.Id, p.Version, "BillingPolicy"))).ToArray();
+            var operation = new SharedOperation(Guid.NewGuid(), "Copy", key, fingerprint, actor, clock.GetUtcNow(), input.SourceLocationId, input.SourceLocationId, Guid.Empty, 0, 0, string.Join(",", input.Groups), input.TargetLocationId, "Completed", created.ToArray(), references, plan.SourceState, plan.TargetState);
             await shared.SaveOperationAsync(operation, t); return operation;
         }, t);
     }

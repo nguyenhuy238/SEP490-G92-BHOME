@@ -29,23 +29,23 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
         if (source.Status != "Published" || source.Version != input.ExpectedVersion) throw new PropertyException(409, "shared_source_stale_or_unpublished");
         if (input.ConflictStrategy != "Reject" || input.LocationId == Guid.Empty) throw new PropertyException(400, "invalid_configuration_strategy");
         var state = await State(input.LocationId, resource, t); var conflicts = new List<string>();
-        if (await shared.HasApplicationAsync(source.FamilyId, input.LocationId, t)) conflicts.Add("This template family was already applied to the target Location.");
+        if (await shared.HasApplicationAsync(source.FamilyId, input.LocationId, t)) conflicts.Add("Mẫu này đã được áp dụng tại cơ sở đích.");
         if (resource == "fee-templates")
         {
             var fee = Data<SharedFeeData>(source);
-            if ((fee.Scope == "Room") != input.RoomId.HasValue) conflicts.Add("Select an explicit target Room for Room scope; Location scope must omit Room.");
-            if (input.RoomId.HasValue && await local.RoomLocationAsync(input.RoomId.Value, t) != input.LocationId) conflicts.Add("Target Room does not belong to the target Location.");
-            if (fee.EffectiveFrom < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow())) conflicts.Add("The fee edition starts in the past. Create a new edition with an approved effective date.");
-            if ((await shared.PoliciesAsync(input.LocationId, t)).Any(p => p.RoomId == input.RoomId && p.ChargeCode == fee.ChargeCode && p.EffectiveFrom <= (fee.EffectiveTo ?? DateOnly.MaxValue) && (p.EffectiveTo ?? DateOnly.MaxValue) >= fee.EffectiveFrom)) conflicts.Add("An overlapping target charge already exists.");
+            if ((fee.Scope == "Room") != input.RoomId.HasValue) conflicts.Add("Chọn phòng đích cho biểu phí theo phòng; biểu phí theo cơ sở không chọn phòng.");
+            if (input.RoomId.HasValue && await local.RoomLocationAsync(input.RoomId.Value, t) != input.LocationId) conflicts.Add("Phòng đích không thuộc cơ sở đã chọn.");
+            if (fee.EffectiveFrom < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow())) conflicts.Add("Ngày hiệu lực đã qua. Tạo phiên bản mới với ngày hiệu lực phù hợp trước khi áp dụng.");
+            if ((await shared.PoliciesAsync(input.LocationId, t)).Any(p => p.RoomId == input.RoomId && p.ChargeCode == fee.ChargeCode && p.EffectiveFrom <= (fee.EffectiveTo ?? DateOnly.MaxValue) && (p.EffectiveTo ?? DateOnly.MaxValue) >= fee.EffectiveFrom)) conflicts.Add("Cơ sở đích đã có khoản thu trùng thời gian hiệu lực.");
         }
         else
         {
-            if (input.RoomId.HasValue) conflicts.Add("This operation creates Location configuration; omit Room.");
+            if (input.RoomId.HasValue) conflicts.Add("Thao tác này tạo cấu hình theo cơ sở, không chọn phòng.");
             var records = await local.ListAsync(input.LocationId, kind, t);
-            if (records.Any(d => d.Data.TryGetProperty("name", out var name) && string.Equals(name.GetString(), source.Name, StringComparison.OrdinalIgnoreCase) || d.Data.TryGetProperty("title", out var title) && string.Equals(title.GetString(), source.Name, StringComparison.OrdinalIgnoreCase))) conflicts.Add("A target configuration with this name already exists.");
-            if (resource == "asset-templates" && !Data<SharedAssetData>(source).Items.Any(i => i.Required || input.IncludeOptionalItems)) conflicts.Add("The selected package contains no included items.");
+            if (records.Any(d => d.Data.TryGetProperty("name", out var name) && string.Equals(name.GetString(), source.Name, StringComparison.OrdinalIgnoreCase) || d.Data.TryGetProperty("title", out var title) && string.Equals(title.GetString(), source.Name, StringComparison.OrdinalIgnoreCase))) conflicts.Add("Cơ sở đích đã có cấu hình cùng tên.");
+            if (resource == "asset-templates" && !Data<SharedAssetData>(source).Items.Any(i => i.Required || input.IncludeOptionalItems)) conflicts.Add("Gói đã chọn không còn mục nào để áp dụng.");
         }
-        return new(id, input.LocationId, Hash(state), conflicts.Count == 0, [$"Create independent {kind}: {source.Name} (edition {source.Edition})."], conflicts.ToArray(), []);
+        return new(id, input.LocationId, Hash(state), conflicts.Count == 0, [$"Tạo cấu hình độc lập: {source.Name} · phiên bản {source.Edition}."], conflicts.ToArray(), []);
     }
     public Task<ConfigurationPlan> PreviewAsync(string resource, Guid id, SharedApply input, CancellationToken t)
     {
@@ -78,7 +78,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
                     created = (await policies.SaveAsync(null, new(input.LocationId, source.Name, policy.Content, policy.EffectiveFrom), t)).Id; break;
                 default: throw new PropertyException(400, "shared_resource_not_applicable");
             }
-            var operation = new SharedOperation(Guid.NewGuid(), "Apply", key, fingerprint, actor, clock.GetUtcNow(), source.Id, null, source.FamilyId, source.Version, source.Edition, resource, input.LocationId, "Completed", [created]);
+            var operation = new SharedOperation(Guid.NewGuid(), "Apply", key, fingerprint, actor, clock.GetUtcNow(), source.Id, null, source.FamilyId, source.Version, source.Edition, resource, input.LocationId, "Completed", [created], [new(source.Id, source.Version, resource)], Hash(source), plan.TargetState);
             await shared.SaveOperationAsync(operation, t); return operation;
         }, t);
     }

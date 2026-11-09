@@ -21,7 +21,6 @@ public sealed partial class SharedDataValidator(ISharedConfigurationStore store)
     }
     public async Task<JsonElement> ValidateAsync(string resource, JsonElement data, CancellationToken t)
     {
-        _ = store; _ = t;
         object value = resource switch
         {
             "room-type-templates" => Room(Read<SharedRoomDefaults>(data)),

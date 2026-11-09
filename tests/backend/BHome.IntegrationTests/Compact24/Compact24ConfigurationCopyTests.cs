@@ -32,6 +32,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Empty(await local.ListAsync(target.Location, "RoomDefaults", default)); Assert.False(await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AnyAsync(p => p.LocationId == target.Location));
         input = input with { SourceState = plan.SourceState, TargetState = plan.TargetState }; var key = Guid.NewGuid();
         var result = await Read<SharedOperation>(await Keyed(owner, "/api/v1/location-configuration/copy", input, key)); Assert.Equal(4, result.CreatedReferences.Length);
+        Assert.Equal(4, result.SourceReferences!.Length); Assert.Equal(plan.SourceState, result.SourceState); Assert.Equal(plan.TargetState, result.TargetState);
         Assert.Equal(result.Id, (await Read<SharedOperation>(await Keyed(owner, "/api/v1/location-configuration/copy", input, key))).Id);
         Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, "/api/v1/location-configuration/copy", input with { Groups = ["RoomDefaults"] }, key)).StatusCode);
         var copied = Assert.Single(await local.ListAsync(target.Location, "OperatingPolicy", default)); var original = Assert.Single(await local.ListAsync(source.Location, "OperatingPolicy", default));
@@ -56,7 +57,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, "/api/v1/location-configuration/copy", input with { SourceState = plan.SourceState, TargetState = plan.TargetState }, Guid.NewGuid())).StatusCode);
         await owner.PostAsJsonAsync("/api/v1/billing-policies", new PolicyWrite(source.Location, source.Room, BHome.Domain.PropertyManagement.ChargeCategory.ServiceFee, "SYNTHETIC", "Room fee", BHome.Domain.PropertyManagement.ChargingMethod.FixedPerRoomPerMonth, 1, Today, null));
         plan = await Read<ConfigurationCopyPlan>(await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", input));
-        Assert.False(plan.CanProceed); Assert.Contains(plan.UnsupportedReferences, x => x.Contains("Room mapping"));
+        Assert.False(plan.CanProceed); Assert.Contains(plan.UnsupportedReferences, x => x.Contains("ánh xạ phòng"));
     }
     [CompactPostgresFact]
     public async Task ConfigurationCopyRollsBackAllGroupsWhenDurableProvenanceFails()

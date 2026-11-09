@@ -16,6 +16,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
+using Swashbuckle.AspNetCore.Swagger;
+using Microsoft.OpenApi.Writers;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 
 namespace BHome.IntegrationTests.Compact24;
 
@@ -98,8 +101,28 @@ public sealed class Compact24ApiAuditTests
             if (!string.IsNullOrWhiteSpace(directory))
             {
                 Directory.CreateDirectory(directory);
+                using var swaggerOutput = new StringWriter(System.Globalization.CultureInfo.InvariantCulture);
+                var swaggerDocument = factory.Services.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
+                var businessPaths = actions.Select(a => "/" + Regex.Replace(a.AttributeRouteInfo!.Template!.TrimStart('/'), "\\{([^}:]+):[^}]+\\}", "{$1}")).ToHashSet();
+                // ApiFactory adds test-only probes from another assembly; exclude those from the product contract.
+                foreach (var path in swaggerDocument.Paths.Keys.Where(p => !businessPaths.Contains(p)).ToArray()) swaggerDocument.Paths.Remove(path);
+                swaggerDocument.SerializeAsV3(new OpenApiJsonWriter(swaggerOutput));
+                var swaggerText = swaggerOutput.ToString();
+                using var swagger = JsonDocument.Parse(swaggerText);
+                var paths = swagger.RootElement.GetProperty("paths");
+                var swaggerMethods = paths.EnumerateObject().Sum(p => p.Value.EnumerateObject().Count(m => new[] { "get", "post", "put", "delete", "patch", "head", "options" }.Contains(m.Name)));
+                var describedMethods = factory.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>().ApiDescriptionGroups.Items.SelectMany(g => g.Items)
+                    .Count(d => d.ActionDescriptor is ControllerActionDescriptor c && c.ControllerTypeInfo.Assembly == typeof(BHome.Api.Controllers.ContractsController).Assembly);
+                Assert.Equal(describedMethods, swaggerMethods);
+                await using var evidenceScope = factory.Services.CreateAsyncScope();
+                var evidenceDb = evidenceScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var tableCount = await evidenceDb.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'").SingleAsync();
+                Assert.True(await evidenceDb.IsSchemaReadyAsync()); Assert.Equal(24, tableCount);
+                await File.WriteAllTextAsync(Path.Combine(directory, "swagger.json"), swaggerText);
                 await File.WriteAllTextAsync(Path.Combine(directory, "api-route-audit.json"), JsonSerializer.Serialize(new
-                { SchemaVersion = Compact24Schema.Version, Endpoints = manifest, OwnerGetProbes = gets }, new JsonSerializerOptions { WriteIndented = true }));
+                { GeneratedAtUtc = DateTimeOffset.UtcNow, SourceCommit = Environment.GetEnvironmentVariable("BHOME_API_INVENTORY_COMMIT"), SchemaVersion = Compact24Schema.Version,
+                    TableCount = tableCount, SchemaVerified = true, SwaggerPathCount = paths.EnumerateObject().Count(), SwaggerMethodRoutePairs = swaggerMethods,
+                    Endpoints = manifest, OwnerGetProbes = gets }, new JsonSerializerOptions { WriteIndented = true }));
             }
         }
         finally { await fixture.DisposeAsync(); }

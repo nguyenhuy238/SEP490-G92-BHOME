@@ -104,6 +104,9 @@ export interface SharedOperation {
   actorId: string;
   appliedAt: string;
   createdReferences: string[];
+  sourceReferences?: { id: string; version: number; kind: string }[];
+  sourceState?: string;
+  targetState?: string;
 }
 export interface SharedUsage {
   items: SharedOperation[];

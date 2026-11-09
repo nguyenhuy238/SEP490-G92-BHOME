@@ -1,9 +1,12 @@
 param(
     [string]$Filter = 'FullyQualifiedName~Compact24OwnerSetupTests',
-    [string]$ResultsDirectory = (Join-Path $env:TEMP 'bhome-configuration-tests')
+    [string]$ResultsDirectory = (Join-Path $env:TEMP 'bhome-configuration-tests'),
+    [string]$TestProject = ''
 )
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path $PSScriptRoot -Parent
+if (-not $TestProject) { $TestProject = Join-Path $repository 'tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj' }
+$TestProject = (Resolve-Path -LiteralPath $TestProject).Path
 $container = 'bhome-config-test-' + [Guid]::NewGuid().ToString('N')
 $previousAdmin = $env:BHOME_COMPACT24_TEST_ADMIN
 $previousPassword = $env:POSTGRES_PASSWORD
@@ -28,7 +31,7 @@ try {
     if ($binding -notmatch '^127\.0\.0\.1:(\d+)$') { throw 'Expected a dedicated loopback port binding.' }
     $env:BHOME_COMPACT24_TEST_ADMIN = 'Host=127.0.0.1;Port=' + $Matches[1] + ';Database=postgres;Username=postgres;Password=' + $env:POSTGRES_PASSWORD
     Write-Host 'Running against disposable PostgreSQL; no working database configuration is used.'
-    & dotnet test (Join-Path $repository 'tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj') --no-restore --filter $Filter --logger 'trx' --results-directory $ResultsDirectory --verbosity minimal
+    & dotnet test $TestProject --no-restore --filter $Filter --logger 'trx' --results-directory $ResultsDirectory --verbosity minimal
     $exitCode = $LASTEXITCODE
 } finally {
     $env:BHOME_COMPACT24_TEST_ADMIN = $previousAdmin

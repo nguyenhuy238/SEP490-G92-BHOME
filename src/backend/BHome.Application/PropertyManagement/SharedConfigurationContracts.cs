@@ -7,8 +7,11 @@ public sealed record SharedDocument(Guid Id, string Resource, Guid FamilyId, int
     string Name, string Description, string Status, string ManagementScope, Guid CreatedBy,
     DateTimeOffset CreatedAt, Guid UpdatedBy, DateTimeOffset UpdatedAt,
     [property: JsonConverter(typeof(ExactSetupDataConverter))] JsonElement Data);
-public sealed record SharedWrite(string Name, string Description, JsonElement Data, int ExpectedVersion = 0);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SharedWrite(string Name, string Description, [property: JsonRequired] JsonElement Data, int ExpectedVersion = 0);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedVersion(int ExpectedVersion);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedDuplicate(string Name, int ExpectedVersion);
 public sealed record SharedPage(IReadOnlyList<SharedDocument> Items, long Total, int Page, int PageSize);
 public interface ISharedConfigurationStore
@@ -26,9 +29,12 @@ public interface ISharedConfigurationStore
     Task<bool> HasApplicationAsync(Guid family, Guid location, CancellationToken t);
     Task SaveOperationAsync(SharedOperation operation, CancellationToken t);
 }
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedApply(Guid LocationId, int ExpectedVersion, string ConflictStrategy = "Reject", string TargetState = "", Guid? RoomId = null, bool IncludeOptionalItems = true);
 public sealed record ConfigurationPlan(Guid SourceId, Guid TargetLocationId, string TargetState, bool CanProceed, string[] Changes, string[] Conflicts, string[] UnsupportedReferences);
 public sealed record SharedOperation(Guid Id, string Kind, Guid Key, string Fingerprint, Guid ActorId, DateTimeOffset AppliedAt,
     Guid SourceId, Guid? SourceLocationId, Guid FamilyId, int SourceVersion, int SourceEdition, string Resource,
-    Guid TargetLocationId, string Status, Guid[] CreatedReferences);
+    Guid TargetLocationId, string Status, Guid[] CreatedReferences, ConfigurationSourceReference[]? SourceReferences = null,
+    string? SourceState = null, string? TargetState = null);
+public sealed record ConfigurationSourceReference(Guid Id, int Version, string Kind);
 public sealed record SharedUsage(IReadOnlyList<SharedOperation> Items, long Total, long LocationsUsing, int Page, int PageSize);

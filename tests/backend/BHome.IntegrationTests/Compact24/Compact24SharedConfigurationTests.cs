@@ -82,6 +82,8 @@ public sealed partial class Compact24OwnerSetupTests
             Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/room-type-templates", SharedInput("room-type-templates") with { Data = JsonSerializer.SerializeToElement(data) })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/asset-catalog", SharedInput("asset-catalog") with { Data = JsonSerializer.SerializeToElement(new { category = "Synthetic", unit = "item", referencePrice = "-1" }) })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/api/v1/shared-configuration/room-types")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/room-type-templates", new { name = "Missing data", description = "Synthetic" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/room-type-templates", new { name = "Unknown top-level member", description = "Synthetic", data = SharedInput("room-type-templates").Data, roomTypeId = (string?)null })).StatusCode);
     }
     [CompactPostgresFact]
     public async Task SharedFeesAndPoliciesValidateDomainRulesWithoutCreatingOperationalRecords()
