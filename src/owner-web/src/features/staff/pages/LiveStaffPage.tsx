@@ -1,5 +1,4 @@
-/* oxlint-disable react/set-state-in-effect -- Dialog errors reset when a different modal opens. */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   Alert,
   Button,
@@ -48,9 +47,6 @@ export default function LiveStaffPage() {
   const [assignment, setAssignment] = useState({ staffUserId: '', startDate: '', endDate: '' });
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  useEffect(() => {
-    setError('');
-  }, [staffOpen, assignmentOpen]);
   const submit = (event: FormEvent, action: () => Promise<unknown>, done: () => void) => {
     event.preventDefault();
     setBusy(true);
@@ -66,13 +62,22 @@ export default function LiveStaffPage() {
         subtitle="Tài khoản Staff và khoảng thời gian phân công được lưu tại Backend."
         actions={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={() => setStaffOpen(true)}>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setError('');
+                setStaffOpen(true);
+              }}
+            >
               Tạo Staff
             </Button>
             <Button
               variant="contained"
               disabled={!locationId}
-              onClick={() => setAssignmentOpen(true)}
+              onClick={() => {
+                setError('');
+                setAssignmentOpen(true);
+              }}
             >
               Phân công cơ sở
             </Button>

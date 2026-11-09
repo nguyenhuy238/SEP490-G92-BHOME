@@ -60,7 +60,9 @@ async function apiAction(page, method, pathname, action, allowed = [200, 201, 20
   try { response = await responsePromise; }
   catch (error) {
     const alerts = await page.getByRole('alert').allTextContents();
-    throw new Error(`${error.message}; url=${page.url()}; alerts=${alerts.join(' | ')}`);
+    throw new Error(`${error.message}; url=${page.url()}; alerts=${alerts.join(' | ')}`, {
+      cause: error,
+    });
   }
   check(allowed.includes(response.status()), `${method} ${pathname} returned ${response.status()}`);
   return response;
