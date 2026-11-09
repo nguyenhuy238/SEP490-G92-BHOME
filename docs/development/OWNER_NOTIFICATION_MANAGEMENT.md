@@ -1,0 +1,7 @@
+# Owner notification management
+
+UC-35/36, JOB-01/04/07 and GBR-18: the existing recipient inbox/read/navigation stays in use. Owner management adds actual audience preview, reviewed draft creation, explicit send confirmation, sent history, delivery overview and per-Location debt/task/emergency/due-soon policy. IN_APP is mandatory and EMAIL is optional. Push is visibly unavailable pending a real provider (CAP05). Server receipt of Send is not proof of external delivery.
+
+Audience types follow `NotificationAudience`: ALL_TENANTS, LOCATION, ROOM, USER and SELECTED_USERS. Selected users are entered as UUIDs and revalidated on the server. Draft text and recipients are previewed; content/scope changes require another preview. Send retries use the persisted draft ID and existing transactional deduplication. Create currently has no replay/recovery contract; an uncertain create response stops another create and asks the operator to investigate rather than silently duplicating it.
+
+Policy reads preserve all fields. The disputed JOB-08 residence settings remain read-only and are preserved on update; no default cadence is invented. This API has no concurrency version, so concurrent policy editing remains a limitation to test. No notification content, provider token or credential is logged. No external message was sent during development; component requests are mocked and integration data is disposable.
