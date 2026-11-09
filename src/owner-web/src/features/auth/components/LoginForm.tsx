@@ -32,10 +32,20 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
+  const [validationError, setValidationError] = useState('');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!email.trim() || !password || busy) return;
+    if (busy) return;
+    if (!email.trim() || !password) {
+      setValidationError('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setValidationError('Email không đúng định dạng.');
+      return;
+    }
+    setValidationError('');
     try {
       await onLogin(email, password);
     } finally {
@@ -47,7 +57,7 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
   return (
     <Box component="form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
       <Stack spacing={2.5}>
-        {error && <Alert severity="error">{error}</Alert>}
+        {(validationError || error) && <Alert severity="error">{validationError || error}</Alert>}
         <Box>
           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.75 }}>
             <Typography
@@ -71,7 +81,10 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
             type="email"
             autoComplete="username"
             placeholder="owner@bhome.vn"
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              if (validationError) setValidationError('');
+            }}
             helperText="Nhập email đã được cấp cho tài khoản Owner."
             slotProps={{
               htmlInput: { maxLength: 256 },
@@ -108,7 +121,10 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
             type={visible ? 'text' : 'password'}
             autoComplete="current-password"
             placeholder="Nhập mật khẩu truy cập"
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              if (validationError) setValidationError('');
+            }}
             slotProps={{
               htmlInput: { maxLength: 1024 },
               input: {

@@ -60,7 +60,9 @@ export function useOwnerLogin() {
         return;
       }
       await client.requestPasswordReset(userName.trim());
-      setResetMessage('Nếu tài khoản đủ điều kiện, hướng dẫn đặt lại mật khẩu sẽ được gửi.');
+      setResetMessage(
+        'Yêu cầu đã được tiếp nhận. Nếu tài khoản đủ điều kiện và kênh email được cấu hình, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.',
+      );
     } catch (failure) {
       setResetError(true);
       setResetMessage(
@@ -83,7 +85,7 @@ export function useOwnerLogin() {
       }
       await client.logout();
     } catch {
-      setError('Đã xóa phiên trên thiết bị. Chưa xác nhận được thu hồi phiên trên máy chủ.');
+      setError('Chưa xác nhận được thu hồi phiên trên máy chủ. Phiên vẫn được giữ để bạn thử lại.');
     } finally {
       setBusy(false);
     }

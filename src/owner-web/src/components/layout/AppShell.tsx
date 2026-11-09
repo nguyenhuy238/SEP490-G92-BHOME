@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   Avatar,
   Badge,
   Box,
@@ -16,7 +15,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  Snackbar,
   TextField,
   Tooltip,
   Typography,
@@ -34,7 +32,6 @@ import {
   Globe,
   KeyRound,
   LayoutDashboard,
-  LogOut,
   Menu,
   Package,
   Receipt,
@@ -54,16 +51,13 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { featureDefinitions } from '../../app/featureDefinitions';
 import { usePortal } from '../../app/PortalProvider';
 import { usePortalAction, usePortalData } from '../../hooks/usePortalData';
-import { demoAuth } from '../../services/demoAuth';
 import { isMockMode } from '../../services/config';
 import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
-import { ChangePasswordDialog } from '../../features/auth/components/ChangePasswordDialog';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -136,6 +130,7 @@ const navGroups = [
 ] as const;
 const navLabels: Record<string, string> = {
   dashboard: 'Tổng quan',
+  account: 'Tài khoản',
   notifications: 'Thông báo',
   locations: 'Cơ sở',
   'configuration/room-types': 'Mẫu loại phòng',
@@ -170,13 +165,10 @@ const navLabels: Record<string, string> = {
 };
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false),
-    [resetOpen, setResetOpen] = useState(false),
-    [passwordOpen, setPasswordOpen] = useState(false),
-    [logoutError, setLogoutError] = useState(false);
+    [resetOpen, setResetOpen] = useState(false);
   const { data } = usePortalData();
   const portal = usePortal();
   const action = usePortalAction();
-  const { client } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const current = location.pathname.split('/')[1] || 'dashboard';
@@ -407,43 +399,24 @@ export function AppShell() {
               </IconButton>
             </Tooltip>
           )}
-          {!isMockMode && (
-            <Tooltip title="Đổi mật khẩu">
-              <IconButton aria-label="Đổi mật khẩu" onClick={() => setPasswordOpen(true)}>
-                <KeyRound size={18} />
-              </IconButton>
-            </Tooltip>
-          )}
-          <Tooltip title="Đăng xuất">
+          <Tooltip title="Quản lý tài khoản">
             <IconButton
-              aria-label="Đăng xuất"
-              onClick={() =>
-                action.mutate(async () => {
-                  try {
-                    if (isMockMode) await demoAuth.logout();
-                    else await client.logout();
-                    setLogoutError(false);
-                    navigate('/login', { replace: true });
-                  } catch {
-                    setLogoutError(true);
-                  }
-                })
-              }
+              aria-label="Mở quản lý tài khoản"
+              onClick={() => navigate('/account/profile')}
+              sx={{ p: 0.5 }}
             >
-              <LogOut size={18} />
+              <Avatar
+                sx={{
+                  width: 30,
+                  height: 30,
+                  fontSize: 12,
+                  bgcolor: 'primary.main',
+                }}
+              >
+                NH
+              </Avatar>
             </IconButton>
           </Tooltip>
-          <Avatar
-            sx={{
-              width: 30,
-              height: 30,
-              fontSize: 12,
-              bgcolor: 'primary.main',
-              display: { xs: 'none', sm: 'flex' },
-            }}
-          >
-            NH
-          </Avatar>
         </Paper>
         <Box sx={{ px: { xs: 2, md: 4 }, py: 3.5, maxWidth: 1480, mx: 'auto' }}>
           <Breadcrumbs sx={{ fontSize: 10, mb: 1 }}>
@@ -472,21 +445,6 @@ export function AppShell() {
       >
         Các thay đổi demo trên trình duyệt này sẽ được thay bằng bộ dữ liệu ban đầu.
       </ConfirmDialog>
-      <ChangePasswordDialog
-        open={passwordOpen}
-        onClose={() => setPasswordOpen(false)}
-        onChanged={() => navigate('/login', { replace: true, state: { passwordChanged: true } })}
-      />
-      <Snackbar
-        open={logoutError}
-        autoHideDuration={8000}
-        onClose={() => setLogoutError(false)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert severity="error" onClose={() => setLogoutError(false)}>
-          Chưa thể xác nhận đăng xuất trên máy chủ. Phiên vẫn được giữ để bạn thử lại.
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

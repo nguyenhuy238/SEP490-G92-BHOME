@@ -19,21 +19,30 @@ import { ApiError } from '../../../../../../packages/client-core/src/api';
 
 interface ChangePasswordDialogProps {
   open: boolean;
+  accountEmail: string;
   onClose: () => void;
   onChanged: () => void;
+  onReauthenticationRequired: () => void;
 }
 
 const passwordRule = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}]).{12,1024}$/u;
 
-export function ChangePasswordDialog({ open, onClose, onChanged }: ChangePasswordDialogProps) {
+export function ChangePasswordDialog({
+  open,
+  accountEmail,
+  onClose,
+  onChanged,
+  onReauthenticationRequired,
+}: ChangePasswordDialogProps) {
   const { client } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<'change' | null>(null);
   const [error, setError] = useState('');
+  const busy = busyAction !== null;
 
   function reset() {
     setCurrentPassword('');
@@ -64,13 +73,25 @@ export function ChangePasswordDialog({ open, onClose, onChanged }: ChangePasswor
       return;
     }
 
-    setBusy(true);
+    setBusyAction('change');
     setError('');
+    let passwordChanged = false;
     try {
       await client.changePassword(currentPassword, newPassword);
+      passwordChanged = true;
+      await client.login(accountEmail, newPassword);
+      if (!client.session?.roles.includes('Owner')) {
+        client.clear();
+        throw new Error('Owner session was not restored.');
+      }
       reset();
       onChanged();
     } catch (failure) {
+      if (passwordChanged) {
+        reset();
+        onReauthenticationRequired();
+        return;
+      }
       if (failure instanceof ApiError && failure.status === 400) {
         setError('Không thể đổi mật khẩu. Hãy kiểm tra mật khẩu hiện tại và yêu cầu bảo mật.');
       } else if (failure instanceof ApiError && failure.status === 401) {
@@ -83,7 +104,7 @@ export function ChangePasswordDialog({ open, onClose, onChanged }: ChangePasswor
         setError('Không thể kết nối dịch vụ xác thực. Vui lòng thử lại sau.');
       }
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -159,8 +180,8 @@ export function ChangePasswordDialog({ open, onClose, onChanged }: ChangePasswor
             slotProps={{ htmlInput: { minLength: 12, maxLength: 1024 } }}
           />
           <Typography variant="caption" color="text.secondary">
-            Tối thiểu 12 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Đổi mật khẩu sẽ đăng
-            xuất tất cả thiết bị.
+            Tối thiểu 12 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Các phiên cũ sẽ bị
+            thu hồi; phiên hiện tại sẽ được xác thực lại tự động bằng mật khẩu mới.
           </Typography>
         </Stack>
       </DialogContent>
@@ -175,7 +196,7 @@ export function ChangePasswordDialog({ open, onClose, onChanged }: ChangePasswor
           disabled={busy || !currentPassword || !newPassword || !confirmation}
           startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}
         >
-          {busy ? 'Đang đổi...' : 'Đổi mật khẩu'}
+          {busyAction === 'change' ? 'Đang đổi...' : 'Đổi mật khẩu'}
         </Button>
       </DialogActions>
     </Dialog>

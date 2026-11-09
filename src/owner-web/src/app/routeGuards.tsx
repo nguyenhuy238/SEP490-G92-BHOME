@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Alert, Box, Typography } from '@mui/material';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../../../../packages/client-core/src/auth';
@@ -36,8 +36,17 @@ export function ProtectedRoute() {
 }
 export function LoginRoute() {
   const { owner, restoring } = useOwnerSession();
+  const { session, client } = useAuth();
+  const wasRestoring = useRef(restoring);
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
+  useEffect(() => {
+    const restorationFinished = wasRestoring.current && !restoring;
+    wasRestoring.current = restoring;
+    if (restorationFinished && session && !session.roles.includes('Owner')) {
+      void client.logout().catch(() => undefined);
+    }
+  }, [client, restoring, session]);
   if (restoring) return <LoadingState />;
   return owner ? (
     <Navigate

@@ -141,7 +141,7 @@ it('reports unavailable reset delivery without claiming an email was sent', asyn
   setup();
   fillLogin();
   fireEvent.click(screen.getByRole('button', { name: 'Quên mật khẩu?' }));
-  expect(screen.getByRole('textbox', { name: /Tên đăng nhập/ })).toHaveValue(
+  expect(screen.getByRole('textbox', { name: /Email/ })).toHaveValue(
     'synthetic-owner@example.invalid',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Gửi hướng dẫn' }));
