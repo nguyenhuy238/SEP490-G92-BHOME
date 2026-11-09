@@ -8,19 +8,13 @@ const native = vi.hoisted(() => ({
   measure: vi.fn((_target: number, callback: (...values: number[]) => void) =>
     callback(0, 450, 200, 60),
   ),
-  listeners: new Map<
-    string,
-    Set<(event?: { endCoordinates: { screenY: number } }) => void>
-  >(),
+  listeners: new Map<string, Set<(event?: { endCoordinates: { screenY: number } }) => void>>(),
   frames: new Map<number, () => void>(),
   sequence: 0,
 }));
 vi.mock('react-native', () => ({
   Keyboard: {
-    addListener: (
-      name: string,
-      cb: (event?: { endCoordinates: { screenY: number } }) => void,
-    ) => {
+    addListener: (name: string, cb: (event?: { endCoordinates: { screenY: number } }) => void) => {
       const listeners = native.listeners.get(name) ?? new Set();
       listeners.add(cb);
       native.listeners.set(name, listeners);

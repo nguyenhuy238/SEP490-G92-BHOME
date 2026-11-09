@@ -32,7 +32,10 @@ export const KeyboardFormScrollView = forwardRef<ScrollHandle, ScrollViewProps>(
           UIManager.measureInWindow(target, (_x, y, _width, height) => {
             const covered = y + height + 16 - top;
             if (covered > 0)
-              scroll.current?.scrollTo({ y: Math.max(0, scrollY.current + covered), animated: true });
+              scroll.current?.scrollTo({
+                y: Math.max(0, scrollY.current + covered),
+                animated: true,
+              });
           });
         });
       });

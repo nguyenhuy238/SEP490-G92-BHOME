@@ -946,7 +946,13 @@ export function contractActions(
         action(
           'holding-conversion',
           'Chuyển sang hợp đồng thuê chính',
-          [{ name: 'requiredSecurityDeposit', label: 'Tiền cọc thuê yêu cầu (VND)', type: 'money' }],
+          [
+            {
+              name: 'requiredSecurityDeposit',
+              label: 'Tiền cọc thuê yêu cầu (VND)',
+              type: 'money',
+            },
+          ],
           'Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
         ),
       );

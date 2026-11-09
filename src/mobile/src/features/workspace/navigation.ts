@@ -150,7 +150,12 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       'owner-finance',
     ].includes(screen)
   )
-    return ['owner-adjustments', 'owner-adjustment-detail', 'owner-payments', 'owner-payment-detail'].includes(screen)
+    return [
+      'owner-adjustments',
+      'owner-adjustment-detail',
+      'owner-payments',
+      'owner-payment-detail',
+    ].includes(screen)
       ? 'approvals'
       : screen === 'owner-finance'
         ? 'owner-home'
