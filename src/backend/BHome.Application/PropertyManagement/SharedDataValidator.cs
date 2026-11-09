@@ -10,8 +10,8 @@ public sealed record SharedCatalogData(string Category, string Unit, [property: 
 
 public sealed partial class SharedDataValidator(ISharedConfigurationStore store) : ISharedDataValidator
 {
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { NumberHandling = JsonNumberHandling.AllowReadingFromString };
-    public bool Supports(string resource) => resource is "room-type-templates" or "asset-catalog" or "asset-templates";
+    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { NumberHandling = JsonNumberHandling.AllowReadingFromString, Converters = { new JsonStringEnumConverter() } };
+    public bool Supports(string resource) => resource is "room-type-templates" or "asset-catalog" or "asset-templates" or "fee-templates" or "policy-templates";
     internal static string Text(string? text, int max) => !string.IsNullOrWhiteSpace(text) && text.Trim().Length <= max ? text.Trim() : throw new PropertyException(400, "invalid_shared_data");
     internal static decimal Money(decimal value) => value >= 0 && value <= 99999999999999.9999m && decimal.Round(value, 4) == value ? value : throw new PropertyException(400, "invalid_shared_rate");
     internal static T Read<T>(JsonElement data)
@@ -27,6 +27,8 @@ public sealed partial class SharedDataValidator(ISharedConfigurationStore store)
             "room-type-templates" => Room(Read<SharedRoomDefaults>(data)),
             "asset-catalog" => Catalog(Read<SharedCatalogData>(data)),
             "asset-templates" => await AssetsAsync(Read<SharedAssetData>(data), t),
+            "fee-templates" => Fee(Read<SharedFeeData>(data)),
+            "policy-templates" => Policy(Read<SharedPolicyData>(data)),
             _ => throw new PropertyException(404, "shared_resource_not_found")
         };
         return JsonSerializer.SerializeToElement(value, Json);
