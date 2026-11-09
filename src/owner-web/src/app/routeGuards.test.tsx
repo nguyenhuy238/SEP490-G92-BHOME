@@ -2,15 +2,34 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LoginRoute, ProtectedRoute } from './routeGuards';
-const state = vi.hoisted(() => ({ owner: false }));
+const state = vi.hoisted(() => ({
+  owner: false,
+  restoring: false,
+  restoredRoles: null as string[] | null,
+  logout: vi.fn(async () => {}),
+}));
 vi.mock('../../../../packages/client-core/src/auth', () => ({
-  useAuth: () => ({ session: state.owner ? { roles: ['Owner'] } : null }),
+  useAuth: () => ({
+    session: state.restoredRoles
+      ? { roles: state.restoredRoles }
+      : state.owner
+        ? { roles: ['Owner'] }
+        : null,
+    isRestoring: state.restoring,
+    client: { logout: state.logout },
+  }),
 }));
 vi.mock('../services/config', () => ({ isMockMode: false }));
 vi.mock('../features/auth/pages/LoginPage', () => ({
   LoginPage: () => <span>Login required</span>,
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  state.owner = false;
+  state.restoring = false;
+  state.restoredRoles = null;
+  state.logout.mockClear();
+});
 function Target() {
   const location = useLocation();
   return <span>{location.pathname + location.search + location.hash}</span>;
@@ -34,4 +53,36 @@ it('retains the full authorized deep link while authentication is restored', asy
   state.owner = true;
   view.rerender(<App />);
   expect(await screen.findByText('/invoices?invoiceId=synthetic#detail')).toBeInTheDocument();
+});
+
+it('shows a protected-route loading state until cookie session restoration finishes', async () => {
+  state.owner = false;
+  state.restoring = true;
+  const view = render(<App />);
+  expect(screen.queryByText('Login required')).not.toBeInTheDocument();
+  state.restoring = false;
+  view.rerender(<App />);
+  expect(await screen.findByText('Login required')).toBeInTheDocument();
+});
+
+it('revokes a restored non-Owner session on the login route', async () => {
+  state.restoring = true;
+  state.restoredRoles = ['Staff'];
+  const view = render(
+    <MemoryRouter initialEntries={['/login']}>
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  state.restoring = false;
+  view.rerender(
+    <MemoryRouter initialEntries={['/login']}>
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('Login required')).toBeInTheDocument();
+  expect(state.logout).toHaveBeenCalledOnce();
 });

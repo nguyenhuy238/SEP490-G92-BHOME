@@ -3,7 +3,6 @@ import { useAuth } from '../../../../packages/client-core/src/auth';
 import { Alert, Snackbar } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMockRepository } from '../services/repositories/mockPortalRepository';
-import { isMockMode } from '../services/config';
 import type { PortalRepository } from '../types/portal';
 
 interface PortalContextValue {
@@ -40,17 +39,7 @@ function PortalScope({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState({ message: '', error: false });
   const [repository] = useState(() => {
-    const mock = createMockRepository();
-    if (isMockMode) return mock;
-    // Business OpenAPI endpoints are not finalized; never silently return mock data in API mode.
-    const unavailable = async (): Promise<never> => {
-      throw new Error(
-        'Chưa có hợp đồng API nghiệp vụ. Đặt VITE_API_MODE=mock để dùng dữ liệu demo.',
-      );
-    };
-    return Object.fromEntries(
-      Object.keys(mock).map((key) => [key, unavailable]),
-    ) as unknown as PortalRepository;
+    return createMockRepository();
   });
   const value = useMemo(
     () => ({

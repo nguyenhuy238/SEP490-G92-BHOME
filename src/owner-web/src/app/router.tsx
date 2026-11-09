@@ -67,16 +67,20 @@ const PolicyTemplatesPage = lazy(() =>
     default: module.PolicyTemplatesPage,
   })),
 );
+const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
+const AccountProfilePage = lazy(() => import('../features/auth/pages/AccountProfilePage'));
 export function AppRouter() {
   return (
     <SharedConfigurationProvider>
       <Suspense fallback={<LoadingState />}>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/account/profile" element={<AccountProfilePage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/configuration/room-types" element={<RoomTypeTemplatesPage />} />
               <Route path="/configuration/assets" element={<AssetCatalogPage />} />

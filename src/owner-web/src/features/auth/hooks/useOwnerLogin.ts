@@ -15,26 +15,34 @@ export function useOwnerLogin() {
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState(false);
 
-  async function login(userName: string, password: string) {
+  async function login(email: string, password: string) {
     if (busy) return;
     setBusy(true);
     setError('');
     try {
       if (isMockMode) {
-        await demoAuth.login(userName.trim(), password);
+        await demoAuth.login(email.trim(), password);
         return;
       }
-      await client.login(userName.trim(), password);
+      await client.login(email.trim(), password);
       if (!client.session?.roles.includes('Owner')) {
         await client.logout().catch(() => undefined);
         setError('Tài khoản này không có quyền truy cập Owner Portal.');
       }
     } catch (failure) {
-      setError(
-        failure instanceof ApiError && failure.status === 429
-          ? 'Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.'
-          : 'Không thể đăng nhập. Vui lòng kiểm tra thông tin hoặc thử lại sau.',
-      );
+      if (!(failure instanceof ApiError)) {
+        setError('Không thể kết nối máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
+      } else if (failure.status === 401) {
+        setError('Email hoặc mật khẩu không đúng. Vui lòng kiểm tra và thử lại.');
+      } else if (failure.status === 403) {
+        setError('Yêu cầu đăng nhập không được phép từ nguồn truy cập này.');
+      } else if (failure.status === 429) {
+        setError('Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.');
+      } else if (failure.status >= 500 || failure.status === 0) {
+        setError('Máy chủ xác thực đang không khả dụng. Vui lòng thử lại sau.');
+      } else {
+        setError('Thông tin đăng nhập không hợp lệ. Vui lòng kiểm tra và thử lại.');
+      }
     } finally {
       setBusy(false);
     }
@@ -52,7 +60,9 @@ export function useOwnerLogin() {
         return;
       }
       await client.requestPasswordReset(userName.trim());
-      setResetMessage('Nếu tài khoản đủ điều kiện, hướng dẫn đặt lại mật khẩu sẽ được gửi.');
+      setResetMessage(
+        'Yêu cầu đã được tiếp nhận. Nếu tài khoản đủ điều kiện và kênh email được cấu hình, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.',
+      );
     } catch (failure) {
       setResetError(true);
       setResetMessage(
@@ -75,7 +85,7 @@ export function useOwnerLogin() {
       }
       await client.logout();
     } catch {
-      setError('Đã xóa phiên trên thiết bị. Chưa xác nhận được thu hồi phiên trên máy chủ.');
+      setError('Chưa xác nhận được thu hồi phiên trên máy chủ. Phiên vẫn được giữ để bạn thử lại.');
     } finally {
       setBusy(false);
     }

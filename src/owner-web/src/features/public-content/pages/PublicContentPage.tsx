@@ -33,9 +33,21 @@ import { RecordEditor } from '../../../components/dialogs/RecordEditor';
 import type { PortalRecord } from '../../../types/portal';
 import { money } from '../../../utils/format';
 import { isMockMode } from '../../../services/config';
-import { PublicContentApiPage } from '../PublicContentApiPage';
+import { UnavailableFeaturePage } from '../../../components/common/UnavailableFeaturePage';
 export default function PublicContentPage() {
-  return isMockMode ? <DemoPublicContentPage /> : <PublicContentApiPage />;
+  return isMockMode ? (
+    <DemoPublicContentPage />
+  ) : (
+    <UnavailableFeaturePage
+      title="Quản lý nội dung công khai"
+      description="Owner duyệt thông tin cơ sở/phòng an toàn trước khi hiển thị trên website thông tin."
+      requirements={[
+        'Danh sách nội dung theo Location với trạng thái Draft/Published và phiên bản.',
+        'Lệnh publish/unpublish Owner-only có concurrency và audit.',
+        'Ảnh riêng tư được duyệt và cung cấp qua API file có kiểm tra quyền.',
+      ]}
+    />
+  );
 }
 function DemoPublicContentPage() {
   const query = usePortalData(),

@@ -1,4 +1,4 @@
-import { ApiError } from './api';
+import { ApiError, type ApiProblem } from './api';
 import type { Session } from './auth';
 
 type SessionResponse = Session & { refreshToken?: string | null };
@@ -80,11 +80,12 @@ export class SessionClient {
   async logout(allDevices = false) {
     // Wait for rotation first so a late Set-Cookie cannot recreate a logged-out web credential.
     if (this.pendingRefresh) await this.pendingRefresh.catch(() => undefined);
-    try {
-      if (this.current) await this.send(allDevices ? 'logout-all' : 'logout', {});
-    } finally {
+    if (!this.current) {
       this.clear();
+      return;
     }
+    await this.send(allDevices ? 'logout-all' : 'logout', {});
+    this.clear();
   }
 
   async changePassword(currentPassword: string, newPassword: string) {
@@ -139,7 +140,12 @@ export class SessionClient {
     } catch {
       throw new ApiError(0);
     }
-    if (!response.ok) throw new ApiError(response.status);
+    if (!response.ok) {
+      const problem = response.headers.get('content-type')?.includes('json')
+        ? ((await response.json().catch(() => undefined)) as ApiProblem | undefined)
+        : undefined;
+      throw new ApiError(response.status, problem);
+    }
     return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
   }
 }
