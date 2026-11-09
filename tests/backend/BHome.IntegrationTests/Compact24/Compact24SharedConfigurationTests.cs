@@ -1,0 +1,54 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using BHome.Application.PropertyManagement;
+
+namespace BHome.IntegrationTests.Compact24;
+
+public sealed partial class Compact24OwnerSetupTests
+{
+    private static SharedWrite SharedInput(string resource) => new("Synthetic " + Guid.NewGuid().ToString("N"), "Synthetic shared reference", JsonSerializer.SerializeToElement(resource switch
+    {
+        "room-type-templates" => (object)new { capacity = 3, area = "25.0001", amenities = new[] { "Synthetic amenity" }, referenceRent = "3500000.0001" },
+        "asset-catalog" => new { category = "Synthetic furniture", unit = "item", referencePrice = "1500000.0001" },
+        _ => throw new InvalidOperationException()
+    }));
+
+    [CompactPostgresFact] public Task SharedRoomCrud() => SharedCrudRejectsConflictsAndPreservesPublishedEditions("room-type-templates");
+    [CompactPostgresFact] public Task SharedCatalogCrud() => SharedCrudRejectsConflictsAndPreservesPublishedEditions("asset-catalog");
+    private async Task SharedCrudRejectsConflictsAndPreservesPublishedEditions(string resource)
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff); using var tenant = await Client(w.Tenant);
+        var route = "/api/v1/shared-configuration/" + resource; var input = SharedInput(resource);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync(route, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(route)).StatusCode);
+        var draft = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, input));
+        Assert.Equal("BHOME", draft.ManagementScope); Assert.Equal(w.Owner.Id, draft.CreatedBy);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + draft.Id, input)).StatusCode);
+        var edited = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + draft.Id, input with { ExpectedVersion = 1, Description = "Edited" }));
+        var published = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/publish", new SharedVersion(edited.Version)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + draft.Id, input with { ExpectedVersion = published.Version })).StatusCode);
+        var next = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/versions", new SharedVersion(published.Version)));
+        Assert.Equal(draft.FamilyId, next.FamilyId); Assert.Equal(2, next.Edition); Assert.Equal(1, next.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route + "/" + draft.Id + "/versions", new SharedVersion(published.Version))).StatusCode);
+        var duplicate = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/duplicate", new SharedDuplicate(input.Name + " copy", published.Version)));
+        Assert.NotEqual(draft.FamilyId, duplicate.FamilyId);
+        Assert.Equal(3, (await owner.GetFromJsonAsync<SharedDocument[]>(route + "/" + draft.Id + "/history"))!.Length);
+        var page = await owner.GetFromJsonAsync<SharedPage>(route + "?search=" + Uri.EscapeDataString(input.Name) + "&status=Published&pageSize=1");
+        Assert.Single(page!.Items); Assert.Equal(1, page.Total);
+        var reloaded = await owner.GetFromJsonAsync<SharedDocument>(route + "/" + draft.Id);
+        Assert.Equal(resource == "asset-catalog" ? "1500000.0001" : "3500000.0001", reloaded!.Data.GetProperty(resource == "asset-catalog" ? "referencePrice" : "referenceRent").GetString());
+        await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/archive", new SharedVersion(published.Version)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + draft.Id, input with { ExpectedVersion = published.Version + 1 })).StatusCode);
+    }
+    [CompactPostgresFact]
+    public async Task SharedRoomAndCatalogRejectUnknownAndInvalidData()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        foreach (var data in new object[] { new { capacity = 0, area = "25", amenities = Array.Empty<string>() }, new { capacity = 2, area = "25", amenities = new[] { "A", "a" } }, new { capacity = 2, area = "25", amenities = Array.Empty<string>(), roomTypeId = (string?)null } })
+            Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/room-type-templates", SharedInput("room-type-templates") with { Data = JsonSerializer.SerializeToElement(data) })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/asset-catalog", SharedInput("asset-catalog") with { Data = JsonSerializer.SerializeToElement(new { category = "Synthetic", unit = "item", referencePrice = "-1" }) })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/api/v1/shared-configuration/room-types")).StatusCode);
+    }
+}

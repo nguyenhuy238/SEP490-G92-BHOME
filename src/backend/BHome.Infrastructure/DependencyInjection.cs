@@ -155,6 +155,8 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SharedConfigurationStore>();
+        services.AddScoped<BHome.Application.PropertyManagement.ISharedDataValidator, BHome.Application.PropertyManagement.SharedDataValidator>();
+        services.AddScoped<BHome.Application.PropertyManagement.SharedConfigurationService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();

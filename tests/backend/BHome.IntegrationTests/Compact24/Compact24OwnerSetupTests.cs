@@ -25,7 +25,7 @@ using Microsoft.Extensions.Configuration;
 namespace BHome.IntegrationTests.Compact24;
 
 [Trait("Category", "CompactPostgres")]
-public sealed class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
+public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private sealed class Clock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private const string Password = "Synthetic!Setup-9273";
