@@ -59,9 +59,10 @@ public sealed partial class ContractLifecycleApiTests
         var owner = As(w.Owner);
         var tenant = As(w.Tenant);
 
+        // OTP is offered to both parties; it is the Tenant's default (the Owner's default is their certificate method).
         var methods = (await owner.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!;
         Assert.Contains(SigningMethods.Otp, methods.Methods);
-        Assert.Equal(SigningMethods.Otp, methods.Default);
+        Assert.Equal(SigningMethods.Otp, (await tenant.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!.Default);
 
         static string EmailOf(Actor actor) => actor.Id.ToString("N") + "@example.invalid";
         foreach (var (signer, account) in new[] { (owner, EmailOf(owner)), (tenant, EmailOf(tenant)) })
