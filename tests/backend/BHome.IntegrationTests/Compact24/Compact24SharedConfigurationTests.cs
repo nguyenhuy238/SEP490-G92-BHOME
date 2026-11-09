@@ -14,6 +14,33 @@ public sealed partial class Compact24OwnerSetupTests
         _ => throw new InvalidOperationException()
     }));
 
+    [CompactPostgresFact]
+    public async Task SharedAssetPackagesValidateCatalogVersionsAndFreezeReferenceFields()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);
+        const string catalogRoute = "/api/v1/shared-configuration/asset-catalog"; const string route = "/api/v1/shared-configuration/asset-templates";
+        var catalog = await Read<SharedDocument>(await owner.PostAsJsonAsync(catalogRoute, SharedInput("asset-catalog")));
+        SharedWrite Package(params SharedAssetItem[] items) => new("Synthetic " + Guid.NewGuid().ToString("N"), "Package", JsonSerializer.SerializeToElement(new SharedAssetData(items)));
+        var item = new SharedAssetItem(catalog.Id, 1, 2, false, "BulkQuantity");
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route, Package(item))).StatusCode);
+        catalog = await Read<SharedDocument>(await owner.PostAsJsonAsync(catalogRoute + "/" + catalog.Id + "/publish", new SharedVersion(1)));
+        item = item with { CatalogVersion = catalog.Version };
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route, Package(item, item))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route, Package(item with { Quantity = 0 }))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(route)).StatusCode);
+        var input = Package(item); var draft = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, input));
+        Assert.Equal(catalog.Name, draft.Data.GetProperty("items")[0].GetProperty("catalog").GetProperty("name").GetString());
+        draft = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + draft.Id, input with { Data = JsonSerializer.SerializeToElement(new SharedAssetData([item with { Required = true, Quantity = 3 }])), ExpectedVersion = 1 }));
+        var published = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/publish", new SharedVersion(2)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + draft.Id, input with { ExpectedVersion = published.Version })).StatusCode);
+        var copy = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/duplicate", new SharedDuplicate(input.Name + " copy", published.Version)));
+        Assert.NotEqual(copy.FamilyId, draft.FamilyId);
+        var next = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/versions", new SharedVersion(published.Version)));
+        Assert.Equal(2, next.Edition);
+        Assert.Equal(3, (await owner.GetFromJsonAsync<SharedDocument[]>(route + "/" + draft.Id + "/history"))!.Length);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route, input with { Name = input.Name.ToUpperInvariant() })).StatusCode);
+    }
+
     [CompactPostgresFact] public Task SharedRoomCrud() => SharedCrudRejectsConflictsAndPreservesPublishedEditions("room-type-templates");
     [CompactPostgresFact] public Task SharedCatalogCrud() => SharedCrudRejectsConflictsAndPreservesPublishedEditions("asset-catalog");
     private async Task SharedCrudRejectsConflictsAndPreservesPublishedEditions(string resource)
