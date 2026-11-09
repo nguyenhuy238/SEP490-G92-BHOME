@@ -37,6 +37,11 @@ export interface Signature {
   signerUserId: string;
   status: string;
   signedAt: string | null;
+  /** OTP | UPLOAD_PROOF | VIETTEL_MYSIGN | SIMULATED (empty from older servers = certificate signing). */
+  method?: string;
+  expiresAt?: string | null;
+  certificateSubject?: string | null;
+  certificateIssuer?: string | null;
 }
 export interface ContractView {
   onboardingDraft?: boolean;
@@ -829,11 +834,16 @@ const proposedFields: ActionField[] = [
   { name: 'proposedDate', label: 'Ngày dự kiến trả phòng', type: 'date' },
   { name: 'reason', label: 'Lý do', type: 'multiline', max: 2000 },
 ];
+/**
+ * signingMethods: what GET /contracts/signing-methods offers. When given, the certificate request ('Yêu cầu ký MySign')
+ * appears only if VIETTEL_MYSIGN (or the Development simulation) is offered; OTP and UPLOAD_PROOF have their own panel.
+ */
 export function contractActions(
   c: ContractView,
   m: MoveOut | null,
   role: string,
   actorId: string,
+  signingMethods?: readonly string[],
 ): ContractAction[] {
   if (c.onboardingDraft) return [];
   const owner = role === 'Owner',
@@ -844,13 +854,21 @@ export function contractActions(
     waiting = ['Draft', 'PendingSigning', 'PendingActivation'].includes(c.status);
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const open = c.signatures.some((s) => !['Signed', 'Simulated', 'Failed'].includes(s.status));
+  const certificateSigning =
+    !signingMethods ||
+    signingMethods.includes(c.isDevelopmentDemo ? 'SIMULATED' : 'VIETTEL_MYSIGN');
+  // Polling and reference recovery only exist for remote (certificate) signing.
+  const remote = mine.filter(
+    (s) => !s.method || ['VIETTEL_MYSIGN', 'SIMULATED'].includes(s.method),
+  );
   const result: ContractAction[] = [];
   if (
     signer &&
     (c.kind !== 'Holding' || !!c.approvedAt) &&
     ['Draft', 'PendingSigning'].includes(c.status) &&
     !mine.some((s) => s.status !== 'Failed') &&
-    !open
+    !open &&
+    certificateSigning
   )
     result.push(
       action(
@@ -864,9 +882,9 @@ export function contractActions(
           : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
       ),
     );
-  if (signer && mine.some((s) => s.status === 'Pending'))
+  if (signer && remote.some((s) => s.status === 'Pending'))
     result.push(action('signing/sync', 'Kiểm tra kết quả ký'));
-  if (signer && mine.some((s) => ['Dispatching', 'ManualReview'].includes(s.status)))
+  if (signer && remote.some((s) => ['Dispatching', 'ManualReview'].includes(s.status)))
     result.push(
       action(
         'signing/recover',
