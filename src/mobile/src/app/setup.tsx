@@ -6,15 +6,16 @@ import { Field, Page, Select, styles } from '../components/Controls';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type Named } from '../lib/api';
 import { inputDate } from '../lib/identity';
+import { loadSetup, roomSetupInput, setupWritePath } from '../services/setup';
 
 export default function Setup() {
   const { api, session } = useSession();
   const [error, setError] = useFeedbackState();
   const [notice, setNotice] = useFeedbackState('success');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const isOwner = session?.roles.includes('Owner') ?? false;
   const lock = useRef(false);
-  const [chains, setChains] = useState<Named[]>([]);
-  const [chain, setChain] = useState('');
   const [locations, setLocations] = useState<Named[]>([]);
   const [location, setLocation] = useState('');
   const [rooms, setRooms] = useState<Named[]>([]);
@@ -23,14 +24,10 @@ export default function Setup() {
   const [staffId, setStaffId] = useState('');
   const [meters, setMeters] = useState<Named[]>([]);
   const [meter, setMeter] = useState('');
-  const [chainName, setChainName] = useState('');
   const [locationName, setLocationName] = useState('');
   const [address, setAddress] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
-  const [roomTypes, setRoomTypes] = useState<
-    { id: string; name: string; defaultCapacity: number }[]
-  >([]);
-  const [roomType, setRoomType] = useState('');
+  const [capacity, setCapacity] = useState('');
   const [staffName, setStaffName] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
@@ -44,61 +41,46 @@ export default function Setup() {
   const [purpose, setPurpose] = useState('0');
   const [date, setDate] = useState('');
   const [period, setPeriod] = useState('');
+  const applyLoadedSetup = useCallback(
+    (result: Awaited<ReturnType<typeof loadSetup>>) => {
+      setLocations(result.locations);
+      setStaff(result.staff);
+      setError(result.error ? errorMessage(result.error) : '');
+      setLoading(false);
+    },
+    [setError],
+  );
   const load = useCallback(async () => {
-    if (!api) return;
-    const [c, l, s] = await Promise.all([
-      api.request<Named[]>('/api/v1/capture/chains'),
-      api.request<Named[]>('/api/v1/capture/locations'),
-      api.request<Named[]>('/api/v1/capture/staff'),
-    ]);
-    setChains(c);
-    setLocations(l);
-    setStaff(s);
-  }, [api]);
+    if (!api || !isOwner) return;
+    setLoading(true);
+    applyLoadedSetup(await loadSetup(api));
+  }, [api, isOwner, applyLoadedSetup]);
   useEffect(() => {
-    if (!api) return;
-    let current = true;
-    void Promise.all([
-      api.request<Named[]>('/api/v1/capture/chains'),
-      api.request<Named[]>('/api/v1/capture/locations'),
-      api.request<Named[]>('/api/v1/capture/staff'),
-    ])
-      .then(([c, l, s]) => {
-        if (current) {
-          setChains(c);
-          setLocations(l);
-          setStaff(s);
-        }
-      })
-      .catch((e) => {
-        if (current) setError(errorMessage(e));
-      });
-    return () => {
-      current = false;
-    };
-  }, [api, setError]);
+    if (!api || !isOwner) return;
+    const controller = new AbortController();
+    void loadSetup(api, controller.signal).then((result) => {
+      if (!controller.signal.aborted) applyLoadedSetup(result);
+    });
+    return () => controller.abort();
+  }, [api, isOwner, applyLoadedSetup]);
   useEffect(() => {
-    if (!api || !location) return;
+    if (!api || !isOwner || !location) return;
     let current = true;
     void Promise.all([
       api.request<Named[]>(`/api/v1/capture/locations/${location}/rooms`),
       api.request<Named[]>(`/api/v1/capture/locations/${location}/meters`),
-      api.request<{ items: { id: string; name: string; defaultCapacity: number }[] }>(
-        `/api/v1/room-types?locationId=${encodeURIComponent(location)}&isActive=true&pageSize=100`,
-      ),
     ])
-      .then(([r, m, types]) => {
+      .then(([r, m]) => {
         if (current) {
           setRooms(r);
           setMeters(m);
-          setRoomTypes(types.items);
         }
       })
       .catch((e) => setError(errorMessage(e)));
     return () => {
       current = false;
     };
-  }, [api, location, setError]);
+  }, [api, isOwner, location, setError]);
   if (!api || !session) return <Redirect href="/" />;
   if (!session.roles.includes('Owner'))
     return (
@@ -113,7 +95,7 @@ export default function Setup() {
     setError('');
     setNotice('');
     try {
-      await api.json('/api/v1/capture/' + path, data());
+      await api.json(setupWritePath(path), data());
       await load();
       if (location) {
         setRooms(await api.request<Named[]>(`/api/v1/capture/locations/${location}/rooms`));
@@ -128,58 +110,28 @@ export default function Setup() {
       setBusy(false);
     }
   };
-  const renameChain = async () => {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const current = await api.request<{ id: string; name: string; version: number }>(
-        '/api/v1/chain',
-      );
-      await api.request('/api/v1/chain', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: chainName.trim(),
-          version: current.version,
-          reason: 'Cập nhật tên chuỗi từ Mobile',
-        }),
-      });
-      await load();
-      setChainName('');
-      setNotice('Máy chủ đã cập nhật tên chuỗi.');
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  };
   return (
     <Page>
       <Text variant="headlineSmall">Thiết lập thu thập dữ liệu</Text>
       <Text>Thực hiện từ trên xuống. Không tạo hợp đồng, kích hoạt phòng thuê hoặc hóa đơn.</Text>
       {!!error && <Text style={styles.error}>{error}</Text>}
       {!!notice && <Text>{notice}</Text>}
-      <Text variant="titleLarge">1. Chuỗi và cơ sở</Text>
-      <Field label="Tên chuỗi" value={chainName} onChange={setChainName} />
-      <Button
-        disabled={busy || !chains.length || !chainName.trim()}
-        onPress={() => void renameChain()}
-      >
-        Đổi tên chuỗi
+      {loading && <Text>Đang tải cấu hình…</Text>}
+      {!loading && !locations.length && (
+        <Text>Chưa có cơ sở. Owner có thể tạo cơ sở bên dưới.</Text>
+      )}
+      <Button disabled={busy || loading} onPress={() => void load()}>
+        Tải lại cấu hình
       </Button>
-      <Select label="Chuỗi sở hữu" items={chains} selected={chain} onSelect={setChain} />
+      <Text variant="titleLarge">1. Cơ sở</Text>
       <Field label="Tên cơ sở" value={locationName} onChange={setLocationName} />
       <Field label="Địa chỉ cơ sở" value={address} onChange={setAddress} />
       <Button
-        disabled={busy || !chain || !locationName.trim() || !address.trim()}
+        disabled={busy || locationName.trim().length < 2 || !address.trim()}
         onPress={() =>
           void create(
             'locations',
-            () => ({ chainId: chain, name: locationName, address }),
+            () => ({ name: locationName.trim(), address: address.trim() }),
             () => {
               setLocationName('');
               setAddress('');
@@ -196,35 +148,27 @@ export default function Setup() {
         onSelect={(id) => {
           setLocation(id);
           setRoom('');
-          setRoomType('');
-          setRoomTypes([]);
           setMeter('');
           setRooms([]);
           setMeters([]);
         }}
       />
       <Text variant="titleLarge">2. Phòng</Text>
-      <Select
-        label="Loại phòng"
-        items={roomTypes.map((item) => ({ id: item.id, label: item.name }))}
-        selected={roomType}
-        onSelect={setRoomType}
-      />
-      {!roomTypes.length && (
-        <Text>Owner cần cấu hình loại phòng tại cơ sở trước khi tạo phòng.</Text>
-      )}
       <Field label="Số phòng" value={roomNumber} onChange={setRoomNumber} />
+      <Field label="Sức chứa của phòng" value={capacity} onChange={setCapacity} numeric />
       <Button
-        disabled={busy || !location || !roomType || !roomNumber.trim()}
+        disabled={
+          busy ||
+          !location ||
+          !roomNumber.trim() ||
+          !/^\d+$/.test(capacity) ||
+          +capacity < 1 ||
+          +capacity > 32767
+        }
         onPress={() =>
           void create(
             'rooms',
-            () => ({
-              locationId: location,
-              roomTypeId: roomType,
-              roomNumber,
-              capacity: roomTypes.find((item) => item.id === roomType)!.defaultCapacity,
-            }),
+            () => roomSetupInput(location, roomNumber, capacity),
             () => setRoomNumber(''),
           )
         }

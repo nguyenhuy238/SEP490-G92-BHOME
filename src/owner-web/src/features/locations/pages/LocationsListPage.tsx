@@ -41,8 +41,14 @@ import {
   type InitialLocationSetupResult,
 } from '../components/InitialLocationSetupWizard';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
+import { isMockMode } from '../../../services/config';
+import { PropertyApiPage } from '../../property/PropertyApiPages';
 
 export function LocationsListPage() {
+  return isMockMode ? <MockLocationsListPage /> : <PropertyApiPage kind="locations" />;
+}
+
+function MockLocationsListPage() {
   const portal = usePortal();
   const query = usePortalData();
   const action = usePortalAction();

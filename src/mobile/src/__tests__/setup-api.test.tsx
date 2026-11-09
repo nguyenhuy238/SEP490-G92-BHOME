@@ -6,13 +6,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 const state = vi.hoisted(() => ({
   request: vi.fn(),
   json: vi.fn(),
-  types: [{ id: 'type-1', name: 'Phòng đôi', defaultCapacity: 2 }],
+  roles: ['Owner'],
 }));
 vi.mock('expo-router', () => ({ Redirect: () => null }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
     api: state,
-    session: { roles: ['Owner'] },
+    session: { roles: state.roles },
   }),
 }));
 vi.mock('react-native-paper', () => ({
@@ -66,59 +66,102 @@ vi.mock('../components/Controls', () => ({
   ),
 }));
 import Setup from '../app/setup';
+import { MobileApiError } from '../lib/api';
+import { roomSetupInput } from '../services/setup';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  state.types = [{ id: 'type-1', name: 'Phòng đôi', defaultCapacity: 2 }];
+  state.roles = ['Owner'];
   state.request.mockImplementation(async (path: string) => {
-    if (path === '/api/v1/chain') return { id: 'chain-1', name: 'BHOME', version: 7 };
-    if (path === '/api/v1/capture/chains') return [{ id: 'chain-1', label: 'BHOME' }];
     if (path === '/api/v1/capture/locations') return [{ id: 'location-1', label: 'Cơ sở mẫu' }];
-    if (path.startsWith('/api/v1/room-types?')) return { items: state.types };
     return [];
   });
   state.json.mockResolvedValue({ id: 'created' });
 });
 afterEach(cleanup);
 
-it('renames the singleton chain using the current backend version and never posts capture/chains', async () => {
+it('loads current Locations without any obsolete Chain or RoomType request', async () => {
   render(<Setup />);
-  await screen.findByRole('option', { name: 'BHOME' });
-  fireEvent.change(screen.getByLabelText('Tên chuỗi'), { target: { value: 'BHOME mới' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Đổi tên chuỗi' }));
-  await waitFor(() =>
-    expect(state.request).toHaveBeenCalledWith(
-      '/api/v1/chain',
-      expect.objectContaining({
-        method: 'PUT',
-        body: JSON.stringify({
-          name: 'BHOME mới',
-          version: 7,
-          reason: 'Cập nhật tên chuỗi từ Mobile',
-        }),
-      }),
-    ),
-  );
+  await screen.findByRole('option', { name: 'Cơ sở mẫu' });
+  expect(state.request.mock.calls.map(([path]) => path)).toEqual([
+    '/api/v1/capture/locations',
+    '/api/v1/capture/staff',
+  ]);
+  expect(screen.queryByLabelText('Tên chuỗi')).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
 
-it('requires an effective room type and sends its id and capacity when creating a room', async () => {
+it('creates a Room directly under Location with an explicit validated capacity', async () => {
   render(<Setup />);
   await screen.findByRole('option', { name: 'Cơ sở mẫu' });
   fireEvent.change(screen.getByLabelText('Cơ sở thao tác'), { target: { value: 'location-1' } });
-  await screen.findByRole('option', { name: 'Phòng đôi' });
   fireEvent.change(screen.getByLabelText('Số phòng'), { target: { value: 'A101' } });
   expect((screen.getByRole('button', { name: 'Tạo phòng' }) as HTMLButtonElement).disabled).toBe(
     true,
   );
-  fireEvent.change(screen.getByLabelText('Loại phòng'), { target: { value: 'type-1' } });
+  fireEvent.change(screen.getByLabelText('Sức chứa của phòng'), { target: { value: '2' } });
   fireEvent.click(screen.getByRole('button', { name: 'Tạo phòng' }));
   await waitFor(() =>
-    expect(state.json).toHaveBeenCalledWith('/api/v1/capture/rooms', {
+    expect(state.json).toHaveBeenCalledWith('/api/v1/rooms', {
       locationId: 'location-1',
-      roomTypeId: 'type-1',
       roomNumber: 'A101',
       capacity: 2,
     }),
   );
+  expect(state.request.mock.calls.some(([path]) => /chains|room-types|\/chain$/.test(path))).toBe(
+    false,
+  );
+  await screen.findByText('Máy chủ đã lưu thành công.');
+});
+
+it('creates a Location using the strict native DTO', async () => {
+  render(<Setup />);
+  await screen.findByRole('option', { name: 'Cơ sở mẫu' });
+  fireEvent.change(screen.getByLabelText('Tên cơ sở'), { target: { value: ' Cơ sở mới ' } });
+  fireEvent.change(screen.getByLabelText('Địa chỉ cơ sở'), { target: { value: ' Địa chỉ mẫu ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo cơ sở' }));
+  await waitFor(() =>
+    expect(state.json).toHaveBeenCalledWith('/api/v1/locations', {
+      name: 'Cơ sở mới',
+      address: 'Địa chỉ mẫu',
+    }),
+  );
+});
+
+it('keeps Locations visible when Staff loading fails and supports retry', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/staff')) throw new MobileApiError(403);
+    return [{ id: 'location-1', label: 'Cơ sở mẫu' }];
+  });
+  render(<Setup />);
+  await screen.findByRole('option', { name: 'Cơ sở mẫu' });
+  await screen.findByText(/không được phép/i);
+  state.request.mockResolvedValue([]);
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại cấu hình' }));
+  await screen.findByText(/Chưa có cơ sở/);
+});
+
+it('does not report persistence success after a rejected write', async () => {
+  state.json.mockRejectedValue(new MobileApiError(400, 'invalid_input'));
+  render(<Setup />);
+  await screen.findByRole('option', { name: 'Cơ sở mẫu' });
+  fireEvent.change(screen.getByLabelText('Tên cơ sở'), { target: { value: 'Cơ sở mới' } });
+  fireEvent.change(screen.getByLabelText('Địa chỉ cơ sở'), { target: { value: 'Địa chỉ mẫu' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo cơ sở' }));
+  await screen.findByText(/Kiểm tra các ô bắt buộc/);
+  expect(screen.queryByText('Máy chủ đã lưu thành công.')).toBeNull();
+});
+
+it('does not load or offer configuration mutations to Staff', async () => {
+  state.roles = ['Staff'];
+  render(<Setup />);
+  await screen.findByText('Chỉ Owner quản lý cấu hình và phân công.');
+  expect(state.request).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Tạo cơ sở' })).toBeNull();
+});
+
+it('rejects invalid room capacities before request serialization', () => {
+  for (const capacity of ['', '0', '-1', '1.5', '32768', 'NaN'])
+    expect(() => roomSetupInput('location-1', 'A101', capacity)).toThrow();
+  expect(() => roomSetupInput('', 'A101', '2')).toThrow();
 });

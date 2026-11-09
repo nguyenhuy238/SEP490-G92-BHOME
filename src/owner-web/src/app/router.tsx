@@ -90,6 +90,7 @@ export function AppRouter() {
                 <Route path="room-types" element={<RoomTypesPage />} />
                 <Route path="assets" element={<AssetsPage />} />
                 <Route path="pricing" element={<PricingPage />} />
+                <Route path="utilities" element={<></>} />
                 <Route path="rules" element={<></>} />
                 <Route path="history" element={<></>} />
                 <Route path="settings" element={<></>} />
