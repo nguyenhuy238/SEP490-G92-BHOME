@@ -1,5 +1,16 @@
 # Owner setup — API bổ sung P0–P2
 
+## Policy history correction — 2026-11-09 (GAP-001)
+
+`GET /api/v1/operating-policies/{id}/versions` returns persisted revisions of
+that document ID in ascending `version` order. It does not list unrelated policies
+in the same Location and does not infer a global policy family. Revision entries
+retain the existing SetupDocument shape and include `recordedAt` and `recordedBy`
+where available. Owner sees Draft and Published revisions. Assigned Staff can
+query a currently Published policy and receives Published revisions only; Draft
+history and other Locations remain hidden. Tenant uses its own Contract's
+`agreed-operating-policy` endpoint. Signed-contract snapshots are unchanged.
+
 Ngày: 08/11/2026. Tài liệu mô tả implementation trong worktree; chưa phải biên bản nghiệm thu hay triển khai production. Base path: `/api/v1`. Schema runtime vẫn là Compact24, Location → Room; không Chain/RoomType.
 
 ## Quy tắc chung

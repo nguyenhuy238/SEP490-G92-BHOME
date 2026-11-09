@@ -72,6 +72,32 @@ public sealed class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassF
         "Synthetic supplier", "Owner-selected synthetic category", "Synthetic configuration source", [new(50, 1000), new(100, 1500), new(null, 2000)], VndRounding.AwayFromZero, true);
 
     [CompactPostgresFact]
+    public async Task PolicyHistoryContainsOnlyPersistedRevisionsAndStaffSeesOnlyPublishedRevisions()
+    {
+        var w = await Seed(); var outside = await Seed();
+        using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);
+        using var stranger = await Client(outside.Staff); using var tenant = await Client(w.Tenant);
+        var a = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/operating-policies", new OperatingPolicyWrite(w.Location, "Synthetic history A", "First draft", Today)));
+        var b = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/operating-policies", new OperatingPolicyWrite(w.Location, "Synthetic history B", "Unrelated draft", Today.AddDays(1))));
+        await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/operating-policies/{a.Id}/draft", new OperatingPolicyWrite(w.Location, "Synthetic history A", "Reviewed draft", Today, a.Version)));
+        Assert.Equal(HttpStatusCode.NotFound, (await staff.GetAsync($"/api/v1/operating-policies/{a.Id}/versions")).StatusCode);
+        await Read<SetupDocument>(await owner.PostAsJsonAsync($"/api/v1/operating-policies/{a.Id}/publish", new TemplatePublish(2)));
+        var revisions = await owner.GetFromJsonAsync<SetupDocument[]>($"/api/v1/operating-policies/{a.Id}/versions");
+        Assert.NotNull(revisions);
+        Assert.Equal(new[] { 1, 2, 3 }, revisions.Select(r => r.Version));
+        Assert.All(revisions, r => { Assert.Equal(a.Id, r.Id); Assert.Equal(w.Owner.Id, r.RecordedBy); Assert.NotNull(r.RecordedAt); });
+        Assert.DoesNotContain(revisions, r => r.Id == b.Id);
+        Assert.Equal("First draft", revisions[0].Data.GetProperty("content").GetString());
+        Assert.Equal("Reviewed draft", revisions[1].Data.GetProperty("content").GetString());
+        var visible = Assert.Single((await staff.GetFromJsonAsync<SetupDocument[]>($"/api/v1/operating-policies/{a.Id}/versions"))!);
+        Assert.Equal("Published", visible.Status); Assert.Equal(3, visible.Version);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/v1/operating-policies/{a.Id}/versions")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/v1/operating-policies/{Guid.NewGuid()}/versions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync($"/api/v1/operating-policies/{a.Id}/versions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/operating-policies/{a.Id}/draft", new OperatingPolicyWrite(w.Location, "Changed", "Must remain immutable", Today, 3))).StatusCode);
+    }
+
+    [CompactPostgresFact]
     public async Task ClosureShowsOpenWorkAndEmergencyReadinessAndDoesNotLeakToTenant()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenant);

@@ -7,11 +7,12 @@ using BHome.Domain.TenantContracts;
 namespace BHome.Application.PropertyManagement;
 
 // Versioned documents use existing Compact24 JSON containers; physical assets and money remain native records.
-public sealed record SetupDocument(Guid Id, Guid LocationId, string Kind, string Status, int Version, JsonElement Data, DateTimeOffset? RecordedAt = null);
+public sealed record SetupDocument(Guid Id, Guid LocationId, string Kind, string Status, int Version, JsonElement Data, DateTimeOffset? RecordedAt = null, Guid? RecordedBy = null);
 public interface ISetupWorkspaceStore
 {
     Task<T> TransactionAsync<T>(Guid locationId, Func<Task<T>> work, CancellationToken t);
     Task<SetupDocument?> GetAsync(Guid id, string kind, CancellationToken t);
+    Task<IReadOnlyList<SetupDocument>> HistoryAsync(Guid id, string kind, CancellationToken t);
     Task<IReadOnlyList<SetupDocument>> ListAsync(Guid locationId, string kind, CancellationToken t);
     Task<SetupDocument> SaveAsync(Guid id, Guid locationId, string kind, string status, object data, int expectedVersion, Guid actor, CancellationToken t);
     Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t);

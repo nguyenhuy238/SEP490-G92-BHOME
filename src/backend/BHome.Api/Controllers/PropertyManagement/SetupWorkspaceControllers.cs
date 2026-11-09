@@ -86,7 +86,7 @@ public sealed class OperatingPoliciesController(OperatingPolicyService service, 
     [HttpGet("operating-policies"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)] public Task<IReadOnlyList<SetupDocument>> List([FromQuery] Guid locationId, CancellationToken t) => service.ReadPoliciesAsync(locationId, t);
     [HttpGet("operating-policies/{id:guid}"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)] public Task<SetupDocument> Get(Guid id, CancellationToken t) => service.ReadPolicyAsync(id, t);
     [HttpGet("operating-policies/{id:guid}/versions"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
-    public async Task<IReadOnlyList<SetupDocument>> Versions(Guid id, CancellationToken t) => await service.ReadPoliciesAsync((await service.ReadPolicyAsync(id, t)).LocationId, t);
+    public Task<IReadOnlyList<SetupDocument>> Versions(Guid id, CancellationToken t) => service.RevisionsAsync(id, t);
     [HttpPost("operating-policies"), Authorize(Roles = Roles.Owner)] public Task<SetupDocument> Create(OperatingPolicyWrite input, CancellationToken t) => service.SaveAsync(null, input, t);
     [HttpPut("operating-policies/{id:guid}/draft"), Authorize(Roles = Roles.Owner)] public Task<SetupDocument> Update(Guid id, OperatingPolicyWrite input, CancellationToken t) => service.SaveAsync(id, input, t);
     [HttpPost("operating-policies/{id:guid}/publish"), Authorize(Roles = Roles.Owner)] public Task<SetupDocument> Publish(Guid id, TemplatePublish input, CancellationToken t) => service.PublishAsync(id, input.ExpectedVersion, t);
