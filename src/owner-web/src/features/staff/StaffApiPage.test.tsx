@@ -78,4 +78,5 @@ it('preserves account version and employment contract, and reports server respon
     employment: { employmentType: 'FullTime' },
   });
   expect(JSON.parse(call[1].body).employment).not.toHaveProperty('id');
+  expect(staff.employment.id).toBe('work');
 });

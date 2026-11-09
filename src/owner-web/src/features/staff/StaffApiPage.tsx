@@ -188,7 +188,8 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
   const set = <K extends keyof Employment>(key: K, value: Employment[K]) =>
     setEmployment((x) => ({ ...x, [key]: value }));
   async function save() {
-    const { id: _id, ...work } = employment;
+    const work = { ...employment };
+    delete work.id;
     const body = {
       fullName: name.trim(),
       email: email.trim(),
