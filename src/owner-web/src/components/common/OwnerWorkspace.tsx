@@ -12,7 +12,7 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { EmptyState } from './PortalUI';
+import { EmptyState, ErrorState, LoadingState } from './PortalUI';
 import { ownerError } from '../../hooks/useOwnerWorkspace';
 
 export function OwnerFeedback({
@@ -39,16 +39,26 @@ export function OwnerTable<T>({
   columns,
   id,
   select,
+  loading,
+  error,
+  retry,
+  label = 'Danh sách bản ghi',
 }: {
   rows: T[];
   columns: { label: string; render: (row: T) => ReactNode }[];
   id: (row: T) => string;
   select?: (row: T) => void;
+  loading?: boolean;
+  error?: unknown;
+  retry?: () => void;
+  label?: string;
 }) {
+  if (error) return <ErrorState error={new Error(ownerError(error))} retry={retry ?? (() => {})} />;
+  if (loading && !rows.length) return <LoadingState />;
   if (!rows.length) return <EmptyState />;
   return (
-    <TableContainer>
-      <Table size="small">
+    <TableContainer aria-busy={loading || undefined}>
+      <Table size="small" aria-label={label}>
         <TableHead>
           <TableRow>
             {columns.map((c) => (
@@ -59,7 +69,7 @@ export function OwnerTable<T>({
         </TableHead>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={id(row)}>
+            <TableRow key={id(row)} hover>
               {columns.map((c) => (
                 <TableCell key={c.label}>{c.render(row)}</TableCell>
               ))}
@@ -89,11 +99,18 @@ export function OwnerPagination({
   busy?: boolean;
 }) {
   return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+    <Stack
+      component="nav"
+      aria-label="Phân trang danh sách"
+      direction="row"
+      useFlexGap
+      spacing={1.5}
+      sx={{ alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}
+    >
       <Button disabled={busy || page <= 1} onClick={() => change(page - 1)}>
         Trang trước
       </Button>
-      <Typography>
+      <Typography variant="body2" aria-live="polite">
         Trang {page} · {total} bản ghi
       </Typography>
       <Button disabled={busy || page * size >= total} onClick={() => change(page + 1)}>

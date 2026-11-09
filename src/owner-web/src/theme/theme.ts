@@ -11,7 +11,7 @@ export const theme = createTheme(
       warning: { main: '#cb8b16' },
       error: { main: '#db4d49' },
       background: { default: '#f6f8fc', paper: '#ffffff' },
-      text: { primary: '#15243e', secondary: '#75839b' },
+      text: { primary: '#15243e', secondary: '#53657f' },
       divider: '#e6ebf2',
     },
     typography: {
@@ -29,13 +29,17 @@ export const theme = createTheme(
           root: {
             borderRadius: 10,
             minHeight: 38,
-            '&.MuiButton-contained': {
-              backgroundColor: '#255dde',
-              '&:hover': { backgroundColor: '#194cbb' },
-            },
           },
         },
       },
+      MuiTextField: { defaultProps: { size: 'small', fullWidth: true } },
+      MuiTableCell: {
+        styleOverrides: {
+          root: { padding: '12px 16px', verticalAlign: 'top' },
+          head: { backgroundColor: '#f6f8fc', fontWeight: 700, whiteSpace: 'nowrap' },
+        },
+      },
+      MuiDialogActions: { styleOverrides: { root: { padding: '16px 24px', gap: 8 } } },
       MuiPaper: {
         defaultProps: { elevation: 0 },
         styleOverrides: {

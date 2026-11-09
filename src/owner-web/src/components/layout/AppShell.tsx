@@ -260,7 +260,10 @@ export function AppShell() {
     </Box>
   );
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f2f3ff' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Box component="a" href="#owner-main" className="skip-link">
+        Đi đến nội dung chính
+      </Box>
       <Box
         component="aside"
         sx={{
@@ -418,7 +421,12 @@ export function AppShell() {
             </IconButton>
           </Tooltip>
         </Paper>
-        <Box sx={{ px: { xs: 2, md: 4 }, py: 3.5, maxWidth: 1480, mx: 'auto' }}>
+        <Box
+          component="main"
+          id="owner-main"
+          tabIndex={-1}
+          sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1680, mx: 'auto', minWidth: 0 }}
+        >
           <Breadcrumbs sx={{ fontSize: 10, mb: 1 }}>
             <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>Hệ thống</Typography>
             <Typography sx={{ fontSize: 10, color: 'primary.main' }}>

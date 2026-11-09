@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import {
   Alert,
   Box,
@@ -15,6 +15,18 @@ import {
   Typography,
 } from '@mui/material';
 import { Inbox, TrendingUp } from 'lucide-react';
+export function FilterToolbar({ children }: { children: ReactNode }) {
+  return (
+    <Stack
+      direction={{ xs: 'column', md: 'row' }}
+      useFlexGap
+      spacing={1.5}
+      sx={{ flexWrap: 'wrap', alignItems: { md: 'flex-start' }, '& > *': { minWidth: 180 } }}
+    >
+      {children}
+    </Stack>
+  );
+}
 export function StatusChip({ label }: { label: string }) {
   const error = /Khẩn|Hỏng|Quá hạn|Trùng/.test(label),
     success = /Hoàn thành|Đã |Đang hiệu lực|Vận hành tốt|Đang thuê/.test(label),
@@ -244,9 +256,16 @@ export function ConfirmDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const titleId = useId();
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
+    <Dialog
+      open={open}
+      aria-labelledby={titleId}
+      onClose={busy ? undefined : onClose}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle id={titleId}>{title}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error">{error}</Alert>}
         {children}
