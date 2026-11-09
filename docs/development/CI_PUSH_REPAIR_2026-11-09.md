@@ -90,3 +90,22 @@ Không tắt test, nới timeout, bỏ assertion hoặc giảm CI gate. Các tes
 Compact24/model/môi trường tùy chọn vẫn giữ điều kiện skip sẵn có; skip không tính là PASS.
 Không push hoặc merge trong tác vụ này; kết quả GitHub Actions cho commit mới chỉ có sau
 khi nhánh được push và workflow chạy lại.
+
+## Bổ sung cho run 42632255071
+
+Sau bản sửa `4ab11c7`, commit `280bd3b` thêm
+`BHOME_OWNER_WEB_IMPLEMENTATION_AUDIT.md` vào Git. File audit trước đó chưa được
+theo dõi, nên chưa thuộc source CI được kiểm tra ở lượt trước. File mới có các bảng
+Markdown chưa theo Prettier, khiến riêng bước `npm run format:check` thất bại trong
+[run 42632255071](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/42632255071).
+Backend đã success; frontend đã qua cài dependency, lint, test và build.
+
+Bản bổ sung chỉ định dạng file audit bằng Prettier và cập nhật báo cáo này. Giữ
+nguyên nội dung audit và cấu hình kiểm tra; không sửa code ứng dụng hay backend.
+Chỉ chạy lại format check toàn repository và Compose config, gồm bước bị lỗi và
+bước cuối bị bỏ qua do lỗi đó. Không chạy lại lint/test/build đã qua.
+
+Kết quả bổ sung: `npm run format:check` toàn repository PASS;
+`docker compose --env-file .env.example config --quiet` PASS; `git diff --check`
+PASS. So sánh audit trước/sau khi chuẩn hóa khoảng trắng và dòng phân cách bảng
+xác nhận nội dung không đổi. Chưa push hoặc có kết quả GitHub cho bản sửa bổ sung.
