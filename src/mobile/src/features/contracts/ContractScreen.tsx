@@ -610,8 +610,11 @@ function LiveContractDetail({
             .map((a) => (
               <Action
                 key={a.operation}
-                disabled={uploading || (a.operation === 'activate' && !r?.ready)}
-                secondary={a.operation !== 'activate'}
+                disabled={
+                  uploading ||
+                  (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
+                }
+                secondary={!['activate', 'holding-activation'].includes(a.operation)}
                 onPress={() => {
                   setSelectedAction(a.operation);
                   setNotice('');

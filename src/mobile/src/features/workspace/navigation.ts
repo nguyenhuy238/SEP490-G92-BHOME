@@ -25,6 +25,12 @@ export const screenRoles = {
   'task-detail': ['Owner', 'Staff'],
   'owner-home': ['Owner'],
   approvals: ['Owner'],
+  'owner-adjustments': ['Owner'],
+  'owner-adjustment-detail': ['Owner'],
+  'owner-payments': ['Owner'],
+  'owner-payment-detail': ['Owner'],
+  'owner-announcements': ['Owner'],
+  'owner-finance': ['Owner'],
   operations: ['Owner'],
   'staff-home': ['Staff'],
   'work-orders': ['Staff'],
@@ -136,9 +142,24 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       'incident-detail',
       'incident-inbox',
       'maintenance-detail',
+      'owner-adjustments',
+      'owner-adjustment-detail',
+      'owner-payments',
+      'owner-payment-detail',
+      'owner-announcements',
+      'owner-finance',
     ].includes(screen)
   )
-    return 'operations';
+    return [
+      'owner-adjustments',
+      'owner-adjustment-detail',
+      'owner-payments',
+      'owner-payment-detail',
+    ].includes(screen)
+      ? 'approvals'
+      : screen === 'owner-finance'
+        ? 'owner-home'
+        : 'operations';
   if (['contract', 'checklist', 'residence', 'contract-request'].includes(screen))
     return 'tenant-home';
   if (['security', 'preferences'].includes(screen)) return 'profile';

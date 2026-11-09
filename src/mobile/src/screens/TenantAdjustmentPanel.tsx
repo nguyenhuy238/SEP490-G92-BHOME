@@ -216,7 +216,7 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
                 </>
               )}
               {detail.data.evidence.map((e, index) => (
-                <PrivateImage
+                <AdjustmentEvidenceImage
                   key={e.id}
                   client={client}
                   id={selected}
@@ -487,7 +487,7 @@ function WebEvidencePicker({
     </>
   );
 }
-function PrivateImage({
+export function AdjustmentEvidenceImage({
   client,
   id,
   fileId,
@@ -536,7 +536,7 @@ function PrivateImage({
             });
         }}
       >
-        Xem bằng chứng của tôi {number}
+        Xem bằng chứng {number}
       </Action>
       {!!error && <Text style={ui.red}>{error}</Text>}
       {!!uri && (

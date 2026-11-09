@@ -126,6 +126,20 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                 (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault() ??
                  db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
                 (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) && (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod)));
+        if (!string.IsNullOrWhiteSpace(query.PaymentStatus))
+            source = query.PaymentStatus switch
+            {
+                "Allocated" => source.Where(x => db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id)),
+                "PendingReview" => source.Where(x => !db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) &&
+                    (db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
+                        .Select(r => r.Decision).FirstOrDefault() == null ||
+                     db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
+                        .Select(r => r.Decision).FirstOrDefault() == "PendingReview")),
+                "Rejected" => source.Where(x => !db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) &&
+                    db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
+                        .Select(r => r.Decision).FirstOrDefault() == "Rejected"),
+                _ => source.Where(_ => false)
+            };
         var views = source.OrderByDescending(x => x.VerifiedAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new TransferView(x.Id, x.ProviderIdentity, x.BankReference, x.Amount, x.Currency, x.OccurredAt, x.TransferDescription,
                 x.StatementReference, x.VerificationReason, x.VerifiedByUserId, x.VerifiedAt, x.ProposedInvoiceId,

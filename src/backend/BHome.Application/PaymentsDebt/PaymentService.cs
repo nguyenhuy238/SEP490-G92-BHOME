@@ -252,14 +252,17 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         Owner(); var transfer = await repository.TransferAsync(id, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
         return View(transfer, await repository.AllocationAsync(id, t), await repository.LatestReviewAsync(id, t));
     }
-    private static void Query(PaymentQuery q)
+    private static void Query(PaymentQuery q, bool transferStatuses = false)
     {
+        var validStatus = transferStatuses
+            ? q.PaymentStatus is null or "PendingReview" or "Allocated" or "Rejected"
+            : q.PaymentStatus is null or "Paid" or "Unpaid";
         if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
-            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || q.PaymentStatus is not (null or "Paid" or "Unpaid") ||
+            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || !validStatus ||
             q.InvoiceIds is { Length: > 100 } || q.InvoiceIds?.Contains(Guid.Empty) == true) throw new PaymentException(400, "invalid_payment_query");
     }
     public Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
-    { Owner(); Query(query); return repository.TransfersAsync(query, t); }
+    { Owner(); Query(query, true); return repository.TransfersAsync(query, t); }
     public async Task<PagedResult<ReconciliationView>> ReviewsAsync(Guid transferId, int page, int pageSize, CancellationToken t)
     {
         Owner(); Query(new() { Page = page, PageSize = pageSize });
