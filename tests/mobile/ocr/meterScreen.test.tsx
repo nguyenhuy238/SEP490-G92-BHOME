@@ -169,6 +169,44 @@ async function capture() {
   await waitFor(() => expect(mocks.image).toHaveBeenCalled());
 }
 
+it('shows the server meter-type mismatch and never fills or confirms an electricity reading', async () => {
+  mocks.image
+    .mockResolvedValueOnce({
+      proposedFields: {},
+      warnings: ['meter_type_mismatch'],
+      isFallback: true,
+    })
+    .mockResolvedValueOnce({ id: 'evidence' });
+  render(<MeterScreen />);
+  await capture();
+  expect(
+    await screen.findByText(/Loại đồng hồ hoặc đơn vị trong ảnh không khớp tác vụ/),
+  ).toBeTruthy();
+  expect(screen.getByLabelText(valueLabel)).toHaveValue('');
+  expect(screen.getByText(saveLabel)).toBeDisabled();
+  expect(mocks.json).not.toHaveBeenCalled();
+});
+
+it('keeps unknown images editable with explicit review and no automatic confirmation', async () => {
+  mocks.image
+    .mockResolvedValueOnce({
+      proposedFields: {},
+      warnings: ['meter_category_unverified'],
+      isFallback: true,
+    })
+    .mockResolvedValueOnce({ id: 'evidence' });
+  render(<MeterScreen />);
+  await capture();
+  expect(await screen.findByText(/OCR chưa đọc được/)).toBeTruthy();
+  expect(screen.getByLabelText(valueLabel)).toHaveValue('');
+  expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
+  expect(screen.getByText(saveLabel)).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '125.0' } });
+  expect(screen.getByLabelText(valueLabel)).toHaveValue('125.0');
+  expect(screen.getByText(saveLabel)).toBeDisabled();
+  expect(mocks.json).not.toHaveBeenCalled();
+});
+
 it('shows OCR progress, warnings, explicit correction and only one pending confirmation', async () => {
   let finishOcr!: (value: unknown) => void;
   mocks.image
@@ -189,7 +227,7 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
   expect(screen.getByText('Đang xử lý…')).toBeTruthy();
   await act(async () => finishOcr(proposal));
   await waitFor(() => expect(screen.getByLabelText(valueLabel)).toHaveValue('00123.4'));
-  expect(screen.getByText('Kiểm tra lại mặt số và dấu thập phân.')).toBeTruthy();
+  expect(screen.getByText(/Ảnh có thể mờ hoặc lóa/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '123.5' } });
   fireEvent.click(screen.getByLabelText(confirmLabel));
   fireEvent.click(screen.getByText(saveLabel));
