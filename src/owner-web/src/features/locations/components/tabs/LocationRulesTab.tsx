@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -24,6 +25,14 @@ import type {
   PolicyVersionRecord,
 } from '../../types/locationConfig';
 import { PolicyVersioningDialog } from '../PolicyVersioningDialog';
+import { isMockMode } from '../../../../services/config';
+import { usePortal } from '../../../../app/PortalProvider';
+import { propertyError } from '../../../property-api/propertyApi';
+import {
+  useLocationConfigurationApi,
+  type OperatingPolicyData,
+  type SetupDocument,
+} from '../../api/locationConfigurationApi';
 
 const CATEGORY_NAMES: Record<string, string> = {
   ACCESS_HOURS: 'Giờ giấc & Ra vào',
@@ -37,7 +46,21 @@ const CATEGORY_NAMES: Record<string, string> = {
   OTHER_OPERATIONS: 'Vận hành khác',
 };
 
-export function LocationRulesTab() {
+const toRule = (document: SetupDocument<OperatingPolicyData>): HouseRuleItem => ({
+  id: document.id,
+  name: document.data.title,
+  category: 'OTHER_OPERATIONS',
+  content: document.data.content,
+  effectiveDate: document.data.effectiveFrom,
+  status: document.status === 'Published' ? 'ACTIVE' : 'DRAFT',
+  version: `V${document.version}`,
+  isAppliedToContracts: document.status === 'Published',
+});
+
+export function LocationRulesTab({ locationId }: { locationId: string }) {
+  const portal = usePortal();
+  const api = useLocationConfigurationApi();
+  const queryClient = useQueryClient();
   const [houseRules, setHouseRules] = useState<HouseRuleItem[]>(INITIAL_HOUSE_RULES);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
@@ -54,10 +77,25 @@ export function LocationRulesTab() {
   const [newRuleContent, setNewRuleContent] = useState('');
   const [newRuleEffectiveDate, setNewRuleEffectiveDate] = useState('2026-12-01');
 
+  const apiQuery = useQuery({
+    queryKey: ['operating-policies', locationId],
+    queryFn: ({ signal }) => api.operatingPolicies(locationId, signal),
+    enabled: !isMockMode && Boolean(locationId),
+  });
+  const apiMutation = useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['operating-policies', locationId] });
+      portal.notify('Đã lưu nội quy vào Backend.');
+    },
+    onError: (error) => portal.notify(propertyError(error), true),
+  });
+  const visibleRules = isMockMode ? houseRules : (apiQuery.data ?? []).map(toRule);
+
   const filteredRules =
     selectedCategory === 'ALL'
-      ? houseRules
-      : houseRules.filter((r) => r.category === selectedCategory);
+      ? visibleRules
+      : visibleRules.filter((r) => r.category === selectedCategory);
 
   const handleOpenVersionDialog = (rule: HouseRuleItem) => {
     setSelectedPolicyForVersion(rule);
@@ -65,6 +103,23 @@ export function LocationRulesTab() {
   };
 
   const handleSaveNewVersion = (policyId: string, newVersion: PolicyVersionRecord) => {
+    if (!isMockMode) {
+      const current = visibleRules.find((rule) => rule.id === policyId);
+      if (!current) return;
+      apiMutation.mutate(async () => {
+        const created = await api.createOperatingPolicy({
+          locationId,
+          title: current.name,
+          content: newVersion.value,
+          effectiveFrom: newVersion.effectiveDate,
+          expectedVersion: 0,
+        });
+        return newVersion.status === 'ACTIVE'
+          ? api.publishOperatingPolicy(created.id, created.version)
+          : created;
+      });
+      return;
+    }
     setHouseRules((prev) =>
       prev.map((r) => {
         if (r.id !== policyId) return r;
@@ -82,6 +137,20 @@ export function LocationRulesTab() {
   };
 
   const handleUpdateDraft = (policyId: string, updatedContent: string) => {
+    if (!isMockMode) {
+      const current = visibleRules.find((rule) => rule.id === policyId);
+      if (!current) return;
+      apiMutation.mutate(() =>
+        api.updateOperatingPolicy(policyId, {
+          locationId,
+          title: current.name,
+          content: updatedContent,
+          effectiveFrom: current.effectiveDate,
+          expectedVersion: Number(current.version.replace(/\D/g, '')),
+        }),
+      );
+      return;
+    }
     setHouseRules((prev) =>
       prev.map((r) => (r.id === policyId ? { ...r, content: updatedContent } : r)),
     );
@@ -89,6 +158,26 @@ export function LocationRulesTab() {
 
   const handleCreateRule = () => {
     if (!newRuleName.trim() || !newRuleContent.trim()) return;
+    if (!isMockMode) {
+      apiMutation.mutate(
+        () =>
+          api.createOperatingPolicy({
+            locationId,
+            title: newRuleName.trim(),
+            content: newRuleContent.trim(),
+            effectiveFrom: newRuleEffectiveDate,
+            expectedVersion: 0,
+          }),
+        {
+          onSuccess: () => {
+            setIsAddDialogOpen(false);
+            setNewRuleName('');
+            setNewRuleContent('');
+          },
+        },
+      );
+      return;
+    }
     const rule: HouseRuleItem = {
       id: `rule-${Date.now()}`,
       name: newRuleName,
@@ -107,6 +196,25 @@ export function LocationRulesTab() {
 
   return (
     <Box>
+      {!isMockMode && apiQuery.isPending && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Đang tải nội quy từ Backend...
+        </Alert>
+      )}
+      {!isMockMode && apiQuery.isError && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+          action={<Button onClick={() => void apiQuery.refetch()}>Thử lại</Button>}
+        >
+          {propertyError(apiQuery.error)}
+        </Alert>
+      )}
+      {!isMockMode && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Backend hiện quản lý nội quy theo từng cơ sở và chưa lưu trường danh mục. Các nội quy API được hiển thị trong nhóm “Vận hành khác”.
+        </Alert>
+      )}
       {/* Top Banner explaining Policy Versioning */}
       <Alert
         severity="info"
@@ -150,7 +258,7 @@ export function LocationRulesTab() {
             onChange={(e) => setSelectedCategory(e.target.value)}
             sx={{ minWidth: 240 }}
           >
-            <MenuItem value="ALL">Tất cả danh mục ({houseRules.length})</MenuItem>
+            <MenuItem value="ALL">Tất cả danh mục ({visibleRules.length})</MenuItem>
             <MenuItem value="ACCESS_HOURS">Giờ giấc & Ra vào</MenuItem>
             <MenuItem value="VISITOR_RULES">Khách thăm & Qua đêm</MenuItem>
             <MenuItem value="FIRE_SAFETY">An toàn PCCC</MenuItem>
@@ -302,6 +410,7 @@ export function LocationRulesTab() {
                 size="small"
                 label="Danh mục"
                 value={newRuleCategory}
+                disabled={!isMockMode}
                 onChange={(e) => setNewRuleCategory(e.target.value as PolicyCategory)}
               >
                 <MenuItem value="ACCESS_HOURS">Giờ giấc & Ra vào</MenuItem>
@@ -343,7 +452,7 @@ export function LocationRulesTab() {
           <Button variant="outlined" onClick={() => setIsAddDialogOpen(false)}>
             Hủy
           </Button>
-          <Button variant="contained" onClick={handleCreateRule}>
+          <Button variant="contained" disabled={apiMutation.isPending} onClick={handleCreateRule}>
             Lưu quy định
           </Button>
         </DialogActions>

@@ -33,10 +33,7 @@ import { financeSummary } from '../../../utils/finance';
 import { RecordEditor } from '../../../components/dialogs/RecordEditor';
 import { featureDefinitions } from '../../../app/featureDefinitions';
 import { roomStatus } from '../../property/model';
-import { isMockMode } from '../../../services/config';
-import LiveDashboardPage from './LiveDashboardPage';
 export default function DashboardPage() {
-  if (!isMockMode) return <LiveDashboardPage />;
   return <DemoDashboardPage />;
 }
 function DemoDashboardPage() {
