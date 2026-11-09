@@ -35,7 +35,10 @@ import { money } from '../../../utils/format';
 import { isMockMode } from '../../../services/config';
 import { UnavailableFeaturePage } from '../../../components/common/UnavailableFeaturePage';
 export default function PublicContentPage() {
-  return isMockMode ? <DemoPublicContentPage /> : <UnavailableFeaturePage
+  return isMockMode ? (
+    <DemoPublicContentPage />
+  ) : (
+    <UnavailableFeaturePage
       title="Quản lý nội dung công khai"
       description="Owner duyệt thông tin cơ sở/phòng an toàn trước khi hiển thị trên website thông tin."
       requirements={[
@@ -43,7 +46,8 @@ export default function PublicContentPage() {
         'Lệnh publish/unpublish Owner-only có concurrency và audit.',
         'Ảnh riêng tư được duyệt và cung cấp qua API file có kiểm tra quyền.',
       ]}
-    />;
+    />
+  );
 }
 function DemoPublicContentPage() {
   const query = usePortalData(),

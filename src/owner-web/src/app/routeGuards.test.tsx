@@ -10,7 +10,11 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({
-    session: state.restoredRoles ? { roles: state.restoredRoles } : state.owner ? { roles: ['Owner'] } : null,
+    session: state.restoredRoles
+      ? { roles: state.restoredRoles }
+      : state.owner
+        ? { roles: ['Owner'] }
+        : null,
     isRestoring: state.restoring,
     client: { logout: state.logout },
   }),

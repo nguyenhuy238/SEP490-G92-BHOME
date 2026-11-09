@@ -43,11 +43,7 @@ import {
 } from '../components/InitialLocationSetupWizard';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
 import { isMockMode } from '../../../services/config';
-import {
-  propertyError,
-  usePropertyApi,
-  type LocationDto,
-} from '../../property-api/propertyApi';
+import { propertyError, usePropertyApi, type LocationDto } from '../../property-api/propertyApi';
 
 export function LocationsListPage() {
   return <MockLocationsListPage />;

@@ -82,5 +82,7 @@ it('falls back to the login route callback if password changed but session resto
   fill('Current!Password-493', 'Next!Password-493');
   fireEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
   await waitFor(() => expect(reauthenticationRequired).toHaveBeenCalledOnce());
-  expect(screen.queryByRole('button', { name: 'Đăng xuất tất cả thiết bị' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Đăng xuất tất cả thiết bị' }),
+  ).not.toBeInTheDocument();
 });

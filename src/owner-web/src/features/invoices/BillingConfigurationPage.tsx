@@ -444,11 +444,7 @@ function PolicyForm({
           slotProps={{ inputLabel: { shrink: true } }}
         />
         {error && <Alert severity="error">{error}</Alert>}
-        <Button
-          type="submit"
-          disabled={busy}
-          variant="contained"
-        >
+        <Button type="submit" disabled={busy} variant="contained">
           Lưu biểu giá
         </Button>
         {previous && (

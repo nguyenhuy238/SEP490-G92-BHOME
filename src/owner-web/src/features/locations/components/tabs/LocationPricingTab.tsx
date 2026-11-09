@@ -96,11 +96,7 @@ const toFee = (policy: BillingPolicyDto): FeePolicyItem => {
       type === 'ELECTRICITY' ? 'PER_KWH' : type === 'WATER' ? 'PER_M3' : 'PER_ROOM',
     unitPrice: Number(policy.rate),
     unit:
-      type === 'ELECTRICITY'
-        ? 'VND / kWh'
-        : type === 'WATER'
-          ? 'VND / m³'
-          : 'VND / phòng / tháng',
+      type === 'ELECTRICITY' ? 'VND / kWh' : type === 'WATER' ? 'VND / m³' : 'VND / phòng / tháng',
     applicationScope: policy.roomId ? 'PER_ROOM' : 'LOCATION_WIDE',
     effectiveDate: policy.effectiveFrom,
     description: '',
@@ -146,11 +142,11 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
       }))
     : isMockMode
       ? [
-        { id: 'r-1', code: 'P.101', floor: '1', category: 'type-studio' },
-        { id: 'r-2', code: 'P.102', floor: '1', category: 'type-studio' },
-        { id: 'r-3', code: 'P.201', floor: '2', category: 'type-mezzanine' },
-        { id: 'r-4', code: 'P.202', floor: '2', category: 'type-mezzanine' },
-        { id: 'r-5', code: 'P.301', floor: '3', category: 'type-1br' },
+          { id: 'r-1', code: 'P.101', floor: '1', category: 'type-studio' },
+          { id: 'r-2', code: 'P.102', floor: '1', category: 'type-studio' },
+          { id: 'r-3', code: 'P.201', floor: '2', category: 'type-mezzanine' },
+          { id: 'r-4', code: 'P.202', floor: '2', category: 'type-mezzanine' },
+          { id: 'r-5', code: 'P.301', floor: '3', category: 'type-1br' },
         ]
       : [];
 
@@ -197,8 +193,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           return;
         }
         const existing = apiPolicies.find(
-          (policy) =>
-            policy.roomId === room.id && [0, 'Rent'].includes(policyCategory(policy)),
+          (policy) => policy.roomId === room.id && [0, 'Rent'].includes(policyCategory(policy)),
         );
         const input: BillingPolicyWrite = {
           locationId: location.id,
@@ -310,7 +305,8 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
         <Box>
           {!isMockMode && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              Backend chưa có API loại phòng, vì vậy cột loại phòng chỉ hiển thị khi dữ liệu thật có RoomTypeId. Giá thuê được đọc từ Billing Policy thực tế.
+              Backend chưa có API loại phòng, vì vậy cột loại phòng chỉ hiển thị khi dữ liệu thật có
+              RoomTypeId. Giá thuê được đọc từ Billing Policy thực tế.
             </Alert>
           )}
           <Alert severity="info" icon={<Scale size={18} />} sx={{ mb: 2.5, borderRadius: 2 }}>
@@ -355,7 +351,11 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                     ? rType?.defaultRate || 5500000
                     : Number(locationRent?.rate ?? 0);
                   const localOverride = rateOverrides[room.code];
-                  const override = isMockMode ? localOverride : roomRent ? Number(roomRent.rate) : undefined;
+                  const override = isMockMode
+                    ? localOverride
+                    : roomRent
+                      ? Number(roomRent.rate)
+                      : undefined;
                   const isOverridden = override !== undefined;
                   const appliedRate = isOverridden ? override : defaultRate;
 
@@ -366,7 +366,9 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                       <TableCell>
                         <Chip
                           size="small"
-                          label={rType?.name || (room.category ? room.category : 'Chưa có loại phòng')}
+                          label={
+                            rType?.name || (room.category ? room.category : 'Chưa có loại phòng')
+                          }
                           sx={{ fontWeight: 700 }}
                         />
                       </TableCell>
@@ -415,7 +417,9 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
       {activeSubTab === 'fees' && (
         <Box>
           {!isMockMode && policyQuery.isPending && (
-            <Alert severity="info" sx={{ mb: 2 }}>Đang tải biểu phí từ Backend...</Alert>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Đang tải biểu phí từ Backend...
+            </Alert>
           )}
           {!isMockMode && policyQuery.isError && (
             <Alert
@@ -428,7 +432,8 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           )}
           {!isMockMode && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              API Billing Policy hiện hỗ trợ phạm vi toàn cơ sở hoặc từng phòng; chưa hỗ trợ mẫu phí cấp chuỗi và phạm vi theo loại phòng.
+              API Billing Policy hiện hỗ trợ phạm vi toàn cơ sở hoặc từng phòng; chưa hỗ trợ mẫu phí
+              cấp chuỗi và phạm vi theo loại phòng.
             </Alert>
           )}
           {/* Statutory Tariff Alert */}

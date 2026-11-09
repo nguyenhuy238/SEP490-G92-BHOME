@@ -212,7 +212,8 @@ export function LocationRulesTab({ locationId }: { locationId: string }) {
       )}
       {!isMockMode && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Backend hiện quản lý nội quy theo từng cơ sở và chưa lưu trường danh mục. Các nội quy API được hiển thị trong nhóm “Vận hành khác”.
+          Backend hiện quản lý nội quy theo từng cơ sở và chưa lưu trường danh mục. Các nội quy API
+          được hiển thị trong nhóm “Vận hành khác”.
         </Alert>
       )}
       {/* Top Banner explaining Policy Versioning */}

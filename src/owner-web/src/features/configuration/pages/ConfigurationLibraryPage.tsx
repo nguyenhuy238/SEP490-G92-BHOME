@@ -153,7 +153,9 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
       </Alert>
       {!isMockMode && (
         <Alert severity="warning" sx={{ mb: 2.5 }}>
-          Backend hiện chỉ có cấu hình theo từng cơ sở, chưa có API thư viện mẫu dùng chung cấp chuỗi. Dữ liệu demo không được hiển thị trong API mode và các thao tác tạo/sửa/áp dụng đang bị khóa để tránh lưu sai nghiệp vụ.
+          Backend hiện chỉ có cấu hình theo từng cơ sở, chưa có API thư viện mẫu dùng chung cấp
+          chuỗi. Dữ liệu demo không được hiển thị trong API mode và các thao tác tạo/sửa/áp dụng
+          đang bị khóa để tránh lưu sai nghiệp vụ.
         </Alert>
       )}
       {notice && (

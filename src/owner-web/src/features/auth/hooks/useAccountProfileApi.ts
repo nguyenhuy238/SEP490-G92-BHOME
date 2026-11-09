@@ -22,8 +22,7 @@ export function useAccountProfileApi() {
   const { request } = useMeterApi();
   return useMemo(
     () => ({
-      get: (signal?: AbortSignal) =>
-        request<AccountProfile>('/api/v1/account/profile', { signal }),
+      get: (signal?: AbortSignal) => request<AccountProfile>('/api/v1/account/profile', { signal }),
       update: (input: AccountProfileUpdate) =>
         request<AccountProfile>('/api/v1/account/profile', {
           method: 'PUT',

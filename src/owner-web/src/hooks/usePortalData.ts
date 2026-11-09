@@ -4,7 +4,11 @@ import { usePropertyApi } from '../features/property-api/propertyApi';
 import { isMockMode } from '../services/config';
 import { resourceKinds, type DemoDatabase, type PortalRecord } from '../types/portal';
 
-const record = ({ id, name, ...value }: Partial<PortalRecord> & Pick<PortalRecord, 'id' | 'name'>): PortalRecord => ({
+const record = ({
+  id,
+  name,
+  ...value
+}: Partial<PortalRecord> & Pick<PortalRecord, 'id' | 'name'>): PortalRecord => ({
   id,
   code: '',
   name,
@@ -34,9 +38,11 @@ const record = ({ id, name, ...value }: Partial<PortalRecord> & Pick<PortalRecor
 
 const roomStatus = (status: number | string) => {
   const value = typeof status === 'string' && /^\d+$/.test(status) ? Number(status) : status;
-  return ({ 0: 'AVAILABLE', 1: 'ON_HOLD', 2: 'OCCUPIED', 3: 'UNAVAILABLE' } as const)[
-    value as 0 | 1 | 2 | 3
-  ] ?? String(status);
+  return (
+    ({ 0: 'AVAILABLE', 1: 'ON_HOLD', 2: 'OCCUPIED', 3: 'UNAVAILABLE' } as const)[
+      value as 0 | 1 | 2 | 3
+    ] ?? String(status)
+  );
 };
 
 export function usePortalData() {
@@ -56,10 +62,13 @@ export function usePortalData() {
         property.rooms(undefined, signal),
         property.assets(undefined, signal),
       ]);
-      const records = resourceKinds.reduce((result, kind) => {
-        result[kind] = [];
-        return result;
-      }, {} as DemoDatabase['records']);
+      const records = resourceKinds.reduce(
+        (result, kind) => {
+          result[kind] = [];
+          return result;
+        },
+        {} as DemoDatabase['records'],
+      );
       records.locations = locations.items.map((item, index) =>
         record({
           id: item.id,

@@ -13,12 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  Apartment,
-  LockOutlined,
-  Visibility,
-  VisibilityOff,
-} from '@mui/icons-material';
+import { Apartment, LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
@@ -215,7 +210,12 @@ export default function ResetPasswordPage() {
               >
                 {busy ? 'Đang đặt lại...' : 'Đặt lại mật khẩu'}
               </Button>
-              <Link component={RouterLink} to="/login" underline="hover" sx={{ textAlign: 'center' }}>
+              <Link
+                component={RouterLink}
+                to="/login"
+                underline="hover"
+                sx={{ textAlign: 'center' }}
+              >
                 Quay lại đăng nhập
               </Link>
             </Stack>

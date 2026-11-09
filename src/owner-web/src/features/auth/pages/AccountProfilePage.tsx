@@ -84,7 +84,8 @@ export default function AccountProfilePage() {
       if (credentialsChanged) {
         try {
           await client.login(updated.email!, reauthPassword);
-          if (!client.session?.roles.includes('Owner')) throw new Error('Owner session was not restored.');
+          if (!client.session?.roles.includes('Owner'))
+            throw new Error('Owner session was not restored.');
           setReauthPassword('');
           setSaved(true);
         } catch {
@@ -162,7 +163,11 @@ export default function AccountProfilePage() {
         group="TÀI KHOẢN OWNER"
         subtitle="Quản lý thông tin liên hệ và bảo mật của tài khoản đang đăng nhập."
         actions={
-          <Button variant="outlined" startIcon={<KeyRound size={16} />} onClick={() => setPasswordOpen(true)}>
+          <Button
+            variant="outlined"
+            startIcon={<KeyRound size={16} />}
+            onClick={() => setPasswordOpen(true)}
+          >
             Đổi mật khẩu
           </Button>
         }
@@ -174,7 +179,11 @@ export default function AccountProfilePage() {
           gap: 2.5,
         }}
       >
-        <Paper component="form" onSubmit={submit} sx={{ p: { xs: 2, md: 3 }, border: '1px solid', borderColor: 'divider' }}>
+        <Paper
+          component="form"
+          onSubmit={submit}
+          sx={{ p: { xs: 2, md: 3 }, border: '1px solid', borderColor: 'divider' }}
+        >
           <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', mb: 3 }}>
             <Avatar sx={{ width: 52, height: 52, bgcolor: 'primary.main' }}>
               <UserRound size={24} />
@@ -184,13 +193,23 @@ export default function AccountProfilePage() {
                 {current.fullName || 'Tài khoản Owner'}
               </Typography>
               <Stack direction="row" sx={{ gap: 0.75, mt: 0.5, flexWrap: 'wrap' }}>
-                {current.roles.map((role) => <Chip key={role} size="small" color="primary" label={role} />)}
-                <Chip size="small" color={current.isActive ? 'success' : 'default'} label={current.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'} />
+                {current.roles.map((role) => (
+                  <Chip key={role} size="small" color="primary" label={role} />
+                ))}
+                <Chip
+                  size="small"
+                  color={current.isActive ? 'success' : 'default'}
+                  label={current.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+                />
               </Stack>
             </Box>
           </Stack>
           <Divider sx={{ mb: 3 }} />
-          {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
+          {formError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {formError}
+            </Alert>
+          )}
           <Stack spacing={2.25}>
             <TextField
               required
@@ -242,7 +261,13 @@ export default function AccountProfilePage() {
                 type="submit"
                 variant="contained"
                 disabled={!changed || update.isPending}
-                startIcon={update.isPending ? <CircularProgress size={16} color="inherit" /> : <Save size={16} />}
+                startIcon={
+                  update.isPending ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <Save size={16} />
+                  )
+                }
               >
                 {update.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
@@ -254,18 +279,31 @@ export default function AccountProfilePage() {
           <Paper sx={{ p: 2.5, border: '1px solid', borderColor: 'divider' }}>
             <Stack direction="row" sx={{ gap: 1, alignItems: 'center', mb: 1 }}>
               <ShieldCheck size={20} color="#255dde" />
-              <Typography component="h2" sx={{ fontWeight: 750 }}>Bảo mật tài khoản</Typography>
+              <Typography component="h2" sx={{ fontWeight: 750 }}>
+                Bảo mật tài khoản
+              </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
               Đổi mật khẩu sẽ thu hồi các phiên đăng nhập hiện có theo chính sách của Backend.
             </Typography>
-            <Button fullWidth variant="outlined" startIcon={<KeyRound size={16} />} onClick={() => setPasswordOpen(true)}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<KeyRound size={16} />}
+              onClick={() => setPasswordOpen(true)}
+            >
               Đổi mật khẩu
             </Button>
           </Paper>
           <Paper sx={{ p: 2.5, border: '1px solid', borderColor: 'divider' }}>
-            <Typography component="h2" sx={{ fontWeight: 750, mb: 1 }}>Phiên hiện tại</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, overflowWrap: 'anywhere' }}>
+            <Typography component="h2" sx={{ fontWeight: 750, mb: 1 }}>
+              Phiên hiện tại
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 2, overflowWrap: 'anywhere' }}
+            >
               Mã tài khoản: {current.userId}
             </Typography>
             <Button
@@ -273,7 +311,9 @@ export default function AccountProfilePage() {
               color="error"
               variant="outlined"
               disabled={loggingOut}
-              startIcon={loggingOut ? <CircularProgress size={16} color="inherit" /> : <LogOut size={16} />}
+              startIcon={
+                loggingOut ? <CircularProgress size={16} color="inherit" /> : <LogOut size={16} />
+              }
               onClick={() => void logout()}
             >
               {loggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
@@ -294,9 +334,15 @@ export default function AccountProfilePage() {
         }
       />
       <Snackbar open={saved} autoHideDuration={5000} onClose={() => setSaved(false)}>
-        <Alert severity="success" onClose={() => setSaved(false)}>Đã cập nhật hồ sơ tài khoản.</Alert>
+        <Alert severity="success" onClose={() => setSaved(false)}>
+          Đã cập nhật hồ sơ tài khoản.
+        </Alert>
       </Snackbar>
-      <Snackbar open={passwordChanged} autoHideDuration={5000} onClose={() => setPasswordChanged(false)}>
+      <Snackbar
+        open={passwordChanged}
+        autoHideDuration={5000}
+        onClose={() => setPasswordChanged(false)}
+      >
         <Alert severity="success" onClose={() => setPasswordChanged(false)}>
           Đã đổi mật khẩu và xác thực lại phiên hiện tại.
         </Alert>

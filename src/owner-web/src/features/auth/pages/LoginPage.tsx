@@ -29,9 +29,7 @@ export function LoginPage() {
   const passwordReset = Boolean(
     (location.state as { passwordReset?: boolean } | null)?.passwordReset,
   );
-  const loggedOutAll = Boolean(
-    (location.state as { loggedOutAll?: boolean } | null)?.loggedOutAll,
-  );
+  const loggedOutAll = Boolean((location.state as { loggedOutAll?: boolean } | null)?.loggedOutAll);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetUserName, setResetUserName] = useState('');
   const [resetValidation, setResetValidation] = useState('');

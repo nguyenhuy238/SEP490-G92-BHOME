@@ -79,11 +79,7 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
         })),
   );
   const roomTypes = db.records['room-types'].filter((item) => item.locationId === location.id);
-  const selectableRoomTypes = roomTypes.length
-    ? roomTypes
-    : isMockMode
-      ? INITIAL_ROOM_TYPES
-      : [];
+  const selectableRoomTypes = roomTypes.length ? roomTypes : isMockMode ? INITIAL_ROOM_TYPES : [];
   const [selectedRoomType, setSelectedRoomType] = useState<string>(
     selectableRoomTypes[0]?.id || 'type-studio',
   );
@@ -121,62 +117,62 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
           source: 'OVERRIDE',
         }))
       : [
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-ac',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-fridge',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-bed',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.101',
-      catalogId: 'cat-heater',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.102',
-      catalogId: 'cat-ac',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.102',
-      catalogId: 'cat-fridge',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.201',
-      catalogId: 'cat-ac',
-      quantity: 1,
-      condition: 'Active',
-      source: 'TEMPLATE',
-    },
-    {
-      roomCode: 'P.201',
-      catalogId: 'cat-tv',
-      quantity: 1,
-      condition: 'Active',
-      source: 'OVERRIDE',
-    },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-ac',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-fridge',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-bed',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.101',
+            catalogId: 'cat-heater',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.102',
+            catalogId: 'cat-ac',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.102',
+            catalogId: 'cat-fridge',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.201',
+            catalogId: 'cat-ac',
+            quantity: 1,
+            condition: 'Active',
+            source: 'TEMPLATE',
+          },
+          {
+            roomCode: 'P.201',
+            catalogId: 'cat-tv',
+            quantity: 1,
+            condition: 'Active',
+            source: 'OVERRIDE',
+          },
         ],
   );
 
@@ -324,10 +320,10 @@ export function LocationAssetsTab({ db, location }: LocationAssetsTabProps) {
 
       {!isMockMode && (
         <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 2 }}>
-          Backend hiện chỉ có tài sản thực tế theo phòng/khu vực và mẫu tài sản theo cơ sở,
-          chưa có quan hệ định mức theo loại phòng như giao diện này. Danh sách phân bổ bên
-          dưới lấy từ API thực; các thao tác định mức và áp dụng hàng loạt tạm thời bị khóa để
-          tránh ghi sai dữ liệu.
+          Backend hiện chỉ có tài sản thực tế theo phòng/khu vực và mẫu tài sản theo cơ sở, chưa có
+          quan hệ định mức theo loại phòng như giao diện này. Danh sách phân bổ bên dưới lấy từ API
+          thực; các thao tác định mức và áp dụng hàng loạt tạm thời bị khóa để tránh ghi sai dữ
+          liệu.
         </Alert>
       )}
 

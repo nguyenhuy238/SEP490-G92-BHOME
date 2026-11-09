@@ -52,7 +52,9 @@ function renderPage() {
 
 beforeEach(() => {
   mocks.get.mockReset().mockResolvedValue(profile);
-  mocks.update.mockReset().mockResolvedValue({ ...profile, fullName: 'Owner đã cập nhật', version: 'profile-v2' });
+  mocks.update
+    .mockReset()
+    .mockResolvedValue({ ...profile, fullName: 'Owner đã cập nhật', version: 'profile-v2' });
   mocks.logout.mockReset();
   mocks.login.mockReset().mockResolvedValue(undefined);
   mocks.changePassword.mockReset();
@@ -80,11 +82,7 @@ it('verifies the current password and restores the session when contact details 
   fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
   await waitFor(() =>
-    expect(mocks.login).toHaveBeenNthCalledWith(
-      1,
-      'owner@example.invalid',
-      'Current!Password-493',
-    ),
+    expect(mocks.login).toHaveBeenNthCalledWith(1, 'owner@example.invalid', 'Current!Password-493'),
   );
   await waitFor(() =>
     expect(mocks.update).toHaveBeenCalledWith({

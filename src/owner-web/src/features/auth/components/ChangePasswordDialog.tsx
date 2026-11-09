@@ -180,8 +180,8 @@ export function ChangePasswordDialog({
             slotProps={{ htmlInput: { minLength: 12, maxLength: 1024 } }}
           />
           <Typography variant="caption" color="text.secondary">
-            Tối thiểu 12 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Các phiên cũ sẽ bị
-            thu hồi; phiên hiện tại sẽ được xác thực lại tự động bằng mật khẩu mới.
+            Tối thiểu 12 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Các phiên cũ sẽ bị thu
+            hồi; phiên hiện tại sẽ được xác thực lại tự động bằng mật khẩu mới.
           </Typography>
         </Stack>
       </DialogContent>
