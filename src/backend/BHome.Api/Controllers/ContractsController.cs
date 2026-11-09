@@ -97,6 +97,21 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractView> ConfirmSigningOtp(Guid id, SigningOtpConfirmation x, CancellationToken t) => service.ConfirmSigningAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/signing/otp/resend"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<SigningOtpView> ResendSigningOtp(Guid id, CancellationToken t) => service.ResendSigningCodeAsync(id, t);
+    // UPLOAD_PROOF (Owner): download the exact PDF to sign with MySign, then upload the signed file.
+    [HttpGet("{id:guid}/signing/upload-source"), Authorize(Roles = Roles.Owner)]
+    public async Task<IActionResult> SigningUploadSource(Guid id, CancellationToken t)
+    {
+        using var buffer = new MemoryStream();
+        await service.CopyUploadSourceAsync(id, buffer, t);
+        return File(buffer.ToArray(), "application/pdf", $"hop-dong-{id:N}.pdf");
+    }
+    [HttpPut("{id:guid}/signing/upload"), Authorize(Roles = Roles.Owner), Consumes("application/pdf"), RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<ContractView> UploadSignedDocument(Guid id, CancellationToken t)
+    {
+        using var upload = new MemoryStream();
+        await Request.Body.CopyToAsync(upload, t);
+        return await service.UploadSignedDocumentAsync(id, upload.ToArray(), Key(), t);
+    }
     [HttpPost("{id:guid}/signing/sync"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<ContractView> Sync(Guid id, CancellationToken t) => service.SyncSigningAsync(id, t);
     [HttpPost("{id:guid}/signing/recover"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

@@ -206,6 +206,8 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Infrastructure.Contracts.SigningOtpChallenges>();
         services.AddScoped<BHome.Infrastructure.Contracts.SigningPartyDirectory>();
         services.AddScoped<BHome.Infrastructure.Contracts.OtpContractSigningAdapter>();
+        services.AddSingleton<BHome.Infrastructure.Contracts.UploadedSignatureVerifier>();
+        services.AddScoped<BHome.Infrastructure.Contracts.UploadProofContractSigningAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningNotifier, BHome.Infrastructure.Contracts.ContractSigningNotifier>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningProvider, BHome.Infrastructure.Contracts.ContractSigningRouter>();
         services.AddScoped<BHome.Application.Contracts.IContractWorkflowRepository, BHome.Infrastructure.Contracts.ContractWorkflowRepository>();
