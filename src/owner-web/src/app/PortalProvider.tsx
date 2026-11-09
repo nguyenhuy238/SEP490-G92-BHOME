@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useAuth } from '../../../../packages/client-core/src/auth';
 import { Alert, Snackbar } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createMockRepository } from '../services/repositories/mockPortalRepository';
+import { createPortalRepository } from '../services/repositories/portalRepository';
 import { isMockMode } from '../services/config';
 import type { PortalRepository } from '../types/portal';
 
@@ -39,9 +39,7 @@ function PortalScope({ children }: { children: ReactNode }) {
   const [locationId, setLocationId] = useState('all');
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState({ message: '', error: false });
-  const [repository] = useState(() => {
-    return createMockRepository();
-  });
+  const [repository] = useState(() => createPortalRepository(isMockMode));
   const value = useMemo(
     () => ({
       repository,
