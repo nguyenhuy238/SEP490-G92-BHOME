@@ -1,125 +1,89 @@
-# BHOME — trạng thái API và bàn giao phát triển
+# BHOME API implementation status
 
-**OCR 08/11/2026:** diagnostics hiện có hỗ trợ `experimental=true&taskId=<guid>` để đọc profile DB của task Staff được phân công; nhánh này read-only, không lưu proposal/reading. Sửa routing PP cho các giả thuyết category yếu trên cùng body; model experimental mới chưa đủ nhãn độc lập để bật Staff proposals. [Contract](OCR_EXPERIMENTAL_DIAGNOSTICS.md), [kết quả OCR](../development/OCR_NEXT_STAFF_RECOGNITION_RESULTS.md). Không thêm route hoặc thay kết quả audit cũ bên dưới.
+Updated **2026-11-09** on `member/QHuy`. Runtime implementation source:
+`b9cff6566df6ddf0c0d339b95c6d226bc22faf24`. The subsequent documentation commit
+does not change that implementation. The delivery report records the final HEAD
+without introducing a circular self-referential commit hash.
 
-Rà soát **06/11/2026**, nhánh `member/QHuy`; SHA từng slice và lệnh kiểm chứng trong [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md). Bổ sung BE-19/BE-X07: calculation, hoàn cọc thủ công, khấu trừ TenantDamage có evidence, Owner UI và browser hai nhánh; không đổi schema hoặc dữ liệu làm việc.
+Current inventory: **392 registered controller method-route pairs**, **391 OpenAPI
+operations / 327 path keys**, plus two health endpoints. The mobile Development
+certificate route is registered but deliberately excluded from OpenAPI. Generic
+shared-resource routes count once per method/path pattern. These figures replace
+the historical 216-route snapshot and the audit's 371/314 Swagger counts.
+The [runtime inventory](API_RUNTIME_ROUTES.md) records exact descriptors, authorization,
+parameters, generation timestamp and probe results.
 
-**Rà soát bổ sung báo cáo tiến độ trên HEAD `8f5c751`:** Backend chạy lại Domain 90/Application 276/Integration 626 đạt, 1 OCR skip; Digital Signing 41 và Mobile 381 đạt. Owner Web full suite mới có 154 pass/1 timeout; chạy lại riêng router 37/37 đạt, không đổi code/timeout và không coi đó là full suite 155/155. Build/lint Owner và typecheck/lint Mobile đạt. Audit mới giữ 216 routes/211 protected trả 401/106 Owner GET không 5xx. Chi tiết, log mới và bài báo cáo nhóm/cá nhân: [báo cáo tiến độ 06/11](../reports/BHOME_PROGRESS_REPORT_NGUYEN_QUOC_HUY_2026-11-06.md). Bảng regression phía dưới là bằng chứng lượt bàn giao trước đó, không thay cho kết quả bổ sung này.
+The instantiated BHome.Api test host uses the real application, controllers, DI and
+Compact24 persistence with synthetic data. Test-assembly probe controllers are
+excluded. Its registered Swagger provider generates the contract; Testing does not
+expose Development-only Swagger HTTP middleware. All 24 physical Compact24 tables
+and the structural schema verifier were checked on dedicated PostgreSQL 16. The
+working database was not migrated or used for writes.
 
-**216 controller routes đang được BHome.Api nạp**, gồm **211 protected** và **5 anonymous**, cộng 2 health endpoints. Danh sách đầy đủ, input/action, policy và source callsite: [API_RUNTIME_ROUTES.md](API_RUNTIME_ROUTES.md). [Mục lục module](README.md) và [quy ước tích hợp](API_CONVENTIONS.md) là điểm bắt đầu cho team.
+## Configuration implementation
 
-`Compact24ApiAuditTests` trong full regression cuối: **6/6 đạt, 0 skip**, PostgreSQL test độc lập, DI mặc định Compact24. Cả 211 protected routes trả 401 khi không có phiên. **106 Owner GET probes**: 200=32, 204=2, 400=10, 403=3, 404=59; **0 HTTP 5xx**. Có thêm 12 GET với query/dữ liệu seed hợp lệ được test trả 200; chúng không cộng thêm route. Probe ID không tồn tại/thiếu query kiểm nhánh lỗi, không chứng minh mọi happy path đã đạt. Route Development có descriptor nhưng vẫn bị chặn theo environment/configuration.
+| Gap | Result | Contract / evidence |
+| --- | --- | --- |
+| GAP-001 | DONE: policy versions returns revisions of the requested document; Staff sees Published revisions only | [Owner setup](OWNER_SETUP_COMPACT24.md) |
+| GAP-002 | DONE: Mobile uses native Location/Room and explicit capacity; loading failures are independent | [Location/Room](LOCATION_ROOM_API.md) |
+| GAP-003 | DONE: pricing uses exact rate strings and current Location/Room scope | [Location/Room](LOCATION_ROOM_API.md) |
+| GAP-004 | DONE: API-mode Owner configuration persists through native APIs, evidence, versions and refetch | [Owner setup](OWNER_SETUP_COMPACT24.md) |
+| GAP-005 | DONE: persistent shared resources, lifecycle, editions, preview/apply and database-derived usage | [Shared API](SHARED_CONFIGURATION.md) |
+| GAP-006 | DONE: configuration-only copy with explicit groups, hashes, conflicts, transactions and provenance | [Copy](SHARED_CONFIGURATION.md#location-configuration-copy) |
+| GAP-007 | DONE: runtime-generated inventory, exact count/schema methodology, archived obsolete snapshots | This document and inventory |
+| GAP-008 | PARTIAL: new workflows and focused regressions pass; broad acceptance retains three baseline migration failures and one logging-dependent skip | [Validation](../development/CONFIGURATION_VALIDATION_2026-11-09.md) |
 
-## Cách đọc và dùng tài liệu
+These statuses cover this configuration scope. They do not establish acceptance of
+every BF/UC, production provider, live browser/device journey or NFR.
 
-- **Có API**: controller được host nạp và có implementation; không đồng nghĩa UI đã nối hoặc provider thật đã nghiệm thu.
-- **Có lời gọi** trong danh mục: source callsite được tìm thấy. **Có client; chưa xác nhận UI**: wrapper tồn tại nhưng chưa truy được màn gọi. **Chưa tìm thấy**: chưa có bằng chứng gọi đúng method/route, không phải backend thiếu. Dò tĩnh có giới hạn với wrapper/action động; xem phần đối chiếu thủ công.
-- Policy ở nhiều attribute áp dụng kết hợp; các role trong cùng attribute là OR. Service vẫn kiểm tra đối tượng, Location assignment hiện tại và Tenant entitlement từ database.
-- Owner Web cần `VITE_API_MODE=api` và API URL đúng; các màn đã nối mới dùng backend. Màn mock hoặc role preview không phải bằng chứng kết nối. Mobile cần phiên đăng nhập thật.
-- Runtime dùng `Compact24DbContext`, `CompactUserStore`, `CompactRoleStore`; không đăng ký/fallback `BHomeDbContext`. Tên CLR/DTO và bảng logic trong report cũ không phải tên bảng vật lý. Không chạy EF migration legacy để triển khai Compact24.
+## Architecture and integration
 
-## Trạng thái theo module
+Location directly owns Rooms. Native APIs reject Chain/RoomType fields.
+`room-type-templates` is a compatibility route for reusable defaults; it does not
+create Rooms, occupancy or contractual obligations.
 
-| Module / nguồn nghiệp vụ                                 | Backend và client thực tế                                                                                                                                                                                                 | Phần cần team tiếp tục                                                                                                                                                                                                               |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Auth — FE-02/UC-01                                       | Login email, JWT/session/refresh, revoke/change/reset password; Owner Web và Mobile có action theo danh mục                                                                                                               | Delivery reset chưa cấu hình; chưa có OTP/MFA challenge hoàn chỉnh; Mobile credential còn memory, cần secure-storage adapter được review                                                                                             |
-| Property — BF-01/UC-04..07                               | Chain/Location/RoomType/Room/Asset/biểu phí, readiness/history/occupancy có API Compact24; Mobile setup cơ bản                                                                                                            | Owner Web nhiều màn Property vẫn mock/báo chưa hỗ trợ API; không suy từ route backend rằng UI CRUD đã nối                                                                                                                            |
-| Staff/Task — BF-02/UC-08..12                             | Capture Staff, assignment theo ngày, Task lifecycle/evidence/history; Mobile có action theo role; Owner Web Task API mode đọc list/detail                                                                                 | Staff/schedule Web còn mock; chưa có shift API riêng hoặc JOB-06/07 recurring/deadline workflow hoàn chỉnh; AdHoc Task không phải Work Order                                                                                         |
-| Onboarding/OCR — BF-03/UC-13..15, GBR-07                 | Capture và human confirmation, Main Draft mã hóa; OCR chỉ trả proposal, manual fallback                                                                                                                                   | Chưa nghiệm thu classifier bốn loại công tơ, >=50 ảnh/90% hoặc camera thiết bị; xem báo cáo OCR được dẫn trong quy ước                                                                                                               |
-| Main/Renewal/signing — BF-03/04/UC-15..19, GBR-04        | Main Draft review/release canonical PDF → signing/deposit/Owner activation; contracts/history/renewal có API và client                                                                                                    | Chưa có bằng chứng cấu hình MySign staging thật và mẫu Production được duyệt; simulation không phải chữ ký pháp lý; signed renewal UI E2E còn thiếu                                                                                  |
-| Holding — BE-14, OQ-03/Q-H1                              | Boundary/transfer guard, ledger runtime vẫn Unconfigured                                                                                                                                                                  | Chưa có Holding ledger/API/UI đầy đủ; cần quyết định validity/payment deadline/transfer; không giả OnHold từ Main Contract                                                                                                           |
-| Handover/move-out — UC-17/19                             | Private evidence, confirmed Initial/Final readings, dispute/version guard, inspection/review/settlement summary, Owner manual refund/damage decision và closure/Room release đã chạy browser; in-app events đã có         | Chưa có debt offset bằng cọc hoặc thu phí vượt cọc; nghĩa vụ thiếu/chưa phân loại tiếp tục chặn release. Native/external delivery và Holding còn thiếu                                                                               |
-| Residence — UC-18/GBR-06                                 | Có metadata residence trong dữ liệu người ở                                                                                                                                                                               | Chưa có residence workflow API riêng; Tenant đăng ký ngoài BHOME qua VNeID, Owner xác nhận; Staff không đăng ký/duyệt thay                                                                                                           |
-| Meter/billing/adjustment — BF-05/UC-20..21/24, JOB-09/10 | Confirmed reading → Draft/Final; Owner opt-in automation; Tenant request/private evidence → Owner decision; Final giữ bất biến                                                                                            | Browser tổng hợp một Invoice/ba Tenant đã chạy; native xuyên chu kỳ, delivery thực tế và reviewer còn thiếu                                                                                                                          |
-| Payment/debt — BF-06/UC-22..25                           | Owner sao kê thủ công, allocation=min(receipt,outstanding), partial/excess, payer privacy, QR/debt/history từ backend                                                                                                     | Chưa nghiệm thu bank callback/provider tự động; ảnh hoặc frontend không chứng minh tiền đã đến                                                                                                                                       |
-| Refund receipt/cọc — BE-X07                              | 7 refund API Owner-only + POST deposit-deductions; source receipt/cọc riêng, manual verification/private evidence, plan history/version/idempotency, Owner Web đã nối. Browser không khấu trừ 19 nhóm, có phí 20 nhóm đạt | Owner chuyển tiền bên ngoài, không tự giải ngân. Tenant đọc summary, Staff không thấy tài chính; native chưa nghiệm thu. Chưa credit, debt offset, phí vượt cọc hoặc refund dư do Adjustment sau Paid                                |
-| Finance — FE-08/UC-31..34, GBR-15/16                     | 8 Expenses routes, report/capital recovery, 4 What-if routes; Owner Web API mode. Receipt-excess và deposit-principal returns có proof được phân loại riêng; verifiedDepositReturns theo kỳ/phạm vi, không phải OPEX      | Refund chưa phân loại giữ unavailable guard; bồi thường thiệt hại giữ cọc chưa cộng vào profit/recovery Invoice/OPEX. Chưa tổng liability cọc/payroll; Work Order chỉ tham chiếu nguồn có sẵn; historical occupancy chỉ một Location |
-| Notification — FE-07/UC-35..36, JOB-04                   | Inbox, event publisher, delivery/retry/lease/monitoring và client; move-out/deduction/deposit-refund có consumer Owner/Tenant Contract, dedupe persisted và target reauthorization                                        | Email/push mặc định Unconfigured; chưa có delivery thật. Receipt-excess refund chưa có consumer riêng; không gửi Staff thông báo tài chính                                                                                           |
-| Incident/Emergency/Work Order — BF-07/UC-26..30          | Chưa có controller/service lifecycle BF-07 đầy đủ trong host                                                                                                                                                              | Owner Web còn mock; bảng/expense reference có sẵn không chứng minh review/plan/repair/verify đã triển khai                                                                                                                           |
-| Public — GBR-17/UC-37                                    | Chưa có public-content controller của BHome.Api                                                                                                                                                                           | Chưa nối nội dung backend; chỉ thông tin được Owner duyệt, không Guest form/booking/payment                                                                                                                                          |
+Shared data belongs to the BHOME Owner management scope. Global Compact24 COMMAND
+documents have NULL Location and a real creator FK. Applications/copies carry the
+actual target, immutable source references, append-only history and durable keys.
+No migration, extra table or dependency was added. See the [persistence decision](../architecture/SHARED_CONFIGURATION_PERSISTENCE_2026-11-09.md)
+and [approved scope](../architecture/CONFIGURATION_SCOPE_DECISION_2026-11-09.md).
 
-Chính sách thiếu/thừa tiền và receipt-excess refund được triển khai theo ủy quyền người dùng khi chưa tìm thấy quyết định OQ-01/02/05; chi tiết ở [PAYMENTS](PAYMENTS.md) và [REFUNDS](REFUNDS.md). Đây không phải quyết định đóng mọi nhánh cọc/quyết toán. `TransferView.unallocatedAmount` vẫn là phần receipt chưa phân bổ vào Invoice; số còn được hoàn lấy từ `RefundSource.availableAmount`, không tự trừ ở frontend.
+Owner Web API mode uses current native/shared clients; in-memory prototypes remain
+behind explicit mock mode. Billing calculations, permissions and transitions stay
+server-authoritative. Applied asset and policy packages are local Drafts. Physical
+verification, contract signing and Owner activation remain separate. Shared changes
+never rewrite signed contracts or finalized invoices.
 
-## Kiểm chứng và giới hạn bàn giao
+## Known limits
 
-| Bằng chứng                     | Kết quả thực tế                                                                                                  | Thời điểm / giới hạn                                                                                                                        |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Audit API vừa chạy             | 6/6, 216 routes, 211 protected trả 401, 106 Owner GET không 5xx                                                  | Trong full integration cuối 06/11; synthetic Compact24 DB, không dùng working bhome                                                         |
-| Danh mục tài liệu              | 216 routes + 2 health; 235 static client callsites; 611 internal file links/18 Markdown files hợp lệ             | Tái sinh manifest audit cuối; callsite là bằng chứng source, không phải UI acceptance. Node syntax và git diff --check đạt                  |
-| Full backend regression        | Domain90 + Application276 + Integration626 đạt; 1 optional real-OCR skip / Integration627 total, 0 fail          | Chạy lại sau fix xUnit constructor; lần đầu603pass/23fixturefail/1skip được ghi riêng, không che lỗi                                        |
-| Full frontend regression       | Owner155/155, Mobile381/381; Owner build/lint, Mobile typecheck/lint đạt                                         | Chạy trên code mới; component/transport không thay thế native acceptance                                                                    |
-| Focused mới                    | Deduction25unit+19PG/audit; Owner26; Finance9unit+13PG+9UI; notification11PG                                     | Lệnh, phạm vi và commit riêng trong report; không cộng dồn các lượt thành một pass rate                                                     |
-| Browser Web/API/PG/MinIO       | Có phí22/22, không phí21/21 nhóm; inspection → deduction/refund → settlement/closure/Room release + report/inbox | Synthetic signing/bank, real private MinIO/API/Web; Staff/Tenant MobileApi; worker tắt, explicit event pump; external delivery Unconfigured |
-| Digital-signing solution riêng | 41/41                                                                                                            | Chạy lại; không chứng minh sandbox controllers đã mount hoặc MySign thật hoạt động                                                          |
-| Real OCR riêng                 | HTTP model smoke 1/1; OCR unit 125/125, integration focused 119/119                                              | Lượt trước; không phải benchmark >=50 ảnh/90% và không tính integration skip thành pass                                                     |
+- Copy rejects Room-scoped fee references; explicit Room mapping is not included.
+  Selected unsupported references/groups are reported and rejected.
+- Fee copy requires a current/future date and selects source policies effective on
+  that date, retaining end dates and native overlap checks.
+- Reject is the only strategy. There is no implicit merge, overwrite or propagation.
+- A shared family can be applied once per Location; later changes use native local
+  workflows. Editions and applications remain retained.
+- Native setup/copy snapshots have an explicit 1000-record workspace bound; excess
+  returns a visible conflict instead of silently truncating a copy.
+- Three historical legacy-to-Compact24 migration tests fail at both audited baseline
+  and current code. The SQL-log independence check remains skipped without sanitized
+  server statement logging. Full regression acceptance is not claimed.
 
-Commands, kết quả và commit: [báo cáo Nguyễn Quốc Huy](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md), [gói Report2/3/4/5/7](../development/NGUYEN_QUOC_HUY_2026-11-06_EVIDENCE.md). Log full integration `.tools/huy-continue-integration-rerun.log`, manifest `.tools/continue-final-evidence/api-route-audit.json` (local/ignored). Chưa nghiệm thu staging MySign/bank/email/push, native device, ST/AT toàn hệ thống, coverage hoặc NFR performance. Không thay đổi hay nghiệm thu database production trong lượt này.
+## Reproduction
 
-## Điểm bắt đầu cho người phát triển tiếp
-
-1. Nối các màn Property/Staff/Residence còn mock theo endpoint hiện hữu và quyền server; không thêm API trùng chỉ để khớp mock.
-2. Review UX cọc/khấu trừ và thực hiện native/notification acceptance; các nhánh manual đã qua Web/API/PG/MinIO nhưng toàn BE-19/BE-X07 chưa DONE. Giữ source riêng, không dùng legacy Completed hoặc receipt refund để bỏ blocker cọc; debt offset/phí vượt cọc tiếp tục pending.
-3. Hoàn thiện Holding sau khi có nội dung quyết định OQ-03/Q-H1. Tích hợp bank/MySign/notification qua adapter và cấu hình test/staging, kiểm idempotency và failure path.
-4. Triển khai BF-07 Work Order lifecycle rồi nối maintenance cost; Expense reference hiện chỉ đọc nguồn đã tồn tại. Reviewer UI và acceptance thiết bị vẫn là việc riêng.
-
-## Đối chiếu thủ công các wrapper động
-
-Các dòng này bổ sung cho kết quả dò tĩnh bảo thủ phía trên; nguồn liên kết là bằng chứng có lời gọi, không phải E2E.
-
-| Nhóm                                                                                        | Owner Web                                                                                           | Mobile                                                                                           | Ghi chú                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth POST login/refresh/logout/logout-all/change-password/forgot-password/reset-password    | [sessionClient.ts](../../packages/client-core/src/sessionClient.ts)                                 | [sessions.ts](../../src/mobile/src/lib/sessions.ts)                                              | Auth dùng action động; reset/delivery phụ thuộc cấu hình. Mobile change-password ở AccountSecurityScreen; không mặc định tất cả action đều có màn UI.                                             |
-| Contract POST activate/deposit-verifications/signing/signing-sync/recover/renewals/move-out | [ContractLifecyclePanel.tsx](../../src/owner-web/src/features/contracts/ContractLifecyclePanel.tsx) | [ContractLifecyclePanel.tsx](../../src/mobile/src/features/contracts/ContractLifecyclePanel.tsx) | Tên route chính xác xem bảng Contracts; client mutate ghép operation được UI lựa chọn.                                                                                                            |
-| Contract POST handover và các confirmation/dispute                                          | [ContractHandoverPanel.tsx](../../src/owner-web/src/features/contracts/ContractHandoverPanel.tsx)   | [ContractHandoverPanel.tsx](../../src/mobile/src/features/contracts/ContractHandoverPanel.tsx)   | Owner xem/theo dõi; Staff chuẩn bị/xác nhận, Tenant xác nhận/tranh chấp trên Mobile. Không coi mọi POST là chức năng của Owner Web.                                                               |
-| OperationalTask POST actions + PUT/update + evidence                                        | [TasksPage.tsx](../../src/owner-web/src/features/tasks/pages/TasksPage.tsx)                         | [operationalTasks.ts](../../src/mobile/src/services/operationalTasks.ts)                         | Owner Web TasksPage API mode hiện chỉ đọc danh sách/chi tiết; thao tác demo ở mock mode. Mobile có command động start/progress/blockers/submit/verify/rework/coordinate/assign/cancel theo quyền. |
-| Capture POST locations/rooms/staff/assignments/meters/meter-tasks                           | Chưa có bằng chứng                                                                                  | [setup.tsx](../../src/mobile/src/app/setup.tsx)                                                  | Đã sửa POST capture/chains không tồn tại thành GET/PUT chain có version; tạo phòng gửi roomTypeId/capacity.                                                                                       |
-
-## Module có controller source nhưng không được host BHome.Api nạp
-
-`src/digital-signing/BHome.DigitalSigning.Api` là thư viện controllers, không có Program/host riêng. BHome.Api không tham chiếu project này và không gọi AddDigitalSigning. Các route sau **không nằm trong runtime 216 routes**, không được coi là đã chuyển/đã nối. Không tự bật module vì sẽ thêm DigitalSigningDbContext/bảng ngoài Compact24 và có endpoint chứng thư trùng với controller native.
-
-| Source                                                                                                                              | Route khai báo                                                | Trạng thái                                        |
-| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
-| [SignatureImageController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SignatureImageController.cs)           | `GET /api/v1/digital-signing/signature-image`                 | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SignatureImageController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SignatureImageController.cs)           | `GET /api/v1/digital-signing/signature-image/content`         | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SignatureImageController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SignatureImageController.cs)           | `PUT /api/v1/digital-signing/signature-image`                 | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SignatureImageController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SignatureImageController.cs)           | `DELETE /api/v1/digital-signing/signature-image`              | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningCertificatesController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningCertificatesController.cs) | `GET /api/v1/digital-signing/certificates`                    | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningCertificatesController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningCertificatesController.cs) | `POST /api/v1/digital-signing/certificates`                   | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningCertificatesController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningCertificatesController.cs) | `DELETE /api/v1/digital-signing/certificates/{id:guid}`       | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningCertificatesController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningCertificatesController.cs) | `POST /api/v1/digital-signing/certificates/{id:guid}/lock`    | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningSettingsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningSettingsController.cs)         | `GET /api/v1/digital-signing/settings/viettel`                | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningSettingsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningSettingsController.cs)         | `PUT /api/v1/digital-signing/settings/viettel`                | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningSettingsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningSettingsController.cs)         | `DELETE /api/v1/digital-signing/settings/viettel`             | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningSettingsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningSettingsController.cs)         | `POST /api/v1/digital-signing/settings/viettel/test`          | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningTransactionsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningTransactionsController.cs) | `POST /api/v1/digital-signing/transactions`                   | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningTransactionsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningTransactionsController.cs) | `GET /api/v1/digital-signing/transactions/{id:guid}`          | Có source; chưa mount; chưa nối Compact24 runtime |
-| [SigningTransactionsController.cs](../../src/digital-signing/BHome.DigitalSigning.Api/Controllers/SigningTransactionsController.cs) | `GET /api/v1/digital-signing/transactions/{id:guid}/document` | Có source; chưa mount; chưa nối Compact24 runtime |
-
-## Dữ liệu mẫu local
-
-Chạy `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Seed-LocalDevelopmentData.ps1` từ repository; công cụ yêu cầu mật khẩu qua secure prompt cho account mới. Email đăng nhập API: `owner.sample@example.invalid`, `staff.sample@example.invalid`, `tenant.sample@example.invalid`, `tenant.other.sample@example.invalid`. LoginRequest yêu cầu email, không gửi username trần.
-
-Chỉ Development + PostgreSQL loopback + `bhome`/database test dành riêng. Tạo 2 Locations, 2 RoomTypes, 6 Rooms (4 Available/2 Unavailable), 6 Assets, 12 Meters, 8 biểu phí mẫu gắn nhãn, 3 Residents Pending, 1 phân công Staff, 4 công việc Assigned, lịch sử/thông báo/audit. Staff chỉ được phân công Location đầu. Không lưu ảnh CCCD/identity thật, không tạo signed contract/payment success/confirmed reading hoặc bật job finalization từ seed.
-
-Chạy lại giữ nguyên dữ liệu đã sửa và mật khẩu. Muốn chọn lại mật khẩu chỉ cho 4 account mẫu: thêm `-SetSamplePasswords` (Identity thu hồi phiên cũ). `-UseRandomPasswords` chạy không tương tác, dùng mật khẩu ngẫu nhiên không in/không lưu; sau đó dùng `-SetSamplePasswords` trước khi đăng nhập. Không có mật khẩu dùng chung được commit. Seed là một transaction và có advisory lock; lỗi rollback toàn bộ.
-
-Nếu database đã có Owner khác, seed từ chối thêm Owner mẫu để giữ mô hình một Owner/Chain của adapter hiện tại. Không chạy đồng thời hai bộ tài khoản New-LocalTestUsers và sample seed; không đổi role/mật khẩu account có sẵn để lách guard. Dữ liệu người dùng hiện có được giữ nguyên.
-
-Các màn hợp đồng/hóa đơn/thanh toán ban đầu có thể rỗng: cần thực hiện onboarding/xác nhận/chữ ký/điều kiện tài chính đúng workflow. Các workflow này được kiểm thử bằng fixture tổng hợp riêng, không tạo bằng chứng ngân hàng hoặc chữ ký giả trong bhome.
-
-## Tái tạo và kiểm tra tài liệu
-
-Chỉ dùng PostgreSQL loopback test do bạn quản lý, admin database `postgres` trên port riêng. Fixture tự tạo/xóa database `bhome_compact24_<uuid>`; không trỏ vào database làm việc/production. Provision cluster theo hướng dẫn môi trường của team trước khi chạy.
+Use Node 22.23.4 (supported >=22.13 and <23); run frontend Vitest from each app.
+The runner creates and cleans a dedicated PostgreSQL instance with temporary
+credentials and never reads the working DB URL.
 
 ```powershell
-$env:BHOME_COMPACT24_TEST_ADMIN = 'Host=127.0.0.1;Port=<test-port>;Database=postgres;Username=<test-admin>'
-$env:BHOME_COMPACT24_EVIDENCE_DIRECTORY = Join-Path $PWD '.tools/api-docs-20261106/evidence'
-dotnet test tests/backend/BHome.IntegrationTests --no-restore --filter FullyQualifiedName~Compact24ApiAuditTests --verbosity minimal
-# Chỉ sinh sau khi audit pass; dùng ngày audit thực tế, Node 22 và dependencies repository đã cài.
-node scripts/Generate-ApiImplementationInventory.cjs .tools/api-docs-20261106/evidence/api-route-audit.json 2026-11-06
-node --check scripts/Generate-ApiImplementationInventory.cjs
-git diff --check
+$env:BHOME_COMPACT24_EVIDENCE_DIRECTORY = Join-Path (Get-Location) '.tmp/config-final-runtime'
+$env:BHOME_API_INVENTORY_COMMIT = git rev-parse HEAD
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Compact24Isolated.ps1 `
+  -Filter 'FullyQualifiedName~Compact24' -ResultsDirectory .tmp/config-final-regression
+node scripts/Generate-ApiImplementationInventory.cjs .tmp/config-final-runtime/api-route-audit.json 2026-11-09
 ```
 
-Nếu môi trường yêu cầu mật khẩu, dùng cơ chế secret local của team; không đưa credential vào tài liệu/commit. Generator chỉ ghi `API_RUNTIME_ROUTES.md` và callsite evidence ignored; không ghi đè bản tổng quan hoặc quyết định thủ công. Không dùng manifest cũ rồi gắn ngày mới. Đối chiếu diff route với DTO/client thực tế và cập nhật module docs trước commit. `OPERATIONAL_TASKS_PROPOSAL.md` là lịch sử, không phải contract hiện tại.
+The broad filter intentionally exposes the known failures/skip. Focus configuration
+checks on Compact24OwnerSetupTests and Compact24SharedStoreTests. Registration and
+anonymous probes establish entry guards; workflow tests separately establish writes,
+scope, state, precision and rollback. Previous documents are preserved in [history](history/README.md).

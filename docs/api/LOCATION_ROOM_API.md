@@ -1,4 +1,10 @@
-# API cấu hình sau reset DB — 04/11/2026
+# Location and Room API — current configuration baseline
+
+Updated 2026-11-09. The runtime source and exact route counts are recorded in
+[API status](API_IMPLEMENTATION_STATUS.md) and the [generated inventory](API_RUNTIME_ROUTES.md).
+Native Location/Room contracts remain authoritative. [Shared templates and copy](SHARED_CONFIGURATION.md)
+create independent reference/local configuration; they do not restore RoomType,
+create occupancy, overwrite signed contracts or change finalized invoices.
 
 ## Mobile Setup compatibility — 2026-11-09 (GAP-002)
 

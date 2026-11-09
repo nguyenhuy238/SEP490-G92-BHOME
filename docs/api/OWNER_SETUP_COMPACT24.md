@@ -1,3 +1,15 @@
+# Current configuration integration — 2026-11-09
+
+Owner Web API mode now connects native Location/Room/physical Asset management,
+local desired inventory, private verification evidence, asset metadata/history,
+advanced utilities, operating policies and contract policy amendments. Confirmed
+server responses determine persistence success; stale versions retain forms for review.
+The global library and Location configuration copy are separate, approved capabilities:
+see [Shared configuration](SHARED_CONFIGURATION.md), [runtime status](API_IMPLEMENTATION_STATUS.md)
+and [executed validation](../development/CONFIGURATION_VALIDATION_2026-11-09.md).
+Compact24 remains 24 physical tables; no migration or legacy operational RoomType
+was added. Previous sections retain their dated scope/history where marked.
+
 # Owner setup — API bổ sung P0–P2
 
 ## Policy history correction — 2026-11-09 (GAP-001)
@@ -158,4 +170,3 @@ Reconciliation preview quantities are strings; preview does not persist a review
 Variance approval recalculates the input hash and rejects changed inputs until the
 Owner saves a fresh reconciliation. Upload evidence remains private and confirmed
 source readings remain separate from OCR proposals.
-

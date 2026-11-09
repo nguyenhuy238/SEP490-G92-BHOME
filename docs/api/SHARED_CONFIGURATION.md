@@ -46,6 +46,8 @@ date and no overlapping target charge. No implicit replacement is performed.
 GET `/{id}/applications?page=1&pageSize=20` returns committed family usage, exact
 sourceId/sourceVersion/sourceEdition, actual target, actor/time/status and created
 references. Total and locationsUsing are database-derived across all editions.
+LocationsUsing counts historical distinct target Locations, including subsequently
+inactive Locations; it does not imply a live binding or automatic propagation.
 One family may be applied once per Location; applying another edition requires an
 explicit local change through its existing configuration workflow.
 
@@ -60,6 +62,8 @@ are RoomDefaults, AssetTemplates, FeePolicies and OperatingPolicies. Source and 
 must be distinct active Locations. Preview returns changes, conflicts, unsupported
 references, sourceState, targetState and canProceed. Execution requires both state
 hashes and a UUID Idempotency-Key; all selected writes and provenance commit together.
+Committed operations retain the exact source document IDs/versions/kinds and the
+confirmed source/target state hashes, alongside the created target references.
 
 FeePolicies additionally requires an explicit current/future effectiveFrom. It copies
 only source policies effective on that date, retaining their end dates and exact rates,
@@ -83,3 +87,36 @@ Explicit Room creation can select applied local defaults to fill capacity; it st
 requires the user to save a new Room through the native API. The existing prototype
 library/context/copy wizard is isolated behind explicit development mock mode.
 Mutation invalidation refreshes persisted setup and usage queries.
+
+## JSON contract details
+
+Every SharedDocument returns id, resource, familyId, edition, version, name,
+description, status, managementScope, createdBy/createdAt, updatedBy/updatedAt and
+data. Edition is a family edition number; version is one document's concurrency
+counter. Dates use ISO yyyy-MM-dd; event timestamps are UTC ISO-8601. Data decimal
+responses accept exact strings or safe integral JSON numbers; forms submit decimal
+strings. Payload envelopes reject unknown members and missing data.
+
+Example room-default request (illustrative, not executed evidence):
+
+```json
+{
+  "name": "Two-person room defaults",
+  "description": "Reference configuration for explicit setup",
+  "expectedVersion": 0,
+  "data": {
+    "capacity": 2,
+    "area": "25.0001",
+    "amenities": ["Balcony"],
+    "referenceRent": "3500000.0001"
+  }
+}
+```
+
+Apply returns a SharedOperation containing id, kind, key, fingerprint, actorId,
+appliedAt, sourceId/sourceLocationId, familyId, sourceVersion/sourceEdition, resource,
+targetLocationId, status, createdReferences, sourceReferences (id/version/kind),
+sourceState and targetState. Copy operations use source Location plus per-document
+sourceReferences; shared edition fields are zero/not applicable for Location copy.
+Completed retries return this recorded result even after a Location is deactivated;
+new previews/executions still require active Locations.
