@@ -24,6 +24,7 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractSigningPanel, signatureLine, useSigningMethods } from './ContractSigningPanel';
 import { ContractDraftForm } from './ContractDraftForm';
 import { MainDraftScreen } from './MainDraftScreen';
 import { MainDraftStart } from './MainDraftStart';
@@ -304,6 +305,7 @@ function LiveContractDetail({
   initialSection?: ContractSection;
 }) {
   const detail = useContractDetail(api, id, role);
+  const signingMethods = useSigningMethods(api);
   const [selectedAction, setSelectedAction] = useState('');
   const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -341,7 +343,7 @@ function LiveContractDetail({
       />
     );
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = contractActions(c, m, role, actorId).filter(
+  const actions = contractActions(c, m, role, actorId, signingMethods?.methods).filter(
     (a) => !['move-out/inspection', 'move-out/settlement'].includes(a.operation),
   );
   const action = actions.find((a) => a.operation === selectedAction);
@@ -432,10 +434,7 @@ function LiveContractDetail({
               {c.signatures
                 .filter((x) => x.signerUserId === s.id)
                 .map((s) => (
-                  <Text key={s.id}>
-                    {text(s.status)}
-                    {s.signedAt ? ` · ${formatInstant(s.signedAt)}` : ''}
-                  </Text>
+                  <Text key={s.id}>{signatureLine(s, text)}</Text>
                 ))}
               {!c.signatures.some((x) => x.signerUserId === s.id) && (
                 <Text>Chưa có yêu cầu ký</Text>
@@ -446,8 +445,21 @@ function LiveContractDetail({
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
               <ContractEvidence api={api} contractId={id} pdf />
             )}
-          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
+          {signer &&
+            !c.isDevelopmentDemo &&
+            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) && (
+              <SigningCertificates api={api} />
+            )}
         </Box>
+      )}
+      {section === 'signing' && (
+        <ContractSigningPanel
+          api={api}
+          contract={c}
+          actorId={actorId}
+          methods={signingMethods}
+          onChanged={detail.reload}
+        />
       )}
       {(section === 'signing' || section === 'history') && (
         <ContractWorkflowPanel
