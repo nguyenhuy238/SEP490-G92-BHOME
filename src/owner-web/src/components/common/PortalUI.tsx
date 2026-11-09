@@ -18,10 +18,21 @@ import { Inbox, TrendingUp } from 'lucide-react';
 export function FilterToolbar({ children }: { children: ReactNode }) {
   return (
     <Stack
+      role="group"
+      aria-label="Bộ lọc"
       direction={{ xs: 'column', md: 'row' }}
       useFlexGap
       spacing={1.5}
-      sx={{ flexWrap: 'wrap', alignItems: { md: 'flex-start' }, '& > *': { minWidth: 180 } }}
+      sx={{
+        flexWrap: 'wrap',
+        alignItems: { md: 'flex-start' },
+        '& > *': {
+          minWidth: { xs: 0, md: 180 },
+          width: { xs: '100%', md: 'auto' },
+          flex: { md: '1 1 180px' },
+        },
+        '& > .MuiButton-root': { flex: '0 0 auto' },
+      }}
     >
       {children}
     </Stack>

@@ -80,6 +80,7 @@ public sealed class Compact24InvoiceRegressionTests
         try { await scenario(new InvoiceApiTests(fixture.Capture)); } finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact] public Task SharedRoomDraft() => Run(t => t.SharedRoomDraftIsPersistedIdempotentScopedAndExplicitlyMissingReadings());
+    [CompactPostgresFact] public Task InvoiceFilters() => Run(t => t.InvoiceFiltersApplyBeforePaginationAndPreserveRecipientIsolation());
     [CompactPostgresFact] public Task Finalization() => Run(t => t.FinalizationRequiresReviewedConfirmedDataIsConcurrentSafeImmutableAndHistoricallyScoped());
     [CompactPostgresFact] public Task Schedule() => Run(t => t.ScheduleRequiresOwnerAndValidDatesAndStaleVersionsConflict());
     [CompactPostgresFact] public Task DraftAdjustment() => Run(t => t.ApprovedDraftCorrectionSurvivesRefreshAndFinalizationWithOriginalSourceTrace());

@@ -59,12 +59,16 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
     }
 
     public async Task<InvoiceView> GetAsync(Guid id, CancellationToken t) => View(await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found"));
-    public async Task<PagedResult<InvoiceView>> ListAsync(int page, int pageSize, Guid? roomId, CancellationToken t)
+    public async Task<PagedResult<InvoiceView>> ListAsync(int page, int pageSize, Guid? roomId, CancellationToken t, InvoiceListFilter? filter = null)
     {
         var scope = Scope;
         if (page < 1 || pageSize is < 1 or > 100 || page > int.MaxValue / pageSize || roomId == Guid.Empty)
             throw new InvoiceException(400, "invalid_invoice_pagination");
-        var result = await repository.ListAsync(scope, page, pageSize, roomId, t);
+        if (filter is not null && (filter.LocationId == Guid.Empty ||
+            filter.Status is { } status && !Enum.IsDefined(status) ||
+            filter.BillingPeriod is { } period && (period.Day != 1 || period.Year is < 2000 or > 9997)))
+            throw new InvoiceException(400, "invalid_invoice_filter");
+        var result = await repository.ListAsync(scope, page, pageSize, roomId, t, filter);
         return new(result.Items.Select(View).ToArray(), page, pageSize, result.TotalCount);
     }
     public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t, Guid? expectedAutomationPlanId = null)

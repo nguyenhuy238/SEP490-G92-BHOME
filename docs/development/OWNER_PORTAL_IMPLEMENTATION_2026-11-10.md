@@ -38,7 +38,7 @@ Baseline `9a9ba18`, nhánh `member/QHuy`. Tệp audit chưa được theo dõi c
 - Phase 5: FE-08, GBR-15/16 → expense/report/scenario; baseline và actual tách biệt.
 - Phase 6: FE-07/09, UC-31..38, GBR-14/17, JOB-04 → inbox/announcement/public content; scoped lookup, lỗi, preview, không Guest capture.
 
-SRS DBR-06 ghi uniqueness theo Contract + period, request và backend hiện tại dùng Room + period. Không sửa chính sách/schema này trong việc cải thiện UI. Các quyết định JOB-08, chính sách tài chính OQ, tài liệu ký production và provider chưa cấu hình không được tự bổ sung. Test component dùng dữ liệu tổng hợp, không phải bằng chứng E2E với provider thật.
+SRS DBR-06 ghi uniqueness theo Contract + period. Đã tìm thấy quyết định Room + tháng ghi trong `docs/development/BH21_TRACEABILITY.md` ngày 01/11/2026, phù hợp yêu cầu hiện tại; giữ chính sách/schema hiện có. Các quyết định JOB-08, chính sách tài chính OQ, tài liệu ký production và provider chưa cấu hình không được tự bổ sung. Test component dùng dữ liệu tổng hợp, không phải bằng chứng E2E với provider thật.
 
 ## Thực thi
 
@@ -57,3 +57,13 @@ Commit Phase 0: `fb7666d`, push thành công. [CI 42662375970](https://github.co
 Đưa danh sách ký đang chờ lên trang Digital Signing, giữ tiến độ/evidence/actions trong ContractDetailPanel hiện có; tách cấu hình MySign vào tab Owner. Cấu hình mẫu/quy trình hợp đồng chuyển vào dialog. Bộ lọc Tenant và residence dùng toolbar. Bàn giao nhận contractId từ liên kết, chọn theo lịch sử phòng, không yêu cầu nhập UUID; liên kết hai chiều tới hợp đồng và kiểm tra trả phòng. Tenant list phân biệt lỗi/tải/rỗng và hỗ trợ residentId khi mở trực tiếp. Không thay activation/deposit/signing/residence policy hoặc quyền Staff.
 
 Validation local: typecheck, root ESLint và root production build PASS; regression contracts/tenants/residence/router 86/86 PASS. Sau thay đổi cuối chạy thêm signing/handover/tenant 6/6 PASS, gồm đọc lỗi/retry, cấu hình không có ở tab tác nghiệp và mở bàn giao từ liên kết. Prettier và diff check PASS. Production MySign/VNeID/bank không được thực hiện; không có thay đổi backend.
+
+Commit Phase 1 `77f4503`, push thành công; [CI 42665108498](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/42665108498) PASS frontend/backend. Chrome fixture 18/18 route PASS, không pageerror.
+
+### Phase 2 — Meter và hóa đơn
+
+GET invoices bổ sung Location/kỳ/trạng thái, giữ response, authorization và tham số cũ. Service kiểm tra bộ lọc, repository lọc sau scope và trước count/page; không đổi tiền/schema/uniqueness. Web dùng bộ lọc server này và chuyển lập nháp vào dialog hai bước; chọn hợp đồng bằng tên/ngày từ occupancy-history thay UUID/100 kết quả đầu. Meter tasks có bảng theo phòng/loại/kỳ/baseline/trạng thái/phân công, giữ panel bằng chứng và Staff xác nhận. Lịch automation tách cấu hình ra dialog, chọn đại diện bằng lịch sử phòng. Adjustment dùng toolbar gọn. Sửa kích thước con của FilterToolbar để TextField fullWidth không chiếm trọn hàng desktop.
+
+Truy vết cụ thể: UC-21, GBR-02/09 → InvoicesController/InvoiceService/InvoiceRepository, shared invoice client và InvoicesPage → filter hợp lệ/không hợp lệ, scope Tenant/Staff/anonymous, count trước page và tương thích cũ. Không thêm endpoint, provider hoặc field response. Giữ workflow adjustment/finalization và OCR do backend xác nhận.
+
+Đã chạy: .NET restore và build PASS (0 warning/error); regression Invoice legacy + Compact24 16/16 PASS, không SKIP, trên database tạm. Lượt chạy filter đầu có 1 PASS/1 FAIL khi PostgreSQL vừa khởi động (lỗi kết nối stream); sau pg_isready chạy lại Compact24 PASS rồi toàn regression PASS. Không sửa database làm việc. Owner và Mobile typecheck PASS; root ESLint/build PASS; frontend billing/meter/adjustment 24/24 PASS, wizard 6/6 PASS. Lượt format .NET đầu phát hiện xuống dòng attribute tại controller; đã sửa, verify-no-changes cho các file backend thay đổi PASS. Prettier và git diff --check PASS. Chrome API fixture render 18/18 không pageerror; đã xem ảnh toolbar desktop sau sửa kích thước. API contract cập nhật tại `docs/api/INVOICES.md`; Postman skill hướng dẫn việc chọn contract và bằng chứng, assertion nghiệp vụ thực thi bằng xUnit/HTTP và PostgreSQL hiện có. `postman status` chạy thành công: CLI 1.80.0, chưa init/bind hoặc đăng nhập workspace; không cần tạo tài khoản/workspace hay cập nhật skill để thực hiện các test local này. Không publish artifact ra Postman.

@@ -42,9 +42,12 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     private static IQueryable<Invoice> Detail(IQueryable<Invoice> source) => source.Include(i => i.Lines).Include(i => i.Recipients).AsSplitQuery();
     public Task<Invoice?> FindAsync(Guid id, InvoiceScope scope, CancellationToken t) => Detail(Visible(scope)).SingleOrDefaultAsync(i => i.Id == id, t);
     public Task<Invoice?> ForPeriodAsync(Guid roomId, DateOnly period, CancellationToken t) => Detail(db.Set<Invoice>()).SingleOrDefaultAsync(i => i.RoomId == roomId && i.BillingPeriod == period, t);
-    public async Task<PagedResult<Invoice>> ListAsync(InvoiceScope scope, int page, int pageSize, Guid? roomId, CancellationToken t)
+    public async Task<PagedResult<Invoice>> ListAsync(InvoiceScope scope, int page, int pageSize, Guid? roomId, CancellationToken t, InvoiceListFilter? filter = null)
     {
         var source = Visible(scope).AsNoTracking().Where(i => roomId == null || i.RoomId == roomId);
+        if (filter?.LocationId is { } locationId) source = source.Where(i => i.LocationId == locationId);
+        if (filter?.BillingPeriod is { } period) source = source.Where(i => i.BillingPeriod == period);
+        if (filter?.Status is { } status) source = source.Where(i => i.Status == status);
         var count = await source.CountAsync(t);
         var items = await Detail(source.OrderByDescending(i => i.BillingPeriod).ThenBy(i => i.Id).Skip((page - 1) * pageSize).Take(pageSize)).ToArrayAsync(t);
         return new(items, page, pageSize, count);

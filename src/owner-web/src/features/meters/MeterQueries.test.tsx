@@ -25,3 +25,20 @@ it('applies the Room invoice filter before pagination and keeps the unfiltered c
   await api.list();
   expect(request.mock.calls[1][0]).toBe('/api/v1/invoices?page=1&pageSize=20');
 });
+it('serializes invoice status, Location and month without removing Room scope', async () => {
+  const request = vi.fn().mockResolvedValue({ items: [] });
+  await invoiceClient(request).list(3, undefined, 'room', {
+    locationId: 'location',
+    billingPeriod: '2026-11-01',
+    status: 'Draft',
+  });
+  const query = new URL(request.mock.calls[0][0], 'https://example.invalid').searchParams;
+  expect(Object.fromEntries(query)).toEqual({
+    page: '3',
+    pageSize: '20',
+    roomId: 'room',
+    locationId: 'location',
+    billingPeriod: '2026-11-01',
+    status: 'Draft',
+  });
+});
