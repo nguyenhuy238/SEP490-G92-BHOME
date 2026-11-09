@@ -11,6 +11,16 @@ successful Location lookup. Configuration actions remain Owner-only and only
 show persistence success after a confirmed server response. Staff assignment,
 meter setup and reading-task operations retain their existing capture APIs.
 
+## Pricing client compatibility — 2026-11-09 (GAP-003)
+
+Owner Web pricing supports Location scope (`roomId:null`) or an explicitly selected
+Room in that Location. The client serializes only PolicyWrite fields and keeps
+`rate` as an exact decimal string. Create and replacement never send RoomType
+fields; strict Backend rejection remains enabled. Replacement includes the source
+`expectedVersion` and preserves its scope. Validation/conflict responses retain
+form values and require review/retry. Existing invoice finalization and immutable
+historical snapshots are unchanged.
+
 Bổ sung ngày 08/11: [Owner setup P0–P2](OWNER_SETUP_COMPACT24.md) mô tả closure-check, Staff responsibility, asset template/inventory, điện nước nâng cao và nội quy/phụ lục.
 
 Quyết định mới: bỏ Chain và RoomType. Location là cấp cao nhất, Room thuộc trực tiếp Location. Tài liệu này thay các phần Chain/RoomType và thứ tự giá cũ trong PROPERTY_MANAGEMENT.md, SINGLE_SYSTEM_CHAIN.md và API_CONVENTIONS.md.

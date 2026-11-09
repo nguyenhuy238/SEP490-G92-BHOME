@@ -42,6 +42,12 @@ public sealed class Compact24PropertyShapeTests(Compact24Fixture fixture) : ICla
         Assert.Equal(HttpStatusCode.Created, policyResponse.StatusCode);
         var policy = await policyResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(policy.TryGetProperty("roomTypeId", out _));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/billing-policies", new
+        { locationId, roomTypeId = (Guid?)null, category = 1, chargeCode = "ELECTRICITY", name = "Synthetic obsolete payload", method = 1, rate = "3000.1250", effectiveFrom = today })).StatusCode);
+        var roomPrice = await client.PostAsJsonAsync("/api/v1/billing-policies", new
+        { locationId, roomId = room.GetProperty("id").GetGuid(), category = 1, chargeCode = "ELECTRICITY", name = "Synthetic precise rate", method = 1, rate = "3000.1250", effectiveFrom = today });
+        Assert.Equal(HttpStatusCode.Created, roomPrice.StatusCode);
+        Assert.Equal(3000.1250m, decimal.Parse((await roomPrice.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("rate").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         await using var connection = new NpgsqlConnection(fixture.Connection); await connection.OpenAsync();
         await using var count = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public'", connection);
         Assert.Equal(383L, await count.ExecuteScalarAsync());
