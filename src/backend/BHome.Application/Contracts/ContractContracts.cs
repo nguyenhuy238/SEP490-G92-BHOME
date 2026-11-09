@@ -144,6 +144,9 @@ public interface IContractSigningProvider
         => throw ContractException.Conflict("signing_confirmation_not_supported");
     // OTP only: where the code was sent and until when it is valid, for the confirmation screen.
     Task<SigningOtpView?> ChallengeAsync(ContractSignature signature, CancellationToken t) => Task.FromResult<SigningOtpView?>(null);
+    // UPLOAD_PROOF only: the issued PDF signed outside BHOME. Throws ContractException (400) naming the failed check.
+    Task<SigningOutcome> CompleteUploadAsync(ContractSignature signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
+        => throw ContractException.Conflict("signing_upload_not_supported");
 }
 public interface IContractDocumentRenderer
 {

@@ -9,8 +9,12 @@ public static class SigningMethods
     public const string Otp = "OTP";
     public const string ViettelMySign = "VIETTEL_MYSIGN";
     public const string Simulated = "SIMULATED";
+    // The Owner signs the issued PDF outside BHOME with their own certificate (e.g. Viettel MySign registered through
+    // VNeID) and uploads it; BHOME verifies the signature, the certificate issuer and that only a signature was added.
+    public const string UploadProof = "UPLOAD_PROOF";
 
     public static bool IsOtp(string? method) => string.Equals(method?.Trim(), Otp, StringComparison.OrdinalIgnoreCase);
+    public static bool IsUploadProof(string? method) => string.Equals(method?.Trim(), UploadProof, StringComparison.OrdinalIgnoreCase);
 }
 
 // Configuration section "ContractSigning". Defaults keep the previous behaviour (MySign on, OTP off) so existing
@@ -21,12 +25,24 @@ public sealed class ContractSigningOptions
     public SigningMethodSwitches Methods { get; set; } = new();
     public OtpSigningOptions Otp { get; set; } = new();
     public SigningSealOptions Seal { get; set; } = new();
+    public UploadProofOptions UploadProof { get; set; } = new();
 }
 
 public sealed class SigningMethodSwitches
 {
     public bool Otp { get; set; }
     public bool ViettelMySign { get; set; } = true;
+    public bool UploadProof { get; set; }
+}
+
+// AllowedIssuers: words that must appear in the signing certificate's issuer (default "Viettel"). BHOME does not hold
+// the CA root bundle, so this is an issuer check, not a full chain validation (documented limitation).
+public sealed class UploadProofOptions
+{
+    public string[]? AllowedIssuers { get; set; }
+    public int MaxMegabytes { get; set; } = 10;
+    public int HoursToSign { get; set; } = 72;
+    public IReadOnlyList<string> Issuers => AllowedIssuers is { Length: > 0 } ? AllowedIssuers : ["Viettel"];
 }
 
 // Proposed values (decisions D5/D6 of BHOME_OTP_Signing_Plan.md); SRS v1.3 does not fix them, so they are configuration.

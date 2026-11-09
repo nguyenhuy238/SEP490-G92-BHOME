@@ -386,10 +386,12 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public async Task<SignatureView> RequestSigningAsync(Guid id, SigningInput x, Guid key, CancellationToken t)
     {
         var otp = SigningMethods.IsOtp(x.Method);
-        if (x.Method is { } method && !otp && !string.Equals(method, SigningMethods.ViettelMySign, StringComparison.OrdinalIgnoreCase) &&
+        var upload = SigningMethods.IsUploadProof(x.Method);
+        if (x.Method is { } method && !otp && !upload && !string.Equals(method, SigningMethods.ViettelMySign, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(method, SigningMethods.Simulated, StringComparison.OrdinalIgnoreCase)) throw ContractException.Invalid("signing_method_invalid");
         if (otp && signingMethods?.IsEnabled(SigningMethods.Otp) != true) throw new ContractException(503, "signing_method_disabled");
-        if (!otp && x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
+        if (upload && signingMethods?.IsEnabled(SigningMethods.UploadProof) != true) throw new ContractException(503, "signing_method_disabled");
+        if (!otp && !upload && x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
         if (x.Placement is { IsValid: false }) throw ContractException.Invalid("signature_placement_invalid");
         await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
         {
@@ -412,16 +414,18 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning) || !Intact(c)) throw ContractException.Conflict("contract_not_signable");
             if (c.Signatures.Any(s => s.SignerUserId == Actor && s.Status != SignatureStatus.Failed)) throw ContractException.Conflict("signer_already_requested");
             if (c.Signatures.Any(s => s.Status is not (SignatureStatus.Signed or SignatureStatus.Simulated or SignatureStatus.Failed))) throw ContractException.Conflict("previous_signature_pending");
+            // The Owner signs outside BHOME with their own certificate; the Tenant signs in the app (OTP).
+            if (upload && Actor != c.OwnerSignerId) throw new ContractException(403, "upload_proof_owner_only");
             var previous = await PreviousSignedPdfAsync(c, t);
-            var prepared = !otp && x.Placement is null && x.UsePicture is null or true
+            var prepared = !otp && !upload && x.Placement is null && x.UsePicture is null or true
                 ? await signing.PrepareAsync(Document(c), x.CertificateId, previous, t)
                 : await signing.PrepareAsync(Document(c), x.CertificateId, previous,
-                    new SigningAppearance(x.Placement, x.UsePicture ?? true, otp ? SigningMethods.Otp : null), t);
+                    new SigningAppearance(x.Placement, x.UsePicture ?? true, otp ? SigningMethods.Otp : upload ? SigningMethods.UploadProof : null), t);
             var s = new ContractSignature
             {
                 ContractId = id,
                 SignerUserId = Actor,
-                CertificateId = otp ? Guid.Empty : x.CertificateId,
+                CertificateId = otp || upload ? Guid.Empty : x.CertificateId,
                 SnapshotHash = c.SnapshotHash,
                 SourceHash = FileHash(prepared.SourcePdf),
                 FieldName = prepared.FieldName,
@@ -431,7 +435,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 CertificateChain = prepared.CertificateChain,
                 ProviderUserId = prepared.ProviderUserId,
                 CredentialId = prepared.CredentialId,
-                ExpiresAt = clock.GetUtcNow().AddMinutes(5)
+                // Signing outside BHOME takes longer than confirming on a phone (decision D5 proposes 72 hours).
+                ExpiresAt = clock.GetUtcNow().Add(upload ? TimeSpan.FromHours(72) : TimeSpan.FromMinutes(5))
             };
             s.PreparedObjectKey = $"contracts/{id:N}/signatures/{s.Id:N}/prepared.pdf";
             await files.PutAsync(c.RoomId, s.PreparedObjectKey, prepared.PreparedPdf, "application/pdf", t);
@@ -532,11 +537,58 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return await signing.ChallengeAsync(PendingOtpSignature(c), t) ?? throw ContractException.Conflict("otp_expired");
     }
 
+    // UPLOAD_PROOF: the exact PDF the Owner must sign outside BHOME (kept when signing started).
+    public async Task CopyUploadSourceAsync(Guid id, Stream output, CancellationToken t)
+    {
+        var c = await Load(id, [Roles.Owner], t);
+        var s = PendingUploadSignature(c);
+        if (s.Status != SignatureStatus.Pending) throw ContractException.Conflict("signing_not_pending");
+        var issued = await PreparedPdfAsync(c, s, t);
+        await output.WriteAsync(issued, t);
+    }
+
+    // UPLOAD_PROOF: the issued PDF signed by the Owner's own certificate. A rejected file changes nothing, so the
+    // Owner can upload again; an accepted one completes the Owner's signature and invites the Tenant.
+    public async Task<ContractView> UploadSignedDocumentAsync(Guid id, byte[] pdf, Guid key, CancellationToken t)
+    {
+        if (pdf.Length == 0) throw ContractException.Invalid("signed_pdf_invalid");
+        var fingerprint = new { id, file = FileHash(pdf) };
+        var completed = false;
+        var view = await Mutate(id, [Roles.Owner], async c =>
+        {
+            RequireSigningMode(c);
+            if (Actor != c.OwnerSignerId) throw new ContractException(403, "contract_signer_required");
+            if (await Replay(key, "sign-upload", fingerprint, t) is not null) return View(c);
+            var s = PendingUploadSignature(c);
+            if (s.Status != SignatureStatus.Pending) throw ContractException.Conflict("signing_not_pending");
+            var issued = await PreparedPdfAsync(c, s, t);
+            completed = await ApplyOutcomeAsync(c, s, await signing.CompleteUploadAsync(s, issued, pdf, t), t);
+            Audit("ContractSignedDocumentUploaded", id);
+            Remember(key, "sign-upload", fingerprint, s.Id);
+            return View(c);
+        }, t);
+        if (completed) await NotifySignatureCompletedAsync(id, t);
+        return view;
+    }
+
+    private ContractSignature PendingUploadSignature(Contract c) =>
+        c.Signatures.Where(s => s.SignerUserId == Actor && s.CredentialId == UploadCredential && s.Status != SignatureStatus.Failed)
+            .OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
+
+    // Marks an UPLOAD_PROOF signature (ContractSigningRouter.UploadCredential in Infrastructure).
+    private const string UploadCredential = "BHOME-UPLOAD-PROOF";
+
     public SigningMethodsView ListSigningMethods()
     {
         Role(Roles.Owner, Roles.Tenant);
         IReadOnlyList<string> enabled = signingMethods?.Enabled ?? (DemoEnabled ? [SigningMethods.Simulated] : [SigningMethods.ViettelMySign]);
-        return new(enabled, enabled.Contains(SigningMethods.Otp) ? SigningMethods.Otp : enabled.FirstOrDefault());
+        // UPLOAD_PROOF is the Owner's way to sign with their own certificate; a Tenant signs in the app.
+        var owner = user.IsInRole(Roles.Owner);
+        var mine = owner ? enabled : enabled.Where(m => m != SigningMethods.UploadProof).ToArray();
+        string[] preference = owner
+            ? [SigningMethods.UploadProof, SigningMethods.ViettelMySign, SigningMethods.Otp, SigningMethods.Simulated]
+            : [SigningMethods.Otp, SigningMethods.ViettelMySign, SigningMethods.Simulated];
+        return new(mine, preference.FirstOrDefault(mine.Contains));
     }
 
     private ContractSignature PendingOtpSignature(Contract c) =>
