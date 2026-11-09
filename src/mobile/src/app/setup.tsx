@@ -13,7 +13,7 @@ export default function Setup() {
   const [error, setError] = useFeedbackState();
   const [notice, setNotice] = useFeedbackState('success');
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const isOwner = session?.roles.includes('Owner') ?? false;
   const lock = useRef(false);
   const [locations, setLocations] = useState<Named[]>([]);
@@ -41,24 +41,28 @@ export default function Setup() {
   const [purpose, setPurpose] = useState('0');
   const [date, setDate] = useState('');
   const [period, setPeriod] = useState('');
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!api || !isOwner) return;
-      setLoading(true);
-      const result = await loadSetup(api, signal);
-      if (signal?.aborted) return;
+  const applyLoadedSetup = useCallback(
+    (result: Awaited<ReturnType<typeof loadSetup>>) => {
       setLocations(result.locations);
       setStaff(result.staff);
       setError(result.error ? errorMessage(result.error) : '');
       setLoading(false);
     },
-    [api, isOwner, setError],
+    [setError],
   );
+  const load = useCallback(async () => {
+    if (!api || !isOwner) return;
+    setLoading(true);
+    applyLoadedSetup(await loadSetup(api));
+  }, [api, isOwner, applyLoadedSetup]);
   useEffect(() => {
+    if (!api || !isOwner) return;
     const controller = new AbortController();
-    void load(controller.signal);
+    void loadSetup(api, controller.signal).then((result) => {
+      if (!controller.signal.aborted) applyLoadedSetup(result);
+    });
     return () => controller.abort();
-  }, [load]);
+  }, [api, isOwner, applyLoadedSetup]);
   useEffect(() => {
     if (!api || !isOwner || !location) return;
     let current = true;
