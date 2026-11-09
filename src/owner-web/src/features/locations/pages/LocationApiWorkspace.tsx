@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Alert,
   Button,
+  Chip,
   MenuItem,
   Paper,
   Stack,
@@ -11,19 +12,21 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router';
+import { Link, Outlet, useLocation, useParams } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { ApiConfigurationCopy } from '../../configuration/ApiConfigurationCopy';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
-import { BillingConfigurationPage } from '../../invoices/BillingConfigurationPage';
-import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
-import { LocalAssetSetup } from '../../property/LocalAssetSetup';
 import { UtilityWorkspace } from '../../property/UtilityWorkspace';
+import { usePortalData } from '../../../hooks/usePortalData';
+import { LocationAssetsTab } from '../components/tabs/LocationAssetsTab';
+import { LocationPricingTab } from '../components/tabs/LocationPricingTab';
+import { LocationRulesTab } from '../components/tabs/LocationRulesTab';
 
 const tabs = [
   ['overview', 'Tổng quan'],
+  ['room-types', 'Loại phòng'],
   ['rooms', 'Phòng'],
   ['assets', 'Tài sản'],
   ['pricing', 'Giá & Phí'],
@@ -38,13 +41,38 @@ export function LocationApiWorkspace() {
   const { locationId = '' } = useParams();
   const route = useLocation();
   const api = usePropertySetupApi();
+  const portalData = usePortalData();
   const { session } = useAuth();
   const active = route.pathname.split('/')[3] || 'overview';
   const location = useQuery({
     queryKey: ['property-setup', 'location', session?.userId, locationId],
     queryFn: ({ signal }) => api.location(locationId, signal),
   });
-  if (active === 'room-types') return <Navigate replace to={`/locations/${locationId}/rooms`} />;
+  const portalLocation = portalData.data?.records.locations.find((item) => item.id === locationId);
+  const summary = useQuery({
+    queryKey: ['property-setup', 'location-summary', session?.userId, locationId],
+    queryFn: async ({ signal }) => {
+      const [roomTypes, rooms, assets, policies, rules, templates] = await Promise.all([
+        api.roomTypes(locationId, 1, '', signal),
+        api.rooms(locationId, 1, '', signal),
+        api.assets(locationId, 1, '', signal),
+        api.request<{ totalCount: number }>(
+          `/api/v1/billing-policies?locationId=${encodeURIComponent(locationId)}&page=1&pageSize=1`,
+          { signal },
+        ),
+        api.policies(locationId, signal),
+        api.templates(locationId, signal),
+      ]);
+      return {
+        roomTypes: roomTypes.totalCount,
+        rooms: rooms.totalCount,
+        assets: assets.totalCount,
+        pricesAndFees: policies.totalCount,
+        rules: rules.length,
+        assetTemplates: templates.length,
+      };
+    },
+  });
   if (location.isPending) return <LoadingState />;
   if (location.error)
     return <ErrorState error={location.error} retry={() => void location.refetch()} />;
@@ -78,18 +106,23 @@ export function LocationApiWorkspace() {
         ))}
       </Tabs>
       {active === 'assets' ? (
-        <Stack spacing={3}>
-          <Outlet />
-          <LocalAssetSetup locationId={locationId} />
-        </Stack>
-      ) : ['rooms', 'investment'].includes(active) ? (
+        portalData.data && portalLocation ? (
+          <LocationAssetsTab db={portalData.data} location={portalLocation} />
+        ) : (
+          <LoadingState />
+        )
+      ) : ['room-types', 'rooms', 'investment'].includes(active) ? (
         <Outlet />
       ) : active === 'pricing' ? (
-        <BillingConfigurationPage initialLocationId={locationId} />
+        portalData.data && portalLocation ? (
+          <LocationPricingTab db={portalData.data} location={portalLocation} />
+        ) : (
+          <LoadingState />
+        )
       ) : active === 'utilities' ? (
         <UtilityWorkspace locationId={locationId} />
       ) : active === 'rules' ? (
-        <OperatingPoliciesPanel locationId={locationId} />
+        <LocationRulesTab locationId={locationId} />
       ) : active === 'history' ? (
         <LocationRoomHistory locationId={locationId} />
       ) : (
@@ -101,6 +134,16 @@ export function LocationApiWorkspace() {
               Cấu hình phòng, tài sản, giá và nội quy được quản lý riêng cho cơ sở này. Thay đổi
               trạng thái do máy chủ kiểm tra theo nghĩa vụ đang mở.
             </Typography>
+            {summary.data && (
+              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
+                <Chip label={`${summary.data.roomTypes} loại phòng`} />
+                <Chip label={`${summary.data.rooms} phòng`} />
+                <Chip label={`${summary.data.assets} tài sản thực tế`} />
+                <Chip label={`${summary.data.assetTemplates} bộ mẫu tài sản`} />
+                <Chip label={`${summary.data.pricesAndFees} chính sách giá & phí`} />
+                <Chip label={`${summary.data.rules} nội quy`} />
+              </Stack>
+            )}
             <Button component={Link} to="/locations">
               Chỉnh sửa thông tin cơ sở
             </Button>

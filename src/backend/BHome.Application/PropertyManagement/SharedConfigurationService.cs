@@ -55,6 +55,19 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             await store.SaveAsync(document, before.Version, t); return document;
         }, t);
     }
+    public Task<SharedDocument> RestoreAsync(string resource, Guid id, SharedVersion input, CancellationToken t)
+    {
+        Resource(resource); var actor = Owner();
+        return store.TransactionAsync([], async () =>
+        {
+            var before = await GetAsync(resource, id, t);
+            if (before.Version != input.ExpectedVersion || before.Status != "Archived") throw new PropertyException(409, "stale_or_non_archived_shared_version");
+            var family = await store.FamilyAsync(before.FamilyId, resource, t);
+            if (family.Any(document => document.Id != before.Id && document.Status == "Draft")) throw new PropertyException(409, "shared_draft_already_exists");
+            var document = before with { Status = "Draft", Version = before.Version + 1, UpdatedBy = actor, UpdatedAt = clock.GetUtcNow() };
+            await store.SaveAsync(document, before.Version, t); return document;
+        }, t);
+    }
     public Task<SharedDocument> DeriveAsync(string resource, Guid id, SharedDuplicate input, bool edition, CancellationToken t)
     {
         Resource(resource); var actor = Owner();
