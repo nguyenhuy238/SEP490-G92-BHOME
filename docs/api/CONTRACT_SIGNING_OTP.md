@@ -45,12 +45,15 @@ Tất cả cần Bearer token của **Owner** hoặc **Tenant**, và người g�
 |---|---|
 | `GET /api/v1/contracts/signing-methods` | `{ methods: ["OTP", …], default: "OTP" }`. UI chỉ hiện các cách ký có trong danh sách |
 | `PUT /api/v1/digital-signing/signature-image` | (có sẵn) Lưu ảnh chữ ký PNG của người đang đăng nhập. Mobile gửi ảnh Tenant vừa vẽ |
+| `POST /api/v1/digital-signing/signature-image/drawn` | Body `{ width, height, strokes: [[[x,y],…],…] }` (≤ 80 nét, ≤ 8000 điểm). Máy chủ vẽ lại thành PNG trong suốt và lưu làm ảnh chữ ký. Lỗi `signature_drawing_empty` / `signature_drawing_invalid` |
 | `GET /api/v1/contracts/{id}/signing/layout`, `GET …/signing/pages/{n}` | (có sẵn) Trang PDF và ô ký gợi ý |
 | `POST /api/v1/contracts/{id}/signing` + `Idempotency-Key` | Body `{ "method": "OTP", "certificateId": "00000000-0000-0000-0000-000000000000", "placement": {…}?, "usePicture": true }`. Chuẩn bị PDF (chèn ảnh và dòng *"Ký điện tử bởi … / Ngày ký … / Xác thực: mã OTP qua email"*), **gửi OTP**, trả lượt ký ở trạng thái `Pending` |
 | `GET /api/v1/contracts/{id}/signing/otp` | `{ signatureId, status: "Sent"\|"Locked", maskedEmail, expiresAt, resendAfterSeconds }` |
 | `POST /api/v1/contracts/{id}/signing/otp/resend` | Gửi mã mới (sau `ResendSeconds`); cũng dùng khi email đầu tiên gửi lỗi |
 | `POST /api/v1/contracts/{id}/signing/otp/confirm` + `Idempotency-Key` | Body `{ "code": "482915" }`. Đúng mã: đóng dấu PDF, lượt ký `Signed`; khi đủ hai bên, hợp đồng → `PendingActivation` |
 | `GET /api/v1/contracts/{id}/document` | (có sẵn) Tải PDF đã ký |
+
+Mỗi chữ ký trong `ContractView.signatures` có thêm `method` (`OTP` / `UPLOAD_PROOF` / `VIETTEL_MYSIGN` / `SIMULATED`), `expiresAt`, `certificateSubject`, `certificateIssuer` (lấy từ chứng thư trong file MySign đã ký).
 
 ### Lỗi
 
