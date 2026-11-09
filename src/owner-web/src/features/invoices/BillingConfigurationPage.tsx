@@ -21,11 +21,13 @@ import {
 import { PageHeader } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 
-export function BillingConfigurationPage() {
+export function BillingConfigurationPage({
+  initialLocationId = '',
+}: { initialLocationId?: string } = {}) {
   const api = useInvoiceApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState(initialLocationId);
   const locations = useQuery({
     queryKey: ['billing-locations', actor],
     queryFn: ({ signal }) =>
@@ -52,6 +54,7 @@ export function BillingConfigurationPage() {
           select
           label="Cơ sở cấu hình"
           value={location}
+          disabled={!!initialLocationId}
           onChange={(e) => setLocation(e.target.value)}
         >
           <MenuItem value="">Chọn cơ sở</MenuItem>

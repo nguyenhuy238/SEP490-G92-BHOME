@@ -11,6 +11,19 @@ query a currently Published policy and receives Published revisions only; Draft
 history and other Locations remain hidden. Tenant uses its own Contract's
 `agreed-operating-policy` endpoint. Signed-contract snapshots are unchanged.
 
+## Owner Web native configuration — 2026-11-09 (GAP-004, property slice)
+
+API mode now uses native paginated Location, Room and physical Asset APIs instead
+of the prototype repository. Create/update requests carry current DTOs and loaded
+versions. Owner actions are hidden for other roles; server authorization remains
+authoritative. Rejected mutations retain the edit form and do not show success.
+Location deactivation requires confirmation and the existing server obligation
+checks. Location workspaces read their own server Location, preserve nested
+Room/Asset/finance routes, and show real policy/Room-history reads. Pricing is
+bound to the route Location. Demo mode continues through the existing explicit
+mock path. Shared-library apply/copy is addressed in the separately approved
+Shared Configuration phases, not by these native CRUD endpoints.
+
 Ngày: 08/11/2026. Tài liệu mô tả implementation trong worktree; chưa phải biên bản nghiệm thu hay triển khai production. Base path: `/api/v1`. Schema runtime vẫn là Compact24, Location → Room; không Chain/RoomType.
 
 ## Quy tắc chung
