@@ -20,4 +20,15 @@ public interface ISharedConfigurationStore
     Task<IReadOnlyList<SharedDocument>> HistoryAsync(Guid id, CancellationToken t);
     Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t);
     Task SaveAsync(SharedDocument document, int expected, CancellationToken t);
+    Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t);
+    Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t);
+    Task<SharedUsage> ApplicationsAsync(Guid family, int page, int pageSize, CancellationToken t);
+    Task<bool> HasApplicationAsync(Guid family, Guid location, CancellationToken t);
+    Task SaveOperationAsync(SharedOperation operation, CancellationToken t);
 }
+public sealed record SharedApply(Guid LocationId, int ExpectedVersion, string ConflictStrategy = "Reject", string TargetState = "", Guid? RoomId = null, bool IncludeOptionalItems = true);
+public sealed record ConfigurationPlan(Guid SourceId, Guid TargetLocationId, string TargetState, bool CanProceed, string[] Changes, string[] Conflicts, string[] UnsupportedReferences);
+public sealed record SharedOperation(Guid Id, string Kind, Guid Key, string Fingerprint, Guid ActorId, DateTimeOffset AppliedAt,
+    Guid SourceId, Guid? SourceLocationId, Guid FamilyId, int SourceVersion, int SourceEdition, string Resource,
+    Guid TargetLocationId, string Status, Guid[] CreatedReferences);
+public sealed record SharedUsage(IReadOnlyList<SharedOperation> Items, long Total, long LocationsUsing, int Page, int PageSize);

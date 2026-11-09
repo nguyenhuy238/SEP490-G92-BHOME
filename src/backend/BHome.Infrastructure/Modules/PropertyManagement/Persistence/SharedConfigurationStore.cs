@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
-internal sealed class SharedConfigurationStore(Compact24DbContext db, CompactNotificationWriter sql) : ISharedConfigurationStore
+internal sealed partial class SharedConfigurationStore(Compact24DbContext db, CompactNotificationWriter sql) : ISharedConfigurationStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public async Task<T> TransactionAsync<T>(Guid[] locations, Func<Task<T>> work, CancellationToken t)

@@ -1,0 +1,53 @@
+# Shared configuration API
+
+Owner-only, authenticated routes under `/api/v1/shared-configuration/{resource}`.
+Resources: `room-type-templates`, `asset-catalog`, `asset-templates`, `fee-templates`,
+`policy-templates`. The compatibility room-template route describes defaults only;
+it introduces no operational RoomType or hierarchy.
+
+GET collection accepts search, status, page (1+), pageSize (1–100) and returns
+items/total/page/pageSize. Every edition is returned; status filtering is explicit.
+GET `/{id}`, POST collection and PUT `/{id}` use shared document metadata and
+`{name, description, data, expectedVersion}`. Data is strictly validated per resource.
+Names are limited to 150 characters for compatibility with local configuration.
+Money and fractional quantities preserve exact decimal strings. Counts are integers.
+
+POST `/{id}/publish`, `/{id}/archive` and `/{id}/versions` require expectedVersion.
+Versions creates a Draft edition in the same family; only one Draft per family is
+allowed. POST `/{id}/duplicate` additionally requires a distinct name and creates a
+new family. GET versions returns family editions; GET history returns revisions of
+that document. Published payloads are immutable. Archive retains data and references.
+
+Room defaults: capacity 1–32767, positive area, distinct amenities, optional referenceRent.
+Catalog: category, unit, non-negative referencePrice. These are reference data.
+Asset templates: items with published catalogId/catalogVersion, quantity, required,
+trackingMode Serialized/BulkQuantity. The server resolves and freezes catalog fields;
+duplicate catalog families are rejected. Fee: category, chargeCode, method,
+referenceRate, unit, scope Location/Room, effectiveFrom/To. Native charge compatibility
+and four decimal-place limits apply. Policy: content and effectiveFrom.
+
+POST `/{id}/apply-preview` accepts locationId, expectedVersion, conflictStrategy Reject,
+optional roomId (required for Room fee scope), includeOptionalItems. It returns planned
+changes, conflicts, unsupportedReferences, canProceed and targetState. It writes no
+business/audit/application records. POST `/{id}/apply` requires that targetState plus
+a UUID Idempotency-Key header. A changed source/target or conflicting configuration
+returns 409; unsupported input returns 400. Same key and payload returns the original
+result; changed payload returns 409. The whole write and provenance are transactional.
+
+Room application creates local RoomDefaults, available through Owner-only GET
+`/api/v1/locations/{locationId}/room-defaults`. Explicit Room creation can consume
+capacity; area/amenities/reference rent remain reference configuration. Asset application
+creates a local Draft package; publish/assignment/verification remain separate. Optional
+items can be excluded as a group; required items are always included. Policy application
+creates a Draft local policy; existing signing and activation flows remain authoritative.
+Fee application creates a native policy and requires a current/future source effective
+date and no overlapping target charge. No implicit replacement is performed.
+
+GET `/{id}/applications?page=1&pageSize=20` returns committed family usage, exact
+sourceId/sourceVersion/sourceEdition, actual target, actor/time/status and created
+references. Total and locationsUsing are database-derived across all editions.
+One family may be applied once per Location; applying another edition requires an
+explicit local change through its existing configuration workflow.
+
+Storage and ownership: see the shared configuration persistence decision. Staff,
+Tenant and anonymous requests cannot access the shared namespace.

@@ -30,7 +30,7 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
     { _ = await GetAsync(resource, id, t); return await store.HistoryAsync(id, t); }
     public Task<SharedDocument> SaveAsync(string resource, Guid? id, SharedWrite input, CancellationToken t)
     {
-        Resource(resource); var actor = Owner(); var name = Text(input.Name, 200); var description = Text(input.Description, 2000, false);
+        Resource(resource); var actor = Owner(); var name = Text(input.Name, 150); var description = Text(input.Description, 2000, false);
         return store.TransactionAsync([], async () =>
         {
             var before = id.HasValue ? await GetAsync(resource, id.Value, t) : null;
@@ -62,7 +62,7 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
         {
             var before = await GetAsync(resource, id, t);
             if (before.Version != input.ExpectedVersion || before.Status == "Archived" || edition && before.Status != "Published") throw new PropertyException(409, "stale_or_immutable_shared_version");
-            var family = edition ? before.FamilyId : Guid.NewGuid(); var name = edition ? before.Name : Text(input.Name, 200);
+            var family = edition ? before.FamilyId : Guid.NewGuid(); var name = edition ? before.Name : Text(input.Name, 150);
             var versions = edition ? await store.FamilyAsync(family, resource, t) : [];
             if (versions.Any(d => d.Status == "Draft")) throw new PropertyException(409, "shared_draft_already_exists");
             if (await store.NameExistsAsync(resource, name, family, t)) throw new PropertyException(409, "duplicate_shared_name");
