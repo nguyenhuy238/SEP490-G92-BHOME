@@ -15,6 +15,7 @@ public sealed class SharedConfigurationController(SharedConfigurationService ser
     [HttpPut("{id:guid}")] public Task<SharedDocument> Update(string resource, Guid id, SharedWrite input, CancellationToken t) => service.SaveAsync(resource, id, input, t);
     [HttpPost("{id:guid}/publish")] public Task<SharedDocument> Publish(string resource, Guid id, SharedVersion input, CancellationToken t) => service.TransitionAsync(resource, id, input, false, t);
     [HttpPost("{id:guid}/archive")] public Task<SharedDocument> Archive(string resource, Guid id, SharedVersion input, CancellationToken t) => service.TransitionAsync(resource, id, input, true, t);
+    [HttpPost("{id:guid}/restore")] public Task<SharedDocument> Restore(string resource, Guid id, SharedVersion input, CancellationToken t) => service.RestoreAsync(resource, id, input, t);
     [HttpPost("{id:guid}/duplicate")] public Task<SharedDocument> Duplicate(string resource, Guid id, SharedDuplicate input, CancellationToken t) => service.DeriveAsync(resource, id, input, false, t);
     [HttpPost("{id:guid}/versions")] public Task<SharedDocument> Edition(string resource, Guid id, SharedVersion input, CancellationToken t) => service.DeriveAsync(resource, id, new("", input.ExpectedVersion), true, t);
     [HttpGet("{id:guid}/versions")] public Task<IReadOnlyList<SharedDocument>> Versions(string resource, Guid id, CancellationToken t) => service.VersionsAsync(resource, id, t);

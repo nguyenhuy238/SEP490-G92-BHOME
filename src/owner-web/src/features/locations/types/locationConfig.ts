@@ -67,6 +67,7 @@ export type FeeCalculationMethod =
 export interface FeePolicyItem {
   id: string;
   name: string;
+  chargeCode?: string;
   type:
     | 'ELECTRICITY'
     | 'WATER'
@@ -79,7 +80,9 @@ export interface FeePolicyItem {
   unitPrice: number;
   unit: string;
   applicationScope: 'LOCATION_WIDE' | 'PER_ROOM' | 'PER_ROOM_TYPE';
+  targetRoomCode?: string;
   effectiveDate: string;
+  effectiveTo?: string | null;
   description: string;
   isRegulatoryControlled?: boolean; // For electricity & water tariffs
 }

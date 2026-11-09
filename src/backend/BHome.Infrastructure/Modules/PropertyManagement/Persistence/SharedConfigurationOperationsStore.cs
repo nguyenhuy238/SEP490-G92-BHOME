@@ -11,7 +11,7 @@ internal sealed partial class SharedConfigurationStore
     public async Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t)
     {
         var rows = await db.Set<BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location).OrderBy(p => p.Id)
-            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version, p.FirstUsedAt)).Take(1001).ToArrayAsync(t);
+            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version, p.FirstUsedAt, p.RoomTypeId)).Take(1001).ToArrayAsync(t);
         if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
     }
     public async Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t)

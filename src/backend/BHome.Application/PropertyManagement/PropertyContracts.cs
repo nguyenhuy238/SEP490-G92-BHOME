@@ -46,7 +46,21 @@ public sealed record LocationWrite(
 public sealed record RoomWrite(Guid LocationId,
     [Required, StringLength(50)] string RoomNumber, [StringLength(30)] string? Floor,
     [Range(1, 32767)] int Capacity, RoomStatus Status = RoomStatus.Available,
-    int Version = 0, [StringLength(500)] string Reason = "");
+    int Version = 0, [StringLength(500)] string Reason = "", Guid? RoomTypeId = null);
+public sealed record RoomTypeWrite(Guid LocationId,
+    [Required, StringLength(150, MinimumLength = 2)] string Name,
+    [StringLength(1000)] string? Description,
+    [Range(1, 32767)] int DefaultCapacity,
+    [Range(typeof(decimal), "0.01", "999999.99")] decimal? AreaM2,
+    [MaxLength(100)] string[] Amenities,
+    bool IsActive = true, int Version = 0, [StringLength(500)] string Reason = "");
+public sealed record BulkRoomItem(
+    [Required, StringLength(50)] string RoomNumber,
+    [StringLength(30)] string? Floor,
+    Guid RoomTypeId,
+    [Range(1, 32767)] int? Capacity = null);
+public sealed record BulkRoomWrite(Guid LocationId, [MinLength(1), MaxLength(200)] BulkRoomItem[] Rooms,
+    [StringLength(500)] string Reason = "");
 public sealed record AssetWrite(Guid LocationId, Guid? RoomId, [StringLength(200)] string? CommonArea,
     [StringLength(80)] string? Code, [Required, StringLength(150)] string Name,
     [Required, StringLength(80)] string Category, [Required, StringLength(1000)] string Condition,
@@ -60,7 +74,8 @@ public sealed record PolicyWrite(Guid LocationId, Guid? RoomId,
     [Required, StringLength(150)] string Name, ChargingMethod Method,
     [property: System.Text.Json.Serialization.JsonRequired]
     [Range(typeof(decimal), "0", "99999999999999.9999")] decimal Rate,
-    DateOnly EffectiveFrom, DateOnly? EffectiveTo, [StringLength(500)] string Reason = "");
+    DateOnly EffectiveFrom, DateOnly? EffectiveTo, [StringLength(500)] string Reason = "",
+    Guid? RoomTypeId = null);
 public sealed record PolicyReplacement(PolicyWrite Policy, [Range(1, int.MaxValue)] int ExpectedVersion);
 public sealed record PolicyUpdate(PolicyWrite Policy, [Range(1, int.MaxValue)] int ExpectedVersion);
 public sealed record PolicyEnd(DateOnly EffectiveTo, [Range(1, int.MaxValue)] int Version,
@@ -68,13 +83,17 @@ public sealed record PolicyEnd(DateOnly EffectiveTo, [Range(1, int.MaxValue)] in
 
 public sealed record LocationDto(Guid Id, string Name, string Address, bool IsActive, int Version);
 public sealed record RoomDto(Guid Id, Guid LocationId, string RoomNumber,
-    string? Floor, int Capacity, RoomStatus Status, int Version);
+    string? Floor, int Capacity, RoomStatus Status, int Version, Guid? RoomTypeId = null);
+public sealed record RoomTypeDto(Guid Id, Guid LocationId, string Name, string? Description,
+    int DefaultCapacity, decimal? AreaM2, string[] Amenities, bool IsActive, int Version);
+public sealed record BulkRoomResult(IReadOnlyList<RoomDto> Rooms);
 public sealed record AssetDto(Guid Id, Guid LocationId, Guid? RoomId, string? CommonArea,
     string? Code, string Name, string Category, string Condition, AssetStatus Status, int Version);
 public sealed record PolicyDto(Guid Id, Guid LocationId, Guid? RoomId,
     ChargeCategory Category, string ChargeCode, string Name, ChargingMethod Method,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal Rate,
-    DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version, DateTimeOffset? FirstUsedAt = null);
+    DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version, DateTimeOffset? FirstUsedAt = null,
+    Guid? RoomTypeId = null);
 public sealed record ResolvedPrices(Guid RoomId, DateOnly EffectiveOn, IReadOnlyList<PolicyDto> Charges,
     IReadOnlyList<string> MissingRequiredCharges);
 

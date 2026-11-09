@@ -331,6 +331,20 @@ function SharedLibrary({
                           </Button>
                         </>
                       )}
+                      {document.status === 'Archived' && (
+                        <Button
+                          size="small"
+                          disabled={action.busy}
+                          onClick={() =>
+                            action.run(
+                              () => api.restore(resource, document.id, document.version),
+                              'Đã khôi phục mẫu thành bản nháp để tiếp tục chỉnh sửa.',
+                            )
+                          }
+                        >
+                          Hoàn tác lưu trữ
+                        </Button>
+                      )}
                     </Stack>
                   </CardContent>
                 </Card>

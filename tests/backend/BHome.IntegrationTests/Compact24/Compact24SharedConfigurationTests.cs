@@ -65,6 +65,9 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route + "/" + draft.Id + "/versions", new SharedVersion(published.Version))).StatusCode);
         var duplicate = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/duplicate", new SharedDuplicate(input.Name + " copy", published.Version)));
         Assert.NotEqual(draft.FamilyId, duplicate.FamilyId);
+        var archivedDuplicate = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + duplicate.Id + "/archive", new SharedVersion(duplicate.Version)));
+        var restoredDuplicate = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + duplicate.Id + "/restore", new SharedVersion(archivedDuplicate.Version)));
+        Assert.Equal("Draft", restoredDuplicate.Status); Assert.Equal(archivedDuplicate.Version + 1, restoredDuplicate.Version);
         Assert.Equal(3, (await owner.GetFromJsonAsync<SharedDocument[]>(route + "/" + draft.Id + "/history"))!.Length);
         var page = await owner.GetFromJsonAsync<SharedPage>(route + "?search=" + Uri.EscapeDataString(input.Name) + "&status=Published&pageSize=1");
         Assert.Single(page!.Items); Assert.Equal(1, page.Total);

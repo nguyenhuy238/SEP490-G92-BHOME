@@ -168,6 +168,8 @@ export function sharedConfigurationClient(
       write<SharedDocument>(route(resource, id) + '/publish', { expectedVersion }),
     archive: (resource: SharedResource, id: string, expectedVersion: number) =>
       write<SharedDocument>(route(resource, id) + '/archive', { expectedVersion }),
+    restore: (resource: SharedResource, id: string, expectedVersion: number) =>
+      write<SharedDocument>(route(resource, id) + '/restore', { expectedVersion }),
     duplicate: (resource: SharedResource, id: string, name: string, expectedVersion: number) =>
       write<SharedDocument>(route(resource, id) + '/duplicate', { name, expectedVersion }),
     edition: (resource: SharedResource, id: string, expectedVersion: number) =>
