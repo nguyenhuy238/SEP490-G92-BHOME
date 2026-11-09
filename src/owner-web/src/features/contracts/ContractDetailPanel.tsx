@@ -199,6 +199,7 @@ export function ContractDetailPanel({
         <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           Mã hợp đồng {c.id}
         </Typography>
+        <ContractNavigation id={c.id} />
         <Stepper activeStep={activeStep} alternativeLabel sx={{ my: 2 }}>
           {steps.map((s) => (
             <Step key={s.label} completed={s.done}>
@@ -480,6 +481,20 @@ export function ContractDetailPanel({
           }}
         />
       )}
+    </Stack>
+  );
+}
+function ContractNavigation({ id }: { id: string }) {
+  const routed = useInRouterContext();
+  if (!routed) return null;
+  return (
+    <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+      <Button component={RouterLink} to={`/handovers?contractId=${encodeURIComponent(id)}`}>
+        Mở biên bản bàn giao
+      </Button>
+      <Button component={RouterLink} to="/temporary-residence">
+        Theo dõi tạm trú
+      </Button>
     </Stack>
   );
 }

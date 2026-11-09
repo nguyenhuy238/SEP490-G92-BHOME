@@ -40,6 +40,17 @@ function mount() {
     </MemoryRouter>,
   );
 }
+it('does not label a failed resident query as an empty collection', async () => {
+  const request = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation((path: string) =>
+    path.startsWith('/api/v1/residents?')
+      ? Promise.reject(new Error('Synthetic unavailable'))
+      : request(path),
+  );
+  mount();
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(screen.queryByText('Không có dữ liệu phù hợp với bộ lọc.')).not.toBeInTheDocument();
+});
 it('forwards paginated search to administration and keeps identity confirmation out of Owner actions', async () => {
   mount();
   fireEvent.change(screen.getByLabelText('Tìm tên hiển thị'), { target: { value: 'synthetic' } });

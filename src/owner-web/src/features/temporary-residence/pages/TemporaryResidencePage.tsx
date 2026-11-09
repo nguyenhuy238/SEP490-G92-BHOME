@@ -27,7 +27,7 @@ import { useResidenceRecord } from '../../../../../../packages/client-core/src/u
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import { displayContractDate } from '../../../../../../packages/client-core/src/contracts';
 import { isMockMode } from '../../../services/config';
-import { PageHeader } from '../../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
 import { useContractsApi } from '../../contracts/useContractsApi';
 import { OwnerLocationPicker } from '../../../components/common/OwnerSelectors';
 export default function TemporaryResidencePage() {
@@ -68,31 +68,33 @@ function OwnerResidenceList({ api }: { api: ResidenceClient }) {
           </Button>
         }
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(id) => {
-          setLocation(id);
-          list.setPage(1);
-          setSelected('');
-        }}
-      />
-      <TextField
-        select
-        label="Trạng thái tạm trú"
-        value={status}
-        onChange={(e) => {
-          setStatus(e.target.value);
-          list.setPage(1);
-          setSelected('');
-        }}
-      >
-        <MenuItem value="">Tất cả trạng thái</MenuItem>
-        {Object.entries(residenceStatus).map(([value, label]) => (
-          <MenuItem key={value} value={value}>
-            {label}
-          </MenuItem>
-        ))}
-      </TextField>
+      <FilterToolbar>
+        <OwnerLocationPicker
+          value={location}
+          change={(id) => {
+            setLocation(id);
+            list.setPage(1);
+            setSelected('');
+          }}
+        />
+        <TextField
+          select
+          label="Trạng thái tạm trú"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            list.setPage(1);
+            setSelected('');
+          }}
+        >
+          <MenuItem value="">Tất cả trạng thái</MenuItem>
+          {Object.entries(residenceStatus).map(([value, label]) => (
+            <MenuItem key={value} value={value}>
+              {label}
+            </MenuItem>
+          ))}
+        </TextField>
+      </FilterToolbar>
       {list.loading && <LinearProgress />}
       {!!list.error && (
         <Alert severity="error" action={<Button onClick={list.reload}>Thử lại</Button>}>
