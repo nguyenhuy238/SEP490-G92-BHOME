@@ -50,6 +50,10 @@ import {
 } from '../../property-api/propertyApi';
 
 export function LocationsListPage() {
+  return isMockMode ? <MockLocationsListPage /> : <PropertyApiPage kind="locations" />;
+}
+
+function MockLocationsListPage() {
   const portal = usePortal();
   const query = usePortalData();
   const action = usePortalAction();

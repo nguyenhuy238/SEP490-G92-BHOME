@@ -29,6 +29,7 @@ import { LocationRulesTab } from '../components/tabs/LocationRulesTab';
 import { LocationSettingsTab } from '../components/tabs/LocationSettingsTab';
 import type { CopyConfigurationGroup } from '../types/locationConfig';
 import { isMockMode } from '../../../services/config';
+import { LocationApiWorkspace } from './LocationApiWorkspace';
 
 const LOCATION_WORKSPACE_TABS = [
   ['overview', 'Tổng quan', Building2],
@@ -42,6 +43,10 @@ const LOCATION_WORKSPACE_TABS = [
 ] as const;
 
 export function LocationWorkspace() {
+  return isMockMode ? <MockLocationWorkspace /> : <LocationApiWorkspace />;
+}
+
+function MockLocationWorkspace() {
   const { locationId = '' } = useParams();
   const route = useLocation();
   const portal = usePortal();

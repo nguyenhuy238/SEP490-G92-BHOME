@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { isMockMode } from '../../../services/config';
+import { ApiConfigurationLibraryPage } from './ApiConfigurationLibraryPage';
 import {
   Alert,
   Box,
@@ -74,6 +76,13 @@ const statusLabels: Record<string, string> = {
 const statusLabel = (status: string) => statusLabels[status] ?? status;
 
 export function ConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
+  return isMockMode ? (
+    <MockConfigurationLibraryPage kind={kind} />
+  ) : (
+    <ApiConfigurationLibraryPage kind={kind} />
+  );
+}
+function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
   const shared = useSharedConfiguration();
   const query = usePortalData();
   const [search, setSearch] = useState('');

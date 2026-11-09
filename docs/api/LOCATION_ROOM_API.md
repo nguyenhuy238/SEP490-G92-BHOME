@@ -1,4 +1,31 @@
-# API cấu hình sau reset DB — 04/11/2026
+# Location and Room API — current configuration baseline
+
+Updated 2026-11-09. The runtime source and exact route counts are recorded in
+[API status](API_IMPLEMENTATION_STATUS.md) and the [generated inventory](API_RUNTIME_ROUTES.md).
+Native Location/Room contracts remain authoritative. [Shared templates and copy](SHARED_CONFIGURATION.md)
+create independent reference/local configuration; they do not restore RoomType,
+create occupancy, overwrite signed contracts or change finalized invoices.
+
+## Mobile Setup compatibility — 2026-11-09 (GAP-002)
+
+Mobile Setup now posts native `POST /api/v1/locations` with `name,address` and
+`POST /api/v1/rooms` with `locationId,roomNumber,capacity`. It reads current
+Location/Room lookup endpoints and no longer calls Chain or RoomType APIs.
+Capacity is explicitly entered by Owner and validated as an integer 1–32767;
+the server remains authoritative. Staff loading failure does not discard a
+successful Location lookup. Configuration actions remain Owner-only and only
+show persistence success after a confirmed server response. Staff assignment,
+meter setup and reading-task operations retain their existing capture APIs.
+
+## Pricing client compatibility — 2026-11-09 (GAP-003)
+
+Owner Web pricing supports Location scope (`roomId:null`) or an explicitly selected
+Room in that Location. The client serializes only PolicyWrite fields and keeps
+`rate` as an exact decimal string. Create and replacement never send RoomType
+fields; strict Backend rejection remains enabled. Replacement includes the source
+`expectedVersion` and preserves its scope. Validation/conflict responses retain
+form values and require review/retry. Existing invoice finalization and immutable
+historical snapshots are unchanged.
 
 Bổ sung ngày 08/11: [Owner setup P0–P2](OWNER_SETUP_COMPACT24.md) mô tả closure-check, Staff responsibility, asset template/inventory, điện nước nâng cao và nội quy/phụ lục.
 

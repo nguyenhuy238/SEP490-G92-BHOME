@@ -99,7 +99,7 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                 else if (!mappings.Any(v => target.Items.Any(i => i.Id == v.Data.GetProperty("itemId").GetGuid()))) discrepancies.Add(new(asset.Id, "PendingRemovalReview"));
             }
         }
-        return new(assets, desired, metadata, current?.Id, discrepancies);
+        return new(assets, desired, metadata, current?.Id, discrepancies, assignment?.Version ?? 0, selected);
     }
     public async Task<Guid> VerifyAsync(Guid room, AssetVerification input, CancellationToken t)
     {

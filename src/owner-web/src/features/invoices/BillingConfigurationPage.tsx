@@ -23,7 +23,9 @@ import { PageHeader } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 import { usePropertyApi, type RoomDto, type RoomTypeDto } from '../property-api/propertyApi';
 
-export function BillingConfigurationPage() {
+export function BillingConfigurationPage({
+  initialLocationId = '',
+}: { initialLocationId?: string } = {}) {
   const api = useInvoiceApi();
   const { locationId: routeLocationId } = useParams();
   const { session } = useAuth();
@@ -56,6 +58,7 @@ export function BillingConfigurationPage() {
           label="Cơ sở cấu hình"
           disabled={!!routeLocationId}
           value={location}
+          disabled={!!initialLocationId}
           onChange={(e) => setLocation(e.target.value)}
         >
           <MenuItem value="">Chọn cơ sở</MenuItem>
@@ -137,8 +140,7 @@ function LocationBilling({ location }: { location: string }) {
             >
               <Typography>
                 {p.name} · {formatBillingDecimal(p.rate)} đ · {p.effectiveFrom} →{' '}
-                {p.effectiveTo ?? 'Không hạn'} ·{' '}
-                {p.roomId ? 'Phòng' : p.roomTypeId ? 'Loại phòng' : 'Cơ sở'}
+                {p.effectiveTo ?? 'Không hạn'} · {p.roomId ? 'Phòng' : 'Cơ sở'}
               </Typography>
               <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>
             </Stack>
@@ -255,7 +257,7 @@ function ScheduleForm({
           <Alert severity="info">Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.</Alert>
         )}
         {choice('rentSource', 'Nguồn tiền thuê cả phòng', [
-          'Biểu giá của phòng / loại phòng / cơ sở',
+          'Biểu giá của phòng / cơ sở',
           'Tiền thuê của hợp đồng đại diện',
         ])}
         {choice('rateDate', 'Mốc áp dụng giá trong kỳ', ['Ngày đầu tháng', 'Ngày cuối tháng'])}
@@ -317,9 +319,20 @@ function PolicyForm({
 }) {
   const api = useInvoiceApi();
   const cache = useQueryClient();
+  const { session } = useAuth();
+  const rooms = useQuery({
+    queryKey: ['policy-rooms', session?.userId, location],
+    queryFn: ({ signal }) =>
+      api.request<{ id: string; label: string }[]>(
+        `/api/v1/capture/locations/${encodeURIComponent(location)}/rooms`,
+        { signal },
+      ),
+  });
+  const [roomId, setRoomId] = useState(previous?.roomId ?? '');
   const [category, setCategory] = useState(String(previous?.category ?? 1)),
     [rate, setRate] = useState(''),
-    [date, setDate] = useState('');
+    [date, setDate] = useState(''),
+    [endDate, setEndDate] = useState('');
   const [name, setName] = useState(previous?.name ?? ''),
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
@@ -358,7 +371,7 @@ function PolicyForm({
             method: cat === 1 || cat === 2 ? 1 : 0,
             rate,
             effectiveFrom: date,
-            effectiveTo: null,
+            effectiveTo: endDate || null,
             reason,
           };
           void (
@@ -373,11 +386,7 @@ function PolicyForm({
               await cache.invalidateQueries({ queryKey: ['billing-policies'] });
               onSaved();
             })
-            .catch(() =>
-              setError(
-                'Không lưu được giá. Kiểm tra ngày hiệu lực từ hôm nay, phạm vi và phiên bản giá trùng kỳ; tải lại trước khi thử lại.',
-              ),
-            )
+            .catch((error) => setError(invoiceError(error)))
             .finally(() => {
               lock.current = false;
               setBusy(false);
@@ -385,7 +394,7 @@ function PolicyForm({
         }}
       >
         <Typography variant="h6">
-          {previous ? 'Phiên bản giá kế tiếp: ' + previous.name : 'Thêm biểu giá cấp cơ sở'}
+          {previous ? 'Phiên bản giá kế tiếp: ' + previous.name : 'Thêm biểu giá'}
         </Typography>
         <TextField
           select
@@ -464,6 +473,13 @@ function PolicyForm({
           label="Lý do / ghi chú"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
+        />
+        <TextField
+          type="date"
+          label="Hiệu lực đến ngày (không bắt buộc)"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
         />
         {error && <Alert severity="error">{error}</Alert>}
         <Button
