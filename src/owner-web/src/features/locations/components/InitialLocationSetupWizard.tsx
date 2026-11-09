@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
@@ -12,6 +13,7 @@ import {
   DialogTitle,
   Divider,
   Grid,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -38,6 +40,7 @@ import {
   Building2,
   CheckCircle2,
   Copy,
+  Edit2,
   Layers3,
   Package,
   Plus,
@@ -62,6 +65,18 @@ import type {
   RoomAssetAssignmentDraft,
   RoomTypeDraft,
 } from '../types/locationConfig';
+import type {
+  AssetCatalogData,
+  FeeTemplateData,
+  PolicyTemplateData,
+  RoomTemplateData,
+} from '../../../../../../packages/client-core/src/sharedConfiguration';
+import { useSharedConfigurationApi } from '../../configuration/useSharedConfigurationApi';
+import { isMockMode } from '../../../services/config';
+import { usePropertySetupApi } from '../../property/usePropertySetupApi';
+
+type WizardCopyGroup = 'ROOM_TYPES' | 'ROOMS' | 'ASSETS' | 'RENT' | 'FEES' | 'RULES';
+const WIZARD_DRAFT_KEY = 'bhome-owner-location-setup-draft-v1';
 
 export interface InitialLocationSetupResult {
   roomTypes: RoomTypeDraft[];
@@ -69,13 +84,22 @@ export interface InitialLocationSetupResult {
   feePolicies: FeePolicyItem[];
   houseRules: HouseRuleItem[];
   rateOverrides: Record<string, number>;
+  roomAssetAssignments: RoomAssetAssignmentDraft[];
+  assetCatalog: AssetCatalogItem[];
+  roomTypeTemplates: Record<
+    string,
+    { catalogId: string; quantity: number; isMandatory: boolean }[]
+  >;
 }
 
 interface InitialLocationSetupWizardProps {
   open: boolean;
   onClose: () => void;
   db: DemoDatabase;
-  onComplete: (newLocationRecord: PortalRecord, wizardData: InitialLocationSetupResult) => void;
+  onComplete: (
+    newLocationRecord: PortalRecord,
+    wizardData: InitialLocationSetupResult,
+  ) => void | boolean | Promise<void | boolean>;
 }
 
 const WIZARD_STEPS = [
@@ -95,11 +119,24 @@ export function InitialLocationSetupWizard({
   db,
   onComplete,
 }: InitialLocationSetupWizardProps) {
+  const sharedApi = useSharedConfigurationApi();
+  const setupApi = usePropertySetupApi();
   const [activeStep, setActiveStep] = useState(0);
 
   // Step 1: Setup Mode & Location Information
   const [setupMode, setSetupMode] = useState<'SCRATCH' | 'COPY'>('SCRATCH');
   const [sourceLocationId, setSourceLocationId] = useState(db.records.locations[0]?.id || '');
+  const [copyGroups, setCopyGroups] = useState<WizardCopyGroup[]>([
+    'ROOM_TYPES',
+    'ROOMS',
+    'ASSETS',
+    'RENT',
+    'FEES',
+    'RULES',
+  ]);
+  const [isLoadingCopy, setIsLoadingCopy] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const [copyLoaded, setCopyLoaded] = useState(false);
   const [locationName, setLocationName] = useState('BHOME Sky View - Nguyễn Thị Thập');
   const [locationCode, setLocationCode] = useState('CS-04');
   const [address, setAddress] = useState('250 Nguyễn Thị Thập, P. Tân Quy, Quận 7, TP.HCM');
@@ -112,41 +149,400 @@ export function InitialLocationSetupWizard({
   const [operationalStatus, setOperationalStatus] = useState<'ACTIVE' | 'PREPARING'>('PREPARING');
 
   // Step 2: Room Types
-  const [roomTypes, setRoomTypes] = useState<RoomTypeDraft[]>(INITIAL_ROOM_TYPES);
+  const [roomTypes, setRoomTypes] = useState<RoomTypeDraft[]>(isMockMode ? INITIAL_ROOM_TYPES : []);
+  const [editingRoomType, setEditingRoomType] = useState<RoomTypeDraft | null>(null);
 
   // Step 3: Rooms
-  const [rooms, setRooms] = useState<GeneratedRoomDraft[]>([
-    { code: 'P.101', floor: 1, roomTypeId: 'type-studio', status: 'AVAILABLE' },
-    { code: 'P.102', floor: 1, roomTypeId: 'type-studio', status: 'AVAILABLE' },
-    { code: 'P.201', floor: 2, roomTypeId: 'type-mezzanine', status: 'AVAILABLE' },
-    { code: 'P.202', floor: 2, roomTypeId: 'type-mezzanine', status: 'AVAILABLE' },
-    { code: 'P.301', floor: 3, roomTypeId: 'type-1br', status: 'AVAILABLE' },
-    { code: 'P.302', floor: 3, roomTypeId: 'type-1br', status: 'AVAILABLE' },
-  ]);
+  const [rooms, setRooms] = useState<GeneratedRoomDraft[]>(
+    isMockMode
+      ? [
+          { code: 'P.101', floor: 1, roomTypeId: 'type-studio', status: 'AVAILABLE' },
+          { code: 'P.102', floor: 1, roomTypeId: 'type-studio', status: 'AVAILABLE' },
+          { code: 'P.201', floor: 2, roomTypeId: 'type-mezzanine', status: 'AVAILABLE' },
+          { code: 'P.202', floor: 2, roomTypeId: 'type-mezzanine', status: 'AVAILABLE' },
+          { code: 'P.301', floor: 3, roomTypeId: 'type-1br', status: 'AVAILABLE' },
+          { code: 'P.302', floor: 3, roomTypeId: 'type-1br', status: 'AVAILABLE' },
+        ]
+      : [],
+  );
+  const [editingRoom, setEditingRoom] = useState<GeneratedRoomDraft | null>(null);
+  const [editingRoomOriginalCode, setEditingRoomOriginalCode] = useState('');
   // Bulk room generator state
   const [bulkFloor, setBulkFloor] = useState<number>(2);
   const [bulkRoomTypeId, setBulkRoomTypeId] = useState<string>('type-studio');
   const [bulkPrefix, setBulkPrefix] = useState<string>('P.');
-  const [bulkStartNumber] = useState<number>(1);
   const [bulkQuantity, setBulkQuantity] = useState<number>(4);
 
   // Step 4: Asset Configuration
-  const [assetCatalog] = useState<AssetCatalogItem[]>(INITIAL_ASSET_CATALOG);
-  const [roomTypeTemplates] = useState(INITIAL_ROOM_TYPE_REQUIREMENTS);
+  const [assetCatalog, setAssetCatalog] = useState<AssetCatalogItem[]>(
+    isMockMode ? INITIAL_ASSET_CATALOG : [],
+  );
+  const [roomTypeTemplates, setRoomTypeTemplates] = useState<
+    Record<string, { catalogId: string; quantity: number; isMandatory: boolean }[]>
+  >(isMockMode ? INITIAL_ROOM_TYPE_REQUIREMENTS : {});
   const [selectedTemplateRoomType, setSelectedTemplateRoomType] = useState<string>('type-studio');
-  const [, setRoomAssetAssignments] = useState<RoomAssetAssignmentDraft[]>([]);
+  const [roomAssetAssignments, setRoomAssetAssignments] = useState<RoomAssetAssignmentDraft[]>([]);
+  const [finishError, setFinishError] = useState('');
+  const [isFinishing, setIsFinishing] = useState(false);
   const [templateAppliedNotice, setTemplateAppliedNotice] = useState<string | null>(null);
 
   // Step 5: Rental Rates
   const [rateOverrides, setRateOverrides] = useState<Record<string, number>>({});
 
   // Step 6: Fee Policies
-  const [feePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
+  const [feePolicies, setFeePolicies] = useState<FeePolicyItem[]>(
+    isMockMode ? INITIAL_FEE_POLICIES : [],
+  );
+  const [editingFee, setEditingFee] = useState<FeePolicyItem | null>(null);
   const [previewKwh, setPreviewKwh] = useState<number>(150);
   const [previewM3, setPreviewM3] = useState<number>(12);
 
   // Step 7: House Rules
-  const [houseRules, setHouseRules] = useState<HouseRuleItem[]>(INITIAL_HOUSE_RULES);
+  const [houseRules, setHouseRules] = useState<HouseRuleItem[]>(
+    isMockMode ? INITIAL_HOUSE_RULES : [],
+  );
+  const [editingRule, setEditingRule] = useState<HouseRuleItem | null>(null);
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
+  const [libraryError, setLibraryError] = useState('');
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  useEffect(() => {
+    if (!open || draftRestored) return;
+    try {
+      const raw = sessionStorage.getItem(WIZARD_DRAFT_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw) as Partial<{
+          activeStep: number;
+          setupMode: 'SCRATCH' | 'COPY';
+          sourceLocationId: string;
+          copyGroups: WizardCopyGroup[];
+          locationName: string;
+          locationCode: string;
+          address: string;
+          floors: number;
+          contactPhone: string;
+          contactEmail: string;
+          description: string;
+          operationalStatus: 'ACTIVE' | 'PREPARING';
+          roomTypes: RoomTypeDraft[];
+          rooms: GeneratedRoomDraft[];
+          assetCatalog: AssetCatalogItem[];
+          roomTypeTemplates: Record<
+            string,
+            { catalogId: string; quantity: number; isMandatory: boolean }[]
+          >;
+          feePolicies: FeePolicyItem[];
+          houseRules: HouseRuleItem[];
+          rateOverrides: Record<string, number>;
+        }>;
+        if (draft.activeStep !== undefined) setActiveStep(draft.activeStep);
+        if (draft.setupMode) setSetupMode(draft.setupMode);
+        if (draft.sourceLocationId) setSourceLocationId(draft.sourceLocationId);
+        if (draft.copyGroups) setCopyGroups(draft.copyGroups);
+        if (draft.locationName !== undefined) setLocationName(draft.locationName);
+        if (draft.locationCode !== undefined) setLocationCode(draft.locationCode);
+        if (draft.address !== undefined) setAddress(draft.address);
+        if (draft.floors !== undefined) setFloors(draft.floors);
+        if (draft.contactPhone !== undefined) setContactPhone(draft.contactPhone);
+        if (draft.contactEmail !== undefined) setContactEmail(draft.contactEmail);
+        if (draft.description !== undefined) setDescription(draft.description);
+        if (draft.operationalStatus) setOperationalStatus(draft.operationalStatus);
+        if (draft.roomTypes) setRoomTypes(draft.roomTypes);
+        if (draft.rooms) setRooms(draft.rooms);
+        if (draft.assetCatalog) setAssetCatalog(draft.assetCatalog);
+        if (draft.roomTypeTemplates) setRoomTypeTemplates(draft.roomTypeTemplates);
+        if (draft.feePolicies) setFeePolicies(draft.feePolicies);
+        if (draft.houseRules) setHouseRules(draft.houseRules);
+        if (draft.rateOverrides) setRateOverrides(draft.rateOverrides);
+      }
+    } finally {
+      setDraftRestored(true);
+    }
+  }, [draftRestored, open]);
+
+  useEffect(() => {
+    if (!open || !draftRestored) return;
+    sessionStorage.setItem(
+      WIZARD_DRAFT_KEY,
+      JSON.stringify({
+        activeStep,
+        setupMode,
+        sourceLocationId,
+        copyGroups,
+        locationName,
+        locationCode,
+        address,
+        floors,
+        contactPhone,
+        contactEmail,
+        description,
+        operationalStatus,
+        roomTypes,
+        rooms,
+        assetCatalog,
+        roomTypeTemplates,
+        feePolicies,
+        houseRules,
+        rateOverrides,
+      }),
+    );
+  }, [
+    activeStep,
+    address,
+    assetCatalog,
+    contactEmail,
+    contactPhone,
+    copyGroups,
+    description,
+    draftRestored,
+    feePolicies,
+    floors,
+    houseRules,
+    locationCode,
+    locationName,
+    open,
+    operationalStatus,
+    rateOverrides,
+    roomTypeTemplates,
+    roomTypes,
+    rooms,
+    setupMode,
+    sourceLocationId,
+  ]);
+
+  const loadSharedLibrary = async () => {
+    setIsLoadingLibrary(true);
+    setLibraryError('');
+    try {
+      const [roomPage, assetPage, feePage, policyPage] = await Promise.all([
+        sharedApi.list('room-type-templates', '', '', 1, 100),
+        sharedApi.list('asset-catalog', '', '', 1, 100),
+        sharedApi.list('fee-templates', '', '', 1, 100),
+        sharedApi.list('policy-templates', '', '', 1, 100),
+      ]);
+      const available = <T extends { status: string }>(items: T[]) =>
+        items.filter((item) => item.status !== 'Archived');
+      const loadedRoomTypes = available(roomPage.items).map((document) => {
+        const data = document.data as RoomTemplateData;
+        return {
+          id: document.id,
+          name: document.name,
+          code: `RT-${document.familyId.slice(0, 6).toUpperCase()}`,
+          area: Number(data.area),
+          maxOccupants: data.capacity,
+          defaultRate: Number(data.referenceRent ?? 0),
+          description: document.description,
+          facilities: data.amenities,
+          status: 'ACTIVE' as const,
+        };
+      });
+      setRoomTypes(loadedRoomTypes);
+      setSelectedTemplateRoomType(loadedRoomTypes[0]?.id ?? '');
+      setBulkRoomTypeId(loadedRoomTypes[0]?.id ?? '');
+      setRoomTypeTemplates({});
+      setAssetCatalog(
+        available(assetPage.items).map((document) => {
+          const data = document.data as AssetCatalogData;
+          return {
+            id: document.id,
+            name: document.name,
+            category: data.category as AssetCatalogItem['category'],
+            defaultCost: Number(data.referencePrice),
+            iconName: 'Package',
+            description: document.description,
+          };
+        }),
+      );
+      setFeePolicies(
+        available(feePage.items).map((document) => {
+          const data = document.data as FeeTemplateData;
+          const category = data.category.toUpperCase();
+          return {
+            id: document.id,
+            name: document.name,
+            type:
+              category === 'ELECTRICITY' ? 'ELECTRICITY' : category === 'WATER' ? 'WATER' : 'OTHER',
+            calculationMethod: data.method.toUpperCase() === 'METERED' ? 'PER_KWH' : 'FIXED_AMOUNT',
+            unitPrice: Number(data.referenceRate),
+            unit: data.unit,
+            applicationScope: data.scope === 'Room' ? 'PER_ROOM' : 'LOCATION_WIDE',
+            effectiveDate: data.effectiveFrom,
+            description: document.description,
+          };
+        }),
+      );
+      setHouseRules(
+        available(policyPage.items).map((document) => {
+          const data = document.data as PolicyTemplateData;
+          return {
+            id: document.id,
+            name: document.name,
+            category: 'OTHER_OPERATIONS' as const,
+            content: data.content,
+            effectiveDate: data.effectiveFrom,
+            status: 'ACTIVE' as const,
+            version: `V${document.edition}`,
+            isAppliedToContracts: false,
+          };
+        }),
+      );
+    } catch (error) {
+      setLibraryError(
+        error instanceof Error ? error.message : 'Không thể tải thư viện cấu hình dùng chung.',
+      );
+    } finally {
+      setIsLoadingLibrary(false);
+    }
+  };
+
+  const loadSourceConfiguration = async () => {
+    if (!sourceLocationId || !copyGroups.length) return;
+    setIsLoadingCopy(true);
+    setCopyError('');
+    try {
+      const [sourceTypes, sourceRooms, sourceTemplates, sourcePolicies, billingPage] =
+        await Promise.all([
+          setupApi.roomTypes(sourceLocationId, 1),
+          (async () => {
+            const first = await setupApi.rooms(sourceLocationId, 1);
+            const items = [...first.items];
+            for (let page = 2; items.length < first.totalCount; page += 1) {
+              const next = await setupApi.rooms(sourceLocationId, page);
+              items.push(...next.items);
+              if (!next.items.length) break;
+            }
+            return { ...first, items };
+          })(),
+          setupApi.templates(sourceLocationId),
+          setupApi.policies(sourceLocationId),
+          setupApi.request<{
+            items: Array<{
+              id: string;
+              roomId: string | null;
+              roomTypeId: string | null;
+              category: number;
+              chargeCode: string;
+              name: string;
+              method: number;
+              rate: number | string;
+              effectiveFrom: string;
+            }>;
+          }>(
+            `/api/v1/billing-policies?locationId=${encodeURIComponent(sourceLocationId)}&page=1&pageSize=100`,
+          ),
+        ]);
+      const mappedTypes: RoomTypeDraft[] = sourceTypes.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        code: `RT-${item.id.slice(0, 6).toUpperCase()}`,
+        area: Number(item.areaM2 ?? 1),
+        maxOccupants: item.defaultCapacity,
+        defaultRate: copyGroups.includes('RENT')
+          ? Number(
+              billingPage.items.find(
+                (policy) => policy.roomTypeId === item.id && policy.chargeCode === 'RENT',
+              )?.rate ?? 0,
+            )
+          : 0,
+        description: item.description ?? '',
+        facilities: item.amenities,
+        status: item.isActive ? 'ACTIVE' : 'DRAFT',
+      }));
+      if (copyGroups.includes('ROOM_TYPES')) {
+        setRoomTypes(mappedTypes);
+        setSelectedTemplateRoomType(mappedTypes[0]?.id ?? '');
+        setBulkRoomTypeId(mappedTypes[0]?.id ?? '');
+      }
+      if (copyGroups.includes('ROOMS')) {
+        setRooms(
+          sourceRooms.items.map((room) => ({
+            code: room.roomNumber,
+            floor: Number(room.floor ?? 1),
+            roomTypeId: room.roomTypeId ?? '',
+            status: 'AVAILABLE',
+          })),
+        );
+      }
+      if (copyGroups.includes('RENT')) {
+        const overrides: Record<string, number> = {};
+        sourceRooms.items.forEach((room) => {
+          const policy = billingPage.items.find(
+            (item) => item.roomId === room.id && item.chargeCode === 'RENT',
+          );
+          if (policy) overrides[room.roomNumber] = Number(policy.rate);
+        });
+        setRateOverrides(overrides);
+      }
+      if (copyGroups.includes('ASSETS')) {
+        const byType: Record<
+          string,
+          { catalogId: string; quantity: number; isMandatory: boolean }[]
+        > = {};
+        mappedTypes.forEach((type) => {
+          const template = sourceTemplates.find((item) =>
+            item.data.name.toLocaleLowerCase().includes(type.name.toLocaleLowerCase()),
+          );
+          if (template) {
+            byType[type.id] = template.data.items.map((item) => ({
+              catalogId: item.id,
+              quantity: item.quantity,
+              isMandatory: true,
+            }));
+          }
+        });
+        setRoomTypeTemplates(byType);
+        setAssetCatalog(
+          sourceTemplates.flatMap((template) =>
+            template.data.items.map((item) => ({
+              id: item.id,
+              name: item.name,
+              category: item.category as AssetCatalogItem['category'],
+              defaultCost: 0,
+              iconName: 'Package',
+              description: template.data.name,
+            })),
+          ),
+        );
+      }
+      if (copyGroups.includes('FEES')) {
+        setFeePolicies(
+          billingPage.items
+            .filter((policy) => policy.chargeCode !== 'RENT' && !policy.roomId)
+            .map((policy) => ({
+              id: policy.id,
+              name: policy.name,
+              type:
+                policy.category === 1 ? 'ELECTRICITY' : policy.category === 2 ? 'WATER' : 'OTHER',
+              calculationMethod: policy.method === 1 ? 'PER_KWH' : 'FIXED_AMOUNT',
+              unitPrice: Number(policy.rate),
+              unit: policy.category === 1 ? 'kWh' : policy.category === 2 ? 'm³' : 'tháng',
+              applicationScope: 'LOCATION_WIDE',
+              effectiveDate: policy.effectiveFrom,
+              description: `Sao chép từ ${sourceLocationId}`,
+            })),
+        );
+      }
+      if (copyGroups.includes('RULES')) {
+        setHouseRules(
+          sourcePolicies.map((policy) => ({
+            id: policy.id,
+            name: policy.data.title,
+            category: 'OTHER_OPERATIONS',
+            content: policy.data.content,
+            effectiveDate: policy.data.effectiveFrom,
+            status: 'ACTIVE',
+            version: `V${policy.version}`,
+            isAppliedToContracts: false,
+          })),
+        );
+      }
+      setCopyLoaded(true);
+    } catch (error) {
+      setCopyError(error instanceof Error ? error.message : 'Không thể nạp cấu hình cơ sở nguồn.');
+    } finally {
+      setIsLoadingCopy(false);
+    }
+  };
 
   // Handle Copy Mode selection
   const handleCopyFromSource = (sourceId: string) => {
@@ -161,8 +557,13 @@ export function InitialLocationSetupWizard({
   // Bulk generate rooms
   const handleGenerateRooms = () => {
     const generated: GeneratedRoomDraft[] = [];
+    const existingNumbers = rooms
+      .filter((room) => room.floor === bulkFloor && room.code.startsWith(bulkPrefix))
+      .map((room) => Number(room.code.slice(bulkPrefix.length)))
+      .filter(Number.isFinite);
+    const firstRoomNumber = Math.max(bulkFloor * 100, ...existingNumbers) + 1;
     for (let i = 0; i < bulkQuantity; i++) {
-      const roomNum = bulkFloor * 100 + bulkStartNumber + i;
+      const roomNum = firstRoomNumber + i;
       const code = `${bulkPrefix}${roomNum}`;
       if (!rooms.some((r) => r.code === code)) {
         generated.push({
@@ -178,6 +579,12 @@ export function InitialLocationSetupWizard({
 
   const handleRemoveRoom = (code: string) => {
     setRooms((prev) => prev.filter((r) => r.code !== code));
+    setRoomAssetAssignments((prev) => prev.filter((assignment) => assignment.roomCode !== code));
+    setRateOverrides((prev) => {
+      const next = { ...prev };
+      delete next[code];
+      return next;
+    });
   };
 
   // Apply Asset Template to all rooms of selected Room Type
@@ -210,16 +617,43 @@ export function InitialLocationSetupWizard({
   };
 
   // Complete wizard
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    const normalizedName = locationName.trim();
+    const normalizedAddress = address.trim();
+    const roomCodes = rooms.map((room) => room.code.trim().toUpperCase());
+    if (!normalizedName || !normalizedAddress) {
+      setFinishError('Vui lòng nhập đầy đủ tên và địa chỉ cơ sở trước khi hoàn tất.');
+      setActiveStep(0);
+      return;
+    }
+    if (!roomTypes.length || roomTypes.some((roomType) => !roomType.name.trim())) {
+      setFinishError('Cơ sở phải có ít nhất một loại phòng hợp lệ.');
+      setActiveStep(1);
+      return;
+    }
+    if (
+      !rooms.length ||
+      roomCodes.some((code) => !code) ||
+      new Set(roomCodes).size !== rooms.length
+    ) {
+      setFinishError('Cơ sở phải có phòng và mã phòng không được để trống hoặc trùng nhau.');
+      setActiveStep(2);
+      return;
+    }
+    if (rooms.some((room) => !roomTypes.some((roomType) => roomType.id === room.roomTypeId))) {
+      setFinishError('Có phòng chưa được gán loại phòng hợp lệ.');
+      setActiveStep(2);
+      return;
+    }
     const newId = `loc-${Date.now()}`;
     const newLocRecord = makeRecord('locations', {
       id: newId,
       code: locationCode,
-      name: locationName,
+      name: normalizedName,
       status: operationalStatus === 'ACTIVE' ? 'Đang vận hành' : 'Chuẩn bị vận hành',
       amount: 0,
       attributes: {
-        address,
+        address: normalizedAddress,
         floors: String(floors),
         phone: contactPhone,
         email: contactEmail,
@@ -229,14 +663,28 @@ export function InitialLocationSetupWizard({
       },
     });
 
-    onComplete(newLocRecord, {
-      roomTypes,
-      rooms,
-      feePolicies,
-      houseRules,
-      rateOverrides,
-    });
-    onClose();
+    setFinishError('');
+    setIsFinishing(true);
+    try {
+      const completed = await onComplete(newLocRecord, {
+        roomTypes,
+        rooms,
+        feePolicies,
+        houseRules,
+        rateOverrides,
+        roomAssetAssignments,
+        assetCatalog,
+        roomTypeTemplates,
+      });
+      if (completed !== false) {
+        sessionStorage.removeItem(WIZARD_DRAFT_KEY);
+        onClose();
+      }
+    } catch (error) {
+      setFinishError(error instanceof Error ? error.message : 'Không thể hoàn tất cấu hình cơ sở.');
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   return (
@@ -302,6 +750,11 @@ export function InitialLocationSetupWizard({
       <DialogContent
         sx={{ p: 3, minHeight: 520, maxHeight: 'calc(85vh - 160px)', overflowY: 'auto' }}
       >
+        {finishError && activeStep !== 7 && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {finishError}
+          </Alert>
+        )}
         {/* STEP 1: Location Information */}
         {activeStep === 0 && (
           <Box>
@@ -393,6 +846,68 @@ export function InitialLocationSetupWizard({
                     </MenuItem>
                   ))}
                 </TextField>
+                <Typography variant="body2" sx={{ mt: 2, fontWeight: 700 }}>
+                  Chọn phần cấu hình cần sao chép:
+                </Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                  {(
+                    [
+                      ['ROOM_TYPES', 'Loại phòng'],
+                      ['ROOMS', 'Danh sách phòng'],
+                      ['ASSETS', 'Tài sản & tiện nghi'],
+                      ['RENT', 'Giá thuê'],
+                      ['FEES', 'Biểu phí'],
+                      ['RULES', 'Nội quy'],
+                    ] as [WizardCopyGroup, string][]
+                  ).map(([group, label]) => (
+                    <FormControlLabel
+                      key={group}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={copyGroups.includes(group)}
+                          onChange={() =>
+                            setCopyGroups((current) => {
+                              if (current.includes(group)) {
+                                return group === 'ROOM_TYPES'
+                                  ? current.filter(
+                                      (item) =>
+                                        item !== 'ROOM_TYPES' &&
+                                        item !== 'ROOMS' &&
+                                        item !== 'ASSETS',
+                                    )
+                                  : current.filter((item) => item !== group);
+                              }
+                              return group === 'ROOMS' || group === 'ASSETS'
+                                ? Array.from(new Set([...current, 'ROOM_TYPES', group]))
+                                : [...current, group];
+                            })
+                          }
+                        />
+                      }
+                      label={label}
+                    />
+                  ))}
+                </Stack>
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={isLoadingCopy || !sourceLocationId || !copyGroups.length}
+                  onClick={() => void loadSourceConfiguration()}
+                >
+                  {isLoadingCopy ? 'Đang nạp cấu hình...' : 'Nạp dữ liệu để xem và xác nhận'}
+                </Button>
+                {copyLoaded && (
+                  <Alert severity="success" sx={{ mt: 1 }}>
+                    Đã nạp dữ liệu nguồn vào các bước Wizard. Owner có thể xem và chỉnh sửa trước
+                    khi hoàn tất.
+                  </Alert>
+                )}
+                {copyError && (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    {copyError}
+                  </Alert>
+                )}
               </Alert>
             )}
 
@@ -503,30 +1018,44 @@ export function InitialLocationSetupWizard({
                   tiện nghi).
                 </Typography>
               </Box>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<Plus size={16} />}
-                onClick={() => {
-                  setRoomTypes((current) => [
-                    ...current,
-                    {
+              <Stack direction="row" spacing={1}>
+                {!isMockMode && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={isLoadingLibrary}
+                    onClick={() => void loadSharedLibrary()}
+                  >
+                    {isLoadingLibrary ? 'Đang tải...' : 'Nạp thư viện dùng chung'}
+                  </Button>
+                )}
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Plus size={16} />}
+                  onClick={() => {
+                    setEditingRoomType({
                       id: `type-${Date.now()}`,
-                      name: 'Studio Sang trọng',
-                      code: 'DLX-STD',
-                      area: 28,
-                      maxOccupants: 2,
-                      defaultRate: 6000000,
-                      description: 'Phòng studio tiện nghi cao cấp có ban công riêng',
-                      facilities: ['Máy lạnh', 'Máy nước nóng', 'Smart TV', 'Ban công riêng'],
+                      name: '',
+                      code: '',
+                      area: 20,
+                      maxOccupants: 1,
+                      defaultRate: 0,
+                      description: '',
+                      facilities: [],
                       status: 'ACTIVE',
-                    },
-                  ]);
-                }}
-              >
-                Thêm loại phòng
-              </Button>
+                    });
+                  }}
+                >
+                  Thêm loại phòng
+                </Button>
+              </Stack>
             </Stack>
+            {libraryError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {libraryError}
+              </Alert>
+            )}
 
             <Grid container spacing={2}>
               {roomTypes.map((rt) => (
@@ -637,6 +1166,9 @@ export function InitialLocationSetupWizard({
                         }}
                       >
                         Nhân bản
+                      </Button>
+                      <Button size="small" onClick={() => setEditingRoomType({ ...rt })}>
+                        Chỉnh sửa
                       </Button>
                       <Button
                         size="small"
@@ -763,7 +1295,7 @@ export function InitialLocationSetupWizard({
                     <TableCell sx={{ fontWeight: 800 }}>Diện tích</TableCell>
                     <TableCell sx={{ fontWeight: 800 }}>Giá thuê mặc định</TableCell>
                     <TableCell sx={{ fontWeight: 800 }}>Trạng thái</TableCell>
-                    <TableCell sx={{ fontWeight: 800, width: 80 }}>Xóa</TableCell>
+                    <TableCell sx={{ fontWeight: 800, width: 140 }}>Thao tác</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -793,6 +1325,16 @@ export function InitialLocationSetupWizard({
                           />
                         </TableCell>
                         <TableCell>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              setEditingRoom({ ...room });
+                              setEditingRoomOriginalCode(room.code);
+                            }}
+                          >
+                            <Edit2 size={16} />
+                          </IconButton>
                           <IconButton
                             size="small"
                             color="error"
@@ -872,6 +1414,27 @@ export function InitialLocationSetupWizard({
                         <Typography variant="caption" color="text.secondary">
                           Đơn giá dự kiến: {item.defaultCost.toLocaleString()} VND
                         </Typography>
+                        <Button
+                          size="small"
+                          sx={{ mt: 0.5 }}
+                          disabled={
+                            !selectedTemplateRoomType ||
+                            roomTypeTemplates[selectedTemplateRoomType]?.some(
+                              (requirement) => requirement.catalogId === item.id,
+                            )
+                          }
+                          onClick={() =>
+                            setRoomTypeTemplates((current) => ({
+                              ...current,
+                              [selectedTemplateRoomType]: [
+                                ...(current[selectedTemplateRoomType] ?? []),
+                                { catalogId: item.id, quantity: 1, isMandatory: true },
+                              ],
+                            }))
+                          }
+                        >
+                          Thêm vào định mức
+                        </Button>
                       </Box>
                     ))}
                   </Stack>
@@ -919,6 +1482,7 @@ export function InitialLocationSetupWizard({
                           <TableCell sx={{ fontWeight: 800 }}>Tên thiết bị</TableCell>
                           <TableCell sx={{ fontWeight: 800 }}>Số lượng chuẩn</TableCell>
                           <TableCell sx={{ fontWeight: 800 }}>Yêu cầu bắt buộc</TableCell>
+                          <TableCell sx={{ width: 60 }} />
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -937,6 +1501,22 @@ export function InitialLocationSetupWizard({
                                   color={req.isMandatory ? 'primary' : 'default'}
                                   sx={{ fontSize: 11 }}
                                 />
+                              </TableCell>
+                              <TableCell>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() =>
+                                    setRoomTypeTemplates((current) => ({
+                                      ...current,
+                                      [selectedTemplateRoomType]: (
+                                        current[selectedTemplateRoomType] ?? []
+                                      ).filter((item) => item.catalogId !== req.catalogId),
+                                    }))
+                                  }
+                                >
+                                  <Trash2 size={15} />
+                                </IconButton>
                               </TableCell>
                             </TableRow>
                           );
@@ -1057,9 +1637,30 @@ export function InitialLocationSetupWizard({
         {/* STEP 6: Fee Policy Configuration */}
         {activeStep === 5 && (
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
-              Bước 6: Biểu phí điện nước & Dịch vụ đi kèm
-            </Typography>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
+                Bước 6: Biểu phí điện nước & Dịch vụ đi kèm
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<Plus size={15} />}
+                onClick={() =>
+                  setEditingFee({
+                    id: `fee-${Date.now()}`,
+                    name: '',
+                    type: 'OTHER',
+                    calculationMethod: 'FIXED_AMOUNT',
+                    unitPrice: 0,
+                    unit: 'VND/tháng',
+                    applicationScope: 'LOCATION_WIDE',
+                    effectiveDate: new Date().toISOString().slice(0, 10),
+                    description: '',
+                  })
+                }
+              >
+                Thêm khoản phí
+              </Button>
+            </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Cấu hình biểu phí điện nước và các khoản phí dịch vụ định kỳ.
             </Typography>
@@ -1096,6 +1697,7 @@ export function InitialLocationSetupWizard({
                         <TableCell sx={{ fontWeight: 800 }}>Cách tính</TableCell>
                         <TableCell sx={{ fontWeight: 800 }}>Đơn giá</TableCell>
                         <TableCell sx={{ fontWeight: 800 }}>Phạm vi</TableCell>
+                        <TableCell sx={{ fontWeight: 800 }}>Thao tác</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1129,6 +1731,22 @@ export function InitialLocationSetupWizard({
                           </TableCell>
                           <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>
                             {fee.applicationScope === 'LOCATION_WIDE' ? 'Toàn cơ sở' : 'Từng phòng'}
+                          </TableCell>
+                          <TableCell>
+                            <Button size="small" onClick={() => setEditingFee({ ...fee })}>
+                              Chỉnh sửa
+                            </Button>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() =>
+                                setFeePolicies((current) =>
+                                  current.filter((item) => item.id !== fee.id),
+                                )
+                              }
+                            >
+                              <Trash2 size={15} />
+                            </IconButton>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1259,17 +1877,16 @@ export function InitialLocationSetupWizard({
                 size="small"
                 startIcon={<Plus size={16} />}
                 onClick={() => {
-                  const newRule: HouseRuleItem = {
+                  setEditingRule({
                     id: `rule-${Date.now()}`,
-                    name: 'Văn hóa sinh hoạt chung',
+                    name: '',
                     category: 'OTHER_OPERATIONS',
-                    content: 'Tôn trọng không gian chung và giữ gìn văn minh trong khu nhà trọ.',
-                    effectiveDate: '2026-12-01',
+                    content: '',
+                    effectiveDate: new Date().toISOString().slice(0, 10),
                     status: 'DRAFT',
                     version: 'V1',
                     isAppliedToContracts: false,
-                  };
-                  setHouseRules((prev) => [...prev, newRule]);
+                  });
                 }}
               >
                 Thêm quy định riêng
@@ -1301,6 +1918,22 @@ export function InitialLocationSetupWizard({
                         variant="outlined"
                         sx={{ fontWeight: 700, fontSize: 11 }}
                       />
+                      <Stack direction="row">
+                        <IconButton size="small" onClick={() => setEditingRule({ ...rule })}>
+                          <Edit2 size={15} />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() =>
+                            setHouseRules((current) =>
+                              current.filter((item) => item.id !== rule.id),
+                            )
+                          }
+                        >
+                          <Trash2 size={15} />
+                        </IconButton>
+                      </Stack>
                       <Chip
                         size="small"
                         label={`Phiên bản ${rule.version}`}
@@ -1449,6 +2082,11 @@ export function InitialLocationSetupWizard({
             </Grid>
           </Box>
         )}
+        {finishError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {finishError}
+          </Alert>
+        )}
       </DialogContent>
 
       <Divider />
@@ -1465,13 +2103,23 @@ export function InitialLocationSetupWizard({
         </Button>
 
         <Stack direction="row" spacing={1.5}>
-          <Button variant="outlined" onClick={onClose}>
+          <Button variant="outlined" onClick={onClose} disabled={isFinishing}>
             Hủy thiết lập
           </Button>
           {activeStep < WIZARD_STEPS.length - 1 ? (
             <Button
               variant="contained"
-              onClick={() => setActiveStep((prev) => Math.min(WIZARD_STEPS.length - 1, prev + 1))}
+              onClick={() => {
+                if (
+                  activeStep === 0 &&
+                  setupMode === 'SCRATCH' &&
+                  !isMockMode &&
+                  !roomTypes.length
+                ) {
+                  void loadSharedLibrary();
+                }
+                setActiveStep((prev) => Math.min(WIZARD_STEPS.length - 1, prev + 1));
+              }}
               endIcon={<ArrowRight size={16} />}
             >
               Tiếp tục ({WIZARD_STEPS[activeStep + 1]})
@@ -1480,14 +2128,314 @@ export function InitialLocationSetupWizard({
             <Button
               variant="contained"
               color="primary"
-              onClick={handleFinish}
+              onClick={() => void handleFinish()}
+              disabled={isFinishing}
               startIcon={<Sparkles size={16} />}
             >
-              Hoàn tất & Kích hoạt cơ sở
+              {isFinishing ? 'Đang lưu cấu hình...' : 'Hoàn tất & Kích hoạt cơ sở'}
             </Button>
           )}
         </Stack>
       </DialogActions>
+      <Dialog
+        open={!!editingRoomType}
+        onClose={() => setEditingRoomType(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Chỉnh sửa loại phòng</DialogTitle>
+        <DialogContent>
+          {editingRoomType && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Tên loại phòng"
+                value={editingRoomType.name}
+                onChange={(event) =>
+                  setEditingRoomType({ ...editingRoomType, name: event.target.value })
+                }
+              />
+              <TextField
+                label="Mã loại phòng"
+                value={editingRoomType.code}
+                onChange={(event) =>
+                  setEditingRoomType({ ...editingRoomType, code: event.target.value })
+                }
+              />
+              <TextField
+                type="number"
+                label="Diện tích (m²)"
+                value={editingRoomType.area}
+                onChange={(event) =>
+                  setEditingRoomType({ ...editingRoomType, area: Number(event.target.value) })
+                }
+              />
+              <TextField
+                type="number"
+                label="Sức chứa tối đa"
+                value={editingRoomType.maxOccupants}
+                onChange={(event) =>
+                  setEditingRoomType({
+                    ...editingRoomType,
+                    maxOccupants: Number(event.target.value),
+                  })
+                }
+              />
+              <TextField
+                type="number"
+                label="Giá thuê mặc định"
+                value={editingRoomType.defaultRate}
+                onChange={(event) =>
+                  setEditingRoomType({
+                    ...editingRoomType,
+                    defaultRate: Number(event.target.value),
+                  })
+                }
+              />
+              <TextField
+                multiline
+                label="Mô tả"
+                value={editingRoomType.description}
+                onChange={(event) =>
+                  setEditingRoomType({ ...editingRoomType, description: event.target.value })
+                }
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingRoomType(null)}>Hủy</Button>
+          <Button
+            variant="contained"
+            disabled={
+              !editingRoomType?.name.trim() ||
+              !editingRoomType.code.trim() ||
+              editingRoomType.area <= 0 ||
+              editingRoomType.maxOccupants <= 0 ||
+              editingRoomType.defaultRate < 0
+            }
+            onClick={() => {
+              if (!editingRoomType) return;
+              setRoomTypes((current) => {
+                const normalized = {
+                  ...editingRoomType,
+                  name: editingRoomType.name.trim(),
+                  code: editingRoomType.code.trim().toUpperCase(),
+                };
+                return current.some((item) => item.id === editingRoomType.id)
+                  ? current.map((item) => (item.id === editingRoomType.id ? normalized : item))
+                  : [...current, normalized];
+              });
+              if (!selectedTemplateRoomType) setSelectedTemplateRoomType(editingRoomType.id);
+              if (!bulkRoomTypeId) setBulkRoomTypeId(editingRoomType.id);
+              setEditingRoomType(null);
+            }}
+          >
+            Lưu thay đổi
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={!!editingRoom} onClose={() => setEditingRoom(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Chỉnh sửa phòng</DialogTitle>
+        <DialogContent>
+          {editingRoom && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Mã phòng"
+                value={editingRoom.code}
+                onChange={(event) => setEditingRoom({ ...editingRoom, code: event.target.value })}
+              />
+              <TextField
+                type="number"
+                label="Tầng"
+                value={editingRoom.floor}
+                onChange={(event) =>
+                  setEditingRoom({ ...editingRoom, floor: Number(event.target.value) })
+                }
+              />
+              <TextField
+                select
+                label="Loại phòng"
+                value={editingRoom.roomTypeId}
+                onChange={(event) =>
+                  setEditingRoom({ ...editingRoom, roomTypeId: event.target.value })
+                }
+              >
+                {roomTypes.map((roomType) => (
+                  <MenuItem key={roomType.id} value={roomType.id}>
+                    {roomType.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingRoom(null)}>Hủy</Button>
+          <Button
+            variant="contained"
+            disabled={
+              !editingRoom?.code.trim() ||
+              editingRoom.floor < 1 ||
+              !editingRoom.roomTypeId ||
+              rooms.some(
+                (room) =>
+                  room.code !== editingRoomOriginalCode &&
+                  room.code.trim().toUpperCase() === editingRoom.code.trim().toUpperCase(),
+              )
+            }
+            onClick={() => {
+              if (!editingRoom) return;
+              const normalized = { ...editingRoom, code: editingRoom.code.trim().toUpperCase() };
+              setRooms((current) =>
+                current.map((room) => (room.code === editingRoomOriginalCode ? normalized : room)),
+              );
+              setRoomAssetAssignments((current) =>
+                current.map((assignment) =>
+                  assignment.roomCode === editingRoomOriginalCode
+                    ? { ...assignment, roomCode: normalized.code }
+                    : assignment,
+                ),
+              );
+              setRateOverrides((current) => {
+                if (!(editingRoomOriginalCode in current)) return current;
+                const next = { ...current, [normalized.code]: current[editingRoomOriginalCode] };
+                delete next[editingRoomOriginalCode];
+                return next;
+              });
+              setEditingRoom(null);
+            }}
+          >
+            Lưu thay đổi
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={!!editingFee} onClose={() => setEditingFee(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Cấu hình khoản phí của cơ sở</DialogTitle>
+        <DialogContent>
+          {editingFee && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Tên khoản phí"
+                value={editingFee.name}
+                onChange={(event) => setEditingFee({ ...editingFee, name: event.target.value })}
+              />
+              <TextField
+                select
+                label="Loại phí"
+                value={editingFee.type}
+                onChange={(event) => {
+                  const type = event.target.value as FeePolicyItem['type'];
+                  setEditingFee({
+                    ...editingFee,
+                    type,
+                    calculationMethod:
+                      type === 'ELECTRICITY'
+                        ? 'PER_KWH'
+                        : type === 'WATER'
+                          ? 'PER_M3'
+                          : 'FIXED_AMOUNT',
+                    unit:
+                      type === 'ELECTRICITY'
+                        ? 'VND/kWh'
+                        : type === 'WATER'
+                          ? 'VND/m³'
+                          : 'VND/tháng',
+                  });
+                }}
+              >
+                <MenuItem value="ELECTRICITY">Điện</MenuItem>
+                <MenuItem value="WATER">Nước</MenuItem>
+                <MenuItem value="OTHER">Dịch vụ khác</MenuItem>
+              </TextField>
+              <TextField
+                type="number"
+                label="Đơn giá"
+                value={editingFee.unitPrice}
+                onChange={(event) =>
+                  setEditingFee({ ...editingFee, unitPrice: Number(event.target.value) })
+                }
+              />
+              <TextField
+                type="date"
+                label="Ngày hiệu lực"
+                value={editingFee.effectiveDate}
+                onChange={(event) =>
+                  setEditingFee({ ...editingFee, effectiveDate: event.target.value })
+                }
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingFee(null)}>Hủy</Button>
+          <Button
+            variant="contained"
+            disabled={!editingFee?.name.trim() || editingFee.unitPrice < 0}
+            onClick={() => {
+              if (!editingFee) return;
+              setFeePolicies((current) =>
+                current.some((item) => item.id === editingFee.id)
+                  ? current.map((item) => (item.id === editingFee.id ? editingFee : item))
+                  : [...current, editingFee],
+              );
+              setEditingFee(null);
+            }}
+          >
+            Lưu khoản phí
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={!!editingRule} onClose={() => setEditingRule(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Cấu hình nội quy của cơ sở</DialogTitle>
+        <DialogContent>
+          {editingRule && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Tên nội quy"
+                value={editingRule.name}
+                onChange={(event) => setEditingRule({ ...editingRule, name: event.target.value })}
+              />
+              <TextField
+                multiline
+                minRows={4}
+                label="Nội dung"
+                value={editingRule.content}
+                onChange={(event) =>
+                  setEditingRule({ ...editingRule, content: event.target.value })
+                }
+              />
+              <TextField
+                type="date"
+                label="Ngày hiệu lực"
+                value={editingRule.effectiveDate}
+                onChange={(event) =>
+                  setEditingRule({ ...editingRule, effectiveDate: event.target.value })
+                }
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingRule(null)}>Hủy</Button>
+          <Button
+            variant="contained"
+            disabled={!editingRule?.name.trim() || !editingRule.content.trim()}
+            onClick={() => {
+              if (!editingRule) return;
+              setHouseRules((current) =>
+                current.some((item) => item.id === editingRule.id)
+                  ? current.map((item) => (item.id === editingRule.id ? editingRule : item))
+                  : [...current, editingRule],
+              );
+              setEditingRule(null);
+            }}
+          >
+            Lưu nội quy
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }
