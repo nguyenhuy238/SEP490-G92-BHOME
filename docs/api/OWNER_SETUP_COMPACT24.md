@@ -24,6 +24,24 @@ bound to the route Location. Demo mode continues through the existing explicit
 mock path. Shared-library apply/copy is addressed in the separately approved
 Shared Configuration phases, not by these native CRUD endpoints.
 
+## Asset and policy UI integration — 2026-11-09 (GAP-004)
+
+Location Assets now supports local template Draft item editing, clone, immutable
+publish, per-Room sync outcomes, assignment and physical inventory verification
+with private image upload. Inventory responses add `assignmentVersion` and
+`assignedTemplateId`, allowing safe assignment after reload. Desired-inventory
+`version`, assignment version and physical asset version are distinct. Verification
+retries retain an already uploaded evidence key after an uncertain response.
+Physical asset history, purchase metadata and confirmed replacement use the
+existing server workflows; template publication never creates verified assets.
+
+Location Rules supports Draft create/edit, publish and persisted document history.
+The Contract detail panel reads the agreed snapshot and prepares a signed-policy
+amendment using a retained UUID command key. It opens the resulting Contract for
+the existing signing and Owner activation controls, without automatically signing,
+activating or overwriting the parent agreement. Applied Addenda cannot be cancelled
+through the proposal UI. Server permission/scope/state guards remain authoritative.
+
 Ngày: 08/11/2026. Tài liệu mô tả implementation trong worktree; chưa phải biên bản nghiệm thu hay triển khai production. Base path: `/api/v1`. Schema runtime vẫn là Compact24, Location → Room; không Chain/RoomType.
 
 ## Quy tắc chung

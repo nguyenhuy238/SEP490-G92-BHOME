@@ -75,6 +75,9 @@ export interface AssetInventory {
   desired: SetupDocument<DesiredAssets>[];
   currentDesiredId?: string | null;
   discrepancies?: { assetId: string; action: string }[];
+  metadata?: Record<string, AssetMetadata>;
+  assignmentVersion: number;
+  assignedTemplateId: string | null;
 }
 export interface AssetVerificationInput {
   templateId: string;

@@ -36,6 +36,7 @@ import {
 } from '../../components/common/PortalUI';
 import { usePortal } from '../../app/PortalProvider';
 import { usePropertySetupApi } from './usePropertySetupApi';
+import { AssetOperationsPanel } from './AssetOperationsPanel';
 
 type Kind = 'locations' | 'rooms' | 'assets';
 type Row = LocationConfiguration | RoomConfiguration | PhysicalAsset;
@@ -68,6 +69,7 @@ export function PropertyApiPage({
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(createInitially);
   const [confirmInactive, setConfirmInactive] = useState(false);
+  const [inspectedAsset, setInspectedAsset] = useState('');
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
@@ -261,6 +263,11 @@ export function PropertyApiPage({
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1}>
+                        {'condition' in row && (
+                          <Button onClick={() => setInspectedAsset(row.id)}>
+                            Thông tin & Lịch sử
+                          </Button>
+                        )}
                         {kind === 'locations' && (
                           <Button component={Link} to={`/locations/${row.id}/overview`}>
                             Quản lý cấu hình
@@ -398,6 +405,15 @@ export function PropertyApiPage({
           </DialogActions>
         </form>
       </Dialog>
+      {query.data?.items
+        .filter((row): row is PhysicalAsset => 'condition' in row && row.id === inspectedAsset)
+        .map((asset) => (
+          <AssetOperationsPanel
+            key={asset.id}
+            asset={asset}
+            onClose={() => setInspectedAsset('')}
+          />
+        ))}
       <ConfirmDialog
         open={confirmInactive}
         title="Ngừng hoạt động cơ sở?"

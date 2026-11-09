@@ -10,13 +10,15 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
-import { invoiceError } from '../../../../../../packages/client-core/src/invoices';
+
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { BillingConfigurationPage } from '../../invoices/BillingConfigurationPage';
+import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
+import { LocalAssetSetup } from '../../property/LocalAssetSetup';
 
 const tabs = [
   ['overview', 'Tổng quan'],
@@ -69,12 +71,17 @@ export function LocationApiWorkspace() {
           />
         ))}
       </Tabs>
-      {['rooms', 'assets', 'investment'].includes(active) ? (
+      {active === 'assets' ? (
+        <Stack spacing={3}>
+          <Outlet />
+          <LocalAssetSetup locationId={locationId} />
+        </Stack>
+      ) : ['rooms', 'investment'].includes(active) ? (
         <Outlet />
       ) : active === 'pricing' ? (
         <BillingConfigurationPage initialLocationId={locationId} />
       ) : active === 'rules' ? (
-        <LocationPolicySummary locationId={locationId} />
+        <OperatingPoliciesPanel locationId={locationId} />
       ) : active === 'history' ? (
         <LocationRoomHistory locationId={locationId} />
       ) : (
@@ -88,89 +95,6 @@ export function LocationApiWorkspace() {
             </Typography>
             <Button component={Link} to="/locations">
               Chỉnh sửa thông tin cơ sở
-            </Button>
-          </Stack>
-        </Paper>
-      )}
-    </Stack>
-  );
-}
-
-export function LocationPolicySummary({ locationId }: { locationId: string }) {
-  const api = usePropertySetupApi();
-  const { session } = useAuth();
-  const cache = useQueryClient();
-  const policies = useQuery({
-    queryKey: ['property-setup', 'policies', session?.userId, locationId],
-    queryFn: ({ signal }) => api.policies(locationId, signal),
-  });
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [date, setDate] = useState('');
-  const save = useMutation({
-    mutationFn: () =>
-      api.savePolicy(null, { locationId, title, content, effectiveFrom: date, expectedVersion: 0 }),
-    onSuccess: async () => {
-      await cache.invalidateQueries({ queryKey: ['property-setup', 'policies'] });
-      setTitle('');
-      setContent('');
-    },
-  });
-  if (policies.isPending) return <LoadingState />;
-  if (policies.error)
-    return <ErrorState error={policies.error} retry={() => void policies.refetch()} />;
-  return (
-    <Stack spacing={2}>
-      <Alert severity="info">
-        Công bố nội quy mới không thay thế nội quy đã ký. Hợp đồng cũ chỉ thay đổi qua phụ lục được
-        ký và Owner áp dụng.
-      </Alert>
-      {!policies.data.length && <Alert severity="info">Chưa có nội quy.</Alert>}
-      {policies.data.map((policy) => (
-        <Paper key={policy.id} sx={{ p: 2 }}>
-          <Typography variant="h6">{policy.data.title}</Typography>
-          <Typography>
-            {policy.status} · {policy.data.effectiveFrom}
-          </Typography>
-          <Typography sx={{ whiteSpace: 'pre-wrap' }}>{policy.data.content}</Typography>
-        </Paper>
-      ))}
-      {session?.roles.includes('Owner') && (
-        <Paper sx={{ p: 2 }}>
-          <Stack
-            component="form"
-            spacing={2}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!save.isPending) save.mutate();
-            }}
-          >
-            <TextField
-              required
-              label="Tên nội quy"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-            <TextField
-              required
-              multiline
-              minRows={4}
-              label="Nội dung nội quy"
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-            />
-            <TextField
-              required
-              type="date"
-              label="Ngày hiệu lực"
-              slotProps={{ inputLabel: { shrink: true } }}
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-            />
-            {save.error && <Alert severity="error">{invoiceError(save.error)}</Alert>}
-            {save.isSuccess && <Alert severity="success">Máy chủ đã lưu bản nháp nội quy.</Alert>}
-            <Button type="submit" variant="contained" disabled={save.isPending}>
-              Lưu bản nháp
             </Button>
           </Stack>
         </Paper>

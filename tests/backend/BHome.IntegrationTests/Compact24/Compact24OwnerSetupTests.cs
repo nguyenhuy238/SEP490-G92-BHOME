@@ -156,6 +156,9 @@ public sealed class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassF
         await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room}/asset-template", new AssetTemplateAssignment(doc.Id)));
         var pinned = await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory");
         Assert.Equal(doc.Id, pinned!.Desired.Single(d => d.Id == pinned.CurrentDesiredId).Data.GetProperty("templateId").GetGuid());
+        Assert.Equal(1, pinned.AssignmentVersion); Assert.Equal(doc.Id, pinned.AssignedTemplateId);
+        await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room}/asset-template", new AssetTemplateAssignment(null, pinned.AssignmentVersion)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room}/asset-template", new AssetTemplateAssignment(doc.Id, pinned.AssignmentVersion))).StatusCode);
     }
     [CompactPostgresFact]
     public async Task TariffComputesProgressiveChargeQuotaAndScopeIsOwnerOnly()

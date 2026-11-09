@@ -46,7 +46,7 @@ public sealed record AssetMetadataWrite(AssetMetadata Metadata, int ExpectedVers
 public sealed record AssetReplacement(string Code, string Condition, string Reason, int ExpectedVersion);
 public sealed record AssetDiscrepancy(Guid AssetId, string Action);
 public sealed record AssetInventory(IReadOnlyList<Asset> Physical, IReadOnlyList<SetupDocument> Desired, IReadOnlyDictionary<Guid, AssetMetadata>? Metadata = null,
-    Guid? CurrentDesiredId = null, IReadOnlyList<AssetDiscrepancy>? Discrepancies = null);
+    Guid? CurrentDesiredId = null, IReadOnlyList<AssetDiscrepancy>? Discrepancies = null, int AssignmentVersion = 0, Guid? AssignedTemplateId = null);
 
 public sealed record UtilityTier(decimal? Through, decimal Rate);
 public sealed record UtilityTariffWrite(Guid LocationId, [property: JsonRequired] UtilityType UtilityType, DateOnly EffectiveFrom, DateOnly? EffectiveTo,
