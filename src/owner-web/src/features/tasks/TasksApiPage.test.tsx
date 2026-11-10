@@ -23,15 +23,27 @@ const task = {
   result: 'Submitted',
   dueAt: '2026-11-10T00:00:00Z',
 };
+const staff = {
+  userId: 'staff',
+  fullName: 'Staff synthetic',
+  email: 'staff@example.invalid',
+  phone: null,
+  isActive: true,
+  accountVersion: 'v1',
+  employment: null,
+};
 beforeEach(() => {
   mocks.request.mockReset();
-  mocks.request.mockImplementation(async (path: string) =>
-    path.endsWith('/evidence')
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/staff?page=1&pageSize=100') return { items: [staff], totalCount: 1 };
+    if (path === '/api/v1/operational-tasks/task/actors')
+      return [{ userId: 'owner', displayName: 'Owner synthetic' }];
+    return path.endsWith('/evidence')
       ? []
       : path === '/api/v1/operational-tasks/task'
         ? task
-        : { items: path.startsWith('/api/v1/operational-tasks?') ? [task] : [], totalCount: 1 },
-  );
+        : { items: path.startsWith('/api/v1/operational-tasks?') ? [task] : [], totalCount: 1 };
+  });
 });
 function mount() {
   render(
@@ -78,4 +90,17 @@ it('keeps the same command key on an uncertain verification retry', async () => 
   );
   const posts = mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(posts[0][1].headers).toEqual(posts[1][1].headers);
+});
+
+it('forwards the selected Staff filter to the server', async () => {
+  mount();
+  const staffFilter = await screen.findByRole('combobox', { name: 'Staff phụ trách' });
+  fireEvent.mouseDown(staffFilter);
+  fireEvent.click(await screen.findByRole('option', { name: 'Staff synthetic' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.stringContaining('staffUserId=staff'),
+      expect.anything(),
+    ),
+  );
 });

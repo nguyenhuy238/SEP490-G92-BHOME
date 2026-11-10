@@ -31,6 +31,11 @@ export interface TaskHistory {
   occurredAt: string;
   taskVersion: number;
   actorId: string;
+  responsibleStaffUserId: string | null;
+}
+export interface TaskActor {
+  userId: string;
+  displayName: string;
 }
 export interface TaskEvidence {
   id: string;

@@ -144,13 +144,16 @@ export function OwnerLocationPicker({
   value,
   change,
   required = false,
+  simple = false,
 }: {
   value: string;
   change: (id: string) => void;
   required?: boolean;
+  simple?: boolean;
 }) {
   return (
     <OwnerPicker<OwnerLocation>
+      key={simple ? 'compact-location-picker' : 'location-picker'}
       value={value}
       change={change}
       required={required}

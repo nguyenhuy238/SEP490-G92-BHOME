@@ -20,7 +20,6 @@ const RoomTypesPage = lazy(() => import('../features/room-types/pages/RoomTypesP
 const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage'));
 const PricingPage = lazy(() => import('../features/pricing/pages/PricingPage'));
 const StaffPage = lazy(() => import('../features/staff/pages/StaffPage'));
-const SchedulesPage = lazy(() => import('../features/schedules/pages/SchedulesPage'));
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
@@ -108,7 +107,6 @@ export function AppRouter() {
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/pricing" element={<PricingPage />} />
               <Route path="/staff" element={<StaffPage />} />
-              <Route path="/schedules" element={<SchedulesPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/tenants" element={<TenantsPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
