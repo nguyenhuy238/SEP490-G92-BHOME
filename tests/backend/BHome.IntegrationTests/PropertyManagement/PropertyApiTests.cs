@@ -327,13 +327,13 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     public async Task ExistingResidentsBlockClosureAndCaptureCannotBypassUnavailableRoom()
     {
         var w = await Workspace(); using var owner = w.Owner;
-        var created = await owner.PostAsJsonAsync("/api/v1/capture/residents", new ResidentInput(w.Room.Id, "Synthetic resident", ResidentType.CoOccupant));
+        var created = await owner.PostAsJsonAsync("/api/v1/capture/residents", new ResidentInput(w.Room.Id, "Synthetic resident", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
             new RoomWrite(w.Location.Id, "A-01", "1", 2, RoomStatus.Unavailable, 1))).StatusCode);
         var unavailable = await Created<RoomDto>(owner, "rooms", new RoomWrite(w.Location.Id, "CLOSED", null, 1, RoomStatus.Unavailable));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/capture/residents",
-            new ResidentInput(unavailable.Id, "Blocked", ResidentType.CoOccupant))).StatusCode);
+            new ResidentInput(unavailable.Id, "Blocked", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"))).StatusCode);
     }
 
     [Fact]

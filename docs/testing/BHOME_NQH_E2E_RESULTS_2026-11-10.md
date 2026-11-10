@@ -20,3 +20,5 @@ Baseline trước triển khai: f318ffcfe79fc5f6e9b829412a3f1257103331c1, member
 | E2E-10 authorization/replay/immutability    | Integration + UI                                                                                                                                             | NOT RUN for changed workflow                                           |
 
 Migration test không chạm database làm việc; credentials chỉ truyền process-local, không commit. Real MySign/Email/SMS chưa verify vì chưa có access. Simulator/test doubles không được báo là real sandbox.
+
+Phase 2: PreAccountOnboardingTests 1/1 PASS trên PostgreSQL disposable; onboarding-state, onboarding-ui và OCR workflows Mobile 3 files/48 tests PASS. Mobile tsc --noEmit PASS; ESLint các file thay đổi PASS. Đây là API/persistence và component tests, chưa phải UI E2E.

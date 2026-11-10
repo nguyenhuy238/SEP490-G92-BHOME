@@ -26,7 +26,12 @@ import {
 } from '../features/onboarding/onboarding';
 import { staffColors as s } from '../theme/theme';
 
-const blankPerson = (key: string): OnboardingPerson => ({ key, label: '', status: 'unscanned' });
+const blankPerson = (key: string): OnboardingPerson => ({
+  key,
+  label: '',
+  email: '',
+  status: 'unscanned',
+});
 export function OnboardingScreen() {
   const { residentId } = useLocalSearchParams<{ residentId?: string }>();
   const { preview, go, resetScroll, registerExitGuard, requestNavigation } = useWorkspace();
@@ -131,6 +136,7 @@ export function OnboardingScreen() {
                 scope.room,
                 person.label.trim(),
                 residentType(mode, person.key, representative),
+                person.email!.trim(),
               )
             ).id
           : null;
@@ -288,6 +294,7 @@ export function OnboardingScreen() {
             if (representative === key) setRepresentative(next[0].key);
           }}
           onLabelChange={(key, label) => patch(key, { label })}
+          onEmailChange={(key, email) => patch(key, { email })}
           onBack={() => move(0)}
           onContinue={() => move(2)}
         />

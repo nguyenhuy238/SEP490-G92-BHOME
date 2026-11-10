@@ -83,7 +83,14 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             if (!await scope.VisibleRooms.AnyAsync(r => r.Id == x.RoomId && r.Location.IsActive &&
                     r.Status != RoomStatus.Unavailable, t))
                 throw new CaptureConflictException("room_unavailable");
-            var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType, OwnerUserId = await IdentityOwnerAsync(t) };
+            var email = x.Email?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(email) || email.Length > 256 || !new EmailAddressAttribute().IsValid(email))
+                throw new CaptureValidationException("resident_email_required");
+            if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext &&
+                await db.Set<Resident>().AnyAsync(r => r.ContactEmail == email, t))
+                throw new CaptureConflictException("resident_email_already_associated");
+            var resident = new Resident { RoomId = x.RoomId, DisplayLabel = x.DisplayLabel.Trim(), ResidentType = x.ResidentType,
+                ContactEmail = email, OwnerUserId = await IdentityOwnerAsync(t) };
             db.Add(resident); Audit("ResidentCreated", "Resident", resident.Id); return new IdResult(resident.Id);
         }, t);
     }
@@ -91,7 +98,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
     {
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == locationId, t)) throw new OcrAccessException();
         return await db.Set<Resident>().AsNoTracking().Where(r => r.Room.LocationId == locationId && scope.VisibleRooms.Any(room => room.Id == r.RoomId))
-            .OrderByDescending(r => r.CreatedAt).Take(100).Select(r => new ResidentSummary(r.Id, r.RoomId, r.DisplayLabel, r.ResidentType, r.VerificationStatus, r.ConfirmedAt)).ToListAsync(t);
+            .OrderByDescending(r => r.CreatedAt).Take(100).Select(r => new ResidentSummary(r.Id, r.RoomId, r.DisplayLabel, r.ResidentType, r.VerificationStatus, r.ConfirmedAt,
+                db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? r.ContactEmail : null)).ToListAsync(t);
     }
     public async Task<IdentityConfirmationResult> ConfirmIdentityAsync(Guid id, IdentityConfirmation x, CancellationToken t)
     {

@@ -21,6 +21,8 @@ Phase 1 chưa được công nhận toàn bộ demo-ready: MinIO/Docker và prov
 
 ## External readiness
 
+Phase 2 — BR-01/05, UC-13: Staff Mobile onboarding và route Resident yêu cầu email riêng hợp lệ. Backend chuẩn hóa và chặn trùng email, giữ dữ liệu CCCD được mã hóa, không tạo User tại bước xác minh. Kiểm thử PostgreSQL disposable 1/1 PASS (email thiếu/sai/trùng, ngoài Location, persisted identity và số User không đổi); Mobile 48/48 PASS; Mobile typecheck và lint các file thay đổi PASS. Lần chạy đầu test dùng nhầm ID RoomType làm Location không tìm thấy fixture; đã sửa dữ liệu test và chạy lại thành công. UI E2E chưa chạy.
+
 | Dependency                             | Status                                                             |
 | -------------------------------------- | ------------------------------------------------------------------ |
 | MySign sandbox                         | BLOCKED — người dùng chưa có access                                |
