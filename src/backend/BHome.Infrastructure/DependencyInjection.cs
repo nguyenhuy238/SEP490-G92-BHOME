@@ -183,6 +183,14 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Contracts.AnonymousContractSigningService>();
+        services.AddScoped<BHome.Application.Contracts.IPostActivationTenantProvisioning, BHome.Infrastructure.IdentityAccess.PostActivationTenantProvisioning>();
+        services.AddScoped<BHome.Infrastructure.IdentityAccess.AccountInvitations>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.IdentityAccess.AccountInvitationJob>();
+        services.AddScoped<BHome.Application.Contracts.IAnonymousSigningRepository, BHome.Infrastructure.Contracts.AnonymousSigningRepository>();
+        services.AddOptions<BHome.Infrastructure.Contracts.AnonymousSigningOptions>().Bind(configuration.GetSection("AnonymousSigning"));
+        services.AddScoped<BHome.Application.Contracts.IAnonymousSigningSecurity, BHome.Infrastructure.Contracts.AnonymousSigningSecurity>();
+        services.AddScoped<BHome.Application.Contracts.IInternalAcceptanceRenderer, BHome.Infrastructure.Contracts.InternalAcceptanceRenderer>();
         services.AddScoped<BHome.Application.Contracts.IAdministrativeContractReadiness>(provider =>
             provider.GetRequiredService<BHome.Application.Contracts.ContractService>());
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();

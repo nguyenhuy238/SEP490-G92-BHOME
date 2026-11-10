@@ -7,11 +7,11 @@ using BHome.Application.PropertyManagement;
 
 namespace BHome.Application.Contracts;
 
-public sealed record ContractDraftInput(Guid RoomId, Guid OwnerSignerId, Guid TenantUserId,
+public sealed record ContractDraftInput(Guid RoomId, Guid OwnerSignerId, Guid? TenantUserId,
     Guid RepresentativeResidentId, [Required, MinLength(1), MaxLength(50)] Guid[] ResidentIds,
     DateOnly StartDate, DateOnly EndDate, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit,
     [Required, StringLength(12000, MinimumLength = 1)] string Terms, Guid? HoldingContractId = null);
-public sealed record HoldingDraftInput(Guid RoomId, Guid OwnerSignerId, Guid TenantUserId,
+public sealed record HoldingDraftInput(Guid RoomId, Guid OwnerSignerId, Guid? TenantUserId,
     Guid RepresentativeResidentId, [Required, MinLength(1), MaxLength(50)] Guid[] ResidentIds,
     DateOnly StartDate, DateOnly EndDate, DateTimeOffset ExpiresAt,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal HoldingDeposit,
@@ -87,7 +87,8 @@ public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Stat
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AppliedHoldingDeposit,
     Guid LocationId = default, bool IsDevelopmentDemo = false, string RoomNumber = "", string LocationName = "", IReadOnlyList<ContractOccupantView>? Occupants = null, DateOnly? ActualEndDate = null, bool OnboardingDraft = false,
     DateTimeOffset? HoldingExpiresAt = null, short? ReservedCapacity = null, DateTimeOffset? ApprovedAt = null,
-    DateTimeOffset? PriceLockedAt = null, string? PriceLockTrigger = null, Guid? ConvertedMainContractId = null);
+    DateTimeOffset? PriceLockedAt = null, string? PriceLockTrigger = null, Guid? ConvertedMainContractId = null,
+    string SigningMode = "", string SnapshotHash = "");
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
 public interface IAdministrativeContractReadiness
@@ -118,6 +119,7 @@ public sealed record ContractDocument(Guid ContractId, Guid RoomId, Guid OwnerSi
 {
     // Server-derived rendering context; excluded from the persisted historical document/hash format.
     [JsonIgnore] public bool IsOperatingPolicyAmendment { get; init; }
+    [JsonIgnore] public bool IsInternalResidentAcceptance { get; init; }
 }
 public sealed record SigningPreparation(byte[] SourcePdf, byte[] PreparedPdf, string FieldName, string DocumentDigest,
     string DataToSignDigest, string CertificateChain, string ProviderUserId, string CredentialId);
@@ -170,14 +172,14 @@ public interface IContractSettlementDetails
     Task<ContractSettlementSummary> SummaryAsync(Guid contractId, CancellationToken t);
 }
 
-public sealed record HoldingDepositApplication(Guid HoldingContractId, Guid RoomId, Guid TenantUserId,
+public sealed record HoldingDepositApplication(Guid HoldingContractId, Guid RoomId, Guid? TenantUserId,
     decimal AppliedAmount, string AllocationReference);
 // The BF-03A adapter MUST validate signed/active/unexpired Holding + verified funds, then durably
 // allocate/convert in the SAME DbContext transaction as the Main Contract. No remote financial mutation here.
 public interface IContractHoldingLedger
 {
     Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId,
-        Guid tenantUserId, decimal requiredDeposit, CancellationToken t);
+        Guid? tenantUserId, decimal requiredDeposit, CancellationToken t);
 }
 
 public interface IContractRepository
@@ -210,4 +212,5 @@ public interface IContractRepository
     Task<ContractOperation?> OperationAsync(Guid actorId, Guid key, string operation, CancellationToken t);
     void Add(object entity);
     void Audit(Guid actorId, string action, Guid targetId, DateTimeOffset at);
+    void AuditAnonymous(string action, Guid targetId, DateTimeOffset at);
 }

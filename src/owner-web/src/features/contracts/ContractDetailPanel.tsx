@@ -45,6 +45,7 @@ import { HoldingDepositPanel } from './HoldingDepositPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 import { ContractPolicyPanel } from './ContractPolicyPanel';
+import { InternalSigningPanel } from './InternalSigningPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -379,6 +380,9 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
+      {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
+        <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+      )}
       <ContractWorkflowPanel api={api} contract={c} />
       {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel

@@ -21,6 +21,10 @@ Phase 1 chưa được công nhận toàn bộ demo-ready: MinIO/Docker và prov
 
 ## External readiness
 
+Phase 3 — BR-01–07/09/11: đã triển khai nhánh ký INTERNAL_OTP_DRAWN trước tài khoản, OTP/session/hash/revoke/replay, PDF/bằng chứng private, Owner confirmation, activation gate và provisioning sau Main Active cùng transactional dispatch intent. Owner Web và Mobile có màn public ký/thiết lập mật khẩu; Owner Main Draft có lựa chọn người mới không account. Holding/Main hỗ trợ subject Resident và chuyển cọc một lần. API/thiết kế tại docs/api/ANONYMOUS_CONTRACT_SIGNING.md.
+
+Validation phase 3: Application unit 387/387 PASS; migration snapshot + Compact24 Contract regressions + luồng anonymous Main/Holding trên PostgreSQL disposable 21/21 PASS; Owner auth/contracts 16 files/67 tests PASS; Mobile anonymous/onboarding 3 files/24 tests PASS. Typecheck Owner/Mobile PASS. Đã sửa thiếu DOM.Iterable trong cấu hình TypeScript Owner (lỗi build ở test MeterQueries hiện có). Lỗi FK thứ tự persist khi provision đã được test phát hiện và sửa trong cùng transaction. Kiểm thử giao diện thật/native và SMTP thật chưa chạy; không coi component/API là E2E.
+
 Phase 2 — BR-01/05, UC-13: Staff Mobile onboarding và route Resident yêu cầu email riêng hợp lệ. Backend chuẩn hóa và chặn trùng email, giữ dữ liệu CCCD được mã hóa, không tạo User tại bước xác minh. Kiểm thử PostgreSQL disposable 1/1 PASS (email thiếu/sai/trùng, ngoài Location, persisted identity và số User không đổi); Mobile 48/48 PASS; Mobile typecheck và lint các file thay đổi PASS. Lần chạy đầu test dùng nhầm ID RoomType làm Location không tìm thấy fixture; đã sửa dữ liệu test và chạy lại thành công. UI E2E chưa chạy.
 
 | Dependency                             | Status                                                             |

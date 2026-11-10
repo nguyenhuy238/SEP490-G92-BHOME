@@ -69,6 +69,8 @@ export interface ContractView {
   convertedMainContractId?: string | null;
   reservedCapacity?: number | null;
   locationId: string;
+  signingMode?: string;
+  snapshotHash?: string;
 }
 export interface ContractTemplate {
   id: string;
@@ -667,6 +669,13 @@ export const labels: Record<string, string> = {
     'Nhà cung cấp không còn trả về chứng thư đã chọn. Hãy kiểm tra và khai báo lại chứng thư của bạn.',
   contract_not_in_effective_period: 'Chưa đến hoặc đã qua kỳ hiệu lực.',
   verified_signature_evidence_required: 'Cần đủ bằng chứng ký đã xác minh của Owner và Tenant.',
+  internal_acceptance_evidence_required:
+    'Cần chấp thuận đúng PDF bằng OTP của người đại diện và xác nhận của Owner.',
+  resident_email_required: 'Mỗi người ở cần có email riêng trước khi kích hoạt.',
+  verified_residents_with_email_required:
+    'Cần xác minh hồ sơ và email riêng hợp lệ cho tất cả người ở.',
+  internal_signing_flow_required: 'Hợp đồng này dùng lời mời ký nội bộ qua OTP.',
+  signing_otp_key_not_configured: 'Dịch vụ xác nhận OTP chưa được cấu hình.',
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
@@ -847,6 +856,7 @@ export function contractActions(
   const result: ContractAction[] = [];
   if (
     signer &&
+    c.signingMode !== 'INTERNAL_OTP_DRAWN' &&
     (c.kind !== 'Holding' || !!c.approvedAt) &&
     ['Draft', 'PendingSigning'].includes(c.status) &&
     !mine.some((s) => s.status !== 'Failed') &&

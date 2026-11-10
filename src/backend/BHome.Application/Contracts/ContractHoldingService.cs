@@ -7,7 +7,12 @@ namespace BHome.Application.Contracts;
 
 public sealed partial class ContractService
 {
-    private bool HoldingSigned(Contract c) => new[] { c.OwnerSignerId, c.TenantUserId }.All(signer =>
+    internal Task CompleteInternalHoldingSigningAsync(Contract contract, CancellationToken t)
+    {
+        Role(Roles.Owner);
+        return LockHoldingPriceAsync(contract, "SigningAndDepositCompleted", clock.GetUtcNow(), t);
+    }
+    private bool HoldingSigned(Contract c) => c.SigningMode == ContractSigningModes.Internal ? AnonymousContractSigningService.Complete(c) : new[] { c.OwnerSignerId, c.TenantUserId }.All(signer =>
         c.Signatures.Any(s => s.SignerUserId == signer && CompleteSignature(s, c) && s.SignedAt is not null &&
             s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) &&
             !string.IsNullOrWhiteSpace(s.SignedHash) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
@@ -25,7 +30,8 @@ public sealed partial class ContractService
             x.Id, x.ChargeCode, (int)x.Category, (int)x.Method, x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version)).ToArray();
         if (charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent)
             throw ContractException.Conflict("holding_approved_price_changed");
-        var signedAt = c.Signatures.Where(s => CompleteSignature(s, c)).Max(s => s.SignedAt)!.Value;
+        var signedAt = c.SigningMode == ContractSigningModes.Internal ? AnonymousContractSigningService.AcceptedEvidence(c)!.OwnerAcceptedAt!.Value :
+            c.Signatures.Where(s => CompleteSignature(s, c)).Max(s => s.SignedAt)!.Value;
         var instant = (at > signedAt ? at : signedAt).ToUniversalTime();
         trigger = "SigningAndDepositCompleted";
         var snapshot = new HoldingPriceSnapshot(c.MonthlyRent, c.RequiredDeposit, c.StartDate, c.EndDate,
@@ -56,11 +62,13 @@ public sealed partial class ContractService
             if (await repository.HoldingConflictAsync(input.RoomId, Guid.Empty, input.StartDate, input.EndDate, token))
                 throw ContractException.Conflict("room_contract_conflict");
             if (!await repository.ActiveUserInRoleAsync(input.OwnerSignerId, Roles.Owner, token) ||
-                !await repository.ActiveUserInRoleAsync(input.TenantUserId, Roles.Tenant, token))
+                input.TenantUserId is { } tenant && !await repository.ActiveUserInRoleAsync(tenant, Roles.Tenant, token))
                 throw ContractException.Invalid("invalid_contract_signers");
             var residents = await repository.ResidentsAsync(input.RoomId, input.ResidentIds, token);
             if (residents.Count != input.ResidentIds.Length || residents.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified))
                 throw ContractException.Invalid("verified_residents_required");
+            if (residents.Any(r => r.Id != input.RepresentativeResidentId && r.ResidentType != ResidentType.CoOccupant))
+                throw ContractException.Invalid("individual_representatives_require_separate_contracts");
             if (residents.Single(r => r.Id == input.RepresentativeResidentId).TenantUserId is { } linked && linked != input.TenantUserId)
                 throw ContractException.Invalid("tenant_account_mismatch");
             var prices = await repository.ResolvePricesAsync(input.RoomId, input.StartDate, token);
@@ -72,6 +80,7 @@ public sealed partial class ContractService
                 RoomId = input.RoomId,
                 OwnerSignerId = input.OwnerSignerId,
                 TenantUserId = input.TenantUserId,
+                SigningMode = input.TenantUserId is null ? ContractSigningModes.Internal : "",
                 RepresentativeResidentId = input.RepresentativeResidentId,
                 Kind = ContractKind.Holding,
                 StartDate = input.StartDate,
@@ -167,7 +176,14 @@ public sealed partial class ContractService
     public Task<ContractView> ActivateHoldingAsync(Guid id, Guid key, CancellationToken token) => Mutate(id, [Roles.Owner], async c =>
     {
         if (await Replay(key, "holding-activate", id, token) is not null) return View(c);
+        await LockHoldingPriceAsync(c, "SigningAndDepositCompleted", clock.GetUtcNow(), token);
         if (!(await HoldingReadiness(c, token)).Ready) throw ContractException.Conflict("holding_not_ready_for_activation");
+        if (c.SigningMode == ContractSigningModes.Internal)
+        {
+            var evidence = AnonymousContractSigningService.AcceptedEvidence(c)!;
+            using var bytes = new MemoryStream(); await storage.CopyToAsync(evidence.FinalDocumentKey!, bytes, token);
+            if (FileHash(bytes.ToArray()) != evidence.FinalDocumentHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
+        }
         foreach (var signature in c.Signatures.Where(s => CompleteSignature(s, c)))
         {
             using var bytes = new MemoryStream(); await storage.CopyToAsync(signature.SignedObjectKey!, bytes, token);
@@ -225,6 +241,7 @@ public sealed partial class ContractService
                 RoomId = holding.RoomId,
                 OwnerSignerId = holding.OwnerSignerId,
                 TenantUserId = holding.TenantUserId,
+                SigningMode = holding.SigningMode,
                 RepresentativeResidentId = holding.RepresentativeResidentId,
                 HoldingContractId = holding.Id,
                 StartDate = holding.StartDate,
@@ -235,7 +252,7 @@ public sealed partial class ContractService
                 IsDevelopmentDemo = holding.IsDevelopmentDemo
             };
             main.OperatingPolicySnapshot = holding.OperatingPolicySnapshot;
-            var application = await holdings.ApplyAsync(id, main.Id, main.RoomId, RequireTenant(main), main.RequiredDeposit, token);
+            var application = await holdings.ApplyAsync(id, main.Id, main.RoomId, main.TenantUserId, main.RequiredDeposit, token);
             if (application.HoldingContractId != id || application.RoomId != main.RoomId || application.TenantUserId != main.TenantUserId ||
                 application.AppliedAmount < 0 || application.AppliedAmount > main.RequiredDeposit || string.IsNullOrWhiteSpace(application.AllocationReference))
                 throw ContractException.Conflict("invalid_holding_deposit_allocation");

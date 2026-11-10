@@ -148,6 +148,8 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
     public Task<ContractOperation?> OperationAsync(Guid actorId, Guid key, string operation, CancellationToken t) =>
         db.Set<ContractOperation>().SingleOrDefaultAsync(o => o.ActorId == actorId && o.Key == key && o.Operation == operation, t);
     public void Add(object entity) => db.Add(entity);
+    public void AuditAnonymous(string action, Guid targetId, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
+    { UserId = null, Event = action, TargetId = targetId, TargetType = "Contract", Succeeded = true, OccurredAt = at });
     public void Audit(Guid actorId, string action, Guid targetId, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actorId, Event = action, TargetId = targetId, TargetType = "Contract", Succeeded = true, OccurredAt = at });
 }

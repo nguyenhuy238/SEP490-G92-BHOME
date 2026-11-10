@@ -141,7 +141,7 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         var snapshot = document with { ResidentIds = document.ResidentIds.ToArray() };
         static bool Money(decimal value) => value >= 0 && value < 1_000_000_000_000_000_000m && decimal.Truncate(value) == value;
         if (snapshot.ContractId == Guid.Empty || snapshot.RoomId == Guid.Empty || snapshot.OwnerSignerId == Guid.Empty ||
-            snapshot.TenantUserId == Guid.Empty || snapshot.OwnerSignerId == snapshot.TenantUserId ||
+            snapshot.TenantUserId == Guid.Empty && !snapshot.IsInternalResidentAcceptance || snapshot.OwnerSignerId == snapshot.TenantUserId ||
             snapshot.RepresentativeResidentId == Guid.Empty || snapshot.ResidentIds.Length is < 1 or > 50 ||
             snapshot.ResidentIds.Contains(Guid.Empty) || snapshot.ResidentIds.Distinct().Count() != snapshot.ResidentIds.Length ||
             !snapshot.ResidentIds.Contains(snapshot.RepresentativeResidentId) || snapshot.StartDate == default || snapshot.EndDate <= snapshot.StartDate ||
@@ -160,7 +160,7 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         [nameof(snapshot.SnapshotHash)] = snapshot.SnapshotHash,
         [nameof(snapshot.RoomId)] = snapshot.RoomId.ToString(),
         [nameof(snapshot.OwnerSignerId)] = snapshot.OwnerSignerId.ToString(),
-        [nameof(snapshot.TenantUserId)] = snapshot.TenantUserId.ToString(),
+        [nameof(snapshot.TenantUserId)] = snapshot.IsInternalResidentAcceptance ? $"Resident {snapshot.RepresentativeResidentId}" : snapshot.TenantUserId.ToString(),
         [nameof(snapshot.RepresentativeResidentId)] = snapshot.RepresentativeResidentId.ToString(),
         [nameof(snapshot.ResidentIds)] = string.Join('\n', snapshot.ResidentIds.Select(id => id.ToString())),
         [nameof(snapshot.StartDate)] = snapshot.StartDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
