@@ -1,5 +1,14 @@
 # BH-25 Payment API
 
+10/11/2026 — GET `/api/v1/debts/summary` dành riêng Owner, service kiểm tra lại Owner.
+Nhận cùng bộ lọc Location/Room/billingPeriod/overdueOnly/paymentStatus/invoiceIds như danh sách debt;
+trả `outstandingAmount`, `overdueAmount` (decimal string VND), `invoiceCount`, `overdueInvoiceCount`.
+Tổng hợp toàn bộ bộ lọc, không áp Skip/Take; tham số phân trang vẫn được kiểm tra hợp lệ.
+Chỉ Final Invoice có dư nợ, dựa trên cùng projection original + approved adjustments - verified allocations
+và cùng ngày nghiệp vụ Asia/Ho_Chi_Minh với debt list. Không thay phân bổ, trạng thái hoặc chính sách tiền.
+Không có dữ liệu trả số 0 xác nhận từ server; 401/403/400 giữ quy tắc auth/validation hiện có.
+Truy vết UC-23, BF-06, GBR-02/10; không migration hoặc state transition.
+
 Cập nhật **06/11/2026**, contract runtime Compact24. [Trạng thái toàn API](API_IMPLEMENTATION_STATUS.md),
 [hoàn phần receipt chưa phân bổ](REFUNDS.md), [notification consumers](NOTIFICATIONS.md).
 

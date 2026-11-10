@@ -23,6 +23,14 @@ export const notificationCategories = {
   Adjustment: 'Điều chỉnh',
   Task: 'Công việc',
 };
+export const ownerNotificationCategories = {
+  ...notificationCategories,
+  Incident: 'Sự cố',
+  Account: 'Tài khoản',
+  Announcement: 'Thông báo chung',
+  Residence: 'Tạm trú',
+  Other: 'Khác',
+};
 export function notificationClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
   return {
     list: (page = 1, category = '', unread = '', signal?: AbortSignal) =>
@@ -54,6 +62,8 @@ export function ownerNotificationRoute(t: NotificationTarget): string | null {
       return `/meters?taskId=${t.objectId}`;
     case 'OperationalTask':
       return `/tasks?taskId=${t.objectId}`;
+    case 'Incident':
+      return `/incidents?incidentId=${t.objectId}`;
     case 'AutomationExecution':
       return t.locationId &&
         idPattern.test(t.locationId) &&

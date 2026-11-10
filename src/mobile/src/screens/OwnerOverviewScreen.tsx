@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { Action, ui } from '../components/WorkspaceKit';
 import {
@@ -56,9 +55,9 @@ export function OwnerOverviewScreen() {
             { label: 'Phê duyệt', icon: 'clipboard-check-outline', onPress: () => go('approvals') },
             { label: 'Vận hành', icon: 'tune-variant', onPress: () => go('operations') },
             {
-              label: 'Thiết lập',
-              icon: 'office-building-outline',
-              onPress: () => router.push('/setup'),
+              label: 'Tài chính',
+              icon: 'chart-line',
+              onPress: () => go('owner-finance'),
             },
           ]}
         />
@@ -106,6 +105,19 @@ export function OwnerOverviewScreen() {
               icon="file-document-outline"
               detail="Tất cả trạng thái"
             />
+            <Metric
+              label="Phòng trống"
+              value={String(state.data.availableRooms)}
+              icon="home-search-outline"
+              detail="Sẵn sàng theo trạng thái phòng"
+            />
+            <Metric
+              label="Tỷ lệ lấp đầy"
+              value={`${state.data.operationalOccupancyRate.toFixed(1)}%`}
+              icon="chart-donut"
+              detail="Phòng đang ở / tổng số phòng"
+              progress={Math.min(1, Math.max(0, state.data.operationalOccupancyRate / 100))}
+            />
           </View>
         )}
       </DashboardSection>
@@ -116,7 +128,12 @@ export function OwnerOverviewScreen() {
         Hợp đồng & Vòng đời
       </Action>
       <Box>
-        <Text>Báo cáo doanh thu, công nợ và chi phí chưa được triển khai trên màn hình này.</Text>
+        <Action secondary onPress={() => go('owner-finance')}>
+          Xem doanh thu, công nợ và chi phí
+        </Action>
+        <Action secondary onPress={() => go('owner-announcements')}>
+          Gửi thông báo đến Tenant
+        </Action>
       </Box>
       <Action secondary onPress={() => go('profile')}>
         Tài khoản & Đăng xuất

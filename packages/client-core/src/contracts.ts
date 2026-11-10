@@ -916,9 +916,12 @@ export function contractActions(
     const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= Date.now();
     if (owner && c.status === 'Draft' && !c.approvedAt && !expired)
       result.push(
-        action('holding-approval', 'Duyệt hợp đồng giữ chỗ', [
-          { name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 },
-        ]),
+        action(
+          'holding-approval',
+          'Phê duyệt hợp đồng giữ chỗ',
+          [{ name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 }],
+          'Kiểm tra phòng, thời hạn, giá và tiền giữ chỗ trước khi phê duyệt. Phê duyệt chưa đồng nghĩa phòng đã được giữ.',
+        ),
       );
     if (owner && waiting && c.approvedAt && !expired)
       result.push(
@@ -926,20 +929,32 @@ export function contractActions(
           'holding-activation',
           'Kích hoạt giữ chỗ',
           [],
-          'Máy chủ yêu cầu đủ chữ ký và cọc ngân hàng đã xác minh trước khi giữ phòng.',
+          'Chỉ kích hoạt sau khi máy chủ xác nhận đủ phê duyệt, chữ ký, tiền giữ chỗ và phòng hợp lệ.',
         ),
       );
     if (owner && ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status))
       result.push(
-        action('holding-cancellation', 'Hủy giữ chỗ', [
-          { name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 },
-        ]),
+        action(
+          'holding-cancellation',
+          'Hủy hợp đồng giữ chỗ',
+          [{ name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 }],
+          'Hủy giữ lại lịch sử và có thể tạo hồ sơ quyết toán thủ công nếu đã nhận tiền.',
+        ),
       );
     if ((owner || staff) && active && !expired && !c.convertedMainContractId)
       result.push(
-        action('holding-conversion', 'Chuyển sang hợp đồng thuê chính', [
-          { name: 'requiredSecurityDeposit', label: 'Cọc hợp đồng thuê (VND)', type: 'money' },
-        ]),
+        action(
+          'holding-conversion',
+          'Chuyển sang hợp đồng thuê chính',
+          [
+            {
+              name: 'requiredSecurityDeposit',
+              label: 'Tiền cọc thuê yêu cầu (VND)',
+              type: 'money',
+            },
+          ],
+          'Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
+        ),
       );
     return result;
   }
@@ -974,7 +989,7 @@ export function contractActions(
         'Owner cần duyệt yêu cầu. Gửi yêu cầu chưa kết thúc hợp đồng hoặc giải phóng phòng.',
       ),
     );
-  if (active && !m && owner)
+  if (active && !m && owner && c.kind !== 'Holding')
     result.push(action('expiry-move-out', 'Lập yêu cầu trả phòng khi hết hạn', proposedFields));
   if (owner && m?.status === 'Requested')
     result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));

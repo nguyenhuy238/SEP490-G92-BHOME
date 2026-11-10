@@ -29,7 +29,7 @@ import {
 } from '../../../../../packages/client-core/src/adjustments';
 import { formatContractMoney, vnd } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { PageHeader } from '../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useAdjustmentApi } from './useAdjustmentApi';
 import { isMockMode } from '../../services/config';
 
@@ -88,65 +88,67 @@ export function OwnerAdjustmentList({
   });
   return (
     <Stack spacing={2}>
-      <TextField
-        select
-        label="Cơ sở điều chỉnh"
-        value={location}
-        onChange={(e) => {
-          setLocation(e.target.value);
-          setRoom('');
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả cơ sở</MenuItem>
-        {locations.data?.map((x) => (
-          <MenuItem key={x.id} value={x.id}>
-            {x.label}
-          </MenuItem>
-        ))}
-      </TextField>
-      <TextField
-        select
-        label="Phòng điều chỉnh"
-        value={room}
-        onChange={(e) => {
-          setRoom(e.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả phòng</MenuItem>
-        {rooms.data?.map((x) => (
-          <MenuItem key={x.id} value={x.id}>
-            {x.label}
-          </MenuItem>
-        ))}
-      </TextField>
-      {!invoiceId && (
+      <FilterToolbar>
         <TextField
-          label="Lọc theo mã hóa đơn"
-          value={invoice}
+          select
+          label="Cơ sở điều chỉnh"
+          value={location}
           onChange={(e) => {
-            setInvoice(e.target.value);
+            setLocation(e.target.value);
+            setRoom('');
             setPage(1);
           }}
-        />
-      )}
-      <TextField
-        select
-        label="Trạng thái yêu cầu"
-        value={status}
-        onChange={(e) => {
-          setStatus(e.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả trạng thái</MenuItem>
-        {['Pending', 'Approved', 'Rejected'].map((x) => (
-          <MenuItem key={x} value={x}>
-            {adjustmentStatus(x)}
-          </MenuItem>
-        ))}
-      </TextField>
+        >
+          <MenuItem value="">Tất cả cơ sở</MenuItem>
+          {locations.data?.map((x) => (
+            <MenuItem key={x.id} value={x.id}>
+              {x.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Phòng điều chỉnh"
+          value={room}
+          onChange={(e) => {
+            setRoom(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả phòng</MenuItem>
+          {rooms.data?.map((x) => (
+            <MenuItem key={x.id} value={x.id}>
+              {x.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        {!invoiceId && (
+          <TextField
+            label="Lọc theo mã hóa đơn"
+            value={invoice}
+            onChange={(e) => {
+              setInvoice(e.target.value);
+              setPage(1);
+            }}
+          />
+        )}
+        <TextField
+          select
+          label="Trạng thái yêu cầu"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả trạng thái</MenuItem>
+          {['Pending', 'Approved', 'Rejected'].map((x) => (
+            <MenuItem key={x} value={x}>
+              {adjustmentStatus(x)}
+            </MenuItem>
+          ))}
+        </TextField>
+      </FilterToolbar>
       {(list.isPending || locations.isPending) && <LinearProgress />}
       {(list.error || locations.error || rooms.error) && (
         <Alert
@@ -166,7 +168,9 @@ export function OwnerAdjustmentList({
           {adjustmentError(list.error || locations.error || rooms.error)}
         </Alert>
       )}
-      {list.data?.items.length === 0 && <Alert severity="info">Không có yêu cầu phù hợp.</Alert>}
+      {!list.error && !list.isPending && list.data?.items.length === 0 && (
+        <Alert severity="info">Không có yêu cầu phù hợp.</Alert>
+      )}
       {list.data?.items.map((x) => (
         <Paper key={x.id} sx={{ p: 2 }}>
           <Stack spacing={1}>
@@ -294,6 +298,7 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
                       'invoices',
                       'invoice-payment',
                       'payment-invoices',
+                      'debt-summary',
                       'payment-history',
                       'transfer-instructions',
                     ].map((key) => cache.invalidateQueries({ queryKey: [key] })),

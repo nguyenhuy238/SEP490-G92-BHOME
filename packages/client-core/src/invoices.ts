@@ -52,6 +52,11 @@ export interface Page<T> {
   pageSize: number;
   totalCount: number;
 }
+export interface InvoiceListFilter {
+  locationId?: string;
+  billingPeriod?: string;
+  status?: 'Draft' | 'Final';
+}
 export interface BillingSchedule {
   locationId: string;
   rateDate: number;
@@ -101,11 +106,12 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
   const json = <T>(path: string, body: unknown, method = 'POST') =>
     request<T>(path, { method, body: JSON.stringify(body) });
   return {
-    list: (page = 1, signal?: AbortSignal, roomId = '') =>
-      request<Page<Invoice>>(
-        `/api/v1/invoices?page=${page}&pageSize=20${roomId ? `&roomId=${encodeURIComponent(roomId)}` : ''}`,
-        { signal },
-      ),
+    list: (page = 1, signal?: AbortSignal, roomId = '', filter: InvoiceListFilter = {}) => {
+      const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+      if (roomId) query.set('roomId', roomId);
+      for (const [key, value] of Object.entries(filter)) if (value) query.set(key, value);
+      return request<Page<Invoice>>(`/api/v1/invoices?${query}`, { signal });
+    },
     get: (id: string, signal?: AbortSignal) =>
       request<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}`, { signal }),
     draft: (roomId: string, billingPeriod: string, representativeContractId: string) =>
@@ -139,6 +145,7 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
   };
 }
 const messages: Record<string, string> = {
+  invalid_invoice_filter: 'Chọn cơ sở, kỳ tháng và trạng thái hóa đơn hợp lệ.',
   stale_version: 'Cấu hình đã thay đổi. Tải lại và kiểm tra phiên bản trước khi lưu.',
   duplicate_or_overlapping_configuration:
     'Cấu hình bị trùng hoặc có kỳ hiệu lực chồng lấn. Kiểm tra dữ liệu trước khi lưu.',

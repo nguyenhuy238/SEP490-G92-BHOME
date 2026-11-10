@@ -6,6 +6,10 @@ import {
   Box,
   Button,
   Drawer,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   LinearProgress,
   MenuItem,
   Pagination,
@@ -63,6 +67,7 @@ function LiveContractsPage() {
     [selectedLocation, setSelectedLocation] = useState('');
   const [mainDraft, setMainDraft] = useState(false);
   const [holding, setHolding] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
     [lookupError, setLookupError] = useState('');
@@ -85,6 +90,7 @@ function LiveContractsPage() {
         subtitle="UC-15 / UC-16 / UC-19 · Nháp → Ký điện tử → Xác minh cọc → Kích hoạt → Gia hạn / Trả phòng"
         actions={
           <>
+            <Button onClick={() => setSettings(true)}>Cấu hình hợp đồng</Button>
             <Button
               variant="contained"
               onClick={() => {
@@ -107,8 +113,6 @@ function LiveContractsPage() {
         }
       />
       <Stack spacing={2}>
-        <MainDraftSettingsPanel api={api} />
-        <ContractConfigurationPanel api={api} />
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Typography variant="h6">Nhắc gia hạn / trả phòng</Typography>
           <Button onClick={() => void reminders.refetch()} disabled={reminders.isFetching}>
@@ -273,6 +277,26 @@ function LiveContractsPage() {
         </Stack>
         {!!lookupError && <Alert severity="error">{lookupError}</Alert>}
       </Stack>
+      <Dialog
+        open={settings}
+        onClose={() => setSettings(false)}
+        maxWidth="md"
+        fullWidth
+        aria-labelledby="contract-settings-title"
+      >
+        <DialogTitle id="contract-settings-title">Cấu hình mẫu và quy trình hợp đồng</DialogTitle>
+        <DialogContent>
+          {settings && (
+            <Stack spacing={2}>
+              <MainDraftSettingsPanel api={api} />
+              <ContractConfigurationPanel api={api} />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettings(false)}>Đóng cấu hình</Button>
+        </DialogActions>
+      </Dialog>
       <Drawer
         anchor="right"
         open={!!selected}

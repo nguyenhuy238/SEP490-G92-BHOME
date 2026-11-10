@@ -10,11 +10,13 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router';
+import { Link as RouterLink, useInRouterContext, useParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   financeError,
@@ -23,7 +25,8 @@ import {
   type ExpenseInput,
 } from '../../../../../packages/client-core/src/finance';
 import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
-import { PageHeader } from '../../components/common/PortalUI';
+import { FilterToolbar, PageHeader } from '../../components/common/PortalUI';
+import { OptionPicker } from '../../components/common/OptionPicker';
 import { useFinanceApi } from './useFinanceApi';
 import { ExpenseEvidencePanel } from './ExpenseEvidencePanel';
 
@@ -34,6 +37,7 @@ export function ExpensesApiPage() {
   const { session } = useAuth();
   const actor = session?.userId;
   const { locationId: routeLocation } = useParams();
+  const routed = useInRouterContext();
   const [filter, setFilter] = useState<ExpenseFilter>({ page: 1 });
   const [editor, setEditor] = useState<Editor | null>(null);
   const [busy, setBusy] = useState(false),
@@ -93,6 +97,7 @@ export function ExpensesApiPage() {
         );
       else await api.createExpense(editor.value, editor.key);
       await queryClient.invalidateQueries({ queryKey: ['expenses', actor] });
+      await queryClient.invalidateQueries({ queryKey: ['financial-report', actor] });
       setEditor(null);
       setSuccess('Đã lưu khoản chi.');
     } catch (e) {
@@ -124,7 +129,10 @@ export function ExpensesApiPage() {
                 value: {
                   locationId: routeLocation || filter.locationId || locations.data![0].id,
                   roomId: null,
-                  expenseType: 'OPERATING',
+                  expenseType:
+                    filter.expenseType === 'INITIAL_INVESTMENT'
+                      ? 'INITIAL_INVESTMENT'
+                      : 'OPERATING',
                   category: '',
                   amount: '',
                   occurredOn: '',
@@ -157,34 +165,29 @@ export function ExpensesApiPage() {
           {financeError(rows.error || locations.error)}
         </Alert>
       )}
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ my: 2 }}>
-        <TextField
-          select
+      <Tabs
+        aria-label="Loại khoản chi"
+        value={filter.expenseType || ''}
+        onChange={(_, v: string) => changeFilter('expenseType', v)}
+        variant="scrollable"
+        allowScrollButtonsMobile
+        sx={{ mb: 2 }}
+      >
+        <Tab value="" label="Tất cả khoản chi" />
+        {types.map((t) => (
+          <Tab key={t.id} value={t.id} label={t.name} />
+        ))}
+      </Tabs>
+      <FilterToolbar>
+        <OptionPicker
           label="Cơ sở"
           value={routeLocation || filter.locationId || ''}
           disabled={!!routeLocation}
-          onChange={(e) => changeFilter('locationId', e.target.value)}
-        >
-          <MenuItem value="">Tất cả cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem key={l.id} value={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Loại khoản chi"
-          value={filter.expenseType || ''}
-          onChange={(e) => changeFilter('expenseType', e.target.value)}
-        >
-          <MenuItem value="">Tất cả</MenuItem>
-          {types.map((t) => (
-            <MenuItem key={t.id} value={t.id}>
-              {t.name}
-            </MenuItem>
-          ))}
-        </TextField>
+          options={locations.data ?? []}
+          loading={locations.isPending}
+          error={!!locations.error}
+          change={(id) => changeFilter('locationId', id)}
+        />
         <TextField
           label="Danh mục"
           value={filter.category || ''}
@@ -204,7 +207,7 @@ export function ExpensesApiPage() {
           value={filter.to || ''}
           onChange={(e) => changeFilter('to', e.target.value)}
         />
-      </Stack>
+      </FilterToolbar>
       {!rows.error && rows.data?.items.length === 0 && (
         <Alert severity="info">Chưa có khoản chi phù hợp.</Alert>
       )}
@@ -222,6 +225,14 @@ export function ExpensesApiPage() {
             <Typography>{e.note}</Typography>
             {(e.assetName || e.taskTitle) && (
               <Typography>{[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}</Typography>
+            )}
+            {routed && e.taskId && (
+              <Button
+                component={RouterLink}
+                to={`/maintenance?workOrderId=${encodeURIComponent(e.taskId)}`}
+              >
+                Xem Work Order
+              </Button>
             )}
             <Button disabled={busy} onClick={() => void view(e.id)}>
               Chi tiết / chỉnh sửa

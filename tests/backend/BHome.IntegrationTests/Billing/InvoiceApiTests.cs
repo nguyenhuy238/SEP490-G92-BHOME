@@ -134,6 +134,8 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         {
             var result = await Success<InvoiceView>(response); Assert.Equal("Final", result.Status); Assert.Equal(ready.Total, result.Total);
         }
+        var filtered = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Tenant.Client.GetAsync($"/api/v1/invoices?roomId={w.Room}&status=Final&billingPeriod={w.Period:yyyy-MM-dd}"));
+        Assert.Equal(draft.Id, Assert.Single(filtered.Items).Id);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(ready.Version + 1))).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == draft.Id && a.Event == "InvoiceFinalized"));
@@ -180,6 +182,29 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Equal(2, await db.Set<InvoiceRecipient>().CountAsync(i => i.InvoiceId == invoice.Id));
         Assert.NotNull((await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.Category == ChargeCategory.Rent)).FirstUsedAt);
         Assert.Equal(2, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
+    }
+
+    [Fact]
+    public async Task InvoiceFiltersApplyBeforePaginationAndPreserveRecipientIsolation()
+    {
+        var w = await Setup(); var draft = await Draft(w);
+        var secondPeriod = w.Period.AddMonths(-1);
+        await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, secondPeriod, w.Contract)));
+        var query = $"/api/v1/invoices?locationId={w.Location}&billingPeriod={w.Period:yyyy-MM-dd}&status=Draft&pageSize=1";
+        var result = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Owner.Client.GetAsync(query));
+        Assert.Equal(1, result.TotalCount); Assert.Equal(draft.Id, Assert.Single(result.Items).Id);
+        var tenant = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Tenant.Client.GetAsync(query));
+        Assert.Equal(draft.Id, Assert.Single(tenant.Items).Id);
+        var outsider = await User(Roles.Tenant);
+        var hidden = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await outsider.Client.GetAsync(query));
+        Assert.Equal(0, hidden.TotalCount); Assert.Empty(hidden.Items);
+        foreach (var mismatch in new[] { query.Replace("status=Draft", "status=Final"), query.Replace(w.Location.ToString(), Guid.NewGuid().ToString()), query + $"&roomId={Guid.NewGuid()}" })
+            Assert.Empty((await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Owner.Client.GetAsync(mismatch))).Items);
+        foreach (var invalid in new[] { "status=999", "status=Unknown", "locationId=" + Guid.Empty, "billingPeriod=2026-11-15", "billingPeriod=bad-date" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.GetAsync("/api/v1/invoices?" + invalid)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(query)).StatusCode);
+        using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(query)).StatusCode);
     }
 
     [Fact]

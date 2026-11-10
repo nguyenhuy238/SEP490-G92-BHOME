@@ -42,6 +42,7 @@ export function contractActionSection(operation: string): ContractSection {
     return 'lifecycle';
   if (
     operation.startsWith('signing') ||
+    operation.startsWith('holding-') ||
     ['activate', 'deposit-verifications', 'cancel'].includes(operation)
   )
     return 'signing';

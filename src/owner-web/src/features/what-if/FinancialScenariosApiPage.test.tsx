@@ -110,3 +110,28 @@ it('loads saved snapshots for review and comparison without replaying analysis',
   expect(mock.analyzeScenario).not.toHaveBeenCalled();
   expect(mock.scenario).toHaveBeenCalledTimes(2);
 });
+it('shows negative forecasts and the full baseline period without recalculating actual records', async () => {
+  mock.analyzeScenario.mockResolvedValue({
+    ...result,
+    baseline: {
+      ...result.baseline,
+      total: { issued: '1000', verifiedCollections: '900', operatingProfit: '-500' },
+    },
+    result: {
+      ...result.result,
+      monthlyProfitDifference: '-999999999999999999',
+      monthlyProfit: '-200',
+    },
+  });
+  mount();
+  fill();
+  await screen.findByText('Lợi nhuận / tháng: -200 ₫');
+  expect(
+    screen.getByText('Chênh lệch lợi nhuận tháng so với nền: -999.999.999.999.999.999 ₫'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Lợi nhuận kỳ nền: -500 ₫')).toBeInTheDocument();
+  expect(
+    screen.getByText('Dữ liệu thực tế trong kỳ nền 01/11/2026 – 30/11/2026'),
+  ).toBeInTheDocument();
+  expect(mock.saveScenario).not.toHaveBeenCalled();
+});

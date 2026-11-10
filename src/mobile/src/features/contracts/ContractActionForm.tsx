@@ -119,7 +119,9 @@ export function ContractActionForm({
         keys.get(scope, body),
       );
       keys.confirmed(scope, body);
-      onSuccess(action.operation === 'renewals' ? result.id : undefined);
+      onSuccess(
+        ['renewals', 'holding-conversion'].includes(action.operation) ? result.id : undefined,
+      );
     } catch (e) {
       setError(contractError(e));
     } finally {

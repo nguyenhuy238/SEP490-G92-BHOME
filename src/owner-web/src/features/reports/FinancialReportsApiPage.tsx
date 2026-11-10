@@ -1,24 +1,17 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Button,
-  LinearProgress,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Button, LinearProgress, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   financeError,
+  formatFinanceMoney,
   type FinanceTotals,
   type ReportFilter,
 } from '../../../../../packages/client-core/src/finance';
-import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
-import { PageHeader } from '../../components/common/PortalUI';
+import { FilterToolbar, KPIGrid, PageHeader } from '../../components/common/PortalUI';
+import { OptionPicker } from '../../components/common/OptionPicker';
+import { FinancialAmountChart } from './FinancialAmountChart';
 import { useFinanceApi } from '../expenses/useFinanceApi';
 import { downloadFinance, reportCsv } from '../../services/financeExport';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
@@ -31,6 +24,7 @@ export function FinancialReportsApiPage() {
     [location, setLocation] = useState('');
   const [filter, setFilter] = useState<ReportFilter | null>(null);
   const [room, setRoom] = useState('');
+  const [dateError, setDateError] = useState(false);
   const locations = useQuery({
     queryKey: ['finance-locations', session?.userId],
     queryFn: ({ signal }) => api.locations(signal),
@@ -39,6 +33,11 @@ export function FinancialReportsApiPage() {
     queryKey: ['financial-report', session?.userId, filter],
     enabled: !!filter,
     queryFn: ({ signal }) => api.report(filter!, signal),
+  });
+  const rooms = useQuery({
+    queryKey: ['finance-rooms', session?.userId, location],
+    enabled: !!location,
+    queryFn: ({ signal }) => api.rooms(location, signal),
   });
   const value = report.data;
   const occupancyReasons: Record<string, string> = {
@@ -68,6 +67,11 @@ export function FinancialReportsApiPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          if (!from || !to || from > to) {
+            setDateError(true);
+            return;
+          }
+          setDateError(false);
           setFilter({
             from,
             to,
@@ -76,7 +80,7 @@ export function FinancialReportsApiPage() {
           });
         }}
       >
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ my: 2 }}>
+        <FilterToolbar>
           <TextField
             required
             label="Từ ngày"
@@ -90,46 +94,47 @@ export function FinancialReportsApiPage() {
             label="Đến ngày"
             type="date"
             value={to}
+            error={dateError}
+            helperText={dateError ? 'Chọn khoảng ngày hợp lệ.' : undefined}
             slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
             onChange={(e) => setTo(e.target.value)}
           />
-          <TextField
-            select
+          <OptionPicker
             label="Cơ sở"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
-          >
-            <MenuItem value="">Toàn chuỗi</MenuItem>
-            {locations.data?.map((l) => (
-              <MenuItem key={l.id} value={l.id}>
-                {l.label}
-              </MenuItem>
-            ))}
-          </TextField>
+            options={locations.data ?? []}
+            loading={locations.isPending}
+            error={!!locations.error}
+            emptyLabel="Toàn chuỗi"
+            change={(id) => {
+              setLocation(id);
+              setRoom('');
+            }}
+          />
+          <OptionPicker
+            label="Phòng"
+            value={room}
+            options={rooms.data ?? []}
+            disabled={!location}
+            loading={!!location && rooms.isPending}
+            error={!!rooms.error}
+            emptyLabel={location ? 'Tất cả phòng' : 'Chọn cơ sở trước'}
+            change={setRoom}
+          />
           <Button type="submit" variant="contained" disabled={report.isFetching}>
             Xem báo cáo
           </Button>
-          <TextField
-            label="Mã phòng (tùy chọn)"
-            value={room}
-            onChange={(e) => setRoom(e.target.value.trim())}
-            slotProps={{
-              htmlInput: {
-                pattern:
-                  '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
-              },
-            }}
-          />
-        </Stack>
+        </FilterToolbar>
       </form>
       {(locations.isPending || report.isFetching) && <LinearProgress />}
-      {(locations.error || report.error) && (
+      {(locations.error || rooms.error || report.error) && (
         <Alert
           severity="error"
           action={
             <Button
               onClick={() => {
                 void locations.refetch();
+                if (location) void rooms.refetch();
                 if (filter) void report.refetch();
               }}
             >
@@ -137,11 +142,26 @@ export function FinancialReportsApiPage() {
             </Button>
           }
         >
-          {financeError(locations.error || report.error)}
+          {financeError(locations.error || rooms.error || report.error)}
         </Alert>
       )}
       {!report.error && value && (
         <Stack spacing={2}>
+          <KPIGrid
+            items={[
+              { label: 'Doanh thu phát hành', value: formatFinanceMoney(value.total.issued) },
+              {
+                label: 'Thu đã xác minh',
+                value: formatFinanceMoney(value.total.verifiedCollections),
+              },
+              {
+                label: 'Nợ hiện tại trong kỳ',
+                value: formatFinanceMoney(value.total.outstandingNow),
+              },
+              { label: 'OPEX trong kỳ', value: formatFinanceMoney(value.total.operatingExpenses) },
+            ]}
+          />
+          <FinancialAmountChart totals={value.total} />
           <Typography>
             Ảnh chụp dữ liệu:{' '}
             {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
@@ -160,7 +180,7 @@ export function FinancialReportsApiPage() {
               Hoàn gốc cọc đã xác minh trong kỳ:{' '}
               {value.verifiedDepositReturns == null
                 ? 'Chưa có dữ liệu phân loại'
-                : formatDraftMoney(value.verifiedDepositReturns)}
+                : formatFinanceMoney(value.verifiedDepositReturns)}
             </Typography>
             <Alert severity="info">
               Hoàn gốc cọc được theo dõi riêng, không phải chi phí vận hành hoặc giảm doanh thu hóa
@@ -201,19 +221,19 @@ export function FinancialReportsApiPage() {
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Vốn & Thu hồi</Typography>
             <Typography>
-              Đầu tư đến cuối kỳ: {formatDraftMoney(value.capital.initialInvestment)}
+              Đầu tư đến cuối kỳ: {formatFinanceMoney(value.capital.initialInvestment)}
             </Typography>
             <Typography>
               Tiền thu hồi lũy kế:{' '}
               {value.capital.netRecovery === null
                 ? 'Chưa xác định'
-                : formatDraftMoney(value.capital.netRecovery)}
+                : formatFinanceMoney(value.capital.netRecovery)}
             </Typography>
             <Typography>
               Vốn chưa thu hồi:{' '}
               {value.capital.remainingCapital === null
                 ? 'Chưa xác định'
-                : formatDraftMoney(value.capital.remainingCapital)}
+                : formatFinanceMoney(value.capital.remainingCapital)}
             </Typography>
             <Typography>
               Tỷ lệ thu hồi:{' '}
@@ -267,7 +287,7 @@ function Totals({ value }: { value: FinanceTotals }) {
         ] as const
       ).map(([label, amount]) => (
         <Typography key={label}>
-          {label}: {amount === null ? 'Chưa xác định' : formatDraftMoney(amount)}
+          {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
         </Typography>
       ))}
     </Stack>

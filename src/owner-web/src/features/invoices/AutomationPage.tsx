@@ -3,6 +3,10 @@ import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Checkbox,
   FormControlLabel,
   LinearProgress,
@@ -128,6 +132,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
   const api = useInvoiceApi();
   const cache = useQueryClient();
   const { session } = useAuth();
+  const [settings, setSettings] = useState(false);
   const key = ['automation', session?.userId, location, period];
   const query = `locationId=${location}&period=${period}`;
   const data = useQuery({
@@ -189,14 +194,33 @@ function AutomationLocation({ location, period }: { location: string; period: st
       {notice && <Alert severity="info">{notice}</Alert>}
       {data.data && (
         <>
-          <AutomationForm
-            key={data.data.history[0]?.id ?? 'new'}
-            location={location}
-            period={period}
-            history={data.data.history}
-            calendarVersion={data.data.calendar?.version ?? 0}
-            saved={() => void cache.invalidateQueries({ queryKey: ['automation'] })}
-          />
+          <Button onClick={() => setSettings(true)}>Cấu hình lịch hóa đơn</Button>
+          <Dialog
+            open={settings}
+            onClose={() => setSettings(false)}
+            maxWidth="md"
+            fullWidth
+            aria-labelledby="automation-settings-title"
+          >
+            <DialogTitle id="automation-settings-title">Cấu hình lịch hóa đơn</DialogTitle>
+            <DialogContent>
+              {settings && (
+                <AutomationForm
+                  key={data.data.history[0]?.id ?? 'new'}
+                  location={location}
+                  period={period}
+                  history={data.data.history}
+                  calendarVersion={data.data.calendar?.version ?? 0}
+                  saved={() => {
+                    void cache.invalidateQueries({ queryKey: ['automation'] });
+                  }}
+                />
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSettings(false)}>Đóng cấu hình lịch</Button>
+            </DialogActions>
+          </Dialog>
           <Paper sx={{ p: 2 }}>
             <Stack spacing={2}>
               <Typography variant="h6">Lịch kỳ đang xem</Typography>
@@ -485,13 +509,27 @@ function RepresentativeForm({ location, period }: { location: string; period: st
         { signal },
       )) ?? null,
   });
+  const contracts = useQuery({
+    queryKey: ['automation-contract-options', session?.userId, room],
+    enabled: !!room,
+    queryFn: ({ signal }) =>
+      api.request<{
+        periods: {
+          contractId: string;
+          from: string;
+          to: string;
+          contractStatus: string;
+          occupants: { displayLabel: string }[];
+        }[];
+      }>(`/api/v1/rooms/${room}/occupancy-history`, { signal }),
+  });
   return (
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2}>
         <Typography variant="h6">Hợp đồng đại diện hóa đơn phòng</Typography>
         <Typography variant="body2">
-          Khi nhiều hợp đồng cùng kỳ, chọn hợp đồng tại màn Hợp đồng và nhập mã; backend kiểm tra
-          phòng, kỳ và quyền trước khi lưu.
+          Khi nhiều hợp đồng cùng kỳ, chọn đại diện từ lịch sử thuê phòng. Máy chủ kiểm tra phòng,
+          kỳ và quyền trước khi lưu.
         </Typography>
         <Button component={Link} to="/contracts">
           Xem hợp đồng
@@ -513,8 +551,10 @@ function RepresentativeForm({ location, period }: { location: string; period: st
             </MenuItem>
           ))}
         </TextField>
-        {(rooms.error || selection.error) && (
-          <Alert severity="error">{invoiceError(rooms.error ?? selection.error)}</Alert>
+        {(rooms.error || selection.error || contracts.error) && (
+          <Alert severity="error">
+            {invoiceError(rooms.error ?? selection.error ?? contracts.error)}
+          </Alert>
         )}
         {selection.data && (
           <Typography>
@@ -522,10 +562,21 @@ function RepresentativeForm({ location, period }: { location: string; period: st
           </Typography>
         )}
         <TextField
-          label="Mã hợp đồng đại diện"
+          select
+          label="Hợp đồng đại diện"
           value={contract}
           onChange={(e) => setContract(e.target.value)}
-        />
+          disabled={!room || contracts.isFetching}
+        >
+          <MenuItem value="">Chọn hợp đồng</MenuItem>
+          {contracts.data?.periods
+            .filter((c) => ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus))
+            .map((c) => (
+              <MenuItem key={c.contractId} value={c.contractId}>
+                {c.from} – {c.to} · {c.occupants.map((o) => o.displayLabel).join(', ')}
+              </MenuItem>
+            ))}
+        </TextField>
         {error && <Alert severity="error">{error}</Alert>}
         {notice && <Alert severity="success">{notice}</Alert>}
         <Button

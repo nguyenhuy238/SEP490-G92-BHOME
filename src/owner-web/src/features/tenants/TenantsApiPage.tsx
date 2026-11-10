@@ -12,8 +12,13 @@ import {
   Typography,
   Alert,
 } from '@mui/material';
-import { Link } from 'react-router';
-import { PageHeader, StatusChip, ConfirmDialog } from '../../components/common/PortalUI';
+import { Link, useSearchParams } from 'react-router';
+import {
+  PageHeader,
+  StatusChip,
+  ConfirmDialog,
+  FilterToolbar,
+} from '../../components/common/PortalUI';
 import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../components/common/OwnerSelectors';
 import {
@@ -45,12 +50,13 @@ interface Resident {
   }[];
 }
 export function TenantsApiPage() {
+  const [params] = useSearchParams();
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [search, setSearch] = useState(''),
     [status, setStatus] = useState(''),
     [page, setPage] = useState(1),
-    [id, setId] = useState(''),
+    [id, setId] = useState(params.get('residentId') ?? ''),
     [create, setCreate] = useState(false);
   const list = useOwnerQuery<OwnerPage<Resident>>(
     ['residents', location, room, search, status, page],
@@ -75,49 +81,56 @@ export function TenantsApiPage() {
           </Button>
         }
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(v) => {
-          setLocation(v);
-          setRoom('');
-          setPage(1);
-        }}
-      />
-      <OwnerRoomPicker
-        key={location}
-        location={location}
-        value={room}
-        change={(v) => {
-          setRoom(v);
-          setPage(1);
-        }}
-      />
-      <TextField
-        label="Tìm tên hiển thị"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setPage(1);
-        }}
-      />
-      <TextField
-        select
-        label="Xác minh định danh"
-        value={status}
-        onChange={(e) => {
-          setStatus(e.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả</MenuItem>
-        <MenuItem value="0">Chờ xác minh</MenuItem>
-        <MenuItem value="1">Đã xác minh</MenuItem>
-        <MenuItem value="2">Đã từ chối</MenuItem>
-      </TextField>
-      <Button onClick={() => void list.refetch()}>Tải lại</Button>
-      <OwnerFeedback busy={list.isFetching} error={list.error} />
+      <FilterToolbar>
+        <OwnerLocationPicker
+          value={location}
+          change={(v) => {
+            setLocation(v);
+            setRoom('');
+            setPage(1);
+          }}
+        />
+        <OwnerRoomPicker
+          key={location}
+          location={location}
+          value={room}
+          change={(v) => {
+            setRoom(v);
+            setPage(1);
+          }}
+        />
+        <TextField
+          label="Tìm tên hiển thị"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+        />
+        <TextField
+          select
+          label="Xác minh định danh"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả</MenuItem>
+          <MenuItem value="0">Chờ xác minh</MenuItem>
+          <MenuItem value="1">Đã xác minh</MenuItem>
+          <MenuItem value="2">Đã từ chối</MenuItem>
+        </TextField>
+        <Button disabled={list.isFetching} onClick={() => void list.refetch()}>
+          Tải lại
+        </Button>
+      </FilterToolbar>
       <Paper>
         <OwnerTable
+          loading={list.isFetching}
+          error={list.error}
+          retry={() => void list.refetch()}
+          label="Khách thuê và người ở"
           rows={list.data?.items ?? []}
           id={(x) => x.id}
           select={(x) => setId(x.id)}
