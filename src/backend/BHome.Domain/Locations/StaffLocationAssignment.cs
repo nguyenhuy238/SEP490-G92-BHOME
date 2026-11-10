@@ -21,4 +21,11 @@ public sealed class StaffLocationAssignment : AuditableEntity
     public Guid CreatedByUserId { get; private set; }
     public DateOnly StartDate { get; private set; }
     public DateOnly EndDate { get; private set; }
+
+    public void ChangePeriod(DateOnly startDate, DateOnly endDate)
+    {
+        if (startDate > endDate) throw new ArgumentOutOfRangeException(nameof(endDate));
+        StartDate = startDate;
+        EndDate = endDate;
+    }
 }

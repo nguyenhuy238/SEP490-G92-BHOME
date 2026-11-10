@@ -39,11 +39,13 @@ export function OwnerTable<T>({
   columns,
   id,
   select,
+  selectLabel = 'Xem chi tiết',
 }: {
   rows: T[];
   columns: { label: string; render: (row: T) => ReactNode }[];
   id: (row: T) => string;
   select?: (row: T) => void;
+  selectLabel?: string;
 }) {
   if (!rows.length) return <EmptyState />;
   return (
@@ -65,7 +67,7 @@ export function OwnerTable<T>({
               ))}
               {select && (
                 <TableCell>
-                  <Button onClick={() => select(row)}>Xem chi tiết</Button>
+                  <Button onClick={() => select(row)}>{selectLabel}</Button>
                 </TableCell>
               )}
             </TableRow>

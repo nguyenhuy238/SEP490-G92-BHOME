@@ -14,7 +14,6 @@ export const portalRoutes = [
   '/rooms/room-0',
   '/pricing',
   '/staff',
-  '/schedules',
   '/tasks',
   '/tenants',
   '/contracts',

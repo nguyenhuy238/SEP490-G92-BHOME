@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -34,9 +34,12 @@ import {
   type OwnerTask,
   type TaskWork,
   type TaskHistory,
+  type TaskActor,
   type TaskEvidence,
   type RecurringTemplate,
 } from './taskContracts';
+import type { Staff } from '../staff/staffContracts';
+import type { OwnerLocation } from '../../hooks/useOwnerWorkspace';
 const root = '/api/v1/operational-tasks';
 const emptyWork: TaskWork = {
   title: '',
@@ -51,17 +54,19 @@ export function TasksApiPage() {
     [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
     [priority, setPriority] = useState(''),
+    [staffUserId, setStaffUserId] = useState(''),
     [overdue, setOverdue] = useState(false),
     [id, setId] = useState(params.get('taskId') ?? ''),
     [editor, setEditor] = useState<OwnerTask | null | undefined>();
   const [from, setFrom] = useState(''),
     [to, setTo] = useState('');
   const list = useOwnerQuery<OwnerPage<OwnerTask>>(
-    ['tasks', location, status, priority, overdue, from, to, page],
+    ['tasks', location, staffUserId, status, priority, overdue, from, to, page],
     root +
       '?' +
       ownerQuery({
         locationId: location,
+        staffUserId,
         status,
         priority,
         isOverdue: overdue || undefined,
@@ -71,6 +76,28 @@ export function TasksApiPage() {
         pageSize: 20,
       }),
   );
+  const staffDirectory = useOwnerQuery<OwnerPage<Staff>>(
+    ['task-staff-directory'],
+    '/api/v1/staff?page=1&pageSize=100',
+  );
+  const locationDirectory = useOwnerQuery<OwnerPage<OwnerLocation>>(
+    ['task-location-directory'],
+    '/api/v1/locations?page=1&pageSize=100',
+  );
+  const staffName = (id: string | null) => displayStaffName(staffDirectory.data?.items, id);
+  const locationName = (id: string) =>
+    locationDirectory.data?.items.find((item) => item.id === id)?.name ?? id;
+  const hasFilters = Boolean(location || staffUserId || status || priority || overdue || from || to);
+  const clearFilters = () => {
+    setLocation('');
+    setStaffUserId('');
+    setStatus('');
+    setPriority('');
+    setOverdue(false);
+    setFrom('');
+    setTo('');
+    setPage(1);
+  };
   return (
     <Stack spacing={2}>
       <PageHeader
@@ -82,15 +109,43 @@ export function TasksApiPage() {
           </Button>
         }
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(v) => {
-          setLocation(v);
-          setPage(1);
-        }}
-      />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+      <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack spacing={2}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Bộ lọc công việc
+          </Typography>
+          <OwnerLocationPicker
+            simple
+            value={location}
+            change={(v) => {
+              setLocation(v);
+              setPage(1);
+            }}
+          />
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{ flexWrap: 'wrap', alignItems: { md: 'center' } }}
+      >
         <TextField
+          sx={{ minWidth: 220, flex: '1 1 220px' }}
+          select
+          label="Staff phụ trách"
+          value={staffUserId}
+          onChange={(e) => {
+            setStaffUserId(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả Staff</MenuItem>
+          {staffDirectory.data?.items.map((staff) => (
+            <MenuItem key={staff.userId} value={staff.userId}>
+              {staff.fullName} {staff.isActive ? '' : '(Đã ngừng)'}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          sx={{ minWidth: 220, flex: '1 1 220px' }}
           select
           label="Trạng thái công việc"
           value={status}
@@ -109,6 +164,7 @@ export function TasksApiPage() {
           )}
         </TextField>
         <TextField
+          sx={{ minWidth: 180, flex: '1 1 180px' }}
           select
           label="Ưu tiên"
           value={priority}
@@ -134,9 +190,13 @@ export function TasksApiPage() {
           }
         />
         <Button onClick={() => void list.refetch()}>Tải lại</Button>
+        <Button disabled={!hasFilters} onClick={clearFilters}>
+          Xóa bộ lọc
+        </Button>
       </Stack>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexWrap: 'wrap' }}>
         <TextField
+          sx={{ minWidth: 260, flex: '1 1 260px' }}
           type="datetime-local"
           label="Hạn từ (giờ Việt Nam)"
           value={from}
@@ -147,6 +207,7 @@ export function TasksApiPage() {
           slotProps={{ inputLabel: { shrink: true } }}
         />
         <TextField
+          sx={{ minWidth: 260, flex: '1 1 260px' }}
           type="datetime-local"
           label="Hạn đến (giờ Việt Nam)"
           value={to}
@@ -157,6 +218,8 @@ export function TasksApiPage() {
           slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
         />
       </Stack>
+        </Stack>
+      </Paper>
       <OwnerFeedback busy={list.isFetching} error={list.error} />
       <Paper>
         <OwnerTable
@@ -165,20 +228,21 @@ export function TasksApiPage() {
           select={(x) => setId(x.id)}
           columns={[
             { label: 'Công việc', render: (x) => x.title },
+            { label: 'Cơ sở', render: (x) => locationName(x.locationId) },
             {
               label: 'Trạng thái',
               render: (x) => <StatusChip label={taskStatus[x.status] ?? x.status} />,
             },
             {
-              label: 'Hạn / ưu tiên',
-              render: (x) =>
-                `${x.dueAt ? formatInstant(x.dueAt) : 'Chưa có hạn'} · ${x.priority} ${x.isOverdue ? '· Quá hạn' : ''}`,
+              label: 'Thời hạn',
+              render: (x) => `${x.dueAt ? formatInstant(x.dueAt) : 'Chưa có hạn'}${x.isOverdue ? ' · Quá hạn' : ''}`,
             },
+            { label: 'Ưu tiên', render: (x) => x.priority },
             {
               label: 'Người phụ trách',
               render: (x) =>
                 x.responsibilityAvailable
-                  ? x.currentResponsibleStaffUserId
+                  ? staffName(x.currentResponsibleStaffUserId)
                   : 'Chưa có người phụ trách',
             },
           ]}
@@ -190,7 +254,7 @@ export function TasksApiPage() {
         change={setPage}
         busy={list.isFetching}
       />
-      {id && <TaskDetail key={id} id={id} close={() => setId('')} edit={setEditor} />}
+      {id && <TaskDetail key={id} id={id} close={() => setId('')} edit={setEditor} locationName={locationName} />}
       {location && <RecurringTemplates key={location} location={location} />}
       {editor !== undefined && (
         <TaskEditor task={editor} initialLocation={location} close={() => setEditor(undefined)} />
@@ -202,11 +266,14 @@ function TaskDetail({
   id,
   close,
   edit,
+  locationName,
 }: {
   id: string;
   close: () => void;
   edit: (task: OwnerTask) => void;
+  locationName: (id: string) => string;
 }) {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1),
     [operation, setOperation] = useState(''),
     [note, setNote] = useState('');
@@ -221,16 +288,30 @@ function TaskDetail({
     `${root}/${id}/evidence`,
     !!detail.data,
   );
+  const actors = useOwnerQuery<TaskActor[]>(
+    ['task-actors', id],
+    `${root}/${id}/actors`,
+    !!detail.data,
+  );
   const { request } = useMeterApi();
   const action = useOwnerAction();
   const task = detail.data;
+  const staffDirectory = useOwnerQuery<OwnerPage<Staff>>(
+    ['task-detail-staff-directory'],
+    '/api/v1/staff?page=1&pageSize=100',
+  );
+  const staffName = (userId: string | null) => displayStaffName(staffDirectory.data?.items, userId);
+  const actorName = (userId: string | null) =>
+    userId
+      ? actors.data?.find((item) => item.userId === userId)?.displayName ?? staffName(userId)
+      : 'Chưa có';
   const mutable = task?.kind === 'AdHoc' && !['Completed', 'Cancelled'].includes(task.status);
   return (
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2}>
         <OwnerFeedback
-          busy={detail.isFetching || history.isFetching || evidence.isFetching || action.busy}
-          error={action.error || detail.error || history.error || evidence.error}
+          busy={detail.isFetching || history.isFetching || evidence.isFetching || actors.isFetching || action.busy}
+          error={action.error || detail.error || history.error || evidence.error || actors.error}
           notice={action.notice}
         />
         {task && (
@@ -238,13 +319,29 @@ function TaskDetail({
             <Typography variant="h6">
               {task.title} · {taskStatus[task.status] ?? task.status}
             </Typography>
+            <Alert severity={task.isOverdue ? 'error' : 'info'}>
+              Cơ sở: {locationName(task.locationId)} · Thời hạn:{' '}
+              {task.dueAt ? formatInstant(task.dueAt) : 'Chưa đặt'}
+              {task.isOverdue ? ' · Đã quá hạn' : ''}
+            </Alert>
             <Typography sx={{ whiteSpace: 'pre-wrap' }}>{task.requirements}</Typography>
             <Typography>
               Kết quả: {task.result ?? 'Chưa gửi'} · Phiên bản {task.version}
             </Typography>
             <Typography>
-              Người phụ trách hiện tại: {task.currentResponsibleStaffUserId ?? 'Chưa có'} · Khi
-              giao: {task.recordedStaffUserId ?? 'Chưa có'}
+              Người phụ trách hiện tại: {staffName(task.currentResponsibleStaffUserId)} · Khi giao:{' '}
+              {staffName(task.recordedStaffUserId)}
+            </Typography>
+            <Alert severity="info">
+              Người thực hiện được xác định theo phân công Staff đang có hiệu lực tại cơ sở. Để đổi người,
+              cập nhật phân công tại mục Nhân viên; các công việc đang mở sẽ được chuyển theo phân công mới.
+            </Alert>
+            <Button variant="outlined" onClick={() => navigate('/staff')}>
+              Mở quản lý phân công Staff
+            </Button>
+            <Typography variant="subtitle1">Tiến độ công việc</Typography>
+            <Typography>
+              Trạng thái hiện tại: {taskStatus[task.status] ?? task.status} · Phiên bản {task.version}
             </Typography>
             {!task.responsibilityAvailable && (
               <Alert severity="warning">
@@ -253,7 +350,7 @@ function TaskDetail({
             )}
             {task.verifiedAt && (
               <Typography>
-                Nghiệm thu: {formatInstant(task.verifiedAt)} · {task.verifiedByUserId}
+                Nghiệm thu: {formatInstant(task.verifiedAt)} · {actorName(task.verifiedByUserId)}
               </Typography>
             )}
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -265,7 +362,7 @@ function TaskDetail({
               </Button>
               {[
                 ['coordinate', 'Ghi chú phối hợp'],
-                ['assign', 'Đồng bộ người phụ trách'],
+                ['assign', 'Đồng bộ theo phân công cơ sở'],
                 ['cancel', 'Hủy công việc'],
                 ['verify', 'Nghiệm thu'],
                 ['rework', 'Yêu cầu làm lại'],
@@ -316,9 +413,16 @@ function TaskDetail({
               id={(x) => x.id}
               columns={[
                 { label: 'Thời gian', render: (x) => formatInstant(x.occurredAt) },
-                { label: 'Thao tác', render: (x) => `${x.action} · v${x.taskVersion}` },
+                {
+                  label: 'Thao tác',
+                  render: (x) => `${taskActionLabel(x.action)} · v${x.taskVersion}`,
+                },
                 { label: 'Nội dung', render: (x) => x.note },
-                { label: 'Người thực hiện', render: (x) => x.actorId },
+                {
+                  label: 'Staff phụ trách',
+                  render: (x) => staffName(x.responsibleStaffUserId),
+                },
+                { label: 'Người thao tác', render: (x) => actorName(x.actorId) },
               ]}
             />
             <OwnerPagination page={page} total={history.data?.totalCount ?? 0} change={setPage} />
@@ -341,7 +445,10 @@ function TaskDetail({
                 }),
               )
               .then((ok) => {
-                if (ok) setOperation('');
+                if (ok) {
+                  setOperation('');
+                  void Promise.all([detail.refetch(), history.refetch(), evidence.refetch(), actors.refetch()]);
+                }
               });
           }}
         >
@@ -365,6 +472,28 @@ function TaskDetail({
       </Stack>
     </Paper>
   );
+}
+
+function displayStaffName(staff: Staff[] | undefined, userId: string | null) {
+  return userId ? staff?.find((item) => item.userId === userId)?.fullName ?? userId : 'Chưa có';
+}
+function taskActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    created: 'Tạo công việc',
+    updated: 'Cập nhật công việc',
+    start: 'Bắt đầu thực hiện',
+    progress: 'Cập nhật tiến độ',
+    blockers: 'Báo vướng mắc',
+    submit: 'Gửi nghiệm thu',
+    verify: 'Owner nghiệm thu',
+    rework: 'Yêu cầu làm lại',
+    cancel: 'Hủy công việc',
+    coordinate: 'Ghi chú phối hợp',
+    responsibility_changed: 'Thay đổi người phụ trách cơ sở',
+    'assignment-replaced': 'Điều chuyển theo phân công cơ sở',
+    evidence_uploaded: 'Tải minh chứng',
+  };
+  return labels[action] ?? action;
 }
 function WorkFields({ work, change }: { work: TaskWork; change: (value: TaskWork) => void }) {
   return (
@@ -474,7 +603,7 @@ function TaskEditor({
         >
           <Stack spacing={2} sx={{ pt: 1 }}>
             <OwnerFeedback {...action} />
-            {!task && <OwnerLocationPicker required value={location} change={setLocation} />}
+            {!task && <OwnerLocationPicker required simple value={location} change={setLocation} />}
             <WorkFields work={work} change={setWork} />
             {task && (
               <TextField

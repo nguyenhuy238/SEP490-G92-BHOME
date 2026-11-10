@@ -13,20 +13,26 @@ export function OwnerLocationPicker({
   value,
   change,
   required = false,
+  simple = false,
 }: {
   value: string;
   change: (id: string) => void;
   required?: boolean;
+  simple?: boolean;
 }) {
   const [page, setPage] = useState(1),
     [search, setSearch] = useState('');
   const q = useOwnerQuery<OwnerPage<OwnerLocation>>(
-    ['location-options', page, search],
-    '/api/v1/locations?' + ownerQuery({ page, pageSize: 20, search }),
+    ['location-options', simple ? 'all' : page, simple ? '' : search],
+    '/api/v1/locations?' + ownerQuery({
+      page: simple ? 1 : page,
+      pageSize: simple ? 100 : 20,
+      search: simple ? '' : search,
+    }),
   );
   return (
     <Stack spacing={1}>
-      <TextField
+      {!simple && <TextField
         size="small"
         label="Tìm cơ sở"
         value={search}
@@ -34,7 +40,7 @@ export function OwnerLocationPicker({
           setSearch(e.target.value);
           setPage(1);
         }}
-      />
+      />}
       <TextField
         select
         required={required}
@@ -53,12 +59,12 @@ export function OwnerLocationPicker({
         ))}
       </TextField>
       <OwnerFeedback busy={q.isFetching} error={q.error} />
-      <OwnerPagination
+      {!simple && <OwnerPagination
         page={page}
         total={q.data?.totalCount ?? 0}
         change={setPage}
         busy={q.isFetching}
-      />
+      />}
     </Stack>
   );
 }

@@ -57,6 +57,25 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             .OrderByDescending(a => a.StartDate).ThenBy(a => a.Id).Select(a => new StaffAssignmentSummary(a.Id, a.StaffUserId, a.StartDate, a.EndDate)).ToArray();
     }
 
+    public async Task<IReadOnlyList<StaffAssignmentDetail>> ListStaffAssignmentsAsync(Guid staffUserId, CancellationToken token)
+    {
+        await db.Database.OpenConnectionAsync(token);
+        await using var query = Command("""
+            SELECT l.id,l.name,a.data->>'id',(a.data->>'staffUserId')::uuid,
+              (a.data->>'startDate')::date,(a.data->>'endDate')::date
+            FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a(data)
+            WHERE (a.data->>'staffUserId')::uuid=@staff
+            ORDER BY (a.data->>'startDate')::date DESC,l.name,l.id
+            """);
+        query.Parameters.AddWithValue("staff", staffUserId);
+        var result = new List<StaffAssignmentDetail>();
+        await using var reader = await query.ExecuteReaderAsync(token);
+        while (await reader.ReadAsync(token))
+            result.Add(new(Guid.Parse(reader.GetString(2)), reader.GetGuid(3), reader.GetGuid(0),
+                reader.GetString(1), DateOnly.FromDateTime(reader.GetDateTime(4)), DateOnly.FromDateTime(reader.GetDateTime(5))));
+        return result;
+    }
+
     public Task<ChangeAssignmentResult> ReplaceAssignmentAsync(Guid actorId, Guid locationId, Guid staffUserId,
         DateOnly effectiveFrom, int expectedLocationVersion, string reason, CancellationToken token) =>
         ChangeAsync(actorId, locationId, staffUserId, effectiveFrom, expectedLocationVersion, reason, token);
@@ -64,6 +83,53 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     public Task<ChangeAssignmentResult> RemoveAssignmentAsync(Guid actorId, Guid locationId, DateOnly effectiveFrom,
         int expectedLocationVersion, string reason, CancellationToken token) =>
         ChangeAsync(actorId, locationId, null, effectiveFrom, expectedLocationVersion, reason, token);
+
+    public async Task<UpdateAssignmentPeriodResult> UpdateAssignmentPeriodAsync(Guid actor, Guid assignmentId,
+        DateOnly start, DateOnly end, int expectedVersion, string reason, CancellationToken token)
+    {
+        if (actor == Guid.Empty || assignmentId == Guid.Empty || start > end || expectedVersion < 1 ||
+            string.IsNullOrWhiteSpace(reason)) return new(UpdateAssignmentPeriodStatus.Invalid);
+        await using var tx = await db.Database.BeginTransactionAsync(token);
+        await db.Database.OpenConnectionAsync(token);
+        await using var find = Command("""
+            SELECT id,staff_assignments::text,version FROM locations
+            WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(staff_assignments) a WHERE (a->>'id')::uuid=@assignment)
+            FOR UPDATE
+            """);
+        find.Parameters.AddWithValue("assignment", assignmentId);
+        Guid locationId; string stored; int version;
+        await using (var reader = await find.ExecuteReaderAsync(token))
+        {
+            if (!await reader.ReadAsync(token)) return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
+            locationId = reader.GetGuid(0); stored = reader.GetString(1); version = reader.GetInt32(2);
+        }
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", token);
+        if (version != expectedVersion) return new(UpdateAssignmentPeriodStatus.StaleVersion, LocationVersion: version);
+        if (!await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token))
+            throw new UnauthorizedAccessException("Owner authorization is required.");
+        var assignments = (JsonSerializer.Deserialize<Assignment[]>(stored, Json) ?? throw new InvalidOperationException("Invalid assignment data.")).ToList();
+        var index = assignments.FindIndex(a => a.Id == assignmentId);
+        if (index < 0) return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
+        var old = assignments[index];
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var current = old.StartDate <= today && today <= old.EndDate;
+        if (old.EndDate < today || current && (start > today || end < today)) return new(UpdateAssignmentPeriodStatus.Invalid);
+        if (assignments.Any(a => a.Id != assignmentId && a.StartDate <= end && start <= a.EndDate))
+            return new(UpdateAssignmentPeriodStatus.DateRangeOverlaps);
+        assignments[index] = old with { StartDate = start, EndDate = end };
+        var json = JsonSerializer.Serialize(assignments.OrderBy(x => x.StartDate).ThenBy(x => x.Id), Json);
+        var now = clock.GetUtcNow();
+        var history = JsonSerializer.Serialize(new[] { new { action = "StaffAssignmentPeriodChanged", actorId = actor,
+            occurredAt = now, assignmentId, before = new { old.StartDate, old.EndDate }, after = new { StartDate = start, EndDate = end }, reason = reason.Trim() } }, Json);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE locations SET staff_assignments=CAST({json} AS jsonb),version=version+1,
+              history=history||CAST({history} AS jsonb) WHERE id={locationId}
+            """, token);
+        await tx.CommitAsync(token);
+        var changed = assignments[index];
+        return new(UpdateAssignmentPeriodStatus.Changed,
+            new(changed.Id, changed.StaffUserId, changed.StartDate, changed.EndDate), version + 1);
+    }
 
     private async Task<ChangeAssignmentResult> ChangeAsync(Guid actor, Guid locationId, Guid? nextStaff,
         DateOnly effectiveFrom, int expectedVersion, string reason, CancellationToken token)
