@@ -28,11 +28,11 @@ const staff = {
 };
 beforeEach(() => {
   mocks.request.mockReset();
-  mocks.request.mockImplementation(async (path: string) =>
-    path === '/api/v1/staff/staff'
-      ? staff
-      : { items: path.startsWith('/api/v1/staff?') ? [staff] : [], totalCount: 1 },
-  );
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/staff/staff') return staff;
+    if (path.startsWith('/api/v1/staff-location-assignments/by-staff')) return [];
+    return { items: path.startsWith('/api/v1/staff?') ? [staff] : [], totalCount: 1 };
+  });
 });
 function mount() {
   render(
@@ -56,8 +56,8 @@ it('loads server staff and forwards search and account status filters', async ()
 });
 it('preserves account version and employment contract, and reports server responsibility conflicts', async () => {
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa tài khoản và công việc' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Quản lý' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa hồ sơ' }));
   fireEvent.change(screen.getByLabelText(/Lý do cập nhật/), {
     target: { value: 'Synthetic change' },
   });
