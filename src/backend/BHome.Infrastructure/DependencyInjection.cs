@@ -183,6 +183,8 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Billing.ITenantMeterReadings, BHome.Infrastructure.Billing.TenantMeterReadingsRepository>();
+        services.AddScoped<BHome.Application.Billing.TenantMeterReadingService>();
         services.AddScoped<BHome.Application.Contracts.AnonymousContractSigningService>();
         services.AddScoped<BHome.Application.Contracts.IPostActivationTenantProvisioning, BHome.Infrastructure.IdentityAccess.PostActivationTenantProvisioning>();
         services.AddScoped<BHome.Infrastructure.IdentityAccess.AccountInvitations>();

@@ -7,7 +7,7 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-internal sealed class CompactNotificationRepository(Compact24DbContext db) : INotificationRepository
+internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome.Application.Billing.ITenantMeterReadings readings) : INotificationRepository
 {
     private const string SourceRead = "(SELECT old.read_at FROM notifications old WHERE old.record_kind='OUTBOX' AND old.id=(n.event_data->'state'->>'sourceTaskNotificationId')::uuid AND COALESCE(old.event_data->'state'->>'recipientUserId',old.event_data->'state'->>'recipientId')=@actor::text)";
     private const string EffectiveRead = "COALESCE(n.read_at," + SourceRead + ")";
@@ -93,6 +93,8 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
             type = reader.GetString(0); related = reader.GetGuid(1); location = reader.IsDBNull(2) ? null : reader.GetGuid(2);
         }
         command.Parameters.AddWithValue("target", related);
+        if (type == "MeterReading")
+            return scope.Tenant && await readings.CanViewAsync(scope.Actor, related, token) ? new(type, related, location) : null;
         command.CommandText = type switch
         {
             "Invoice" => "SELECT EXISTS(SELECT 1 FROM invoices i WHERE i.id=@target AND (@owner OR (@tenant AND @actor=ANY(i.recipient_user_ids))))",

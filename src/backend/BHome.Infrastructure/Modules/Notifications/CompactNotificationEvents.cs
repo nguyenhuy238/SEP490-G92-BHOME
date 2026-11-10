@@ -117,17 +117,21 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     }
     private async Task<int> MeterReadings(CancellationToken t)
     {
-        var rows = await db.Set<MeterReading>().AsNoTracking().Where(r => !db.Set<NotificationPublication>().Any(p => p.EventKey == "meter-confirmed:" + r.Id.ToString()))
+        var rows = await db.Set<MeterReading>().AsNoTracking().Where(r => r.ConfirmedAt != default &&
+            (r.Status == MeterReadingStatus.Confirmed || r.Status == MeterReadingStatus.Corrected) &&
+            db.Set<OperationalTask>().Any(x => x.Id == r.TaskId && x.MeterId == r.MeterId && x.Status == MeterTaskStatus.Completed) &&
+            db.Set<MeterEvidence>().Any(e => e.Id == r.EvidenceId && e.TaskId == r.TaskId && e.IsUploaded && e.IsLinked) &&
+            !db.Set<NotificationPublication>().Any(p => p.EventKey == "meter-confirmed:" + r.Id.ToString()))
             .OrderBy(r => r.ConfirmedAt).Take(25).ToArrayAsync(t); var count = 0;
         foreach (var reading in rows)
         {
             var meter = await db.Set<BHome.Domain.Billing.Meter>().AsNoTracking().SingleAsync(m => m.Id == reading.MeterId, t);
             var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(x => x.Id == reading.TaskId, t);
-            var date = task.BillingPeriod ?? task.ReadingDate; var from = new DateOnly(date.Year, date.Month, 1); var to = from.AddMonths(1).AddDays(-1);
+            var from = task.BillingPeriod ?? task.ReadingDate; var to = task.BillingPeriod.HasValue ? from.AddMonths(1).AddDays(-1) : from;
             var users = await Occupants(meter.RoomId, from, to, t);
             var location = await db.Set<BHome.Domain.PropertyManagement.Room>().Where(r => r.Id == meter.RoomId).Select(r => r.LocationId).SingleAsync(t);
             foreach (var user in users) count += await sql.Emit(user, "Tenant", location, "meter-confirmed:" + reading.Id, "METER_READING_CONFIRMED", "Invoice",
-                "Chỉ số điện/nước đã được xác nhận", "Staff đã xác nhận chỉ số cho kỳ đo liên quan. Mở dữ liệu phòng để xem chỉ số được phép.", "Room", meter.RoomId, t, "P2", ["IN_APP"]);
+                "Chỉ số điện/nước đã được xác nhận", "Staff đã xác nhận chỉ số cho kỳ đo liên quan. Mở chỉ số điện nước để kiểm tra trước khi lập hóa đơn.", "MeterReading", reading.Id, t, "P2", ["IN_APP", "EMAIL"]);
             await Mark("meter-confirmed:" + reading.Id, t);
         }
         return count;
@@ -137,7 +141,9 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         return await (from cr in db.Set<ContractResident>().AsNoTracking()
                       join c in db.Set<Contract>() on cr.ContractId equals c.Id
                       join r in db.Set<Resident>() on cr.ResidentId equals r.Id
-                      where c.RoomId == room && c.ActivatedAt != null && c.Kind != ContractKind.Holding && c.StartDate <= periodEnd && (c.ActualEndDate ?? c.EndDate) >= periodStart &&
+                      where c.RoomId == room && c.ActivatedAt != null && c.Kind != ContractKind.Holding &&
+                        (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
+                        c.StartDate <= periodEnd && (c.ActualEndDate ?? c.EndDate) >= periodStart &&
                         cr.ResidenceFrom <= periodEnd && (cr.ResidenceTo == null || cr.ResidenceTo >= periodStart) && r.TenantUserId != null
                       select r.TenantUserId!.Value).Distinct().ToArrayAsync(t);
     }
