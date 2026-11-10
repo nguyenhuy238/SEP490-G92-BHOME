@@ -87,7 +87,9 @@ export function TasksApiPage() {
   const staffName = (id: string | null) => displayStaffName(staffDirectory.data?.items, id);
   const locationName = (id: string) =>
     locationDirectory.data?.items.find((item) => item.id === id)?.name ?? id;
-  const hasFilters = Boolean(location || staffUserId || status || priority || overdue || from || to);
+  const hasFilters = Boolean(
+    location || staffUserId || status || priority || overdue || from || to,
+  );
   const clearFilters = () => {
     setLocation('');
     setStaffUserId('');
@@ -122,102 +124,102 @@ export function TasksApiPage() {
               setPage(1);
             }}
           />
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
-        sx={{ flexWrap: 'wrap', alignItems: { md: 'center' } }}
-      >
-        <TextField
-          sx={{ minWidth: 220, flex: '1 1 220px' }}
-          select
-          label="Staff phụ trách"
-          value={staffUserId}
-          onChange={(e) => {
-            setStaffUserId(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả Staff</MenuItem>
-          {staffDirectory.data?.items.map((staff) => (
-            <MenuItem key={staff.userId} value={staff.userId}>
-              {staff.fullName} {staff.isActive ? '' : '(Đã ngừng)'}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          sx={{ minWidth: 220, flex: '1 1 220px' }}
-          select
-          label="Trạng thái công việc"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả</MenuItem>
-          {['Assigned', 'InProgress', 'Completed', 'Cancelled', 'PendingVerification'].map(
-            (v, i) => (
-              <MenuItem key={v} value={String(i)}>
-                {taskStatus[v]}
-              </MenuItem>
-            ),
-          )}
-        </TextField>
-        <TextField
-          sx={{ minWidth: 180, flex: '1 1 180px' }}
-          select
-          label="Ưu tiên"
-          value={priority}
-          onChange={(e) => {
-            setPriority(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả</MenuItem>
-          <MenuItem value="0">Bình thường</MenuItem>
-          <MenuItem value="1">Cao</MenuItem>
-        </TextField>
-        <FormControlLabel
-          label="Chỉ quá hạn"
-          control={
-            <Checkbox
-              checked={overdue}
-              onChange={(_, v) => {
-                setOverdue(v);
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            sx={{ flexWrap: 'wrap', alignItems: { md: 'center' } }}
+          >
+            <TextField
+              sx={{ minWidth: 220, flex: '1 1 220px' }}
+              select
+              label="Staff phụ trách"
+              value={staffUserId}
+              onChange={(e) => {
+                setStaffUserId(e.target.value);
                 setPage(1);
               }}
+            >
+              <MenuItem value="">Tất cả Staff</MenuItem>
+              {staffDirectory.data?.items.map((staff) => (
+                <MenuItem key={staff.userId} value={staff.userId}>
+                  {staff.fullName} {staff.isActive ? '' : '(Đã ngừng)'}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              sx={{ minWidth: 220, flex: '1 1 220px' }}
+              select
+              label="Trạng thái công việc"
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả</MenuItem>
+              {['Assigned', 'InProgress', 'Completed', 'Cancelled', 'PendingVerification'].map(
+                (v, i) => (
+                  <MenuItem key={v} value={String(i)}>
+                    {taskStatus[v]}
+                  </MenuItem>
+                ),
+              )}
+            </TextField>
+            <TextField
+              sx={{ minWidth: 180, flex: '1 1 180px' }}
+              select
+              label="Ưu tiên"
+              value={priority}
+              onChange={(e) => {
+                setPriority(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả</MenuItem>
+              <MenuItem value="0">Bình thường</MenuItem>
+              <MenuItem value="1">Cao</MenuItem>
+            </TextField>
+            <FormControlLabel
+              label="Chỉ quá hạn"
+              control={
+                <Checkbox
+                  checked={overdue}
+                  onChange={(_, v) => {
+                    setOverdue(v);
+                    setPage(1);
+                  }}
+                />
+              }
             />
-          }
-        />
-        <Button onClick={() => void list.refetch()}>Tải lại</Button>
-        <Button disabled={!hasFilters} onClick={clearFilters}>
-          Xóa bộ lọc
-        </Button>
-      </Stack>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexWrap: 'wrap' }}>
-        <TextField
-          sx={{ minWidth: 260, flex: '1 1 260px' }}
-          type="datetime-local"
-          label="Hạn từ (giờ Việt Nam)"
-          value={from}
-          onChange={(e) => {
-            setFrom(e.target.value);
-            setPage(1);
-          }}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-        <TextField
-          sx={{ minWidth: 260, flex: '1 1 260px' }}
-          type="datetime-local"
-          label="Hạn đến (giờ Việt Nam)"
-          value={to}
-          onChange={(e) => {
-            setTo(e.target.value);
-            setPage(1);
-          }}
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
-        />
-      </Stack>
+            <Button onClick={() => void list.refetch()}>Tải lại</Button>
+            <Button disabled={!hasFilters} onClick={clearFilters}>
+              Xóa bộ lọc
+            </Button>
+          </Stack>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexWrap: 'wrap' }}>
+            <TextField
+              sx={{ minWidth: 260, flex: '1 1 260px' }}
+              type="datetime-local"
+              label="Hạn từ (giờ Việt Nam)"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setPage(1);
+              }}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              sx={{ minWidth: 260, flex: '1 1 260px' }}
+              type="datetime-local"
+              label="Hạn đến (giờ Việt Nam)"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setPage(1);
+              }}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
+            />
+          </Stack>
         </Stack>
       </Paper>
       <OwnerFeedback busy={list.isFetching} error={list.error} />
@@ -235,7 +237,8 @@ export function TasksApiPage() {
             },
             {
               label: 'Thời hạn',
-              render: (x) => `${x.dueAt ? formatInstant(x.dueAt) : 'Chưa có hạn'}${x.isOverdue ? ' · Quá hạn' : ''}`,
+              render: (x) =>
+                `${x.dueAt ? formatInstant(x.dueAt) : 'Chưa có hạn'}${x.isOverdue ? ' · Quá hạn' : ''}`,
             },
             { label: 'Ưu tiên', render: (x) => x.priority },
             {
@@ -254,7 +257,15 @@ export function TasksApiPage() {
         change={setPage}
         busy={list.isFetching}
       />
-      {id && <TaskDetail key={id} id={id} close={() => setId('')} edit={setEditor} locationName={locationName} />}
+      {id && (
+        <TaskDetail
+          key={id}
+          id={id}
+          close={() => setId('')}
+          edit={setEditor}
+          locationName={locationName}
+        />
+      )}
       {location && <RecurringTemplates key={location} location={location} />}
       {editor !== undefined && (
         <TaskEditor task={editor} initialLocation={location} close={() => setEditor(undefined)} />
@@ -303,14 +314,20 @@ function TaskDetail({
   const staffName = (userId: string | null) => displayStaffName(staffDirectory.data?.items, userId);
   const actorName = (userId: string | null) =>
     userId
-      ? actors.data?.find((item) => item.userId === userId)?.displayName ?? staffName(userId)
+      ? (actors.data?.find((item) => item.userId === userId)?.displayName ?? staffName(userId))
       : 'Chưa có';
   const mutable = task?.kind === 'AdHoc' && !['Completed', 'Cancelled'].includes(task.status);
   return (
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2}>
         <OwnerFeedback
-          busy={detail.isFetching || history.isFetching || evidence.isFetching || actors.isFetching || action.busy}
+          busy={
+            detail.isFetching ||
+            history.isFetching ||
+            evidence.isFetching ||
+            actors.isFetching ||
+            action.busy
+          }
           error={action.error || detail.error || history.error || evidence.error || actors.error}
           notice={action.notice}
         />
@@ -333,15 +350,17 @@ function TaskDetail({
               {staffName(task.recordedStaffUserId)}
             </Typography>
             <Alert severity="info">
-              Người thực hiện được xác định theo phân công Staff đang có hiệu lực tại cơ sở. Để đổi người,
-              cập nhật phân công tại mục Nhân viên; các công việc đang mở sẽ được chuyển theo phân công mới.
+              Người thực hiện được xác định theo phân công Staff đang có hiệu lực tại cơ sở. Để đổi
+              người, cập nhật phân công tại mục Nhân viên; các công việc đang mở sẽ được chuyển theo
+              phân công mới.
             </Alert>
             <Button variant="outlined" onClick={() => navigate('/staff')}>
               Mở quản lý phân công Staff
             </Button>
             <Typography variant="subtitle1">Tiến độ công việc</Typography>
             <Typography>
-              Trạng thái hiện tại: {taskStatus[task.status] ?? task.status} · Phiên bản {task.version}
+              Trạng thái hiện tại: {taskStatus[task.status] ?? task.status} · Phiên bản{' '}
+              {task.version}
             </Typography>
             {!task.responsibilityAvailable && (
               <Alert severity="warning">
@@ -447,7 +466,12 @@ function TaskDetail({
               .then((ok) => {
                 if (ok) {
                   setOperation('');
-                  void Promise.all([detail.refetch(), history.refetch(), evidence.refetch(), actors.refetch()]);
+                  void Promise.all([
+                    detail.refetch(),
+                    history.refetch(),
+                    evidence.refetch(),
+                    actors.refetch(),
+                  ]);
                 }
               });
           }}
@@ -475,7 +499,7 @@ function TaskDetail({
 }
 
 function displayStaffName(staff: Staff[] | undefined, userId: string | null) {
-  return userId ? staff?.find((item) => item.userId === userId)?.fullName ?? userId : 'Chưa có';
+  return userId ? (staff?.find((item) => item.userId === userId)?.fullName ?? userId) : 'Chưa có';
 }
 function taskActionLabel(action: string) {
   const labels: Record<string, string> = {

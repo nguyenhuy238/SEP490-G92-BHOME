@@ -71,12 +71,12 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
           ? { locationId: location, staffUserId: staff.userId, startDate: start, endDate: end }
           : confirm === 'period'
             ? { startDate: start, endDate: end, locationVersion: selected.data!.version, reason }
-          : {
-              ...(confirm === 'replace' ? { staffUserId: replacementStaffId } : {}),
-              effectiveFrom: today,
-              locationVersion: selected.data!.version,
-              reason,
-            },
+            : {
+                ...(confirm === 'replace' ? { staffUserId: replacementStaffId } : {}),
+                effectiveFrom: today,
+                locationVersion: selected.data!.version,
+                reason,
+              },
       ),
     );
     if (ok) {
@@ -105,7 +105,8 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
               Các cơ sở đã được phân công
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Danh sách lấy trực tiếp từ dữ liệu phân công, gồm ngày bắt đầu và ngày kết thúc hiệu lực.
+              Danh sách lấy trực tiếp từ dữ liệu phân công, gồm ngày bắt đầu và ngày kết thúc hiệu
+              lực.
             </Typography>
             {staffAssignments.data?.length ? (
               <OwnerTable
@@ -165,202 +166,213 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Chỉnh sửa phân công
             </Typography>
-        <TextField
-          select
-          label="Cơ sở cần xem hoặc phân công"
-          value={location}
-          onChange={(e) => {
-            setLocation(e.target.value);
-            setReplacementStaffId('');
-            setEditingAssignmentId('');
-            setStart(today);
-            setEnd('');
-          }}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.items.map((x) => (
-            <MenuItem key={x.id} value={x.id}>
-              {x.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        {location && (
-          <>
-            {changePreview.data && !changePreview.data.canRemove && (
-              <Alert severity="warning">
-                Chưa thể gỡ người phụ trách vì Location còn trách nhiệm đang mở. Hãy xử lý hoặc
-                phân công lại các trách nhiệm trước khi gỡ.
-                {changePreview.data.openResponsibilities.length > 0 && (
-                  <Typography component="span" sx={{ display: 'block' }}>
-                    {changePreview.data.openResponsibilities
-                      .map((item) => `${item.code}: ${item.count}`)
-                      .join(' · ')}
-                  </Typography>
-                )}
-              </Alert>
-            )}
-            <Alert severity="info">
-              {current
-                ? `Nhân viên đang phụ trách: ${staffName(current.staffUserId)}`
-                : 'Chưa có người phụ trách trong ngày hiện tại.'}{' '}
-              Thay hoặc gỡ phân công có hiệu lực hôm nay; máy chủ kiểm tra và cập nhật công việc còn
-              mở.
-            </Alert>
-            {current && !editingAssignment && (
-              <TextField
-                select
-                label="Người phụ trách mới"
-                value={replacementStaffId}
-                onChange={(e) => setReplacementStaffId(e.target.value)}
-              >
-                <MenuItem value="">Chọn Staff thay thế</MenuItem>
-                {staffDirectory.data?.items
-                  .filter((item) => item.isActive && item.userId !== current.staffUserId)
-                  .map((item) => (
-                    <MenuItem key={item.userId} value={item.userId}>
-                      {item.fullName} · {item.email}
-                    </MenuItem>
-                  ))}
-              </TextField>
-            )}
-            <OwnerTable
-              rows={assignments.data ?? []}
-              id={(x) => x.id}
-              columns={[
-                {
-                  label: 'Nhân viên',
-                  render: (x) =>
-                    x.staffUserId === staff.userId ? staff.fullName : staffName(x.staffUserId),
-                },
-                { label: 'Từ ngày', render: (x) => x.startDate },
-                { label: 'Đến ngày', render: (x) => x.endDate },
-              ]}
-            />
-            {(!current || editingAssignment) && (
+            <TextField
+              select
+              label="Cơ sở cần xem hoặc phân công"
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                setReplacementStaffId('');
+                setEditingAssignmentId('');
+                setStart(today);
+                setEnd('');
+              }}
+            >
+              <MenuItem value="">Chọn cơ sở</MenuItem>
+              {locations.data?.items.map((x) => (
+                <MenuItem key={x.id} value={x.id}>
+                  {x.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {location && (
               <>
-                <TextField
-                  required
-                  type="date"
-                  label="Hiệu lực từ"
-                  value={start}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  onChange={(e) => setStart(e.target.value)}
+                {changePreview.data && !changePreview.data.canRemove && (
+                  <Alert severity="warning">
+                    Chưa thể gỡ người phụ trách vì Location còn trách nhiệm đang mở. Hãy xử lý hoặc
+                    phân công lại các trách nhiệm trước khi gỡ.
+                    {changePreview.data.openResponsibilities.length > 0 && (
+                      <Typography component="span" sx={{ display: 'block' }}>
+                        {changePreview.data.openResponsibilities
+                          .map((item) => `${item.code}: ${item.count}`)
+                          .join(' · ')}
+                      </Typography>
+                    )}
+                  </Alert>
+                )}
+                <Alert severity="info">
+                  {current
+                    ? `Nhân viên đang phụ trách: ${staffName(current.staffUserId)}`
+                    : 'Chưa có người phụ trách trong ngày hiện tại.'}{' '}
+                  Thay hoặc gỡ phân công có hiệu lực hôm nay; máy chủ kiểm tra và cập nhật công việc
+                  còn mở.
+                </Alert>
+                {current && !editingAssignment && (
+                  <TextField
+                    select
+                    label="Người phụ trách mới"
+                    value={replacementStaffId}
+                    onChange={(e) => setReplacementStaffId(e.target.value)}
+                  >
+                    <MenuItem value="">Chọn Staff thay thế</MenuItem>
+                    {staffDirectory.data?.items
+                      .filter((item) => item.isActive && item.userId !== current.staffUserId)
+                      .map((item) => (
+                        <MenuItem key={item.userId} value={item.userId}>
+                          {item.fullName} · {item.email}
+                        </MenuItem>
+                      ))}
+                  </TextField>
+                )}
+                <OwnerTable
+                  rows={assignments.data ?? []}
+                  id={(x) => x.id}
+                  columns={[
+                    {
+                      label: 'Nhân viên',
+                      render: (x) =>
+                        x.staffUserId === staff.userId ? staff.fullName : staffName(x.staffUserId),
+                    },
+                    { label: 'Từ ngày', render: (x) => x.startDate },
+                    { label: 'Đến ngày', render: (x) => x.endDate },
+                  ]}
                 />
+                {(!current || editingAssignment) && (
+                  <>
+                    <TextField
+                      required
+                      type="date"
+                      label="Hiệu lực từ"
+                      value={start}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      onChange={(e) => setStart(e.target.value)}
+                    />
+                    <TextField
+                      required
+                      type="date"
+                      label="Hiệu lực đến"
+                      value={end}
+                      slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: start } }}
+                      onChange={(e) => setEnd(e.target.value)}
+                    />
+                  </>
+                )}
+                {editingAssignment && editingAssignment.endDate < today && (
+                  <Alert severity="info">
+                    Phân công đã kết thúc được giữ nguyên để bảo toàn lịch sử.
+                  </Alert>
+                )}
                 <TextField
-                  required
-                  type="date"
-                  label="Hiệu lực đến"
-                  value={end}
-                  slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: start } }}
-                  onChange={(e) => setEnd(e.target.value)}
+                  label={
+                    editingAssignment ? 'Lý do cập nhật ngày hiệu lực' : 'Lý do thay / gỡ phân công'
+                  }
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  slotProps={{ htmlInput: { maxLength: 500 } }}
                 />
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                  {editingAssignment && (
+                    <Button
+                      variant="contained"
+                      disabled={
+                        action.busy ||
+                        editingAssignment.endDate < today ||
+                        !selected.data ||
+                        !start ||
+                        !end ||
+                        end < start ||
+                        !reason.trim()
+                      }
+                      onClick={() => setConfirm('period')}
+                    >
+                      Lưu ngày hiệu lực
+                    </Button>
+                  )}
+                  {!editingAssignment && (
+                    <>
+                      <Button
+                        disabled={
+                          action.busy ||
+                          !staff.isActive ||
+                          !selected.data?.isActive ||
+                          !!assignments.error ||
+                          assignments.isFetching ||
+                          !assignments.data ||
+                          !!current ||
+                          !start ||
+                          !end ||
+                          end < start
+                        }
+                        onClick={() => setConfirm('assign')}
+                      >
+                        Phân công nhân viên này
+                      </Button>
+                      <Button
+                        disabled={
+                          action.busy ||
+                          !staff.isActive ||
+                          !selected.data ||
+                          !!assignments.error ||
+                          assignments.isFetching ||
+                          !current ||
+                          !replacementStaffId ||
+                          !reason.trim()
+                        }
+                        onClick={() => setConfirm('replace')}
+                      >
+                        Thay người phụ trách
+                      </Button>
+                    </>
+                  )}
+                  {editingAssignment && (
+                    <Button
+                      onClick={() => {
+                        setEditingAssignmentId('');
+                        setReason('');
+                        setStart(today);
+                        setEnd('');
+                      }}
+                    >
+                      Hủy chỉnh sửa
+                    </Button>
+                  )}
+                  {!editingAssignment && (
+                    <Button
+                      color="error"
+                      disabled={
+                        action.busy ||
+                        !selected.data ||
+                        !!assignments.error ||
+                        !!changePreview.error ||
+                        !changePreview.data?.canRemove ||
+                        assignments.isFetching ||
+                        current?.staffUserId !== staff.userId ||
+                        !reason.trim()
+                      }
+                      onClick={() => setConfirm('remove')}
+                    >
+                      Gỡ phân công hiện tại
+                    </Button>
+                  )}
+                </Stack>
               </>
             )}
-            {editingAssignment && editingAssignment.endDate < today && (
-              <Alert severity="info">Phân công đã kết thúc được giữ nguyên để bảo toàn lịch sử.</Alert>
-            )}
-            <TextField
-              label={editingAssignment ? 'Lý do cập nhật ngày hiệu lực' : 'Lý do thay / gỡ phân công'}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              slotProps={{ htmlInput: { maxLength: 500 } }}
-            />
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-              {editingAssignment && (
-                <Button
-                  variant="contained"
-                  disabled={
-                    action.busy ||
-                    editingAssignment.endDate < today ||
-                    !selected.data ||
-                    !start ||
-                    !end ||
-                    end < start ||
-                    !reason.trim()
-                  }
-                  onClick={() => setConfirm('period')}
-                >
-                  Lưu ngày hiệu lực
-                </Button>
-              )}
-              {!editingAssignment && (
-                <>
-                  <Button
-                    disabled={
-                      action.busy ||
-                      !staff.isActive ||
-                      !selected.data?.isActive ||
-                      !!assignments.error ||
-                      assignments.isFetching ||
-                      !assignments.data ||
-                      !!current ||
-                      !start ||
-                      !end ||
-                      end < start
-                    }
-                    onClick={() => setConfirm('assign')}
-                  >
-                    Phân công nhân viên này
-                  </Button>
-                  <Button
-                    disabled={
-                      action.busy ||
-                      !staff.isActive ||
-                      !selected.data ||
-                      !!assignments.error ||
-                      assignments.isFetching ||
-                      !current ||
-                      !replacementStaffId ||
-                      !reason.trim()
-                    }
-                    onClick={() => setConfirm('replace')}
-                  >
-                    Thay người phụ trách
-                  </Button>
-                </>
-              )}
-              {editingAssignment && (
-                <Button
-                  onClick={() => {
-                    setEditingAssignmentId('');
-                    setReason('');
-                    setStart(today);
-                    setEnd('');
-                  }}
-                >
-                  Hủy chỉnh sửa
-                </Button>
-              )}
-              {!editingAssignment && <Button
-                color="error"
-                disabled={
-                  action.busy ||
-                  !selected.data ||
-                  !!assignments.error ||
-                  !!changePreview.error ||
-                  !changePreview.data?.canRemove ||
-                  assignments.isFetching ||
-                  current?.staffUserId !== staff.userId ||
-                  !reason.trim()
-                }
-                onClick={() => setConfirm('remove')}
-              >
-                Gỡ phân công hiện tại
-              </Button>}
-            </Stack>
-          </>
-        )}
           </Stack>
         </Paper>
         <ConfirmDialog
           error={action.error}
           open={!!confirm}
-          title={confirm === 'period' ? 'Xác nhận cập nhật ngày hiệu lực' : 'Xác nhận thay đổi người phụ trách'}
+          title={
+            confirm === 'period'
+              ? 'Xác nhận cập nhật ngày hiệu lực'
+              : 'Xác nhận thay đổi người phụ trách'
+          }
           busy={action.busy}
           onClose={() => setConfirm('')}
           onConfirm={() => void save()}
         >
-          Máy chủ sẽ kiểm tra khoảng ngày, trách nhiệm còn mở và phiên bản cơ sở. Thay đổi được ghi vào lịch sử.
+          Máy chủ sẽ kiểm tra khoảng ngày, trách nhiệm còn mở và phiên bản cơ sở. Thay đổi được ghi
+          vào lịch sử.
         </ConfirmDialog>
       </Stack>
     </Paper>

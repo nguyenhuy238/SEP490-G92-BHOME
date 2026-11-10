@@ -16,17 +16,17 @@ Scope: Phase 0–3 of the Owner Web Staff implementation plan.
 
 ## Requirement mapping
 
-| Requested behavior | Traceability | Current implementation | Acceptance evidence |
-| --- | --- | --- | --- |
-| Owner manages Staff account/profile | BF-02, UC-08, GBR-01..03 | `StaffAdministrationController`, `OperationsService`, `StaffApiPage` | Owner create/list/detail/update; non-Owner denied |
-| Staff employment/agreed salary | BF-02, UC-08 | `EmploymentWrite`, `StaffEditor` | Decimal non-negative rate; employment status/date validation |
-| Owner invitation | UC-08, GBR-01 | `AccountInvitationsController`, `AccountInvitations` | One-time invitation and acceptance tests |
-| Assign Staff to Location | BF-02, UC-09, DBR-01 | `StaffLocationAssignmentsController`, `StaffAssignments` | Date overlap and inactive Staff rejection |
-| Safe replacement/removal | BF-02, GBR-18 | `staff-change-preview`, versioned PUT/DELETE | Open responsibility warning; stale version returns 409 and UI refreshes |
-| Owner task management | UC-10..12, JOB-07 | `OperationalTasksController`, `OperationalTaskService`, `TasksApiPage` | Create/update/assign/coordinate/cancel/verify/rework |
-| Staff task filtering and display | BF-02, UC-10 | `TaskQuery.StaffUserId`, Owner Web Staff directory | Filter sent to server; display uses Staff name with UUID fallback |
-| Evidence access | UC-11..12, NFR security | `OperationalTasksController`, private evidence storage | Owner download only for authorized task |
-| Recurring task templates | JOB-06, JOB-07, GBR-18 | `OperationalTaskTemplatesController`, `RecurringOperationsJob` | CRUD and idempotent generation tests |
+| Requested behavior                  | Traceability             | Current implementation                                                 | Acceptance evidence                                                     |
+| ----------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Owner manages Staff account/profile | BF-02, UC-08, GBR-01..03 | `StaffAdministrationController`, `OperationsService`, `StaffApiPage`   | Owner create/list/detail/update; non-Owner denied                       |
+| Staff employment/agreed salary      | BF-02, UC-08             | `EmploymentWrite`, `StaffEditor`                                       | Decimal non-negative rate; employment status/date validation            |
+| Owner invitation                    | UC-08, GBR-01            | `AccountInvitationsController`, `AccountInvitations`                   | One-time invitation and acceptance tests                                |
+| Assign Staff to Location            | BF-02, UC-09, DBR-01     | `StaffLocationAssignmentsController`, `StaffAssignments`               | Date overlap and inactive Staff rejection                               |
+| Safe replacement/removal            | BF-02, GBR-18            | `staff-change-preview`, versioned PUT/DELETE                           | Open responsibility warning; stale version returns 409 and UI refreshes |
+| Owner task management               | UC-10..12, JOB-07        | `OperationalTasksController`, `OperationalTaskService`, `TasksApiPage` | Create/update/assign/coordinate/cancel/verify/rework                    |
+| Staff task filtering and display    | BF-02, UC-10             | `TaskQuery.StaffUserId`, Owner Web Staff directory                     | Filter sent to server; display uses Staff name with UUID fallback       |
+| Evidence access                     | UC-11..12, NFR security  | `OperationalTasksController`, private evidence storage                 | Owner download only for authorized task                                 |
+| Recurring task templates            | JOB-06, JOB-07, GBR-18   | `OperationalTaskTemplatesController`, `RecurringOperationsJob`         | CRUD and idempotent generation tests                                    |
 
 ## Negative and concurrency cases
 
