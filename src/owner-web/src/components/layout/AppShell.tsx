@@ -317,10 +317,12 @@ export function AppShell() {
           <Breadcrumbs sx={{ display: { xs: 'none', md: 'flex' }, fontSize: 11, flexShrink: 0 }}>
             <House size={13} />
             <Typography sx={{ fontSize: 11, fontWeight: 750, color: 'text.primary' }}>
-              {selectedLocation ? `Cơ sở / ${selectedLocation.name}` : 'BHOME Portal'}
+              {inLocationWorkspace && selectedLocation
+                ? `Cơ sở / ${selectedLocation.name}`
+                : 'BHOME Portal'}
             </Typography>
           </Breadcrumbs>
-          {!inLocationWorkspace && (
+          {isMockMode && !inLocationWorkspace && (
             <TextField
               size="small"
               placeholder="Tìm kiếm phòng, khách, hợp đồng..."
@@ -339,7 +341,7 @@ export function AppShell() {
               }}
             />
           )}
-          <Box sx={{ flex: 1, display: { xs: 'none', md: 'block' } }} />
+          <Box sx={{ flex: 1, display: { xs: isMockMode ? 'none' : 'block', md: 'block' } }} />
           {isMockMode && (
             <Box
               sx={{
@@ -358,29 +360,31 @@ export function AppShell() {
               DEMO · KHÔNG GỬI API
             </Box>
           )}
-          <TextField
-            select
-            size="small"
-            aria-label="Chọn cơ sở"
-            value={portal.locationId}
-            onChange={(e) => {
-              const nextLocationId = e.target.value;
-              portal.setLocationId(nextLocationId);
-              portal.setSearch('');
-              if (inLocationWorkspace) {
-                if (nextLocationId === 'all') navigate('/locations');
-                else navigate(`/locations/${nextLocationId}/${workspaceParts[3] || 'overview'}`);
-              }
-            }}
-            sx={{ minWidth: { xs: 115, sm: 180 }, maxWidth: 240 }}
-          >
-            <MenuItem value="all">Tất cả cơ sở ({data?.records.locations.length || 0})</MenuItem>
-            {data?.records.locations.map((row) => (
-              <MenuItem key={row.id} value={row.id}>
-                {row.code} • {row.name}
-              </MenuItem>
-            ))}
-          </TextField>
+          {(isMockMode || inLocationWorkspace) && (
+            <TextField
+              select
+              size="small"
+              aria-label="Chọn cơ sở"
+              value={portal.locationId}
+              onChange={(e) => {
+                const nextLocationId = e.target.value;
+                portal.setLocationId(nextLocationId);
+                portal.setSearch('');
+                if (inLocationWorkspace) {
+                  if (nextLocationId === 'all') navigate('/locations');
+                  else navigate(`/locations/${nextLocationId}/${workspaceParts[3] || 'overview'}`);
+                }
+              }}
+              sx={{ minWidth: { xs: 115, sm: 180 }, maxWidth: 240 }}
+            >
+              <MenuItem value="all">Tất cả cơ sở ({data?.records.locations.length || 0})</MenuItem>
+              {data?.records.locations.map((row) => (
+                <MenuItem key={row.id} value={row.id}>
+                  {row.code} • {row.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           {isMockMode ? (
             <IconButton aria-label="Thông báo" onClick={() => navigate('/notifications')}>
               <Badge
@@ -416,7 +420,7 @@ export function AppShell() {
                   bgcolor: 'primary.main',
                 }}
               >
-                NH
+                <Contact size={17} />
               </Avatar>
             </IconButton>
           </Tooltip>
