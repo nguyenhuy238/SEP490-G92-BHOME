@@ -59,6 +59,8 @@ internal sealed class UploadedSignatureVerifier(IOptions<ContractSigningOptions>
         var settings = options.Value.UploadProof;
         if (uploaded.Length > settings.MaxMegabytes * 1024 * 1024) throw new ContractException(413, "signed_pdf_too_large");
         if (uploaded.Length < 5 || !uploaded.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw ContractException.Invalid("signed_pdf_invalid");
+        // The issued file sent back unchanged was simply not signed yet.
+        if (uploaded.AsSpan().SequenceEqual(issued)) throw ContractException.Invalid("signed_pdf_has_no_new_signature");
         if (uploaded.Length <= issued.Length || !uploaded.AsSpan(0, issued.Length).SequenceEqual(issued))
             throw ContractException.Invalid("signed_pdf_not_from_issued_contract");
         try

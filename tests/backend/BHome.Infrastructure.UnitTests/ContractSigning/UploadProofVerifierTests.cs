@@ -81,6 +81,14 @@ public sealed class UploadProofVerifierTests : IDisposable
     }
 
     [Fact]
+    public void TheIssuedFileSentBackUnsignedIsReportedAsNotSigned()
+    {
+        var issued = Contract("Tiền thuê 3.000.000 VND/tháng");
+
+        Assert.Equal("signed_pdf_has_no_new_signature", Refused(() => verifier.Verify(issued, issued.ToArray())));
+    }
+
+    [Fact]
     public void TextAddedBeforeSigningIsRefusedEvenIfTheSignatureIsValid()
     {
         using var owner = new Ca("CN=CHU TRO TONG HOP, O=Viettel-CA Synthetic Test");
