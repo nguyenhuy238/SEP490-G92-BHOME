@@ -163,6 +163,9 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         Assert.Equal(Math.Min(100000, amount), view.PaidAmount); Assert.Equal(amount > 100000, view.PendingReview);
         var receipt = await As(w.Owner, Roles.Owner, s => s.TransferAsync(transfer.Id, default));
         Assert.Equal(Math.Min(100000, amount), receipt.AllocatedAmount); Assert.Equal(Math.Max(0, amount - 100000), receipt.UnallocatedAmount);
+        var summary = await As(w.Owner, Roles.Owner, s => s.DebtSummaryAsync(new() { LocationId = w.Location }, default));
+        Assert.Equal(view.OutstandingAmount, summary.OutstandingAmount); Assert.Equal(view.OutstandingAmount, summary.OverdueAmount);
+        Assert.Equal(amount < 100000 ? 1 : 0, summary.InvoiceCount);
         Assert.Equal(reason, (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, verifiedPayer ? w.Tenants[0] : null, true), Guid.NewGuid(), default))).Reason);
         if (amount < 100000)
         {

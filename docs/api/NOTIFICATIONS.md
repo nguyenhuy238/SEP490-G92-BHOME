@@ -9,13 +9,13 @@ runtime dùng `notifications`/JSON và technical queue trong `operational_tasks`
 Scope từ actor hiện hành, audience role đã lưu và current Staff Location assignment.
 Owner chỉ đọc thông báo gửi cho mình; Tenant chỉ của mình; Staff chỉ Task thuộc Location hiện có quyền.
 
-| Method | Route                                     | Hành vi                                                                                                     |
-| ------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| GET    | root?page=1&pageSize=20&category=&unread= | Paging/filter, max100; categories Contract/Invoice/Payment/Adjustment/Task                                  |
-| GET    | unread-count                              | `{unreadCount}` theo cùng scope                                                                             |
-| POST   | `{id}/read`                               | Recipient/scoped, idempotent; người khác 404                                                                |
-| POST   | read-all                                  | Chỉ các thông báo hiện có quyền của actor                                                                   |
-| GET    | `{id}/target`                             | Reauthorize Invoice recipient, own Adjustment/Contract, current task Location/assignee hoặc Owner execution |
+| Method | Route                                     | Hành vi                                                                                                                  |
+| ------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| GET    | root?page=1&pageSize=20&category=&unread= | Paging/filter, max100; categories Contract/Invoice/Payment/Adjustment/Task/Incident/Account/Announcement/Residence/Other |
+| GET    | unread-count                              | `{unreadCount}` theo cùng scope                                                                                          |
+| POST   | `{id}/read`                               | Recipient/scoped, idempotent; người khác 404                                                                             |
+| POST   | read-all                                  | Chỉ các thông báo hiện có quyền của actor                                                                                |
+| GET    | `{id}/target`                             | Reauthorize Invoice recipient, own Adjustment/Contract, current task Location/assignee hoặc Owner execution              |
 
 Target trả objectType/objectId/locationId/billingPeriod, không URL tùy ý hoặc file key.
 Client vẫn dùng endpoint nghiệp vụ có auth khi tải đối tượng. Không coi saved link là quyền.
@@ -94,6 +94,7 @@ không có endpoint tự reset giới hạn, không đổi Paid/Invoice hoặc h
 Web `/notifications` và Mobile workspace `notifications` lấy API thật, polling 30 giây,
 read-all/read-one và target lookup trước khi điều hướng. Bell không suy ra trạng thái từ demo.
 Client chỉ ánh xạ loại hồ sơ đã biết sang route nội bộ; không nhận URL từ notification.
+Owner Web tách tab hộp thư và soạn/quản lý; bản soạn được giữ khi chuyển tab. Chọn tài khoản qua danh sách người ở có tìm kiếm/phân trang, chỉ lấy tenantUserId đã liên kết; preview/send vẫn resolve điều kiện cư trú ở backend. Giới hạn 500 tài khoản giữ nguyên contract. Nháp phục hồi gửi bằng ID đã lưu; UI không nhập UUID người nhận. Incident target mở `/incidents?incidentId=...` sau GET target được phân quyền. Nhóm và trạng thái phát dùng đúng enum backend, gồm PendingReview/Unconfigured; không suy việc tạo/gửi nháp thành delivery thực tế.
 Invoice/Contract/Adjustment/MeterTask deep links vẫn đi qua API quyền của hồ sơ.
 Owner có màn đọc OperationalTask thật; xử lý nghiệp vụ task hiện hành vẫn trên Mobile.
 Capture GET `meter-tasks` bổ sung optional query `locationId`, `roomId`, `dueDate` (ngày VN),

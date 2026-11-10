@@ -76,6 +76,8 @@ it('shows real exceptions, gates run-now and submits an explicit versioned autho
   await choose();
   expect(await screen.findByText('missing_water_meter')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Chạy ngay: Phát hành hóa đơn' })).toBeDisabled();
+  expect(screen.queryByLabelText(/Ngày giao việc ghi số/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cấu hình lịch hóa đơn' }));
   fireEvent.change(screen.getByLabelText(/Ngày giao việc ghi số/), { target: { value: '2' } });
   fireEvent.change(screen.getByLabelText(/Ngày hết hạn ghi số/), { target: { value: '4' } });
   fireEvent.mouseDown(screen.getByLabelText(/Tháng cộng thêm cho hạn ghi số/));

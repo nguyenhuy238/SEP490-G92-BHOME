@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Link, useInRouterContext, useSearchParams } from 'react-router';
 import { Alert, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
-import { PageHeader, ChartCard } from '../../components/common/PortalUI';
+import { PageHeader, ChartCard, FilterToolbar, StatusChip } from '../../components/common/PortalUI';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../components/common/OwnerSelectors';
 import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
 import {
@@ -11,16 +12,14 @@ import {
 } from '../../hooks/useOwnerWorkspace';
 import { downloadOwnerFile } from '../../services/ownerDownloads';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import {
-  formatContractMoney,
-  mutationKeys,
-} from '../../../../../packages/client-core/src/contracts';
-import { todayVietnam, type StaffAssignment } from '../staff/staffContracts';
+import { mutationKeys } from '../../../../../packages/client-core/src/contracts';
+import { todayVietnam, type StaffAssignment, type Staff } from '../staff/staffContracts';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
 import {
   incidentStatuses,
   workStatuses,
   statusText,
+  formatIncidentMoney,
   type Incident,
   type WorkOrder,
   type IncidentEvidence,
@@ -34,12 +33,23 @@ const assetFields: IncidentCommand['fields'] = [
   { name: 'assetCondition', label: 'Tình trạng tài sản sau xử lý' },
 ];
 export function IncidentWorkspace({ maintenance = false }: { maintenance?: boolean }) {
+  const [params, setParams] = useSearchParams();
+  const selectedKey = maintenance ? 'workOrderId' : 'incidentId';
+  const selected = params.get(selectedKey) ?? '';
+  const incidentFilter = maintenance ? (params.get('incidentId') ?? '') : '';
+  function setSelected(id: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set(selectedKey, id);
+      else next.delete(selectedKey);
+      return next;
+    });
+  }
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [status, setStatus] = useState(''),
     [severity, setSeverity] = useState(''),
-    [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+    [page, setPage] = useState(1);
   const path =
     (maintenance ? workRoot : root) +
     '?' +
@@ -47,6 +57,7 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
       locationId: location,
       roomId: room,
       severity,
+      incidentId: incidentFilter,
       ...(maintenance ? { workOrderStatus: status } : { status }),
       page,
       pageSize: 20,
@@ -60,64 +71,100 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
         title={maintenance ? 'Bảo trì & Lệnh sửa chữa' : 'Sự cố & Xử lý khẩn cấp'}
         subtitle="Owner phân loại, phân công, duyệt phương án/chi phí và xác minh kết quả."
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(id) => {
-          setLocation(id);
-          setRoom('');
-          setPage(1);
-        }}
-      />
-      <OwnerRoomPicker
-        key={location}
-        location={location}
-        value={room}
-        change={(id) => {
-          setRoom(id);
-          setPage(1);
-        }}
-      />
-      <TextField
-        select
-        label="Trạng thái cần lọc"
-        value={status}
-        onChange={(e) => {
-          setStatus(e.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả trạng thái</MenuItem>
-        {Object.entries(maintenance ? workStatuses : incidentStatuses).map(([key, label]) => (
-          <MenuItem key={key} value={key}>
-            {label}
-          </MenuItem>
-        ))}
-      </TextField>
-      <TextField
-        select
-        label="Mức độ sự cố"
-        value={severity}
-        onChange={(e) => {
-          setSeverity(e.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả</MenuItem>
-        <MenuItem value="Normal">Thông thường</MenuItem>
-        <MenuItem value="Emergency">Khẩn cấp</MenuItem>
-      </TextField>
-      <OwnerFeedback busy={q.isFetching} error={q.error} />
-      <Button disabled={q.isFetching} onClick={() => void q.refetch()}>
-        Làm mới danh sách
-      </Button>
+      {incidentFilter && (
+        <Button
+          onClick={() =>
+            setParams((previous) => {
+              const next = new URLSearchParams(previous);
+              next.delete('incidentId');
+              return next;
+            })
+          }
+        >
+          Xem tất cả lệnh sửa chữa
+        </Button>
+      )}
+      <FilterToolbar>
+        <OwnerLocationPicker
+          value={location}
+          change={(id) => {
+            setLocation(id);
+            setRoom('');
+            setPage(1);
+          }}
+        />
+        <OwnerRoomPicker
+          key={location}
+          location={location}
+          value={room}
+          change={(id) => {
+            setRoom(id);
+            setPage(1);
+          }}
+        />
+        <TextField
+          select
+          label="Trạng thái cần lọc"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả trạng thái</MenuItem>
+          {Object.entries(maintenance ? workStatuses : incidentStatuses).map(([key, label]) => (
+            <MenuItem key={key} value={key}>
+              {label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Mức độ sự cố"
+          value={severity}
+          onChange={(e) => {
+            setSeverity(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả</MenuItem>
+          <MenuItem value="Normal">Thông thường</MenuItem>
+          <MenuItem value="Emergency">Khẩn cấp</MenuItem>
+        </TextField>
+        <Button disabled={q.isFetching} onClick={() => void q.refetch()}>
+          Làm mới danh sách
+        </Button>
+        {!maintenance && (
+          <Button
+            variant={severity === 'Emergency' ? 'contained' : 'outlined'}
+            color="error"
+            onClick={() => {
+              setSeverity(severity === 'Emergency' ? '' : 'Emergency');
+              setPage(1);
+            }}
+          >
+            Ưu tiên khẩn cấp
+          </Button>
+        )}
+      </FilterToolbar>
       {maintenance ? (
         <OwnerTable
+          loading={q.isFetching}
+          error={q.error}
+          retry={() => void q.refetch()}
+          label="Lệnh sửa chữa"
           rows={works.data?.items ?? []}
           id={(w) => w.id}
           select={(w) => setSelected(w.id)}
           columns={[
             { label: 'Kết quả yêu cầu', render: (w) => w.expectedOutcome },
-            { label: 'Trạng thái', render: (w) => statusText(w.status) },
+            { label: 'Trạng thái', render: (w) => <StatusChip label={statusText(w.status)} /> },
+            {
+              label: 'Duyệt phương án',
+              render: (w) => (w.planApproved ? 'Đã duyệt' : 'Chưa duyệt'),
+            },
+            { label: 'Dự toán', render: (w) => formatIncidentMoney(w.estimatedCost) },
+            { label: 'Chi phí thực tế', render: (w) => formatIncidentMoney(w.actualCost) },
             {
               label: 'Thời hạn',
               render: (w) =>
@@ -127,15 +174,25 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
         />
       ) : (
         <OwnerTable
+          loading={q.isFetching}
+          error={q.error}
+          retry={() => void q.refetch()}
+          label="Sự cố"
           rows={incidents.data?.items ?? []}
           id={(i) => i.id}
           select={(i) => setSelected(i.id)}
           columns={[
             { label: 'Mã / Nội dung', render: (i) => `${i.code} · ${i.description}` },
-            { label: 'Trạng thái', render: (i) => statusText(i.status) },
+            { label: 'Trạng thái', render: (i) => <StatusChip label={statusText(i.status)} /> },
+            {
+              label: 'Ngày báo cáo',
+              render: (i) => (i.createdAt ? formatInstant(i.createdAt) : 'Chưa có'),
+            },
             {
               label: 'Mức độ',
-              render: (i) => (i.severity === 'Emergency' ? 'Khẩn cấp' : 'Thông thường'),
+              render: (i) => (
+                <StatusChip label={i.severity === 'Emergency' ? 'Khẩn cấp' : 'Thông thường'} />
+              ),
             },
           ]}
         />
@@ -207,7 +264,8 @@ export function IncidentDetail({ id }: { id: string }) {
     if (i)
       setCommand({ title, path: `${root}/${id}/${operation}`, version: i.version, fields, extra });
   }
-  const editable = !!i && ['Submitted', 'InProgress'].includes(i.status);
+  const editable =
+    !!i && !q.isFetching && !q.error && ['Submitted', 'InProgress'].includes(i.status);
   return (
     <ChartCard title={i ? `${i.code} · ${statusText(i.status)}` : 'Chi tiết sự cố'}>
       <Stack spacing={2}>
@@ -243,8 +301,15 @@ export function IncidentDetail({ id }: { id: string }) {
               </Alert>
             )}
             <Typography>{i.description}</Typography>
+            <RecordContext
+              locationId={i.locationId}
+              roomId={i.roomId}
+              incidentId={i.id}
+              staffId={currentStaff}
+            />
             <Typography>
-              {i.commonArea || i.roomId} · Tài sản: {i.assetId || 'Không gắn tài sản'}
+              {i.commonArea || ''}
+              {i.createdAt ? ` · Báo cáo lúc ${formatInstant(i.createdAt)}` : ''}
             </Typography>
             <Typography>
               Phân loại: {i.type || 'Chưa phân loại'} · Nhóm: {i.category || 'Chưa có'} · Phiên bản{' '}
@@ -288,7 +353,17 @@ export function IncidentDetail({ id }: { id: string }) {
                   onClick={() =>
                     open('duplicate', 'Đánh dấu trùng báo cáo', [
                       ...reason,
-                      { name: 'duplicateOfId', label: 'UUID sự cố gốc', type: 'guid' },
+                      {
+                        name: 'duplicateOfId',
+                        label: 'Sự cố gốc',
+                        type: 'incident',
+                        incidentScope: {
+                          id: i.id,
+                          locationId: i.locationId,
+                          roomId: i.roomId,
+                          assetId: i.assetId,
+                        },
+                      },
                     ])
                   }
                 >
@@ -324,8 +399,10 @@ export function IncidentDetail({ id }: { id: string }) {
             )}
             {editable && (
               <Alert severity="info">
-                Staff hiện chịu trách nhiệm: {currentStaff || 'Chưa có phân công hiệu lực'}. Máy chủ
-                kiểm tra các lệnh sửa chữa và chi phí tồn đọng trước khi đóng sự cố.
+                {currentStaff
+                  ? 'Đã có Staff phụ trách hiện tại.'
+                  : 'Chưa có phân công Staff hiệu lực.'}{' '}
+                Máy chủ kiểm tra các lệnh sửa chữa và chi phí tồn đọng trước khi đóng sự cố.
               </Alert>
             )}
             <Typography variant="h6">Bằng chứng báo cáo, kiểm tra và hoàn tất</Typography>
@@ -383,10 +460,7 @@ export function IncidentDetail({ id }: { id: string }) {
               <Paper key={e.id} variant="outlined" sx={{ p: 2 }}>
                 <Typography>
                   Hoạt động {e.activityId} · Yêu cầu{' '}
-                  {e.requestedCost == null
-                    ? 'Không có'
-                    : formatContractMoney(String(e.requestedCost))}{' '}
-                  ·{' '}
+                  {e.requestedCost == null ? 'Không có' : formatIncidentMoney(e.requestedCost)} ·{' '}
                   {e.costApproved == null
                     ? 'Chưa quyết định'
                     : e.costApproved
@@ -425,6 +499,10 @@ export function IncidentDetail({ id }: { id: string }) {
             ))}
             <Typography variant="h6">Lệnh sửa chữa liên quan</Typography>
             <OwnerTable
+              loading={works.isFetching}
+              error={works.error}
+              retry={() => void works.refetch()}
+              label="Lệnh sửa chữa của sự cố"
               rows={works.data?.items ?? []}
               id={(w) => w.id}
               select={(w) => setSelectedWork(w.id)}
@@ -443,7 +521,7 @@ export function IncidentDetail({ id }: { id: string }) {
             {expenses.data?.map((e) => (
               <Typography key={e.id}>
                 {e.category} · {e.expenseDate.split('-').reverse().join('/')} ·{' '}
-                {formatContractMoney(String(e.amount))}
+                {formatIncidentMoney(e.amount)}
               </Typography>
             ))}
             <Typography variant="h6">Lịch sử và ghi nhận khó khăn</Typography>
@@ -593,21 +671,32 @@ export function WorkOrderDetail({
         </Button>
         {w && (
           <>
+            <RecordContext
+              locationId={w.locationId}
+              roomId={w.roomId}
+              incidentId={w.incidentId}
+              staffId={w.assignedStaffId}
+            />
             <Typography>
               {w.expectedOutcome} · {statusText(w.status)} · {w.isOverdue ? 'Quá hạn' : 'Hạn'}{' '}
               {formatInstant(w.targetCompletionAt)}
             </Typography>
             <Typography>
-              Staff: {w.assignedStaffId} · Phiên bản {w.version}
+              Phiên bản {w.version} ·{' '}
+              {w.planApproved ? 'Phương án đã được duyệt' : 'Phương án chưa được duyệt'}
             </Typography>
+            {w.canStart && (
+              <Alert severity="info">
+                Máy chủ xác nhận Staff có thể bắt đầu thực hiện phương án đã duyệt.
+              </Alert>
+            )}
             <Typography>
               Kiểm tra: {w.inspectionResult || 'Chưa có'} · Phương án v{w.proposalVersion}:{' '}
               {w.proposedSolution || 'Chưa có'} · {w.estimatedMinutes ?? '—'} phút
             </Typography>
             <Typography>
-              Dự toán:{' '}
-              {w.estimatedCost == null ? 'Chưa có' : formatContractMoney(String(w.estimatedCost))} ·
-              Đơn vị thực hiện: {w.vendor || 'Chưa có'}
+              Dự toán: {formatIncidentMoney(w.estimatedCost)} · Đơn vị thực hiện:{' '}
+              {w.vendor || 'Chưa có'}
             </Typography>
             <Typography>
               Người duyệt: {w.approvedById || 'Chưa duyệt'} ·{' '}
@@ -615,13 +704,13 @@ export function WorkOrderDetail({
             </Typography>
             <Typography>
               Kết quả: {w.result || 'Chưa có'} · Thực tế:{' '}
-              {w.actualCost == null ? 'Chưa xác minh' : formatContractMoney(String(w.actualCost))}
+              {w.actualCost == null ? 'Chưa xác minh' : formatIncidentMoney(w.actualCost)}
             </Typography>
             <Typography>
               Xác minh: {w.verifiedById || 'Chưa có'} ·{' '}
               {w.verifiedAt ? formatInstant(w.verifiedAt) : ''}
             </Typography>
-            {w.status === 'PendingApproval' && (
+            {!q.isFetching && !q.error && w.status === 'PendingApproval' && (
               <Stack direction="row">
                 <Button
                   onClick={() =>
@@ -647,7 +736,7 @@ export function WorkOrderDetail({
                 </Button>
               </Stack>
             )}
-            {w.status === 'PendingVerification' && (
+            {!q.isFetching && !q.error && w.status === 'PendingVerification' && (
               <Stack direction="row">
                 <Button
                   onClick={() =>
@@ -676,7 +765,7 @@ export function WorkOrderDetail({
                 </Button>
               </Stack>
             )}
-            {!['Verified', 'Cancelled'].includes(w.status) && (
+            {!q.isFetching && !q.error && !['Verified', 'Cancelled'].includes(w.status) && (
               <Stack direction="row">
                 <Button
                   disabled={!currentStaff || currentStaff === w.assignedStaffId}
@@ -705,7 +794,7 @@ export function WorkOrderDetail({
               <Typography key={h.id}>
                 {formatInstant(h.verifiedAt)} · {h.action} · {h.conditionBefore} →{' '}
                 {h.conditionAfter} · {h.statusBefore} → {h.statusAfter} ·{' '}
-                {formatContractMoney(String(h.actualCost))}
+                {formatIncidentMoney(h.actualCost)}
               </Typography>
             ))}
             <OwnerPagination page={page} total={history.data?.totalCount ?? 0} change={setPage} />
@@ -721,5 +810,63 @@ export function WorkOrderDetail({
         )}
       </Stack>
     </ChartCard>
+  );
+}
+function RecordContext({
+  locationId,
+  roomId,
+  incidentId,
+  staffId,
+}: {
+  locationId: string;
+  roomId?: string | null;
+  incidentId: string;
+  staffId?: string;
+}) {
+  const routed = useInRouterContext();
+  const location = useOwnerQuery<{ name: string }>(
+    ['incident-location-name', locationId],
+    `/api/v1/locations/${locationId}`,
+    !!locationId,
+  );
+  const room = useOwnerQuery<{ roomNumber: string }>(
+    ['incident-room-name', roomId],
+    `/api/v1/rooms/${roomId}`,
+    !!roomId,
+  );
+  const staff = useOwnerQuery<Staff>(
+    ['staff-detail', staffId],
+    `/api/v1/staff/${staffId}`,
+    !!staffId,
+  );
+  return (
+    <Stack spacing={1}>
+      <Typography>
+        {location.data?.name ?? 'Cơ sở liên quan'}
+        {roomId ? ` · Phòng ${room.data?.roomNumber ?? 'liên quan'}` : ' · Khu vực chung'} ·{' '}
+        {staffId
+          ? (staff.data?.fullName ?? 'Nhân viên đã phân công')
+          : 'Chưa có nhân viên phụ trách'}
+      </Typography>
+      <OwnerFeedback error={location.error || room.error || staff.error} />
+      {routed && (
+        <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+          <Button component={Link} to={`/incidents?incidentId=${encodeURIComponent(incidentId)}`}>
+            Mở sự cố
+          </Button>
+          <Button component={Link} to={`/maintenance?incidentId=${encodeURIComponent(incidentId)}`}>
+            Các lệnh sửa chữa
+          </Button>
+          {roomId && (
+            <Button component={Link} to={`/rooms/${encodeURIComponent(roomId)}`}>
+              Mở phòng
+            </Button>
+          )}
+          <Button component={Link} to={`/locations/${encodeURIComponent(locationId)}/investment`}>
+            Chi phí tại cơ sở
+          </Button>
+        </Stack>
+      )}
+    </Stack>
   );
 }

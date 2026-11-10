@@ -12,6 +12,9 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Stepper,
+  Step,
+  StepLabel,
   Table,
   TableBody,
   TableCell,
@@ -26,9 +29,10 @@ import {
   invoiceError,
   formatBillingDecimal,
   missingBillingInput,
+  type InvoiceListFilter,
 } from '../../../../../../packages/client-core/src/invoices';
 import { formatContractMoney } from '../../../../../../packages/client-core/src/contracts';
-import { PageHeader } from '../../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useInvoiceApi } from '../useInvoiceApi';
@@ -50,6 +54,11 @@ export function LiveInvoicesPage() {
     [contractId, setContractId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [filterRoom, setFilterRoom] = useState('');
+  const [filterLocation, setFilterLocation] = useState(''),
+    [filterPeriod, setFilterPeriod] = useState(''),
+    [filterStatus, setFilterStatus] = useState<'' | 'Draft' | 'Final'>('');
+  const [creating, setCreating] = useState(false),
+    [draftStep, setDraftStep] = useState(0);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [confirm, setConfirm] = useState(false);
@@ -70,15 +79,35 @@ export function LiveInvoicesPage() {
   });
   const contracts = useQuery({
     queryKey: ['invoice-contracts', actor, roomId],
-    enabled: !!roomId,
+    enabled: creating && !!roomId,
     queryFn: ({ signal }) =>
       api.request<{
-        items: { id: string; roomId: string; status: string; startDate: string; endDate: string }[];
-      }>(`/api/v1/contracts?locationId=${locationId}&pageSize=100`, { signal }),
+        periods: {
+          contractId: string;
+          contractStatus: string;
+          from: string;
+          to: string;
+          occupants: { displayLabel: string }[];
+        }[];
+      }>(`/api/v1/rooms/${roomId}/occupancy-history`, { signal }),
   });
+  const filterRooms = useQuery({
+    queryKey: ['invoice-filter-rooms', actor, filterLocation],
+    enabled: !!filterLocation,
+    queryFn: ({ signal }) =>
+      api.request<{ id: string; label: string }[]>(
+        `/api/v1/capture/locations/${filterLocation}/rooms`,
+        { signal },
+      ),
+  });
+  const filters: InvoiceListFilter = {
+    locationId: filterLocation || undefined,
+    billingPeriod: filterPeriod ? filterPeriod + '-01' : undefined,
+    status: filterStatus || undefined,
+  };
   const list = useQuery({
-    queryKey: ['invoices', actor, page, filterRoom],
-    queryFn: ({ signal }) => api.list(page, signal, filterRoom),
+    queryKey: ['invoices', actor, page, filterRoom, filters],
+    queryFn: ({ signal }) => api.list(page, signal, filterRoom, filters),
   });
   const detail = useQuery({
     queryKey: ['invoice', actor, selected],
@@ -93,6 +122,7 @@ export function LiveInvoicesPage() {
     try {
       const result = await work();
       setSelected(result.id);
+      setCreating(false);
       setConfirm(false);
       await cache.invalidateQueries({ queryKey: ['invoices', actor] });
       await cache.invalidateQueries({ queryKey: ['invoice', actor] });
@@ -109,118 +139,237 @@ export function LiveInvoicesPage() {
       <PageHeader
         title="Hóa đơn phòng"
         subtitle="Nháp → Kiểm tra chi phí → Phát hành. Số tiền do hệ thống tính từ chỉ số đã xác nhận và cấu hình Owner."
+        actions={
+          <Button
+            variant="contained"
+            onClick={() => {
+              setDraftStep(0);
+              setCreating(true);
+            }}
+          >
+            Lập hóa đơn nháp
+          </Button>
+        }
       />
       <Stack spacing={2}>
-        <TextField
-          select
-          label="Lọc danh sách hóa đơn theo phòng"
-          value={filterRoom}
-          onChange={(e) => {
-            setFilterRoom(e.target.value);
-            setPage(1);
-          }}
-          helperText="Chọn cơ sở trong phần lập nháp để tải phòng. Bộ lọc áp dụng trên máy chủ."
+        <FilterToolbar>
+          <TextField
+            select
+            label="Cơ sở lọc hóa đơn"
+            value={filterLocation}
+            onChange={(e) => {
+              setFilterLocation(e.target.value);
+              setFilterRoom('');
+              setPage(1);
+            }}
+          >
+            <MenuItem value="">Tất cả cơ sở</MenuItem>
+            {locations.data?.map((l) => (
+              <MenuItem key={l.id} value={l.id}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Lọc danh sách hóa đơn theo phòng"
+            value={filterRoom}
+            onChange={(e) => {
+              setFilterRoom(e.target.value);
+              setPage(1);
+            }}
+            disabled={!filterLocation}
+            helperText={!filterLocation ? 'Chọn cơ sở để lọc theo phòng' : undefined}
+          >
+            <MenuItem value="">Tất cả phòng</MenuItem>
+            {filterRooms.data?.map((r) => (
+              <MenuItem key={r.id} value={r.id}>
+                {r.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            type="month"
+            label="Kỳ hóa đơn cần lọc"
+            value={filterPeriod}
+            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(e) => {
+              setFilterPeriod(e.target.value);
+              setPage(1);
+            }}
+          />
+          <TextField
+            select
+            label="Trạng thái hóa đơn"
+            value={filterStatus}
+            onChange={(e) => {
+              setFilterStatus(e.target.value as '' | 'Draft' | 'Final');
+              setPage(1);
+            }}
+          >
+            <MenuItem value="">Tất cả trạng thái</MenuItem>
+            <MenuItem value="Draft">Nháp</MenuItem>
+            <MenuItem value="Final">Đã phát hành</MenuItem>
+          </TextField>
+          <Button disabled={list.isFetching} onClick={() => void list.refetch()}>
+            Làm mới hóa đơn
+          </Button>
+        </FilterToolbar>
+        {(locations.error || filterRooms.error) && (
+          <Alert
+            severity="error"
+            action={
+              <Button
+                onClick={() => {
+                  void locations.refetch();
+                  if (filterLocation) void filterRooms.refetch();
+                }}
+              >
+                Thử lại bộ lọc
+              </Button>
+            }
+          >
+            {invoiceError(locations.error || filterRooms.error)}
+          </Alert>
+        )}
+        {list.data && !list.error && (
+          <Typography variant="body2">
+            {list.data.totalCount} hóa đơn trong bộ lọc · Nháp và đã phát hành được phân biệt theo
+            trạng thái.
+          </Typography>
+        )}
+        <Button component={Link} to="/payments">
+          Theo dõi thanh toán và số dư
+        </Button>
+        <Dialog
+          open={creating}
+          onClose={busy ? undefined : () => setCreating(false)}
+          maxWidth="sm"
+          fullWidth
+          aria-labelledby="invoice-draft-title"
         >
-          <MenuItem value="">Tất cả phòng</MenuItem>
-          {filterRoom && !rooms.data?.some((r) => r.id === filterRoom) && (
-            <MenuItem value={filterRoom}>{filterRoom}</MenuItem>
-          )}
-          {rooms.data?.map((r) => (
-            <MenuItem key={r.id} value={r.id}>
-              {r.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <Paper sx={{ p: 2 }}>
-          <Stack spacing={2}>
-            <Typography variant="h6">Lập hóa đơn nháp</Typography>
-            <TextField
-              select
-              label="Cơ sở"
-              value={locationId}
-              onChange={(e) => {
-                setLocationId(e.target.value);
-                setRoomId('');
-                setContractId('');
-              }}
-            >
-              <MenuItem value="">Chọn cơ sở</MenuItem>
-              {locations.data?.map((l) => (
-                <MenuItem value={l.id} key={l.id}>
-                  {l.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Phòng"
-              value={roomId}
-              onChange={(e) => {
-                setRoomId(e.target.value);
-                setContractId('');
-              }}
-            >
-              <MenuItem value="">Chọn phòng</MenuItem>
-              {rooms.data?.map((r) => (
-                <MenuItem value={r.id} key={r.id}>
-                  {r.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Kỳ hóa đơn"
-              type="month"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <TextField
-              select
-              label="Hợp đồng đại diện phòng trong kỳ"
-              value={contractId}
-              onChange={(e) => setContractId(e.target.value)}
-            >
-              <MenuItem value="">Chọn hợp đồng</MenuItem>
-              {contracts.data?.items
-                .filter(
-                  (c) =>
-                    c.roomId === roomId &&
-                    ['Active', 'Terminated', 'Superseded'].includes(c.status),
-                )
-                .map((c) => (
-                  <MenuItem value={c.id} key={c.id}>
-                    {c.startDate} – {c.endDate} · {c.id}
-                  </MenuItem>
-                ))}
-            </TextField>
-            <TextField
-              label="Hoặc nhập mã hợp đồng đại diện"
-              value={contractId}
-              onChange={(e) => setContractId(e.target.value)}
-              helperText="Dùng mã hợp đồng nếu không có trong 100 kết quả đầu."
-            />
-            {(locations.error || rooms.error || contracts.error) && (
-              <Alert severity="error">
-                {invoiceError(locations.error || rooms.error || contracts.error)}
-              </Alert>
-            )}
-            {(locations.isPending ||
-              (!!locationId && rooms.isPending) ||
-              (!!roomId && contracts.isPending)) && <LinearProgress />}
-            <Button
-              variant="contained"
-              disabled={
-                busy ||
-                !roomId ||
-                !/^\d{4}-\d{2}$/.test(period) ||
-                !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(contractId)
-              }
-              onClick={() => void mutate(() => api.draft(roomId, period + '-01', contractId))}
-            >
-              Tạo / mở bản nháp
+          <DialogTitle id="invoice-draft-title">Lập hóa đơn nháp</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2}>
+              {!!error && <Alert severity="error">{error}</Alert>}
+              <Stepper activeStep={draftStep}>
+                <Step>
+                  <StepLabel>Phòng và kỳ</StepLabel>
+                </Step>
+                <Step>
+                  <StepLabel>Hợp đồng đại diện</StepLabel>
+                </Step>
+              </Stepper>
+              <Stack spacing={2} sx={{ display: draftStep === 0 ? 'flex' : 'none', pt: 1 }}>
+                <TextField
+                  select
+                  label="Cơ sở"
+                  value={locationId}
+                  onChange={(e) => {
+                    setLocationId(e.target.value);
+                    setRoomId('');
+                    setContractId('');
+                  }}
+                >
+                  <MenuItem value="">Chọn cơ sở</MenuItem>
+                  {locations.data?.map((l) => (
+                    <MenuItem value={l.id} key={l.id}>
+                      {l.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  label="Phòng"
+                  value={roomId}
+                  onChange={(e) => {
+                    setRoomId(e.target.value);
+                    setContractId('');
+                  }}
+                >
+                  <MenuItem value="">Chọn phòng</MenuItem>
+                  {rooms.data?.map((r) => (
+                    <MenuItem value={r.id} key={r.id}>
+                      {r.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  label="Kỳ hóa đơn"
+                  type="month"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+              </Stack>
+              <Stack spacing={2} sx={{ display: draftStep === 1 ? 'flex' : 'none' }}>
+                <TextField
+                  select
+                  label="Hợp đồng đại diện phòng trong kỳ"
+                  value={contractId}
+                  onChange={(e) => setContractId(e.target.value)}
+                >
+                  <MenuItem value="">Chọn hợp đồng</MenuItem>
+                  {contracts.data?.periods
+                    .filter((c) =>
+                      ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus),
+                    )
+                    .map((c) => (
+                      <MenuItem value={c.contractId} key={c.contractId}>
+                        {c.from.split('-').reverse().join('/')} –{' '}
+                        {c.to.split('-').reverse().join('/')} ·{' '}
+                        {c.occupants.map((o) => o.displayLabel).join(', ')}
+                      </MenuItem>
+                    ))}
+                </TextField>
+                <Alert severity="info">
+                  Máy chủ kiểm tra hợp đồng đại diện trong kỳ. Bản nháp có dữ liệu thiếu sẽ được giữ
+                  để xem xét trước khi phát hành.
+                </Alert>
+              </Stack>
+              {(locations.error || rooms.error || contracts.error) && (
+                <Alert severity="error">
+                  {invoiceError(locations.error || rooms.error || contracts.error)}
+                </Alert>
+              )}
+              {(locations.isPending ||
+                (!!locationId && rooms.isPending) ||
+                (!!roomId && contracts.isPending)) && <LinearProgress />}
+              <Button
+                sx={{ display: draftStep === 1 ? 'inline-flex' : 'none' }}
+                variant="contained"
+                disabled={
+                  busy ||
+                  !roomId ||
+                  !/^\d{4}-\d{2}$/.test(period) ||
+                  !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(contractId)
+                }
+                onClick={() => void mutate(() => api.draft(roomId, period + '-01', contractId))}
+              >
+                Tạo / mở bản nháp
+              </Button>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={busy} onClick={() => setCreating(false)}>
+              Hủy lập nháp
             </Button>
-          </Stack>
-        </Paper>
+            {draftStep === 1 && (
+              <Button disabled={busy} onClick={() => setDraftStep(0)}>
+                Quay lại chọn phòng
+              </Button>
+            )}
+            {draftStep === 0 && (
+              <Button
+                disabled={!roomId || !/^\d{4}-\d{2}$/.test(period)}
+                variant="contained"
+                onClick={() => setDraftStep(1)}
+              >
+                Tiếp tục chọn hợp đồng
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
         {error && <Alert severity="error">{error}</Alert>}
         {list.isPending && <LinearProgress />}
         {list.error && (
@@ -231,7 +380,9 @@ export function LiveInvoicesPage() {
             {invoiceError(list.error)}
           </Alert>
         )}
-        {list.data?.items.length === 0 && <Alert severity="info">Chưa có hóa đơn.</Alert>}
+        {!list.error && !list.isPending && list.data?.items.length === 0 && (
+          <Alert severity="info">Chưa có hóa đơn.</Alert>
+        )}
         {list.data?.items.map((item) => (
           <Paper sx={{ p: 2 }} key={item.id}>
             <Stack direction="row" sx={{ alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
@@ -245,12 +396,12 @@ export function LiveInvoicesPage() {
           </Paper>
         ))}
         <Stack direction="row" spacing={2}>
-          <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
+          <Button disabled={page === 1 || list.isFetching} onClick={() => setPage(page - 1)}>
             Trang trước
           </Button>
           <Typography>Trang {page}</Typography>
           <Button
-            disabled={!list.data || page * 20 >= list.data.totalCount}
+            disabled={list.isFetching || !list.data || page * 20 >= list.data.totalCount}
             onClick={() => setPage(page + 1)}
           >
             Trang sau

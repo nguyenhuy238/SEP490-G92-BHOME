@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FinancialReportsApiPage } from './FinancialReportsApiPage';
-const mock = vi.hoisted(() => ({ locations: vi.fn(), report: vi.fn() }));
+const mock = vi.hoisted(() => ({ locations: vi.fn(), rooms: vi.fn(), report: vi.fn() }));
 vi.mock('../expenses/useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
@@ -10,6 +10,7 @@ vi.mock('../../../../../packages/client-core/src/auth', () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   mock.locations.mockResolvedValue([]);
+  mock.rooms.mockResolvedValue([]);
 });
 function mount() {
   render(
@@ -144,4 +145,53 @@ it('reports API failure without a financial result', async () => {
   request();
   await screen.findByText('Không thể tải hoặc lưu dữ liệu tài chính. Vui lòng thử lại.');
   expect(screen.queryByText('Vốn & Thu hồi')).not.toBeInTheDocument();
+});
+it('keeps negative server totals exact, including amounts beyond safe integers', async () => {
+  mock.report.mockResolvedValue({
+    ...backendReport,
+    total: { ...backendReport.total, operatingProfit: '-999999999999999999' },
+  });
+  mount();
+  request();
+  await screen.findByText('Lợi nhuận vận hành: -999.999.999.999.999.999 ₫');
+  expect(screen.getByText('Điều chỉnh đã duyệt: -100 ₫')).toBeInTheDocument();
+});
+it('selects a scoped Room by name and clears it when the Location changes', async () => {
+  mock.locations.mockResolvedValue([
+    { id: 'a', label: 'Cơ sở A' },
+    { id: 'b', label: 'Cơ sở B' },
+  ]);
+  mock.rooms.mockImplementation(async (id) =>
+    id === 'a' ? [{ id: 'room', label: 'Phòng 101' }] : [],
+  );
+  mock.report.mockResolvedValue(backendReport);
+  mount();
+  expect(screen.getByRole('combobox', { name: 'Phòng' })).toBeDisabled();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở A' }));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Phòng 101' }));
+  request();
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(mock.report).toHaveBeenLastCalledWith(
+    expect.objectContaining({ locationId: 'a', roomId: 'room' }),
+    expect.any(AbortSignal),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở B' }));
+  expect(screen.getByRole('combobox', { name: 'Phòng' })).toHaveValue('');
+  request();
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(mock.report).toHaveBeenLastCalledWith(
+    { from: '2026-11-01', to: '2026-11-30', locationId: 'b' },
+    expect.any(AbortSignal),
+  );
+});
+it('rejects a reversed date range before requesting financial figures', () => {
+  mount();
+  fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-11-30' } });
+  fireEvent.change(screen.getByLabelText(/Đến ngày/), { target: { value: '2026-11-01' } });
+  fireEvent.submit(screen.getByRole('button', { name: 'Xem báo cáo' }).closest('form')!);
+  expect(screen.getByText('Chọn khoảng ngày hợp lệ.')).toBeInTheDocument();
+  expect(mock.report).not.toHaveBeenCalled();
 });

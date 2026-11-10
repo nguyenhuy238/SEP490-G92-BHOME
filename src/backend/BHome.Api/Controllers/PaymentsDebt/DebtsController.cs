@@ -13,6 +13,8 @@ public sealed class DebtsController(PaymentService service) : ControllerBase
     [HttpGet]
     public Task<PagedResult<DebtInvoiceView>> List([FromQuery] PaymentQuery query, CancellationToken t)
     { query.OutstandingOnly = true; return service.DebtAsync(query, t); }
+    [HttpGet("summary"), Authorize(Policy = Permissions.Finance.View)]
+    public Task<DebtSummary> Summary([FromQuery] PaymentQuery query, CancellationToken t) => service.DebtSummaryAsync(query, t);
 }
 [ApiController, Route("api/v1/payment-invoices"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

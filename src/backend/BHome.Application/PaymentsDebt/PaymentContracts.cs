@@ -17,6 +17,10 @@ public sealed record PaymentMatchInput(Guid InvoiceId, Guid? PaidByUserId, [prop
 public sealed record PaymentDepositMatchInput(Guid ContractId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified);
 public sealed record PaymentRejectInput([Required, StringLength(2000)] string Reason);
 public sealed record PaymentScope(Guid ActorId, bool Owner, bool Tenant, bool Staff, DateOnly Today);
+public sealed record DebtSummary(
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OutstandingAmount,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OverdueAmount,
+    int InvoiceCount, int OverdueInvoiceCount);
 public sealed class PaymentQuery
 {
     public int Page { get; set; } = 1;
@@ -94,6 +98,7 @@ public interface IPaymentRepository
     Task<bool> ActiveLocationAsync(Guid locationId, CancellationToken t);
     Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid invoiceId, CancellationToken t);
     Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope, PaymentQuery query, CancellationToken t);
+    Task<DebtSummary> DebtSummaryAsync(PaymentScope scope, PaymentQuery query, CancellationToken t);
     Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentScope scope, PaymentQuery query, CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset at);

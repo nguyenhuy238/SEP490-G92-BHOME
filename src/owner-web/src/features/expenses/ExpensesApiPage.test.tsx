@@ -68,7 +68,20 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
     expect.objectContaining({ locationId: 'location' }),
     expect.any(AbortSignal),
   );
-  expect(screen.getByRole('combobox', { name: 'Cơ sở' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('combobox', { name: 'Cơ sở' })).toBeDisabled();
+});
+it('filters Initial Investment on the server and uses that type for new records', async () => {
+  mount();
+  await screen.findByText('Bảo trì — 500.000 ₫');
+  fireEvent.click(screen.getByRole('tab', { name: 'Đầu tư ban đầu' }));
+  await waitFor(() =>
+    expect(mock.expenses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expenseType: 'INITIAL_INVESTMENT', page: 1 }),
+      expect.any(AbortSignal),
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
+  expect(screen.getByRole('combobox', { name: 'Phân loại' })).toHaveTextContent('Đầu tư ban đầu');
 });
 it('loads real API rows, submits one mutation while busy and reloads the list', async () => {
   let finish!: (v: typeof expense) => void;

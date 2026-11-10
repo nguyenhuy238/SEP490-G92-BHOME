@@ -320,6 +320,11 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         if (!scope.Owner && !scope.Tenant && !scope.Staff) throw new PaymentException(403, "payment_view_forbidden");
         return repository.DebtAsync(scope, query, t);
     }
+    public Task<DebtSummary> DebtSummaryAsync(PaymentQuery query, CancellationToken t)
+    {
+        Owner(); Query(query); query.OutstandingOnly = true;
+        return repository.DebtSummaryAsync(Scope, query, t);
+    }
     public Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentQuery query, CancellationToken t)
     {
         var scope = Scope; Query(query);
