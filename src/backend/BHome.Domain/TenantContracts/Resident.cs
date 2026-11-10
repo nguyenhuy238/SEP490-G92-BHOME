@@ -16,6 +16,9 @@ public sealed class Resident : AuditableEntity
     public IdentityVerificationStatus VerificationStatus { get; set; }
     public Guid OwnerUserId { get; set; }
     public Guid? TenantUserId { get; set; }
+    // Contact identity exists before a login account. Only Compact24 persists this field.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ContactEmail { get; set; }
     public string IdentityData { get; set; } = "{}";
     public string? IdentityHmac { get; set; }
     public string? HmacKeyVersion { get; set; }

@@ -140,6 +140,7 @@ CREATE TABLE assets (
 CREATE TABLE residents (
     id uuid PRIMARY KEY,
     user_id uuid REFERENCES users(id),
+    contact_email varchar(256),
     current_room_id uuid REFERENCES rooms(id),
     identity_owner_scope_id uuid NOT NULL REFERENCES users(id),
     display_label varchar(150) NOT NULL,
@@ -152,6 +153,7 @@ CREATE TABLE residents (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array')
 );
 CREATE UNIQUE INDEX ux_resident_identity ON residents(identity_owner_scope_id,hmac_key_version,identity_hmac) WHERE identity_hmac IS NOT NULL;
+CREATE UNIQUE INDEX ux_resident_contact_email ON residents(lower(btrim(contact_email))) WHERE contact_email IS NOT NULL;
 
 -- 08 One Contract table: documents, handovers, inspections and settlement are typed snapshots.
 CREATE TABLE contracts (
@@ -186,7 +188,7 @@ CREATE TABLE contracts (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     CHECK (end_date>start_date),
     CHECK (tenant_user_id IS NULL OR tenant_user_id<>owner_signer_id),
-    CHECK (status<>3 OR (activated_at IS NOT NULL AND activated_by_user_id IS NOT NULL AND tenant_user_id IS NOT NULL)),
+    CONSTRAINT ck_contract_active_metadata CHECK (status<>3 OR (activated_at IS NOT NULL AND activated_by_user_id IS NOT NULL)),
     CHECK (previous_contract_id IS NULL OR previous_contract_id<>id),
     CHECK (parent_contract_id IS NULL OR parent_contract_id<>id),
     CHECK (source_holding_contract_id IS NULL OR source_holding_contract_id<>id)

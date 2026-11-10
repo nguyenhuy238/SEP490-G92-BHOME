@@ -61,7 +61,8 @@ internal static class Compact24Records
         Root("Room", "rooms", "LocationId:location_id RoomNumber:room_number Floor:floor Capacity:capacity Status:status Version:version");
         Root("Asset", "assets", "LocationId:location_id RoomId:room_id CommonArea:common_area Code:asset_code Name:name Category:category Condition:condition Status:status Version:version");
         Root("Resident", "residents", "TenantUserId:user_id RoomId:current_room_id OwnerUserId:identity_owner_scope_id DisplayLabel:display_label IdentityHmac:identity_hmac HmacKeyVersion:hmac_key_version VerificationStatus:verification_status ConfirmedByUserId:verified_by_user_id ConfirmedAt:verified_at")
-            .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)");
+            .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)")
+            .Map("ContactEmail", "contact_email");
         var policy = Root("BillingPolicy", "billing_policies", "LocationId:location_id RoomId:room_id ChargeCode:charge_code Category:category Rate:rate EffectiveFrom:effective_from EffectiveTo:effective_to FirstUsedAt:first_used_at Version:version");
         policy.Map("Method", "calculation_method", "CASE t.calculation_method WHEN 'METERED' THEN 1 ELSE 0 END", "CASE WHEN (@state::jsonb->>'method')::int=1 THEN 'METERED' ELSE 'FIXED_PER_ROOM_PER_MONTH' END");
         var contract = Root("Contract", "contracts", "RoomId:room_id RepresentativeResidentId:representative_resident_id TenantUserId:tenant_user_id OwnerSignerId:owner_signer_id PreviousContractId:previous_contract_id HoldingContractId:source_holding_contract_id HoldingExpiryAt:holding_expiry_at ReservedCapacity:reserved_capacity StartDate:start_date EndDate:end_date MonthlyRent:monthly_rent RequiredDeposit:deposit_required AppliedHoldingDeposit:applied_holding_deposit Terms:terms SnapshotHash:snapshot_hash Status:status ActivatedAt:activated_at ActivatedByUserId:activated_by_user_id ActualEndDate:actual_end_date DraftVersion:version");
@@ -159,6 +160,7 @@ internal static class Compact24Records
         allocation.Write["reason"] = "CASE WHEN @state::jsonb->>'sourceDepositContractId' IS NOT NULL THEN 'Applied verified Holding Deposit to Main Contract' ELSE 'Verified invoice bank receipt' END"; allocation.AppendOnly = true;
         // Deposit receipts use a canonical payment plus an allocation, preserving the original receipt UUID.
         History("DepositVerification", "payments", "Id").AppendOnly = true;
+        History("ContractSigningInvitation", "contracts", "ContractId");
         Technical("PaymentCommand", true).AppendOnly = true; Notification("PaymentConfirmedEvent");
 
         // Incident aggregates reuse the native report/task/expense tables. Child records
