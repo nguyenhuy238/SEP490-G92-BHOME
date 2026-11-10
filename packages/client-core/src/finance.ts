@@ -1,4 +1,12 @@
 import type { ContractRequest } from './contracts';
+import { formatBillingDecimal } from './invoices';
+
+// Financial results can be negative; preserve the server's exact decimal string.
+export function formatFinanceMoney(value: string): string {
+  const negative = value.startsWith('-');
+  const amount = formatBillingDecimal(negative ? value.slice(1) : value);
+  return amount === '—' ? '—' : `${negative && amount !== '0' ? '-' : ''}${amount} ₫`;
+}
 
 export interface ExpenseInput {
   locationId: string;
@@ -165,6 +173,11 @@ export function financeClient(request: ContractRequest) {
     },
     locations: (signal?: AbortSignal) =>
       request<{ id: string; label: string }[]>('/api/v1/capture/locations', { signal }),
+    rooms: (locationId: string, signal?: AbortSignal) =>
+      request<{ id: string; label: string }[]>(
+        `/api/v1/capture/locations/${encodeURIComponent(locationId)}/rooms`,
+        { signal },
+      ),
     expenses: (filter: ExpenseFilter, signal?: AbortSignal) => {
       const query = new URLSearchParams();
       Object.entries(filter).forEach(([key, value]) => {

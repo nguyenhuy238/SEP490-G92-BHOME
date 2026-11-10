@@ -4,6 +4,16 @@ import type {
   FinancialReport,
   FinanceTotals,
 } from '../../../../../packages/client-core/src/finance';
+import { formatFinanceMoney } from '../../../../../packages/client-core/src/finance';
+it.each([
+  ['-999999999999999999', '-999.999.999.999.999.999 ₫'],
+  ['-12.5000', '-12,5 ₫'],
+  ['-0.00', '0 ₫'],
+  ['invalid', '—'],
+  ['--100', '—'],
+])('formats signed server decimal %s exactly', (value, expected) => {
+  expect(formatFinanceMoney(value)).toBe(expected);
+});
 it('exports exact backend decimals, preserves unavailable values and neutralizes spreadsheet formulas', () => {
   const totals = {
     issued: '999999999999999999',

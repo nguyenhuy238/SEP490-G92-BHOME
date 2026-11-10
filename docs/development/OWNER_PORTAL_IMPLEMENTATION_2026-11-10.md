@@ -89,3 +89,15 @@ Truy vết BF-07, UC-26..30, GBR-11/12/13 → IncidentWorkspace/IncidentCommandD
 API Incident dùng JSON number decimal tới 18 chữ số theo contract hiện có. Owner nay báo cần đối chiếu chứng từ khi số vượt khả năng biểu diễn chính xác của JavaScript, tương tự Mobile; không định dạng số bị làm tròn như số chính thức. Không đổi API/money policy. Reporter identity không có trong DTO đã duyệt (Tenant DTO chủ động loại identity/actor), nên không tự bổ sung PII hoặc suy diễn người báo cáo. Giữ history actor theo API Owner hiện có.
 
 Đánh dấu trùng mở danh sách sự cố gốc theo mã/nội dung, lọc cùng Location/Room/Asset và loại chính nó hoặc trạng thái không phù hợp; không nhập UUID. Server vẫn quyết định hợp lệ khi ghi. Validation: 14/14 test Incident/Live API pages PASS, gồm rework thiếu lý do/nhấp lặp, lookup trùng, lọc Emergency và deep link. Owner typecheck, root lint/build, Prettier, diff check PASS; Chrome fixture 18/18 route render không pageerror. Một fixture test mới ban đầu trả array cho endpoint Location phân trang đã được sửa đúng response shape, không thay API hoặc bỏ assertion. Backend không đổi nên không chạy lại backend local ở phase này; CI sẽ kiểm toàn solution.
+
+Commit Phase 4 `023d608`, push thành công; [CI 42734571043](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/42734571043) PASS frontend/backend.
+
+### Phase 5 — Chi phí, báo cáo và What-if
+
+Truy vết FE-08, UC-31..34, GBR-15/16 → finance client/Expense/Report/Scenario → kiểm tra lọc theo scope, số âm, baseline không thay sổ thực tế. Chi phí có tab đầu tư/OPEX lọc server, toolbar tìm cơ sở, tạo theo loại đang chọn, liên kết Work Order và invalidate báo cáo sau khi lưu. Báo cáo chọn phòng theo tên qua GET capture hiện hữu, xóa phòng khi đổi cơ sở, chặn ngày ngược; KPI và biểu đồ chỉ trình bày tổng server. Chiều dài thanh dùng tỷ lệ BigInt giới hạn trước khi đổi Number; không cộng/tính lại chỉ tiêu tài chính trên UI. API chưa có subtotal maintenance riêng nên không tự dựng tổng này.
+
+Sửa lỗi số âm hiển thị dấu gạch: formatter tài chính riêng giữ nguyên chuỗi decimal chính xác cho điều chỉnh, lợi nhuận, dòng tiền và What-if; không thay validation số tiền đầu vào. What-if tách dữ liệu thực tế trong kỳ nền và dự báo tháng, form giả định hai cột, tên cột so sánh rõ ràng và retry danh sách lỗi. Giữ snapshot server, khóa mutation và idempotency key khi kết quả chưa rõ. Không sửa backend/schema/công thức hoặc dữ liệu tài chính thực tế.
+
+Validation đã chạy: 30/30 test chi phí/báo cáo/What-if/export PASS; root lint và root build PASS. Lệnh thử trực tiếp root TypeScript 5.9 với Owner tsconfig báo DOM Iterable ở test Meter có sẵn; dùng script typecheck của workspace với TypeScript 7 đúng cấu hình CI để kiểm lại. Browser fixture và kiểm tra cuối ghi tiếp bên dưới. Provider/E2E thực tế chưa chạy.
+
+Kiểm tra cuối Phase 5: workspace Owner typecheck (TypeScript của dự án) PASS, Prettier và diff check PASS. Chrome fixture 18/18 route render không pageerror; đã thao tác tải báo cáo có số âm và xem ảnh desktop/mobile. Đây là kiểm tra client/layout bằng dữ liệu tổng hợp, không phải E2E backend/provider. Không có thay đổi backend ở phase này.
