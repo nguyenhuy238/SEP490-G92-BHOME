@@ -151,52 +151,16 @@ export function OwnerLocationPicker({
   required?: boolean;
   simple?: boolean;
 }) {
-  const [page, setPage] = useState(1),
-    [search, setSearch] = useState('');
-  const q = useOwnerQuery<OwnerPage<OwnerLocation>>(
-    ['location-options', simple ? 'all' : page, simple ? '' : search],
-    '/api/v1/locations?' + ownerQuery({
-      page: simple ? 1 : page,
-      pageSize: simple ? 100 : 20,
-      search: simple ? '' : search,
-    }),
-  );
   return (
-    <Stack spacing={1}>
-      {!simple && <TextField
-        size="small"
-        label="Tìm cơ sở"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setPage(1);
-        }}
-      />}
-      <TextField
-        select
-        required={required}
-        label="Cơ sở"
-        value={value}
-        onChange={(e) => change(e.target.value)}
-      >
-        <MenuItem value="">{required ? 'Chọn cơ sở' : 'Tất cả cơ sở'}</MenuItem>
-        {value && !q.data?.items.some((x) => x.id === value) && (
-          <MenuItem value={value}>{value}</MenuItem>
-        )}
-        {q.data?.items.map((x) => (
-          <MenuItem key={x.id} value={x.id}>
-            {x.name}
-          </MenuItem>
-        ))}
-      </TextField>
-      <OwnerFeedback busy={q.isFetching} error={q.error} />
-      {!simple && <OwnerPagination
-        page={page}
-        total={q.data?.totalCount ?? 0}
-        change={setPage}
-        busy={q.isFetching}
-      />}
-    </Stack>
+    <OwnerPicker<OwnerLocation>
+      key={simple ? 'compact-location-picker' : 'location-picker'}
+      value={value}
+      change={change}
+      required={required}
+      label="Cơ sở"
+      path="/api/v1/locations"
+      optionLabel={(item) => item.name}
+    />
   );
 }
 
