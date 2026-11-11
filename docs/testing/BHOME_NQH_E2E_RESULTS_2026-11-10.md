@@ -97,3 +97,6 @@ Application unit 406 PASS, Mobile refund/history 29 PASS, Owner/Mobile typecheck
 ## 11/11/2026 — Owner Mobile monitoring boundary
 
 Mobile affected regression 107 PASS (Owner contract/read-only finance, lifecycle, navigation, incident/Staff), component announcement/finance sau bổ sung 3 PASS; typecheck và changed-file ESLint PASS. Owner Web actions/shared contracts/backend không đổi. Old Mobile Owner mutation scenarios được thay bằng read-only acceptance theo BR-26, giữ Staff Emergency version/evidence/concurrency regression. Không có native device/browser E2E cho slice này.
+## 11/11/2026 — Retention review only
+
+Force rebuild Release integration project: 0 warning/error. Application unit 411 PASS; PostgreSQL retention + whole-excess + resident administration 6 PASS sau rebuild; Owner retention/resident UI 5 PASS; Owner force typecheck/Mobile typecheck và changed-file lint/format PASS. Khóa source/parallel/replay/hold-release/sai quyền, không leak/change identity, nghĩa vụ hoàn dư chưa tạo request đều có assert. Không xóa/ẩn danh hóa, không đặt ngày luật định, không migrate DB làm việc. Lượt incremental ban đầu discover thiếu retention do timestamp/DLL cũ không được tính là test retention đã chạy; bản rebuilt mới đã được chạy lại. Browser/native/legal acceptance chưa thực hiện.

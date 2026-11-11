@@ -34,6 +34,12 @@ export function ownerError(error: unknown) {
       .flat()
       .join(' ');
     const codes: Record<string, string> = {
+      identity_retention_review_changed:
+        'Metadata hoặc nghĩa vụ đã thay đổi. Tải lại và xác nhận lại trước khi lưu.',
+      identity_retention_key_conflict: 'Yêu cầu rà soát đã dùng với nội dung khác. Tải lại hồ sơ.',
+      identity_retention_hold_not_active: 'Lệnh giữ đã được xử lý hoặc không thuộc hồ sơ này.',
+      invalid_identity_retention_review:
+        'Chọn thao tác metadata hợp lệ, nhập lý do và xác nhận đã đọc hồ sơ.',
       staff_responsibilities_unresolved:
         'Nhân viên còn trách nhiệm chưa giải quyết. Hãy thay người phụ trách trước.',
       stale_staff_version: 'Hồ sơ đã thay đổi. Tải lại trước khi sửa tiếp.',

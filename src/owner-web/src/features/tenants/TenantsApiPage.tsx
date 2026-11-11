@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IdentityRetentionPanel } from './IdentityRetentionPanel';
 import {
   Button,
   Dialog,
@@ -312,6 +313,7 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
                 Phòng có thêm người ở. Dùng bộ lọc phòng và phân trang ở danh sách để xem đầy đủ.
               </Alert>
             )}
+            <IdentityRetentionPanel residentId={r.id} />
             <Typography variant="subtitle1">Hợp đồng / vai trò người ở</Typography>
             {r.tenancies.map((x) => (
               <Button

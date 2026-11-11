@@ -107,6 +107,8 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(route + $"/context?holdingContractId={holding.Id}&invoiceId={w.Invoice}")).StatusCode);
         var confirmed = await RefundValue<ReceiptExcessDisposition>(await Post(owner, route, new ReceiptExcessConfirmation(new(HoldingContractId: holding.Id), context.Reference, resident.Id, "Synthetic closed holding received accidental transfer", true)));
         Assert.Null(confirmed.PayerUserId);
+        var retentionRoute = $"/api/v1/residents/{resident.Id}/identity-retention";
+        Assert.Contains("refund_pending", (await RefundValue<BHome.Application.Operations.IdentityRetentionView>(await owner.GetAsync(retentionRoute))).BlockingReasons);
         var sourceRoute = $"/api/v1/payment-transactions/{extra.Id}/refunds";
         Assert.Equal(resident.Id, Assert.Single((await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).Beneficiaries).Id);
         var refund = await RefundValue<RefundView>(await Post(owner, sourceRoute, new RefundInput(resident.Id, 35000, "Synthetic actual preaccount payer", true)));
@@ -118,6 +120,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(0, await finalDb.Set<PaymentAllocation>().CountAsync(a => a.TransferId == extra.Id));
         Assert.Equal("ExcessRefundCompleted", (await As(w.Owner, Roles.Owner, s => s.TransferAsync(extra.Id, default))).Status);
         Assert.False((await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}"))).HasUnclassifiedRefunds);
+        Assert.DoesNotContain("refund_pending", (await RefundValue<BHome.Application.Operations.IdentityRetentionView>(await owner.GetAsync(retentionRoute))).BlockingReasons);
     }
     internal async Task SettlementWholeExcessIsDiscoverableAfterPhysicalRelease()
     {

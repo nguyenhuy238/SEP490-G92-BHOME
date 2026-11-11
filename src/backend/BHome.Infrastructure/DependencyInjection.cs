@@ -144,6 +144,10 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.Operations.OperationsFiles>();
         services.AddScoped<BHome.Application.Operations.OperationsService>();
         services.AddScoped<BHome.Application.Operations.IResidentAdministrationRepository, BHome.Infrastructure.Modules.Operations.ResidentAdministrationRepository>();
+        services.AddOptions<BHome.Application.Operations.IdentityRetentionOptions>().BindConfiguration("IdentityRetention");
+        services.AddScoped(sp => sp.GetRequiredService<IOptions<BHome.Application.Operations.IdentityRetentionOptions>>().Value);
+        services.AddScoped<BHome.Application.Operations.IIdentityRetentionRepository, BHome.Infrastructure.Modules.Operations.IdentityRetentionRepository>();
+        services.AddScoped<BHome.Application.Operations.IdentityRetentionService>();
         services.AddScoped<BHome.Application.Operations.ResidentAdministrationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());

@@ -27,13 +27,14 @@ internal static class ReceiptExcessRecords
             """).SingleOrDefaultAsync(token);
         return json is null ? null : JsonSerializer.Deserialize<ReceiptExcessDisposition>(json, Json) ?? throw new PaymentException(409, "receipt_excess_history_invalid");
     }
-    internal static Task<bool> PendingAsync(BHomePersistenceContext db, Guid? invoiceId, Guid? settlementContractId, CancellationToken token)
+    internal static Task<bool> PendingAsync(BHomePersistenceContext db, Guid? invoiceId, Guid? settlementContractId, CancellationToken token, Guid? payerResidentId = null)
     {
         if (db is not Compact24DbContext) return Task.FromResult(false);
         return db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
               WHERE h->>'recordType'={Kind} AND (({invoiceId}::uuid IS NOT NULL AND h->'state'->'target'->>'invoiceId'={invoiceId}::text)
-                OR ({settlementContractId}::uuid IS NOT NULL AND h->'state'->'target'->>'settlementContractId'={settlementContractId}::text))
+                OR ({settlementContractId}::uuid IS NOT NULL AND h->'state'->'target'->>'settlementContractId'={settlementContractId}::text)
+                OR ({payerResidentId}::uuid IS NOT NULL AND h->'state'->>'payerResidentId'={payerResidentId}::text))
               AND p.amount>(SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'
                 AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) proof WHERE proof->>'recordType'='ExcessReceiptRefundV1'
                   AND proof->'state'->>'receiptExcessDispositionId'=h->'state'->>'id' AND r.executed_at IS NOT NULL
