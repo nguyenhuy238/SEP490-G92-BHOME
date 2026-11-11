@@ -108,6 +108,15 @@ public sealed partial class Compact24DbContext
     private async Task ValidateAllocationAsync(PaymentAllocation allocation, CancellationToken token)
     {
         await Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", token);
+        if (allocation.DepositOffsetApprovalId is not null)
+        {
+            // The native guard verifies the immutable Owner approval, exact target,
+            // remaining obligation and unreserved source funds in this transaction.
+            if (allocation.TransferId is not null || allocation.SourceDepositContractId is null || allocation.TargetDepositContractId is not null || allocation.Amount <= 0)
+                throw LedgerConflict();
+            return;
+        }
+        if (allocation.TargetSettlementContractId is not null || allocation.SettlementReceivableId is not null) throw LedgerConflict();
         if (allocation.TransferId is { } transferId)
         {
             if (allocation.SourceDepositContractId is not null ||

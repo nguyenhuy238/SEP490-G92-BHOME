@@ -36,6 +36,15 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             if (root.RoomId != c.RoomId || root.TenantUserId != c.TenantUserId) throw ContractException.Conflict("contract_version_integrity_failed");
         }
         var blockers = new List<string>(); var m = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, t);
+        var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, t);
+        var chargeBalances = new List<SettlementReceivableBalance>();
+        foreach (var charge in charges)
+        {
+            var paid = await db.Set<PaymentAllocation>().Where(a => a.TargetSettlementContractId == id && a.SettlementReceivableId == charge.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0;
+            if (paid < 0 || paid > charge.Amount) throw ContractException.Conflict("settlement_ledger_integrity_failed");
+            chargeBalances.Add(new(charge, paid, charge.Amount - paid, paid == charge.Amount ? "Paid" : paid == 0 ? "Unpaid" : "PartiallyPaid"));
+            if (paid < charge.Amount) blockers.Add("settlement_receivable_outstanding");
+        }
         var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(t);
         HandoverSnapshot? observed = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         if (m?.ApprovedAt is null) blockers.Add("owner_termination_approval_required");
@@ -46,9 +55,14 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var start = new DateOnly(root.StartDate.Year, root.StartDate.Month, 1); var through = new DateOnly(end.Year, end.Month, 1);
         if (through < start || through.Year - start.Year > 20) throw ContractException.Conflict("settlement_period_review_required");
         var deposits = await db.Set<DepositVerification>().AsNoTracking().Where(d => d.ContractId == root.Id).OrderBy(d => d.Id).Select(d => new { d.Id, d.Amount, d.VerifiedAt }).ToArrayAsync(t);
-        var deposit = decimal.Truncate(deposits.Sum(d => d.Amount));
+        var deposit = decimal.Truncate(deposits.Sum(d => d.Amount) + root.AppliedHoldingDeposit);
         if (deposit > 0 || chain.Any(c => c.RequiredDeposit > 0)) blockers.Add("deposit_deduction_refund_policy_required");
-        if (root.HoldingContractId != null || root.AppliedHoldingDeposit > 0) blockers.Add("holding_allocation_settlement_required");
+        if (root.HoldingContractId is { } holding)
+        {
+            var applied = await db.Set<PaymentAllocation>().Where(a => a.SourceDepositContractId == holding && a.TargetDepositContractId == root.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0;
+            if (applied != root.AppliedHoldingDeposit) blockers.Add("holding_allocation_settlement_required");
+        }
+        else if (root.AppliedHoldingDeposit > 0) blockers.Add("holding_allocation_settlement_required");
         var invoiceEntities = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through).OrderBy(i => i.BillingPeriod).ToArrayAsync(t);
         if (invoiceEntities.Length > 250) throw ContractException.Conflict("settlement_period_review_required");
         var ids = invoiceEntities.Select(i => i.Id).ToArray();
@@ -61,7 +75,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             if (invoice.Status != InvoiceStatus.Final) { blockers.Add("draft_invoice_pending"); continue; }
             var finances = await db.FinancialsAsync(invoice.Id, t); var shared = allRecipients.Count(r => r.InvoiceId == invoice.Id) > 1;
             invoices.Add(new(invoice.Id, invoice.BillingPeriod, shared, finances));
-            if (finances.OutstandingAmount > 0) blockers.Add(shared ? "shared_liability_allocation_pending" : "invoice_outstanding");
+            if (finances.OutstandingAmount > 0) blockers.Add("invoice_outstanding");
             if (finances.PotentialExcessAmount > 0) blockers.Add("invoice_excess_pending_review");
             if (payments is not null && await payments.PendingReviewAsync(invoice.Id, t)) blockers.Add("bank_transfer_pending_review");
         }
@@ -93,6 +107,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             root.AppliedHoldingDeposit,
             deposits,
             Invoices = invoices,
+            Charges = chargeBalances,
             Blockers = blockers.Where(b => b != "deposit_deduction_refund_policy_required").Distinct().Order().ToArray(),
             Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges },
             Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId }
@@ -120,7 +135,8 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             returned ? position!.Refunded : deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
             invoices, blockers.Distinct().Order().ToArray(), other, resolved, "",
             returned ? position!.Refunded > 0 ? "VerifiedManual" : "NotRequired" : deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview",
-            calculation, financialReference, plan, obligationReference);
+            calculation, financialReference, plan, obligationReference, chargeBalances);
+        if (charges.Length > 0) value = value with { ApprovedFinalCharges = charges.Sum(charge => charge.Amount) };
         // Snapshot identity includes sources and their revisions, no user supplied financial totals.
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { value, Root = root.Id, root.RequiredDeposit, deposits, Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges }, Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId } })));
         return value with { Reference = "BH40-" + fingerprint };

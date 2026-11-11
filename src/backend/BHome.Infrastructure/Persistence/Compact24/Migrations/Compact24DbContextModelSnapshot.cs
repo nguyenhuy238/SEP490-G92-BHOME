@@ -2530,6 +2530,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreatedAt");
 
+                    b.Property<Guid?>("DepositOffsetApprovalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DepositOffsetApprovalId");
+
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uuid")
                         .HasColumnName("InvoiceId");
@@ -2538,6 +2542,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("PaidByUserId");
 
+                    b.Property<Guid?>("SettlementReceivableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("SettlementReceivableId");
+
                     b.Property<Guid?>("SourceDepositContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("SourceDepositContractId");
@@ -2545,6 +2553,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<Guid?>("TargetDepositContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("TargetDepositContractId");
+
+                    b.Property<Guid?>("TargetSettlementContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TargetSettlementContractId");
 
                     b.Property<Guid?>("TransferId")
                         .HasColumnType("uuid")
@@ -2568,6 +2580,8 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasIndex("TargetDepositContractId");
 
+                    b.HasIndex("TargetSettlementContractId");
+
                     b.HasIndex("TransferId")
                         .IsUnique();
 
@@ -2575,7 +2589,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.allocated_at)::timestamptz AS \"AllocatedAt\",(t.amount)::numeric AS \"Amount\",(COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at))::timestamptz AS \"CreatedAt\",(t.target_invoice_id)::uuid AS \"InvoiceId\",(t.paid_by_user_id)::uuid AS \"PaidByUserId\",(t.source_deposit_contract_id)::uuid AS \"SourceDepositContractId\",(t.target_deposit_contract_id)::uuid AS \"TargetDepositContractId\",(t.source_payment_id)::uuid AS \"TransferId\",(COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at))::timestamptz AS \"UpdatedAt\",(t.created_by_user_id)::uuid AS \"VerifiedByUserId\" FROM payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE WHERE (t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL) OR (t.target_deposit_contract_id IS NOT NULL AND (t.source_payment_id IS NOT NULL OR t.source_deposit_contract_id IS NOT NULL))");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.allocated_at)::timestamptz AS \"AllocatedAt\",(t.amount)::numeric AS \"Amount\",(COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at))::timestamptz AS \"CreatedAt\",(t.deposit_offset_approval_id)::uuid AS \"DepositOffsetApprovalId\",(t.target_invoice_id)::uuid AS \"InvoiceId\",(t.paid_by_user_id)::uuid AS \"PaidByUserId\",(t.settlement_receivable_id)::uuid AS \"SettlementReceivableId\",(t.source_deposit_contract_id)::uuid AS \"SourceDepositContractId\",(t.target_deposit_contract_id)::uuid AS \"TargetDepositContractId\",(t.target_settlement_contract_id)::uuid AS \"TargetSettlementContractId\",(t.source_payment_id)::uuid AS \"TransferId\",(COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at))::timestamptz AS \"UpdatedAt\",(t.created_by_user_id)::uuid AS \"VerifiedByUserId\" FROM payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE WHERE t.target_invoice_id IS NOT NULL OR t.target_deposit_contract_id IS NOT NULL OR t.target_settlement_contract_id IS NOT NULL");
                 });
 
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentCommand", b =>
@@ -5912,6 +5926,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
                         .HasForeignKey("TargetDepositContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("TargetSettlementContractId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)

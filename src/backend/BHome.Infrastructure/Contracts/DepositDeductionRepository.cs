@@ -37,6 +37,9 @@ internal sealed class DepositDeductionRepository(BHomePersistenceContext db, ICo
     }
     public async Task<DepositDeductionContext> ContextAsync(Guid contractId, CancellationToken token)
     {
+        if ((await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, contractId, SettlementChargeRecords.ChargeKind, token)).Length > 0 ||
+            (await SettlementChargeRecords.ReadAsync<DepositOffsetApproval>(db, contractId, SettlementChargeRecords.OffsetKind, token)).Length > 0)
+            throw ContractException.Conflict("settlement_receivables_replace_legacy_deductions");
         if (ledger is not IContractSettlementDetails details) throw new ContractException(503, "settlement_summary_unavailable");
         var contract = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contractId, token) ?? throw ContractException.Missing();
         var summary = await details.SummaryAsync(contractId, token);

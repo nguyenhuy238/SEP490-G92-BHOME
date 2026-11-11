@@ -52,6 +52,8 @@ internal static class Compact24DomainModel
         var allocation = model.Entity<BHome.Domain.PaymentsDebt.PaymentAllocation>();
         allocation.Property(x => x.TransferId).IsRequired(false); allocation.Property(x => x.InvoiceId).IsRequired(false);
         allocation.Property(x => x.SourceDepositContractId); allocation.Property(x => x.TargetDepositContractId);
+        allocation.Property(x => x.TargetSettlementContractId); allocation.Property(x => x.SettlementReceivableId); allocation.Property(x => x.DepositOffsetApprovalId);
+        allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.TargetSettlementContractId).OnDelete(DeleteBehavior.Restrict);
         allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.SourceDepositContractId).OnDelete(DeleteBehavior.Restrict);
         allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.TargetDepositContractId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<BHome.Domain.PaymentsDebt.PaymentReconciliation>().Property(x => x.DepositContractId);

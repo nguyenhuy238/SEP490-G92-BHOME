@@ -13,9 +13,9 @@ namespace BHome.IntegrationTests.PaymentsDebt;
 
 public sealed partial class PaymentLedgerTests
 {
-    private async Task<(Workspace Workspace, Guid Proof, byte[] Photo)> DamageFixture()
+    private async Task<(Workspace Workspace, Guid Proof, byte[] Photo)> DamageFixture(bool otherResidents = false)
     {
-        var w = await Setup(); await ReadySettlementFixture(w, false);
+        var w = await Setup(); await ReadySettlementFixture(w, otherResidents);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         using var image = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var photo = image.ImEncode(".png");
         var proof = new ContractInspectionEvidence

@@ -40,3 +40,11 @@ Phase 2 — BR-01/05, UC-13: Staff Mobile onboarding và route Resident yêu c�
 | Native Android/iOS UI E2E              | NOT RUN                                                            |
 
 NOT PUSHED — USER PUSH REQUIRED.
+
+## 11/11/2026 — Khoản phải thu thiệt hại và cấn trừ có nguồn
+
+BR-15/19/20/21/22: thêm khoản phải thu bất biến trong contracts.history, cấn trừ Owner duyệt riêng và money effect trong payment_allocations hiện có. Thiệt hại không bị giới hạn bằng cọc; thử 600.000đ phải thu / 400.000đ cọc còn 200.000đ sau bàn giao. Snapshot quyền cho người thuê cùng phòng, lịch sử còn sau release, không cấp cho người ngoài/người mới. Owner Web tạo/duyệt; Tenant Mobile xem số dư máy chủ. Không tạo Final Settlement Invoice. Migration bổ sung giữ 24 bảng, chỉ áp dụng trong DB kiểm thử disposable; DB làm việc chưa thay đổi.
+
+Đã chạy: Release build trong integration runner; Application unit 387 PASS; payment/contract/invoice/refund/finance regression 71 PASS; nhóm mới + physical release + migration/snapshot 8 PASS sau thay đổi cuối; Owner UI 20 PASS; Mobile UI 1 PASS; Owner/Mobile typecheck và changed-file ESLint PASS. Các lần thử đầu lỗi test đếm hóa đơn, test assertion matcher và test TypeScript đã sửa; Python không có nên dùng Node có sẵn cho thao tác file. Không dùng các lỗi ban đầu làm bằng chứng PASS.
+
+Còn tiếp tục: điện/nước chốt không trùng, tiền thuê tháng lẻ theo policy, xác nhận đủ danh sách phí, thu tiền trực tiếp cho khoản phải thu, hoàn dư sau cấn trừ, chuyển endpoint khấu trừ cũ và báo cáo tài chính. Provider thật vẫn BLOCKED do chưa có access. Chi tiết: docs/api/SETTLEMENT_RECEIVABLES.md.

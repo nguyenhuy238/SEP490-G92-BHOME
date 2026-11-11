@@ -221,6 +221,7 @@ export interface InspectionPreparation {
   otherTenantsRemain: boolean;
 }
 export interface SettlementSummary {
+  receivables?: SettlementReceivableBalance[] | null;
   obligationReference?: string;
   depositDeductions?: DepositDeductionPlan | null;
   financialReference?: string;
@@ -272,6 +273,73 @@ export interface DepositDeductionItem {
   amount: string;
   description: string;
   evidenceIds: string[];
+}
+export interface SettlementReceivable {
+  id: string;
+  contractId: string;
+  roomId: string;
+  kind: string;
+  sourceKey: string;
+  inspectionId: string;
+  inspectionVersion: number;
+  assetId: string | null;
+  amount: string;
+  description: string;
+  calculationPolicy: string;
+  evidence: { id: string; length: number; sha256: string }[];
+  approvedAt: string;
+}
+export interface SettlementReceivableBalance {
+  charge: SettlementReceivable;
+  allocated: string;
+  outstanding: string;
+  status: 'Unpaid' | 'PartiallyPaid' | 'Paid';
+}
+export interface DepositOffsetApproval {
+  id: string;
+  receivableId: string | null;
+  invoiceId: string | null;
+  sourceDepositContractId: string;
+  amount: string;
+  reason: string;
+  approvedAt: string;
+  allocationId: string;
+}
+export interface SettlementReceivables {
+  invoices?:
+    | {
+        id: string;
+        billingPeriod: string;
+        payable: string;
+        allocated: string;
+        outstanding: string;
+      }[]
+    | null;
+  contractId: string;
+  roomId: string;
+  roomNumber: string;
+  reference: string;
+  availableDeposit: string;
+  receivables: SettlementReceivableBalance[];
+  offsets: DepositOffsetApproval[];
+}
+export interface DamageChargeInput {
+  expectedReference: string;
+  inspectionId: string;
+  inspectionVersion: number;
+  assetId: string | null;
+  amount: string;
+  description: string;
+  evidenceIds: string[];
+  humanConfirmed: boolean;
+}
+export interface DepositOffsetInput {
+  expectedReference: string;
+  receivableId: string | null;
+  invoiceId: string | null;
+  amount: string;
+  reason: string;
+  humanConfirmed: boolean;
 }
 export interface DepositDeductionPlan {
   id: string;
@@ -347,6 +415,20 @@ export function contractClient(request: ContractRequest) {
       request<InspectionPreparation>(`${root}/${id}/move-out/inspection-preparation`, { signal }),
     settlementSummary: (id: string, signal?: AbortSignal) =>
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
+    settlementReceivables: (id: string, signal?: AbortSignal) =>
+      request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    approveDamageCharge: (id: string, body: DamageChargeInput, key: string) =>
+      request<SettlementReceivable>(`${root}/${id}/move-out/receivables/damage`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    approveDepositOffset: (id: string, body: DepositOffsetInput, key: string) =>
+      request<DepositOffsetApproval>(`${root}/${id}/move-out/receivables/deposit-offsets`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
     approveDepositDeductions: (
       id: string,
       body: {

@@ -6,7 +6,14 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService
 {
     public Task<ContractSettlementSummary> SettlementSummaryAsync(Guid id, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
-        ledger is IContractSettlementDetails details ? await details.SummaryAsync(id, t) : throw new ContractException(503, "settlement_summary_unavailable"), t);
+    {
+        var summary = ledger is IContractSettlementDetails details ? await details.SummaryAsync(id, t) : throw new ContractException(503, "settlement_summary_unavailable");
+        return user.IsInRole(Roles.Owner) ? summary : summary with
+        {
+            Receivables = summary.Receivables?.Where(r => r.Charge.RecipientUserIds.Contains(Actor))
+                .Select(r => r with { Charge = r.Charge with { RecipientUserIds = [], OperationKey = Guid.Empty, Fingerprint = "" } }).ToArray()
+        };
+    }, t);
     private void MoveOutEvent(ContractMoveOut m, string action) => repository.Add(new ContractMoveOutHistory
     {
         ContractId = m.ContractId,

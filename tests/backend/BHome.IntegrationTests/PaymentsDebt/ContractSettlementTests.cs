@@ -18,11 +18,11 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(path)).StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(path)).StatusCode);
         var before = (await tenant.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.False(before.Resolved); Assert.Null(before.ContractSpecificOutstanding);
         Assert.Equal(100000, before.Calculation!.RoomOutstanding); Assert.Null(before.Calculation.ContractSpecificOutstanding);
-        Assert.Contains("shared_liability_allocation_pending", before.UnresolvedItems); var invoice = Assert.Single(before.Invoices); Assert.True(invoice.Shared); Assert.Equal(100000, invoice.Financials.OutstandingAmount);
+        Assert.Contains("invoice_outstanding", before.UnresolvedItems); var invoice = Assert.Single(before.Invoices); Assert.True(invoice.Shared); Assert.Equal(100000, invoice.Financials.OutstandingAmount);
         var request = await AdjustRequest(tenant, w.Invoice, 1, 90000); var response = await Post(owner, $"/api/v1/invoice-adjustments/{request.Id}/approve", new AdjustmentDecisionInput(1, 1, 0, 90000, null, "Synthetic error confirmed", true)); response.EnsureSuccessStatusCode();
         var adjusted = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.Equal(-10000, Assert.Single(adjusted.Invoices).Financials.ApprovedAdjustmentTotal); Assert.NotEqual(before.Reference, adjusted.Reference);
         var transfer = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, 90000), Guid.NewGuid(), default)); await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, w.Tenants[0], true), Guid.NewGuid(), default));
-        var paid = (await tenant.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.DoesNotContain("shared_liability_allocation_pending", paid.UnresolvedItems); Assert.False(paid.Resolved); Assert.Equal(90000, Assert.Single(paid.Invoices).Financials.AllocatedPayments);
+        var paid = (await tenant.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.DoesNotContain("invoice_outstanding", paid.UnresolvedItems); Assert.False(paid.Resolved); Assert.Equal(90000, Assert.Single(paid.Invoices).Financials.AllocatedPayments);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); db.Add(new DepositVerification { ContractId = w.Contract, Amount = 20000, BankTransactionReference = "SYN-BH40-" + Guid.NewGuid(), VerificationReason = "Synthetic deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();

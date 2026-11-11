@@ -68,6 +68,7 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
 }
 
 const blockers: Record<string, string> = {
+  settlement_receivable_outstanding: 'Còn khoản phải thu chuyển ra chưa thanh toán hết.',
   owner_termination_approval_required: 'Chờ Owner duyệt yêu cầu trả phòng.',
   owner_confirmed_inspection_required: 'Chờ Owner xác nhận biên bản kiểm tra.',
   final_charges_and_damage_policy_pending:

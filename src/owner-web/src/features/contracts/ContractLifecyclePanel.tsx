@@ -34,6 +34,7 @@ import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { ChartCard } from '../../components/common/PortalUI';
 import { RefundPanel } from '../payments/RefundPanel';
 import { DepositDeductionsPanel } from './DepositDeductionsPanel';
+import { SettlementReceivablesPanel } from './SettlementReceivablesPanel';
 
 export function ContractLifecyclePanel({
   api,
@@ -282,25 +283,34 @@ export function ContractLifecyclePanel({
                 {settlementBlocker(b)}
               </Alert>
             ))}
+            {inspection?.ownerDecision === 'Confirmed' && !summary.depositDeductions && (
+              <SettlementReceivablesPanel
+                key={`receivables:${contract.id}`}
+                api={api}
+                id={contract.id}
+                inspection={inspection}
+                summary={summary}
+                saved={async () => {
+                  await reload();
+                  onChanged();
+                }}
+              />
+            )}
             {!/^0(?:\.0+)?$/.test(summary.verifiedSecurityDeposit) && (
               <>
-                {inspection?.ownerDecision === 'Confirmed' &&
-                  (summary.depositDeductions ||
-                    summary.unresolvedItems.includes(
-                      'final_charges_and_damage_policy_pending',
-                    )) && (
-                    <DepositDeductionsPanel
-                      key={`deductions:${summary.reference}`}
-                      api={api}
-                      id={contract.id}
-                      summary={summary}
-                      inspection={inspection}
-                      saved={async () => {
-                        await reload();
-                        onChanged();
-                      }}
-                    />
-                  )}
+                {inspection?.ownerDecision === 'Confirmed' && summary.depositDeductions && (
+                  <DepositDeductionsPanel
+                    key={`deductions:${summary.reference}`}
+                    api={api}
+                    id={contract.id}
+                    summary={summary}
+                    inspection={inspection}
+                    saved={async () => {
+                      await reload();
+                      onChanged();
+                    }}
+                  />
+                )}
                 <RefundPanel
                   sourceId={contract.id}
                   sourceKind="SecurityDeposit"
