@@ -24,7 +24,7 @@ public sealed partial class FinancialReportRepository
             AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(r.state->'events')='array'
               THEN r.state->'events' ELSE '[]'::jsonb END) e WHERE e->>'action'='Completed')
           THEN CASE
-            WHEN r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL AND bhome24_external_refund_valid(r.id)
+            WHEN r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL AND (bhome24_external_refund_valid(r.id) OR bhome24_deposit_refund_valid(r.id))
               THEN 'ReceiptExcess'
             WHEN r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL
               AND r.state->>'classification'='ExcessReceiptRefundV1' AND EXISTS(

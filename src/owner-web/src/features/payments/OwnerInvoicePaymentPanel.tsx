@@ -149,10 +149,16 @@ export function RecordTransferForm({
   invoiceId,
   state,
   onClose,
+  initialDescription,
+  onRecorded,
+  depositContractId,
 }: {
   invoiceId: string;
   state?: InvoicePayment;
   onClose: () => void;
+  initialDescription?: string;
+  onRecorded?: (receiptId: string) => void;
+  depositContractId?: string;
 }) {
   const api = usePaymentApi();
   const cache = useQueryClient();
@@ -162,7 +168,7 @@ export function RecordTransferForm({
     [reference, setReference] = useState(''),
     [amount, setAmount] = useState(state?.outstandingAmount ?? ''),
     [occurred, setOccurred] = useState(''),
-    [description, setDescription] = useState(state?.transferReference ?? '');
+    [description, setDescription] = useState(state?.transferReference ?? initialDescription ?? '');
   const [statement, setStatement] = useState(''),
     [reason, setReason] = useState(''),
     [checked, setChecked] = useState(false),
@@ -178,7 +184,11 @@ export function RecordTransferForm({
     return (
       <>
         <Alert severity="success">Đã lưu giao dịch đã đối chiếu sao kê.</Alert>
-        <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
+        {onRecorded ? (
+          <Button onClick={() => onRecorded(saved.id)}>Đối chiếu receipt cọc vừa lưu</Button>
+        ) : (
+          <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
+        )}
         <Button onClick={onClose}>Đóng biểu mẫu</Button>
       </>
     );
@@ -214,6 +224,7 @@ export function RecordTransferForm({
               statementReference: statement,
               verificationReason: reason,
               proposedInvoiceId: invoiceId || null,
+              ...(depositContractId ? { proposedDepositContractId: depositContractId } : {}),
               humanVerified: checked,
               isDevelopmentDemo: demo,
             },

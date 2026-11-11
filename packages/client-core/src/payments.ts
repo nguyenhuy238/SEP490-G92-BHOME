@@ -52,6 +52,7 @@ export interface BankAccount {
   version: number;
 }
 export interface BankTransfer {
+  allocatedDepositContractId?: string | null;
   allocatedSettlementContractId?: string | null;
   allocatedSettlementReceivableId?: string | null;
   id: string;
@@ -74,6 +75,7 @@ export interface BankTransfer {
   unallocatedAmount?: string;
 }
 export interface TransferInput {
+  proposedDepositContractId?: string;
   providerIdentity: string;
   bankReference: string;
   amount: string;
@@ -187,7 +189,23 @@ export interface ExternalPaymentPayerContext {
   payer: ExternalPaymentPayer | null;
   isDevelopmentDemo: boolean;
 }
+export interface DepositAllocationContext {
+  transferId: string;
+  contractId: string;
+  reference: string;
+  depositReference: string;
+  required: string;
+  received: string;
+  remaining: string;
+  proposedAllocation: string;
+  excess: string;
+  payers: { residentId: string; userId: string | null; label: string }[];
+  externalPayer: ExternalPaymentPayer | null;
+  problems: string[];
+  isDevelopmentDemo: boolean;
+}
 export interface PaymentFilter {
+  depositContractId?: string;
   settlementContractId?: string;
   page?: number;
   locationId?: string;
@@ -293,6 +311,37 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       ),
     reject: (id: string, reason: string, key: string) =>
       mutation(`${root}/${encodeURIComponent(id)}/reject`, { reason }, key),
+    depositContext: (id: string, contractId: string, signal?: AbortSignal) =>
+      request<DepositAllocationContext>(
+        `${root}/${encodeURIComponent(id)}/deposit-context?contractId=${encodeURIComponent(contractId)}`,
+        { signal },
+      ),
+    depositPosition: (contractId: string, signal?: AbortSignal) =>
+      request<{
+        contractId: string;
+        transferReference: string;
+        required: string;
+        received: string;
+        remaining: string;
+        isDevelopmentDemo: boolean;
+      }>(`/api/v1/contracts/${encodeURIComponent(contractId)}/deposit-payment`, { signal }),
+    allocateDeposit: (
+      id: string,
+      input: {
+        contractId: string;
+        paidByUserId: string | null;
+        paidByResidentId?: string;
+        externalPayerAttestationId?: string;
+        expectedReference: string;
+        humanVerified: boolean;
+      },
+      key: string,
+    ) =>
+      mutation<{ status: string; reason: string }>(
+        `${root}/${encodeURIComponent(id)}/allocate-deposit`,
+        input,
+        key,
+      ),
     allocateHolding: (id: string, contractId: string, paidByUserId: string, key: string) =>
       mutation<{ status: string; reason: string }>(
         `${root}/${encodeURIComponent(id)}/allocate-holding-deposit`,
@@ -312,6 +361,18 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
   };
 }
 const labels: Record<string, string> = {
+  deposit_context_changed: 'Nguồn hoặc số cọc đã đổi. Tải lại và xác nhận lại.',
+  deposit_payer_confirmation_required:
+    'Chọn đúng Resident thuộc hợp đồng hoặc người trả bên ngoài đã xác minh.',
+  deposit_allocation_confirmation_required:
+    'Cần xác nhận giao dịch và người thực trả trước khi phân bổ cọc.',
+  deposit_already_satisfied: 'Cọc đã đủ; giao dịch mới cần đối chiếu hoàn toàn bộ.',
+  deposit_not_payable: 'Hợp đồng đã đóng hoặc không nhận thêm cọc.',
+  deposit_transfer_reference_mismatch: 'Nội dung giao dịch chưa khớp tham chiếu cọc của hợp đồng.',
+  verified_deposit_excess_refund_required:
+    'Đã phân bổ đủ phần cọc thiếu; phần dư phải hoàn người thực trả.',
+  verified_partial_deposit: 'Đã ghi nhận cọc một phần, chưa đủ cọc thỏa thuận.',
+  verified_deposit: 'Đã phân bổ vào cọc đã thỏa thuận.',
   ExcessRefundPending: 'Phải hoàn tiền dư',
   ExcessRefundCompleted: 'Đã hoàn tiền dư',
   verified_whole_excess_refund_required: 'Toàn bộ giao dịch phải hoàn cho người thực trả.',
@@ -353,6 +414,12 @@ export function paymentError(error: unknown) {
   const code =
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   const errors: Record<string, string> = {
+    deposit_context_changed: labels.deposit_context_changed,
+    deposit_payer_confirmation_required: labels.deposit_payer_confirmation_required,
+    deposit_allocation_confirmation_required: labels.deposit_allocation_confirmation_required,
+    deposit_already_satisfied: labels.deposit_already_satisfied,
+    deposit_not_payable: labels.deposit_not_payable,
+    deposit_transfer_reference_mismatch: labels.deposit_transfer_reference_mismatch,
     external_payer_confirmation_required:
       'Cần đối chiếu sao kê, nhập nhãn người thực trả và xác nhận không có hồ sơ Resident.',
     external_payer_review_changed:

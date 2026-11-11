@@ -40,6 +40,7 @@ internal sealed class ExternalPaymentPayerRepository(BHomePersistenceContext db,
         if (existing is not null && existing.TransferFingerprint != fingerprint) throw new PaymentException(409, "external_payer_history_invalid");
         if (!await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={transferId} AND status='VERIFIED') AS \"Value\"").SingleAsync(token)) problems.Add("verified_bank_receipt_required");
         if ((await payments.AllocationAsync(transferId, token))?.PaidByUserId is not null) problems.Add("receipt_payer_already_linked");
+        if ((await DepositReceiptRecords.ReadAsync(db, transferId, token))?.PayerResidentId is not null) problems.Add("receipt_payer_already_linked");
         if ((await payments.LatestReviewAsync(transferId, token))?.Decision == "Rejected") problems.Add("bank_transfer_rejected");
         if (await ReceiptExcessRecords.ReadAsync(db, transferId, token) is not null) problems.Add("receipt_excess_already_confirmed");
         if (await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM refund_requests WHERE source_payment_id={transferId} AND status IN ('REQUESTED','APPROVED','COMPLETED')) AS \"Value\"").SingleAsync(token)) problems.Add("refund_source_requires_manual_review");

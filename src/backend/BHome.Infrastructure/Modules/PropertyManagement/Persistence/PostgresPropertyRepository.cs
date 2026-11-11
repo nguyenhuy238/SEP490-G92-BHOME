@@ -36,7 +36,8 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation) &&
             (c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
                 s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
-             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0)), token);
+             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0) ||
+             db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0)), token);
         return new(residents, occupancy, active, pending);
     }
     public async Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity

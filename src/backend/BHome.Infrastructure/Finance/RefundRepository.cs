@@ -105,6 +105,25 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                 db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == charge.RoomId)))
                 .OrderBy(person => person.Id).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         }
+        if (allocation?.TargetDepositContractId is { } depositContract)
+        {
+            var deposit = await BHome.Infrastructure.PaymentsDebt.DepositReceiptRecords.ReadAsync(db, id, t);
+            if (deposit is not null)
+            {
+                if (deposit.TransferFingerprint != ReceiptExcessRules.TransferFingerprint(payment) || deposit.AllocationId != allocation.Id ||
+                    deposit.ContractId != depositContract || deposit.AllocatedAmount != allocation.Amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ||
+                    deposit.PayerUserId != allocation.PaidByUserId || deposit.ExternalPayerAttestationId != external?.Id)
+                    throw new FinanceException(409, "refund_source_requires_manual_review");
+                people = await db.Set<Resident>().AsNoTracking().Where(person => person.Id == deposit.PayerResidentId &&
+                    person.VerificationStatus == IdentityVerificationStatus.Verified && (deposit.PayerUserId == null || person.TenantUserId == deposit.PayerUserId) &&
+                    db.Set<ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
+                    .Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+            }
+            else if (allocation.PaidByUserId is { } depositUser)
+                people = await db.Set<Resident>().AsNoTracking().Where(person => person.TenantUserId == depositUser && person.VerificationStatus == IdentityVerificationStatus.Verified &&
+                    db.Set<ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
+                    .Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+        }
         if (whole is not null)
             people = await db.Set<Resident>().AsNoTracking().Where(person => person.Id == whole.PayerResidentId && person.VerificationStatus == IdentityVerificationStatus.Verified &&
                 (whole.PayerUserId == null || person.TenantUserId == whole.PayerUserId)).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
@@ -150,9 +169,16 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             var disposition = await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, receipt, t);
             if (disposition?.Id != dispositionId) throw new FinanceException(409, "refund_source_changed");
             var returned = await db.Database.SqlQuery<decimal>($"SELECT COALESCE(sum(requested_amount),0) AS \"Value\" FROM refund_requests WHERE source_payment_id={receipt} AND status='COMPLETED'").SingleAsync(t);
-            db.Add(new PaymentReconciliation { TransferId = receipt, InvoiceId = disposition.Target.InvoiceId, DepositContractId = disposition.Target.HoldingContractId,
+            db.Add(new PaymentReconciliation
+            {
+                TransferId = receipt,
+                InvoiceId = disposition.Target.InvoiceId,
+                DepositContractId = disposition.Target.HoldingContractId,
                 Decision = returned == disposition.Amount ? "ExcessRefundCompleted" : "ExcessRefundPending",
-                Reason = returned == disposition.Amount ? "verified_whole_excess_returned" : "verified_partial_excess_returned", ActorId = actor, OccurredAt = now });
+                Reason = returned == disposition.Amount ? "verified_whole_excess_returned" : "verified_partial_excess_returned",
+                ActorId = actor,
+                OccurredAt = now
+            });
         }
         await db.SaveChangesAsync(t);
     }

@@ -42,6 +42,7 @@ import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { HoldingDepositPanel } from './HoldingDepositPanel';
+import { DepositReceiptPanel } from './DepositReceiptPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 import { ContractPolicyPanel } from './ContractPolicyPanel';
@@ -349,6 +350,15 @@ export function ContractDetailPanel({
       </ChartCard>
 
       {/* 4. Reference material, folded away until needed */}
+      {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
+        <DepositReceiptPanel
+          contract={c}
+          changed={() => {
+            detail.reload();
+            onChanged();
+          }}
+        />
+      )}
       {c.kind === 'Holding' && (
         <HoldingDepositPanel
           contract={c}

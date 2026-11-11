@@ -44,7 +44,8 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var blockers = new List<string>(); var m = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, t);
         var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, t);
         if (await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, id, t) ||
-            await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAllocatedSettlementAsync(db, id, t)) blockers.Add("receipt_excess_refund_pending");
+            await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAllocatedSettlementAsync(db, id, t) ||
+            await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingDepositAsync(db, chain.Select(v => v.Id).Append(root.HoldingContractId ?? root.Id).Distinct().ToArray(), t)) blockers.Add("receipt_excess_refund_pending");
         var chargeBalances = new List<SettlementReceivableBalance>();
         foreach (var charge in charges)
         {
@@ -67,6 +68,16 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var start = new DateOnly(root.StartDate.Year, root.StartDate.Month, 1); var through = new DateOnly(end.Year, end.Month, 1);
         if (through < start || through.Year - start.Year > 20) throw ContractException.Conflict("settlement_period_review_required");
         var deposits = await db.Set<DepositVerification>().AsNoTracking().Where(d => d.ContractId == root.Id).OrderBy(d => d.Id).Select(d => new { d.Id, d.Amount, d.VerifiedAt }).ToArrayAsync(t);
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+        {
+            var receipts = await db.Database.SqlQuery<SettlementDepositReceipt>($"""
+                SELECT a.id AS "Id",a.amount AS "Amount",p.verified_at AS "VerifiedAt" FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
+                WHERE a.target_deposit_contract_id={root.Id} AND p.status='VERIFIED'
+                  AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='DepositVerification')
+                """).ToArrayAsync(t);
+            // Preserve the exact legacy reference shape/IDs; add only canonical receipt allocations absent from that history.
+            deposits = deposits.Concat(receipts.Select(d => new { d.Id, d.Amount, d.VerifiedAt })).OrderBy(d => d.Id).ToArray();
+        }
         var deposit = decimal.Truncate(deposits.Sum(d => d.Amount) + root.AppliedHoldingDeposit);
         if (deposit > 0 || chain.Any(c => c.RequiredDeposit > 0)) blockers.Add("deposit_deduction_refund_policy_required");
         if (root.HoldingContractId is { } holding)
@@ -165,3 +176,5 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         return value with { Reference = "BH40-" + fingerprint };
     }
 }
+
+internal sealed record SettlementDepositReceipt(Guid Id, decimal Amount, DateTimeOffset VerifiedAt);

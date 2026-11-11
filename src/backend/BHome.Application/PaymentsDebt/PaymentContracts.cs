@@ -14,7 +14,10 @@ public sealed record PaymentTransferInput([Required, StringLength(80)] string Pr
     [Required, StringLength(2000)] string VerificationReason, Guid? ProposedInvoiceId,
     [property: JsonRequired] bool HumanVerified, bool IsDevelopmentDemo = false, Guid? ProposedDepositContractId = null);
 public sealed record PaymentMatchInput(Guid InvoiceId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified);
-public sealed record PaymentDepositMatchInput(Guid ContractId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified);
+public sealed record PaymentDepositMatchInput(Guid ContractId, Guid? PaidByUserId, [property: JsonRequired] bool HumanVerified,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? PaidByResidentId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ExternalPayerAttestationId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExpectedReference = null);
 public sealed record PaymentRejectInput([Required, StringLength(2000)] string Reason);
 public sealed record PaymentScope(Guid ActorId, bool Owner, bool Tenant, bool Staff, DateOnly Today);
 public sealed record DebtSummary(
@@ -23,6 +26,7 @@ public sealed record DebtSummary(
     int InvoiceCount, int OverdueInvoiceCount);
 public sealed class PaymentQuery
 {
+    public Guid? DepositContractId { get; set; }
     public Guid? SettlementContractId { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
@@ -76,6 +80,10 @@ public sealed class PaymentException(int status, string code) : Exception("Payme
 }
 public interface IPaymentRepository
 {
+    Task<IReadOnlyList<DepositPayerChoice>> DepositPayersAsync(Guid contractId, CancellationToken token);
+    Task<bool> VerifiedReceiptAsync(Guid transferId, CancellationToken token);
+    Task<ExternalPaymentPayer?> ExternalPayerAsync(Guid transferId, CancellationToken token);
+    Task RecordDepositReceiptAsync(DepositReceiptAllocation record, CancellationToken token);
     Task<bool> ExternalPayerRecordedAsync(Guid transferId, CancellationToken token);
     bool AmountMismatchSupported => false;
     Task<T> TransactionAsync<T>(Guid? transferId, Guid? invoiceId, Func<Task<T>> work, CancellationToken t);

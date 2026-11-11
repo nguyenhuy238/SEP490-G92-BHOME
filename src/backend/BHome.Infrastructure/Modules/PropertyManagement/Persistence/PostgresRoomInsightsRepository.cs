@@ -100,7 +100,8 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
              c.Status == ContractStatus.PendingActivation) &&
             (c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
                 s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
-             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0)), token);
+             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0) ||
+             db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0)), token);
         return new(residents, occupancy, active, pending);
     }
 

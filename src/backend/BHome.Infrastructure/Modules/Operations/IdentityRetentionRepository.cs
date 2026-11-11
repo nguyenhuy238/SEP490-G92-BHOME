@@ -73,7 +73,8 @@ internal sealed class IdentityRetentionRepository(Compact24DbContext db, IContra
             """).SingleAsync(token);
         if (residence.OpenResidence == true) blockers.Add("residence_not_closed");
         var pending = await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM refund_requests WHERE beneficiary_resident_id={id} AND status IN ('REQUESTED','APPROVED')) AS \"Value\"").SingleAsync(token)
-            || await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, null, token, id);
+            || await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, null, token, id)
+            || await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingDepositAsync(db, [], token, id);
         if (pending) blockers.Add("refund_pending");
         DateOnly? start = policy.StartBasis switch
         {
@@ -82,8 +83,20 @@ internal sealed class IdentityRetentionRepository(Compact24DbContext db, IContra
             _ => null
         };
         var evaluation = IdentityRetentionRules.Evaluate(policy, start, today, blockers);
-        var reference = "RETENTION-" + IdentityRetentionRules.Hash(new { id, person.RoomId, person.UserId, person.VerifiedAt, person.HistoryJson,
-            policy, today, residence, pending, sources, evaluation.Blockers });
+        var reference = "RETENTION-" + IdentityRetentionRules.Hash(new
+        {
+            id,
+            person.RoomId,
+            person.UserId,
+            person.VerifiedAt,
+            person.HistoryJson,
+            policy,
+            today,
+            residence,
+            pending,
+            sources,
+            evaluation.Blockers
+        });
         return new(id, reference, policy, start, evaluation.Due, evaluation.Blockers.Length == 0 ? "ReadyForPolicyReview" : "Restricted",
             false, evaluation.Blockers, holds, events);
     }
@@ -91,8 +104,15 @@ internal sealed class IdentityRetentionRepository(Compact24DbContext db, IContra
     {
         var json = JsonSerializer.Serialize(new { recordType = Kind, schemaVersion = 1, state = entry }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET history=history||jsonb_build_array({json}::jsonb) WHERE id={residentId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = entry.ActorId, Event = "IdentityRetention" + entry.Action,
-            TargetType = "Resident", TargetId = residentId, Succeeded = true, OccurredAt = entry.At });
+        db.SecurityAudit.Add(new SecurityAuditRecord
+        {
+            UserId = entry.ActorId,
+            Event = "IdentityRetention" + entry.Action,
+            TargetType = "Resident",
+            TargetId = residentId,
+            Succeeded = true,
+            OccurredAt = entry.At
+        });
         await db.SaveChangesAsync(token);
     }
 }

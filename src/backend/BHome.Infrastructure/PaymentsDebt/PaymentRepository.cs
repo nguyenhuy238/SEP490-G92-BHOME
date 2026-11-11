@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRepository
+internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IPaymentRepository
 {
     public Task<bool> ExternalPayerRecordedAsync(Guid transferId, CancellationToken token) => db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
         ? db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h WHERE p.id={transferId} AND h->>'recordType'={ExternalPaymentPayerRecords.Kind}) AS \"Value\"").SingleAsync(token)
@@ -143,6 +143,8 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                 (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault() ??
                  db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
                 (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) && (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod)));
+        if (query.DepositContractId is { } deposit)
+            source = source.Where(p => db.Set<PaymentAllocation>().Any(a => a.TransferId == p.Id && a.TargetDepositContractId == deposit));
         if (query.SettlementContractId is { } settlement)
         {
             var excess = AmountMismatchSupported ? db.Database.SqlQuery<Guid>($"""

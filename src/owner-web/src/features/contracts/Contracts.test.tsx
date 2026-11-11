@@ -17,6 +17,9 @@ import { theme } from '../../theme/theme';
 import { ContractDetailPanel } from './ContractDetailPanel';
 import { ContractActionDialog } from './ContractActionDialog';
 import { useContractDetail } from '../../../../../packages/client-core/src/useContractDetail';
+vi.mock('./DepositReceiptPanel', () => ({
+  DepositReceiptPanel: () => <div>Deposit receipt workflow</div>,
+}));
 
 const owner = '00000000-0000-0000-0000-000000000001',
   tenant = '00000000-0000-0000-0000-000000000002',

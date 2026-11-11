@@ -139,8 +139,9 @@ public sealed partial class Compact24DbContext
                 var depositHolding = await Set<Contract>().SingleAsync(c => c.Id == depositContractId, token);
                 var paymentReceived = await Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == depositContractId)
                     .SumAsync(a => (decimal?)a.Amount, token) ?? 0m;
-                if (depositHolding.Kind != ContractKind.Holding || depositHolding.ApprovedAt is null || depositHolding.Status is ContractStatus.Expired or ContractStatus.Cancelled or ContractStatus.Converted ||
-                    depositHolding.HoldingExpiryAt <= allocation.AllocatedAt || allocation.Amount <= 0 ||
+                if (depositHolding.Kind is not (ContractKind.Main or ContractKind.Holding) || depositHolding.PreviousContractId is not null ||
+                    depositHolding.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active) ||
+                    depositHolding.Kind == ContractKind.Holding && (depositHolding.ApprovedAt is null || depositHolding.HoldingExpiryAt <= allocation.AllocatedAt) || allocation.Amount <= 0 ||
                     allocation.Amount != Math.Min(transfer.Amount, depositHolding.RequiredDeposit - paymentReceived) ||
                     await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
                 return;

@@ -182,6 +182,8 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 100000;
+            await db.SaveChangesAsync();
             db.Add(new DepositVerification { ContractId = w.Contract, Amount = 100000, BankTransactionReference = input.BankReference, VerificationReason = "SYNTHETIC", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
         }

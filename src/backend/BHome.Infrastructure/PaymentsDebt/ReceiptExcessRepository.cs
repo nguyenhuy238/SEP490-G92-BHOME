@@ -18,6 +18,21 @@ internal static class ReceiptExcessRecords
 {
     internal const string Kind = "ReceiptExcessDispositionV1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    internal static Task<bool> PendingDepositAsync(BHomePersistenceContext db, Guid[] contractIds, CancellationToken token, Guid? payerResidentId = null)
+    {
+        if (db is not Compact24DbContext) return Task.FromResult(false);
+        return db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
+              LEFT JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='DepositReceiptAllocationV1') payer ON true
+              WHERE (cardinality({contractIds})=0 OR a.target_deposit_contract_id=ANY({contractIds})) AND a.target_deposit_contract_id IS NOT NULL
+                AND ({payerResidentId}::uuid IS NULL OR payer.state->>'payerResidentId'={payerResidentId}::text OR
+                  payer.state IS NULL AND EXISTS(SELECT 1 FROM residents person WHERE person.id={payerResidentId} AND person.user_id=a.paid_by_user_id))
+                AND (p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id)<>
+                  (SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED') OR
+                EXISTS(SELECT 1 FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'
+                  AND NOT bhome24_external_refund_valid(r.id) AND NOT bhome24_deposit_refund_valid(r.id)))) AS "Value"
+            """).SingleAsync(token);
+    }
     internal static Task<bool> PendingAllocatedSettlementAsync(BHomePersistenceContext db, Guid contractId, CancellationToken token)
     {
         if (db is not Compact24DbContext) return Task.FromResult(false);
@@ -154,14 +169,31 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         var record = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = ReceiptExcessRecords.Kind, recordKey = disposition.Id, state = disposition }, ReceiptExcessRecords.Json);
         var claim = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "BankReferenceClaim", recordKey = transfer.NormalizedReference,
+            schemaVersion = 1,
+            recordType = "BankReferenceClaim",
+            recordKey = transfer.NormalizedReference,
             state = new { normalizedReference = transfer.NormalizedReference, allocationId = (Guid?)null, depositVerificationId = (Guid?)null, receiptExcessTransferId = transfer.Id }
         });
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE payments SET history=history||jsonb_build_array({record}::jsonb,{claim}::jsonb) WHERE id={transfer.Id}", token);
-        db.Add(new PaymentReconciliation { TransferId = transfer.Id, InvoiceId = disposition.Target.InvoiceId, DepositContractId = disposition.Target.HoldingContractId,
-            Decision = "ExcessRefundPending", Reason = "verified_whole_excess_refund_required", ActorId = disposition.ApprovedByUserId, OccurredAt = disposition.ApprovedAt });
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = disposition.ApprovedByUserId, Event = "WholeReceiptExcessConfirmed", TargetType = ReceiptExcessRecords.Kind,
-            TargetId = disposition.Id, Succeeded = true, OccurredAt = disposition.ApprovedAt });
+        db.Add(new PaymentReconciliation
+        {
+            TransferId = transfer.Id,
+            InvoiceId = disposition.Target.InvoiceId,
+            DepositContractId = disposition.Target.HoldingContractId,
+            Decision = "ExcessRefundPending",
+            Reason = "verified_whole_excess_refund_required",
+            ActorId = disposition.ApprovedByUserId,
+            OccurredAt = disposition.ApprovedAt
+        });
+        db.SecurityAudit.Add(new SecurityAuditRecord
+        {
+            UserId = disposition.ApprovedByUserId,
+            Event = "WholeReceiptExcessConfirmed",
+            TargetType = ReceiptExcessRecords.Kind,
+            TargetId = disposition.Id,
+            Succeeded = true,
+            OccurredAt = disposition.ApprovedAt
+        });
         await db.SaveChangesAsync(token);
     }
 }

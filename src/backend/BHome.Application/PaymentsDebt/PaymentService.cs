@@ -11,7 +11,7 @@ using BHome.Application.PropertyManagement;
 
 namespace BHome.Application.PaymentsDebt;
 
-public sealed class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null,
+public sealed partial class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null,
     BHome.Application.Contracts.ContractService? contracts = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
@@ -92,8 +92,9 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
                 throw new PaymentException(409, "final_invoice_required");
             if (x.ProposedDepositContractId is { } depositId)
             {
-                if (contracts is null) throw new PaymentException(503, "holding_payment_unavailable");
-                _ = await contracts.HoldingDepositAsync(depositId, t);
+                var target = await repository.HoldingAsync(depositId, t) ?? throw new PaymentException(404, "contract_not_found");
+                if (target.Kind is not (BHome.Domain.TenantContracts.ContractKind.Main or BHome.Domain.TenantContracts.ContractKind.Holding))
+                    throw new PaymentException(400, "deposit_contract_required");
             }
             var transfer = new PaymentTransfer
             {
@@ -187,62 +188,6 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             return new PaymentReviewResult(review.Decision, review.Reason, transferId, invoice.Id);
         }, t);
     }
-    public async Task<PaymentReviewResult> AllocateDepositAsync(Guid transferId, PaymentDepositMatchInput x, Guid key, CancellationToken t)
-    {
-        Owner(); Validate(x);
-        if (!x.HumanVerified || x.ContractId == Guid.Empty || x.PaidByUserId == Guid.Empty || contracts is null)
-            throw new PaymentException(400, "deposit_allocation_confirmation_required");
-        return await repository.DepositTransactionAsync(transferId, x.ContractId, async () =>
-        {
-            if (await Replay(key, "allocate-deposit", new { transferId, x }, t) is not null) return await Outcome(transferId, t);
-            var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
-            if (await repository.ExternalPayerRecordedAsync(transferId, t)) throw new PaymentException(409, "receipt_payer_already_external");
-            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
-            if (await repository.AllocationAsync(transferId, t) is not null) throw new PaymentException(409, "bank_transaction_already_allocated");
-            var holding = await repository.HoldingAsync(x.ContractId, t) ?? throw new PaymentException(404, "holding_contract_not_found");
-            if (holding.Kind != BHome.Domain.TenantContracts.ContractKind.Holding || holding.TenantUserId != x.PaidByUserId)
-                throw new PaymentException(400, "payer_not_holding_tenant");
-            var latest = await repository.LatestReviewAsync(transferId, t);
-            if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
-            if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
-            var received = await repository.DepositAllocatedAsync(x.ContractId, t);
-            var remaining = holding.RequiredDeposit - received;
-            var claimed = await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t);
-            string? reason = holding.Status is BHome.Domain.TenantContracts.ContractStatus.Expired or BHome.Domain.TenantContracts.ContractStatus.Cancelled or BHome.Domain.TenantContracts.ContractStatus.Converted ||
-                holding.HoldingExpiryAt <= Now || holding.ApprovedAt is null ? "holding_deposit_requires_manual_review" :
-                !await contracts.CanAcceptHoldingDepositAsync(holding.Id, t) ? "holding_room_commitment_requires_manual_review" :
-                claimed ? "bank_reference_already_credited" : remaining <= 0 ? "holding_deposit_already_satisfied" :
-                !string.Equals(transfer.TransferDescription.Trim(), PaymentRules.DepositReference(holding.Id), StringComparison.OrdinalIgnoreCase) ? "holding_transfer_reference_mismatch" :
-                transfer.Amount > remaining ? "holding_deposit_excess_requires_manual_review" : null;
-            var review = new PaymentReconciliation
-            {
-                TransferId = transfer.Id,
-                DepositContractId = holding.Id,
-                ActorId = Actor,
-                OccurredAt = Now,
-                Decision = reason is null ? "Allocated" : "PendingReview",
-                Reason = reason ?? (transfer.Amount < remaining ? "verified_partial_holding_deposit" : "verified_holding_deposit")
-            };
-            repository.Add(review);
-            if (reason is null)
-            {
-                await contracts.ConfirmHoldingDepositAllocationAsync(holding.Id, transfer.Amount, transfer.VerifiedAt, t);
-                var allocation = new PaymentAllocation
-                {
-                    TransferId = transfer.Id,
-                    TargetDepositContractId = holding.Id,
-                    Amount = transfer.Amount,
-                    PaidByUserId = x.PaidByUserId,
-                    VerifiedByUserId = Actor,
-                    AllocatedAt = Now
-                };
-                repository.Add(allocation); repository.Audit(Actor, "HoldingDepositAllocated", allocation.Id, Now);
-                Remember(key, "allocate-deposit", new { transferId, x }, allocation.Id);
-            }
-            else Remember(key, "allocate-deposit", new { transferId, x }, review.Id);
-            return new(review.Decision, review.Reason, transferId, null, holding.Id);
-        }, t);
-    }
     private async Task<PaymentReviewResult> Outcome(Guid transferId, CancellationToken t)
     {
         var allocation = await repository.AllocationAsync(transferId, t);
@@ -262,7 +207,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             ? q.PaymentStatus is null or "PendingReview" or "Allocated" or "Rejected" or "ExcessRefundPending" or "ExcessRefundCompleted"
             : q.PaymentStatus is null or "Paid" or "Unpaid";
         if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
-            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || !validStatus ||
+            q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.DepositContractId == Guid.Empty || q.SettlementContractId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || !validStatus ||
             q.InvoiceIds is { Length: > 100 } || q.InvoiceIds?.Contains(Guid.Empty) == true) throw new PaymentException(400, "invalid_payment_query");
     }
     public Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)

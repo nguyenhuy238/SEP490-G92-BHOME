@@ -71,7 +71,7 @@ public sealed partial class InvoiceApiTests
             {
                 ContractId = contract,
                 Status = MoveOutStatus.Approved,
-                    ProposedDate = contract == w.Contract || sameDayFinals ? finalDate : finalDate.AddDays(-1),
+                ProposedDate = contract == w.Contract || sameDayFinals ? finalDate : finalDate.AddDays(-1),
                 Reason = "Synthetic approved departure",
                 RequestedByUserId = w.Tenant.Id,
                 ApprovedByUserId = w.Owner.Id,
@@ -125,9 +125,18 @@ public sealed partial class InvoiceApiTests
             {
                 move.InspectedAt = new DateTimeOffset(finalDate.ToDateTime(new TimeOnly(17, 0)), TimeSpan.FromHours(7)).ToUniversalTime();
                 var reviewContract = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract); reviewContract.StartDate = period; reviewContract.SnapshotHash = new string('A', 64);
+                reviewContract.RequiredDeposit = offsetAllDeposit ? invoice.Total + 74000 : 4000000;
                 (await db.Set<ContractResident>().SingleAsync(r => r.ContractId == w.Contract)).ResidenceFrom = period;
-                db.Add(new DepositVerification { ContractId = w.Contract, Amount = offsetAllDeposit ? invoice.Total + 74000 : 4000000, VerifiedByUserId = w.Owner.Id,
-                    VerifiedAt = DateTimeOffset.UtcNow, BankTransactionReference = "SYN-DEPOSIT-" + Guid.NewGuid(), VerificationReason = "Synthetic verified deposit precondition" });
+                await db.SaveChangesAsync(); // Persist the synthetic agreed deposit before the ledger enforces its native cap.
+                db.Add(new DepositVerification
+                {
+                    ContractId = w.Contract,
+                    Amount = offsetAllDeposit ? invoice.Total + 74000 : 4000000,
+                    VerifiedByUserId = w.Owner.Id,
+                    VerifiedAt = DateTimeOffset.UtcNow,
+                    BankTransactionReference = "SYN-DEPOSIT-" + Guid.NewGuid(),
+                    VerificationReason = "Synthetic verified deposit precondition"
+                });
             }
             await db.SaveChangesAsync();
         }

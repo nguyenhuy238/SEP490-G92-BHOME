@@ -54,3 +54,7 @@ Người dùng đã trả lời “chưa có, tôi sẽ thêm vào sau” cho pr
 ## Validation
 
 Thực hiện restore/build theo CI, backend unit/digital-signing/full integration khi hạ tầng cho phép, Owner/Mobile typecheck, Node 22 frontend tests/lint/build/format, disposable schema/migrations, MinIO/PDF/OCR, UI E2E. Ghi đầy đủ FAIL/BLOCKED/NOT RUN. Không xác nhận GitHub Actions trên commits chưa push.
+
+## 11/11/2026 — Tiếp nối receipt cọc
+
+Commit cọc trực tiếp 5a855aa đã chặn vượt phần thỏa thuận. Slice receipt tiếp theo nối actual Resident trước account/external payer, phân bổ canonical và hoàn excess; migration 8 chỉ chạy disposable. Không đánh dấu toàn bộ Phase 7/10/13 hoàn tất: full-excess Main, adjustment/reversal, external principal và real UI/provider vẫn còn như kết quả kiểm chứng.
