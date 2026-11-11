@@ -1,11 +1,9 @@
 import { requestDiagnostic } from '../../../../packages/client-core/src/api';
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
+import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
 
-export interface Session {
-  userId: string;
-  roles: string[];
-  accessToken: string;
+export interface Session extends TokenSession {
   refreshToken: string;
 }
 export interface Proposal {

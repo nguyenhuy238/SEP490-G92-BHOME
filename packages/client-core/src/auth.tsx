@@ -1,14 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Role } from './roles';
 import { SessionClient, type AuthTransport } from './sessionClient';
+import type { TokenSession } from './jwtSession';
 
-export interface Session {
-  userId: string;
+export interface Session extends TokenSession {
   roles: Role[];
-  accessToken: string;
-  sessionId?: string;
-  expiresAt?: string;
-  sessionExpiresAt?: string;
 }
 interface AuthState {
   session: Session | null;

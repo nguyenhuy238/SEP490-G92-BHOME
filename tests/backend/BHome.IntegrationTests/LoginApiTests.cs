@@ -4,11 +4,48 @@ using BHome.Application.IdentityAccess;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Text.Json;
 
 namespace BHome.IntegrationTests;
 
 public sealed class LoginApiTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SuccessfulLoginReturnsOnlyTransportCredentials(bool web)
+    {
+        using var factory = new ApiFactory();
+        var session = new LoginResult(Guid.NewGuid(), [Roles.Owner], "header.payload.signature",
+            DateTimeOffset.UtcNow.AddMinutes(30), Guid.NewGuid(), "synthetic-refresh",
+            DateTimeOffset.UtcNow.AddDays(7));
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<ICredentialVerifier>();
+            services.RemoveAll<IAuthenticationSessions>();
+            services.AddSingleton<ICredentialVerifier>(new AllowedCredentials(session.UserId));
+            services.AddSingleton<IAuthenticationSessions>(new FixedSessions(session));
+        }));
+        using var client = host.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
+        {
+            Content = JsonContent.Create(new { email = "synthetic@example.invalid", password = "synthetic-password" })
+        };
+        if (web)
+        {
+            request.Headers.Add("X-BHome-Client", "web");
+            request.Headers.Add("Origin", "https://localhost");
+        }
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var names = body.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray();
+        Assert.Equal(web ? ["accessToken"] : ["accessToken", "refreshToken"], names);
+    }
+
     [Fact]
     public async Task SourceRateLimitRejectsBeforeCredentialLookupAndIgnoresUntrustedForwardedHeaders()
     {
@@ -157,5 +194,21 @@ public sealed class LoginApiTests
             Calls++;
             return Task.FromResult<VerifiedIdentity?>(null);
         }
+    }
+
+    private sealed class AllowedCredentials(Guid userId) : ICredentialVerifier
+    {
+        public Task<VerifiedIdentity?> VerifyAsync(string identifier, string password, CancellationToken cancellationToken) =>
+            Task.FromResult<VerifiedIdentity?>(new VerifiedIdentity(userId, [Roles.Owner], "synthetic-stamp"));
+    }
+
+    private sealed class FixedSessions(LoginResult session) : IAuthenticationSessions
+    {
+        public Task<LoginResult?> CreateAsync(VerifiedIdentity identity, string? device, CancellationToken cancellationToken) =>
+            Task.FromResult<LoginResult?>(session);
+        public Task<LoginResult?> RefreshAsync(string token, CancellationToken cancellationToken) =>
+            Task.FromResult<LoginResult?>(session);
+        public Task RevokeAsync(Guid userId, Guid sessionId, bool allDevices, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<bool> ValidateAsync(SessionIdentity identity, string securityStamp, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }
