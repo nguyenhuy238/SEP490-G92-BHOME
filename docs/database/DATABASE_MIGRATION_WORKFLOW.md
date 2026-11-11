@@ -85,6 +85,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -E
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile .env.neon
 ```
 
+## Chẩn đoán lỗi schema sau khi đổi phiên bản ứng dụng
+
+Nếu nhiều màn hình cùng lỗi trong khi đăng nhập/danh sách đơn giản vẫn chạy, kiểm tra `/health/ready` và `scripts/Test-Database.ps1` trước. Probe chỉ đọc metadata, in rõ migration pending; không tự migrate hoặc đổi dữ liệu. Trường hợp 12/11/2026: runtime dùng 8 migration nhưng Neon development mới có baseline đầu tiên, thiếu `residents.contact_email`, cột settlement allocation và external refund. Owner phải dùng profile runtime DML; operator direct riêng mới thực hiện DDL.
+
+Script Update-NeonDatabase mặc định dùng Release để không ghi đè DLL Debug đang được Visual Studio chạy. Có thể chọn `-Configuration Debug` khi đã dừng app; hành vi mặc định vẫn chỉ list. Trước Apply: kiểm tra target, review SQL, backup riêng tư, test nâng từ baseline có dữ liệu tổng hợp và đối chiếu dữ liệu. Không dùng credential operator làm connection runtime.
+
+Schema verifier so khớp cả nội dung function. Bản EF CLI local có thể thêm indentation vào dollar-quoted function body khi xuất script `--idempotent`, làm verifier từ chối dù chỉ khác định dạng. Dùng EF database update cho Apply; script idempotent dùng để review. Nếu cần chạy SQL trong một transaction, sinh script đúng `FROM`/`TO` với `--no-transactions` và **không** `--idempotent`, xác minh đúng applied history trước rồi chạy trong transaction. Không nới lỏng verifier hoặc xóa history để bỏ qua mismatch.
+
+Backup/snapshot/connection secrets chỉ ở cấu hình local bị Git bỏ qua. Khi đối chiếu dữ liệu trên database đang chạy, notifications/refresh_tokens có thể đổi do worker/session; ghi nhận riêng các thay đổi đồng thời, không rollback tự động hoạt động tài chính hoặc phiên người dùng.
+
 API/laptop không tự áp migration. Sau apply kiểm history/pending, schema verifier,
 ready, API và authorization âm; ghi actor/time/commit/hash/result rồi báo nhóm đồng
 bộ code. Không push/merge tự động.

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../packages/client-core/src/auth';
-import { ApiError } from '../../../../packages/client-core/src/api';
+import { ApiError, infrastructureError } from '../../../../packages/client-core/src/api';
 import { invoiceError } from '../../../../packages/client-core/src/invoices';
 import { useMeterApi } from '../features/meters/useMeterApi';
 
@@ -29,6 +29,8 @@ export function ownerQuery(values: Record<string, unknown>) {
   return result.toString();
 }
 export function ownerError(error: unknown) {
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure;
   if (error instanceof ApiError) {
     const fields = Object.values(error.problem?.errors ?? {})
       .flat()

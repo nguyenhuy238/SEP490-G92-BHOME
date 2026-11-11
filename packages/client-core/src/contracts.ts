@@ -1,5 +1,5 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
-import { ApiError, requestDiagnostic } from './api';
+import { ApiError, infrastructureError, requestDiagnostic } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
 export const contractStates = [
   'Draft',
@@ -1031,6 +1031,8 @@ export function contractError(error: unknown): string {
   } | null;
   const code = e?.code ?? e?.problem?.code;
   const diagnostic = e ? requestDiagnostic(e) : '';
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure + diagnostic;
   if (code === 'request_timeout')
     return (
       'Máy chủ không phản hồi trong 15 giây. Hãy tải lại để kiểm tra trước khi gửi lại.' +

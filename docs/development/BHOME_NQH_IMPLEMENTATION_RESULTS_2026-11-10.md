@@ -244,3 +244,15 @@ Full integration 857 PASS/20 SKIP ở baseline trước đó chưa chạy lại 
 Đã chạy browser 1 PASS và full Owner Web 336 PASS/67 files. Sau bổ sung assertion bảo toàn mili giây, RefundPanel 13 PASS và Owner typecheck PASS. Lượt browser trước đó FAIL vì runner dùng sai Vite workspace, thiếu allowed auth origin, thiếu lý do execution sau remount, cắt timestamp xuống phút và assertion step sai; đã sửa runner. UI vốn đã hỗ trợ mili giây, không thay backend time rule và không tuyên bố đây là lỗi sản phẩm. Bridge xử lý browser disconnect để cleanup không che lỗi gốc. Compile đầu helper có nullable header errors đã sửa; các lượt FAIL không tính PASS. TRX dưới .tools/ci-validation-2026-11-11/browser-agreement; artifact riêng mỗi lần chạy.
 
 Thông báo lỗi xác nhận nguồn cọc dùng ngôn ngữ recipient phù hợp BR-30, không buộc người nhận principal phải là người nộp. Không schema/migration/dependency mới. Bộ browser opt-in chưa bật trong GitHub Actions; không suy acceptance local sang native/provider hoặc mọi luồng còn lại.
+
+## 12/11/2026 — Sửa lỗi Owner runtime/schema trong ảnh người dùng
+
+Neon development chỉ có 1/8 migration trong khi source đã cần schema mới. Đã sao lưu private, áp dụng 7 migration hiện có theo yêu cầu sửa và cấu hình operator người dùng cung cấp; runtime vẫn bhome_dev01. Đưa 11 function về canonical formatting do EF idempotent generator thêm indentation, giữ strict verifier. Live readiness đã từ 503 lên 200 Healthy; read-only DatabaseProbe Compact24 PASS, 8 applied/0 pending/0 unknown, RuntimeEFQuery PASS. Đối chiếu dữ liệu tài chính/identity không đổi; notifications/refresh_tokens có hoạt động đồng thời và được ghi riêng. Không reset/reseed hoặc commit secrets/backup.
+
+Backend trả sanitized 503/database_schema_incompatible cho missing schema object; các error formatter Owner giải thích cần đồng bộ hệ thống. Probe in rõ pending IDs, operator script dùng Release khi Debug API đang chạy. Thêm regression nâng từ baseline có dữ liệu, so sánh toàn bộ các row cũ và replay; giữ authorization/constraint failure semantics.
+
+Đã chạy backend build 0 warning/error, nhóm migration/error/probe 45 PASS và nhóm affected API regression 51 PASS; frontend targeted 22 PASS. Mô tả nguyên nhân, các lần thử thất bại đã sửa, backup, dữ liệu đồng thời và giới hạn xác minh tại [runtime schema incident](OWNER_RUNTIME_SCHEMA_INCIDENT_2026-11-12.md). Computer Use tự dừng do URL Chrome không xác định được; không tuyên bố đã kiểm tra lại UI live. Các gap hoàn thiện sản phẩm trước đó vẫn còn, ngoài phạm vi sửa runtime này.
+
+Sau sửa cuối: full Owner Web 338 PASS/68 files, Owner/Mobile typecheck, changed-file ESLint, dotnet format verify, Prettier và diff check PASS. Bài schema error dùng .test.tsx theo discovery config; không tính lượt .test.ts chưa được discover là đã chạy. Badge “Đã từ chối” được ưu tiên màu error thay vì regex success Đã; dữ liệu quyết định Incident giữ nguyên. Live readiness kiểm lại vẫn 200 Healthy.
+
+Owner production build PASS, có cảnh báo bundle lớn hơn 500 kB; không coi đây là lỗi build hoặc bằng chứng performance đạt yêu cầu. Chưa chạy lại full backend/native/browser/provider acceptance ngoài các nhóm đã ghi.

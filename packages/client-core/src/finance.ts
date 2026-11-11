@@ -1,4 +1,5 @@
 import type { ContractRequest } from './contracts';
+import { infrastructureError } from './api';
 import { formatBillingDecimal } from './invoices';
 
 // Financial results can be negative; preserve the server's exact decimal string.
@@ -234,6 +235,8 @@ export function financeClient(request: ContractRequest) {
   };
 }
 export function financeError(error: unknown) {
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure;
   if ((error as { code?: string })?.code === 'settlement_report_sources_require_review')
     return 'Nguồn khoản phải thu hoặc phân bổ tiền chưa khớp. Cần Owner đối chiếu trước khi lập báo cáo.';
   const status = (error as { status?: number })?.status;

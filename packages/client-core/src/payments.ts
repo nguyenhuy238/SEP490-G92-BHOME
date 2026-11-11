@@ -1,4 +1,4 @@
-import { ApiError } from './api';
+import { ApiError, infrastructureError } from './api';
 import type { Page } from './invoices';
 
 export interface VerifiedPayment {
@@ -411,6 +411,8 @@ export function paymentText(value: string) {
   return labels[value] ?? 'Cần kiểm tra thông tin đối soát';
 }
 export function paymentError(error: unknown) {
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure;
   const value = error as { status?: number; code?: string; problem?: { code?: string } };
   const code =
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
