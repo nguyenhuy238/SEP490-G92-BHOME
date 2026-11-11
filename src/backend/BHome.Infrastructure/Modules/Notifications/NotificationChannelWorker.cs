@@ -150,9 +150,14 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         if (n.EventType == "TASK_DUE_OR_OVERDUE") return await db.Set<OperationalTask>().AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
         if (n.EventType.StartsWith("EMERGENCY_ACK_")) return await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(x => x.Id == n.RelatedObjectId && x.AcknowledgedAt == null && (x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.Submitted || x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.InProgress), t);
         if (n.EventType == "TEMPORARY_RESIDENCE_ACTION") return await sql.Scalar<bool>("""
-            SELECT EXISTS(SELECT 1 FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id WHERE cr.resident_id=@id AND c.status=3
-            AND COALESCE(cr.registration_status,'Pending') IN ('Pending','InProgress') AND cr.owner_confirmed_at IS NULL)
-            """, t, ("id", n.RelatedObjectId));
+            SELECT EXISTS(SELECT 1 FROM notifications notice JOIN contract_residents cr ON cr.resident_id=notice.related_entity_id
+              AND cr.contract_id::text=split_part(notice.event_key,':',2)
+              JOIN contracts c ON c.id=cr.contract_id JOIN residents r ON r.id=cr.resident_id
+              WHERE notice.id=@notice AND notice.event_key LIKE 'residence:%' AND c.status=3
+                AND cr.actual_residence_from<=@today AND (cr.residence_to IS NULL OR cr.residence_to>=@today)
+                AND cr.actual_move_out_date IS NULL AND COALESCE(cr.registration_status,'Pending') IN ('Pending','InProgress')
+                AND (notice.recipient_user_id=c.owner_signer_id OR notice.recipient_user_id=r.user_id))
+            """, t, ("notice", n.Id), ("today", BillingAutomationDates.BusinessDate(sql.Now)));
         return true;
     }
 }

@@ -103,3 +103,8 @@ giữ nguyên array contract và kiểm tra Staff assignment hiện tại. Khôn
 
 > Cập nhật 08/11/2026: [Notification MVP trên Compact24](NOTIFICATION_MVP_COMPACT24.md) bổ sung
 > invitation, inbox detail, announcements, devices, kênh gửi và reminder policy; giữ tương thích các route cũ bên dưới.
+## 11/11/2026 — Residence reminders theo BR-28
+
+JOB-08 dùng WEEKLY/MONTHLY + LocalSendHour của notification-policy đã được Owner cấu hình; mặc định tắt, không thêm cadence/SLA. Dedupe bền vững Contract+Resident+window, các lần pump song song/lặp lại chỉ có một inbox cho mỗi recipient/window. Query khóa row cư trú khi đánh giá và publish; chỉ nhắc khi ActualResidenceFrom đã đến, contract Active, residence chưa hết/đóng thực tế và registration Pending/InProgress. Owner-confirmed legacy stamp không thay được trạng thái Completed. Recipients chỉ đúng Owner signer và Tenant occupant, không Staff kể cả liên kết dữ liệu cũ sai role. Không gửi/đăng ký VNeID.
+
+Kênh ngoài kiểm lại exact contract của EventKey, cư trú/status hiện tại và recipient tại thời điểm delivery; Completed hoặc actual_move_out_date đã có thì suppress. Không dùng một contract mới của cùng Resident để làm thông báo cũ tiếp tục hợp lệ. Inbox đã lưu là lịch sử, không phải bằng chứng đăng ký hoặc gửi provider thành công. Không thay permission Residence API (Owner/Tenant), không migrate/schema change.

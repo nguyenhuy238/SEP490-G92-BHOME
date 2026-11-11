@@ -100,3 +100,6 @@ Mobile affected regression 107 PASS (Owner contract/read-only finance, lifecycle
 ## 11/11/2026 — Retention review only
 
 Force rebuild Release integration project: 0 warning/error. Application unit 411 PASS; PostgreSQL retention + whole-excess + resident administration 6 PASS sau rebuild; Owner retention/resident UI 5 PASS; Owner force typecheck/Mobile typecheck và changed-file lint/format PASS. Khóa source/parallel/replay/hold-release/sai quyền, không leak/change identity, nghĩa vụ hoàn dư chưa tạo request đều có assert. Không xóa/ẩn danh hóa, không đặt ngày luật định, không migrate DB làm việc. Lượt incremental ban đầu discover thiếu retention do timestamp/DLL cũ không được tính là test retention đã chạy; bản rebuilt mới đã được chạy lại. Browser/native/legal acceptance chưa thực hiện.
+## 11/11/2026 — Residence reminders và delivery source
+
+Release non-incremental build 0 warning/error; PostgreSQL notification/residence 15 PASS. Window WEEKLY được advance bằng clock tổng hợp, concurrency/retry không duplicate, Owner-confirmed legacy stamp không thay Completed, actual closure dừng, không Staff, và kênh delivery không dùng contract mới để gửi reminder của contract cũ. First run 13 PASS/1 FAIL do clock fixture UTC+7; đã sửa UTC, rebuild test và nhóm mở rộng 15 PASS. Channel probe chỉ local test boundary, không là provider acceptance.
