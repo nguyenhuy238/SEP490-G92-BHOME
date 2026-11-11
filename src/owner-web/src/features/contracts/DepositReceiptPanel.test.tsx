@@ -22,6 +22,11 @@ vi.mock('../payments/RefundPanel', () => ({
     <div>Actual refund workflow: {sourceId}</div>
   ),
 }));
+vi.mock('../payments/ReceiptExcessPanel', () => ({
+  ReceiptExcessPanel: ({ target }: { target: { depositContractId?: string } }) => (
+    <div>Whole receipt return for {target.depositContractId}</div>
+  ),
+}));
 vi.mock('../payments/OwnerInvoicePaymentPanel', () => ({
   RecordTransferForm: () => <div>Bank receipt recording</div>,
 }));
@@ -79,6 +84,26 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+it('routes a fully funded Main deposit to whole-receipt return without a zero allocation', async () => {
+  api.depositContext.mockResolvedValue({
+    ...context,
+    remaining: '0',
+    proposedAllocation: '0',
+    excess: '80000',
+    problems: ['deposit_already_satisfied'],
+  });
+  mount();
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Receipt cọc trên sao kê' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  await select('Receipt cọc trên sao kê', /SYN-BANK/);
+  await screen.findByText('Whole receipt return for contract');
+  expect(screen.queryByRole('button', { name: 'Phân bổ receipt vào cọc' })).not.toBeInTheDocument();
+  expect(api.allocateDeposit).not.toHaveBeenCalled();
+});
 async function select(label: string, option: RegExp) {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: label }));
   fireEvent.click(await screen.findByRole('option', { name: option }));

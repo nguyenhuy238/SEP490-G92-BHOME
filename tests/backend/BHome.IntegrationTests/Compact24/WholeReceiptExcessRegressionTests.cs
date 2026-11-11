@@ -13,7 +13,7 @@ public sealed class WholeReceiptExcessRegressionTests
     public async Task ClosedHoldingAccidentalReceiptRefundsWithoutProvisioningAnAccount()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new PaymentLedgerTests(fixture.Capture).ClosedHoldingExcessCanReturnToVerifiedResidentWithoutAnAccount(); }
+        try { await new PaymentLedgerTests(fixture.Capture).ClosedDepositExcessCanReturnToVerifiedResidentWithoutAnAccount(); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]

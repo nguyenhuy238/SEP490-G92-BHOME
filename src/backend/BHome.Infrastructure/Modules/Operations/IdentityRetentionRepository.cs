@@ -47,17 +47,24 @@ internal sealed class IdentityRetentionRepository(Compact24DbContext db, IContra
         if (person.RoomId is not null) blockers.Add("current_residence");
         if (holds.Length > 0) blockers.Add("identity_retention_hold_active");
         var contracts = await db.Set<Contract>().AsNoTracking().Where(c => c.Residents.Any(r => r.ResidentId == id)).OrderBy(c => c.Id)
-            .Select(c => new { c.Id, c.Status, c.Kind }).ToArrayAsync(token);
+            .Select(c => new { c.Id, c.Status, c.Kind, c.TenantUserId }).ToArrayAsync(token);
         foreach (var contract in contracts)
         {
             if (contract.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active)
-            { blockers.Add("contract_not_closed"); sources.Add(contract); continue; }
+            { blockers.Add("contract_not_closed"); sources.Add(new { contract.Id, contract.Status, contract.Kind }); continue; }
             if (contract.Kind == ContractKind.Holding)
             {
                 var money = await db.Database.SqlQuery<decimal>($"SELECT COALESCE(sum(amount),0) AS \"Value\" FROM payment_allocations WHERE target_deposit_contract_id={contract.Id}").SingleAsync(token);
                 // Retention of historical forfeiture/application/refund evidence still needs the approved policy scope.
                 if (money != 0) blockers.Add("holding_financial_records_require_review");
                 sources.Add(new { contract.Id, contract.Status, Money = money });
+            }
+            else if (contract.TenantUserId is null)
+            {
+                // A cancelled pre-account draft has no activated tenancy to inspect/settle. Keep its
+                // history under policy review; never fabricate an account just to read retention metadata.
+                blockers.Add("preaccount_contract_records_require_review");
+                sources.Add(new { contract.Id, contract.Status, contract.Kind });
             }
             else if (ledger is IContractSettlementDetails details)
             {

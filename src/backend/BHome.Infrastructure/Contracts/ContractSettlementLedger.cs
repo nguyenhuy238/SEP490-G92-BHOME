@@ -43,7 +43,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         }
         var blockers = new List<string>(); var m = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, t);
         var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, t);
-        if (await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, id, t) ||
+        if (await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, id, t, depositContractIds: chain.Select(v => v.Id).Append(root.HoldingContractId ?? root.Id).Distinct().ToArray()) ||
             await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAllocatedSettlementAsync(db, id, t) ||
             await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingDepositAsync(db, chain.Select(v => v.Id).Append(root.HoldingContractId ?? root.Id).Distinct().ToArray(), t)) blockers.Add("receipt_excess_refund_pending");
         var chargeBalances = new List<SettlementReceivableBalance>();

@@ -21,6 +21,7 @@ import { usePaymentApi } from '../payments/usePaymentApi';
 import { RecordTransferForm } from '../payments/OwnerInvoicePaymentPanel';
 import { ExternalPaymentPayerPanel } from '../payments/ExternalPaymentPayerPanel';
 import { RefundPanel } from '../payments/RefundPanel';
+import { ReceiptExcessPanel } from '../payments/ReceiptExcessPanel';
 
 export function DepositReceiptPanel({
   contract,
@@ -55,7 +56,7 @@ export function DepositReceiptPanel({
         {
           page,
           paymentStatus: status,
-          ...(status === 'Allocated' ? { depositContractId: contract.id } : {}),
+          ...(status !== 'PendingReview' ? { depositContractId: contract.id } : {}),
         },
         signal,
       ),
@@ -72,6 +73,10 @@ export function DepositReceiptPanel({
   });
   const signature = JSON.stringify([contract.id, receipt, payer, context.data?.reference]);
   const checked = confirmation === signature;
+  const wholeExcess =
+    ['ExcessRefundPending', 'ExcessRefundCompleted'].includes(transfer.data?.status ?? '') ||
+    context.data?.remaining === '0' ||
+    context.data?.problems.includes('deposit_not_payable');
   const selectablePayer =
     context.data?.payers.some((p) => p.residentId === payer) ||
     (!!context.data?.externalPayer && payer === `external:${context.data.externalPayer.id}`);
@@ -179,6 +184,8 @@ export function DepositReceiptPanel({
         >
           <MenuItem value="PendingReview">Chờ phân bổ</MenuItem>
           <MenuItem value="Allocated">Đã phân bổ vào hợp đồng này</MenuItem>
+          <MenuItem value="ExcessRefundPending">Phải hoàn toàn bộ receipt</MenuItem>
+          <MenuItem value="ExcessRefundCompleted">Đã hoàn toàn bộ receipt</MenuItem>
         </TextField>
         {list.isFetching && <Typography>Đang tải receipt…</Typography>}
         <TextField
@@ -263,9 +270,22 @@ export function DepositReceiptPanel({
                   setPayer('');
                   setConfirmation('');
                   void context.refetch();
+                  void cache.invalidateQueries({ queryKey: ['receipt-excess-context'] });
                 }}
               />
-              {context.data && (
+              {wholeExcess && (
+                <ReceiptExcessPanel
+                  key={receipt + '-whole'}
+                  transferId={receipt}
+                  target={
+                    contract.kind === 'Holding'
+                      ? { holdingContractId: contract.id }
+                      : { depositContractId: contract.id }
+                  }
+                  onChanged={() => void refresh()}
+                />
+              )}
+              {context.data && !wholeExcess && (
                 <>
                   <Typography>Nội dung cọc: {context.data.depositReference}</Typography>
                   <Typography>

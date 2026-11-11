@@ -173,7 +173,7 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             {
                 TransferId = receipt,
                 InvoiceId = disposition.Target.InvoiceId,
-                DepositContractId = disposition.Target.HoldingContractId,
+                DepositContractId = disposition.Target.HoldingContractId ?? disposition.Target.DepositContractId,
                 Decision = returned == disposition.Amount ? "ExcessRefundCompleted" : "ExcessRefundPending",
                 Reason = returned == disposition.Amount ? "verified_whole_excess_returned" : "verified_partial_excess_returned",
                 ActorId = actor,

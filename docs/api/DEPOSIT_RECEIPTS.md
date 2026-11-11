@@ -24,4 +24,10 @@ Owner Web có receipt picker/phân trang, chọn actual payer, xác nhận gắn
 
 Migration SQL-only thứ 8 `20261111080000_DepositReceiptAllocation`: giữ 24 bảng; snapshot/source/budget/refund guards và proof classification. Fresh DDL và embedded migration đồng bộ. Upgrade không viết lại allocation lịch sử đã vượt cọc; các hồ sơ đó cần đối chiếu riêng, không tự hợp thức hóa. Không downgrade xóa lịch sử.
 
-Đã kiểm chứng bằng PostgreSQL disposable và component tests; chưa là browser/native hoặc bank-provider acceptance. Migration chưa áp dụng vào DB làm việc. Receipt chuyển thêm sau khi cọc Main đã đủ (toàn bộ receipt là dư), excess sinh từ điều chỉnh/reversal và hoàn principal deposit cho external payer là các nhánh tiếp theo; không dùng allocation 0 hoặc gán Resident giả để lách các nhánh này.
+Đã kiểm chứng bằng PostgreSQL disposable và component tests; chưa là browser/native hoặc bank-provider acceptance. Migration chưa áp dụng vào DB làm việc. Excess sinh từ điều chỉnh/reversal và hoàn principal deposit cho external payer là các nhánh tiếp theo; không dùng allocation 0 hoặc gán Resident giả để lách các nhánh này.
+
+## Toàn bộ receipt dư khi cọc đã đủ hoặc hợp đồng đã đóng
+
+ReceiptExcess API nhận thêm `target.depositContractId` cho Main/Holding; alias `holdingContractId` cũ giữ nguyên. Chỉ chọn một target; trường mới null bị bỏ khỏi JSON để giữ fingerprint hồ sơ cũ. Main đủ cọc hoặc đã đóng có thể xác nhận toàn bộ receipt phải hoàn, không tạo allocation 0. Hợp đồng còn thiếu cọc và chưa đóng bị chặn; thay đổi cọc sau khi lấy context phải đối chiếu lại.
+
+Owner Web chuyển từ phân bổ sang ReceiptExcessPanel khi cọc đủ/đã đóng; các nhóm receipt phải hoàn/đã hoàn lọc đúng hợp đồng, kể cả sau bàn giao phòng. Quyết toán giữ pending tới khi hoàn đúng payer, đúng source/proof và đúng tổng receipt; over-return hoặc hồ sơ hoàn không phân loại không tự làm sạch blocker. Resident chưa có account của Main đã hủy cũng nhận lại receipt ngoài ý muốn được; retention đọc metadata thay vì yêu cầu tenancy settlement/account, vẫn CanDelete=false và chờ rà soát chính sách. Không thay đổi nghĩa vụ principal deposit đã phân bổ.

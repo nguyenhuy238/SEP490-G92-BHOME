@@ -91,21 +91,23 @@ public sealed partial class PaymentLedgerTests
         var report = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}"));
         Assert.False(report.HasUnclassifiedRefunds); Assert.Equal("100000", report.Total.VerifiedCollections); Assert.Equal("0", report.Total.OutstandingNow);
     }
-    internal async Task ClosedHoldingExcessCanReturnToVerifiedResidentWithoutAnAccount()
+    internal async Task ClosedDepositExcessCanReturnToVerifiedResidentWithoutAnAccount(bool main = false)
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
         var resident = new BHome.Domain.TenantContracts.Resident { OwnerUserId = w.Owner, DisplayLabel = "SYNTHETIC PREACCOUNT PAYER", VerificationStatus = BHome.Domain.TenantContracts.IdentityVerificationStatus.Verified };
         var holding = new BHome.Domain.TenantContracts.Contract { RoomId = w.Room, OwnerSignerId = w.Owner, RepresentativeResidentId = resident.Id,
-            Kind = BHome.Domain.TenantContracts.ContractKind.Holding, Status = BHome.Domain.TenantContracts.ContractStatus.Cancelled,
+            Kind = main ? BHome.Domain.TenantContracts.ContractKind.Main : BHome.Domain.TenantContracts.ContractKind.Holding, Status = BHome.Domain.TenantContracts.ContractStatus.Cancelled,
             RequiredDeposit = 100000, StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)), Terms = "SYNTHETIC CLOSED HOLDING",
             Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = resident.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative }] };
         await using (var scope = fixture.Factory.Services.CreateAsyncScope()) { var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); db.AddRange(resident, holding); await db.SaveChangesAsync(); }
         var extra = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, 35000) with { ProposedInvoiceId = null, TransferDescription = PaymentRules.DepositReference(holding.Id) }, Guid.NewGuid(), default));
         var route = $"/api/v1/payment-transactions/{extra.Id}/excess-disposition";
-        var context = await RefundValue<ReceiptExcessContext>(await owner.GetAsync(route + $"/context?holdingContractId={holding.Id}"));
+        var target = main ? new ReceiptExcessTarget(DepositContractId: holding.Id) : new ReceiptExcessTarget(HoldingContractId: holding.Id);
+        var query = main ? "depositContractId" : "holdingContractId";
+        var context = await RefundValue<ReceiptExcessContext>(await owner.GetAsync(route + $"/context?{query}={holding.Id}"));
         Assert.Empty(context.Problems); Assert.Null(Assert.Single(context.Payers).UserId);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(route + $"/context?holdingContractId={holding.Id}&invoiceId={w.Invoice}")).StatusCode);
-        var confirmed = await RefundValue<ReceiptExcessDisposition>(await Post(owner, route, new ReceiptExcessConfirmation(new(HoldingContractId: holding.Id), context.Reference, resident.Id, "Synthetic closed holding received accidental transfer", true)));
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(route + $"/context?{query}={holding.Id}&invoiceId={w.Invoice}")).StatusCode);
+        var confirmed = await RefundValue<ReceiptExcessDisposition>(await Post(owner, route, new ReceiptExcessConfirmation(target, context.Reference, resident.Id, "Synthetic closed deposit received accidental transfer", true)));
         Assert.Null(confirmed.PayerUserId);
         var retentionRoute = $"/api/v1/residents/{resident.Id}/identity-retention";
         Assert.Contains("refund_pending", (await RefundValue<BHome.Application.Operations.IdentityRetentionView>(await owner.GetAsync(retentionRoute))).BlockingReasons);

@@ -197,9 +197,15 @@ export function ReceiptExcessPanel({
   const differentTarget =
     disposition &&
     target &&
-    (['invoiceId', 'settlementContractId', 'receivableId', 'holdingContractId'] as const).some(
-      (key) => (disposition.target[key] ?? null) !== (target[key] ?? null),
-    );
+    (
+      [
+        'invoiceId',
+        'settlementContractId',
+        'receivableId',
+        'holdingContractId',
+        'depositContractId',
+      ] as const
+    ).some((key) => (disposition.target[key] ?? null) !== (target[key] ?? null));
   return (
     <Stack spacing={2}>
       {(existing.isFetching || context.isFetching || busy) && <LinearProgress />}

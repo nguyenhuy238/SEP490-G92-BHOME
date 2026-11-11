@@ -7,7 +7,8 @@ using BHome.Domain.PaymentsDebt;
 
 namespace BHome.Application.PaymentsDebt;
 
-public sealed record ReceiptExcessTarget(Guid? InvoiceId = null, Guid? SettlementContractId = null, Guid? ReceivableId = null, Guid? HoldingContractId = null);
+public sealed record ReceiptExcessTarget(Guid? InvoiceId = null, Guid? SettlementContractId = null, Guid? ReceivableId = null, Guid? HoldingContractId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? DepositContractId = null);
 public sealed record ReceiptExcessPayer(Guid ResidentId, Guid? UserId, string Label);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record ReceiptExcessDisposition(Guid Id, Guid TransferId, ReceiptExcessTarget Target, Guid RoomId, decimal Amount,
@@ -32,9 +33,9 @@ public static class ReceiptExcessRules
     });
     public static void Validate(ReceiptExcessTarget target)
     {
-        if (target is null || target.InvoiceId == Guid.Empty || target.SettlementContractId == Guid.Empty || target.ReceivableId == Guid.Empty || target.HoldingContractId == Guid.Empty ||
+        if (target is null || target.InvoiceId == Guid.Empty || target.SettlementContractId == Guid.Empty || target.ReceivableId == Guid.Empty || target.HoldingContractId == Guid.Empty || target.DepositContractId == Guid.Empty ||
             (target.SettlementContractId is null) != (target.ReceivableId is null) ||
-            new[] { target.InvoiceId is not null, target.SettlementContractId is not null, target.HoldingContractId is not null }.Count(v => v) != 1)
+            new[] { target.InvoiceId is not null, target.SettlementContractId is not null, target.HoldingContractId is not null, target.DepositContractId is not null }.Count(v => v) != 1)
             throw new PaymentException(400, "receipt_excess_target_required");
     }
 }

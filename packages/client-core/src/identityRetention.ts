@@ -32,6 +32,8 @@ const reasons: Record<string, string> = {
   identity_retention_hold_active: 'Đang có lệnh giữ hồ sơ.',
   refund_pending: 'Còn nghĩa vụ hoàn tiền chưa hoàn tất.',
   financial_obligations_require_review: 'Quyết toán hoặc nghĩa vụ tài chính cần đối chiếu.',
+  preaccount_contract_records_require_review:
+    'Hồ sơ hợp đồng đã đóng trước khi có tài khoản cần được rà soát theo chính sách lưu trữ.',
   holding_financial_records_require_review:
     'Có chứng từ cọc giữ chỗ cần rà soát phạm vi lưu giữ theo chính sách được duyệt.',
   financial_ledger_unavailable: 'Chưa xác minh được sổ tài chính.',

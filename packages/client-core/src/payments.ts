@@ -139,6 +139,7 @@ export interface PayerChoice {
   displayLabel: string;
 }
 export interface ReceiptExcessTarget {
+  depositContractId?: string | null;
   invoiceId?: string | null;
   settlementContractId?: string | null;
   receivableId?: string | null;

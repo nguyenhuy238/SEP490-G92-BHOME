@@ -46,13 +46,23 @@ afterEach(() => {
   cleanup();
   cache.clear();
 });
-function mount() {
+function mount(selectedTarget = target as { invoiceId?: string; depositContractId?: string }) {
   render(
     <QueryClientProvider client={cache}>
-      <ReceiptExcessPanel transferId="receipt" target={target} />
+      <ReceiptExcessPanel transferId="receipt" target={selectedTarget} />
     </QueryClientProvider>,
   );
 }
+it('does not reuse a whole-excess decision for another Main deposit', async () => {
+  api.excessDisposition.mockResolvedValue({
+    ...disposition,
+    target: { depositContractId: 'other-main' },
+  });
+  mount({ depositContractId: 'main' });
+  await screen.findByText(/Giao dịch đã được xác nhận hoàn theo nghĩa vụ khác/);
+  expect(screen.queryByText('Refund workflow receipt')).not.toBeInTheDocument();
+  expect(api.confirmExcess).not.toHaveBeenCalled();
+});
 async function fill() {
   await screen.findByText('Xác nhận toàn bộ giao dịch là tiền dư');
   fireEvent.mouseDown(screen.getByLabelText('Người thực trả nhận lại tiền'));

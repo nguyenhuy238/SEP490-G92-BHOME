@@ -61,22 +61,27 @@ internal static class ReceiptExcessRecords
             """).SingleOrDefaultAsync(token);
         return json is null ? null : JsonSerializer.Deserialize<ReceiptExcessDisposition>(json, Json) ?? throw new PaymentException(409, "receipt_excess_history_invalid");
     }
-    internal static Task<bool> PendingAsync(BHomePersistenceContext db, Guid? invoiceId, Guid? settlementContractId, CancellationToken token, Guid? payerResidentId = null)
+    internal static Task<bool> PendingAsync(BHomePersistenceContext db, Guid? invoiceId, Guid? settlementContractId, CancellationToken token, Guid? payerResidentId = null, Guid[]? depositContractIds = null)
     {
         if (db is not Compact24DbContext) return Task.FromResult(false);
+        var depositIds = (depositContractIds ?? []).Select(id => id.ToString()).ToArray();
         return db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
               WHERE h->>'recordType'={Kind} AND (({invoiceId}::uuid IS NOT NULL AND h->'state'->'target'->>'invoiceId'={invoiceId}::text)
                 OR ({settlementContractId}::uuid IS NOT NULL AND h->'state'->'target'->>'settlementContractId'={settlementContractId}::text)
+                OR h->'state'->'target'->>'depositContractId'=ANY({depositIds}) OR h->'state'->'target'->>'holdingContractId'=ANY({depositIds})
                 OR ({payerResidentId}::uuid IS NOT NULL AND h->'state'->>'payerResidentId'={payerResidentId}::text))
-              AND p.amount>(SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'
+              AND (p.amount<>(SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED') OR
+                p.amount<>(SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED'
+                AND r.source_deposit_contract_id IS NULL AND (r.beneficiary_kind='RESIDENT' AND r.beneficiary_resident_id::text=h->'state'->>'payerResidentId'
+                  OR r.beneficiary_kind='EXTERNAL' AND r.external_payer_attestation_id::text=h->'state'->>'externalPayerAttestationId' AND bhome24_external_refund_valid(r.id))
                 AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) proof WHERE proof->>'recordType'='ExcessReceiptRefundV1'
                   AND proof->'state'->>'receiptExcessDispositionId'=h->'state'->>'id' AND r.executed_at IS NOT NULL
                   AND proof->'state'->'upload'->>'objectKey'=r.execution_evidence_key
                   AND proof->'state'->'upload'->>'externalReference'=r.external_refund_reference
                   AND proof->'state'->'upload'->>'sha256' ~ {"^[A-F0-9]{64}$"}
                   AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(proof->'state'->'events')='array' THEN proof->'state'->'events' ELSE '[]'::jsonb END) event
-                    WHERE event->>'action'='Completed')))) AS "Value"
+                    WHERE event->>'action'='Completed'))))) AS "Value"
             """).SingleAsync(token);
     }
 }
@@ -87,7 +92,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
     {
         if (target.InvoiceId is { } invoice)
             return await db.Set<Invoice>().Where(i => i.Id == invoice).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(token) ?? throw new PaymentException(404, "payment_invoice_not_found");
-        var contractId = target.SettlementContractId ?? target.HoldingContractId;
+        var contractId = target.SettlementContractId ?? target.HoldingContractId ?? target.DepositContractId;
         return await db.Set<Contract>().Where(c => c.Id == contractId).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token) ?? throw new PaymentException(404, "contract_not_found");
     }
     public async Task<T> TransactionAsync<T>(Guid transferId, ReceiptExcessTarget target, Func<Task<T>> work, CancellationToken token)
@@ -135,10 +140,11 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         }
         else
         {
-            var holding = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == target.HoldingContractId, token);
-            if (holding.Kind != ContractKind.Holding) throw new PaymentException(404, "holding_contract_not_found");
+            var holding = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == (target.HoldingContractId ?? target.DepositContractId), token);
+            if (target.HoldingContractId is not null ? holding.Kind != ContractKind.Holding : holding.Kind is not (ContractKind.Main or ContractKind.Holding) || holding.PreviousContractId is not null)
+                throw new PaymentException(404, "deposit_contract_not_found");
             var received = await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == holding.Id).SumAsync(a => (decimal?)a.Amount, token) ?? 0;
-            outstanding = holding.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Converted ? 0 : Math.Max(0, holding.RequiredDeposit - received);
+            outstanding = holding.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Applied ? 0 : Math.Max(0, holding.RequiredDeposit - received);
             residents = await db.Set<ContractResident>().Where(r => r.ContractId == holding.Id).Select(r => r.ResidentId).ToArrayAsync(token);
             reference = PaymentRules.DepositReference(holding.Id); targetDemo = holding.IsDevelopmentDemo;
         }
@@ -179,7 +185,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         {
             TransferId = transfer.Id,
             InvoiceId = disposition.Target.InvoiceId,
-            DepositContractId = disposition.Target.HoldingContractId,
+            DepositContractId = disposition.Target.HoldingContractId ?? disposition.Target.DepositContractId,
             Decision = "ExcessRefundPending",
             Reason = "verified_whole_excess_refund_required",
             ActorId = disposition.ApprovedByUserId,
