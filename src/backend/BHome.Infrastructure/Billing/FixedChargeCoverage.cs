@@ -23,14 +23,20 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
                            join contract in db.Set<Contract>() on invoice.RepresentativeContractId equals contract.Id
                            where invoice.RoomId == roomId && invoice.BillingPeriod == period && invoice.Status == InvoiceStatus.Final && line.ChargeCode == code
                            select new { line, invoice.ScheduleSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
+        var invoiceIds = lines.Select(r => r.line.InvoiceId).Distinct().ToArray();
+        var adjustments = await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().Where(d => invoiceIds.Contains(d.InvoiceId) && d.ChargeCode == code &&
+            d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved").Select(d => new { d.Id, d.InvoiceId, d.Delta }).Take(501).ToArrayAsync(token);
+        if (adjustments.Length > 500) throw ContractException.Conflict("fixed_charge_history_review_required");
         foreach (var row in lines)
         {
+            var decisions = adjustments.Where(d => d.InvoiceId == row.line.InvoiceId).ToArray();
+            var reduction = Math.Max(0, (row.line.CalculatedAmount ?? row.line.Amount) - row.line.Amount - decisions.Sum(d => d.Delta));
             if (!string.IsNullOrWhiteSpace(row.line.UtilityCalculationSnapshot))
             {
                 using var json = JsonDocument.Parse(row.line.UtilityCalculationSnapshot);
                 if (json.RootElement.TryGetProperty("kind", out var kind) && kind.GetString() == "FixedChargeCoverage/v1")
                 {
-                    result.Add(new(row.line.Id, json.RootElement.GetProperty("source").Deserialize<FixedChargeSource>()!)); continue;
+                    result.Add(new(row.line.Id, json.RootElement.GetProperty("source").Deserialize<FixedChargeSource>()!, reduction, decisions.Select(d => d.Id).Order().ToArray())); continue;
                 }
             }
             var schedule = JsonSerializer.Deserialize<BillingSchedule>(row.ScheduleSnapshot) ?? throw ContractException.Conflict("billing_schedule_snapshot_invalid");
@@ -39,7 +45,7 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
             var reference = FixedChargeCalculation.PolicyReference(policy, schedule, row.SnapshotHash);
             result.Add(new(row.line.Id, new(period, code, row.line.Category.ToString(), row.line.PolicyId, row.line.PolicyVersion, row.line.Rate,
                 reference, schedule.PartialMonth, schedule.Rounding, row.line.OccupiedDays, row.line.PeriodDays,
-                row.line.CalculatedAmount ?? row.line.Amount, 0)));
+                row.line.CalculatedAmount ?? row.line.Amount, 0), reduction, decisions.Select(d => d.Id).Order().ToArray()));
         }
         var records = await db.Database.SqlQuery<string>($"""
             SELECT (h->'state')::text AS "Value" FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h

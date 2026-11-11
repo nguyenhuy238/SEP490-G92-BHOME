@@ -88,3 +88,9 @@ Các lần chạy đầu đã phát hiện và sửa: test variable name trùng,
 Còn tiếp tục: điều chỉnh rent đã Final trước ngày đi thực tế, legacy deduction creation/corrections, Holding cancellation, whole/external-payer excess, finance aggregation, Owner Mobile scope, retention/residence, demo/UI E2E và full CI-equivalent. Không coi toàn bộ dự án hoàn thành.
 
 Rerun sau sửa fault injection: Compact24DepositRecoveryTests + Compact24InvoiceRegressionTests + Compact24PaymentRegressionTests + exact runtime migration snapshot: 49/49 PASS. Assertion về durable upload intent, sai ảnh khi retry, reserved balance và không double refund vẫn giữ nguyên. Full CI-equivalent và provider/native UI E2E chưa chạy.
+
+## 11/11/2026 — Đối chiếu ngày đi sớm với điều chỉnh rent đã duyệt
+
+BR-13/16/19: hóa đơn Final tính trước ngày bàn giao không bị sửa. Nếu daily policy cho tiền thuê thấp hơn, preview giữ Pending cho tới khi phần giảm đủ được Owner duyệt trên đúng mã phí; Pending/Rejected không có hiệu lực, các quyết định tăng lại được tính net. Snapshot lưu ID quyết định, giá policy theo ngày thực tế và vị trí giá gốc đã ghi nhận; không thu lại discount ở lần tính sau. FullMonth vẫn theo lựa chọn Owner, không tự giảm theo ngày. Owner Web hiển thị căn cứ giảm và số phải thu thêm; Tenant Mobile nêu nguồn điều chỉnh.
+
+Files: FixedChargeCalculation, FixedChargeCoverageRepository, shared contracts, FinalFixedChargesPanel, TenantSettlementReceivables và regression tests. Không schema/migration. Đã chạy: Application unit 399 PASS; PostgreSQL disposable fixed/utility/invoice regression 19 PASS, gồm Tenant gửi điều chỉnh → Pending chưa được dùng → Owner approve → zero acknowledgement, Final không đổi; Owner fixed-charge component 3 PASS; Owner/Mobile typecheck, changed-file ESLint PASS trước lần bổ sung hiển thị cuối (sẽ kiểm tra lại trong commit gate). Storage/inspection fixtures synthetic, không UI E2E/provider thật.

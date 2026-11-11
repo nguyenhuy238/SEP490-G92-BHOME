@@ -46,6 +46,12 @@ export function TenantSettlementReceivables() {
                 </Text>
               )}
               <Text>Phải thu: {formatContractMoney(r.charge.amount)}</Text>
+              {!!r.charge.fixedCharge?.approvedAdjustmentIds?.length && (
+                <Text>
+                  Tiền thuê/phí đã được đối chiếu với điều chỉnh do Owner duyệt. Xem lịch sử điều
+                  chỉnh của hóa đơn để theo dõi căn cứ.
+                </Text>
+              )}
               <Text>
                 Đã phân bổ: {formatContractMoney(r.allocated)} · Còn nợ:{' '}
                 {formatContractMoney(r.outstanding)}

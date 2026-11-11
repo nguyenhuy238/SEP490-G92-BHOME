@@ -91,6 +91,17 @@ export function FinalFixedChargesPanel({
                   Giá trị lũy kế: {formatContractMoney(row.calculation.cumulativePricedAmount)} · Đã
                   ghi nhận: {formatContractMoney(row.calculation.alreadyPricedAmount)}
                 </Typography>
+                {!!row.calculation.approvedAdjustmentIds?.length && (
+                  <Typography>
+                    Đã đối chiếu phần giảm Owner duyệt:{' '}
+                    {formatContractMoney(row.calculation.approvedReduction ?? '0')} · Giá theo số
+                    ngày thực tế:{' '}
+                    {formatContractMoney(
+                      row.calculation.policyCalculatedAmount ??
+                        row.calculation.cumulativePricedAmount,
+                    )}
+                  </Typography>
+                )}
               </>
             )}
             <Typography>

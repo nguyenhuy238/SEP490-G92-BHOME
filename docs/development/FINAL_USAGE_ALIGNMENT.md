@@ -33,3 +33,7 @@ Files: FixedChargeCalculation, FixedChargeCoverageRepository, SettlementFinalFix
 ## Slice tiếp theo — xác nhận danh sách phí và hoàn phần cọc còn lại
 
 Traceability trước sửa: BR-15/20/21/22/23; BF-04/05/06, UC-19/21/22/25, GBR-08/09/10/18. Thêm Owner review gắn inspection + danh sách khoản thu bất biến; thiếu điện/nước/rent/phí bắt buộc giữ Pending. Danh sách thay đổi vô hiệu review cũ, thanh toán/cấn trừ không đổi nguồn khoản thu. SettlementSummary dùng coverage khoản phải thu cho tháng cuối thay việc bắt tạo Final Settlement Invoice. Chỉ cho hoàn số cọc còn lại khi mọi source offset được phân loại và nợ đã xử lý; không tự động Completed. Kiểm thử: incomplete/stale review, 100% và một phần offset, refund external evidence sau release, repeat/race, thiếu review/ngoài quyền; UI review có checkbox và refresh, không fake payment success. Legacy deduction history giữ đọc được; việc thay mới đi qua distinct receivable + distinct offset.
+
+## Điều chỉnh rent đã Final trước ngày bàn giao — kế hoạch slice
+
+BR-13/16/19: nếu FullMonth được Owner chọn, ngày đi sớm không tự giảm tiền. Nếu OccupiedCalendarDays và Final đã ghi đủ tháng, không tạo charge âm hoặc sửa Final; cần InvoiceAdjustment được Owner duyệt trên đúng mã phí. Coverage nhận phần giảm đã duyệt (net cả tăng lại), giữ giá gốc để không thu lại discount. Snapshot khoản đối chiếu giữ ID quyết định và giá policy tại ngày đi. Ca kiểm: chưa duyệt/Pending vẫn chặn; duyệt đủ mới ghi nhận zero acknowledgement; reject hoặc tăng lại không được coi là giảm; Final và lịch sử payment bất biến.

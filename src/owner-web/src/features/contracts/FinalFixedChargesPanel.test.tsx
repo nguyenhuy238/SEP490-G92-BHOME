@@ -78,3 +78,19 @@ it('keeps missing policies pending instead of displaying a zero charge', async (
   await screen.findByText('Phải thu thêm: Chưa đủ dữ liệu');
   expect(screen.getByRole('button', { name: 'Duyệt Tiền thuê' })).toBeDisabled();
 });
+it('shows the approved adjustment without collecting the original rent again', async () => {
+  mount({
+    ...row,
+    amount: '0',
+    calculation: {
+      ...row.calculation!,
+      cumulativePricedAmount: '3000000',
+      alreadyPricedAmount: '3000000',
+      policyCalculatedAmount: '1500000',
+      approvedReduction: '1500000',
+      approvedAdjustmentIds: ['owner-decision'],
+    },
+  });
+  await screen.findByText(/Đã đối chiếu phần giảm Owner duyệt: 1.500.000/);
+  expect(screen.getByText('Phải thu thêm: 0 ₫')).toBeTruthy();
+});

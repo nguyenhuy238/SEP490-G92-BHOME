@@ -10,8 +10,9 @@ namespace BHome.Application.Billing;
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record FixedChargeSource(DateOnly BillingPeriod, string ChargeCode, string Category, Guid? PolicyId, int? PolicyVersion,
     decimal Rate, string PolicyReference, PartialMonthRule PartialMonth, VndRounding Rounding,
-    int OccupiedDays, int PeriodDays, decimal CumulativePricedAmount, decimal AlreadyPricedAmount);
-public sealed record FixedChargeCoverage(Guid SourceId, FixedChargeSource Source);
+    int OccupiedDays, int PeriodDays, decimal CumulativePricedAmount, decimal AlreadyPricedAmount,
+    decimal? PolicyCalculatedAmount = null, decimal ApprovedReduction = 0, Guid[]? ApprovedAdjustmentIds = null);
+public sealed record FixedChargeCoverage(Guid SourceId, FixedChargeSource Source, decimal ApprovedReduction = 0, Guid[]? AdjustmentIds = null);
 public sealed record FixedChargeResult(decimal? Amount, FixedChargeSource Source, IReadOnlyList<string> MissingInputs);
 public interface IFixedChargeCoverage
 {
@@ -34,20 +35,22 @@ public static class FixedChargeCalculation
         var days = DateTime.DaysInMonth(period.Year, period.Month);
         var reference = PolicyReference(policy, schedule, signedContractHash);
         var cumulative = InvoiceMath.Amount(policy.Rate, 1, occupiedDays, days, schedule.PartialMonth, schedule.Rounding, false);
+        var previous = coverage.Count == 0 ? 0 : coverage.Max(c => c.Source.CumulativePricedAmount);
+        var reduction = coverage.Sum(c => c.ApprovedReduction);
         var missing = new List<string>();
         foreach (var prior in coverage)
         {
             if (prior.Source.BillingPeriod != period || prior.Source.ChargeCode != policy.ChargeCode || prior.Source.PolicyReference != reference)
                 missing.Add("fixed_charge_policy_changed");
-            if (schedule.PartialMonth == PartialMonthRule.OccupiedCalendarDays && prior.Source.OccupiedDays > occupiedDays || prior.Source.CumulativePricedAmount > cumulative)
+            if (prior.Source.CumulativePricedAmount > cumulative && prior.Source.CumulativePricedAmount - cumulative > reduction)
                 missing.Add("fixed_charge_occupancy_changed");
-            if (prior.Source.AlreadyPricedAmount < 0 || prior.Source.CumulativePricedAmount < prior.Source.AlreadyPricedAmount)
+            if (prior.ApprovedReduction < 0 || prior.Source.AlreadyPricedAmount < 0 || prior.Source.CumulativePricedAmount < prior.Source.AlreadyPricedAmount)
                 missing.Add("fixed_charge_coverage_invalid");
         }
-        var previous = coverage.Count == 0 ? 0 : coverage.Max(c => c.Source.CumulativePricedAmount);
         var source = new FixedChargeSource(period, policy.ChargeCode, policy.Category.ToString(), policy.Id == Guid.Empty ? null : policy.Id,
             policy.Id == Guid.Empty ? null : policy.Version, policy.Rate, reference, schedule.PartialMonth, schedule.Rounding,
-            occupiedDays, days, cumulative, previous);
-        return new(missing.Count == 0 ? cumulative - previous : null, source, missing.Distinct().ToArray());
+            occupiedDays, days, Math.Max(cumulative, previous), previous, cumulative, reduction,
+            coverage.SelectMany(c => c.AdjustmentIds ?? []).Distinct().Order().ToArray());
+        return new(missing.Count == 0 ? Math.Max(0, cumulative - previous) : null, source, missing.Distinct().ToArray());
     }
 }

@@ -19,6 +19,23 @@ public sealed class FixedChargeCalculationTests
         Assert.Empty(result.MissingInputs); Assert.Equal(expected, result.Amount);
     }
     [Fact]
+    public void EarlierDepartureRequiresASufficientOwnerApprovedReductionAndDoesNotRecollectIt()
+    {
+        var schedule = new BillingSchedule { PartialMonth = PartialMonthRule.OccupiedCalendarDays };
+        var original = FixedChargeCalculation.Calculate(Period, Rent, schedule, "hash", 30, []);
+        var adjustment = Guid.NewGuid();
+        var pending = FixedChargeCalculation.Calculate(Period, Rent, schedule, "hash", 15, [new(Guid.NewGuid(), original.Source)]);
+        Assert.Null(pending.Amount);
+        var insufficient = FixedChargeCalculation.Calculate(Period, Rent, schedule, "hash", 15, [new(Guid.NewGuid(), original.Source, 1000000, [adjustment])]);
+        Assert.Null(insufficient.Amount);
+        var approved = FixedChargeCalculation.Calculate(Period, Rent, schedule, "hash", 15, [new(Guid.NewGuid(), original.Source, 1500000, [adjustment])]);
+        Assert.Empty(approved.MissingInputs); Assert.Equal(0, approved.Amount);
+        Assert.Equal(1500000, approved.Source.PolicyCalculatedAmount); Assert.Equal(3000000, approved.Source.CumulativePricedAmount);
+        Assert.Equal(adjustment, Assert.Single(approved.Source.ApprovedAdjustmentIds!));
+        var later = FixedChargeCalculation.Calculate(Period, Rent, schedule, "hash", 30, [new(Guid.NewGuid(), approved.Source)]);
+        Assert.Empty(later.MissingInputs); Assert.Equal(0, later.Amount);
+    }
+    [Fact]
     public void FullMonthAlreadyPricedRemainsCoveredWhenTheActualDepartureIsEarlier()
     {
         var schedule = new BillingSchedule { PartialMonth = PartialMonthRule.FullMonth };

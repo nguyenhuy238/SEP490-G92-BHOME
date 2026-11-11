@@ -319,6 +319,9 @@ export interface SettlementReceivable {
   approvedAt: string;
 }
 export interface FixedChargeSource {
+  policyCalculatedAmount?: string | null;
+  approvedReduction?: string;
+  approvedAdjustmentIds?: string[] | null;
   billingPeriod: string;
   chargeCode: string;
   category: string;
