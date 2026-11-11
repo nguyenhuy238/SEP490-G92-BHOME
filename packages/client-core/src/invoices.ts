@@ -38,6 +38,14 @@ export function hasSettlementUsageCoverage(line: InvoiceLine): boolean {
     return false;
   }
 }
+export function hasSettlementFixedCoverage(line: InvoiceLine): boolean {
+  if (!line.utilityCalculationSnapshot) return false;
+  try {
+    return JSON.parse(line.utilityCalculationSnapshot)?.kind === 'FixedChargeCoverage/v1';
+  } catch {
+    return false;
+  }
+}
 export interface Invoice {
   id: string;
   roomId: string;
@@ -204,6 +212,15 @@ export function missingBillingInput(code: string): string {
     billing_schedule_snapshot_invalid: 'Cần đối chiếu chính sách của kỳ trước khi tính khoản chốt',
     owner_confirmed_inspection_required: 'Cần Owner xác nhận biên bản và chỉ số chốt',
     final_meter_readings_required: 'Thiếu chỉ số điện/nước chốt đã xác nhận',
+    room_billing_period_still_open:
+      'Phòng còn hợp đồng tiếp tục thuê; đối chiếu tiền thuê qua hóa đơn chung của kỳ, không tự chia phần cá nhân',
+    fixed_charge_policy_changed:
+      'Chính sách tiền thuê/phí khác nguồn đã tính; cần Owner đối chiếu trước khi thu thêm',
+    fixed_charge_occupancy_changed:
+      'Khoảng ở thay đổi so với khoản đã ghi nhận; cần điều chỉnh có phê duyệt',
+    fixed_charge_coverage_invalid: 'Nguồn khoản thu tiền thuê/phí cần được đối chiếu',
+    fixed_charge_occupancy_required: 'Thiếu khoảng ở hợp lệ để tính tiền thuê',
+    signed_contract_snapshot_required: 'Thiếu phiên bản điều khoản hợp đồng đã ký',
     confirmed_billable_baseline_required: 'Thiếu mốc ban đầu hoặc mốc đã tính tiền có chứng từ',
     settlement_metered_policy_required: 'Cần một chính sách giá theo chỉ số phù hợp',
     utility_pricing_baseline_required: 'Thiếu chính sách giá của phần tiêu thụ đã ghi nhận',

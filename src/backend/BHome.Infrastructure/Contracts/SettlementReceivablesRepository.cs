@@ -178,10 +178,10 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     }
     public async Task SaveChargeAsync(SettlementReceivable charge, CancellationToken token)
     {
-        if (charge.Utility?.PricePolicyId is { } policyId)
+        if ((charge.Utility?.PricePolicyId ?? charge.FixedCharge?.PolicyId) is { } policyId)
         {
             var policy = await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().SingleAsync(p => p.Id == policyId, token);
-            if (policy.Version != charge.Utility.PricePolicyVersion) throw ContractException.Conflict("utility_increment_policy_changed");
+            if (policy.Version != (charge.Utility?.PricePolicyVersion ?? charge.FixedCharge?.PolicyVersion)) throw ContractException.Conflict("settlement_policy_changed");
             policy.RecordUsage(clock.GetUtcNow());
         }
         await AppendAsync(charge.ContractId, charge.Id, SettlementChargeRecords.ChargeKind, charge, charge.ApprovedByUserId, charge.ApprovedAt, token);

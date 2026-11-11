@@ -30,6 +30,14 @@ export function TenantSettlementReceivables() {
           {source.receivables.map((r) => (
             <Box key={r.charge.id}>
               <Text>{r.charge.description}</Text>
+              {r.charge.fixedCharge && (
+                <Text>
+                  {r.charge.fixedCharge.partialMonth === 0
+                    ? 'Theo chính sách đủ tháng'
+                    : `Theo ${r.charge.fixedCharge.occupiedDays}/${r.charge.fixedCharge.periodDays} ngày phòng có người ở`}{' '}
+                  · Đơn giá tháng {formatContractMoney(r.charge.fixedCharge.rate)}
+                </Text>
+              )}
               {r.charge.utility && (
                 <Text>
                   Mốc đã ghi nhận {formatBillingDecimal(r.charge.utility.baseline.value)} → chỉ số

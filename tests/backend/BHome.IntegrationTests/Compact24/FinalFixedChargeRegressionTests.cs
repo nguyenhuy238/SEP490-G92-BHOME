@@ -1,0 +1,14 @@
+using BHome.IntegrationTests.Billing;
+namespace BHome.IntegrationTests.Compact24;
+public sealed class FinalFixedChargeRegressionTests
+{
+    [CompactPostgresFact]
+    public async Task PartialMonthRentPrecedesInvoiceWithoutDoubleBilling()
+    { var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync(); try { await new InvoiceApiTests(fixture.Capture).FinalFixedChargesFollowOwnerPolicyWithoutDuplicateBilling(); } finally { await fixture.DisposeAsync(); } }
+    [CompactPostgresFact]
+    public async Task FinalInvoiceRentIsNotChargedAgain()
+    { var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync(); try { await new InvoiceApiTests(fixture.Capture).FinalFixedChargesFollowOwnerPolicyWithoutDuplicateBilling(invoiceFirst: true); } finally { await fixture.DisposeAsync(); } }
+    [CompactPostgresFact]
+    public async Task FullMonthRuleRequiresTheConfiguredChoice()
+    { var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync(); try { await new InvoiceApiTests(fixture.Capture).FinalFixedChargesFollowOwnerPolicyWithoutDuplicateBilling(fullMonth: true); } finally { await fixture.DisposeAsync(); } }
+}

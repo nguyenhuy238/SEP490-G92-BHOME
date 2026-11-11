@@ -22,6 +22,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { SettlementBankPanel } from './SettlementBankPanel';
 import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
+import { FinalFixedChargesPanel } from './FinalFixedChargesPanel';
 
 export function SettlementReceivablesPanel({
   api,
@@ -122,6 +123,15 @@ export function SettlementReceivablesPanel({
         )}
         {data && (
           <>
+            <FinalFixedChargesPanel
+              api={api}
+              id={id}
+              reference={data.reference}
+              saved={async () => {
+                await query.refetch();
+                await saved();
+              }}
+            />
             <FinalUtilitiesPanel
               api={api}
               id={id}

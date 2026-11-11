@@ -275,6 +275,7 @@ export interface DepositDeductionItem {
   evidenceIds: string[];
 }
 export interface SettlementReceivable {
+  fixedCharge?: FixedChargeSource | null;
   utility?: {
     meterId: string;
     utilityType: string;
@@ -300,6 +301,28 @@ export interface SettlementReceivable {
   calculationPolicy: string;
   evidence: { id: string; length: number; sha256: string }[];
   approvedAt: string;
+}
+export interface FixedChargeSource {
+  billingPeriod: string;
+  chargeCode: string;
+  category: string;
+  rate: string;
+  partialMonth: number;
+  rounding: number;
+  occupiedDays: number;
+  periodDays: number;
+  cumulativePricedAmount: string;
+  alreadyPricedAmount: string;
+}
+export interface FinalFixedChargePreview {
+  chargeCode: string;
+  name: string;
+  billingPeriod: string;
+  reference: string;
+  amount: string | null;
+  calculation: FixedChargeSource | null;
+  existingReceivableId: string | null;
+  missingInputs: string[];
 }
 export interface SettlementReceivableBalance {
   charge: SettlementReceivable;
@@ -474,6 +497,24 @@ export function contractClient(request: ContractRequest) {
     finalUtilities: (id: string, signal?: AbortSignal) =>
       request<FinalUtilityPreview[]>(`${root}/${id}/move-out/receivables/final-utilities`, {
         signal,
+      }),
+    finalFixedCharges: (id: string, signal?: AbortSignal) =>
+      request<FinalFixedChargePreview[]>(`${root}/${id}/move-out/receivables/final-fixed-charges`, {
+        signal,
+      }),
+    approveFinalFixedCharge: (
+      id: string,
+      body: {
+        chargeCode: string;
+        expectedReference: string;
+        policyAppliesToSignedTermsConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      request<SettlementReceivable>(`${root}/${id}/move-out/receivables/final-fixed-charges`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
       }),
     approveFinalUtility: (
       id: string,

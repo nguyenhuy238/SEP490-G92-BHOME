@@ -267,6 +267,7 @@ public static class DependencyInjection
         services.AddScoped<ICaptureRepository, CaptureRepository>();
         services.AddScoped<CaptureService>();
         services.AddScoped<BHome.Application.Billing.IInvoiceRepository, BHome.Infrastructure.Billing.InvoiceRepository>();
+        services.AddScoped<BHome.Application.Billing.IFixedChargeCoverage, BHome.Infrastructure.Billing.FixedChargeCoverageRepository>();
         services.AddScoped<BHome.Application.Billing.IAdjustmentRepository, BHome.Infrastructure.Billing.AdjustmentRepository>();
         services.AddScoped<BHome.Application.Billing.IAdjustmentEvidenceFiles, BHome.Infrastructure.Billing.AdjustmentEvidenceFiles>();
         services.AddScoped<BHome.Application.Billing.AdjustmentService>();

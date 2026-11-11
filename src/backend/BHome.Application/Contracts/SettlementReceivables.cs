@@ -19,7 +19,7 @@ public sealed record SettlementReceivable(Guid Id, Guid ContractId, Guid RoomId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, string Description,
     string CalculationPolicy, IReadOnlyList<DeductionEvidence> Evidence, Guid[] RecipientUserIds,
     Guid ApprovedByUserId, DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo = false,
-    SettlementUtilitySource? Utility = null);
+    SettlementUtilitySource? Utility = null, BHome.Application.Billing.FixedChargeSource? FixedCharge = null);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record DepositOffsetApproval(Guid Id, Guid ContractId, Guid SourceDepositContractId,
     Guid? ReceivableId, Guid? InvoiceId, decimal Amount, string Reason, Guid ApprovedByUserId,
@@ -52,11 +52,13 @@ public interface ISettlementReceivablesRepository
     Task SaveBankResultAsync(SettlementBankAllocationResult result, CancellationToken token);
     Task<Guid> LocationAsync(Guid contractId, CancellationToken token);
     Task<FinalUtilityContext> FinalUtilityAsync(Guid contractId, BHome.Domain.Billing.UtilityType type, CancellationToken token);
+    Task<FinalFixedChargeContext> FinalFixedAsync(Guid contractId, CancellationToken token);
 }
 
 public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,
     IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null, IPaymentRepository? payments = null,
-    ITransferQrGenerator? qr = null, PropertyService? properties = null, IUtilityBilling? utilities = null, ISettlementChargeEvidence? chargeEvidence = null)
+    ITransferQrGenerator? qr = null, PropertyService? properties = null, IUtilityBilling? utilities = null, ISettlementChargeEvidence? chargeEvidence = null,
+    BHome.Application.Billing.IFixedChargeCoverage? fixedCoverage = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private async Task AuthorizeAsync(Guid id, bool write, CancellationToken token)

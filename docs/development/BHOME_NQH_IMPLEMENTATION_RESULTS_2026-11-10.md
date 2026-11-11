@@ -64,3 +64,13 @@ BR-14/15/19: Owner Web xem preview baseline đã tính tiền, chỉ số chốt
 Files: SettlementFinalUtilities/Repository, SettlementChargeEvidence, MeterBillingCoverage, UtilityIncrementCalculation, InvoiceService/Repository, CaptureRepository, shared client, FinalUtilitiesPanel, TenantSettlementReceivables/TenantInvoiceCharges. Thiếu quota, baseline, phân bổ đồng hồ thay thế, policy lịch sử hoặc bằng chứng thì Amount=null/Pending; không ước lượng để tạo phí chính thức.
 
 Đã chạy: Application unit 394 PASS; PostgreSQL disposable FinalUtilityRegressionTests (5 ca), Compact24InvoiceRegressionTests và SettlementReceivableRegressionTests: tổng 16 PASS. Owner/Mobile typecheck và changed-file ESLint PASS. Storage là test substitute; không phải MinIO live, bank sandbox hoặc UI E2E. Tiền thuê/phí khác theo BR-13 và xác nhận đầy đủ danh sách phí tiếp tục ở slice sau.
+
+## 11/11/2026 — Tiền thuê/phí cố định tháng cuối theo chính sách
+
+BR-13/15/19: nguồn FinalFixed bất biến trong contracts.history giữ kỳ, mã phí, giá, policy/version hoặc hash hợp đồng đại diện, lựa chọn FullMonth/OccupiedCalendarDays/làm tròn, số ngày phòng có người và giá lũy kế. Owner Web phải xác nhận chính sách áp dụng đúng điều khoản đã ký; backend tính tiền, không đọc tự động free text để đoán thỏa thuận. Khoản mới chỉ là chênh lệch giá chính sách chưa ghi nhận; hóa đơn định kỳ sau đó loại phần đã ghi nhận, Final cũ không đổi. Khoản giảm đã duyệt không bị thu lại. Tenant Mobile hiển thị căn cứ và số dư backend; không tự chia nợ phòng cho cá nhân.
+
+Thiếu lịch, bản hợp đồng hoặc dữ liệu khoảng ở giữ Amount=null. Khi người khác còn tiếp tục thuê, tiền thuê vẫn đối chiếu qua hóa đơn chung của phòng, không bịa phần tiền riêng cho người đi. Tất cả khoản phải thu có thể thu tiền/cấn trừ qua ledger đã có. Không thêm bảng hoặc migration; database làm việc không thay đổi.
+
+Files: FixedChargeCalculation, FixedChargeCoverageRepository, SettlementFinalFixedCharges/Repository, InvoiceService, SettlementReceivablesRepository/Controller, shared client, FinalFixedChargesPanel, TenantSettlementReceivables và thông tin nguồn trên dòng hóa đơn.
+
+Đã chạy: Release solution build PASS; Application unit 398 PASS; PostgreSQL disposable final-fixed/final-utility/invoice regression 16 PASS (bao gồm thiếu policy, còn người tiếp tục thuê, từ chối Staff/Tenant, xác nhận điều khoản, concurrent replay, thứ tự invoice/charge); Owner UI 20 PASS; Mobile 4 PASS; Owner/Mobile typecheck và changed-file ESLint PASS. Inspection metadata trong test fixed-charge là fixture synthetic; không coi đó là UI E2E hay kiểm thử live storage. Tiếp tục xác nhận đầy đủ danh sách phí, hoàn cọc sau offset, Holding và các phase còn lại.

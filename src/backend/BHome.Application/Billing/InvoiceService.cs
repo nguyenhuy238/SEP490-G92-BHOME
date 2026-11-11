@@ -8,7 +8,7 @@ using BHome.Domain.PropertyManagement;
 namespace BHome.Application.Billing;
 
 public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock, IBillingAutomationSchedules? automation = null,
-    IUtilityBilling? utilities = null)
+    IUtilityBilling? utilities = null, IFixedChargeCoverage? fixedCoverage = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new InvoiceException(401, "authentication_required");
     private bool Owner => user.IsInRole(Roles.Owner);
@@ -242,6 +242,17 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 if (utility is not null) { missing.AddRange(utility.MissingInputs); amount = utility.Amount; }
                 else if (reading.AlreadyBilledQuantity > 0 && !UtilityIncrementCalculation.FlatPolicyMatches(reading.PreviousPricingSnapshot, policy.Id, policy.Version, policy.Rate, schedule.Rounding))
                     missing.Add("utility_increment_policy_changed");
+            }
+            else if (!metered && fixedCoverage is not null)
+            {
+                var prior = await fixedCoverage.ReadAsync(invoice.RoomId, start, policy.ChargeCode, t);
+                if (prior.Count > 0)
+                {
+                    var fixedResult = FixedChargeCalculation.Calculate(start, policy, schedule, representative.Contract.SnapshotHash, occupiedDays, prior);
+                    missing.AddRange(fixedResult.MissingInputs);
+                    amount = fixedResult.Amount ?? 0;
+                    utility = new(amount, JsonSerializer.Serialize(new { kind = "FixedChargeCoverage/v1", source = fixedResult.Source }), fixedResult.MissingInputs);
+                }
             }
             invoice.Lines.Add(new InvoiceLine
             {

@@ -9,6 +9,7 @@ import { formatInstant } from '../../../../packages/client-core/src/localization
 import {
   formatBillingDecimal,
   hasSettlementUsageCoverage,
+  hasSettlementFixedCoverage,
   missingBillingInput,
   type Invoice,
   type InvoiceLine,
@@ -113,6 +114,12 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
   return (
     <View style={invoiceUi.chargeDetails}>
       <InvoiceDetailRow label="Tên khoản thu" value={line.name} />
+      {hasSettlementFixedCoverage(line) && (
+        <Text style={invoiceUi.secondary}>
+          Số tiền trên dòng này đã loại phần tiền thuê/phí ghi nhận trong khoản phải thu trả phòng.
+          Khoản phải thu vẫn có số dư riêng do máy chủ xác nhận.
+        </Text>
+      )}
       {utility && hasSettlementUsageCoverage(line) ? (
         <Text style={invoiceUi.secondary}>
           Phần tiêu thụ này đã được ghi nhận trong khoản phải thu khi trả phòng, không cộng lại trên
