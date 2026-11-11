@@ -36,6 +36,17 @@ public sealed partial class FinancialReportRepository
                   AND p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id)
                     >= (SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr WHERE rr.source_payment_id=p.id AND rr.status='COMPLETED'))
               THEN 'ReceiptExcess'
+            WHEN r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL AND r.state->>'classification'='ExcessReceiptRefundV1'
+              AND EXISTS(SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+                JOIN residents person ON person.id=r.beneficiary_resident_id
+                WHERE p.id=r.source_payment_id AND p.status='VERIFIED' AND h->>'recordType'='ReceiptExcessDispositionV1'
+                  AND h->'state'->>'id'=r.state->>'receiptExcessDispositionId' AND h->'state'->>'transferId'=p.id::text
+                  AND h->'state'->>'payerResidentId'=person.id::text
+                  AND (h->'state'->>'payerUserId' IS NULL OR h->'state'->>'payerUserId'=person.user_id::text)
+                  AND (h->'state'->>'amount')::numeric=p.amount
+                  AND NOT EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=p.id)
+                  AND p.amount>=(SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr WHERE rr.source_payment_id=p.id AND rr.status='COMPLETED'))
+              THEN 'ReceiptExcess'
             WHEN r.source_payment_id IS NULL AND r.source_deposit_contract_id IS NOT NULL
               AND r.state->>'classification'='SecurityDepositRefundV1'
               AND r.state->>'beneficiaryVerified'='true'

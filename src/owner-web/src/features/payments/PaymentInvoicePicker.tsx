@@ -31,6 +31,7 @@ export function PaymentInvoicePicker({
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [period, setPeriod] = useState(''),
+    [paymentStatus, setPaymentStatus] = useState('Unpaid'),
     [page, setPage] = useState(1);
   const locations = useQuery({
     queryKey: ['payment-locations', session?.userId],
@@ -47,7 +48,16 @@ export function PaymentInvoicePicker({
       }),
   });
   const list = useQuery({
-    queryKey: ['payment-invoices', session?.userId, 'picker', location, room, period, page],
+    queryKey: [
+      'payment-invoices',
+      session?.userId,
+      'picker',
+      location,
+      room,
+      period,
+      paymentStatus,
+      page,
+    ],
     enabled: open,
     queryFn: ({ signal }) =>
       api.invoices(
@@ -56,7 +66,7 @@ export function PaymentInvoicePicker({
           roomId: room,
           billingPeriod: period ? period + '-01' : '',
           page,
-          paymentStatus: 'Unpaid',
+          paymentStatus,
         },
         signal,
       ),
@@ -73,6 +83,19 @@ export function PaymentInvoicePicker({
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <FilterToolbar>
+            <TextField
+              select
+              label="Tình trạng tiền hóa đơn đối chiếu"
+              value={paymentStatus}
+              onChange={(e) => {
+                setPaymentStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="Unpaid">Còn phải trả</MenuItem>
+              <MenuItem value="Paid">Đã đủ tiền · đối chiếu hoàn dư</MenuItem>
+              <MenuItem value="">Tất cả hóa đơn</MenuItem>
+            </TextField>
             <TextField
               select
               label="Cơ sở hóa đơn"

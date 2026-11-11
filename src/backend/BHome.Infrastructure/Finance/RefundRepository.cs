@@ -59,7 +59,10 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
         var payment = await db.Set<PaymentTransfer>().AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, t)
             ?? throw new FinanceException(404, "bank_transfer_not_found");
         var allocation = await db.Set<PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.TransferId == id, t);
-        var excess = payment.Amount - (allocation?.Amount ?? payment.Amount);
+        var whole = allocation is null ? await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, id, t) : null;
+        if (whole is not null && (whole.TransferFingerprint != BHome.Application.PaymentsDebt.ReceiptExcessRules.TransferFingerprint(payment) || whole.Amount != payment.Amount))
+            throw new FinanceException(409, "refund_source_requires_manual_review");
+        var excess = whole?.Amount ?? payment.Amount - (allocation?.Amount ?? payment.Amount);
         var allReserved = await db.Database.SqlQuery<decimal>($"""
             SELECT COALESCE(sum(requested_amount),0) AS "Value" FROM refund_requests
             WHERE source_payment_id={id} AND status IN ('REQUESTED','APPROVED','COMPLETED')
@@ -67,6 +70,11 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
         var requests = (await Rows.Where(r => r.SourcePaymentId == id).OrderByDescending(r => r.RequestedAt).ToArrayAsync(t)).Select(Decode).ToArray();
         // Do not hide reservations owned by another/legacy workflow from availability.
         if (allReserved != requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount))
+            throw new FinanceException(409, "refund_source_requires_manual_review");
+        if (whole is not null && requests.Any(r => (r.Status is "REQUESTED" or "APPROVED" or "COMPLETED") && r.State.ReceiptExcessDispositionId != whole.Id))
+            throw new FinanceException(409, "refund_source_requires_manual_review");
+        if (whole is not null && requests.Any(r => r.Status == "COMPLETED" && (r.ExecutedAt is null || r.State.Upload is not { } upload ||
+            upload.ObjectKey != r.EvidenceKey || upload.ExternalReference != r.ExternalReference || !System.Text.RegularExpressions.Regex.IsMatch(upload.Sha256, "^[A-F0-9]{64}$") || !r.State.Events.Any(e => e.Action == "Completed"))))
             throw new FinanceException(409, "refund_source_requires_manual_review");
         var people = allocation?.PaidByUserId is not { } payer ? [] : await (
             from person in db.Set<Resident>().AsNoTracking()
@@ -85,7 +93,10 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                 db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == charge.RoomId)))
                 .OrderBy(person => person.Id).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         }
-        return new(Math.Max(0, excess), payment.IsDevelopmentDemo, people, requests);
+        if (whole is not null)
+            people = await db.Set<Resident>().AsNoTracking().Where(person => person.Id == whole.PayerResidentId && person.VerificationStatus == IdentityVerificationStatus.Verified &&
+                (whole.PayerUserId == null || person.TenantUserId == whole.PayerUserId)).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+        return new(Math.Max(0, excess), payment.IsDevelopmentDemo, people, requests, ReceiptExcessDispositionId: whole?.Id);
     }
     public Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken t) => db.Database.SqlQuery<bool>($"""
         SELECT EXISTS(SELECT 1 FROM refund_requests r WHERE id<>{exceptId} AND (
@@ -121,6 +132,15 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             Succeeded = true,
             OccurredAt = now
         });
+        if (!create && row.Status == "COMPLETED" && row.SourcePaymentId is { } receipt && row.State.ReceiptExcessDispositionId is { } dispositionId)
+        {
+            var disposition = await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, receipt, t);
+            if (disposition?.Id != dispositionId) throw new FinanceException(409, "refund_source_changed");
+            var returned = await db.Database.SqlQuery<decimal>($"SELECT COALESCE(sum(requested_amount),0) AS \"Value\" FROM refund_requests WHERE source_payment_id={receipt} AND status='COMPLETED'").SingleAsync(t);
+            db.Add(new PaymentReconciliation { TransferId = receipt, InvoiceId = disposition.Target.InvoiceId, DepositContractId = disposition.Target.HoldingContractId,
+                Decision = returned == disposition.Amount ? "ExcessRefundCompleted" : "ExcessRefundPending",
+                Reason = returned == disposition.Amount ? "verified_whole_excess_returned" : "verified_partial_excess_returned", ActorId = actor, OccurredAt = now });
+        }
         await db.SaveChangesAsync(t);
     }
 }

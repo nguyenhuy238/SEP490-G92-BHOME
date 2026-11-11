@@ -352,6 +352,8 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                 }}
               >
                 <MenuItem value="PendingReview">Chờ xác minh / chưa ghép hóa đơn</MenuItem>
+                <MenuItem value="ExcessRefundPending">Phải hoàn toàn bộ tiền dư</MenuItem>
+                <MenuItem value="ExcessRefundCompleted">Đã hoàn toàn bộ tiền dư</MenuItem>
                 <MenuItem value="Allocated">Đã phân bổ</MenuItem>
                 <MenuItem value="Rejected">Không phân bổ</MenuItem>
                 <MenuItem value="">Tất cả giao dịch</MenuItem>

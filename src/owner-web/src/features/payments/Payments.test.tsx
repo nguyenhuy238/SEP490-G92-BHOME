@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
     history: vi.fn(),
     transfers: vi.fn(),
     request: vi.fn(),
+    excessDisposition: vi.fn(),
+    excessContext: vi.fn(),
   },
 }));
 vi.mock('./usePaymentApi', () => ({ usePaymentApi: () => mocks.api }));
@@ -112,6 +114,15 @@ beforeEach(() => {
   mocks.api.transfer.mockResolvedValue(transfer);
   mocks.api.reviews.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.request.mockResolvedValue([]);
+  mocks.api.excessDisposition.mockResolvedValue(null);
+  mocks.api.excessContext.mockResolvedValue({
+    amount: '100000',
+    outstanding: '100000',
+    reference: 'test',
+    transferReference: 'REFERENCE',
+    payers: [],
+    problems: ['receipt_target_not_settled'],
+  });
   mocks.api.transfers.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.history.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.invoices.mockResolvedValue({ items: [], totalCount: 0 });

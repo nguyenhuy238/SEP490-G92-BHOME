@@ -62,7 +62,9 @@ public sealed partial class SettlementReceivablesService
             }
             if (context.View.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (!context.InspectionConfirmed) throw ContractException.Conflict("settlement_charge_not_ready");
-            if ((await payments.LatestReviewAsync(transfer.Id, token))?.Decision == "Rejected") throw ContractException.Conflict("bank_transfer_rejected");
+            var latest = await payments.LatestReviewAsync(transfer.Id, token);
+            if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw ContractException.Conflict("receipt_excess_already_confirmed");
+            if (latest?.Decision == "Rejected") throw ContractException.Conflict("bank_transfer_rejected");
             var reason = await payments.ReferenceClaimedAsync(transfer.NormalizedReference, token) ? "bank_reference_already_credited" :
                 balance.Outstanding <= 0 ? "settlement_already_paid" :
                 !string.Equals(transfer.TransferDescription.Trim(), PaymentRules.InvoiceReference(chargeId), StringComparison.OrdinalIgnoreCase) ? "settlement_transfer_reference_mismatch" : null;

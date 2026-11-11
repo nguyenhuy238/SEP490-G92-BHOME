@@ -83,6 +83,7 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
     public Task<bool> EligiblePayerAsync(Guid invoiceId, Guid payerId, CancellationToken t) => db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == payerId, t);
     public async Task<bool> PendingReviewAsync(Guid invoiceId, CancellationToken t)
     {
+        if (await ReceiptExcessRecords.PendingAsync(db, invoiceId, null, t)) return true;
         if (AmountMismatchSupported)
             return await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS(SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
@@ -127,7 +128,15 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                  db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
                 (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) && (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod)));
         if (query.SettlementContractId is { } settlement)
-            source = source.Where(p => db.Set<PaymentAllocation>().Any(a => a.TransferId == p.Id && a.TargetSettlementContractId == settlement));
+        {
+            var excess = AmountMismatchSupported ? db.Database.SqlQuery<Guid>($"""
+                SELECT p.id AS "Value" FROM payments p WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(p.history) h
+                  WHERE h->>'recordType'={ReceiptExcessRecords.Kind} AND h->'state'->'target'->>'settlementContractId'={settlement.ToString()})
+                """) : Enumerable.Empty<Guid>().AsQueryable();
+            source = AmountMismatchSupported
+                ? source.Where(p => db.Set<PaymentAllocation>().Any(a => a.TransferId == p.Id && a.TargetSettlementContractId == settlement) || excess.Contains(p.Id))
+                : source.Where(p => db.Set<PaymentAllocation>().Any(a => a.TransferId == p.Id && a.TargetSettlementContractId == settlement));
+        }
         if (!string.IsNullOrWhiteSpace(query.PaymentStatus))
             source = query.PaymentStatus switch
             {
@@ -140,6 +149,9 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                 "Rejected" => source.Where(x => !db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) &&
                     db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
                         .Select(r => r.Decision).FirstOrDefault() == "Rejected"),
+                "ExcessRefundPending" or "ExcessRefundCompleted" => source.Where(x => !db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) &&
+                    db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
+                        .Select(r => r.Decision).FirstOrDefault() == query.PaymentStatus),
                 _ => source.Where(_ => false)
             };
         var views = source.OrderByDescending(x => x.VerifiedAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)

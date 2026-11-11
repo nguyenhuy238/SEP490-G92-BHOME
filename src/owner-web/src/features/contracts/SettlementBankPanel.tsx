@@ -20,6 +20,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { paymentClient } from '../../../../../packages/client-core/src/payments';
 import { RefundPanel } from '../payments/RefundPanel';
+import { ReceiptExcessPanel } from '../payments/ReceiptExcessPanel';
 
 export function SettlementBankPanel({
   api,
@@ -40,10 +41,7 @@ export function SettlementBankPanel({
   const history = useQuery({
     queryKey: ['settlement-bank-history', data.contractId, historyPage, data.reference],
     queryFn: ({ signal }) =>
-      bank.transfers(
-        { page: historyPage, settlementContractId: data.contractId, paymentStatus: 'Allocated' },
-        signal,
-      ),
+      bank.transfers({ page: historyPage, settlementContractId: data.contractId }, signal),
   });
   const [target, setTarget] = useState(''),
     [transfer, setTransfer] = useState(''),
@@ -119,13 +117,11 @@ export function SettlementBankPanel({
           setChecked(false);
         }}
       >
-        {data.receivables
-          .filter((r) => r.status !== 'Paid')
-          .map((r) => (
-            <MenuItem key={r.charge.id} value={r.charge.id}>
-              {r.charge.description} · {formatContractMoney(r.outstanding)}
-            </MenuItem>
-          ))}
+        {data.receivables.map((r) => (
+          <MenuItem key={r.charge.id} value={r.charge.id}>
+            {r.charge.description} · {formatContractMoney(r.outstanding)}
+          </MenuItem>
+        ))}
       </TextField>
       {instructions.data && (
         <Typography>
@@ -187,9 +183,26 @@ export function SettlementBankPanel({
         }
         label="Tôi đã kiểm tra giao dịch thực nhận, khoản đích và người thực trả trên sao kê"
       />
-      <Button disabled={busy || !checked || !transfer || !target} onClick={() => void allocate()}>
+      <Button
+        disabled={
+          busy ||
+          !checked ||
+          !transfer ||
+          !target ||
+          data.receivables.find((r) => r.charge.id === target)?.status === 'Paid'
+        }
+        onClick={() => void allocate()}
+      >
         Xác nhận phân bổ tiền ngân hàng
       </Button>
+      {transfer && target && (
+        <ReceiptExcessPanel
+          key={`${transfer}:${target}`}
+          transferId={transfer}
+          target={{ settlementContractId: data.contractId, receivableId: target }}
+          onChanged={() => void saved()}
+        />
+      )}
       {result && (
         <Alert severity={result.status === 'Allocated' ? 'success' : 'warning'}>
           {result.status === 'Allocated'
@@ -208,8 +221,11 @@ export function SettlementBankPanel({
             {t.bankReference} · Đã phân bổ {formatContractMoney(t.allocatedAmount ?? '0')} · Chưa
             phân bổ {formatContractMoney(t.unallocatedAmount ?? '0')}
           </Typography>
-          {!/^0(?:\.0+)?$/.test(t.unallocatedAmount ?? '0') && (
+          {t.status === 'Allocated' && !/^0(?:\.0+)?$/.test(t.unallocatedAmount ?? '0') && (
             <Button onClick={() => setRefund(t.id)}>Xem hoàn dư giao dịch {t.bankReference}</Button>
+          )}
+          {(t.status === 'ExcessRefundPending' || t.status === 'ExcessRefundCompleted') && (
+            <ReceiptExcessPanel transferId={t.id} onChanged={() => void saved()} />
           )}
         </Stack>
       ))}

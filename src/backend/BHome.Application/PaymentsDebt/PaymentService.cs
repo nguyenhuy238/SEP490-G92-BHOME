@@ -148,6 +148,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             var invoice = await Invoice(x.InvoiceId, t);
             if (invoice.Status != InvoiceStatus.Final) throw new PaymentException(409, "final_invoice_required");
             var latest = await repository.LatestReviewAsync(transferId, t);
+            if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
             if (x.PaidByUserId is { } payer && !await repository.EligiblePayerAsync(invoice.Id, payer, t))
                 throw new PaymentException(400, "payer_not_invoice_viewer");
@@ -200,6 +201,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (holding.Kind != BHome.Domain.TenantContracts.ContractKind.Holding || holding.TenantUserId != x.PaidByUserId)
                 throw new PaymentException(400, "payer_not_holding_tenant");
             var latest = await repository.LatestReviewAsync(transferId, t);
+            if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
             var received = await repository.DepositAllocatedAsync(x.ContractId, t);
             var remaining = holding.RequiredDeposit - received;
@@ -255,7 +257,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
     private static void Query(PaymentQuery q, bool transferStatuses = false)
     {
         var validStatus = transferStatuses
-            ? q.PaymentStatus is null or "PendingReview" or "Allocated" or "Rejected"
+            ? q.PaymentStatus is null or "PendingReview" or "Allocated" or "Rejected" or "ExcessRefundPending" or "ExcessRefundCompleted"
             : q.PaymentStatus is null or "Paid" or "Unpaid";
         if (q.Page < 1 || q.PageSize is < 1 or > 100 || q.Page > int.MaxValue / q.PageSize ||
             q.LocationId == Guid.Empty || q.RoomId == Guid.Empty || q.BillingPeriod is { Day: not 1 } || !validStatus ||
@@ -278,6 +280,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             _ = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
             if (await repository.AllocationAsync(transferId, t) is not null) throw new PaymentException(409, "allocated_payment_cannot_be_rejected");
             var latest = await repository.LatestReviewAsync(transferId, t);
+            if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected" && latest.Reason != reason) throw new PaymentException(409, "bank_transfer_rejected");
             if (latest?.Decision != "Rejected")
             {

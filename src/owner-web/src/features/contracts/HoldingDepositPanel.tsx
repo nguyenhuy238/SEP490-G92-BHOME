@@ -23,6 +23,7 @@ import { OwnerFeedback } from '../../components/common/OwnerWorkspace';
 import { usePaymentApi } from '../payments/usePaymentApi';
 import { RecordTransferForm } from '../payments/OwnerInvoicePaymentPanel';
 import { RefundPanel } from '../payments/RefundPanel';
+import { ReceiptExcessPicker } from '../payments/ReceiptExcessPanel';
 export function HoldingDepositPanel({
   contract: c,
   changed,
@@ -141,6 +142,13 @@ export function HoldingDepositPanel({
         {c.convertedMainContractId && (
           <Typography>Hợp đồng thuê đã chuyển đổi: {c.convertedMainContractId}</Typography>
         )}
+        <ReceiptExcessPicker
+          target={{ holdingContractId: c.id }}
+          onChanged={() => {
+            void q.refetch();
+            changed();
+          }}
+        />
         <ConfirmDialog
           open={confirm}
           title="Phân bổ cọc ngân hàng đã xác minh"

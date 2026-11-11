@@ -136,6 +136,38 @@ export interface PayerChoice {
   userId: string;
   displayLabel: string;
 }
+export interface ReceiptExcessTarget {
+  invoiceId?: string | null;
+  settlementContractId?: string | null;
+  receivableId?: string | null;
+  holdingContractId?: string | null;
+}
+export interface ReceiptExcessDisposition {
+  id: string;
+  transferId: string;
+  target: ReceiptExcessTarget;
+  roomId: string;
+  amount: string;
+  payerResidentId: string;
+  payerUserId: string | null;
+  payerLabel: string;
+  reason: string;
+  approvedAt: string;
+  isDevelopmentDemo: boolean;
+}
+export interface ReceiptExcessContext {
+  transferId: string;
+  target: ReceiptExcessTarget;
+  roomId: string;
+  amount: string;
+  outstanding: string;
+  transferReference: string;
+  payers: { residentId: string; userId: string | null; label: string }[];
+  reference: string;
+  problems: string[];
+  disposition: ReceiptExcessDisposition | null;
+  isDevelopmentDemo: boolean;
+}
 export interface PaymentFilter {
   settlementContractId?: string;
   page?: number;
@@ -160,6 +192,35 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
     });
   const root = '/api/v1/payment-transactions';
   return {
+    excessDisposition: async (id: string, signal?: AbortSignal) =>
+      (await request<ReceiptExcessDisposition | null>(
+        `${root}/${encodeURIComponent(id)}/excess-disposition`,
+        { signal },
+      )) ?? null,
+    excessContext: (id: string, target: ReceiptExcessTarget, signal?: AbortSignal) => {
+      const query = new URLSearchParams();
+      for (const [name, value] of Object.entries(target)) if (value) query.set(name, value);
+      return request<ReceiptExcessContext>(
+        `${root}/${encodeURIComponent(id)}/excess-disposition/context?${query}`,
+        { signal },
+      );
+    },
+    confirmExcess: (
+      id: string,
+      input: {
+        target: ReceiptExcessTarget;
+        expectedReference: string;
+        payerResidentId: string;
+        reason: string;
+        humanConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      mutation<ReceiptExcessDisposition>(
+        `${root}/${encodeURIComponent(id)}/excess-disposition`,
+        input,
+        key,
+      ),
     payment: (id: string, signal?: AbortSignal) =>
       request<InvoicePayment>(`/api/v1/invoices/${encodeURIComponent(id)}/payment`, { signal }),
     instructions: (id: string, signal?: AbortSignal) =>
@@ -215,6 +276,18 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
   };
 }
 const labels: Record<string, string> = {
+  ExcessRefundPending: 'Phải hoàn tiền dư',
+  ExcessRefundCompleted: 'Đã hoàn tiền dư',
+  verified_whole_excess_refund_required: 'Toàn bộ giao dịch phải hoàn cho người thực trả.',
+  verified_whole_excess_refund_completed: 'Đã hoàn toàn bộ giao dịch cho người thực trả.',
+  verified_whole_excess_returned: 'Đã hoàn toàn bộ giao dịch cho người thực trả.',
+  verified_partial_excess_returned: 'Đã hoàn một phần tiền dư; tiếp tục xử lý số còn lại.',
+  receipt_target_not_settled: 'Nghĩa vụ vẫn còn số tiền phải trả; cần đối soát phân bổ trước.',
+  receipt_verified_payer_required: 'Cần xác minh hồ sơ người thực trả trước khi hoàn.',
+  verified_bank_receipt_required: 'Giao dịch chưa đủ điều kiện xác minh tiền ngân hàng thực nhận.',
+  development_payment_mismatch: 'Giao dịch và nghĩa vụ phải cùng chế độ dữ liệu.',
+  refund_source_requires_manual_review: 'Giao dịch đã có yêu cầu hoàn; cần kiểm tra hồ sơ hiện có.',
+  bank_transaction_already_allocated: 'Giao dịch đã được phân bổ; xem hồ sơ hoàn phần dư.',
   Paid: 'Đã thanh toán',
   verified_partial_payment: 'Đã ghi nhận thanh toán một phần; tiếp tục theo dõi dư nợ.',
   verified_excess_payment_pending_review:
@@ -244,6 +317,13 @@ export function paymentError(error: unknown) {
   const code =
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   const errors: Record<string, string> = {
+    receipt_excess_already_confirmed: 'Giao dịch đã xác nhận phải hoàn. Tải lại hồ sơ hoàn tiền.',
+    receipt_excess_review_changed: 'Số liệu đối chiếu đã thay đổi. Tải lại và xác nhận lại.',
+    receipt_excess_not_ready:
+      'Chưa đủ điều kiện xác nhận toàn bộ tiền dư. Kiểm tra các mục còn vướng.',
+    receipt_verified_payer_required: 'Chọn đúng hồ sơ người thực trả đã được xác minh.',
+    receipt_excess_confirmation_required:
+      'Cần chọn người thực trả, nhập lý do và xác nhận đối chiếu.',
     invalid_verified_bank_transfer:
       'Kiểm tra số tiền VND nguyên, thời gian và bằng chứng sao kê; cần xác nhận của Owner.',
     payment_idempotency_key_reused:

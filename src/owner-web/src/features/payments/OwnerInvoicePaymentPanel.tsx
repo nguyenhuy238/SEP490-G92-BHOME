@@ -33,6 +33,7 @@ import {
 import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { RefundPanel } from './RefundPanel';
+import { ReceiptExcessPanel } from './ReceiptExcessPanel';
 import { PaymentInvoicePicker } from './PaymentInvoicePicker';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
@@ -82,8 +83,8 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {state.data.reviewStatus === 'PendingReview' && (
               <Alert severity="warning">
                 Tiền thừa chờ xem xét:{' '}
-                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Chưa hoàn tiền hoặc
-                chuyển credit.
+                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Owner cần đối chiếu
+                người thực trả và ghi bằng chứng hoàn tiền thực tế.
               </Alert>
             )}
             {state.data.pendingReview && state.data.reviewStatus !== 'PendingReview' && (
@@ -422,6 +423,15 @@ export function ReconcileTransfer({
             <Button onClick={() => setRefundsOpen(true)}>Xử lý hoàn tiền thừa</Button>
           )}
         {refundsOpen && <RefundPanel key={transfer.id} sourceId={transfer.id} />}
+        {(data.status === 'ExcessRefundPending' ||
+          data.status === 'ExcessRefundCompleted' ||
+          (data.status === 'PendingReview' && invoiceId)) && (
+          <ReceiptExcessPanel
+            key={`${transfer.id}:${invoiceId}`}
+            transferId={transfer.id}
+            target={data.status === 'PendingReview' ? { invoiceId } : undefined}
+          />
+        )}
         {(latest.error || history.error) && (
           <Alert
             severity="error"

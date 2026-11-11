@@ -48,6 +48,7 @@ public sealed class RefundRecord
 }
 public sealed class RefundState
 {
+    public Guid? ReceiptExcessDispositionId { get; set; }
     public string Classification { get; set; } = "ExcessReceiptRefundV1";
     public List<RefundEvent> Events { get; set; } = [];
     public RefundUpload? Upload { get; set; }
@@ -79,7 +80,8 @@ public sealed record RefundSource(Guid? SourcePaymentId,
 public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries,
     IReadOnlyList<RefundRecord> Requests, Guid? DepositContractId = null, string? FinancialReference = null,
     IReadOnlyList<string>? Blockers = null, decimal? AvailableDeposit = null, decimal? VerifiedDeposit = null,
-    DepositDeductionPlan? DepositDeductions = null, decimal ApprovedDepositOffsets = 0, string? DepositClassification = null);
+    DepositDeductionPlan? DepositDeductions = null, decimal ApprovedDepositOffsets = 0, string? DepositClassification = null,
+    Guid? ReceiptExcessDispositionId = null);
 public interface IRefundRepository
 {
     Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t);
@@ -203,6 +205,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 OperationKey = key,
                 IsDevelopmentDemo = source.IsDevelopmentDemo
             };
+            row.State.ReceiptExcessDispositionId = source.ReceiptExcessDispositionId;
             if (deposit is not null) row.State = new()
             {
                 Classification = source.DepositClassification ?? "SecurityDepositRefundV1",

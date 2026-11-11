@@ -1,5 +1,21 @@
 # Hoàn tiền thủ công — receipt thừa và cọc không khấu trừ
 
+## 11/11/2026 — Giao dịch dư toàn bộ sau khi nghĩa vụ đã đủ tiền
+
+BR-17/18/19/23, BF-06, UC-22/25, GBR-10/18. Owner dùng:
+
+- `GET /api/v1/payment-transactions/{id}/excess-disposition` để đọc quyết định đã lưu (chưa có trả null/204).
+- `GET .../excess-disposition/context?invoiceId=...`, hoặc `settlementContractId=...&receivableId=...`, hoặc `holdingContractId=...` để lấy số liệu đối chiếu. Chỉ một loại đích mỗi lần.
+- `POST .../excess-disposition` với `{target,expectedReference,payerResidentId,reason,humanConfirmed:true}` và UUID `Idempotency-Key`.
+
+Backend yêu cầu receipt VERIFIED/VND, đúng tham chiếu đích, nghĩa vụ không còn phải trả, nguồn chưa phân bổ/claim/refund/rejected, cùng chế độ dữ liệu. Người thực trả phải là Resident Verified có quan hệ hợp lệ với đích; Holding cho phép Resident chưa có User. Confirmation binds receipt fingerprint, balance và payer choices; stale context hoặc key dùng với nội dung khác bị chặn. Quyết định bất biến `ReceiptExcessDispositionV1` và `BankReferenceClaim` được ghi trong cùng transaction. Không tạo allocation 0, không ghi thêm doanh thu hoặc Tenant Credit.
+
+Sau xác nhận, dùng các route receipt refunds request/decision/execution hiện hữu. Chỉ người thực trả trong disposition được nhận; chỉ bằng chứng thực chi hoàn tất mới giảm số còn phải hoàn. Trạng thái receipt `ExcessRefundPending` → `ExcessRefundCompleted`; partial return vẫn Pending. Không được reject/phân bổ lại receipt đã xác nhận. Invoice pending review và settlement unresolved giữ nghĩa vụ này đến khi hoàn đủ, kể cả sau physical release.
+
+Migration SQL-only `20261111060000_ReceiptExcessDisposition` thêm native allocation guard; fresh DDL đồng bộ, vẫn 24 bảng, không thay EF model. Guard ngăn reuse receipt được claim hoặc phần tiền đã reserve/refund. Không migrate database làm việc.
+
+Owner Web: mục Thanh toán lọc hai trạng thái hoàn toàn bộ; invoice picker có lựa chọn hóa đơn đã đủ tiền; ReconcileTransfer/SettlementBankPanel/HoldingDepositPanel dùng context thực và chọn người theo nhãn. Việc xác nhận chưa phải đã hoàn tiền. Payer bên ngoài không có Resident hợp lệ và Main Deposit overage còn cần nhánh riêng; không tạo hồ sơ giả hoặc tự chọn representative. Tenant chưa có màn hình riêng xem refund receipt trong slice này. Provider bank thực và browser/native E2E chưa được xác nhận.
+
 Cập nhật **06/11/2026**, triển khai `12043f0`, UI recovery `17c4228`. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md),
 [Payment](PAYMENTS.md), [Finance](FINANCE.md). Đây là API đã triển khai trên Compact24, không phải đề xuất.
 
