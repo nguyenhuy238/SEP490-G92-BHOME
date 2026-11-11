@@ -13,9 +13,25 @@ namespace BHome.IntegrationTests.PaymentsDebt;
 
 public sealed partial class PaymentLedgerTests
 {
-    private async Task<(Workspace Workspace, Guid Proof, byte[] Photo)> DamageFixture()
+    // Explicit pre-existing legacy history fixture. Never use the retired production command to manufacture historical data.
+    private async Task<DepositDeductionPlan> SeedHistoricalDeduction(Workspace w, DepositDeductionInput input, ContractSettlementSummary summary, Guid key)
     {
-        var w = await Setup(); await ReadySettlementFixture(w, false);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var inspection = await db.Set<ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
+        var items = DepositDeductionPolicy.Normalize(input, 999999999999999999m, input.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!.Value).ToArray(), input.Items.SelectMany(i => i.EvidenceIds).ToArray());
+        var normalized = input with { Reason = input.Reason.Trim(), Items = items };
+        var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { contractId = w.Contract, input = normalized })));
+        var evidence = await scope.ServiceProvider.GetRequiredService<IDepositDeductionEvidence>().CaptureAsync(w.Contract, items.SelectMany(i => i.EvidenceIds).Distinct().Order().ToArray(), default);
+        var plan = new DepositDeductionPlan(Guid.NewGuid(), w.Contract, summary.DepositContractId, inspection.Id, inspection.Version,
+            input.ExpectedVersion + 1, w.Owner, DateTimeOffset.UtcNow, normalized.Reason, summary.ObligationReference, items.Sum(i => i.Amount), items, evidence, key, fingerprint);
+        var json = JsonSerializer.Serialize(new { recordType = "DepositDeductionV1", recordKey = plan.Id, state = plan }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={w.Contract}");
+        db.SecurityAudit.Add(new() { UserId = w.Owner, TargetId = plan.Id, TargetType = "DepositDeduction", Event = "DepositDeductionApproved", Succeeded = true, OccurredAt = plan.ApprovedAt });
+        await db.SaveChangesAsync(); return plan;
+    }
+    private async Task<(Workspace Workspace, Guid Proof, byte[] Photo)> DamageFixture(bool otherResidents = false)
+    {
+        var w = await Setup(); await ReadySettlementFixture(w, otherResidents, agreedDeposit: 400000);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         using var image = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var photo = image.ImEncode(".png");
         var proof = new ContractInspectionEvidence
@@ -39,7 +55,7 @@ public sealed partial class PaymentLedgerTests
             new DepositInput("SYN-DAMAGE-" + Guid.NewGuid(), 400000, "Synthetic original depositor checked")));
         return (w, proof.Id, photo);
     }
-    internal async Task OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(decimal deduction)
+    internal async Task HistoricalDamageDeductionPreservesRemainderRefundAndOriginalInvoice(decimal deduction)
     {
         var (w, proof, photo) = await DamageFixture(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); using var staff = await Client(w.Staff);
         var root = $"/api/v1/contracts/{w.Contract}"; var route = root + "/deposit-deductions";
@@ -51,9 +67,11 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(tenant, route, input)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, route, input)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, input with { Items = [input.Items[0] with { Amount = 400001 }] })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, route, input with { Items = [input.Items[0] with { EvidenceIds = [Guid.NewGuid()] }] })).StatusCode);
-        var key = Guid.NewGuid(); var replies = await Task.WhenAll(Post(owner, route, input, key), Post(owner, route, input, key));
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, input with { Items = [input.Items[0] with { EvidenceIds = [Guid.NewGuid()] }] })).StatusCode);
+        var key = Guid.NewGuid(); var historical = await SeedHistoricalDeduction(w, input, before, key);
+        var replies = await Task.WhenAll(Post(owner, route, input, key), Post(owner, route, input, key));
         var plan = await RefundValue<DepositDeductionPlan>(replies[0]); Assert.Equal(plan.Id, (await RefundValue<DepositDeductionPlan>(replies[1])).Id);
+        Assert.Equal(historical.Id, plan.Id);
         Assert.Equal(deduction, plan.Total); Assert.Single(plan.Evidence); Assert.Equal(64, plan.Evidence[0].Sha256.Length);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, input with { Reason = "Changed key payload" }, key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, input)).StatusCode);
@@ -108,17 +126,19 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(report.VerifiedDepositReturns, scoped.VerifiedDepositReturns);
         await VerifySettlementNotifications(w, true, deduction < 400000);
     }
-    internal async Task DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle()
+    internal async Task HistoricalDamageDeductionVersionsRemainReadableAndTamperedEvidenceCannotSettle()
     {
         var (w, proof, _) = await DamageFixture(); using var owner = await Client(w.Owner);
         var root = $"/api/v1/contracts/{w.Contract}"; var route = root + "/deposit-deductions";
         var summary = await RefundValue<ContractSettlementSummary>(await owner.GetAsync(root + "/move-out/settlement-summary"));
         var input = new DepositDeductionInput(0, summary.Reference, "Synthetic decision", true, [new(null, "TenantDamage", 400000, "Synthetic damage", [proof])]);
         var competing = await Task.WhenAll(Post(owner, route, input), Post(owner, route, input));
-        Assert.Single(competing, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(competing, r => r.StatusCode == HttpStatusCode.Conflict);
-        var first = await RefundValue<DepositDeductionPlan>(competing.Single(r => r.StatusCode == HttpStatusCode.OK));
+        Assert.All(competing, r => Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
+        var first = await SeedHistoricalDeduction(w, input, summary, Guid.NewGuid());
         summary = await RefundValue<ContractSettlementSummary>(await owner.GetAsync(root + "/move-out/settlement-summary"));
-        var revised = await RefundValue<DepositDeductionPlan>(await Post(owner, route, input with { ExpectedVersion = 1, ExpectedReference = summary.Reference, Reason = "Synthetic re-evaluation" }));
+        var revision = input with { ExpectedVersion = 1, ExpectedReference = summary.Reference, Reason = "Synthetic historical re-evaluation" };
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, revision)).StatusCode);
+        var revised = await SeedHistoricalDeduction(w, revision, summary, Guid.NewGuid());
         Assert.Equal(2, revised.Version); Assert.NotEqual(first.Id, revised.Id);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(2, await db.Database.SqlQuery<int>($"SELECT jsonb_array_length(jsonb_path_query_array(history,'$[*] ? (@.recordType == \"DepositDeductionV1\")')) AS \"Value\" FROM contracts WHERE id={w.Contract}").SingleAsync());

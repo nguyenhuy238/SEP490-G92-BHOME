@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
+using System.Text.Json.Serialization;
 using BHome.Domain.Common;
 using BHome.Domain.PropertyManagement;
 
@@ -42,11 +43,11 @@ public sealed record LocationWrite(
     [Required, StringLength(200, MinimumLength = 2)] string Name,
     [Required, StringLength(1000)] string Address, bool IsActive = true, int Version = 0,
     [StringLength(500)] string Reason = "");
-[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public sealed record RoomWrite(Guid LocationId,
     [Required, StringLength(50)] string RoomNumber, [StringLength(30)] string? Floor,
     [Range(1, 32767)] int Capacity, RoomStatus Status = RoomStatus.Available,
-    int Version = 0, [StringLength(500)] string Reason = "", Guid? RoomTypeId = null);
+    int Version = 0, [StringLength(500)] string Reason = "",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
 public sealed record RoomTypeWrite(Guid LocationId,
     [Required, StringLength(150, MinimumLength = 2)] string Name,
     [StringLength(1000)] string? Description,
@@ -68,14 +69,13 @@ public sealed record AssetWrite(Guid LocationId, Guid? RoomId, [StringLength(200
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public sealed record AssetConditionUpdate([Required, StringLength(1000)] string Condition,
     [Range(1, int.MaxValue)] int Version, [Required, StringLength(500)] string Reason);
-[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public sealed record PolicyWrite(Guid LocationId, Guid? RoomId,
     ChargeCategory Category, [Required, StringLength(80)] string ChargeCode,
     [Required, StringLength(150)] string Name, ChargingMethod Method,
     [property: System.Text.Json.Serialization.JsonRequired]
     [Range(typeof(decimal), "0", "99999999999999.9999")] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo, [StringLength(500)] string Reason = "",
-    Guid? RoomTypeId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
 public sealed record PolicyReplacement(PolicyWrite Policy, [Range(1, int.MaxValue)] int ExpectedVersion);
 public sealed record PolicyUpdate(PolicyWrite Policy, [Range(1, int.MaxValue)] int ExpectedVersion);
 public sealed record PolicyEnd(DateOnly EffectiveTo, [Range(1, int.MaxValue)] int Version,
@@ -83,7 +83,8 @@ public sealed record PolicyEnd(DateOnly EffectiveTo, [Range(1, int.MaxValue)] in
 
 public sealed record LocationDto(Guid Id, string Name, string Address, bool IsActive, int Version);
 public sealed record RoomDto(Guid Id, Guid LocationId, string RoomNumber,
-    string? Floor, int Capacity, RoomStatus Status, int Version, Guid? RoomTypeId = null);
+    string? Floor, int Capacity, RoomStatus Status, int Version,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
 public sealed record RoomTypeDto(Guid Id, Guid LocationId, string Name, string? Description,
     int DefaultCapacity, decimal? AreaM2, string[] Amenities, bool IsActive, int Version);
 public sealed record BulkRoomResult(IReadOnlyList<RoomDto> Rooms);
@@ -93,7 +94,7 @@ public sealed record PolicyDto(Guid Id, Guid LocationId, Guid? RoomId,
     ChargeCategory Category, string ChargeCode, string Name, ChargingMethod Method,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version, DateTimeOffset? FirstUsedAt = null,
-    Guid? RoomTypeId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
 public sealed record ResolvedPrices(Guid RoomId, DateOnly EffectiveOn, IReadOnlyList<PolicyDto> Charges,
     IReadOnlyList<string> MissingRequiredCharges);
 

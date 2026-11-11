@@ -5,6 +5,8 @@ using BHome.DigitalSigning.Application;
 using BHome.Application.Ocr;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace BHome.Api.Middleware;
 
@@ -12,7 +14,9 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
-        var status = exception switch
+        var schemaMismatch = exception is PostgresException { SqlState: "42703" or "42P01" or "42883" } or
+            DbUpdateException { InnerException: PostgresException { SqlState: "42703" or "42P01" or "42883" } };
+        var status = schemaMismatch ? StatusCodes.Status503ServiceUnavailable : exception switch
         {
             BHome.Application.Operations.OperationsException operations => operations.Status,
             BHome.Application.Finance.FinanceException finance => finance.Status,
@@ -54,7 +58,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             "Request {CorrelationId} failed with {ErrorCode}", context.TraceIdentifier, exception.GetType().Name);
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
-        var code = exception switch
+        var code = schemaMismatch ? "database_schema_incompatible" : exception switch
         {
             BHome.Application.Operations.OperationsException operations => operations.Code,
             BHome.Application.Finance.FinanceException finance => finance.Code,

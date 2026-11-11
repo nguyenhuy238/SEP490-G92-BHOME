@@ -95,10 +95,11 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task DebtSummary() => Run(t => t.OwnerDebtSummaryCoversAllPagesAndExcludesSettledInvoicesWithoutExposingStaffFinance());
     [CompactPostgresFact] public Task DebtNotificationStops() => Run(t => t.DebtRemindersDeduplicateAndStopAfterVerifiedPayment());
     [CompactPostgresFact] public Task PartialAndPaidNotifications() => Run(t => t.DelayedNotificationWorkerPreservesPartialSnapshotAndOnePaidTransitionForAllThreeTenants());
-    [CompactPostgresFact] public Task DamageDeductionAndRemainder() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(100000));
-    [CompactPostgresFact] public Task FullDamageDeduction() => Run(t => t.OwnerApprovesDamageDeductionAndReturnsOnlyTheRemainder(400000));
-    [CompactPostgresFact] public Task DamageDeductionHistoryAndEvidence() => Run(t => t.DamageDeductionCorrectionsAreVersionedAndTamperedEvidenceCannotSettle());
+    [CompactPostgresFact] public Task HistoricalDamageDeductionAndRemainder() => Run(t => t.HistoricalDamageDeductionPreservesRemainderRefundAndOriginalInvoice(100000));
+    [CompactPostgresFact] public Task HistoricalFullDamageDeduction() => Run(t => t.HistoricalDamageDeductionPreservesRemainderRefundAndOriginalInvoice(400000));
+    [CompactPostgresFact] public Task HistoricalDamageDeductionHistoryAndEvidence() => Run(t => t.HistoricalDamageDeductionVersionsRemainReadableAndTamperedEvidenceCannotSettle());
     [CompactPostgresFact] public Task DepositReturnAndClosure() => Run(t => t.UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure());
+    [CompactPostgresFact] public Task DepositReturnAgreedRecipient() => Run(t => t.DepositRefundNotifiesAgreedRecipientInsteadOfContractTenant());
     [CompactPostgresFact] public Task DepositReturnChangedSource() => Run(t => t.ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased());
     [CompactPostgresFact] public Task DepositReturnUnknownHistory() => Run(t => t.UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn());
     [CompactPostgresFact] public Task SettlementCalculation() => Run(t => t.SettlementReadsActualSharedDebtAdjustmentsAndDepositsWithoutAssigningRoomDebtToTenant());

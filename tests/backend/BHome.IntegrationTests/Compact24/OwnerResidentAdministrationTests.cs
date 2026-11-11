@@ -96,7 +96,7 @@ public sealed class OwnerResidentAdministrationTests(Compact24WorkflowFixture fi
     }
     private static async Task<Guid> Create(HttpClient client, string label)
     {
-        var result = await client.PostAsJsonAsync("/api/v1/capture/residents", new ResidentInput(Compact24SampleSeed.Id(40), label, ResidentType.CoOccupant));
+        var result = await client.PostAsJsonAsync("/api/v1/capture/residents", new ResidentInput(Compact24SampleSeed.Id(40), label, ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         result.EnsureSuccessStatusCode(); return (await result.Content.ReadFromJsonAsync<IdResult>())!.Id;
     }
 }

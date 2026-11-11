@@ -26,6 +26,12 @@ internal static class LegacyPersistenceRegistration
 {
     internal static IServiceCollection UseLegacyPersistenceForTesting(this IServiceCollection services)
     {
+        services.PostConfigure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
+        {
+            for (var i = options.JsonSerializerOptions.Converters.Count - 1; i >= 0; i--)
+                if (options.JsonSerializerOptions.Converters[i] is BHome.Api.Configuration.RetiredRoomTypeJsonConverterFactory)
+                    options.JsonSerializerOptions.Converters.RemoveAt(i);
+        });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
         // Compose the source-schema handlers explicitly. Registration order is not a schema boundary:
@@ -62,6 +68,9 @@ internal static class LegacyPersistenceRegistration
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<NotificationEventPublisher>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<NotificationDeliveryService>());
         services.RemoveAll<IAccountInvitations>();
+        services.RemoveAll<AccountInvitations>();
+        services.RemoveAll<IIdentityRetentionRepository>();
+        services.RemoveAll<IdentityRetentionService>();
         services.RemoveAll<CompactNotificationWriter>();
         services.RemoveAll<INotificationWorkspace>();
         services.RemoveAll<NotificationWorkspaceService>();

@@ -40,12 +40,16 @@ beforeEach(() => {
   vi.resetAllMocks();
   request.mockResolvedValue(source);
 });
-it('uses the deposit source, requires depositor and zero-deduction consent, and resets consent/key when obligations change', async () => {
+it('uses the agreed Security Deposit recipient, requires Owner consent, and resets consent/key when obligations change', async () => {
   let current = {
     ...source,
     sourcePaymentId: null,
     sourceDepositContractId: 'root',
     verifiedDepositAmount: '20000',
+    beneficiaries: [
+      ...source.beneficiaries,
+      { id: 'agreed-recipient', label: 'Synthetic agreed recipient' },
+    ],
     excessAmount: '0',
     financialReference: 'D1',
     blockers: [],
@@ -61,16 +65,21 @@ it('uses the deposit source, requires depositor and zero-deduction consent, and 
     expect.anything(),
   );
   fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn đã xác minh'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic agreed recipient' }));
   fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
     target: { value: '20000' },
   });
   fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
-    target: { value: 'Original depositor checked' },
+    target: { value: 'Contract recipient checked by Owner' },
   });
   const create = screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' });
-  const general = 'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn';
-  const depositor = 'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp';
+  const general = 'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng';
+  const depositor = 'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc';
+  expect(
+    screen.queryByLabelText(
+      'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    ),
+  ).not.toBeInTheDocument();
   const deductions = 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý';
   fireEvent.click(screen.getByLabelText(general));
   expect(create).toBeDisabled();
@@ -84,9 +93,9 @@ it('uses the deposit source, requires depositor and zero-deduction consent, and 
   expect(first[0]).toBe('/api/v1/contracts/source/deposit-refunds');
   expect(JSON.parse(first[1].body)).toEqual({
     refund: {
-      beneficiaryResidentId: 'payer',
+      beneficiaryResidentId: 'agreed-recipient',
       amount: '20000',
-      reason: 'Original depositor checked',
+      reason: 'Contract recipient checked by Owner',
       humanConfirmed: true,
     },
     expectedFinancialReference: 'D1',
@@ -169,8 +178,8 @@ it('binds a remainder refund to the approved deduction instead of claiming there
     target: { value: 'Only return the remainder' },
   });
   for (const label of [
-    'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn',
-    'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng',
+    'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc',
     'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại',
   ])
     fireEvent.click(screen.getByLabelText(label));
@@ -187,7 +196,68 @@ it('binds a remainder refund to the approved deduction instead of claiming there
   });
   expect(body.refund.amount).toBe('300000');
 });
-function mount(kind: 'Receipt' | 'SecurityDeposit' = 'Receipt') {
+it('requires confirmation of source-specific deposit offsets before refunding the remainder', async () => {
+  request.mockImplementation(async (_url, init) => {
+    if (init?.method === 'POST') throw { status: 503 };
+    return {
+      ...source,
+      sourcePaymentId: null,
+      sourceDepositContractId: 'root',
+      verifiedDepositAmount: '400000',
+      availableAmount: '300000',
+      financialReference: 'D-offset',
+      approvedDepositOffsets: '100000',
+    };
+  });
+  mount('SecurityDeposit');
+  await screen.findByText('Hoàn phần cọc còn lại sau cấn trừ');
+  fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn đã xác minh'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
+  fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
+    target: { value: '300000' },
+  });
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
+    target: { value: 'Verified remaining deposit after approved offsets' },
+  });
+  for (const label of [
+    'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng',
+    'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc',
+    'Tôi đã đối chiếu 100.000 ₫ cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại',
+  ])
+    fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await vi.waitFor(() =>
+    expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+  );
+  const body = JSON.parse(request.mock.calls.find(([, init]) => init?.method === 'POST')![1].body);
+  expect(body).toMatchObject({
+    noDeductionsConfirmed: false,
+    deductionsConfirmed: true,
+    expectedFinancialReference: 'D-offset',
+  });
+  expect(body.expectedDeductionPlanId).toBeUndefined();
+});
+it('keeps Holding depositor verification separate from the Security Deposit agreement policy', async () => {
+  request.mockResolvedValue({
+    ...source,
+    sourcePaymentId: null,
+    sourceDepositContractId: 'holding',
+    verifiedDepositAmount: '20000',
+    excessAmount: '0',
+    financialReference: 'H1',
+    blockers: [],
+  });
+  mount('HoldingDeposit');
+  expect(
+    await screen.findByLabelText(
+      'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByLabelText('Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc'),
+  ).not.toBeInTheDocument();
+});
+function mount(kind: 'Receipt' | 'SecurityDeposit' | 'HoldingDeposit' = 'Receipt') {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -264,6 +334,7 @@ it('refreshes approval and completion only from the server and sends execution a
     if (init?.method === 'POST' && url.endsWith('/execution')) {
       expect(init.body).toBeInstanceOf(FormData);
       expect((init.body as FormData).get('humanConfirmed')).toBe('true');
+      expect((init.body as FormData).get('executedAt')).toBe('2026-11-06T05:00:12.345Z');
       current = { ...row, status: 'COMPLETED', version: 3 };
     }
     return init?.method === 'POST' ? current : { ...source, requests: [current] };
@@ -284,8 +355,12 @@ it('refreshes approval and completion only from the server and sends execution a
   fireEvent.change(screen.getByLabelText('Tham chiếu giao dịch hoàn trên sao kê'), {
     target: { value: 'SYN-REFUND' },
   });
+  expect(screen.getByLabelText('Thời gian hoàn thực tế (giờ Việt Nam)')).toHaveAttribute(
+    'step',
+    '0.001',
+  );
   fireEvent.change(screen.getByLabelText('Thời gian hoàn thực tế (giờ Việt Nam)'), {
-    target: { value: '2026-11-06T12:00:00' },
+    target: { value: '2026-11-06T12:00:12.345' },
   });
   fireEvent.change(screen.getByLabelText('Chứng từ giao dịch hoàn'), {
     target: { files: [new File(['synthetic'], 'test.png', { type: 'image/png' })] },
@@ -401,4 +476,39 @@ it('lets fetch set multipart boundaries while keeping JSON request headers uncha
   } finally {
     vi.unstubAllGlobals();
   }
+});
+it('requests a refund to the verified outside payer without inventing a Resident identifier', async () => {
+  request.mockResolvedValue({
+    ...source,
+    beneficiaries: [],
+    externalBeneficiary: { attestationId: 'outside', label: 'Synthetic outside payer' },
+  });
+  mount();
+  fireEvent.mouseDown(await screen.findByLabelText('Người nhận hoàn đã xác minh'));
+  fireEvent.click(await screen.findByRole('option', { name: /Synthetic outside payer/ }));
+  fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
+    target: { value: '20000' },
+  });
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
+    target: { value: 'Synthetic verified outside payer return' },
+  });
+  fireEvent.click(
+    screen.getByLabelText('Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await vi.waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/payment-transactions/source/refunds',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          beneficiaryResidentId: null,
+          externalPayerAttestationId: 'outside',
+          amount: '20000',
+          reason: 'Synthetic verified outside payer return',
+          humanConfirmed: true,
+        }),
+      }),
+    ),
+  );
 });

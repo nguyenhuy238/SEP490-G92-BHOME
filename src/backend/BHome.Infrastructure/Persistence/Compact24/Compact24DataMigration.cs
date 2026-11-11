@@ -3,6 +3,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BHome.Domain.Billing;
+using BHome.Domain.PaymentsDebt;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Jobs;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +13,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 namespace BHome.Infrastructure.Persistence.Compact24;
 
 public sealed record Compact24Reconciliation(string Source, long SourceRows, long TargetRecords, bool KeysAndValuesMatch);
-public sealed record Compact24DataCopyResult(IReadOnlyList<Compact24Reconciliation> Tables, bool Committed, bool SourceReadOnly);
+public sealed record Compact24DataCopyResult(IReadOnlyList<Compact24Reconciliation> Tables, bool Committed, bool SourceReadOnly,
+    int DerivedDepositAllocations = 0);
 
 // Offline only: both connections must identify explicitly named, disposable/authorized databases.
 // Uses the same typed serialization and native columns as runtime, with historical timestamps preserved.
@@ -74,10 +77,28 @@ public sealed class Compact24DataMigration(BHomeDbContext source, Compact24DbCon
             target.ChangeTracker.Clear();
 
             var reconciliation = new List<Compact24Reconciliation>();
+            var depositSources = rows.GetValueOrDefault(typeof(DepositVerification), []).Cast<DepositVerification>()
+                .ToDictionary(d => Compact24DbContext.DeterministicId("depositAllocation/" + d.Id));
+            var derivedDepositAllocations = 0;
             foreach (var entity in entities)
             {
                 var expected = rows[entity.ClrType];
                 var actual = await ReadRowsAsync(target, entity.ClrType, token);
+                if (entity.ClrType == typeof(PaymentAllocation))
+                {
+                    // Normalizing an old DepositVerification creates a new canonical allocation.
+                    // Reconcile each derived row strictly before comparing source-mapped allocations;
+                    // never hide arbitrary extra money or compare it to a source table that had no such row.
+                    var derived = actual.Cast<PaymentAllocation>().Where(a => depositSources.ContainsKey(a.Id)).ToArray();
+                    if (derived.Length != depositSources.Count || derived.Any(a =>
+                        a.TransferId != depositSources[a.Id].Id || a.TargetDepositContractId != depositSources[a.Id].ContractId ||
+                        a.Amount != depositSources[a.Id].Amount || a.VerifiedByUserId != depositSources[a.Id].VerifiedByUserId ||
+                        a.AllocatedAt != depositSources[a.Id].VerifiedAt || a.SourceDepositContractId is not null || a.InvoiceId is not null ||
+                        a.PaidByUserId is not null || a.TargetSettlementContractId is not null || a.SettlementReceivableId is not null || a.DepositOffsetApprovalId is not null))
+                        throw new Compact24MigrationException("derived_deposit_allocation_reconciliation_failed");
+                    derivedDepositAllocations = derived.Length;
+                    actual = actual.Cast<PaymentAllocation>().Where(a => !depositSources.ContainsKey(a.Id)).Cast<object>().ToArray();
+                }
                 var match = Fingerprints(entity, expected).SequenceEqual(Fingerprints(entity, actual));
                 reconciliation.Add(new(entity.GetTableName()!, expected.LongLength, actual.LongLength, match));
                 if (!match) throw new Compact24MigrationException("reconciliation_failed:" + entity.GetTableName());
@@ -97,7 +118,7 @@ public sealed class Compact24DataMigration(BHomeDbContext source, Compact24DbCon
             if (reconciliation.Count != 70 || reconciliation.Any(r => !r.KeysAndValuesMatch))
                 throw new Compact24MigrationException("incomplete_reconciliation");
             await write.CommitAsync(token);
-            return new(reconciliation.OrderBy(r => r.Source, StringComparer.Ordinal).ToArray(), true, true);
+            return new(reconciliation.OrderBy(r => r.Source, StringComparer.Ordinal).ToArray(), true, true, derivedDepositAllocations);
         }
         finally { target.Importing = false; target.ChangeTracker.Clear(); }
     }

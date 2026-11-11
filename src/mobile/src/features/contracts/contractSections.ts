@@ -1,4 +1,14 @@
-import type { ContractSummary } from '../../../../../packages/client-core/src/contracts';
+import {
+  contractActions,
+  type ContractSummary,
+} from '../../../../../packages/client-core/src/contracts';
+
+export function mobileContractActions(...args: Parameters<typeof contractActions>) {
+  if (args[2] === 'Owner') return [];
+  return contractActions(...args).filter(
+    (action) => !['move-out/inspection', 'move-out/settlement'].includes(action.operation),
+  );
+}
 
 export const contractSections = [
   { id: 'overview', label: 'Tổng quan' },

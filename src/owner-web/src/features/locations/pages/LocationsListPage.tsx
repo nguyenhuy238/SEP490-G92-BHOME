@@ -114,10 +114,9 @@ function MockLocationsListPage() {
   // Handlers
   const handleOpenCopyWizard = (sourceLocId?: string) => {
     if (!isMockMode) {
-      portal.notify(
-        'Backend chưa có API sao chép cấu hình nguyên tử giữa hai cơ sở. Không có dữ liệu nào được thay đổi.',
-        true,
-      );
+      const source = sourceLocId || locations[0]?.id;
+      if (source) navigate(`/locations/${source}/settings`);
+      else portal.notify('Tạo cơ sở trước, sau đó mở Sao chép cấu hình tại cơ sở nguồn.');
       return;
     }
     setSelectedSourceForCopy(sourceLocId || locations[0]?.id || '');
@@ -164,29 +163,10 @@ function MockLocationsListPage() {
         }
         return items;
       };
-      const existingTypes = await setupApi.roomTypes(createdLocation.id, 1);
       const sharedRoomTemplates = await setupApi.request<{
         items: { name: string; status: string }[];
       }>('/api/v1/shared-configuration/room-type-templates?page=1&pageSize=100');
-      const typeIds = new Map<string, string>();
       for (const roomType of wizardData.roomTypes) {
-        const saved =
-          existingTypes.items.find(
-            (item) =>
-              item.name.trim().toLocaleLowerCase() === roomType.name.trim().toLocaleLowerCase(),
-          ) ??
-          (await setupApi.saveRoomType(null, {
-            locationId: createdLocation.id,
-            name: roomType.name,
-            description: roomType.description || null,
-            defaultCapacity: roomType.maxOccupants,
-            areaM2: roomType.area,
-            amenities: roomType.facilities,
-            isActive: true,
-            version: 0,
-            reason: 'Tạo loại phòng từ Setup Wizard',
-          }));
-        typeIds.set(roomType.id, saved.id);
         if (
           !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(roomType.id) &&
           !sharedRoomTemplates.items.some(
@@ -214,18 +194,19 @@ function MockLocationsListPage() {
       const missingRooms = wizardData.rooms.filter(
         (room) => !existingRooms.some((item) => item.roomNumber === room.code),
       );
-      if (missingRooms.length)
-        await setupApi.bulkCreateRooms(createdLocation.id, {
-          rooms: missingRooms.map((room) => ({
-            roomNumber: room.code,
-            floor: String(room.floor),
-            roomTypeId: typeIds.get(room.roomTypeId) ?? '',
-            capacity:
-              wizardData.roomTypes.find((roomType) => roomType.id === room.roomTypeId)
-                ?.maxOccupants ?? 1,
-          })),
-          reason: 'Tạo phòng hàng loạt từ Setup Wizard',
+      for (const room of missingRooms) {
+        const defaults = wizardData.roomTypes.find((item) => item.id === room.roomTypeId);
+        if (!defaults) throw new Error(`Phòng ${room.code} chưa chọn cấu hình sức chứa.`);
+        await setupApi.saveRoom(null, {
+          locationId: createdLocation.id,
+          roomNumber: room.code,
+          floor: String(room.floor),
+          capacity: defaults.maxOccupants,
+          status: 0,
+          version: 0,
+          reason: 'Tạo phòng từ Setup Wizard',
         });
+      }
       const createdRooms = await loadAllRooms();
       const today = new Date().toISOString().slice(0, 10);
       const effective = (value: string) => (value && value > today ? value : today);
@@ -250,7 +231,6 @@ function MockLocationsListPage() {
           body: JSON.stringify({
             locationId: createdLocation.id,
             roomId: room.id,
-            roomTypeId: null,
             category: 0,
             chargeCode: 'RENT',
             name: `Giá thuê phòng ${room.roomNumber}`,
@@ -293,7 +273,6 @@ function MockLocationsListPage() {
           body: JSON.stringify({
             locationId: createdLocation.id,
             roomId: targetRoom?.id ?? null,
-            roomTypeId: null,
             category: feeCategory(fee.type),
             chargeCode,
             name: fee.name,
@@ -341,8 +320,10 @@ function MockLocationsListPage() {
           }));
         if (template.status === 'Draft')
           await setupApi.publishTemplate(template.id, template.version);
-        for (const room of createdRooms.filter(
-          (item) => item.roomTypeId === typeIds.get(roomType.id),
+        for (const room of createdRooms.filter((item) =>
+          wizardData.rooms.some(
+            (draft) => draft.code === item.roomNumber && draft.roomTypeId === roomType.id,
+          ),
         )) {
           const inventory = await setupApi.inventory(room.id);
           if (inventory.assignedTemplateId !== template.id)

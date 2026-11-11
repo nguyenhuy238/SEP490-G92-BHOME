@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Button,
+  Checkbox,
+  FormControlLabel,
   Dialog,
   DialogActions,
   DialogContent,
@@ -120,7 +122,14 @@ export function ContractActionDialog({
                 label={field.label}
                 value={values[field.name] ?? ''}
                 disabled={busy || certs.isFetching}
-                onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+                onChange={(e) =>
+                  setValues((v) => ({
+                    ...v,
+                    [field.name]: e.target.value,
+                    humanConfirmed:
+                      action.operation === 'holding-cancellation' ? '' : v.humanConfirmed,
+                  }))
+                }
               >
                 {(certs.data ?? []).filter(canUseCertificate).map((c) => (
                   <MenuItem key={c.id} value={c.id}>
@@ -150,9 +159,44 @@ export function ContractActionDialog({
                     inputMode: field.type === 'money' ? 'numeric' : undefined,
                   },
                 }}
-                onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+                onChange={(e) =>
+                  setValues((v) => ({
+                    ...v,
+                    [field.name]: e.target.value,
+                    humanConfirmed:
+                      action.operation === 'holding-cancellation' ? '' : v.humanConfirmed,
+                  }))
+                }
               />
             ),
+          )}
+          {action.operation === 'holding-cancellation' && (
+            <>
+              <TextField
+                select
+                label="Nguyên nhân hủy giữ chỗ"
+                value={values.cause ?? ''}
+                disabled={busy}
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, cause: e.target.value, humanConfirmed: '' }))
+                }
+              >
+                <MenuItem value="0">Tenant tự nguyện hủy — mất cọc</MenuItem>
+                <MenuItem value="1">Owner không cung cấp được phòng — phải hoàn cọc</MenuItem>
+              </TextField>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={values.humanConfirmed === 'true'}
+                    disabled={busy || !['0', '1'].includes(values.cause)}
+                    onChange={(_, checked) =>
+                      setValues((v) => ({ ...v, humanConfirmed: checked ? 'true' : '' }))
+                    }
+                  />
+                }
+                label="Tôi đã đối chiếu nguyên nhân hủy, người yêu cầu và trách nhiệm xử lý cọc"
+              />
+            </>
           )}
           {action.operation === 'signing' &&
             !contract.isDevelopmentDemo &&

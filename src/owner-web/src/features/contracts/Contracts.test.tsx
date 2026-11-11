@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material';
 import { expect, it, vi } from 'vitest';
 import {
   contractActions,
+  contractError,
   contractClient,
   actionPayload,
   mutationKeys,
@@ -16,6 +17,9 @@ import { theme } from '../../theme/theme';
 import { ContractDetailPanel } from './ContractDetailPanel';
 import { ContractActionDialog } from './ContractActionDialog';
 import { useContractDetail } from '../../../../../packages/client-core/src/useContractDetail';
+vi.mock('./DepositReceiptPanel', () => ({
+  DepositReceiptPanel: () => <div>Deposit receipt workflow</div>,
+}));
 
 const owner = '00000000-0000-0000-0000-000000000001',
   tenant = '00000000-0000-0000-0000-000000000002',
@@ -68,6 +72,24 @@ const draft: ContractView = {
   holdingContractId: null,
   appliedHoldingDeposit: '0',
 };
+
+it('keeps new deposit verification off closed contracts and explains excess without changing the receipt', () => {
+  for (const status of [
+    'Terminated',
+    'Superseded',
+    'Cancelled',
+    'Expired',
+    'Converted',
+    'Applied',
+  ]) {
+    expect(
+      contractActions({ ...draft, status }, null, 'Owner', owner).map((a) => a.operation),
+    ).not.toContain('deposit-verifications');
+  }
+  expect(
+    contractError({ status: 409, code: 'main_deposit_excess_requires_manual_review' }),
+  ).toContain('không sửa số tiền sao kê');
+});
 
 it('keeps Holding actions separate from Main activation, renewal and move-out', () => {
   const holding = {
@@ -233,6 +255,52 @@ it('requires confirmation and sends one activation mutation only after the serve
   );
   await waitFor(() => expect(changed).toHaveBeenCalled());
   expect(request).toHaveBeenCalled();
+});
+it('requires an explicit Holding cancellation cause and confirmation before sending a financial decision', async () => {
+  const holding: ContractView = { ...draft, kind: 'Holding' };
+  const { api } = setup(holding);
+  const mutation = vi.fn().mockRejectedValue({ status: 503 });
+  api.mutate = mutation;
+  const cancellation = contractActions(holding, null, 'Owner', owner).find(
+    (a) => a.operation === 'holding-cancellation',
+  )!;
+  mount(
+    <ContractActionDialog
+      api={api}
+      contract={holding}
+      action={cancellation}
+      keys={mutationKeys(() => owner)}
+      actorId={owner}
+      onClose={vi.fn()}
+      onSuccess={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Lý do hủy'), {
+    target: { value: 'Synthetic Tenant request verified' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await screen.findByText('Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.');
+  expect(mutation).not.toHaveBeenCalled();
+  fireEvent.mouseDown(screen.getByLabelText('Nguyên nhân hủy giữ chỗ'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tenant tự nguyện hủy — mất cọc' }));
+  fireEvent.click(
+    screen.getByLabelText(
+      'Tôi đã đối chiếu nguyên nhân hủy, người yêu cầu và trách nhiệm xử lý cọc',
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+  expect(mutation.mock.calls[0][2]).toMatchObject({
+    cause: 0,
+    humanConfirmed: true,
+    reason: 'Synthetic Tenant request verified',
+  });
+  fireEvent.change(screen.getByLabelText('Lý do hủy'), { target: { value: 'Updated evidence' } });
+  expect(
+    screen.getByLabelText(
+      'Tôi đã đối chiếu nguyên nhân hủy, người yêu cầu và trách nhiệm xử lý cọc',
+    ),
+  ).not.toBeChecked();
 });
 it('validates deposit input and retains its idempotency key after network uncertainty, without reporting success', async () => {
   const { api } = setup();

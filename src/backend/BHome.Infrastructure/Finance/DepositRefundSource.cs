@@ -12,12 +12,13 @@ internal sealed partial class RefundRepository
     {
         var contract = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contractId, t)
             ?? throw new FinanceException(404, "contract_not_found");
+        if (contract.Kind == ContractKind.Holding) return await HoldingRefundSourceAsync(contract, t);
         if (ledger is not IContractSettlementDetails details) throw new FinanceException(503, "settlement_summary_unavailable");
         var summary = await details.SummaryAsync(contractId, t);
         var blockers = summary.UnresolvedItems.Where(b => b != "deposit_deduction_refund_policy_required").ToList();
-        if (contract.Status != ContractStatus.Active) blockers.Add("deposit_contract_not_active");
+        if (contract.Status is not (ContractStatus.Active or ContractStatus.Terminated)) blockers.Add("deposit_contract_not_active");
         if (summary.VerifiedSecurityDeposit <= 0 || summary.Calculation?.DepositPositionConsistent != true ||
-            summary.Calculation.DepositAllocated != 0) blockers.Add("deposit_source_requires_review");
+            summary.Calculation.DepositAllocated != summary.ApprovedDepositOffsets) blockers.Add("deposit_source_requires_review");
         if (summary.DepositDeductions is { } plan)
         {
             if (summary.ApprovedDeductions != plan.Total || summary.ApprovedFinalCharges != plan.Total)
@@ -28,6 +29,12 @@ internal sealed partial class RefundRepository
                 await deductionEvidence.VerifyAsync(plan, t);
             }
         }
+        else if (summary.Receivables is { Count: > 0 })
+        {
+            if (summary.ChargeReview is null || summary.Receivables.Any(r => r.Outstanding > 0)) blockers.Add("settlement_charge_sources_incomplete");
+            if (chargeEvidence is null) throw new FinanceException(503, "settlement_evidence_unavailable");
+            foreach (var charge in summary.Receivables) await chargeEvidence.VerifyAsync(charge.Charge, t);
+        }
         else if (summary.ApprovedFinalCharges != 0) blockers.Add("deposit_deductions_require_review");
         var requests = (await Rows.Where(r => r.SourceDepositContractId == summary.DepositContractId)
             .OrderByDescending(r => r.RequestedAt).ToArrayAsync(t)).Select(Decode).ToArray();
@@ -37,14 +44,14 @@ internal sealed partial class RefundRepository
             """).SingleAsync(t);
         if (allReserved != requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount))
             blockers.Add("refund_source_requires_manual_review");
-        var people = await db.Set<Resident>().AsNoTracking().Where(r => r.RoomId == contract.RoomId &&
+        var people = await db.Set<Resident>().AsNoTracking().Where(r =>
             r.TenantUserId != null && r.VerificationStatus == IdentityVerificationStatus.Verified &&
             db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
-        // Choices are eligible occupants, NOT inferred deposit payers. The Owner must explicitly verify
-        // the original depositor before requesting; the attestation is retained in immutable refund history.
-        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0), contract.IsDevelopmentDemo, people, requests,
+        // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
+        // are eligible Residents, not an inference about who originally paid the deposit.
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
-            summary.VerifiedSecurityDeposit, summary.DepositDeductions);
+            summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets);
     }
 }

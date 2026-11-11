@@ -94,6 +94,7 @@ public static class DatabaseProbe
                     var applied = (await db.Database.GetAppliedMigrationsAsync(token)).ToArray();
                     var runtime = db.Database.GetMigrations().ToArray();
                     await output.WriteLineAsync($"Compact24EFHistory=PRESENT; applied={applied.Length}; pending={runtime.Except(applied).Count()}; unknown={applied.Except(runtime).Count()}");
+                    await output.WriteLineAsync($"PendingCompact24Migrations={string.Join(',', runtime.Except(applied))}");
                 }
                 else await output.WriteLineAsync("Compact24EFHistory=ABSENT; existing_local_SQL_schema_is_not_automatically_adopted");
             }

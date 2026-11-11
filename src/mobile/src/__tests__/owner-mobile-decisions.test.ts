@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { contractActions, type ContractView } from '../../../../packages/client-core/src/contracts';
 import { canOpenScreen } from '../features/workspace/navigation';
 import { notificationDestination } from '../services/notificationInbox';
+import { mobileContractActions } from '../features/contracts/contractSections';
 
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 function holding(status: string): ContractView {
@@ -45,7 +46,7 @@ it('exposes Owner-only decision screens without opening them to Tenant', () => {
   }
 });
 
-it('offers the server-backed Holding decisions and excludes Main-contract actions', () => {
+it('preserves Owner Web Holding decisions while Mobile has no Owner mutation actions', () => {
   expect(contractActions(holding('Draft'), null, 'Owner', id).map((x) => x.operation)).toContain(
     'holding-approval',
   );
@@ -58,6 +59,8 @@ it('offers the server-backed Holding decisions and excludes Main-contract action
   expect(active).toContain('holding-conversion');
   expect(active).not.toContain('renewals');
   expect(active).not.toContain('expiry-move-out');
+  for (const status of ['Draft', 'PendingSigning', 'PendingActivation', 'Active', 'Cancelled'])
+    expect(mobileContractActions(holding(status), null, 'Owner', id)).toEqual([]);
 });
 
 it('routes an Owner adjustment notification to the real review screen', async () => {

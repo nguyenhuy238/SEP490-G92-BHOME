@@ -83,6 +83,28 @@ it('keeps the inbox visible when opening a revoked target fails', async () => {
   expect(mocks.read).not.toHaveBeenCalled();
   expect(screen.getByTestId('route')).toBeEmptyDOMElement();
 });
+it('resolves an Owner refund notice to its authorized source receipt before marking it read', async () => {
+  mocks.list.mockResolvedValue({
+    items: [
+      {
+        id,
+        title: 'Cập nhật hoàn tiền dư',
+        summary: 'Mở hồ sơ để xem',
+        category: 'Payment',
+        relatedObjectType: 'Refund',
+        createdAt: '2026-11-12T00:00:00Z',
+        readAt: null,
+      },
+    ],
+    totalCount: 1,
+  });
+  mocks.target.mockResolvedValue({ objectType: 'BankTransfer', objectId: id });
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
+  await waitFor(() => expect(mocks.target).toHaveBeenCalledWith(id));
+  await waitFor(() => expect(mocks.read).toHaveBeenCalledWith(id));
+  await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('transferId=' + id));
+});
 it('rejects arbitrary URLs, malformed identifiers and unknown target kinds', () => {
   expect(
     ownerNotificationRoute({ objectType: 'https://example.invalid', objectId: id }),

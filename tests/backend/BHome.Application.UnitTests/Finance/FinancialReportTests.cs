@@ -6,6 +6,17 @@ namespace BHome.Application.UnitTests.Finance;
 
 public sealed class FinancialReportTests
 {
+    [Fact]
+    public void SettlementBreakdownDoesNotAddTheSameMoneyToTotalsTwiceOrTreatOffsetsAsCash()
+    {
+        var row = new FinanceBasis(Guid.NewGuid(), "Synthetic", Issued: 800000, Collected: 450000, Operating: 50000, Debt: 200000,
+            SettlementCharges: 600000, SettlementDebt: 200000, SettlementCollections: 250000, DepositOffsets: 350000, HoldingForfeitures: 100000);
+        var report = FinancialReportService.Calculate(new(new(2026, 11, 1), new(2026, 11, 30)), new([row], false), DateTimeOffset.UtcNow);
+        Assert.Equal("800000", report.Total.Issued); Assert.Equal("450000", report.Total.VerifiedCollections);
+        Assert.Equal("750000", report.Total.OperatingProfit); Assert.Equal("400000", report.Total.NetOperatingCashFlow);
+        Assert.Equal("350000", report.SettlementSources!.DepositOffsetsApplied); Assert.Equal("100000", report.SettlementSources.HoldingForfeitures);
+        Assert.Equal(report.SettlementSources, Assert.Single(report.Locations).SettlementSources);
+    }
     private static readonly ReportFilter Period = new(new(2026, 10, 1), new(2026, 10, 31));
     [Fact]
     public void ReportsDepositPrincipalSeparatelyWithoutChangingInvoiceProfitCashOrRecovery()

@@ -329,3 +329,9 @@ nhận giao dịch Owner đã thực hiện bên ngoài, không có API tự chu
 khác payload trả 409; tải lại, review và chỉ retry cùng key khi giữ đúng payload/bytes. Upload intent
 được lưu bền vững trước storage; Pending/Approved chưa phải Completed. Không tự retry tài chính
 chỉ vì browser timeout. Tham chiếu [Finance](FINANCE.md) cho report/What-if và các chỉ tiêu unavailable.
+
+## Runtime schema mismatch
+
+PostgreSQL undefined column/table/function (`42703`, `42P01`, `42883`), trực tiếp hoặc trong DbUpdateException, trả HTTP 503 với safe code `database_schema_incompatible` và correlation ID. Không trả tên bảng/cột, SQL hoặc exception detail trong response. Constraint violations và lỗi khác giữ mapping hiện hành; không đánh đồng mọi lỗi database với schema drift.
+
+Owner clients giải thích máy chủ/database chưa đồng bộ và cần quản trị viên cập nhật. Không giả danh sách rỗng/thành công, không tự migrate hoặc retry giao dịch tài chính. Operator dùng DatabaseProbe/readiness và quy trình migration có backup; frontend không có quyền DDL. Các lỗi 401/403 và object-level authorization giữ nguyên.

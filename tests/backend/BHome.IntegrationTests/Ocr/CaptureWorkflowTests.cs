@@ -339,7 +339,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private static async Task<Guid> Create(HttpClient c, string path, object data)
     {
         var response = await c.PostAsJsonAsync("/api/v1/capture/" + path, data);
-        Assert.True(response.IsSuccessStatusCode, $"{path}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+        Assert.True(response.IsSuccessStatusCode, $"{path}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}\n" + string.Join('\n', ApiFactory.Diagnostics.TakeLast(3)));
         return (await response.Content.ReadFromJsonAsync<IdResult>())!.Id;
     }
     private async Task<(HttpClient Owner, HttpClient Staff, Guid OwnerId, Guid StaffId, Guid Location, Guid Room, Guid Resident, Guid Meter)> Workspace()
@@ -348,7 +348,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var location = await Create(owner.Client, "locations", new LocationInput("Synthetic Location", "Synthetic Address"));
         var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01", 2));
         await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), Today.AddDays(365)));
-        var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant));
+        var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -364,7 +364,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     public async Task ParallelDuplicateIdentitiesHaveOneWinnerAndNoAutomaticMerge()
     {
         var w = await Workspace();
-        var second = await Create(w.Staff, "residents", new ResidentInput(w.Room, "Hồ sơ độc lập", ResidentType.CoOccupant));
+        var second = await Create(w.Staff, "residents", new ResidentInput(w.Room, "Hồ sơ độc lập", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         var replies = await Task.WhenAll(new[] { w.Resident, second }.Select(id => w.Staff.PostAsJsonAsync($"/api/v1/capture/residents/{id}/confirm", Identity())));
         Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -380,7 +380,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.OK, (await w.Staff.PostAsJsonAsync(path, Identity())).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await w.Staff.PostAsJsonAsync(path, Identity())).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(path, Identity() with { FullName = "KHÁC" })).StatusCode);
-        var duplicate = await Create(w.Staff, "residents", new ResidentInput(w.Room, "Hồ sơ thứ hai", ResidentType.CoOccupant));
+        var duplicate = await Create(w.Staff, "residents", new ResidentInput(w.Room, "Hồ sơ thứ hai", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         var dup = await w.Staff.PostAsJsonAsync($"/api/v1/capture/residents/{duplicate}/confirm", Identity());
         Assert.Equal(HttpStatusCode.Conflict, dup.StatusCode);
         Assert.DoesNotContain(w.Resident.ToString(), await dup.Content.ReadAsStringAsync());

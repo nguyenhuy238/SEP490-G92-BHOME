@@ -47,17 +47,18 @@ Staff/Tenant khác và Owner browser mở đúng Contract từ thông báo closu
 22 nhóm có phí/21 nhóm không phí; no duplicate publication. Worker vẫn tắt, DeliveryState giữ
 Unconfigured; không suy kết quả này thành kiểm chứng lịch worker, email/push hoặc native UI.
 
-| Source                                        | Recipients / safe links                                                                                                                          |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| InvoiceIssuedEvents                           | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                                                                           |
-| PaymentConfirmedEvents + verified allocation  | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data                                                          |
-| Adjustment requested                          | Owner phụ trách; Adjustment                                                                                                                      |
-| Adjustment decided                            | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update                                              |
-| ContractExpiryNotices JOB-02                  | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                                                                        |
-| OperationalTaskNotifications                  | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                                                             |
-| Automation execution PendingInputs            | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                                                                |
-| ContractMoveOutHistory đã commit              | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract                              |
-| DepositDeductionV1 và SecurityDepositRefundV1 | Owner signer + Tenant Contract; plan đã duyệt, request/APPROVED/REJECTED/Completed. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng |
+| Source                                           | Recipients / safe links                                                                                                                              |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| InvoiceIssuedEvents                              | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                                                                               |
+| PaymentConfirmedEvents + verified allocation     | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data                                                              |
+| Adjustment requested                             | Owner phụ trách; Adjustment                                                                                                                          |
+| Adjustment decided                               | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update                                                  |
+| ContractExpiryNotices JOB-02                     | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                                                                            |
+| OperationalTaskNotifications                     | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                                                                 |
+| Automation execution PendingInputs               | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                                                                    |
+| ContractMoveOutHistory đã commit                 | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract                                  |
+| DepositDeductionV1                               | Owner signer + Tenant Contract; quyết định khấu trừ. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng                                    |
+| SecurityDepositRefundV1 / HoldingDepositRefundV1 | Owner signer mở Contract; đúng beneficiary Tenant mở Refund history. Requested/APPROVED/REJECTED/Completed; không suy beneficiary từ Tenant đại diện |
 
 Receipt-excess refund mới chưa có event consumer riêng; không suy notification hoàn tiền đã tồn tại
 từ payment-confirmed. Browser finance/refund harness tắt worker, nên kết quả browser đó không chứng minh
@@ -103,3 +104,25 @@ giữ nguyên array contract và kiểm tra Staff assignment hiện tại. Khôn
 
 > Cập nhật 08/11/2026: [Notification MVP trên Compact24](NOTIFICATION_MVP_COMPACT24.md) bổ sung
 > invitation, inbox detail, announcements, devices, kênh gửi và reminder policy; giữ tương thích các route cũ bên dưới.
+
+## 11/11/2026 — Residence reminders theo BR-28
+
+JOB-08 dùng WEEKLY/MONTHLY + LocalSendHour của notification-policy đã được Owner cấu hình; mặc định tắt, không thêm cadence/SLA. Dedupe bền vững Contract+Resident+window, các lần pump song song/lặp lại chỉ có một inbox cho mỗi recipient/window. Query khóa row cư trú khi đánh giá và publish; chỉ nhắc khi ActualResidenceFrom đã đến, contract Active, residence chưa hết/đóng thực tế và registration Pending/InProgress. Owner-confirmed legacy stamp không thay được trạng thái Completed. Recipients chỉ đúng Owner signer và Tenant occupant, không Staff kể cả liên kết dữ liệu cũ sai role. Không gửi/đăng ký VNeID.
+
+Kênh ngoài kiểm lại exact contract của EventKey, cư trú/status hiện tại và recipient tại thời điểm delivery; Completed hoặc actual_move_out_date đã có thì suppress. Không dùng một contract mới của cùng Resident để làm thông báo cũ tiếp tục hợp lệ. Inbox đã lưu là lịch sử, không phải bằng chứng đăng ký hoặc gửi provider thành công. Không thay permission Residence API (Owner/Tenant), không migrate/schema change.
+
+## 12/11/2026 — Thông báo hoàn tiền receipt dư
+
+JOB-04 đọc committed `ExcessReceiptRefundV1` và phát `EXCESS_PAYMENT_OR_REFUND_STATUS`, category `Payment`, cho các event Requested/APPROVED/REJECTED/Completed. Key bền vững `receipt-refund:{refundId}:{version}:{action}` dùng transaction/publication lock hiện có; trạng thái Completed chỉ eligible khi evidence key, external reference và hash khớp hồ sơ execution. Không gọi kênh ngoài trong transaction tiền; inbox tồn tại khi delivery Unconfigured/failed.
+
+Recipient là Owner lập hồ sơ và actual Resident beneficiary có tài khoản Tenant hiện hành, kiểm lại payer từ allocation/deposit receipt/whole-excess snapshot. Không gửi cho đại diện hợp đồng thay payer, co-occupants hoặc Staff. External/pre-account chỉ gửi Owner, không tạo User/Resident. Location để null vì quyền theo actual beneficiary và lịch sử receipt, không suy từ Room hiện tại. Title/summary không chứa amount, bank reference, reason, tên payer hoặc private evidence.
+
+`GET notifications/{id}/target` kiểm lại entitlement của refund: Owner nhận `BankTransfer` cùng source receipt ID, Tenant nhận `Refund` cùng refund ID của chính mình; không cần current Room. Owner Web mở `/payments?transferId=...` và tải lại receipt qua API; Mobile Owner đi màn monitoring receipt hiện có. Tenant Mobile mở lịch sử thanh toán với panel hoàn tiền của tôi được mở. Navigation hint không cấp quyền đọc hồ sơ hoặc tự thực hiện hoàn tiền. Chưa chứng minh bank payout thực tế.
+
+## 12/11/2026 — Người thụ hưởng hoàn principal deposit (BR-30)
+
+Thông báo hoàn Security/Holding Deposit dùng lịch sử canonical, event key `deposit-refund:{refundId}:{version}:{action}` hiện có và kiểm lại source/proof trong transaction publication. Owner signer giữ target Contract/category Contract; chỉ Resident beneficiary đã xác nhận có tài khoản Tenant nhận target Refund/category Payment, kể cả đã rời Room. Tenant đại diện hợp đồng không mặc nhiên là người nhận hoàn; Staff và co-occupant khác không nhận. Resident chưa có account chỉ tạo inbox Owner, không cấp account từ refund.
+
+Target Refund kiểm lại beneficiary và membership lịch sử trong settlement Contract, không cấp quyền xem Contract đầy đủ cho co-occupant. Completed đòi execution key/reference/hash khớp. Kênh ngoài kiểm lại chính event key, người nhận và proof ngay trước gửi cho cả Owner lẫn Tenant; không hợp lệ thì Suppressed, giữ inbox và ledger. Không chứa reason, amount, bank reference, tên hoặc chứng từ. Consumer không đổi lịch sử/publication cũ và không gửi bù notification đã có marker. Receiver ngoài cohort/external chưa thuộc slice này.
+
+Worker EMAIL/PUSH kiểm lại cùng event key, payer/proof hiện hành và quyền target ngay trước provider call. Hồ sơ mất proof eligibility bị Suppressed ở kênh ngoài, không xóa inbox đã lưu và không thay đổi trạng thái tài chính. Kiểm thử dùng provider tổng hợp không gửi ra ngoài.

@@ -58,6 +58,8 @@ export function ownerNotificationRoute(t: NotificationTarget): string | null {
       return `/invoice-adjustments?requestId=${t.objectId}`;
     case 'Contract':
       return `/contracts?contractId=${t.objectId}`;
+    case 'BankTransfer':
+      return `/payments?transferId=${t.objectId}`;
     case 'MeterTask':
       return `/meters?taskId=${t.objectId}`;
     case 'OperationalTask':

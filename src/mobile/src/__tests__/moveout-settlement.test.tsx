@@ -119,6 +119,19 @@ it('Tenant reads server deposit reservation without Owner refund/approval action
   expect(request.mock.calls.some(([path]) => path.endsWith('/inspection-preparation'))).toBe(false);
   expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
+it('Owner monitors the settlement summary and performs financial decisions through Owner Web', async () => {
+  const { request, panel } = setup();
+  render(panel('Owner'));
+  expect(await screen.findByText(/Cọc giữ chỗ hoàn: 400.000/)).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Xác nhận biên bản, duyệt khoản phải thu, cấn trừ và quyết toán tại Owner Web/,
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Lưu xem xét quyết toán' })).toBeNull();
+  expect(screen.queryByLabelText('Căn cứ quyết định')).toBeNull();
+  expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+});
 it('shows verified manual return only from the server and retains unknown amounts as unknown', async () => {
   const { panel } = setup({
     ...data,
