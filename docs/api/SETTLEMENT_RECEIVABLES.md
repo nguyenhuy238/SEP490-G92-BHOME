@@ -24,13 +24,25 @@ Tất cả dùng xác thực; `NoStore`. Mọi POST cần UUID `Idempotency-Key`
 
 Money JSON là chuỗi thập phân VND. Các trạng thái khoản phải thu được backend suy ra từ ledger: `Unpaid`, `PartiallyPaid`, `Paid`. Không dùng thao tác UI để xác nhận đã thanh toán.
 
+## Nối ngân hàng thủ công
+
+- `GET …/receivables/{chargeId}/transfer-instructions`: Owner/Tenant thuộc khoản phải thu. Trả tài khoản nhận đã cấu hình, nội dung, số dư và QR nội bộ; tài khoản chưa sẵn sàng thì không trả chi tiết nhận tiền. QR không xác nhận thanh toán.
+- `POST …/receivables/{chargeId}/bank-allocations`: Owner; body gồm `expectedReference`, `transferId` đã xác minh qua payment API hiện có, `paidByUserId` nullable, `humanConfirmed=true`; cần Idempotency-Key.
+- Owner chọn khoản tiền đã xác minh từ `/api/v1/payment-transactions`, rồi chọn khoản đích/người thực trả tại sổ phải thu. Nội dung không khớp hoặc mã đã claim giữ PendingReview và không giảm nợ. Một receipt chỉ ghi tiền một lần; phân bổ min(received, outstanding), tiền dư không chuyển thành Tenant Credit.
+- Nguồn hoàn Receipt hiện có chọn đúng Resident liên kết người thực trả trong snapshot, kể cả khác người đại diện và không còn ở phòng. Chưa xác định được người trả thì chờ xác minh; chưa có nhánh hoàn cho người trả bên ngoài không có Resident được xác minh.
+- GET payment-transactions hỗ trợ `settlementContractId`, lọc trước phân trang. TransferView thêm `allocatedSettlementContractId`/`allocatedSettlementReceivableId`.
+- Thông báo khoản phải thu/offset/tiền nhận có khóa dedupe, không chứa số tiền hoặc sao kê; in-app/email intent cùng giao dịch tiền. Resolve target kiểm lại quyền snapshot trước khi điều hướng Tenant.
+- Nhóm chịu nghĩa vụ giới hạn theo thời điểm kiểm tra cuối: người kích hoạt hợp đồng sau lúc kiểm tra, kể cả cùng ngày, không nhận thiệt hại cũ. Hợp đồng đã kết thúc trước ngày phát sinh bị loại.
+
 ## Persistence và migration
 
 Vẫn 24 bảng. `SettlementReceivableV1` và `DepositOffsetApprovalV1` là record bất biến trong `contracts.history`. Thêm ba cột nullable vào bảng phân bổ hiện hữu: `target_settlement_contract_id` (FK), `settlement_receivable_id`, `deposit_offset_approval_id`; ràng buộc đúng một đích, cặp tham chiếu khoản phải thu, index duy nhất cho quyết định cấn trừ, trigger kiểm nguồn/đích. EF migration `20261111035703_SettlementReceivableLedger`; không đổi baseline cũ, không migrate DB làm việc.
 
+Migration `20261111050000_SettlementBankAllocations` chỉ bổ sung SQL guard, không đổi EF model. Trigger kiểm receipt verified/chưa dùng/chưa claim, người trả đủ điều kiện và số tiền đúng phần còn nợ. `SettlementBankAllocationV1` lưu quyết định, actor, target, key/fingerprint, money effect và phần ngoài phân bổ. Không migrate DB làm việc.
+
 ## Còn phải hoàn thành
 
-Tính điện/nước chốt từ baseline đã tính tiền, tiền thuê tháng lẻ theo chính sách hiệu lực, duyệt danh sách phí cuối kỳ hoàn chỉnh, thu tiền ngân hàng trực tiếp cho khoản phải thu, điều chỉnh khoản đã duyệt, hoàn phần cọc dư sau cấn trừ và đưa các khoản mới vào báo cáo tài chính. Hiện sổ vẫn giữ các blocker quyết toán tương ứng; không coi có một khoản thiệt hại là đã duyệt toàn bộ nghĩa vụ. Bank/MySign/Email/SMS sandbox thật còn thiếu nhà cung cấp/access.
+Tính điện/nước chốt từ baseline đã tính tiền, tiền thuê tháng lẻ theo chính sách hiệu lực, duyệt danh sách phí cuối kỳ hoàn chỉnh, điều chỉnh khoản đã duyệt, hoàn phần cọc dư sau cấn trừ và đưa các khoản mới vào tổng thu/nợ của báo cáo tài chính. Báo cáo đã nhận diện nhánh hoàn dư mới, nhưng chưa tổng hợp doanh thu/phải thu mới. Hiện sổ vẫn giữ các blocker quyết toán tương ứng; không coi một khoản thiệt hại là đã duyệt toàn bộ nghĩa vụ. Bank/MySign/Email/SMS sandbox thật còn thiếu nhà cung cấp/access.
 
 ## Bằng chứng kiểm thử
 
@@ -40,3 +52,5 @@ Kiểm thử trên PostgreSQL local dùng DB `bhome_compact24_<uuid>` riêng, x�
 - Migration upgrade/replay, snapshot, bốn ca physical release và hai ca khoản phải thu: **8 PASS** sau thay đổi backend cuối.
 - Nhóm hồi quy payment/contract/invoice/refund/finance hiện hữu: **71 PASS**. Application unit: **387 PASS**. Owner Web 3 file/**20 PASS**; Mobile 1 file/**1 PASS**.
 - Owner/Mobile typecheck, ESLint các file thay đổi, `git diff --check`: PASS. Chưa chạy native UI E2E hoặc kiểm thử provider thật cho phần này.
+
+Sau bước nối ngân hàng thủ công: nhóm 3 ca khoản phải thu + migration + snapshot **5 PASS**; payment/refund/finance/inbox regression **46 PASS**; Application unit **387 PASS**; Owner 3 file/**10 PASS**, Mobile 3 file/**25 PASS**; typecheck hai client và changed-file ESLint PASS. Ca mới chạy thiếu → dư → hoàn 50.000đ cho người thực trả khác đại diện; trùng reference/replay/concurrency; tài khoản nhận chưa cấu hình/đã cấu hình; trạng thái sau bàn giao; người vào cùng ngày nhưng sau kiểm tra bị loại; quyền target thông báo; không lộ sao kê trong thông báo. Đây là dữ liệu tổng hợp và xác minh thủ công trong test, **không phải PASS bank sandbox thật**.

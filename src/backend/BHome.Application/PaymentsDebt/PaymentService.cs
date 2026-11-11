@@ -293,7 +293,8 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             transfer.TransferDescription, transfer.StatementReference, transfer.VerificationReason, transfer.VerifiedByUserId, transfer.VerifiedAt,
             transfer.ProposedInvoiceId, allocation is not null ? "Allocated" : review?.Decision ?? "PendingReview",
             review?.Reason ?? (allocation is not null ? "verified_full_payment" : "owner_allocation_confirmation_required"), allocation?.InvoiceId, transfer.IsDevelopmentDemo,
-            allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0), allocation?.TargetDepositContractId);
+            allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0), allocation?.TargetDepositContractId,
+            allocation?.TargetSettlementContractId, allocation?.SettlementReceivableId);
     public async Task<InvoicePaymentView> InvoicePaymentAsync(Guid id, CancellationToken t)
     {
         var invoice = await Invoice(id, t);

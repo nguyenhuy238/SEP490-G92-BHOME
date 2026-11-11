@@ -15,6 +15,10 @@ public sealed class SettlementReceivablesController(SettlementReceivablesService
     public Task<SettlementReceivable> Damage(Guid id, DamageChargeInput input, CancellationToken token) => service.ApproveDamageAsync(id, input, Key(), token);
     [HttpPost("deposit-offsets"), Authorize(Roles = Roles.Owner)]
     public Task<DepositOffsetApproval> Offset(Guid id, DepositOffsetInput input, CancellationToken token) => service.ApproveOffsetAsync(id, input, Key(), token);
+    [HttpPost("{chargeId:guid}/bank-allocations"), Authorize(Roles = Roles.Owner)]
+    public Task<SettlementBankAllocationResult> Allocate(Guid id, Guid chargeId, SettlementBankAllocationInput input, CancellationToken token) => service.AllocateBankAsync(id, chargeId, input, Key(), token);
+    [HttpGet("{chargeId:guid}/transfer-instructions")]
+    public Task<SettlementTransferInstructions> Instructions(Guid id, Guid chargeId, CancellationToken token) => service.TransferInstructionsAsync(id, chargeId, token);
 }
 
 [ApiController, Route("api/v1/tenant/settlement-receivables"), Authorize(Roles = Roles.Tenant)]

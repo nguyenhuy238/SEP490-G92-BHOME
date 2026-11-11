@@ -20,6 +20,7 @@ import {
   type FinalInspection,
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
+import { SettlementBankPanel } from './SettlementBankPanel';
 
 export function SettlementReceivablesPanel({
   api,
@@ -42,16 +43,22 @@ export function SettlementReceivablesPanel({
     [amount, setAmount] = useState(''),
     [description, setDescription] = useState('');
   const [proofs, setProofs] = useState<string[]>([]),
-    [checked, setChecked] = useState(false);
+    [chargeConfirmation, setChargeConfirmation] = useState<string | null>(null);
   const [target, setTarget] = useState(''),
     [offsetAmount, setOffsetAmount] = useState(''),
     [reason, setReason] = useState(''),
-    [offsetChecked, setOffsetChecked] = useState(false);
+    [offsetConfirmation, setOffsetConfirmation] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const lock = useRef(false);
   const data = query.data;
+  const checked = !!data && chargeConfirmation === data.reference;
+  const offsetChecked = !!data && offsetConfirmation === data.reference;
+  const setChecked = (value: boolean) =>
+    setChargeConfirmation(value ? (data?.reference ?? null) : null);
+  const setOffsetChecked = (value: boolean) =>
+    setOffsetConfirmation(value ? (data?.reference ?? null) : null);
   async function submit(kind: 'damage' | 'offset') {
     if (lock.current || !data) return;
     lock.current = true;
@@ -266,6 +273,14 @@ export function SettlementReceivablesPanel({
             <Button disabled={busy} onClick={() => void query.refetch()}>
               Tải lại sổ phải thu
             </Button>
+            <SettlementBankPanel
+              api={api}
+              data={data}
+              saved={async () => {
+                await query.refetch();
+                await saved();
+              }}
+            />
           </>
         )}
       </Stack>

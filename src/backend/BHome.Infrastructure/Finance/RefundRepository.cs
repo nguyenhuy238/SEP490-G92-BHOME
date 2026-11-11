@@ -75,6 +75,15 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                 db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == invoice.RoomId))
             orderby person.Id
             select new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+        if (allocation is { PaidByUserId: { } chargePayer, TargetSettlementContractId: { } contractId, SettlementReceivableId: { } chargeId })
+        {
+            var charge = (await BHome.Infrastructure.Contracts.SettlementChargeRecords.ReadAsync<BHome.Application.Contracts.SettlementReceivable>(db,
+                contractId, BHome.Infrastructure.Contracts.SettlementChargeRecords.ChargeKind, t)).SingleOrDefault(c => c.Id == chargeId);
+            if (charge is null || !charge.RecipientUserIds.Contains(chargePayer)) throw new FinanceException(409, "refund_source_requires_manual_review");
+            people = await db.Set<Resident>().AsNoTracking().Where(person => person.TenantUserId == chargePayer && person.VerificationStatus == IdentityVerificationStatus.Verified &&
+                db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == charge.RoomId)))
+                .OrderBy(person => person.Id).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+        }
         return new(Math.Max(0, excess), payment.IsDevelopmentDemo, people, requests);
     }
     public Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken t) => db.Database.SqlQuery<bool>($"""

@@ -3,6 +3,7 @@
     <EmbeddedResource Include="Persistence/Compact24/Migrations/LifecycleAlignment.sql" LogicalName="BHome.Compact24.LifecycleAlignment.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/PhysicalResidenceClosure.sql" LogicalName="BHome.Compact24.PhysicalResidenceClosure.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SettlementReceivableLedger.sql" LogicalName="BHome.Compact24.SettlementReceivableLedger.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/SettlementBankAllocations.sql" LogicalName="BHome.Compact24.SettlementBankAllocations.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Compatibility/compact24-2026-11-04.schema-reference" LogicalName="BHome.Compact24.PreviousProperty.schema-reference" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/InitialCompact24.sql" LogicalName="BHome.Compact24.InitialBaseline.sql" />
     <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/UPGRADE_LOCATION_ROOM.sql" LogicalName="BHome.Compact24.PropertyUpgrade.sql" />

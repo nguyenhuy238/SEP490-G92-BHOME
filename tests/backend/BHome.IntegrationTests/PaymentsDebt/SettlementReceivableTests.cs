@@ -28,8 +28,23 @@ public sealed partial class PaymentLedgerTests
             outsiderId = (await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
                 new ApplicationUser { UserName = Guid.NewGuid() + "@example.invalid", Email = Guid.NewGuid() + "@example.invalid" },
                 BHome.Domain.IdentityAccess.Roles.Tenant, BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password)).Id;
+            // A replacement arrives on the same calendar day, after the final inspection.
+            // Capacity remains three; the replacement must never inherit this damage debt.
+            var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(inspection.InspectedAt, "Asia/Ho_Chi_Minh").DateTime);
+            var departed = await db.Set<BHome.Domain.TenantContracts.Contract>().SingleAsync(c => c.RoomId == w.Room && c.TenantUserId == w.Tenants[1]);
+            departed.Status = BHome.Domain.TenantContracts.ContractStatus.Terminated; departed.ActualEndDate = date.AddDays(-1);
+            var departedMember = await db.Set<BHome.Domain.TenantContracts.ContractResident>().SingleAsync(cr => cr.ContractId == departed.Id);
+            departedMember.ResidenceTo = date.AddDays(-1);
+            (await db.Set<BHome.Domain.TenantContracts.Resident>().SingleAsync(r => r.TenantUserId == w.Tenants[1])).RoomId = null;
+            var newcomer = new BHome.Domain.TenantContracts.Resident { RoomId = w.Room, TenantUserId = outsiderId, OwnerUserId = w.Owner, DisplayLabel = "Synthetic new occupant" };
+            db.AddRange(newcomer, new BHome.Domain.TenantContracts.Contract { RoomId = w.Room, TenantUserId = outsiderId, OwnerSignerId = w.Owner,
+                RepresentativeResidentId = newcomer.Id, StartDate = date, EndDate = date.AddMonths(1), Terms = "Synthetic replacement tenancy",
+                Status = BHome.Domain.TenantContracts.ContractStatus.Active, ActivatedAt = DateTimeOffset.UtcNow, ActivatedByUserId = w.Owner,
+                Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = newcomer.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative, ResidenceFrom = date }] });
+            await db.SaveChangesAsync();
         }
         using var outsider = await Client(outsiderId);
+        view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
         var input = new DamageChargeInput(view.Reference, inspectionId, inspectionVersion, null, 600000,
             "Synthetic damage exceeding the security deposit", [proof], true);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(tenant, route + "/damage", input)).StatusCode);
@@ -41,6 +56,7 @@ public sealed partial class PaymentLedgerTests
         var charge = await RefundValue<SettlementReceivable>(competing[0]);
         Assert.Equal(charge.Id, (await RefundValue<SettlementReceivable>(competing[1])).Id);
         Assert.Equal(600000, charge.Amount); Assert.NotEmpty(charge.RecipientUserIds); Assert.Single(charge.Evidence);
+        Assert.DoesNotContain(outsiderId, charge.RecipientUserIds); Assert.DoesNotContain(w.Tenants[1], charge.RecipientUserIds);
         using var coTenant = await Client(w.Tenants[2]);
         Assert.Equal(600000, Assert.Single((await RefundValue<SettlementReceivablesView>(await coTenant.GetAsync(route))).Receivables).Outstanding);
         Assert.Single((await RefundValue<SettlementReceivablePage>(await coTenant.GetAsync("/api/v1/tenant/settlement-receivables"))).Items);

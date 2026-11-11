@@ -29,7 +29,8 @@ public sealed record SettlementReceivableBalance(SettlementReceivable Charge, de
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record SettlementReceivablesView(Guid ContractId, Guid RoomId, string Reference,
     decimal AvailableDeposit, IReadOnlyList<SettlementReceivableBalance> Receivables,
-    IReadOnlyList<DepositOffsetApproval> Offsets, string RoomNumber = "", IReadOnlyList<SettlementOffsetInvoice>? Invoices = null);
+    IReadOnlyList<DepositOffsetApproval> Offsets, string RoomNumber = "", IReadOnlyList<SettlementOffsetInvoice>? Invoices = null,
+    IReadOnlyList<PayerChoice>? Payers = null);
 public sealed record SettlementReceivablePage(IReadOnlyList<SettlementReceivablesView> Items, int Page, int PageSize, int Total);
 public sealed record SettlementChargeContext(SettlementReceivablesView View, Guid DepositContractId,
     Guid InspectionId, int InspectionVersion, bool InspectionConfirmed, bool NoAdditionalCharges,
@@ -45,10 +46,14 @@ public interface ISettlementReceivablesRepository
     Task<decimal?> InvoiceOutstandingAsync(Guid contractId, Guid invoiceId, CancellationToken token);
     Task SaveChargeAsync(SettlementReceivable charge, CancellationToken token);
     Task SaveOffsetAsync(DepositOffsetApproval approval, CancellationToken token);
+    Task<SettlementBankAllocationResult?> BankOperationAsync(Guid actor, Guid key, CancellationToken token);
+    Task SaveBankResultAsync(SettlementBankAllocationResult result, CancellationToken token);
+    Task<Guid> LocationAsync(Guid contractId, CancellationToken token);
 }
 
-public sealed class SettlementReceivablesService(ISettlementReceivablesRepository repository,
-    IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null)
+public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,
+    IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null, IPaymentRepository? payments = null,
+    ITransferQrGenerator? qr = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private async Task AuthorizeAsync(Guid id, bool write, CancellationToken token)
@@ -71,7 +76,8 @@ public sealed class SettlementReceivablesService(ISettlementReceivablesRepositor
             Receivables = visible.Select(r => r with { Charge = r.Charge with { RecipientUserIds = [], OperationKey = Guid.Empty, Fingerprint = "" } }).ToArray(),
             Offsets = view.Offsets.Where(o => o.ReceivableId is { } charge && visible.Any(r => r.Charge.Id == charge))
                 .Select(o => o with { OperationKey = Guid.Empty, Fingerprint = "", SourceSnapshot = "" }).ToArray(),
-            Invoices = null
+            Invoices = null,
+            Payers = null
         };
     }
     public async Task<SettlementReceivablePage> TenantListAsync(int page, int pageSize, CancellationToken token)

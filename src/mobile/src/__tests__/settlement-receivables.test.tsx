@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 const reload = vi.hoisted(() => vi.fn());
+vi.mock('react-native', () => ({ Image: () => null }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

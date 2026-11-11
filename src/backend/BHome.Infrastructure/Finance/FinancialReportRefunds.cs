@@ -27,7 +27,10 @@ public sealed partial class FinancialReportRepository
               AND r.state->>'classification'='ExcessReceiptRefundV1' AND EXISTS(
                 SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
                 JOIN residents person ON person.id=r.beneficiary_resident_id
-                WHERE p.id=r.source_payment_id AND p.status='VERIFIED' AND a.target_invoice_id IS NOT NULL
+                WHERE p.id=r.source_payment_id AND p.status='VERIFIED' AND (a.target_invoice_id IS NOT NULL OR EXISTS(
+                  SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+                  WHERE c.id=a.target_settlement_contract_id AND h->>'recordType'='SettlementReceivableV1'
+                    AND h->>'recordKey'=a.settlement_receivable_id::text AND h->'state'->'recipientUserIds' @> jsonb_build_array(a.paid_by_user_id::text)))
                   AND a.paid_by_user_id=person.user_id
                   AND p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id)
                     >= (SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr WHERE rr.source_payment_id=p.id AND rr.status='COMPLETED'))

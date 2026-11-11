@@ -23,6 +23,7 @@ public sealed record DebtSummary(
     int InvoiceCount, int OverdueInvoiceCount);
 public sealed class PaymentQuery
 {
+    public Guid? SettlementContractId { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
     public Guid? LocationId { get; set; }
@@ -52,7 +53,7 @@ public sealed record TransferView(Guid Id, string ProviderIdentity, string BankR
     string Status, string Reason, Guid? AllocatedInvoiceId, bool IsDevelopmentDemo,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal AllocatedAmount = 0,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal UnallocatedAmount = 0,
-    Guid? AllocatedDepositContractId = null);
+    Guid? AllocatedDepositContractId = null, Guid? AllocatedSettlementContractId = null, Guid? AllocatedSettlementReceivableId = null);
 public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTransfer Transfer);
 public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId, Guid? DepositContractId = null);
 public sealed record ReconciliationView(long Sequence, Guid? InvoiceId, string Decision, string Reason, Guid ActorId, DateTimeOffset OccurredAt);

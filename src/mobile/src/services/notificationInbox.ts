@@ -99,6 +99,8 @@ export async function notificationDestination(
     return { screen: 'invoice', params: { invoiceId: target.objectId } };
   if (target.objectType === 'MeterReading' && role === 'Tenant')
     return { screen: 'tenant-meters', params: { readingId: target.objectId } };
+  if (target.objectType === 'SettlementReceivable' && role === 'Tenant')
+    return { screen: 'invoice', params: { focus: 'settlement' } };
   if (target.objectType === 'Adjustment' && role === 'Tenant') {
     const adjustment = await api.request<{ invoiceId: string }>(
       `/api/v1/invoice-adjustments/${encodeURIComponent(target.objectId)}`,

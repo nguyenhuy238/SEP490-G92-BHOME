@@ -116,13 +116,24 @@ public sealed partial class Compact24DbContext
                 throw LedgerConflict();
             return;
         }
-        if (allocation.TargetSettlementContractId is not null || allocation.SettlementReceivableId is not null) throw LedgerConflict();
         if (allocation.TransferId is { } transferId)
         {
             if (allocation.SourceDepositContractId is not null ||
-                (allocation.TargetDepositContractId is null) == (allocation.InvoiceId is null) ||
+                (allocation.TargetDepositContractId is null ? 0 : 1) + (allocation.InvoiceId is null ? 0 : 1) + (allocation.TargetSettlementContractId is null ? 0 : 1) != 1 ||
                 await Set<PaymentAllocation>().AnyAsync(a => a.TransferId == transferId, token)) throw LedgerConflict();
             var transfer = await Set<PaymentTransfer>().SingleAsync(p => p.Id == transferId, token);
+            if (allocation.TargetSettlementContractId is { } settlementContract)
+            {
+                var charges = await BHome.Infrastructure.Contracts.SettlementChargeRecords.ReadAsync<BHome.Application.Contracts.SettlementReceivable>(this,
+                    settlementContract, BHome.Infrastructure.Contracts.SettlementChargeRecords.ChargeKind, token);
+                var charge = charges.SingleOrDefault(c => c.Id == allocation.SettlementReceivableId);
+                var settled = await Set<PaymentAllocation>().Where(a => a.TargetSettlementContractId == settlementContract && a.SettlementReceivableId == allocation.SettlementReceivableId)
+                    .SumAsync(a => (decimal?)a.Amount, token) ?? 0;
+                if (charge is null || allocation.Amount <= 0 || allocation.Amount != Math.Min(transfer.Amount, charge.Amount - settled) ||
+                    allocation.PaidByUserId is { } payer && !charge.RecipientUserIds.Contains(payer) ||
+                    await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
+                return;
+            }
             if (allocation.TargetDepositContractId is { } depositContractId)
             {
                 var depositHolding = await Set<Contract>().SingleAsync(c => c.Id == depositContractId, token);
@@ -141,6 +152,7 @@ public sealed partial class Compact24DbContext
                 await Set<BankReferenceClaim>().AnyAsync(c => c.NormalizedReference == transfer.NormalizedReference, token)) throw LedgerConflict();
             return;
         }
+        if (allocation.TargetSettlementContractId is not null || allocation.SettlementReceivableId is not null) throw LedgerConflict();
         if (allocation.SourceDepositContractId is not { } source || allocation.TargetDepositContractId is not { } target || allocation.InvoiceId is not null ||
             allocation.Amount <= 0 || await Set<PaymentAllocation>().AnyAsync(a => a.SourceDepositContractId == source, token)) throw LedgerConflict();
         var holding = await Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == source, token);

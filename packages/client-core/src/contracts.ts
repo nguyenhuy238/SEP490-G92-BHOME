@@ -306,6 +306,7 @@ export interface DepositOffsetApproval {
   allocationId: string;
 }
 export interface SettlementReceivables {
+  payers?: { userId: string; displayLabel: string }[] | null;
   invoices?:
     | {
         id: string;
@@ -340,6 +341,23 @@ export interface DepositOffsetInput {
   amount: string;
   reason: string;
   humanConfirmed: boolean;
+}
+export interface SettlementTransferInstructions {
+  availability: string;
+  bankIdentifier: string | null;
+  accountNumber: string | null;
+  accountHolder: string | null;
+  outstandingAmount: string;
+  transferReference: string;
+  qrImageDataUri: string | null;
+  isDevelopmentDemo: boolean;
+}
+export interface SettlementBankResult {
+  transferId: string;
+  status: string;
+  reason: string;
+  allocatedAmount: string;
+  unallocatedAmount: string;
 }
 export interface DepositDeductionPlan {
   id: string;
@@ -417,6 +435,30 @@ export function contractClient(request: ContractRequest) {
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
     settlementReceivables: (id: string, signal?: AbortSignal) =>
       request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    settlementTransferInstructions: (id: string, chargeId: string, signal?: AbortSignal) =>
+      request<SettlementTransferInstructions>(
+        `${root}/${id}/move-out/receivables/${chargeId}/transfer-instructions`,
+        { signal },
+      ),
+    allocateSettlementBank: (
+      id: string,
+      chargeId: string,
+      body: {
+        expectedReference: string;
+        transferId: string;
+        paidByUserId: string | null;
+        humanConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      request<SettlementBankResult>(
+        `${root}/${id}/move-out/receivables/${chargeId}/bank-allocations`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify(body),
+        },
+      ),
     approveDamageCharge: (id: string, body: DamageChargeInput, key: string) =>
       request<SettlementReceivable>(`${root}/${id}/move-out/receivables/damage`, {
         method: 'POST',
@@ -792,6 +834,20 @@ export const labels: Record<string, string> = {
     'Chứng từ thiệt hại không khớp bản đã duyệt. Cần Owner đối chiếu lại.',
   settlement_review_changed:
     'Số liệu quyết toán đã thay đổi. Tải lại để đối chiếu và xác nhận phiên bản mới.',
+  settlement_source_already_charged:
+    'Nguồn thiệt hại này đã có khoản phải thu được duyệt. Kiểm tra sổ hiện có để tránh tính hai lần.',
+  settlement_idempotency_conflict:
+    'Mã thao tác đã được dùng với nội dung khác. Kiểm tra kết quả trước khi tạo quyết định mới.',
+  settlement_charge_not_ready:
+    'Cần biên bản đã được Owner duyệt và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
+  settlement_evidence_integrity_failed:
+    'Ảnh nguồn không còn khớp với bản đã duyệt. Cần đối chiếu lại trước khi ghi giảm nợ.',
+  deposit_offset_not_available:
+    'Cọc còn dùng không đủ hoặc đang có khoản giữ cho hoàn tiền. Tải lại số dư để kiểm tra.',
+  deposit_offset_target_invalid:
+    'Khoản đích hoặc số tiền cấn trừ không còn hợp lệ. Tải lại số dư nghĩa vụ.',
+  payer_not_settlement_recipient:
+    'Tài khoản người trả chưa thuộc nhóm người thuê của khoản phải thu. Kiểm tra lại người thực chuyển tiền.',
   move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
   inspection_changed_or_reviewed:
     'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',

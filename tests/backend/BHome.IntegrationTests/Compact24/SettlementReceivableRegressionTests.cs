@@ -18,4 +18,11 @@ public sealed class SettlementReceivableRegressionTests
         try { await new PaymentLedgerTests(fixture.Capture).DepositOffsetsVerifyDamageEvidenceAndFinalInvoiceBalance(); }
         finally { await fixture.DisposeAsync(); }
     }
+    [CompactPostgresFact]
+    public async Task BankPaymentsAndActualPayerRefunds()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try { await new PaymentLedgerTests(fixture.Capture).SettlementBankPaymentsPreservePartialDebtAndRefundExcessToActualPayer(); }
+        finally { await fixture.DisposeAsync(); }
+    }
 }

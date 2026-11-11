@@ -126,6 +126,8 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                 (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault() ??
                  db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
                 (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) && (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod)));
+        if (query.SettlementContractId is { } settlement)
+            source = source.Where(p => db.Set<PaymentAllocation>().Any(a => a.TransferId == p.Id && a.TargetSettlementContractId == settlement));
         if (!string.IsNullOrWhiteSpace(query.PaymentStatus))
             source = query.PaymentStatus switch
             {
@@ -148,7 +150,9 @@ internal sealed class PaymentRepository(BHomePersistenceContext db) : IPaymentRe
                 db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
                 db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0,
                 x.Amount - (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0),
-                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.TargetDepositContractId).FirstOrDefault()));
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.TargetDepositContractId).FirstOrDefault(),
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.TargetSettlementContractId).FirstOrDefault(),
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.SettlementReceivableId).FirstOrDefault()));
         return new(await views.ToArrayAsync(t),
             query.Page, query.PageSize, await source.CountAsync(t));
     }

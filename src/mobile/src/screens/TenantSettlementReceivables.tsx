@@ -6,6 +6,7 @@ import {
 } from '../../../../packages/client-core/src/contracts';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { TenantSettlementTransfer } from './TenantSettlementTransfer';
 
 export function TenantSettlementReceivables() {
   const [page, setPage] = useState(1);
@@ -43,6 +44,13 @@ export function TenantSettlementReceivables() {
               <Text>
                 Chi phí theo biên bản kiểm tra được Owner duyệt. Số đã phân bổ do máy chủ xác nhận.
               </Text>
+              {r.status !== 'Paid' && (
+                <TenantSettlementTransfer
+                  contractId={source.contractId}
+                  chargeId={r.charge.id}
+                  changed={query.reload}
+                />
+              )}
             </Box>
           ))}
           {source.offsets.map((o) => (

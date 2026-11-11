@@ -97,6 +97,7 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
             return scope.Tenant && await readings.CanViewAsync(scope.Actor, related, token) ? new(type, related, location) : null;
         command.CommandText = type switch
         {
+            "SettlementReceivable" => "SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h WHERE h->>'recordType'='SettlementReceivableV1' AND h->>'recordKey'=@target::text AND (@owner OR (@tenant AND h->'state'->'recipientUserIds' @> jsonb_build_array(@actor::text))))",
             "Invoice" => "SELECT EXISTS(SELECT 1 FROM invoices i WHERE i.id=@target AND (@owner OR (@tenant AND @actor=ANY(i.recipient_user_ids))))",
             "Adjustment" => "SELECT EXISTS(SELECT 1 FROM invoice_adjustments a JOIN invoices i ON i.id=a.invoice_id WHERE a.id=@target AND (@owner OR (@tenant AND a.requested_by_user_id=@actor AND @actor=ANY(i.recipient_user_ids))))",
             "Location" => "SELECT EXISTS(SELECT 1 FROM locations l WHERE l.id=@target AND (@owner OR (@staff AND l.is_active AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@actor AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))",

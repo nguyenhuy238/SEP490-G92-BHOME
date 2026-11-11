@@ -7,7 +7,7 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 public static class Compact24Schema
 {
-    public const string Version = "compact24-2026-11-11-settlement";
+    public const string Version = "compact24-2026-11-11-settlement-bank";
     private static readonly string Script = ReadScript();
     public static string ScriptSha256 { get; } = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Script)));
     private static readonly string[] Tables = Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal).ToArray();

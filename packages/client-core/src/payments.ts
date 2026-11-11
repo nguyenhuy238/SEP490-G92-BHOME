@@ -52,6 +52,8 @@ export interface BankAccount {
   version: number;
 }
 export interface BankTransfer {
+  allocatedSettlementContractId?: string | null;
+  allocatedSettlementReceivableId?: string | null;
   id: string;
   providerIdentity: string;
   bankReference: string;
@@ -135,6 +137,7 @@ export interface PayerChoice {
   displayLabel: string;
 }
 export interface PaymentFilter {
+  settlementContractId?: string;
   page?: number;
   locationId?: string;
   roomId?: string;
