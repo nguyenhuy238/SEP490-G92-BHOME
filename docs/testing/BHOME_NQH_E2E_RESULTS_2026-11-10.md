@@ -103,3 +103,6 @@ Force rebuild Release integration project: 0 warning/error. Application unit 411
 ## 11/11/2026 — Residence reminders và delivery source
 
 Release non-incremental build 0 warning/error; PostgreSQL notification/residence 15 PASS. Window WEEKLY được advance bằng clock tổng hợp, concurrency/retry không duplicate, Owner-confirmed legacy stamp không thay Completed, actual closure dừng, không Staff, và kênh delivery không dùng contract mới để gửi reminder của contract cũ. First run 13 PASS/1 FAIL do clock fixture UTC+7; đã sửa UTC, rebuild test và nhóm mở rộng 15 PASS. Channel probe chỉ local test boundary, không là provider acceptance.
+## 11/11/2026 — Legacy deduction retirement
+
+Non-incremental Release integration build 0 warning/error; Application unit 412 PASS; historical legacy + canonical settlement receivable PostgreSQL 6 PASS; Owner legacy/lifecycle/refund 19 PASS; Owner force typecheck/Mobile typecheck/lint/format PASS. New legacy/revision requests bị chặn, đúng old key replay được, production demo không replay; fixture historical versions/proof hash/audit giữ nguyên nghĩa vụ/refund/report/original invoice/tamper assertions. Không migrate working DB hoặc chuyển đổi lịch sử; không phải browser/provider E2E.

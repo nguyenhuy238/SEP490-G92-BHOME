@@ -301,14 +301,7 @@ export function ContractLifecyclePanel({
                 {inspection?.ownerDecision === 'Confirmed' && summary.depositDeductions && (
                   <DepositDeductionsPanel
                     key={`deductions:${summary.reference}`}
-                    api={api}
-                    id={contract.id}
                     summary={summary}
-                    inspection={inspection}
-                    saved={async () => {
-                      await reload();
-                      onChanged();
-                    }}
                   />
                 )}
                 <RefundPanel
