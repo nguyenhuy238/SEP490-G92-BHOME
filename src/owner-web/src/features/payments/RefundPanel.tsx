@@ -56,6 +56,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
         source.data.depositDeductions?.id,
         source.data.approvedDepositOffsets,
         source.data.beneficiaries.map((p) => p.id),
+        source.data.externalBeneficiary?.attestationId,
         source.data.requests.map((r) => [r.id, r.version, r.executionIntent?.key]),
       ])
     : '';
@@ -99,7 +100,10 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
       if (key.current.signature !== signature)
         key.current = { signature, value: crypto.randomUUID() };
       const body = {
-        beneficiaryResidentId: person,
+        beneficiaryResidentId: person.startsWith('external:') ? null : person,
+        ...(person.startsWith('external:')
+          ? { externalPayerAttestationId: person.slice('external:'.length) }
+          : {}),
         amount: value,
         reason,
         humanConfirmed: checked,
@@ -206,7 +210,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
               bằng chứng nộp cọc trước khi chọn người nhận.
             </Alert>
           )}
-          {source.data.beneficiaries.length === 0 ? (
+          {source.data.beneficiaries.length === 0 && !source.data.externalBeneficiary ? (
             <Alert severity="warning">
               Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.
             </Alert>
@@ -228,6 +232,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                     {p.label}
                   </MenuItem>
                 ))}
+                {source.data.externalBeneficiary && (
+                  <MenuItem value={`external:${source.data.externalBeneficiary.attestationId}`}>
+                    {source.data.externalBeneficiary.label} · Người trả bên ngoài
+                  </MenuItem>
+                )}
               </TextField>
               <TextField
                 label="Số tiền yêu cầu hoàn (VND)"
@@ -296,7 +305,12 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                   !checked ||
                   !depositConfirmed ||
                   blocked ||
-                  !source.data.beneficiaries.some((p) => p.id === person) ||
+                  !(
+                    source.data.beneficiaries.some((p) => p.id === person) ||
+                    (sourceKind === 'Receipt' &&
+                      source.data.externalBeneficiary &&
+                      person === `external:${source.data.externalBeneficiary.attestationId}`)
+                  ) ||
                   !amount ||
                   !reason.trim() ||
                   source.data.availableAmount === null ||

@@ -48,6 +48,7 @@ public sealed partial class SettlementReceivablesService
             var context = await repository.ContextAsync(id, token);
             var balance = context.View.Receivables.SingleOrDefault(r => r.Charge.Id == chargeId) ?? throw ContractException.Missing();
             var transfer = await payments.TransferAsync(input.TransferId, token) ?? throw ContractException.Missing();
+            if (input.PaidByUserId is not null && await payments.ExternalPayerRecordedAsync(transfer.Id, token)) throw ContractException.Conflict("receipt_payer_already_external");
             if ((context.IsDevelopmentDemo || transfer.IsDevelopmentDemo) && mode?.AllowDevelopmentDemo != true || transfer.IsDevelopmentDemo && !context.IsDevelopmentDemo)
                 throw ContractException.Conflict("development_payment_unavailable");
             if (input.PaidByUserId is { } payer && !balance.Charge.RecipientUserIds.Contains(payer)) throw ContractException.Invalid("payer_not_settlement_recipient");

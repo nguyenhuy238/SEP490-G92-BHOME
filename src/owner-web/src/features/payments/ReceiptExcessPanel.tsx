@@ -175,7 +175,10 @@ export function ReceiptExcessPanel({
         {
           target: context.data.target,
           expectedReference: context.data.reference,
-          payerResidentId: payer,
+          payerResidentId: payer.startsWith('external:') ? null : payer,
+          ...(payer.startsWith('external:')
+            ? { externalPayerAttestationId: payer.slice('external:'.length) }
+            : {}),
           reason: reason.trim(),
           humanConfirmed: true,
         },
@@ -255,6 +258,11 @@ export function ReceiptExcessPanel({
                   {p.label}
                 </MenuItem>
               ))}
+              {context.data.externalPayer && (
+                <MenuItem value={`external:${context.data.externalPayer.id}`}>
+                  {context.data.externalPayer.payerLabel} · Người trả bên ngoài đã xác minh
+                </MenuItem>
+              )}
             </TextField>
             <TextField
               label="Lý do xác nhận toàn bộ tiền dư"

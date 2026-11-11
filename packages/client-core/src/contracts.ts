@@ -968,6 +968,8 @@ export const labels: Record<string, string> = {
   deposit_deduction_not_ready: 'Chưa đủ điều kiện khấu trừ hoặc đã có khoản hoàn giữ chỗ/hoàn tất.',
   settlement_receivables_replace_legacy_deductions:
     'Luồng khấu trừ cũ chỉ đọc. Ghi thiệt hại thành khoản phải thu rồi duyệt cấn trừ cọc riêng.',
+  receipt_payer_already_external:
+    'Giao dịch có người thực trả bên ngoài đã xác minh; để người trả Tenant trống và xem hồ sơ payer của giao dịch.',
   deposit_deduction_exceeds_available:
     'Tổng khấu trừ vượt cọc còn khả dụng. Cần xử lý phần nghĩa vụ còn thiếu.',
   invalid_deposit_deduction_item:

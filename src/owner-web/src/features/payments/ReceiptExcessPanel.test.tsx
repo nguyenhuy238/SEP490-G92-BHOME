@@ -109,3 +109,27 @@ it('loads a durable disposition directly without offering a second confirmation'
   expect(api.excessContext).not.toHaveBeenCalled();
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 });
+it('confirms whole excess to the attested outside payer without a placeholder Resident', async () => {
+  api.excessContext.mockResolvedValue({
+    ...context,
+    payers: [],
+    externalPayer: { id: 'outside', payerLabel: 'Synthetic outside payer' },
+  });
+  api.confirmExcess.mockRejectedValue({ status: 503 });
+  mount();
+  await screen.findByText('Xác nhận toàn bộ giao dịch là tiền dư');
+  fireEvent.mouseDown(screen.getByLabelText('Người thực trả nhận lại tiền'));
+  fireEvent.click(await screen.findByRole('option', { name: /Synthetic outside payer/ }));
+  fireEvent.change(screen.getByLabelText('Lý do xác nhận toàn bộ tiền dư'), {
+    target: { value: 'Synthetic checked source' },
+  });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận nghĩa vụ hoàn toàn bộ giao dịch' }));
+  await waitFor(() =>
+    expect(api.confirmExcess).toHaveBeenCalledWith(
+      'receipt',
+      expect.objectContaining({ payerResidentId: null, externalPayerAttestationId: 'outside' }),
+      expect.any(String),
+    ),
+  );
+});

@@ -18,6 +18,25 @@ internal static class ReceiptExcessRecords
 {
     internal const string Kind = "ReceiptExcessDispositionV1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    internal static Task<bool> PendingAllocatedSettlementAsync(BHomePersistenceContext db, Guid contractId, CancellationToken token)
+    {
+        if (db is not Compact24DbContext) return Task.FromResult(false);
+        return db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
+              WHERE a.target_settlement_contract_id={contractId} AND (p.status<>'VERIFIED' OR
+                p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id)<>
+                  (SELECT COALESCE(sum(r.requested_amount),0) FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED') OR
+                EXISTS(SELECT 1 FROM refund_requests r WHERE r.source_payment_id=p.id AND r.status='COMPLETED' AND NOT bhome24_external_refund_valid(r.id)
+                  AND NOT EXISTS(SELECT 1 FROM residents person,
+                    LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
+                      WHERE h->>'recordType'='ExcessReceiptRefundV1' ORDER BY n DESC LIMIT 1) proof
+                    WHERE person.id=r.beneficiary_resident_id AND person.user_id=a.paid_by_user_id AND r.source_deposit_contract_id IS NULL
+                      AND proof.state->>'classification'='ExcessReceiptRefundV1' AND r.executed_at IS NOT NULL
+                      AND proof.state->'upload'->>'objectKey'=r.execution_evidence_key AND proof.state->'upload'->>'externalReference'=r.external_refund_reference
+                      AND proof.state->'upload'->>'sha256' ~ {"^[A-F0-9]{64}$"}
+                      AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(proof.state->'events')='array' THEN proof.state->'events' ELSE '[]'::jsonb END) e WHERE e->>'action'='Completed'))))) AS "Value"
+            """).SingleAsync(token);
+    }
     internal static async Task<ReceiptExcessDisposition?> ReadAsync(BHomePersistenceContext db, Guid transferId, CancellationToken token)
     {
         if (db is not Compact24DbContext) return null;
@@ -123,8 +142,10 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         if ((await payments.LatestReviewAsync(id, token))?.Decision == "Rejected") problems.Add("bank_transfer_rejected");
         if (await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM refund_requests WHERE source_payment_id={id} AND status IN ('REQUESTED','APPROVED','COMPLETED')) AS \"Value\"").SingleAsync(token))
             problems.Add("refund_source_requires_manual_review");
-        if (people.Length == 0) problems.Add("receipt_verified_payer_required");
-        var context = new ReceiptExcessContext(id, target, room, transfer.Amount, outstanding, reference, people, "", problems.Distinct().Order().ToArray(), existing, transfer.IsDevelopmentDemo);
+        var external = await ExternalPaymentPayerRecords.ReadAsync(db, id, token);
+        if (external is not null && external.TransferFingerprint != ReceiptExcessRules.TransferFingerprint(transfer)) throw new PaymentException(409, "external_payer_history_invalid");
+        if (people.Length == 0 && external is null) problems.Add("receipt_verified_payer_required");
+        var context = new ReceiptExcessContext(id, target, room, transfer.Amount, outstanding, reference, external is null ? people : [], "", problems.Distinct().Order().ToArray(), existing, transfer.IsDevelopmentDemo, external);
         return context with { Reference = "EXCESS-" + ReceiptExcessRules.Hash(new { context, Transfer = ReceiptExcessRules.TransferFingerprint(transfer) }) };
     }
     public async Task SaveAsync(ReceiptExcessDisposition disposition, CancellationToken token)

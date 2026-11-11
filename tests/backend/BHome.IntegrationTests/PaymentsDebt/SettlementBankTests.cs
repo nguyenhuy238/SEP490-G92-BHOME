@@ -65,6 +65,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(150000, paid.AllocatedAmount); Assert.Equal(50000, paid.UnallocatedAmount);
         view = await RefundValue<SettlementReceivablesView>(await tenant.GetAsync(route));
         Assert.Equal("Paid", view.Receivables[0].Status); Assert.Equal(0, view.Receivables[0].Outstanding);
+        Assert.Contains("receipt_excess_refund_pending", (await RefundValue<ContractSettlementSummary>(await owner.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"))).UnresolvedItems);
         Assert.Equal("Settled", (await RefundValue<SettlementTransferInstructions>(await tenant.GetAsync(instructionsRoute))).Availability);
         var receipt = await RefundValue<TransferView>(await owner.GetAsync($"/api/v1/payment-transactions/{excess.Id}"));
         Assert.Equal(w.Contract, receipt.AllocatedSettlementContractId); Assert.Equal(charge.Id, receipt.AllocatedSettlementReceivableId);
@@ -78,6 +79,7 @@ public sealed partial class PaymentLedgerTests
         refund = await RefundValue<RefundView>(await Post(owner, $"/api/v1/refund-requests/{refund.Id}/decision", new RefundDecision(refund.Version, true, "Synthetic bank payer checked", true)));
         await RefundValue<RefundView>(await DepositExecute(owner, refund, Guid.NewGuid(), DateTimeOffset.UtcNow, photo));
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
+        Assert.DoesNotContain("receipt_excess_refund_pending", (await RefundValue<ContractSettlementSummary>(await owner.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"))).UnresolvedItems);
         var report = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}"));
         Assert.False(report.HasUnclassifiedRefunds);
         Assert.Equal("600000", report.SettlementSources!.ApprovedCharges); Assert.Equal("0", report.SettlementSources.OutstandingNow);

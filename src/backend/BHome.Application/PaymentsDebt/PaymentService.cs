@@ -137,6 +137,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             if (await Replay(key, "allocate", new { transferId, x }, t) is not null)
                 return await Outcome(transferId, t);
             var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+            if (x.PaidByUserId is not null && await repository.ExternalPayerRecordedAsync(transferId, t)) throw new PaymentException(409, "receipt_payer_already_external");
             if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
                 throw new PaymentException(409, "development_payment_unavailable");
             var allocated = await repository.AllocationAsync(transferId, t);
@@ -195,6 +196,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
         {
             if (await Replay(key, "allocate-deposit", new { transferId, x }, t) is not null) return await Outcome(transferId, t);
             var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+            if (await repository.ExternalPayerRecordedAsync(transferId, t)) throw new PaymentException(409, "receipt_payer_already_external");
             if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
             if (await repository.AllocationAsync(transferId, t) is not null) throw new PaymentException(409, "bank_transaction_already_allocated");
             var holding = await repository.HoldingAsync(x.ContractId, t) ?? throw new PaymentException(404, "holding_contract_not_found");
@@ -311,7 +313,7 @@ public sealed class PaymentService(IPaymentRepository repository, ICurrentUser u
             financial.EffectivePayableAmount, paid, outstanding, invoice.DueDate, invoice.Status == InvoiceStatus.Final ? PaymentRules.OverdueDays(invoice.DueDate, Today, outstanding) : 0,
             PaymentRules.InvoiceReference(invoice.Id), financial.PotentialExcessAmount > 0 || await repository.PendingReviewAsync(id, t),
             history.Select(entry => new PaymentHistoryView(entry.Allocation.Id, entry.Allocation.Amount, entry.Transfer.OccurredAt,
-                entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
+                entry.ExternalPayerVerified ? "Người trả bên ngoài (đã xác minh)" : entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
                     scope.Owner ? payers.FirstOrDefault(p => p.UserId == entry.Allocation.PaidByUserId)?.DisplayLabel ?? "Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                 scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray(),
             financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus);

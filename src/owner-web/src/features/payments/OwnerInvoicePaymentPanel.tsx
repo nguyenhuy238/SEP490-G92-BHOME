@@ -34,6 +34,7 @@ import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { RefundPanel } from './RefundPanel';
 import { ReceiptExcessPanel } from './ReceiptExcessPanel';
+import { ExternalPaymentPayerPanel } from './ExternalPaymentPayerPanel';
 import { PaymentInvoicePicker } from './PaymentInvoicePicker';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
@@ -417,6 +418,7 @@ export function ReconcileTransfer({
           </Typography>
         )}
         {notice && <Alert severity="info">{notice}</Alert>}
+        <ExternalPaymentPayerPanel transferId={transfer.id} />
         {data.status === 'Allocated' &&
           data.unallocatedAmount !== undefined &&
           /^0*(?:\.0+)?$/.test(data.unallocatedAmount) === false && (

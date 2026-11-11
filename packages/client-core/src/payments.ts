@@ -148,7 +148,8 @@ export interface ReceiptExcessDisposition {
   target: ReceiptExcessTarget;
   roomId: string;
   amount: string;
-  payerResidentId: string;
+  payerResidentId: string | null;
+  externalPayerAttestationId?: string | null;
   payerUserId: string | null;
   payerLabel: string;
   reason: string;
@@ -156,6 +157,7 @@ export interface ReceiptExcessDisposition {
   isDevelopmentDemo: boolean;
 }
 export interface ReceiptExcessContext {
+  externalPayer?: ExternalPaymentPayer | null;
   transferId: string;
   target: ReceiptExcessTarget;
   roomId: string;
@@ -166,6 +168,23 @@ export interface ReceiptExcessContext {
   reference: string;
   problems: string[];
   disposition: ReceiptExcessDisposition | null;
+  isDevelopmentDemo: boolean;
+}
+export interface ExternalPaymentPayer {
+  id: string;
+  transferId: string;
+  payerLabel: string;
+  reason: string;
+  transferFingerprint: string;
+  verifiedAt: string;
+  isDevelopmentDemo: boolean;
+}
+export interface ExternalPaymentPayerContext {
+  transferId: string;
+  transferFingerprint: string;
+  statementReference: string;
+  problems: string[];
+  payer: ExternalPaymentPayer | null;
   isDevelopmentDemo: boolean;
 }
 export interface PaymentFilter {
@@ -192,6 +211,22 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
     });
   const root = '/api/v1/payment-transactions';
   return {
+    externalPayer: (id: string, signal?: AbortSignal) =>
+      request<ExternalPaymentPayerContext>(`${root}/${encodeURIComponent(id)}/external-payer`, {
+        signal,
+      }),
+    confirmExternalPayer: (
+      id: string,
+      body: {
+        expectedTransferFingerprint: string;
+        payerLabel: string;
+        reason: string;
+        payerHasNoResidentProfile: boolean;
+        humanConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      mutation<ExternalPaymentPayer>(`${root}/${encodeURIComponent(id)}/external-payer`, body, key),
     excessDisposition: async (id: string, signal?: AbortSignal) =>
       (await request<ReceiptExcessDisposition | null>(
         `${root}/${encodeURIComponent(id)}/excess-disposition`,
@@ -210,7 +245,8 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       input: {
         target: ReceiptExcessTarget;
         expectedReference: string;
-        payerResidentId: string;
+        payerResidentId: string | null;
+        externalPayerAttestationId?: string;
         reason: string;
         humanConfirmed: boolean;
       },
@@ -317,6 +353,13 @@ export function paymentError(error: unknown) {
   const code =
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   const errors: Record<string, string> = {
+    external_payer_confirmation_required:
+      'Cần đối chiếu sao kê, nhập nhãn người thực trả và xác nhận không có hồ sơ Resident.',
+    external_payer_review_changed:
+      'Nguồn giao dịch hoặc điều kiện xác minh đã thay đổi. Tải lại để kiểm tra.',
+    external_payer_already_confirmed: 'Người trả bên ngoài đã được xác nhận cho giao dịch này.',
+    receipt_payer_already_external:
+      'Giao dịch có người thực trả bên ngoài đã xác minh; không gắn thành thanh toán của Tenant.',
     receipt_excess_already_confirmed: 'Giao dịch đã xác nhận phải hoàn. Tải lại hồ sơ hoàn tiền.',
     receipt_excess_review_changed: 'Số liệu đối chiếu đã thay đổi. Tải lại và xác nhận lại.',
     receipt_excess_not_ready:

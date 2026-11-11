@@ -21,6 +21,7 @@ import {
 import { paymentClient } from '../../../../../packages/client-core/src/payments';
 import { RefundPanel } from '../payments/RefundPanel';
 import { ReceiptExcessPanel } from '../payments/ReceiptExcessPanel';
+import { ExternalPaymentPayerPanel } from '../payments/ExternalPaymentPayerPanel';
 
 export function SettlementBankPanel({
   api,
@@ -203,6 +204,7 @@ export function SettlementBankPanel({
           onChanged={() => void saved()}
         />
       )}
+      {transfer && <ExternalPaymentPayerPanel key={transfer} transferId={transfer} />}
       {result && (
         <Alert severity={result.status === 'Allocated' ? 'success' : 'warning'}>
           {result.status === 'Allocated'

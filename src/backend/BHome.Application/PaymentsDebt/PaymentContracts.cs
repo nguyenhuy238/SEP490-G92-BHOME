@@ -54,7 +54,7 @@ public sealed record TransferView(Guid Id, string ProviderIdentity, string BankR
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal AllocatedAmount = 0,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal UnallocatedAmount = 0,
     Guid? AllocatedDepositContractId = null, Guid? AllocatedSettlementContractId = null, Guid? AllocatedSettlementReceivableId = null);
-public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTransfer Transfer);
+public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTransfer Transfer, bool ExternalPayerVerified = false);
 public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId, Guid? DepositContractId = null);
 public sealed record ReconciliationView(long Sequence, Guid? InvoiceId, string Decision, string Reason, Guid ActorId, DateTimeOffset OccurredAt);
 public sealed record PayerChoice(Guid UserId, string DisplayLabel);
@@ -76,6 +76,7 @@ public sealed class PaymentException(int status, string code) : Exception("Payme
 }
 public interface IPaymentRepository
 {
+    Task<bool> ExternalPayerRecordedAsync(Guid transferId, CancellationToken token);
     bool AmountMismatchSupported => false;
     Task<T> TransactionAsync<T>(Guid? transferId, Guid? invoiceId, Func<Task<T>> work, CancellationToken t);
     Task<T> DepositTransactionAsync<T>(Guid transferId, Guid contractId, Func<Task<T>> work, CancellationToken t);

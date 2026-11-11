@@ -21,7 +21,9 @@ export interface Refund {
   id: string;
   sourcePaymentId: string | null;
   sourceDepositContractId?: string | null;
-  beneficiaryResidentId: string;
+  beneficiaryResidentId: string | null;
+  beneficiaryKind?: 'RESIDENT' | 'EXTERNAL';
+  externalPayerAttestationId?: string | null;
   beneficiaryLabel: string;
   amount: string;
   reason: string;
@@ -45,6 +47,7 @@ export interface Refund {
   } | null;
 }
 export interface RefundSource {
+  externalBeneficiary?: { attestationId: string; label: string } | null;
   approvedDepositOffsets?: string;
   sourcePaymentId: string | null;
   sourceDepositContractId?: string | null;
@@ -61,7 +64,8 @@ export interface RefundSource {
   requests: Refund[];
 }
 export interface RefundInput {
-  beneficiaryResidentId: string;
+  beneficiaryResidentId: string | null;
+  externalPayerAttestationId?: string;
   amount: string;
   reason: string;
   humanConfirmed: boolean;

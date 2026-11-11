@@ -443,3 +443,38 @@ it('lets fetch set multipart boundaries while keeping JSON request headers uncha
     vi.unstubAllGlobals();
   }
 });
+it('requests a refund to the verified outside payer without inventing a Resident identifier', async () => {
+  request.mockResolvedValue({
+    ...source,
+    beneficiaries: [],
+    externalBeneficiary: { attestationId: 'outside', label: 'Synthetic outside payer' },
+  });
+  mount();
+  fireEvent.mouseDown(await screen.findByLabelText('Người nhận hoàn đã xác minh'));
+  fireEvent.click(await screen.findByRole('option', { name: /Synthetic outside payer/ }));
+  fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
+    target: { value: '20000' },
+  });
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
+    target: { value: 'Synthetic verified outside payer return' },
+  });
+  fireEvent.click(
+    screen.getByLabelText('Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await vi.waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/payment-transactions/source/refunds',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          beneficiaryResidentId: null,
+          externalPayerAttestationId: 'outside',
+          amount: '20000',
+          reason: 'Synthetic verified outside payer return',
+          humanConfirmed: true,
+        }),
+      }),
+    ),
+  );
+});

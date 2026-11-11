@@ -11,13 +11,16 @@ public sealed record ReceiptExcessTarget(Guid? InvoiceId = null, Guid? Settlemen
 public sealed record ReceiptExcessPayer(Guid ResidentId, Guid? UserId, string Label);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record ReceiptExcessDisposition(Guid Id, Guid TransferId, ReceiptExcessTarget Target, Guid RoomId, decimal Amount,
-    Guid PayerResidentId, Guid? PayerUserId, string PayerLabel, string TransferFingerprint, string Reason, Guid ApprovedByUserId,
-    DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo);
+    Guid? PayerResidentId, Guid? PayerUserId, string PayerLabel, string TransferFingerprint, string Reason, Guid ApprovedByUserId,
+    DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ExternalPayerAttestationId = null);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record ReceiptExcessContext(Guid TransferId, ReceiptExcessTarget Target, Guid RoomId, decimal Amount, decimal Outstanding,
     string TransferReference, IReadOnlyList<ReceiptExcessPayer> Payers, string Reference, IReadOnlyList<string> Problems,
-    ReceiptExcessDisposition? Disposition, bool IsDevelopmentDemo);
-public sealed record ReceiptExcessConfirmation(ReceiptExcessTarget Target, string ExpectedReference, Guid PayerResidentId, string Reason, bool HumanConfirmed);
+    ReceiptExcessDisposition? Disposition, bool IsDevelopmentDemo,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ExternalPaymentPayer? ExternalPayer = null);
+public sealed record ReceiptExcessConfirmation(ReceiptExcessTarget Target, string ExpectedReference, Guid? PayerResidentId, string Reason, bool HumanConfirmed,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ExternalPayerAttestationId = null);
 public static class ReceiptExcessRules
 {
     public static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
@@ -64,7 +67,8 @@ public sealed class ReceiptExcessService(IReceiptExcessRepository repository, IP
     public Task<ReceiptExcessDisposition> ConfirmAsync(Guid transferId, ReceiptExcessConfirmation input, Guid key, CancellationToken token)
     {
         var actor = Owner(); ReceiptExcessRules.Validate(input.Target);
-        if (key == Guid.Empty || !input.HumanConfirmed || input.PayerResidentId == Guid.Empty || string.IsNullOrWhiteSpace(input.ExpectedReference) ||
+        if (key == Guid.Empty || !input.HumanConfirmed || input.PayerResidentId == Guid.Empty || input.ExternalPayerAttestationId == Guid.Empty ||
+            (input.PayerResidentId is null) == (input.ExternalPayerAttestationId is null) || string.IsNullOrWhiteSpace(input.ExpectedReference) ||
             string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Length > 2000) throw new PaymentException(400, "receipt_excess_confirmation_required");
         var normalized = input with { Reason = input.Reason.Trim() }; var fingerprint = ReceiptExcessRules.Hash(new { transferId, input = normalized });
         return repository.TransactionAsync(transferId, input.Target, async () =>
@@ -79,11 +83,13 @@ public sealed class ReceiptExcessService(IReceiptExcessRepository repository, IP
             if (context.Disposition is not null) throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (context.Reference != input.ExpectedReference) throw new PaymentException(409, "receipt_excess_review_changed");
             if (context.Problems.Count > 0 || context.Outstanding != 0) throw new PaymentException(409, "receipt_excess_not_ready");
-            var payer = context.Payers.SingleOrDefault(p => p.ResidentId == input.PayerResidentId) ?? throw new PaymentException(400, "receipt_verified_payer_required");
+            var payer = context.Payers.SingleOrDefault(p => p.ResidentId == input.PayerResidentId);
+            var external = input.ExternalPayerAttestationId is { } externalId && context.ExternalPayer?.Id == externalId ? context.ExternalPayer : null;
+            if (payer is null && external is null) throw new PaymentException(400, "receipt_verified_payer_required");
             var transfer = await payments.TransferAsync(transferId, token) ?? throw new PaymentException(404, "bank_transfer_not_found");
             var result = new ReceiptExcessDisposition(Guid.NewGuid(), transferId, input.Target, context.RoomId, context.Amount,
-                payer.ResidentId, payer.UserId, payer.Label, ReceiptExcessRules.TransferFingerprint(transfer), normalized.Reason, actor,
-                PaymentRules.Timestamp(clock.GetUtcNow()), key, fingerprint, context.IsDevelopmentDemo);
+                payer?.ResidentId, payer?.UserId, payer?.Label ?? external!.PayerLabel, ReceiptExcessRules.TransferFingerprint(transfer), normalized.Reason, actor,
+                PaymentRules.Timestamp(clock.GetUtcNow()), key, fingerprint, context.IsDevelopmentDemo, external?.Id);
             await repository.SaveAsync(result, token); return result;
         }, token);
     }

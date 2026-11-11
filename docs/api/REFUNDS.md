@@ -1,5 +1,9 @@
 # Hoàn tiền thủ công — receipt thừa và cọc không khấu trừ
 
+## 11/11/2026 — Payer bên ngoài không có Resident
+
+Đã bổ sung [xác minh payer ngoài và hoàn tiền receipt](EXTERNAL_PAYMENT_PAYERS.md). Beneficiary phân biệt RESIDENT/EXTERNAL; external dùng attestation đúng receipt với beneficiaryResidentId null, không tạo hồ sơ giả. Request/approve/execution/private proof, source budget và Owner-only giữ nguyên; old Resident request fingerprint tương thích. Các giới hạn lịch sử bên dưới về thiếu external-payer refund đã được thay thế cho nguồn receipt; principal deposit và adjustment-generated excess vẫn cần xử lý riêng.
+
 ## 11/11/2026 — Tenant xem hoàn tiền của chính mình
 
 `GET /api/v1/tenant/refunds?page=1&pageSize=20` chỉ dành cho Tenant. Quyền theo `refund_requests.beneficiary_resident_id → residents.user_id` hiện được liên kết với authenticated user; không theo RoomId hiện tại. Áp quyền trước count, sort và pagination; page >= 1, pageSize 1..100, chặn overflow. Chỉ đọc các workflow refund đã phân loại, không expose legacy chưa đối chiếu.
