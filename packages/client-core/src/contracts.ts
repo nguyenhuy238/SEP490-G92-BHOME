@@ -269,6 +269,25 @@ export interface SettlementSummary {
   reference: string;
   transferVerificationStatus: string;
 }
+export interface HoldingDepositStatus {
+  contractId: string;
+  status: string;
+  required: string;
+  verified: string;
+  remaining: string;
+  requiresManualReview: boolean;
+  priceLockedAt: string | null;
+  priceLockTrigger: string | null;
+  disposition?: {
+    cause: string;
+    status: string;
+    forfeitedAmount: string;
+    refundRequired: string;
+    refunded: string;
+    reserved: string;
+    financialReference: string;
+  } | null;
+}
 export interface SettlementChargeReview {
   id: string;
   contractId: string;
@@ -1218,7 +1237,7 @@ export function contractActions(
           'holding-cancellation',
           'Hủy hợp đồng giữ chỗ',
           [{ name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 }],
-          'Hủy giữ lại lịch sử và có thể tạo hồ sơ quyết toán thủ công nếu đã nhận tiền.',
+          'Chọn rõ nguyên nhân: Tenant tự hủy thì mất cọc; Owner không cung cấp được phòng phải hoàn bên ngoài và ghi nhận bằng chứng thực chi. Lịch sử được giữ lại.',
         ),
       );
     if ((owner || staff) && active && !expired && !c.convertedMainContractId)
@@ -1355,6 +1374,12 @@ export function actionPayload(
   }
   if (a.operation === 'renewals' && String(body.endDate) <= c.endDate)
     throw new Error('Ngày hết hạn mới phải sau ngày hết hạn hiện tại.');
+  if (a.operation === 'holding-cancellation') {
+    if (!['0', '1'].includes(values.cause) || values.humanConfirmed !== 'true')
+      throw new Error('Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.');
+    body.cause = Number(values.cause);
+    body.humanConfirmed = true;
+  }
   if (a.operation === 'termination-requests' || a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
       throw new Error('Ngày trả phòng không được trong quá khứ.');

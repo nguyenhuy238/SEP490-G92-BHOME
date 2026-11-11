@@ -24,16 +24,16 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
           r.decision_reason AS "DecisionReason", r.executed_at AS "ExecutedAt", r.external_refund_reference AS "ExternalReference",
           r.execution_evidence_key AS "EvidenceKey", r.history::text AS "HistoryJson",
           (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')='true' OR
-            EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType'='SecurityDepositRefundV1'
+            EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType' IN ('SecurityDepositRefundV1','HoldingDepositRefundV1')
               AND h->'state'->>'isDevelopmentDemo'='true')) AS "IsDevelopmentDemo"
         FROM refund_requests r JOIN residents resident ON resident.id=r.beneficiary_resident_id
           LEFT JOIN payments p ON p.id=r.source_payment_id
-        WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1'))
+        WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1','HoldingDepositRefundV1'))
         """);
     private static RefundRecord Decode(RefundRecord row)
     {
         using var json = JsonDocument.Parse(row.HistoryJson);
-        row.State = json.RootElement.EnumerateArray().Last(n => n.TryGetProperty("recordType", out var kind) && kind.GetString() is Kind or "SecurityDepositRefundV1")
+        row.State = json.RootElement.EnumerateArray().Last(n => n.TryGetProperty("recordType", out var kind) && kind.GetString() is Kind or "SecurityDepositRefundV1" or "HoldingDepositRefundV1")
             .GetProperty("state").Deserialize<RefundState>(Json) ?? throw new FinanceException(409, "refund_history_invalid");
         return row;
     }
@@ -91,7 +91,7 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
         SELECT EXISTS(SELECT 1 FROM refund_requests r WHERE id<>{exceptId} AND (
           upper(external_refund_reference)={reference} OR EXISTS(
             SELECT 1 FROM jsonb_array_elements(r.history) h
-            WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1') AND h->'state'->'upload'->>'externalReference'={reference}))) AS "Value"
+            WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1','HoldingDepositRefundV1') AND h->'state'->'upload'->>'externalReference'={reference}))) AS "Value"
         """).SingleAsync(t);
     public async Task SaveAsync(RefundRecord row, bool create, Guid actor, string action, DateTimeOffset now, CancellationToken t)
     {

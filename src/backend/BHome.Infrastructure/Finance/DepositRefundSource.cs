@@ -12,6 +12,7 @@ internal sealed partial class RefundRepository
     {
         var contract = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contractId, t)
             ?? throw new FinanceException(404, "contract_not_found");
+        if (contract.Kind == ContractKind.Holding) return await HoldingRefundSourceAsync(contract, t);
         if (ledger is not IContractSettlementDetails details) throw new FinanceException(503, "settlement_summary_unavailable");
         var summary = await details.SummaryAsync(contractId, t);
         var blockers = summary.UnresolvedItems.Where(b => b != "deposit_deduction_refund_policy_required").ToList();

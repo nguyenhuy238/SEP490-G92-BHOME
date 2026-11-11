@@ -1,5 +1,6 @@
 using BHome.Application.Finance;
 using Microsoft.EntityFrameworkCore;
+using BHome.Domain.TenantContracts;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -13,7 +14,7 @@ public sealed partial class FinancialReportRepository
         WITH completed AS (
           SELECT r.*,latest.state FROM refund_requests r
           LEFT JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
-            WHERE h->>'recordType' IN ('ExcessReceiptRefundV1','SecurityDepositRefundV1') ORDER BY n DESC LIMIT 1) latest ON true
+            WHERE h->>'recordType' IN ('ExcessReceiptRefundV1','SecurityDepositRefundV1','HoldingDepositRefundV1') ORDER BY n DESC LIMIT 1) latest ON true
           WHERE r.status='COMPLETED' AND (r.executed_at IS NULL OR r.executed_at<{end})
         ), classified AS (
           SELECT r.*,CASE WHEN r.executed_at IS NOT NULL
@@ -48,13 +49,36 @@ public sealed partial class FinancialReportRepository
                   AND ((r.state->>'noDeductionsConfirmed'='true' AND COALESCE(r.state->>'deductionsConfirmed','false')='false'
                         AND r.state->>'deductionPlanId' IS NULL)
                     OR (r.state->>'deductionsConfirmed'='true' AND r.state->>'noDeductionsConfirmed'='false'
-                        AND decision.plan->>'id'=r.state->>'deductionPlanId' AND decision.plan->>'depositContractId'=root.id::text))
+                        AND decision.plan->>'id'=r.state->>'deductionPlanId' AND decision.plan->>'depositContractId'=root.id::text)
+                    OR (r.state->>'deductionsConfirmed'='true' AND r.state->>'noDeductionsConfirmed'='false' AND r.state->>'deductionPlanId' IS NULL
+                        AND EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_deposit_contract_id=root.id AND a.deposit_offset_approval_id IS NOT NULL)
+                        AND NOT EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_deposit_contract_id=root.id AND
+                          (a.deposit_offset_approval_id IS NULL OR NOT EXISTS(
+                            SELECT 1 FROM contracts scoped CROSS JOIN LATERAL jsonb_array_elements(scoped.history) h
+                            WHERE scoped.room_id=root.room_id AND h->>'recordType'='DepositOffsetApprovalV1'
+                              AND h->'state'->>'id'=a.deposit_offset_approval_id::text AND h->'state'->>'allocationId'=a.id::text
+                              AND h->'state'->>'sourceDepositContractId'=root.id::text AND (h->'state'->>'amount')::numeric=a.amount)))))
                   AND (SELECT COALESCE(sum(a.amount),0) FROM payment_allocations a WHERE a.target_deposit_contract_id=root.id)
                     >= (SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr
                           WHERE rr.source_deposit_contract_id=root.id AND rr.status='COMPLETED')
                      + (SELECT COALESCE(sum(a.amount),0) FROM payment_allocations a WHERE a.source_deposit_contract_id=root.id)
-                     + CASE WHEN r.state->>'noDeductionsConfirmed'='true' THEN 0
+                     + CASE WHEN r.state->>'noDeductionsConfirmed'='true' OR r.state->>'deductionPlanId' IS NULL THEN 0
                          WHEN decision.plan->>'total' ~ '^[0-9]+$' THEN (decision.plan->>'total')::numeric ELSE NULL END)
+              THEN 'DepositPrincipal'
+            WHEN r.source_payment_id IS NULL AND r.source_deposit_contract_id IS NOT NULL
+              AND r.state->>'classification'='HoldingDepositRefundV1' AND r.state->>'beneficiaryVerified'='true'
+              AND r.state->>'noDeductionsConfirmed'='true' AND COALESCE(r.state->>'deductionsConfirmed','false')='false'
+              AND r.state->>'sourceReference' ~ {"^HOLDING-[A-F0-9]{64}$"}
+              AND EXISTS(SELECT 1 FROM contracts holding
+                JOIN contract_residents person ON person.contract_id=holding.id AND person.resident_id=r.beneficiary_resident_id
+                CROSS JOIN LATERAL jsonb_array_elements(COALESCE(holding.settlement->'reviews','[]'::jsonb)) decision
+                WHERE holding.id=r.source_deposit_contract_id AND holding.id::text=r.state->>'settlementContractId'
+                  AND holding.contract_type='HOLDING' AND holding.status={(short)ContractStatus.Cancelled}
+                  AND decision->>'recordType'='ContractSettlementReview' AND decision->>'decision'='HoldingRefundRequired'
+                  AND decision->>'ledgerReference'=r.state->>'sourceReference'
+                  AND (SELECT COALESCE(sum(a.amount),0) FROM payment_allocations a WHERE a.target_deposit_contract_id=holding.id)
+                    >= (SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr WHERE rr.source_deposit_contract_id=holding.id AND rr.status='COMPLETED')
+                      + (SELECT COALESCE(sum(a.amount),0) FROM payment_allocations a WHERE a.source_deposit_contract_id=holding.id))
               THEN 'DepositPrincipal' END END category
           FROM completed r
         )

@@ -42,10 +42,10 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         public Task SendAsync(Guid id, string destination, string token, CancellationToken t) { AccountTokens[id] = token; AccountSendCount++; return Task.CompletedTask; }
     }
     private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-    private static async Task<HttpResponseMessage> Post(HttpClient client, string path, object input)
+    private static async Task<HttpResponseMessage> Post(HttpClient client, string path, object input, Guid? key = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(input) };
-        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); return await client.SendAsync(request);
+        request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString()); return await client.SendAsync(request);
     }
     private static async Task<T> Result<T>(HttpResponseMessage response)
     {
@@ -177,6 +177,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
 
     [CompactPostgresFact]
     public async Task AnonymousHoldingTransfersAllVerifiedDepositOnceAndProvisionsOnlyAfterMainActivation()
+        => await AnonymousHoldingWorkflow();
+
+    internal async Task AnonymousHoldingWorkflow(HoldingCancellationCause? cancellationCause = null)
     {
         var delivery = new Delivery();
         using var host = fixture.Factory!.WithWebHostBuilder(b =>
@@ -237,6 +240,68 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             Assert.Equal(usersBefore, await db.Users.CountAsync());
             Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).TenantUserId);
+        }
+        if (cancellationCause is { } cause)
+        {
+            var cancel = new HoldingCancellationInput("Synthetic verified cancellation cause and original depositor", cause, true); var cancellationKey = Guid.NewGuid();
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, root + "/holding-cancellation", cancel with { HumanConfirmed = false })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await Post(guest, root + "/holding-cancellation", cancel)).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, root + "/holding-cancellation", new { reason = "Synthetic unspecified cause", humanConfirmed = true })).StatusCode);
+            var commands = await Task.WhenAll(Post(owner, root + "/holding-cancellation", cancel, cancellationKey), Post(owner, root + "/holding-cancellation", cancel, cancellationKey));
+            var cancelled = await Result<ContractView>(commands[0]); Assert.Equal(cancelled.Id, (await Result<ContractView>(commands[1])).Id);
+            Assert.Equal("Cancelled", cancelled.Status);
+            Assert.Equal(cancelled.Id, (await Result<ContractView>(await Post(owner, root + "/holding-cancellation", cancel, cancellationKey))).Id);
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/holding-cancellation", cancel with { Cause = cause == HoldingCancellationCause.TenantVoluntary ? HoldingCancellationCause.OwnerCannotProvideRoom : HoldingCancellationCause.TenantVoluntary }, cancellationKey)).StatusCode);
+            var status = await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit");
+            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? "Forfeited" : "RefundPending", status!.Disposition!.Status);
+            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? 100000 : 0, status.Disposition.ForfeitedAmount);
+            await using (var savedScope = host.Services.CreateAsyncScope())
+            {
+                var savedReview = await savedScope.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<ContractSettlementReview>().SingleAsync(r => r.ContractId == holding.Id);
+                Assert.Equal(status.Disposition.FinancialReference, savedReview.LedgerReference);
+                Assert.Equal(HoldingCancellationRules.Reference(holding.Id, savedReview), savedReview.LedgerReference);
+            }
+            var source = await Result<BHome.Application.Finance.RefundSource>(await owner.GetAsync(root + "/deposit-refunds"));
+            var refundInput = new BHome.Application.Finance.DepositRefundInput(new(residentId, 100000, "Synthetic verified original depositor", true), source.FinancialReference!, true, true);
+            if (cause == HoldingCancellationCause.TenantVoluntary)
+            {
+                Assert.Contains("holding_deposit_forfeited", source.Blockers!);
+                Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/deposit-refunds", refundInput)).StatusCode);
+                Assert.Empty(source.Requests);
+            }
+            else
+            {
+                Assert.Empty(source.Blockers!); Assert.Equal(100000, source.AvailableAmount);
+                var refund = await Result<BHome.Application.Finance.RefundView>(await Post(owner, root + "/deposit-refunds", refundInput)); Assert.Equal("REQUESTED", refund.Status);
+                var decision = await Result<BHome.Application.Finance.RefundView>(await Post(owner, $"/api/v1/refund-requests/{refund.Id}/decision", new BHome.Application.Finance.RefundDecision(1, true, "Synthetic verified external refund obligation", true)));
+                Assert.Equal("APPROVED", decision.Status);
+                Assert.Equal("RefundReserved", (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!.Disposition!.Status);
+                using var image = new OpenCvSharp.Mat(40, 100, OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.White); var bytes = image.ImEncode(".png");
+                var executeKey = Guid.NewGuid(); var executedAt = DateTimeOffset.UtcNow;
+                async Task<HttpResponseMessage> Execute()
+                {
+                    var form = new MultipartFormDataContent { { new StringContent(decision.Version.ToString()), "expectedVersion" }, { new StringContent(executedAt.ToString("O")), "executedAt" }, { new StringContent("SYN-HOLD-" + executeKey), "externalReference" }, { new StringContent("Synthetic verified bank refund evidence"), "reason" }, { new StringContent("true"), "humanConfirmed" } };
+                    var photo = new ByteArrayContent(bytes); photo.Headers.ContentType = new("image/png"); form.Add(photo, "evidence", "synthetic.png");
+                    var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/refund-requests/{refund.Id}/execution") { Content = form }; request.Headers.Add("Idempotency-Key", executeKey.ToString()); return await owner.SendAsync(request);
+                }
+                foreach (var result in await Task.WhenAll(Execute(), Execute())) Assert.Equal("COMPLETED", (await Result<BHome.Application.Finance.RefundView>(result)).Status);
+                Assert.Equal("RefundCompleted", (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!.Disposition!.Status);
+                Assert.Equal(0, (await Result<BHome.Application.Finance.RefundSource>(await owner.GetAsync(root + "/deposit-refunds"))).AvailableAmount);
+            }
+            await using var cancellationScope = host.Services.CreateAsyncScope(); var cancelledDb = cancellationScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            Assert.Equal(usersBefore, await cancelledDb.Users.CountAsync()); Assert.Null((await cancelledDb.Set<Resident>().SingleAsync(r => r.Id == residentId)).TenantUserId);
+            Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Available, (await cancelledDb.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == cancelled.RoomId)).Status);
+            Assert.Equal(1, await cancelledDb.Set<ContractSettlementReview>().CountAsync(r => r.ContractId == holding.Id));
+            var finances = await cancellationScope.ServiceProvider.GetRequiredService<BHome.Application.Finance.IFinancialReportRepository>()
+                .ReadAsync(new(Today.AddDays(-1), Today, RoomId: cancelled.RoomId), default);
+            Assert.False(finances.HasUnclassifiedRefunds); Assert.Equal(cause == HoldingCancellationCause.OwnerCannotProvideRoom ? 100000 : 0, finances.VerifiedDepositReturns);
+            for (var pass = 0; pass < 3; pass++)
+                await cancellationScope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
+            var notices = (await owner.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<NotificationView>>("/api/v1/notifications?category=Contract&pageSize=100"))!.Items;
+            Assert.Single(notices, n => n.RelatedObjectId == holding.Id && n.Title == (cause == HoldingCancellationCause.TenantVoluntary ? "Giữ chỗ đã hủy theo yêu cầu Tenant, cọc không hoàn" : "Giữ chỗ đã hủy do không cung cấp được phòng, chờ xử lý hoàn cọc"));
+            if (cause == HoldingCancellationCause.OwnerCannotProvideRoom) Assert.Single(notices, n => n.RelatedObjectId == holding.Id && n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công");
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/holding-conversion", new HoldingConversionInput(200000))).StatusCode);
+            return;
         }
         var main = await Result<ContractId>(await Post(owner, root + "/holding-conversion", new HoldingConversionInput(200000)));
         var convertedAgain = await Result<ContractId>(await Post(owner, root + "/holding-conversion", new HoldingConversionInput(200000)));

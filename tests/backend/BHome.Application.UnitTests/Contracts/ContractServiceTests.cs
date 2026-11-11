@@ -44,6 +44,7 @@ public sealed class ContractServiceTests
         public readonly IContractImageValidator Images = Substitute.For<IContractImageValidator>();
         public readonly IContractSettlementLedger Ledger = Substitute.For<IContractSettlementLedger>();
         public readonly IContractHoldingLedger Holdings = Substitute.For<IContractHoldingLedger>();
+        public readonly IContractDepositPosition Positions = Substitute.For<IContractDepositPosition>();
         public readonly List<Contract> Contracts = [];
         public readonly List<ContractMoveOut> Moves = [];
         public readonly List<ContractOperation> Operations = [];
@@ -85,7 +86,8 @@ public sealed class ContractServiceTests
                 }
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock());
+            Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
@@ -202,7 +204,7 @@ public sealed class ContractServiceTests
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-FULL", 2000000, "Verified bank statement"), Guid.NewGuid(), default);
         await r.Service.ActivateHoldingAsync(id.Id, Guid.NewGuid(), default);
         Assert.Equal(ContractStatus.Active, holding.Status); Assert.Equal(RoomStatus.OnHold, r.Room.Status); Assert.Equal(2, r.Room.Version);
-        await r.Service.CancelHoldingAsync(id.Id, new("Tenant and Owner cancelled"), Guid.NewGuid(), default);
+        await r.Service.CancelHoldingAsync(id.Id, new("Synthetic Tenant voluntarily cancelled", HoldingCancellationCause.TenantVoluntary, true), Guid.NewGuid(), default);
         Assert.Equal(ContractStatus.Cancelled, holding.Status); Assert.Equal(RoomStatus.Available, r.Room.Status); Assert.Equal(3, r.Room.Version);
     }
 

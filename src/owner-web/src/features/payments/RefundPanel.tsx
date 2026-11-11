@@ -20,7 +20,7 @@ import { useRefundApi } from './useRefundApi';
 import { settlementBlocker } from '../../../../../packages/client-core/src/useContractLifecycle';
 type RefundPanelProps = {
   sourceId: string;
-  sourceKind?: 'Receipt' | 'SecurityDeposit';
+  sourceKind?: 'Receipt' | 'SecurityDeposit' | 'HoldingDeposit';
   onChanged?: () => void;
 };
 export function RefundPanel(props: RefundPanelProps) {
@@ -35,9 +35,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
   const source = useQuery({
     queryKey: ['refund-source', session?.userId, sourceKind, sourceId],
     queryFn: ({ signal }) =>
-      sourceKind === 'SecurityDeposit'
-        ? api.depositSource(sourceId, signal)
-        : api.source(sourceId, signal),
+      sourceKind !== 'Receipt' ? api.depositSource(sourceId, signal) : api.source(sourceId, signal),
   });
   const [person, setPerson] = useState(''),
     [amount, setAmount] = useState(''),
@@ -66,7 +64,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
     !!source.data?.approvedDepositOffsets &&
     !/^0(?:\.0+)?$/.test(source.data.approvedDepositOffsets);
   const depositConfirmed =
-    sourceKind !== 'SecurityDeposit' ||
+    sourceKind === 'Receipt' ||
     (beneficiarySource === signature && zeroDeductionSource === signature);
   const blocked = (source.data?.blockers?.length ?? 0) > 0;
   const key = useRef({ signature: '', value: crypto.randomUUID() }),
@@ -106,7 +104,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
         reason,
         humanConfirmed: checked,
       };
-      if (sourceKind === 'SecurityDeposit') {
+      if (sourceKind !== 'Receipt') {
         if (!source.data?.financialReference) throw { code: 'refund_source_changed' };
         await api.createDeposit(
           sourceId,
@@ -142,13 +140,15 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
   return (
     <Stack spacing={2}>
       <Typography variant="h6">
-        {sourceKind === 'SecurityDeposit'
-          ? hasOffsets
-            ? 'Hoàn phần cọc còn lại sau cấn trừ'
-            : source.data?.depositDeductions
-              ? 'Hoàn cọc theo quyết định khấu trừ'
-              : 'Hoàn cọc không khấu trừ'
-          : 'Hoàn tiền thừa từ giao dịch'}
+        {sourceKind === 'HoldingDeposit'
+          ? 'Hoàn cọc giữ chỗ do không cung cấp được phòng'
+          : sourceKind === 'SecurityDeposit'
+            ? hasOffsets
+              ? 'Hoàn phần cọc còn lại sau cấn trừ'
+              : source.data?.depositDeductions
+                ? 'Hoàn cọc theo quyết định khấu trừ'
+                : 'Hoàn cọc không khấu trừ'
+            : 'Hoàn tiền thừa từ giao dịch'}
       </Typography>
       <Alert severity="info">
         Owner tự thực hiện chuyển khoản hoàn bên ngoài. BHOME chỉ ghi nhận sau khi Owner đối chiếu
@@ -167,8 +167,8 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
             </Alert>
           )}
           <Typography>
-            {sourceKind === 'SecurityDeposit' ? 'Cọc đã xác minh' : 'Tiền thừa ban đầu'}:{' '}
-            {sourceKind === 'SecurityDeposit'
+            {sourceKind !== 'Receipt' ? 'Cọc đã xác minh' : 'Tiền thừa ban đầu'}:{' '}
+            {sourceKind !== 'Receipt'
               ? source.data.verifiedDepositAmount == null
                 ? 'Chờ đối chiếu'
                 : formatContractMoney(source.data.verifiedDepositAmount)
@@ -200,7 +200,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
               ))}
             </Paper>
           )}
-          {sourceKind === 'SecurityDeposit' && (
+          {sourceKind !== 'Receipt' && (
             <Alert severity="info">
               Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu
               bằng chứng nộp cọc trước khi chọn người nhận.
@@ -257,7 +257,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                 }
                 label="Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn"
               />
-              {sourceKind === 'SecurityDeposit' && (
+              {sourceKind !== 'Receipt' && (
                 <>
                   <FormControlLabel
                     control={

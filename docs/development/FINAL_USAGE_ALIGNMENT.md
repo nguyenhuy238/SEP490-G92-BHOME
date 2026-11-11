@@ -37,3 +37,7 @@ Traceability trước sửa: BR-15/20/21/22/23; BF-04/05/06, UC-19/21/22/25, GBR
 ## Điều chỉnh rent đã Final trước ngày bàn giao — kế hoạch slice
 
 BR-13/16/19: nếu FullMonth được Owner chọn, ngày đi sớm không tự giảm tiền. Nếu OccupiedCalendarDays và Final đã ghi đủ tháng, không tạo charge âm hoặc sửa Final; cần InvoiceAdjustment được Owner duyệt trên đúng mã phí. Coverage nhận phần giảm đã duyệt (net cả tăng lại), giữ giá gốc để không thu lại discount. Snapshot khoản đối chiếu giữ ID quyết định và giá policy tại ngày đi. Ca kiểm: chưa duyệt/Pending vẫn chặn; duyệt đủ mới ghi nhận zero acknowledgement; reject hoặc tăng lại không được coi là giảm; Final và lịch sử payment bất biến.
+
+## Holding cancellation — traceability trước triển khai
+
+BR-08/09/10/11/18; BF-03A/BF-06, UC-14/15/22/25, GBR-04/10/18. Owner phải chọn TenantVoluntary hoặc OwnerCannotProvideRoom và xác nhận căn cứ. Voluntary ghi forfeiture bất biến, không hoàn tự động. Owner failure tạo nghĩa vụ hoàn đúng tiền đã nhận, dùng workflow thực chi/evidence/private storage hiện có; không tạo User/Resident giả cho người chưa có tài khoản. Source đã chuyển sang Main hoặc có nguồn tiền chưa đối chiếu phải bị chặn. Quyền Owner, hai nhánh, replay/race, trước account, history và phòng được giải phóng cần test PostgreSQL + Owner Web. Không suy luận expiry là tự nguyện hủy, không đặt thời hạn Holding tối đa.

@@ -68,7 +68,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpPost("{id:guid}/holding-activation"), Authorize(Roles = Roles.Owner)]
     public Task<ContractView> ActivateHolding(Guid id, CancellationToken t) => service.ActivateHoldingAsync(id, Key(), t);
     [HttpPost("{id:guid}/holding-cancellation"), Authorize(Roles = Roles.Owner)]
-    public Task<ContractView> CancelHolding(Guid id, HoldingDecisionInput x, CancellationToken t) => service.CancelHoldingAsync(id, x, Key(), t);
+    public Task<ContractView> CancelHolding(Guid id, HoldingCancellationInput x, CancellationToken t) => service.CancelHoldingAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/holding-conversion"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<ContractId> ConvertHolding(Guid id, HoldingConversionInput x, CancellationToken t) => service.ConvertHoldingAsync(id, x, Key(), t);
     [HttpGet("{id:guid}")]

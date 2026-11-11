@@ -78,5 +78,7 @@ public sealed partial class InvoiceApiTests
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Available, (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
+        var finance = await scope.ServiceProvider.GetRequiredService<IFinancialReportRepository>().ReadAsync(new(Today.AddDays(-1), Today, RoomId: w.Room), default);
+        Assert.False(finance.HasUnclassifiedRefunds); Assert.Equal(deposit - total, finance.VerifiedDepositReturns);
     }
 }

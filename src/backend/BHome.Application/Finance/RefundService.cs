@@ -79,7 +79,7 @@ public sealed record RefundSource(Guid? SourcePaymentId,
 public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries,
     IReadOnlyList<RefundRecord> Requests, Guid? DepositContractId = null, string? FinancialReference = null,
     IReadOnlyList<string>? Blockers = null, decimal? AvailableDeposit = null, decimal? VerifiedDeposit = null,
-    DepositDeductionPlan? DepositDeductions = null, decimal ApprovedDepositOffsets = 0);
+    DepositDeductionPlan? DepositDeductions = null, decimal ApprovedDepositOffsets = 0, string? DepositClassification = null);
 public interface IRefundRepository
 {
     Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t);
@@ -205,7 +205,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
             };
             if (deposit is not null) row.State = new()
             {
-                Classification = "SecurityDepositRefundV1",
+                Classification = source.DepositClassification ?? "SecurityDepositRefundV1",
                 SettlementContractId = sourceId,
                 SourceReference = source.FinancialReference,
                 BeneficiaryVerified = true,

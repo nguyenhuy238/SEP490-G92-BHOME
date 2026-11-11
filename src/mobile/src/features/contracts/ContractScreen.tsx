@@ -342,7 +342,9 @@ function LiveContractDetail({
     );
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
   const actions = contractActions(c, m, role, actorId).filter(
-    (a) => !['move-out/inspection', 'move-out/settlement'].includes(a.operation),
+    (a) =>
+      !['move-out/inspection', 'move-out/settlement'].includes(a.operation) &&
+      !(role === 'Owner' && a.operation === 'holding-cancellation'),
   );
   const action = actions.find((a) => a.operation === selectedAction);
   const signer =
@@ -357,6 +359,11 @@ function LiveContractDetail({
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
+      {role === 'Owner' && c.kind === 'Holding' && (
+        <Text>
+          Hủy giữ chỗ và xử lý cọc tại Owner Web; Mobile theo dõi trạng thái và thông báo.
+        </Text>
+      )}
       <View style={ui.wrap}>
         {contractSections.map((item) => (
           <Button

@@ -19,7 +19,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IContractDocumentRenderer? renderer = null, IContractWorkflowRepository? workflowRepository = null, IContractWorkflowMode? workflowMode = null,
     IContractHandoverRepository? handoverRepository = null, IContractSigningPages? signingPages = null,
     IContractSigningDocumentSource? signingDocuments = null, IPropertyLifecycleChecks? lifecycle = null,
-    IOperatingPolicyWorkflow? operatingPolicies = null, IPostActivationTenantProvisioning? provisioning = null) : IAdministrativeContractReadiness
+    IOperatingPolicyWorkflow? operatingPolicies = null, IPostActivationTenantProvisioning? provisioning = null,
+    IContractDepositPosition? depositPositions = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);

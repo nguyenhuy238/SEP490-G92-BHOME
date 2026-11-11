@@ -234,6 +234,52 @@ it('requires confirmation and sends one activation mutation only after the serve
   await waitFor(() => expect(changed).toHaveBeenCalled());
   expect(request).toHaveBeenCalled();
 });
+it('requires an explicit Holding cancellation cause and confirmation before sending a financial decision', async () => {
+  const holding: ContractView = { ...draft, kind: 'Holding' };
+  const { api } = setup(holding);
+  const mutation = vi.fn().mockRejectedValue({ status: 503 });
+  api.mutate = mutation;
+  const cancellation = contractActions(holding, null, 'Owner', owner).find(
+    (a) => a.operation === 'holding-cancellation',
+  )!;
+  mount(
+    <ContractActionDialog
+      api={api}
+      contract={holding}
+      action={cancellation}
+      keys={mutationKeys(() => owner)}
+      actorId={owner}
+      onClose={vi.fn()}
+      onSuccess={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Lý do hủy'), {
+    target: { value: 'Synthetic Tenant request verified' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await screen.findByText('Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.');
+  expect(mutation).not.toHaveBeenCalled();
+  fireEvent.mouseDown(screen.getByLabelText('Nguyên nhân hủy giữ chỗ'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tenant tự nguyện hủy — mất cọc' }));
+  fireEvent.click(
+    screen.getByLabelText(
+      'Tôi đã đối chiếu nguyên nhân hủy, người yêu cầu và trách nhiệm xử lý cọc',
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+  expect(mutation.mock.calls[0][2]).toMatchObject({
+    cause: 0,
+    humanConfirmed: true,
+    reason: 'Synthetic Tenant request verified',
+  });
+  fireEvent.change(screen.getByLabelText('Lý do hủy'), { target: { value: 'Updated evidence' } });
+  expect(
+    screen.getByLabelText(
+      'Tôi đã đối chiếu nguyên nhân hủy, người yêu cầu và trách nhiệm xử lý cọc',
+    ),
+  ).not.toBeChecked();
+});
 it('validates deposit input and retains its idempotency key after network uncertainty, without reporting success', async () => {
   const { api } = setup();
   const mutation = vi.fn().mockRejectedValue({ status: 0 });

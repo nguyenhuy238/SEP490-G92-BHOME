@@ -135,9 +135,25 @@ public sealed partial class ContractService
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], token);
         if (c.Kind != ContractKind.Holding) throw ContractException.Missing();
         var verified = await repository.DepositTotalAsync(id, token);
+        HoldingDispositionView? disposition = null;
+        if (c.Status == ContractStatus.Cancelled && !user.IsInRole(Roles.Staff))
+        {
+            var review = (await repository.SettlementReviewsAsync(id, token)).FirstOrDefault(r => HoldingCancellationRules.Decode(r) is not null);
+            var decision = HoldingCancellationRules.Decode(review);
+            if (decision is not null)
+            {
+                var reference = HoldingCancellationRules.Reference(id, review!);
+                var position = depositPositions is null ? null : await depositPositions.ReadAsync([id], token, reference);
+                var valid = position is not null && position.Received == decision.VerifiedDeposit && verified == decision.VerifiedDeposit && position.Allocated == 0 && position.UnclassifiedRefunds == 0;
+                var status = !valid ? "PendingManualReview" : decision.VerifiedDeposit == 0 ? "NotRequired" : decision.Cause == HoldingCancellationCause.TenantVoluntary
+                    ? position!.Refunded == 0 && position.Reserved == 0 ? "Forfeited" : "PendingManualReview"
+                    : position!.Refunded == decision.RefundRequired && position.Reserved == 0 ? "RefundCompleted" : position.Reserved > 0 ? "RefundReserved" : "RefundPending";
+                disposition = new(decision.Cause.ToString(), status, decision.ForfeitedAmount, decision.RefundRequired, position?.Refunded ?? 0, position?.Reserved ?? 0, reference);
+            }
+        }
         return new(id, verified >= c.RequiredDeposit ? "Verified" : verified > 0 ? "Partial" : "Pending",
-            c.RequiredDeposit, verified, Math.Max(0, c.RequiredDeposit - verified), verified > c.RequiredDeposit,
-            c.PriceLockedAt, c.PriceLockTrigger);
+            c.RequiredDeposit, verified, Math.Max(0, c.RequiredDeposit - verified), verified > c.RequiredDeposit || !user.IsInRole(Roles.Staff) && c.Status == ContractStatus.Cancelled && (disposition is null || disposition.Status == "PendingManualReview"),
+            c.PriceLockedAt, c.PriceLockTrigger, disposition);
     }
 
     public async Task ConfirmHoldingDepositAllocationAsync(Guid id, decimal amount, DateTimeOffset verifiedAt, CancellationToken token)
@@ -194,31 +210,40 @@ public sealed partial class ContractService
         Audit("HoldingActivated", id); Remember(key, "holding-activate", id, id); return View(c);
     }, token);
 
-    public Task<ContractView> CancelHoldingAsync(Guid id, HoldingDecisionInput input, Guid key, CancellationToken token)
+    public Task<ContractView> CancelHoldingAsync(Guid id, HoldingCancellationInput input, Guid key, CancellationToken token)
     {
         Validate(input);
+        if (!input.HumanConfirmed || !Enum.IsDefined(input.Cause)) throw ContractException.Invalid("holding_cancellation_cause_required");
         return Mutate(id, [Roles.Owner], async c =>
         {
             if (await Replay(key, "holding-cancel", new { id, input }, token) is not null) return View(c);
             if (c.Kind != ContractKind.Holding || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active))
                 throw ContractException.Conflict("holding_not_cancellable");
+            if (await repository.MainForHoldingAsync(c.Id, token) is not null) throw ContractException.Conflict("holding_conversion_in_progress");
+            var received = await repository.DepositTotalAsync(c.Id, token);
+            if (depositPositions is null) throw new ContractException(503, "deposit_position_unavailable");
+            var position = await depositPositions.ReadAsync([id], token);
+            if (position is null || position.Received != received || position.Allocated != 0 || position.Refunded != 0 || position.Reserved != 0 || position.UnclassifiedRefunds != 0)
+                throw ContractException.Conflict("holding_deposit_requires_manual_review");
             if (c.Status == ContractStatus.Active)
             {
-                if (await repository.MainForHoldingAsync(c.Id, token) is not null) throw ContractException.Conflict("holding_conversion_in_progress");
                 ChangeRoomStatus(c, RoomStatus.Available, RoomTransitionSource.HoldingRelease);
             }
             c.Status = ContractStatus.Cancelled; c.ActualEndDate = Today; c.LifecycleActorId = Actor;
             c.LifecycleAt = clock.GetUtcNow(); c.LifecycleReason = input.Reason.Trim();
-            var received = await repository.DepositTotalAsync(c.Id, token);
-            if (received > 0) repository.Add(new ContractSettlementReview
+            var forfeited = input.Cause == HoldingCancellationCause.TenantVoluntary ? received : 0;
+            var review = new ContractSettlementReview
             {
                 ContractId = c.Id,
-                Decision = "PendingManualReview",
-                Settled = false,
+                Decision = input.Cause == HoldingCancellationCause.TenantVoluntary ? "HoldingDepositForfeited" : "HoldingRefundRequired",
+                Settled = input.Cause == HoldingCancellationCause.TenantVoluntary || received == 0,
                 ReviewedByUserId = Actor,
                 ReviewedAt = clock.GetUtcNow(),
-                FinancialSnapshot = JsonSerializer.Serialize(new { verifiedDeposit = received, reason = "HoldingCancelled", automaticRefund = false })
-            });
+                FinancialSnapshot = JsonSerializer.Serialize(new HoldingCancellationDisposition(HoldingCancellationRules.Kind, input.Cause, received,
+                    forfeited, received - forfeited, Actor, clock.GetUtcNow(), input.Reason.Trim()))
+            };
+            review.LedgerReference = HoldingCancellationRules.Reference(id, review);
+            repository.Add(review);
             Audit("HoldingCancelled", id); Remember(key, "holding-cancel", new { id, input }, id); return View(c);
         }, token);
     }

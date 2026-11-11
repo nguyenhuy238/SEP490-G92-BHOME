@@ -31,7 +31,7 @@ public sealed record HoldingDepositStatus(Guid ContractId, string Status,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Required,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Verified,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Remaining,
-    bool RequiresManualReview, DateTimeOffset? PriceLockedAt, string? PriceLockTrigger);
+    bool RequiresManualReview, DateTimeOffset? PriceLockedAt, string? PriceLockTrigger, HoldingDispositionView? Disposition = null);
 public sealed record RenewalInput(DateOnly EndDate, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent,
     [Required, StringLength(12000, MinimumLength = 1)] string Terms);
 public sealed record ContractId(Guid Id);
