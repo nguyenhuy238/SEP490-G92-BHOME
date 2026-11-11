@@ -517,44 +517,27 @@ it.each(['progress', 'blocker', 'submit'])(
     expect(JSON.parse(mutations()[1][1].body)).toMatchObject({ version: 7, evidenceIds: [eid] });
   },
 );
-it('Owner approves a proposal and verifies only at PendingVerification, preserving zero cost', async () => {
-  s.role = 'Owner';
-  work.status = 'PendingApproval';
-  const view = render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-  choose('Chọn thao tác', 'plan-decision');
-  choose('Quyết định phê duyệt', 'true');
-  choose('Đơn vị sửa chữa (tùy chọn)', 'Tổ bảo trì');
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Quyết định phương án' }));
-  await waitFor(() => expect(mutations()).toHaveLength(1));
-  expect(JSON.parse(mutations()[0][1].body)).toEqual({
-    version: 7,
-    approve: true,
-    reason: null,
-    vendor: 'Tổ bảo trì',
-  });
-  view.unmount();
-  work.status = 'PendingVerification';
-  work.estimatedCost = 0;
-  work.version = 9;
-  render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-  choose('Chọn thao tác', 'verify');
-  choose('Chi phí thực tế (VND, nhập 0 nếu không có)', '0');
-  choose('Kết quả xác nhận', 'Đã kiểm tra vận hành');
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Nghiệm thu hoàn thành' }));
-  await waitFor(() => expect(mutations()).toHaveLength(2));
-  expect(JSON.parse(mutations()[1][1].body)).toMatchObject({ version: 9, actualCost: 0 });
-});
+it.each(['PendingApproval', 'PendingVerification'] as const)(
+  'Owner monitors %s and uses Owner Web for plan/cost/verification decisions',
+  (status) => {
+    s.role = 'Owner';
+    work.status = status;
+    render(<IncidentActionPanel report={report} work={work} role="Owner" />);
+    expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+    expect(mutations()).toHaveLength(0);
+  },
+);
 it('refreshes the Incident version after uploading Emergency evidence before sending the action', async () => {
-  s.role = 'Owner';
+  s.role = 'Staff';
   report.severity = 'Emergency';
+  report.acknowledgedAt = '2026-11-11T00:00:00Z';
   s.request.mockImplementation(async (path, init) =>
     path === `/api/v1/incidents/${id}` && !init?.method
       ? { ...report, version: 5 }
       : respond(path, init),
   );
-  render(<IncidentActionPanel report={report} role="Owner" />);
+  render(<IncidentActionPanel report={report} role="Staff" />);
   choose('Chọn thao tác', 'emergency-actions');
   choose('Nội dung / kết quả thực hiện', 'Đã khóa van và cô lập khu vực');
   choose('Chi phí đề nghị (VND, tùy chọn)', '50000');
@@ -569,7 +552,9 @@ it('refreshes the Incident version after uploading Emergency evidence before sen
   });
 });
 it('retains input and shows backend concurrency diagnostics without reporting success', async () => {
-  s.role = 'Owner';
+  s.role = 'Staff';
+  report.severity = 'Emergency';
+  report.acknowledgedAt = '2026-11-11T00:00:00Z';
   s.request.mockImplementation(async (path, init) =>
     init?.method === 'POST'
       ? Promise.reject(
@@ -577,15 +562,18 @@ it('retains input and shows backend concurrency diagnostics without reporting su
         )
       : respond(path, init),
   );
-  render(<IncidentActionPanel report={report} role="Owner" />);
-  choose('Chọn thao tác', 'review');
-  choose('Loại sự cố', 'Kỹ thuật');
-  choose('Nhóm sự cố', 'Cấp nước');
+  render(<IncidentActionPanel report={report} role="Staff" />);
+  choose('Chọn thao tác', 'emergency-actions');
+  choose('Nội dung / kết quả thực hiện', 'Đã khóa van');
+
   confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Phân loại sự cố' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi hành động khẩn cấp' }));
   await screen.findByText(/Dữ liệu đã thay đổi.*aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
   expect(s.success).not.toHaveBeenCalled();
-  expect(screen.getByLabelText('Loại sự cố')).toHaveProperty('value', 'Kỹ thuật');
+  expect(screen.getByLabelText('Nội dung / kết quả thực hiện')).toHaveProperty(
+    'value',
+    'Đã khóa van',
+  );
 });
 it('downloads authorized evidence on demand and supports fullscreen preview', async () => {
   s.request.mockResolvedValue(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
@@ -693,116 +681,25 @@ it('re-fetches WorkOrder detail after start instead of applying a local completi
   expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
 });
 
-it('requires a variance explanation when actual cost differs even from an unspecified estimate', async () => {
-  s.role = 'Owner';
-  work.status = 'PendingVerification';
-  work.estimatedCost = null;
-  render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-  choose('Chọn thao tác', 'verify');
-  choose('Chi phí thực tế (VND, nhập 0 nếu không có)', '0');
-  choose('Kết quả xác nhận', 'Đã kiểm tra đầy đủ');
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Nghiệm thu hoàn thành' }));
-  await screen.findByText(/Lý do chênh lệch chi phí: cần nhập/);
-  expect(mutations()).toHaveLength(0);
-});
-
-it('Owner classifies and assigns to a real currently assigned Staff option', async () => {
-  s.role = 'Owner';
-  report.type = 'Kỹ thuật';
-  report.category = 'Nước';
-  render(<IncidentActionPanel report={report} role="Owner" />);
-  choose('Chọn thao tác', 'work-orders');
-  await screen.findByRole('option', { name: 'Nhân viên thử nghiệm' });
-  choose('Nhân viên tại cơ sở', actor);
-  choose('Kết quả yêu cầu', 'Sửa hết rò nước');
-  choose('Hạn hoàn thành (dd/MM/yyyy HH:mm)', '06/11/2099 16:30');
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Giao lệnh sửa chữa' }));
-  await waitFor(() => expect(mutations()).toHaveLength(1));
-  expect(mutations()[0][0]).toBe(`/api/v1/incidents/${id}/work-orders`);
-  expect(JSON.parse(mutations()[0][1].body)).toEqual({
-    version: 4,
-    staffId: actor,
-    expectedOutcome: 'Sửa hết rò nước',
-    targetCompletionAt: '2099-11-06T16:30:00+07:00',
-  });
-});
-
-it('Owner direct completion sends private Direct evidence and explicit cost', async () => {
-  s.role = 'Owner';
-  report.type = 'Kỹ thuật';
-  report.category = 'Nước';
-  s.request.mockImplementation(async (path, init) =>
-    path === `/api/v1/incidents/${id}` && !init?.method
-      ? { ...report, version: 5 }
-      : respond(path, init),
-  );
-  render(<IncidentActionPanel report={report} role="Owner" />);
-  choose('Chọn thao tác', 'direct-completion');
-  choose('Chi phí thực tế (VND, nhập 0 nếu không có)', '100000');
-  choose('Kết quả xác nhận', 'Đã tự xử lý và kiểm tra');
-  await photo();
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Xử lý trực tiếp và hoàn tất' }));
-  await waitFor(() => expect(mutations()).toHaveLength(2));
-  expect(mutations()[0][0]).toContain('evidence?kind=4');
-  expect(JSON.parse(mutations()[1][1].body)).toMatchObject({
-    version: 5,
-    actualCost: 100000,
-    evidenceIds: [eid],
-    result: 'Đã tự xử lý và kiểm tra',
-  });
-});
-
-it('Owner decides a pending emergency cost using the report version and actual entry ID', async () => {
-  s.role = 'Owner';
-  report.severity = 'Emergency';
-  render(
-    <IncidentActionPanel
-      report={report}
-      role="Owner"
-      emergencyActions={[{ id: eid, activityId: wid, requestedCost: 50000, costApproved: null }]}
-    />,
-  );
-  choose('Chọn thao tác', 'cost-decision');
-  choose('Quyết định phê duyệt', 'false');
-  choose('Khoản chi phí chờ duyệt', eid);
-  choose('Lý do quyết định', 'Chứng từ chưa phù hợp');
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Quyết định chi phí khẩn cấp' }));
-  await waitFor(() => expect(mutations()).toHaveLength(1));
-  expect(mutations()[0][0]).toBe(`/api/v1/incidents/${id}/emergency-actions/${eid}/cost-decision`);
-  expect(JSON.parse(mutations()[0][1].body)).toEqual({
-    version: 4,
-    approve: false,
-    reason: 'Chứng từ chưa phù hợp',
-  });
-});
-
-it.each(['reject', 'cancel', 'resolve'])(
-  'Owner %s uses a versioned reasoned command, without modifying local status',
-  async (action) => {
+it.each(['Submitted', 'InProgress', 'Resolved'] as const)(
+  'Owner uses Owner Web for incident writes while %s monitoring remains available',
+  (status) => {
     s.role = 'Owner';
-    render(<IncidentActionPanel report={report} role="Owner" />);
-    choose('Chọn thao tác', action);
-    choose('Lý do quyết định', 'Đã kiểm tra thông tin thực tế');
-    confirm();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: action === 'reject' ? 'Từ chối báo cáo' : action === 'cancel' ? 'Hủy' : 'Đóng sự cố',
-      }),
+    report.status = status;
+    report.severity = 'Emergency';
+    render(
+      <IncidentActionPanel
+        report={report}
+        role="Owner"
+        emergencyActions={[{ id: eid, activityId: wid, requestedCost: 50000, costApproved: null }]}
+      />,
     );
-    await waitFor(() => expect(mutations()).toHaveLength(1));
-    expect(mutations()[0][0]).toBe(`/api/v1/incidents/${id}/${action}`);
-    expect(JSON.parse(mutations()[0][1].body)).toEqual({
-      version: 4,
-      reason: 'Đã kiểm tra thông tin thực tế',
-    });
-    expect(report.status).toBe('Submitted');
+    expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+    expect(mutations()).toHaveLength(0);
+    expect(s.success).not.toHaveBeenCalled();
   },
 );
-
 it('Staff emergency acknowledgement uses its authorized endpoint and current report version', async () => {
   report.severity = 'Emergency';
   render(<IncidentActionPanel report={report} role="Staff" />);
@@ -812,21 +709,4 @@ it('Staff emergency acknowledgement uses its authorized endpoint and current rep
   await waitFor(() => expect(mutations()).toHaveLength(1));
   expect(mutations()[0][0]).toBe(`/api/v1/incidents/${id}/acknowledge`);
   expect(JSON.parse(mutations()[0][1].body)).toEqual({ version: 4 });
-});
-
-it('Owner rework sends a reason with the WorkOrder version and no unsupported evidence', async () => {
-  s.role = 'Owner';
-  work.status = 'PendingVerification';
-  render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-  choose('Chọn thao tác', 'rework');
-  choose('Nội dung / kết quả thực hiện', 'Vẫn rò nước, cần kiểm tra lại');
-  confirm();
-  fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu làm lại' }));
-  await waitFor(() => expect(mutations()).toHaveLength(1));
-  expect(mutations()[0][0]).toBe(`/api/v1/work-orders/${wid}/rework`);
-  expect(JSON.parse(mutations()[0][1].body)).toEqual({
-    version: 7,
-    note: 'Vẫn rò nước, cần kiểm tra lại',
-    evidenceIds: [],
-  });
 });

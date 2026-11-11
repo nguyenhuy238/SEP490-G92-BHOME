@@ -52,3 +52,6 @@ BR-17/18/19/23; BF-06, UC-22/25, GBR-10/18. Khi obligation đã đủ/đóng, re
 ## Tenant xem trạng thái hoàn tiền của chính mình — traceability trước sửa
 
 BR-18/19/23; BF-06, FE-07, UC-25/31/32, GBR-01/02/10/18. Đọc refund theo beneficiary Resident liên kết authenticated Tenant, kiểm quyền trước count/pagination; không dùng RoomId hiện tại nên vẫn xem sau trả phòng. DTO chỉ số tiền, loại nguồn, trạng thái và thời điểm; không có bank reference, chứng từ private, người nhận khác, audit actor, lý do nội bộ hoặc execution intent. Tenant Mobile mở danh sách từ lịch sử thanh toán, loading/error/retry/empty/pagination; không được duyệt hoặc đánh dấu hoàn. Test isolation cùng phòng, Staff/Owner/anonymous, pagination và sau release.
+## Owner Mobile theo dõi tài chính — traceability trước sửa
+
+BR-26; BF-03/04/06/07, FE-08, UC-14/19/22/25/26..30/35: Owner Mobile xem status, lịch sử, thông báo và điều hướng; thao tác hợp đồng/cọc/đối soát/quyết toán/điều chỉnh tài chính thực hiện ở Owner Web. Giữ API read và các luồng Staff/Tenant; bỏ form mutation Owner cũ khỏi Mobile, kể cả deep link Main draft/lifecycle, duyệt phương án/chi phí sửa chữa và soạn thông báo. Shared Owner Web actions không thay đổi. Acceptance: không có nút phân bổ/duyệt/settlement/activation cho Owner Mobile, status/history vẫn có, Staff chuẩn bị/handover và Tenant request/confirm không bị mất.

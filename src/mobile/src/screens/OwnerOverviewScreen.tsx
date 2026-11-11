@@ -132,7 +132,7 @@ export function OwnerOverviewScreen() {
           Xem doanh thu, công nợ và chi phí
         </Action>
         <Action secondary onPress={() => go('owner-announcements')}>
-          Gửi thông báo đến Tenant
+          Thông báo đã gửi
         </Action>
       </Box>
       <Action secondary onPress={() => go('profile')}>

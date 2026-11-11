@@ -94,3 +94,6 @@ Thực thi trên PostgreSQL disposable: migration/baseline 9 PASS; WholeReceiptE
 ## 11/11/2026 — Tenant refund status
 
 Application unit 406 PASS, Mobile refund/history 29 PASS, Owner/Mobile typecheck và changed-file lint PASS. PostgreSQL WholeReceiptExcessRegressionTests 3 PASS có thêm Tenant role/pagination/own-beneficiary isolation sau RoomId null, cùng phòng không thấy refund người khác, DTO chỉ tám trường và COMPLETED thực chi. Bổ sung Security Deposit history đi cùng closure: nhóm 4 PASS. Không thêm quyền duyệt/execution/evidence cho Tenant; không chạy native/provider E2E trong slice này.
+## 11/11/2026 — Owner Mobile monitoring boundary
+
+Mobile affected regression 107 PASS (Owner contract/read-only finance, lifecycle, navigation, incident/Staff), component announcement/finance sau bổ sung 3 PASS; typecheck và changed-file ESLint PASS. Owner Web actions/shared contracts/backend không đổi. Old Mobile Owner mutation scenarios được thay bằng read-only acceptance theo BR-26, giữ Staff Emergency version/evidence/concurrency regression. Không có native device/browser E2E cho slice này.

@@ -201,6 +201,26 @@ it('shows separate populated lifecycle groups on the list page', async () => {
   expect(screen.getByText('3. Đang thuê')).toBeTruthy();
   expect(screen.getByText('4. Bản gia hạn')).toBeTruthy();
   expect(screen.getByText('5. Đã kết thúc / hủy')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Tạo nháp hợp đồng thuê' })).toBeNull();
+});
+it('keeps Owner contract status and navigation without financial mutation forms', () => {
+  state.role = 'Owner';
+  render(<ContractScreen />);
+  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Gia hạn & trả phòng' }));
+  expect(screen.queryByRole('button', { name: 'Tạo bản gia hạn' })).toBeNull();
+  expect(screen.queryByText('Action form')).toBeNull();
+});
+it('routes an old Owner prepare entry to Owner Web without opening a draft form', () => {
+  state.role = 'Owner';
+  render(<ContractScreen prepare />);
+  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.queryByText('Action form')).toBeNull();
+  expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
+    true,
+  );
 });
 it('defaults to overview and switches sections without displaying all forms at once', () => {
   render(<ContractScreen />);
