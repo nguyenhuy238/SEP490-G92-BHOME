@@ -7,6 +7,7 @@ import {
   formatFinanceMoney,
   type FinanceTotals,
   type ReportFilter,
+  type SettlementFinanceSources,
 } from '../../../../../packages/client-core/src/finance';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
 import { FilterToolbar, KPIGrid, PageHeader } from '../../components/common/PortalUI';
@@ -149,7 +150,7 @@ export function FinancialReportsApiPage() {
         <Stack spacing={2}>
           <KPIGrid
             items={[
-              { label: 'Doanh thu phát hành', value: formatFinanceMoney(value.total.issued) },
+              { label: 'Hóa đơn / khoản phải thu', value: formatFinanceMoney(value.total.issued) },
               {
                 label: 'Thu đã xác minh',
                 value: formatFinanceMoney(value.total.verifiedCollections),
@@ -176,6 +177,7 @@ export function FinancialReportsApiPage() {
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">Toàn bộ phạm vi đã chọn</Typography>
             <Totals value={value.total} />
+            <SettlementSources value={value.settlementSources} />
             <Typography>
               Hoàn gốc cọc đã xác minh trong kỳ:{' '}
               {value.verifiedDepositReturns == null
@@ -184,8 +186,8 @@ export function FinancialReportsApiPage() {
             </Typography>
             <Alert severity="info">
               Hoàn gốc cọc được theo dõi riêng, không phải chi phí vận hành hoặc giảm doanh thu hóa
-              đơn. Báo cáo lợi nhuận và hoàn vốn dùng hóa đơn, khoản thu đã phân bổ và OPEX; khoản
-              giữ cọc bồi thường thiệt hại chưa được cộng vào các chỉ số này.
+              đơn. Khoản phải thu trả phòng đã duyệt được cộng vào giá trị phải thu và nợ; cấn trừ
+              cọc làm giảm nợ và được trình bày riêng, không ghi thành tiền chuyển khoản mới.
             </Alert>
           </Paper>
           <Paper sx={{ p: 2 }}>
@@ -257,6 +259,7 @@ export function FinancialReportsApiPage() {
             <Paper key={l.locationId} sx={{ p: 2 }}>
               <Typography variant="h6">{l.locationName}</Typography>
               <Totals value={l.totals} />
+              <SettlementSources value={l.settlementSources} />
             </Paper>
           ))}
           <Typography variant="caption">
@@ -277,12 +280,12 @@ function Totals({ value }: { value: FinanceTotals }) {
       </Typography>
       {(
         [
-          ['Phát hành trong kỳ', value.issued],
+          ['Hóa đơn và khoản phải thu đã duyệt trong kỳ', value.issued],
           ['Điều chỉnh đã duyệt', value.approvedAdjustments],
           ['Tiền phân bổ đã xác minh trong kỳ', value.verifiedCollections],
           ['Chi phí vận hành', value.operatingExpenses],
           ['Lợi nhuận vận hành', value.operatingProfit],
-          ['Nợ hiện tại của hóa đơn trong kỳ', value.outstandingNow],
+          ['Nợ hiện tại của hóa đơn và khoản phải thu trong kỳ', value.outstandingNow],
           ['Dòng tiền vận hành', value.netOperatingCashFlow],
         ] as const
       ).map(([label, amount]) => (
@@ -290,6 +293,32 @@ function Totals({ value }: { value: FinanceTotals }) {
           {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
         </Typography>
       ))}
+    </Stack>
+  );
+}
+function SettlementSources({ value }: { value?: SettlementFinanceSources | null }) {
+  if (!value) return null;
+  return (
+    <Stack spacing={1}>
+      <Typography variant="subtitle2">Đối chiếu khoản phải thu trả phòng và cọc</Typography>
+      {(
+        [
+          ['Khoản phải thu trả phòng đã duyệt', value.approvedCharges],
+          ['Nợ khoản phải thu trả phòng hiện tại', value.outstandingNow],
+          ['Tiền ngân hàng phân bổ vào khoản phải thu', value.verifiedBankCollections],
+          ['Cọc cấn trừ được duyệt trong kỳ', value.depositOffsetsApplied],
+          ['Cọc Holding không hoàn theo quyết định hủy', value.holdingForfeitures],
+        ] as const
+      ).map(([label, amount]) => (
+        <Typography key={label}>
+          {label}: {formatFinanceMoney(amount)}
+        </Typography>
+      ))}
+      <Typography variant="caption">
+        Điện/nước và phí cố định theo kỳ đã chốt; thiệt hại theo ngày Owner duyệt. Tiền thu/cấn trừ
+        theo thời điểm phân bổ ở Việt Nam. Cọc Holding không hoàn hiển thị riêng, chưa cộng vào công
+        thức lợi nhuận hoặc dòng tiền hiện có.
+      </Typography>
     </Stack>
   );
 }

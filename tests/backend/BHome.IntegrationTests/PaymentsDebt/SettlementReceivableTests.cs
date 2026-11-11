@@ -93,6 +93,19 @@ public sealed partial class PaymentLedgerTests
         Assert.All(allocations, a => { Assert.Null(a.PaidByUserId); Assert.NotNull(a.DepositOffsetApprovalId); Assert.Equal(w.Contract, a.SourceDepositContractId); });
         Assert.Equal(3, await finalDb.SecurityAudit.CountAsync(a => a.TargetType == "SettlementReceivableV1" || a.TargetType == "DepositOffsetApprovalV1"));
         Assert.Equal(originalInvoiceCount, await finalDb.Set<BHome.Domain.Billing.Invoice>().CountAsync(i => i.RoomId == w.Room));
+        var report = await RefundValue<BHome.Application.Finance.FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}"));
+        Assert.Equal("600000", report.SettlementSources!.ApprovedCharges); Assert.Equal("200000", report.SettlementSources.OutstandingNow);
+        Assert.Equal("400000", report.SettlementSources.DepositOffsetsApplied); Assert.Equal("0", report.SettlementSources.VerifiedBankCollections);
+        Assert.Equal("200000", report.Total.OutstandingNow); Assert.Equal("800000", report.Total.Issued);
+        var priorReport = await RefundValue<BHome.Application.Finance.FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to={today.AddDays(-1):yyyy-MM-dd}&roomId={w.Room}"));
+        Assert.Equal("0", priorReport.SettlementSources!.ApprovedCharges); Assert.Equal("0", priorReport.SettlementSources.DepositOffsetsApplied);
+        // A future/unrecognized money source must require review rather than
+        // disappear from an apparently complete financial report.
+        var unsupported = charge with { Id = Guid.NewGuid(), Kind = "FutureUnknown", Amount = 1, SourceKey = "synthetic-unsupported-source" };
+        var envelope = System.Text.Json.JsonSerializer.Serialize(new { schemaVersion = 1, recordType = "SettlementReceivableV1", recordKey = unsupported.Id, state = unsupported }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        await finalDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({envelope}::jsonb) WHERE id={w.Contract}");
+        var incomplete = await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}");
+        Assert.Equal(HttpStatusCode.Conflict, incomplete.StatusCode); Assert.Contains("settlement_report_sources_require_review", await incomplete.Content.ReadAsStringAsync());
         var invalid = new PaymentAllocation
         {
             SourceDepositContractId = w.Contract,

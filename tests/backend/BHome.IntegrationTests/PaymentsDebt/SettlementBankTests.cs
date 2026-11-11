@@ -78,7 +78,11 @@ public sealed partial class PaymentLedgerTests
         refund = await RefundValue<RefundView>(await Post(owner, $"/api/v1/refund-requests/{refund.Id}/decision", new RefundDecision(refund.Version, true, "Synthetic bank payer checked", true)));
         await RefundValue<RefundView>(await DepositExecute(owner, refund, Guid.NewGuid(), DateTimeOffset.UtcNow, photo));
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
-        Assert.False((await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"))).HasUnclassifiedRefunds);
+        var report = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}"));
+        Assert.False(report.HasUnclassifiedRefunds);
+        Assert.Equal("600000", report.SettlementSources!.ApprovedCharges); Assert.Equal("0", report.SettlementSources.OutstandingNow);
+        Assert.Equal("200000", report.SettlementSources.VerifiedBankCollections); Assert.Equal("400000", report.SettlementSources.DepositOffsetsApplied);
+        Assert.Equal("800000", report.Total.Issued); Assert.Equal("400000", report.Total.VerifiedCollections); // Unallocated excess/refund is not revenue.
         Assert.Equal(2, await db.Set<PaymentAllocation>().CountAsync(a => a.SettlementReceivableId == charge.Id && a.TransferId != null));
         var notices = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(n => n.RelatedObjectType == "SettlementReceivable" && n.RelatedObjectId == charge.Id).ToArrayAsync();
         Assert.Equal(charge.RecipientUserIds.Length * 4, notices.Length); // charge, offset and two payments; replay/mismatch produce none.

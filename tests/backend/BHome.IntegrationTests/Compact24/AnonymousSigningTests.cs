@@ -295,6 +295,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var finances = await cancellationScope.ServiceProvider.GetRequiredService<BHome.Application.Finance.IFinancialReportRepository>()
                 .ReadAsync(new(Today.AddDays(-1), Today, RoomId: cancelled.RoomId), default);
             Assert.False(finances.HasUnclassifiedRefunds); Assert.Equal(cause == HoldingCancellationCause.OwnerCannotProvideRoom ? 100000 : 0, finances.VerifiedDepositReturns);
+            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? 100000 : 0, Assert.Single(finances.Locations).HoldingForfeitures);
             for (var pass = 0; pass < 3; pass++)
                 await cancellationScope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
             var notices = (await owner.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<NotificationView>>("/api/v1/notifications?category=Contract&pageSize=100"))!.Items;

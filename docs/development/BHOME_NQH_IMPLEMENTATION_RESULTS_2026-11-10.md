@@ -106,3 +106,13 @@ Files: HoldingCancellation, ContractHoldingService/Contracts/Controller, Contrac
 Đã chạy: Application unit 400 PASS; PostgreSQL Holding/anonymous/finance/new-offset-refund nhóm 6 PASS, rồi contract/finance/recovery/Holding/final-utility hồi quy 29 PASS; Owner contracts/refund UI 24 PASS; Mobile holding/sections 13 PASS. Typecheck Owner/Mobile và changed-file ESLint tiếp tục qua commit gate. Storage/PDF/email test substitutes và bank evidence synthetic; không phải real provider hoặc UI E2E.
 
 Lần chạy đầu đã sửa helper test thiếu idempotency-key argument, raw JSON fingerprint thay đổi sau jsonb canonicalization (nay hash typed v1), SQL dùng nhầm string status (nay dùng enum smallint thực tế). Assertions về source reference, money, không account, no duplicate refund, notifications và report classification đều được giữ và chạy lại.
+
+## 11/11/2026 — Báo cáo nguồn phải thu/tiền thu/cấn trừ
+
+BR-15/17/18/19/20/21/22, FE-08: financial report cộng khoản phải thu trả phòng vào issued/debt theo Room/Location, chỉ cộng verified bank allocation vào collections. Breakdown riêng cho approved charges/outstanding/bank collections/deposit offsets/Holding forfeitures; offset không là tiền chuyển mới, dư/unmatched/simulator không là doanh thu. Giữ công thức lợi nhuận/cashflow hiện có; Holding forfeiture chỉ hiện riêng, principal return không OPEX. Unknown/invalid source trả 409 cần đối chiếu. Owner Web và CSV hiển thị nguồn, decimal strings và date basis; What-if vẫn read-only.
+
+Files: FinancialReportSettlements/Repository/Service, shared finance, FinancialReportsApiPage/financeExport và tests. Không schema/migration, database làm việc giữ nguyên. API/basis: docs/api/SETTLEMENT_FINANCIAL_REPORTING.md.
+
+Đã chạy: Release solution build PASS; Application unit 401 PASS; PostgreSQL disposable receivable/Holding/finance/final-utility/fixed regression 17 PASS; Owner report/export/What-if 23 PASS. Owner typecheck PASS; Mobile typecheck và changed-file lint/format qua commit gate. Ca 600.000 damage + 400.000 offset → 200.000 debt sau release; receipt 50.000 + 150.000 đúng nguồn, 50.000 dư được hoàn không cộng collections; unknown kind buộc 409; đúng scope/date. Các lỗi đầu: sai tên kind (TenantDamage) trong source guard, số expected fixture bank 200.000/offset 400.000, và thiếu required fields ở CSV fixture đã sửa và rerun.
+
+Chưa phải toàn bộ CI/E2E. Tiếp tục corrections/legacy deduction, whole/external-payer excess, Owner Mobile scope, retention/residence, isolated demo, UI E2E và final validation. Real bank/MySign/Email/SMS còn chờ cấu hình đã xác nhận từ người dùng.

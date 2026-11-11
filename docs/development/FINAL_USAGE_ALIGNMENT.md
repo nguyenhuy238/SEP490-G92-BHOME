@@ -41,3 +41,7 @@ BR-13/16/19: nếu FullMonth được Owner chọn, ngày đi sớm không tự 
 ## Holding cancellation — traceability trước triển khai
 
 BR-08/09/10/11/18; BF-03A/BF-06, UC-14/15/22/25, GBR-04/10/18. Owner phải chọn TenantVoluntary hoặc OwnerCannotProvideRoom và xác nhận căn cứ. Voluntary ghi forfeiture bất biến, không hoàn tự động. Owner failure tạo nghĩa vụ hoàn đúng tiền đã nhận, dùng workflow thực chi/evidence/private storage hiện có; không tạo User/Resident giả cho người chưa có tài khoản. Source đã chuyển sang Main hoặc có nguồn tiền chưa đối chiếu phải bị chặn. Quyền Owner, hai nhánh, replay/race, trước account, history và phòng được giải phóng cần test PostgreSQL + Owner Web. Không suy luận expiry là tự nguyện hủy, không đặt thời hạn Holding tối đa.
+
+## Báo cáo khoản phải thu/thu tiền/cấn trừ — kế hoạch slice
+
+BR-15/17/18/19/20/21/22; FE-08, UC-33/34/35, GBR-10/15/16/18. Cộng khoản phải thu trả phòng đã duyệt vào issued và debt đúng Room/Location; tiền thu chỉ từ verified receipt allocations, không dùng unallocated/dư/simulator làm revenue. Offset giảm debt và có breakdown riêng, không giả giao dịch tiền mặt mới. Utility/fixed theo billingPeriod snapshot; damage theo ngày Owner duyệt (Asia/Ho_Chi_Minh). Holding forfeiture hiện riêng theo ngày quyết định hủy, không tự đổi công thức lợi nhuận/cashflow hiện có. Hoàn tiền gốc giữ riêng, không expense. Backend query/DTO + Owner report/export và test source/order/filter/after-release/no-double-count. Formula/basis được ghi rõ, What-if chỉ đọc snapshots.
