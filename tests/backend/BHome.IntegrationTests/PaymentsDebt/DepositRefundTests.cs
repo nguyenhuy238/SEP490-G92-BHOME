@@ -76,9 +76,9 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("APPROVED", approved.Status);
         await PumpNotifications();
         var pendingNotices = (await tenant.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<BHome.Application.Notifications.NotificationView>>(
-            "/api/v1/notifications?category=Contract&pageSize=100"))!.Items;
-        Assert.Single(pendingNotices, n => n.RelatedObjectId == w.Contract && n.Title == "Yêu cầu hoàn cọc đã được duyệt, chờ thực hiện");
-        Assert.DoesNotContain(pendingNotices, n => n.RelatedObjectId == w.Contract && n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công");
+            "/api/v1/notifications?category=Payment&pageSize=100"))!.Items;
+        Assert.Single(pendingNotices, n => n.RelatedObjectId == row.Id && n.Title == "Yêu cầu hoàn cọc đã được duyệt, chờ thực hiện");
+        Assert.DoesNotContain(pendingNotices, n => n.RelatedObjectId == row.Id && n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công");
         var pending = await RefundValue<ContractSettlementSummary>(await owner.GetAsync(contract + "/move-out/settlement-summary"));
         Assert.False(pending.Resolved); Assert.Equal(400000, pending.Calculation!.DepositReserved);
         await RefundValue<MoveOutView>(await Post(owner, contract + "/move-out/settlement", new SettlementInput("Still awaiting bank", pending.Reference)));

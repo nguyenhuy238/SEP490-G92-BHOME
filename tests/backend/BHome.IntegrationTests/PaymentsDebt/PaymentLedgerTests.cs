@@ -26,7 +26,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         return await work(new PaymentService(scope.ServiceProvider.GetRequiredService<IPaymentRepository>(), new User(actor, role), TimeProvider.System));
     }
-    private async Task<Workspace> Setup()
+    private async Task<Workspace> Setup(bool sharedContract = false)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -48,6 +48,12 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         foreach (var tenant in tenants)
         {
             var resident = new Resident { RoomId = room.Id, TenantUserId = tenant, OwnerUserId = owner, DisplayLabel = "SYNTHETIC TENANT", VerificationStatus = IdentityVerificationStatus.Verified };
+            if (sharedContract && contracts.Count > 0)
+            {
+                db.Add(resident);
+                contracts[0].Residents.Add(new ContractResident { ResidentId = resident.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.CoOccupant });
+                continue;
+            }
             var contract = new Contract
             {
                 RoomId = room.Id,

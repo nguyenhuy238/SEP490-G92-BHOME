@@ -146,6 +146,11 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     }
     private async Task<bool> Relevant(NotificationView n, CancellationToken t)
     {
+        if (n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS" && await db.Set<BHome.Domain.Notifications.UserNotification>()
+            .AnyAsync(notice => notice.Id == n.Id && notice.EventKey.StartsWith("deposit-refund:"), t))
+            return await NotificationEventPublisher.DepositRefundNotices(db).AnyAsync(r =>
+                db.Set<BHome.Domain.Notifications.UserNotification>().Any(notice => notice.Id == n.Id && notice.EventKey == r.EventKey &&
+                    (notice.AudienceRole == "Owner" && notice.RecipientUserId == r.OwnerId || notice.AudienceRole == "Tenant" && notice.RecipientUserId == r.BeneficiaryUserId)), t);
         if (n.RelatedObjectType == "Refund" && n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS")
             return await NotificationEventPublisher.ReceiptRefundNotices(db).AnyAsync(r => r.RefundId == n.RelatedObjectId &&
                 db.Set<BHome.Domain.Notifications.UserNotification>().Any(notice => notice.Id == n.Id && notice.EventKey == r.EventKey), t);

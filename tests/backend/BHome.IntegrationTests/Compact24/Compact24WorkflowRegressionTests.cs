@@ -99,6 +99,7 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task HistoricalFullDamageDeduction() => Run(t => t.HistoricalDamageDeductionPreservesRemainderRefundAndOriginalInvoice(400000));
     [CompactPostgresFact] public Task HistoricalDamageDeductionHistoryAndEvidence() => Run(t => t.HistoricalDamageDeductionVersionsRemainReadableAndTamperedEvidenceCannotSettle());
     [CompactPostgresFact] public Task DepositReturnAndClosure() => Run(t => t.UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure());
+    [CompactPostgresFact] public Task DepositReturnAgreedRecipient() => Run(t => t.DepositRefundNotifiesAgreedRecipientInsteadOfContractTenant());
     [CompactPostgresFact] public Task DepositReturnChangedSource() => Run(t => t.ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased());
     [CompactPostgresFact] public Task DepositReturnUnknownHistory() => Run(t => t.UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn());
     [CompactPostgresFact] public Task SettlementCalculation() => Run(t => t.SettlementReadsActualSharedDebtAdjustmentsAndDepositsWithoutAssigningRoomDebtToTenant());

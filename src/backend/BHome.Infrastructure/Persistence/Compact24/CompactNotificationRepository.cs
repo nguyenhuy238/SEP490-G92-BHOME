@@ -104,7 +104,11 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
                   AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType'='ExcessReceiptRefundV1')
                 """;
             var source = await command.ExecuteScalarAsync(token);
-            return source is Guid receipt ? scope.Owner ? new("BankTransfer", receipt) : new("Refund", related) : null;
+            if (source is Guid receipt) return scope.Owner ? new("BankTransfer", receipt) : new("Refund", related);
+            var depositContract = await BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher.DepositRefundNotices(db)
+                .Where(n => n.RefundId == related && (scope.Owner && n.OwnerId == scope.Actor || scope.Tenant && n.BeneficiaryUserId == scope.Actor))
+                .Select(n => (Guid?)n.ContractId).Distinct().SingleOrDefaultAsync(token);
+            return depositContract is { } contract ? scope.Owner ? new("Contract", contract) : new("Refund", related) : null;
         }
         command.CommandText = type switch
         {
