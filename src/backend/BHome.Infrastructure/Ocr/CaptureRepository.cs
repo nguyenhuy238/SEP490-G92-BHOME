@@ -189,7 +189,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 ? db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => r.PreviousValue).FirstOrDefault()
                 : db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId &&
                     db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
-                        (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate && previous.Purpose != ReadingPurpose.Final))))
+                        (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate &&
+                            (previous.Purpose != ReadingPurpose.Final || previous.ContractId != x.ContractId)))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
             x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(), x.DueAt, x.AssignedStaffUserId, x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId));
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null)
@@ -271,7 +272,11 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         if (previous is not null)
         {
             var previousTask = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(a => a.Id == previous.TaskId, t);
-            var finalOnSameDay = task.Purpose == ReadingPurpose.Final && previousTask.Purpose != ReadingPurpose.Final && task.ReadingDate == previousTask.ReadingDate;
+            // Individually recorded Room contracts may finish on the same day.
+            // Distinct Owner-approved final tasks still use this locked meter's
+            // latest confirmed value; they never create another financial effect.
+            var finalOnSameDay = task.Purpose == ReadingPurpose.Final && task.ReadingDate == previousTask.ReadingDate &&
+                (previousTask.Purpose != ReadingPurpose.Final || previousTask.ContractId != task.ContractId);
             if ((!finalOnSameDay && task.ReadingDate <= previousTask.ReadingDate) || (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod)) throw new CaptureConflictException("reading_period_out_of_order");
             if (x.ConfirmedValue < previous.ConfirmedValue) throw new CaptureConflictException("meter_reset_or_rollover_requires_review");
         }

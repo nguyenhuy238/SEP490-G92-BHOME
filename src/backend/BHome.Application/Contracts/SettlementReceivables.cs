@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
 using BHome.Application.PaymentsDebt;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PaymentsDebt;
 
@@ -17,7 +18,8 @@ public sealed record SettlementReceivable(Guid Id, Guid ContractId, Guid RoomId,
     Guid InspectionId, int InspectionVersion, Guid? AssetId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, string Description,
     string CalculationPolicy, IReadOnlyList<DeductionEvidence> Evidence, Guid[] RecipientUserIds,
-    Guid ApprovedByUserId, DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo = false);
+    Guid ApprovedByUserId, DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo = false,
+    SettlementUtilitySource? Utility = null);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record DepositOffsetApproval(Guid Id, Guid ContractId, Guid SourceDepositContractId,
     Guid? ReceivableId, Guid? InvoiceId, decimal Amount, string Reason, Guid ApprovedByUserId,
@@ -49,11 +51,12 @@ public interface ISettlementReceivablesRepository
     Task<SettlementBankAllocationResult?> BankOperationAsync(Guid actor, Guid key, CancellationToken token);
     Task SaveBankResultAsync(SettlementBankAllocationResult result, CancellationToken token);
     Task<Guid> LocationAsync(Guid contractId, CancellationToken token);
+    Task<FinalUtilityContext> FinalUtilityAsync(Guid contractId, BHome.Domain.Billing.UtilityType type, CancellationToken token);
 }
 
 public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,
     IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null, IPaymentRepository? payments = null,
-    ITransferQrGenerator? qr = null)
+    ITransferQrGenerator? qr = null, PropertyService? properties = null, IUtilityBilling? utilities = null, ISettlementChargeEvidence? chargeEvidence = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private async Task AuthorizeAsync(Guid id, bool write, CancellationToken token)
@@ -160,9 +163,7 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
             if (input.ReceivableId is { } sourceId)
             {
                 var charge = context.View.Receivables.Single(r => r.Charge.Id == sourceId).Charge;
-                var current = await evidence.CaptureAsync(id, charge.Evidence.Select(e => e.Id).Order().ToArray(), token);
-                if (!current.OrderBy(e => e.Id).SequenceEqual(charge.Evidence.OrderBy(e => e.Id)))
-                    throw ContractException.Conflict("settlement_evidence_integrity_failed");
+                await VerifyChargeAsync(charge, token);
             }
             var approval = new DepositOffsetApproval(Guid.NewGuid(), id, context.DepositContractId, input.ReceivableId, input.InvoiceId,
                 input.Amount, input.Reason, Actor, clock.GetUtcNow(), Guid.NewGuid(), key, fingerprint, input.ExpectedReference,

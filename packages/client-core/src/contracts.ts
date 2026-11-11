@@ -275,6 +275,18 @@ export interface DepositDeductionItem {
   evidenceIds: string[];
 }
 export interface SettlementReceivable {
+  utility?: {
+    meterId: string;
+    utilityType: string;
+    billingPeriod: string;
+    baseline: BillableMeterPoint;
+    final: BillableMeterPoint;
+    alreadyBilledQuantity: string;
+    quantity: string;
+    cumulativePricingSnapshot: string;
+    pricePolicyId?: string | null;
+    pricePolicyVersion?: number | null;
+  } | null;
   id: string;
   contractId: string;
   roomId: string;
@@ -351,6 +363,30 @@ export interface SettlementTransferInstructions {
   transferReference: string;
   qrImageDataUri: string | null;
   isDevelopmentDemo: boolean;
+}
+export interface BillableMeterPoint {
+  readingId: string;
+  evidenceId: string;
+  date: string;
+  value: string;
+  sourceKind: string;
+  sourceId: string;
+}
+export interface FinalUtilityPreview {
+  pricePolicyId?: string | null;
+  pricePolicyVersion?: number | null;
+  contractId: string;
+  utilityType: 'Electricity' | 'Water';
+  billingPeriod: string;
+  reference: string;
+  baseline: BillableMeterPoint | null;
+  final: BillableMeterPoint | null;
+  alreadyBilledQuantity: string;
+  quantity: string | null;
+  amount: string | null;
+  calculationSnapshot: string;
+  existingReceivableId: string | null;
+  missingInputs: string[];
 }
 export interface SettlementBankResult {
   transferId: string;
@@ -435,6 +471,20 @@ export function contractClient(request: ContractRequest) {
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
     settlementReceivables: (id: string, signal?: AbortSignal) =>
       request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    finalUtilities: (id: string, signal?: AbortSignal) =>
+      request<FinalUtilityPreview[]>(`${root}/${id}/move-out/receivables/final-utilities`, {
+        signal,
+      }),
+    approveFinalUtility: (
+      id: string,
+      body: { utilityType: number; expectedReference: string; humanConfirmed: boolean },
+      key: string,
+    ) =>
+      request<SettlementReceivable>(`${root}/${id}/move-out/receivables/final-utilities`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
     settlementTransferInstructions: (id: string, chargeId: string, signal?: AbortSignal) =>
       request<SettlementTransferInstructions>(
         `${root}/${id}/move-out/receivables/${chargeId}/transfer-instructions`,
@@ -834,6 +884,8 @@ export const labels: Record<string, string> = {
     'Chứng từ thiệt hại không khớp bản đã duyệt. Cần Owner đối chiếu lại.',
   settlement_review_changed:
     'Số liệu quyết toán đã thay đổi. Tải lại để đối chiếu và xác nhận phiên bản mới.',
+  final_utility_inputs_required:
+    'Còn thiếu mốc đã tính tiền, chỉ số chốt, ảnh hoặc chính sách giá hợp lệ. Bổ sung rồi xem lại trước khi duyệt.',
   settlement_source_already_charged:
     'Nguồn thiệt hại này đã có khoản phải thu được duyệt. Kiểm tra sổ hiện có để tránh tính hai lần.',
   settlement_idempotency_conflict:

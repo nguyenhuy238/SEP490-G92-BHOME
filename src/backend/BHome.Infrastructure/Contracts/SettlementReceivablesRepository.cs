@@ -27,7 +27,7 @@ internal static class SettlementChargeRecords
     }
 }
 
-internal sealed class SettlementReceivablesRepository(BHomePersistenceContext db, IContractRepository contracts,
+internal sealed partial class SettlementReceivablesRepository(BHomePersistenceContext db, IContractRepository contracts,
     IContractDepositPosition deposits, TimeProvider clock) : ISettlementReceivablesRepository
 {
     public async Task<T> TransactionAsync<T>(Guid id, Func<Task<T>> work, CancellationToken token)
@@ -178,6 +178,12 @@ internal sealed class SettlementReceivablesRepository(BHomePersistenceContext db
     }
     public async Task SaveChargeAsync(SettlementReceivable charge, CancellationToken token)
     {
+        if (charge.Utility?.PricePolicyId is { } policyId)
+        {
+            var policy = await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().SingleAsync(p => p.Id == policyId, token);
+            if (policy.Version != charge.Utility.PricePolicyVersion) throw ContractException.Conflict("utility_increment_policy_changed");
+            policy.RecordUsage(clock.GetUtcNow());
+        }
         await AppendAsync(charge.ContractId, charge.Id, SettlementChargeRecords.ChargeKind, charge, charge.ApprovedByUserId, charge.ApprovedAt, token);
         await db.SaveChangesAsync(token);
         await NotifyAsync(charge, "settlement-charge:" + charge.Id, "Có khoản phải thu chuyển ra", "Owner đã duyệt khoản phải thu theo biên bản. Mở hóa đơn và khoản phải thu để kiểm tra.", token);

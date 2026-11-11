@@ -69,8 +69,7 @@ public sealed partial class SettlementReceivablesService
             PaymentAllocation? allocation = null;
             if (reason is null)
             {
-                var current = await evidence.CaptureAsync(id, balance.Charge.Evidence.Select(e => e.Id).Order().ToArray(), token);
-                if (!current.OrderBy(e => e.Id).SequenceEqual(balance.Charge.Evidence.OrderBy(e => e.Id))) throw ContractException.Conflict("settlement_evidence_integrity_failed");
+                await VerifyChargeAsync(balance.Charge, token);
                 allocation = new PaymentAllocation
                 {
                     TransferId = transfer.Id,

@@ -21,6 +21,7 @@ import {
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
 import { SettlementBankPanel } from './SettlementBankPanel';
+import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
 
 export function SettlementReceivablesPanel({
   api,
@@ -121,6 +122,15 @@ export function SettlementReceivablesPanel({
         )}
         {data && (
           <>
+            <FinalUtilitiesPanel
+              api={api}
+              id={id}
+              reference={data.reference}
+              saved={async () => {
+                await query.refetch();
+                await saved();
+              }}
+            />
             <Typography>
               Cọc chưa dùng hoặc giữ cho hoàn tiền: {formatContractMoney(data.availableDeposit)}
             </Typography>

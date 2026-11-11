@@ -75,10 +75,30 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
                          join evidence in db.Set<MeterEvidence>() on reading.EvidenceId equals evidence.Id
                          where meter.RoomId == roomId && meter.UtilityType == type && task.Purpose == ReadingPurpose.Periodic &&
                              task.BillingPeriod == period && task.Status == MeterTaskStatus.Completed && evidence.IsLinked && evidence.IsUploaded
-                         select new BillingReading(reading, task.ReadingDate)).ToArrayAsync(t);
+                         select new BillingReading(reading, task.ReadingDate, null, null, 0, null, false, null, null)).ToArrayAsync(t);
         // Replaced meters/multiple readings require an approved replacement allocation; never guess.
         if (row.Length != 1) return null;
         var value = row[0];
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+        {
+            var proof = await db.Set<MeterEvidence>().AsNoTracking().SingleAsync(e => e.Id == value.Reading.EvidenceId, t);
+            var target = new BHome.Application.Contracts.BillableMeterPoint(value.Reading.Id, proof.Id, value.ReadingDate,
+                value.Reading.ConfirmedValue, proof.ImageHash, proof.Length, "ConfirmedPeriodic", value.Reading.Id);
+            var position = await MeterBillingCoverage.ReadAsync(db, roomId, value.Reading.MeterId, period, target, value.Reading.ConfirmedAt, t);
+            var snapshot = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                kind = "MeterBillingCoverage/v1",
+                position.Baseline,
+                target,
+                position.AlreadyBilledQuantity,
+                position.FullyCovered
+            });
+            return new(value.Reading, value.ReadingDate, position.Baseline?.Value,
+                position.Baseline is null ? null : value.Reading.ConfirmedValue - position.Baseline.Value,
+                position.AlreadyBilledQuantity, position.PreviousPricingSnapshot, position.FullyCovered, snapshot, position.MissingInputs);
+        }
+        // Offline source-schema regressions retain their original projection; the
+        // runtime composition always uses Compact24 and the financial baseline above.
         var prior = await (from reading in db.Set<MeterReading>().AsNoTracking()
                            join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
                            where reading.MeterId == value.Reading.MeterId && reading.Id != value.Reading.Id && task.ReadingDate < value.ReadingDate

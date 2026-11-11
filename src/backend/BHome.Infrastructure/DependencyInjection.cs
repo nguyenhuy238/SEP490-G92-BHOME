@@ -227,6 +227,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractDepositPosition, BHome.Infrastructure.Contracts.ContractDepositPosition>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionRepository, BHome.Infrastructure.Contracts.DepositDeductionRepository>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionEvidence, BHome.Infrastructure.Contracts.DepositDeductionEvidence>();
+        services.AddScoped<BHome.Application.Contracts.ISettlementChargeEvidence, BHome.Infrastructure.Contracts.SettlementChargeEvidence>();
         services.AddScoped<BHome.Application.Contracts.DepositDeductionService>();
         services.AddScoped<BHome.Application.Contracts.ISettlementReceivablesRepository, BHome.Infrastructure.Contracts.SettlementReceivablesRepository>();
         services.AddScoped<BHome.Application.Contracts.SettlementReceivablesService>();

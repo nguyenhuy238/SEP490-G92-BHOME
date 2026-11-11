@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractSettlementLedger(BHomePersistenceContext db, IContractDepositPosition? positions = null,
-    IPaymentRepository? payments = null, IDepositDeductionEvidence? deductionEvidence = null) : IContractSettlementLedger, IContractSettlementDetails
+    IPaymentRepository? payments = null, IDepositDeductionEvidence? deductionEvidence = null,
+    ISettlementChargeEvidence? chargeEvidence = null) : IContractSettlementLedger, IContractSettlementDetails
 {
     public async Task<SettlementLedgerState?> ReadAsync(Guid id, Guid electricity, Guid water, CancellationToken t)
     {
@@ -21,6 +22,11 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         {
             if (deductionEvidence is null) throw new ContractException(503, "deduction_evidence_unavailable");
             await deductionEvidence.VerifyAsync(plan, t);
+        }
+        if (summary.Resolved && summary.Receivables is { Count: > 0 })
+        {
+            if (chargeEvidence is null) throw new ContractException(503, "settlement_evidence_unavailable");
+            foreach (var charge in summary.Receivables) await chargeEvidence.VerifyAsync(charge.Charge, t);
         }
         var valid = m?.ElectricityReadingId == electricity && m.WaterReadingId == water && summary.Resolved;
         return new(valid, valid, valid, summary.Reference);
@@ -86,6 +92,8 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         {
             foreach (var final in new[] { observed.Electricity, observed.Water })
             {
+                if (charges.Any(charge => charge.Utility is { } source && source.Final.ReadingId == final.Id &&
+                    source.Final.Value == final.Value && source.Final.Date == final.Date)) continue;
                 var billed = invoiceEntities.Where(i => i.Status == InvoiceStatus.Final && i.BillingPeriod == through).SelectMany(i => i.Lines)
                     .SingleOrDefault(l => l.Category == (final.UtilityType == 0 ? BHome.Domain.PropertyManagement.ChargeCategory.Electricity : BHome.Domain.PropertyManagement.ChargeCategory.Water));
                 var reading = billed?.MeterReadingId is { } readingId ? await db.Set<MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == readingId, t) : null;

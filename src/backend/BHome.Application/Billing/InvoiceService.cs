@@ -218,19 +218,30 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             if (metered)
             {
                 reading = await repository.ReadingAsync(invoice.RoomId, policy.Category == ChargeCategory.Electricity ? UtilityType.Electricity : UtilityType.Water, start, t);
-                if (reading?.Reading.Consumption is null) { missing.Add("confirmed_reading_" + policy.Category); continue; }
+                if (reading?.MissingInputs is { Count: > 0 }) { missing.AddRange(reading.MissingInputs); continue; }
+                if (reading is null || (reading.BillableConsumption ?? reading.Reading.Consumption) is null) { missing.Add("confirmed_reading_" + policy.Category); continue; }
                 // Do not charge another tenancy's usage or silently skip an intermediate month.
-                if (reading.Reading.PreviousValue is null) { missing.Add("baseline_" + policy.Category); continue; }
+                if ((reading.BillablePrevious ?? reading.Reading.PreviousValue) is null) { missing.Add("baseline_" + policy.Category); continue; }
             }
-            var quantity = metered ? reading!.Reading.Consumption!.Value : 1m;
+            var quantity = metered ? (reading!.BillableConsumption ?? reading.Reading.Consumption)!.Value : 1m;
             decimal amount;
             try { amount = InvoiceMath.Amount(policy.Rate, quantity, occupiedDays, end.Day, schedule.PartialMonth, schedule.Rounding, metered); }
             catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
             UtilityCalculation? utility = null;
-            if (metered && utilities is not null)
+            if (metered && reading!.FullyCovered)
             {
-                utility = await utilities.CalculateAsync(invoice.RoomId, policy.Category == ChargeCategory.Electricity ? UtilityType.Electricity : UtilityType.Water, start, quantity, t);
+                amount = 0;
+                utility = new(0, JsonSerializer.Serialize(new { kind = "CoveredBySettlement/v1", coverage = reading.CoverageSnapshot }), []);
+            }
+            else if (metered && utilities is not null)
+            {
+                var type = policy.Category == ChargeCategory.Electricity ? UtilityType.Electricity : UtilityType.Water;
+                utility = reading!.AlreadyBilledQuantity > 0
+                    ? await UtilityIncrementCalculation.CalculateAsync(utilities, invoice.RoomId, type, start, reading.AlreadyBilledQuantity, quantity, reading.PreviousPricingSnapshot, t)
+                    : await utilities.CalculateAsync(invoice.RoomId, type, start, quantity, t);
                 if (utility is not null) { missing.AddRange(utility.MissingInputs); amount = utility.Amount; }
+                else if (reading.AlreadyBilledQuantity > 0 && !UtilityIncrementCalculation.FlatPolicyMatches(reading.PreviousPricingSnapshot, policy.Id, policy.Version, policy.Rate, schedule.Rounding))
+                    missing.Add("utility_increment_policy_changed");
             }
             invoice.Lines.Add(new InvoiceLine
             {
@@ -247,9 +258,9 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 PeriodDays = end.Day,
                 Amount = amount,
                 UtilityCalculationSnapshot = utility?.Snapshot,
-                MeterReadingId = reading?.Reading.Id,
-                PreviousReading = reading?.Reading.PreviousValue,
-                ConfirmedReading = reading?.Reading.ConfirmedValue
+                MeterReadingId = reading?.FullyCovered == true ? null : reading?.Reading.Id,
+                PreviousReading = reading?.FullyCovered == true ? null : reading?.BillablePrevious ?? reading?.Reading.PreviousValue,
+                ConfirmedReading = reading?.FullyCovered == true ? null : reading?.Reading.ConfirmedValue
             });
             if (policy.Id != Guid.Empty) used.Add(policy.Id);
         }

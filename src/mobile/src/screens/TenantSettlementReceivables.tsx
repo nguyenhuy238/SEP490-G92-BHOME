@@ -7,6 +7,7 @@ import {
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { TenantSettlementTransfer } from './TenantSettlementTransfer';
+import { formatBillingDecimal } from '../../../../packages/client-core/src/invoices';
 
 export function TenantSettlementReceivables() {
   const [page, setPage] = useState(1);
@@ -29,6 +30,13 @@ export function TenantSettlementReceivables() {
           {source.receivables.map((r) => (
             <Box key={r.charge.id}>
               <Text>{r.charge.description}</Text>
+              {r.charge.utility && (
+                <Text>
+                  Mốc đã ghi nhận {formatBillingDecimal(r.charge.utility.baseline.value)} → chỉ số
+                  chốt {formatBillingDecimal(r.charge.utility.final.value)} · Phần tăng thêm{' '}
+                  {formatBillingDecimal(r.charge.utility.quantity)}
+                </Text>
+              )}
               <Text>Phải thu: {formatContractMoney(r.charge.amount)}</Text>
               <Text>
                 Đã phân bổ: {formatContractMoney(r.allocated)} · Còn nợ:{' '}
