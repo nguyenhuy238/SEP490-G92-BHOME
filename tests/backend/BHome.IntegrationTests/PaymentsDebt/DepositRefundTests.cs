@@ -32,7 +32,7 @@ public sealed partial class PaymentLedgerTests
 
     internal async Task UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure(bool interruptedUpload = false)
     {
-        var w = await Setup(); await ReadySettlementFixture(w, false);
+        var w = await Setup(); await ReadySettlementFixture(w, false, agreedDeposit: 400000);
         using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); using var staff = await Client(w.Staff);
         var contract = $"/api/v1/contracts/{w.Contract}"; var sourceRoute = contract + "/deposit-refunds";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications",
@@ -124,7 +124,7 @@ public sealed partial class PaymentLedgerTests
     }
     internal async Task ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased()
     {
-        var w = await Setup(); await ReadySettlementFixture(w, true); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var w = await Setup(); await ReadySettlementFixture(w, true, agreedDeposit: 20000); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
         var contract = $"/api/v1/contracts/{w.Contract}"; var route = contract + "/deposit-refunds";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications", new DepositInput("SYN-CHANGED-" + Guid.NewGuid(), 20000, "Synthetic")));
         var source = await RefundValue<RefundSource>(await owner.GetAsync(route));
@@ -138,7 +138,7 @@ public sealed partial class PaymentLedgerTests
     }
     internal async Task UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn()
     {
-        var w = await Setup(); await ReadySettlementFixture(w, true); using var owner = await Client(w.Owner);
+        var w = await Setup(); await ReadySettlementFixture(w, true, agreedDeposit: 20000); using var owner = await Client(w.Owner);
         var contract = $"/api/v1/contracts/{w.Contract}";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications", new DepositInput("SYN-IMPORT-" + Guid.NewGuid(), 20000, "Synthetic")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();

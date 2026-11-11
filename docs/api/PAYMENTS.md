@@ -96,3 +96,7 @@ Offline legacy regression giữ constraint exact cũ qua capability repository; 
 # Giao dịch dư toàn bộ — 11/11/2026
 
 Receipt nhận sau khi hóa đơn/khoản phải thu đã thanh toán đủ hoặc Holding đã đóng có Owner confirmation riêng. Xem [hợp đồng hoàn tiền](REFUNDS.md). `paymentStatus` của danh sách receipt hỗ trợ thêm `ExcessRefundPending` và `ExcessRefundCompleted`; filter `settlementContractId` bao gồm disposition đích tương ứng. Chúng không tạo allocation và không tăng verified collections. Existing allocated excess vẫn dùng luồng refund cũ.
+
+## Xác minh cọc trực tiếp — giới hạn số tiền (11/11/2026)
+
+POST contracts/{id}/deposit-verifications giữ DTO/key cũ. Main tính remaining = RequiredDeposit - AppliedHoldingDeposit - tổng receipt cọc đã xác minh; số tiền vượt remaining trả 409 main_deposit_excess_requires_manual_review. Holding giữ lỗi holding_deposit_excess_requires_manual_review. Không nhận mới trên hợp đồng đóng hoặc phiên bản renewal/addendum (deposit_not_payable); exact-key replay vẫn hợp lệ. Không sửa số tiền sao kê để làm vừa remaining. Receipt vượt cọc cần nguồn receipt đầy đủ, phân bổ cọc và hoàn phần dư riêng; đường xác minh trực tiếp không thực hiện thay luồng này. Lịch sử đã có không bị viết lại.

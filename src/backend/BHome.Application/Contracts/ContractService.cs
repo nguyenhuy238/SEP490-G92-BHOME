@@ -242,7 +242,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return Mutate(id, [Roles.Owner], async c =>
         {
             if (await Replay(key, "deposit", new { id, x }, t) is { } prior) return new ContractId(prior);
-            if (c.PreviousContractId is not null || c.Status is ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Converted)
+            if (c.PreviousContractId is not null || c.Kind is not (ContractKind.Main or ContractKind.Holding) ||
+                c.Status is ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Converted or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Applied)
                 throw ContractException.Conflict("deposit_not_payable");
             if (c.Kind == ContractKind.Holding && (c.ApprovedAt is null || c.Status is ContractStatus.Expired or ContractStatus.Cancelled || c.HoldingExpiryAt <= clock.GetUtcNow()))
                 throw ContractException.Conflict("holding_deposit_requires_manual_review");
@@ -253,6 +254,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 if (existing.ContractId != id || existing.Amount != x.Amount) throw ContractException.Conflict("bank_transaction_already_allocated");
                 Remember(key, "deposit", new { id, x }, existing.Id); return new ContractId(existing.Id);
             }
+            var already = await repository.DepositTotalAsync(c.Id, t);
+            if (x.Amount > c.RequiredDeposit - c.AppliedHoldingDeposit - already)
+                throw ContractException.Conflict(c.Kind == ContractKind.Holding ? "holding_deposit_excess_requires_manual_review" : "main_deposit_excess_requires_manual_review");
             var entry = new DepositVerification
             {
                 ContractId = id,
@@ -265,8 +269,6 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.Kind == ContractKind.Holding)
             {
                 if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
-                var already = await repository.DepositTotalAsync(c.Id, t);
-                if (already + entry.Amount > c.RequiredDeposit) throw ContractException.Conflict("holding_deposit_excess_requires_manual_review");
                 await LockHoldingPriceAsync(c, "VerifiedDeposit", entry.VerifiedAt, t, entry.Amount);
             }
             repository.Add(entry); Audit("ContractDepositVerified", id); Remember(key, "deposit", new { id, x }, entry.Id); return new ContractId(entry.Id);

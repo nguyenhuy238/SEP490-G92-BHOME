@@ -850,6 +850,11 @@ export const labels: Record<string, string> = {
   Applied: 'Đã áp dụng',
   holding_owner_approval_required: 'Cần Owner phê duyệt hợp đồng giữ chỗ.',
   holding_deposit_insufficient: 'Cọc giữ chỗ đã xác minh chưa đủ.',
+  main_deposit_excess_requires_manual_review:
+    'Giao dịch vượt phần cọc còn thiếu. Hãy đối chiếu toàn bộ receipt ngân hàng và phần dư phải hoàn; không sửa số tiền sao kê để ghi thành cọc.',
+  holding_deposit_excess_requires_manual_review:
+    'Giao dịch vượt phần cọc giữ chỗ còn thiếu. Cần đối chiếu receipt và phần dư phải hoàn riêng.',
+  deposit_not_payable: 'Hợp đồng này không còn nhận thêm tiền cọc.',
   holding_expired: 'Hợp đồng giữ chỗ đã hết hạn.',
   HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
   HoldingApproved: 'Owner phê duyệt giữ chỗ',
@@ -1196,7 +1201,8 @@ export function contractActions(
   if (
     owner &&
     !c.previousContractId &&
-    !['Terminated', 'Superseded', 'Cancelled'].includes(c.status)
+    ['Main', 'Holding'].includes(c.kind) &&
+    !['Terminated', 'Superseded', 'Cancelled', 'Expired', 'Converted', 'Applied'].includes(c.status)
   )
     result.push(
       action(
@@ -1212,7 +1218,7 @@ export function contractActions(
             max: 2000,
           },
         ],
-        'Chỉ xác minh giao dịch đã đối chiếu sao kê ngân hàng. Ảnh chuyển khoản riêng lẻ chưa đủ chứng minh tiền đã về.',
+        'Chỉ xác minh giao dịch đã đối chiếu sao kê, không vượt phần cọc còn thiếu sau Holding đã áp dụng. Giao dịch có phần dư phải đối chiếu receipt và khoản hoàn riêng; không sửa số tiền sao kê. Ảnh chuyển khoản riêng lẻ chưa đủ chứng minh tiền đã về.',
       ),
     );
   if (c.kind === 'Holding') {

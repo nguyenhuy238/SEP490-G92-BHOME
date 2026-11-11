@@ -109,3 +109,9 @@ Non-incremental Release integration build 0 warning/error; Application unit 412 
 ## 11/11/2026 — External payer receipt refund
 
 Release non-incremental build 0 warning/error; Application unit 415 PASS; disposable external payer/migration 2 PASS, expanded external + whole + receivable + refund/historical 16 PASS; Owner payments/refund UI 27 PASS; force Owner typecheck/Mobile typecheck/lint/format PASS. Có legacy 6→7 preservation/tampered schema function, role/source/key/race/native relabel rejection, actual external partial/whole return, no dummy Resident/User, no double revenue/cost, Tenant data isolation và pending settlement until actual refund. Mọi statement/photo/channel đều synthetic/local test boundaries, không là real provider hoặc browser/native acceptance. Không thay DB làm việc.
+
+## 11/11/2026 — Bảo vệ xác minh cọc trực tiếp
+
+BR-09/11/17/18: Main chỉ nhận số tiền sao kê không vượt RequiredDeposit trừ AppliedHoldingDeposit và cọc đã xác minh. Cọc bằng 0/đủ cọc, hợp đồng đóng/renewal/addendum không được nhận khoản cọc mới; exact-key replay vẫn được trả lại. Không cắt số tiền receipt hoặc tự biến phần dư thành cọc. Owner Web ẩn action trên trạng thái đã đóng và giải thích lỗi phần dư. Fixtures hoàn cọc khai báo số cọc thỏa thuận tương ứng trước khi nhận tiền, thay vì tạo cọc trên hợp đồng RequiredDeposit=0.
+
+Đã chạy: Release backend non-incremental build 0 warning/error, Application unit 423 PASS, PostgreSQL direct-cap/concurrency + refund/recovery/receivable + anonymous signing 12 PASS, Owner contract UI 14 PASS, Owner force typecheck và changed-file ESLint/Prettier PASS. Chỉ disposable DB, không migrate working DB. Luồng receipt phân bổ cọc Main/Holding trước account và hoàn phần dư còn cần triển khai tiếp; chặn đường ghi trực tiếp chưa là hoàn tất luồng E2E hoặc native DB constraint.

@@ -16,12 +16,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BHome.IntegrationTests.PaymentsDebt;
 public sealed partial class PaymentLedgerTests
 {
-    private async Task ReadySettlementFixture(Workspace w, bool others, bool payInvoices = true)
+    private async Task ReadySettlementFixture(Workspace w, bool others, bool payInvoices = true, decimal agreedDeposit = 0)
     {
         // Synthetic persisted financial/inspection preconditions, no mocked settlement result.
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract); var prior = await db.Set<Invoice>().SingleAsync(i => i.Id == w.Invoice);
         contract.StartDate = prior.BillingPeriod;
+        contract.RequiredDeposit = agreedDeposit;
         if (!others)
             foreach (var other in await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).ToArrayAsync())
                 other.Status = ContractStatus.Terminated;

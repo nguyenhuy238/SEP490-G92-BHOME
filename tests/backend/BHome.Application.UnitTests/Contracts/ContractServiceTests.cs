@@ -322,6 +322,48 @@ public sealed class ContractServiceTests
         await Assert.ThrowsAsync<ContractException>(() => r.Service.VerifyDepositAsync(c.Id, input with { Amount = 200 }, Guid.NewGuid(), default));
     }
     [Fact]
+    public async Task MainDepositOnlyAcceptsTheAgreedRemainderAfterHoldingAndEarlierReceipts()
+    {
+        var r = new Rig(); var c = await r.Create(); c.AppliedHoldingDeposit = 2000000;
+        await r.Service.VerifyDepositAsync(c.Id, new("PARTIAL", 400000, "Synthetic statement"), Guid.NewGuid(), default);
+        var excess = await Assert.ThrowsAsync<ContractException>(() => r.Service.VerifyDepositAsync(c.Id,
+            new("EXCESS", 600001, "Synthetic statement"), Guid.NewGuid(), default));
+        Assert.Equal("main_deposit_excess_requires_manual_review", excess.Code);
+        Assert.Equal(400000, Assert.Single(r.Deposits).Amount);
+        var key = Guid.NewGuid(); var input = new DepositInput("REMAINDER", 600000, "Synthetic statement");
+        var saved = await r.Service.VerifyDepositAsync(c.Id, input, key, default);
+        Assert.Equal(1000000, r.Deposits.Sum(d => d.Amount));
+        Assert.Equal(3000000, c.AppliedHoldingDeposit + r.Deposits.Sum(d => d.Amount));
+        var extra = await Assert.ThrowsAsync<ContractException>(() => r.Service.VerifyDepositAsync(c.Id,
+            new("ALREADY-FUNDED", 1, "Synthetic statement"), Guid.NewGuid(), default));
+        Assert.Equal("main_deposit_excess_requires_manual_review", extra.Code);
+        c.Status = ContractStatus.Terminated;
+        Assert.Equal(saved, await r.Service.VerifyDepositAsync(c.Id, input, key, default));
+        Assert.Equal(2, r.Deposits.Count);
+    }
+    [Fact]
+    public async Task ZeroAgreedDepositCannotBeTurnedIntoAnUnapprovedDeposit()
+    {
+        var r = new Rig(); var c = await r.Create(); c.RequiredDeposit = 0;
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.VerifyDepositAsync(c.Id,
+            new("ZERO-DEPOSIT", 1, "Synthetic statement"), Guid.NewGuid(), default));
+        Assert.Equal("main_deposit_excess_requires_manual_review", error.Code); Assert.Empty(r.Deposits);
+    }
+    [Theory]
+    [InlineData(ContractStatus.Terminated)]
+    [InlineData(ContractStatus.Superseded)]
+    [InlineData(ContractStatus.Cancelled)]
+    [InlineData(ContractStatus.Expired)]
+    [InlineData(ContractStatus.Converted)]
+    [InlineData(ContractStatus.Applied)]
+    public async Task ClosedContractCannotAcceptANewDeposit(ContractStatus status)
+    {
+        var r = new Rig(); var c = await r.Create(); c.Status = status;
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.VerifyDepositAsync(c.Id,
+            new("CLOSED", 1, "Synthetic statement"), Guid.NewGuid(), default));
+        Assert.Equal("deposit_not_payable", error.Code); Assert.Empty(r.Deposits);
+    }
+    [Fact]
     public async Task ReusingIdempotencyKeyWithChangedInputFails()
     {
         var r = new Rig(); var key = Guid.NewGuid(); await r.Service.CreateAsync(r.Draft, key, default);

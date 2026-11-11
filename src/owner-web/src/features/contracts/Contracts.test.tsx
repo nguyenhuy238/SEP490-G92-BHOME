@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material';
 import { expect, it, vi } from 'vitest';
 import {
   contractActions,
+  contractError,
   contractClient,
   actionPayload,
   mutationKeys,
@@ -68,6 +69,24 @@ const draft: ContractView = {
   holdingContractId: null,
   appliedHoldingDeposit: '0',
 };
+
+it('keeps new deposit verification off closed contracts and explains excess without changing the receipt', () => {
+  for (const status of [
+    'Terminated',
+    'Superseded',
+    'Cancelled',
+    'Expired',
+    'Converted',
+    'Applied',
+  ]) {
+    expect(
+      contractActions({ ...draft, status }, null, 'Owner', owner).map((a) => a.operation),
+    ).not.toContain('deposit-verifications');
+  }
+  expect(
+    contractError({ status: 409, code: 'main_deposit_excess_requires_manual_review' }),
+  ).toContain('không sửa số tiền sao kê');
+});
 
 it('keeps Holding actions separate from Main activation, renewal and move-out', () => {
   const holding = {
