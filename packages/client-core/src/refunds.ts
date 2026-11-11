@@ -1,4 +1,15 @@
 import type { ContractRequest, DepositDeductionPlan } from './contracts';
+import type { Page } from './invoices';
+export interface TenantRefund {
+  id: string;
+  amount: string;
+  sourceKind: 'ReceiptExcess' | 'SecurityDeposit' | 'HoldingDeposit';
+  status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+  requestedAt: string;
+  decidedAt: string | null;
+  executedAt: string | null;
+  isDevelopmentDemo: boolean;
+}
 export interface RefundEvent {
   action: string;
   actor: string;
@@ -64,6 +75,10 @@ export interface RefundExecution {
 }
 export function refundClient(request: ContractRequest) {
   return {
+    own: (page = 1, pageSize = 20, signal?: AbortSignal) =>
+      request<Page<TenantRefund>>(`/api/v1/tenant/refunds?page=${page}&pageSize=${pageSize}`, {
+        signal,
+      }),
     source: (id: string, signal?: AbortSignal) =>
       request<RefundSource>(`/api/v1/payment-transactions/${id}/refunds`, { signal }),
     depositSource: (id: string, signal?: AbortSignal) =>

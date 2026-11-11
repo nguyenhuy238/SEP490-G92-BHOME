@@ -24,6 +24,7 @@ import {
 } from '../components/InvoiceDetailUi';
 import { ChoiceField } from '../components/WorkflowControls';
 import { TenantBillingTabs } from '../components/TenantBillingTabs';
+import { TenantRefundPanel } from './TenantRefundPanel';
 import { Pill } from '../components/WorkspaceKit';
 import { colors } from '../theme/theme';
 import { tenantPaymentLabel } from '../features/tenant/paymentPresentation';
@@ -137,6 +138,7 @@ function PaymentLedger() {
         </View>
       )}
       <View style={invoiceUi.surface}>
+        <TenantRefundPanel />
         <TenantBillingTabs
           active={tab}
           select={(next) => (next === 'invoices' ? go('invoice') : chooseTab(next))}

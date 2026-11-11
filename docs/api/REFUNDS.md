@@ -1,5 +1,13 @@
 # Hoàn tiền thủ công — receipt thừa và cọc không khấu trừ
 
+## 11/11/2026 — Tenant xem hoàn tiền của chính mình
+
+`GET /api/v1/tenant/refunds?page=1&pageSize=20` chỉ dành cho Tenant. Quyền theo `refund_requests.beneficiary_resident_id → residents.user_id` hiện được liên kết với authenticated user; không theo RoomId hiện tại. Áp quyền trước count, sort và pagination; page >= 1, pageSize 1..100, chặn overflow. Chỉ đọc các workflow refund đã phân loại, không expose legacy chưa đối chiếu.
+
+Response `PagedResult` với items `{id,amount,sourceKind,status,requestedAt,decidedAt,executedAt,isDevelopmentDemo}`. `amount` chuỗi VND; sourceKind ReceiptExcess/SecurityDeposit/HoldingDeposit; status REQUESTED/APPROVED/REJECTED/COMPLETED. Không có lý do nội bộ, actor, payer khác, bank reference, upload intent, object key hoặc endpoint tải chứng từ. Owner/Staff không dùng route Tenant này; Tenant vẫn không được dùng các mutation/evidence Owner. Không nhận userId/residentId từ client để chọn chủ hồ sơ.
+
+Tenant Mobile: Hóa đơn & thanh toán → Lịch sử → Xem hoàn tiền của tôi. Đã duyệt hiển thị chờ thực hiện, chỉ COMPLETED có thời điểm thực chi; tải lại, trang tiếp, empty/error/retry riêng. Loader kiểm hợp đồng dữ liệu và chỉ giữ trường Tenant. Có thể xem sau physical release, không tạo financial state mới. Slice không thêm migration, không gọi bank hoặc sửa dữ liệu làm việc. Nội dung lịch sử bên dưới ghi lại các giới hạn tại thời điểm cũ; endpoint/màn hình này thay thế giới hạn thiếu Tenant refund history.
+
 ## 11/11/2026 — Giao dịch dư toàn bộ sau khi nghĩa vụ đã đủ tiền
 
 BR-17/18/19/23, BF-06, UC-22/25, GBR-10/18. Owner dùng:
@@ -14,7 +22,7 @@ Sau xác nhận, dùng các route receipt refunds request/decision/execution hi�
 
 Migration SQL-only `20261111060000_ReceiptExcessDisposition` thêm native allocation guard; fresh DDL đồng bộ, vẫn 24 bảng, không thay EF model. Guard ngăn reuse receipt được claim hoặc phần tiền đã reserve/refund. Không migrate database làm việc.
 
-Owner Web: mục Thanh toán lọc hai trạng thái hoàn toàn bộ; invoice picker có lựa chọn hóa đơn đã đủ tiền; ReconcileTransfer/SettlementBankPanel/HoldingDepositPanel dùng context thực và chọn người theo nhãn. Việc xác nhận chưa phải đã hoàn tiền. Payer bên ngoài không có Resident hợp lệ và Main Deposit overage còn cần nhánh riêng; không tạo hồ sơ giả hoặc tự chọn representative. Tenant chưa có màn hình riêng xem refund receipt trong slice này. Provider bank thực và browser/native E2E chưa được xác nhận.
+Owner Web: mục Thanh toán lọc hai trạng thái hoàn toàn bộ; invoice picker có lựa chọn hóa đơn đã đủ tiền; ReconcileTransfer/SettlementBankPanel/HoldingDepositPanel dùng context thực và chọn người theo nhãn. Việc xác nhận chưa phải đã hoàn tiền. Payer bên ngoài không có Resident hợp lệ và Main Deposit overage còn cần nhánh riêng; không tạo hồ sơ giả hoặc tự chọn representative. Tenant refund history được bổ sung ở mục trên. Provider bank thực và browser/native E2E chưa được xác nhận.
 
 Cập nhật **06/11/2026**, triển khai `12043f0`, UI recovery `17c4228`. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md),
 [Payment](PAYMENTS.md), [Finance](FINANCE.md). Đây là API đã triển khai trên Compact24, không phải đề xuất.

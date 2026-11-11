@@ -52,6 +52,8 @@ public sealed partial class PaymentLedgerTests
         var created = await Task.WhenAll(Post(owner, sourceRoute, input, key), Post(owner, sourceRoute, input, key));
         var row = await RefundValue<RefundView>(created[0]); Assert.Equal(row.Id, (await RefundValue<RefundView>(created[1])).Id);
         Assert.Null(row.SourcePaymentId); Assert.Equal(w.Contract, row.SourceDepositContractId);
+        var tenantRefund = Assert.Single((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync("/api/v1/tenant/refunds"))).Items);
+        Assert.Equal("SecurityDeposit", tenantRefund.SourceKind); Assert.Equal(row.Id, tenantRefund.Id); Assert.Equal("REQUESTED", tenantRefund.Status);
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
         var report = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
         Assert.False(report.HasUnclassifiedRefunds); Assert.Equal("0", report.VerifiedDepositReturns);
@@ -102,6 +104,8 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == row.Id && a.Event == "DepositRefundCompleted"));
         var afterReturn = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
         Assert.False(afterReturn.HasUnclassifiedRefunds); Assert.Equal("400000", afterReturn.VerifiedDepositReturns);
+        tenantRefund = Assert.Single((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync("/api/v1/tenant/refunds"))).Items);
+        Assert.Equal("COMPLETED", tenantRefund.Status); Assert.NotNull(tenantRefund.ExecutedAt);
         Assert.Equal(report.Total.OperatingExpenses, afterReturn.Total.OperatingExpenses);
         Assert.Equal(report.Total.VerifiedCollections, afterReturn.Total.VerifiedCollections);
         Assert.Equal(report.Capital.NetRecovery, afterReturn.Capital.NetRecovery);

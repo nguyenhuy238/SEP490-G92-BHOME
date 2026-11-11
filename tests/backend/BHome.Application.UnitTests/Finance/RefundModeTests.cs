@@ -38,6 +38,18 @@ public sealed class RefundModeTests
     }
     private sealed class User(string role) : ICurrentUser
     { public Guid? UserId => Guid.Parse("00000000-0000-0000-0000-000000000123"); public bool IsInRole(string value) => role == value; }
+    [Theory]
+    [InlineData("Owner", 1, 20, 403)]
+    [InlineData("Staff", 1, 20, 403)]
+    [InlineData("Tenant", 0, 20, 400)]
+    [InlineData("Tenant", 1, 101, 400)]
+    [InlineData("Tenant", int.MaxValue, 100, 400)]
+    public async Task TenantRefundReadsEnforceRoleAndPaginationBeforeRepository(string role, int page, int size, int status)
+    {
+        var service = new RefundService(new Source(), new NoStorage(), new NoImages(), new User(role), TimeProvider.System);
+        var error = await Assert.ThrowsAsync<FinanceException>(() => service.TenantListAsync(page, size, default));
+        Assert.Equal(status, error.Status);
+    }
     // Explicit storage/provider boundaries. None should be called by these rejection cases.
     private sealed class NoStorage : IObjectStorage
     {
@@ -49,6 +61,7 @@ public sealed class RefundModeTests
     { public string Validate(byte[] bytes) => throw new InvalidOperationException(); }
     private sealed class Source : IRefundRepository
     {
+        public Task<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>> TenantListAsync(Guid tenant, int page, int pageSize, CancellationToken t) => throw new InvalidOperationException();
         public Guid Person { get; } = Guid.NewGuid(); public int Writes; public int Reads;
         public Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t) => work();
         public Task<RefundSourceData> SourceAsync(Guid id, CancellationToken t)

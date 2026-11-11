@@ -61,6 +61,19 @@ public sealed partial class PaymentLedgerTests
         }
         var refund = await RefundValue<RefundView>(await Post(owner, sourceRoute, new RefundInput(payer.ResidentId, 50000, "Synthetic full excess return to actual payer", true)));
         Assert.Equal("REQUESTED", refund.Status);
+        const string ownRefunds = "/api/v1/tenant/refunds?pageSize=1";
+        using var coTenant = await Client(w.Tenants[0]); using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(ownRefunds)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync(ownRefunds)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(ownRefunds)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await tenant.GetAsync(ownRefunds + "&page=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await tenant.GetAsync("/api/v1/tenant/refunds?page=2147483647&pageSize=100")).StatusCode);
+        var own = await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync(ownRefunds));
+        Assert.Equal(1, own.TotalCount); Assert.Equal(refund.Id, Assert.Single(own.Items).Id); Assert.Equal("ReceiptExcess", own.Items[0].SourceKind); Assert.Equal("REQUESTED", own.Items[0].Status);
+        Assert.Empty((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync(ownRefunds + "&page=2"))).Items);
+        Assert.Equal(0, (await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await coTenant.GetAsync(ownRefunds))).TotalCount);
+        var tenantJson = System.Text.Json.JsonDocument.Parse(await tenant.GetStringAsync(ownRefunds));
+        Assert.Equal(new[] { "amount", "decidedAt", "executedAt", "id", "isDevelopmentDemo", "requestedAt", "sourceKind", "status" }, tenantJson.RootElement.GetProperty("items")[0].EnumerateObject().Select(p => p.Name).Order());
         refund = await RefundValue<RefundView>(await Post(owner, $"/api/v1/refund-requests/{refund.Id}/decision", new RefundDecision(1, true, "Synthetic bank payer proof checked", true)));
         Assert.Equal("APPROVED", refund.Status);
         Assert.True((await As(w.Tenants[2], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default))).PendingReview);
@@ -73,6 +86,8 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("ExcessRefundCompleted", (await As(w.Owner, Roles.Owner, s => s.TransferAsync(extra.Id, default))).Status);
         var completed = await RefundValue<BHome.Application.PropertyManagement.PagedResult<TransferView>>(await owner.GetAsync("/api/v1/payment-transactions?paymentStatus=ExcessRefundCompleted&pageSize=20"));
         Assert.Contains(completed.Items, p => p.Id == extra.Id);
+        var ownCompleted = Assert.Single((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync(ownRefunds))).Items);
+        Assert.Equal("COMPLETED", ownCompleted.Status); Assert.Equal(50000, ownCompleted.Amount); Assert.NotNull(ownCompleted.ExecutedAt);
         var report = await RefundValue<FinancialReport>(await owner.GetAsync($"/api/v1/financial-reports?from=2000-01-01&to=2100-12-31&roomId={w.Room}"));
         Assert.False(report.HasUnclassifiedRefunds); Assert.Equal("100000", report.Total.VerifiedCollections); Assert.Equal("0", report.Total.OutstandingNow);
     }

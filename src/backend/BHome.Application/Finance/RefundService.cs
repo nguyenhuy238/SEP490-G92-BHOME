@@ -84,6 +84,7 @@ public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IR
     Guid? ReceiptExcessDispositionId = null);
 public interface IRefundRepository
 {
+    Task<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>> TenantListAsync(Guid tenant, int page, int pageSize, CancellationToken t);
     Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t);
     Task<RefundSourceData> SourceAsync(Guid id, CancellationToken t);
     Task<RefundSourceData> DepositSourceAsync(Guid contractId, CancellationToken t);
@@ -95,6 +96,14 @@ public interface IRefundRepository
 public sealed class RefundService(IRefundRepository repository, IObjectStorage storage, IContractImageValidator images,
     ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null)
 {
+    public Task<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>> TenantListAsync(int page, int pageSize, CancellationToken token)
+    {
+        if (user.UserId is not { } actor || actor == Guid.Empty) throw new FinanceException(401, "authentication_required");
+        if (!user.IsInRole(Roles.Tenant)) throw new FinanceException(403, "refund_tenant_required");
+        if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
+            throw new FinanceException(400, "invalid_refund_page");
+        return repository.TenantListAsync(actor, page, pageSize, token);
+    }
     private Guid Owner()
     {
         if (user.UserId is not { } actor || actor == Guid.Empty) throw new FinanceException(401, "authentication_required");
