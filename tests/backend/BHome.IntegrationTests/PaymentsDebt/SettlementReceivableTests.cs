@@ -37,10 +37,20 @@ public sealed partial class PaymentLedgerTests
             departedMember.ResidenceTo = date.AddDays(-1);
             (await db.Set<BHome.Domain.TenantContracts.Resident>().SingleAsync(r => r.TenantUserId == w.Tenants[1])).RoomId = null;
             var newcomer = new BHome.Domain.TenantContracts.Resident { RoomId = w.Room, TenantUserId = outsiderId, OwnerUserId = w.Owner, DisplayLabel = "Synthetic new occupant" };
-            db.AddRange(newcomer, new BHome.Domain.TenantContracts.Contract { RoomId = w.Room, TenantUserId = outsiderId, OwnerSignerId = w.Owner,
-                RepresentativeResidentId = newcomer.Id, StartDate = date, EndDate = date.AddMonths(1), Terms = "Synthetic replacement tenancy",
-                Status = BHome.Domain.TenantContracts.ContractStatus.Active, ActivatedAt = DateTimeOffset.UtcNow, ActivatedByUserId = w.Owner,
-                Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = newcomer.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative, ResidenceFrom = date }] });
+            db.AddRange(newcomer, new BHome.Domain.TenantContracts.Contract
+            {
+                RoomId = w.Room,
+                TenantUserId = outsiderId,
+                OwnerSignerId = w.Owner,
+                RepresentativeResidentId = newcomer.Id,
+                StartDate = date,
+                EndDate = date.AddMonths(1),
+                Terms = "Synthetic replacement tenancy",
+                Status = BHome.Domain.TenantContracts.ContractStatus.Active,
+                ActivatedAt = DateTimeOffset.UtcNow,
+                ActivatedByUserId = w.Owner,
+                Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = newcomer.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative, ResidenceFrom = date }]
+            });
             await db.SaveChangesAsync();
         }
         using var outsider = await Client(outsiderId);

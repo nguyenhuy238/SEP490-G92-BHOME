@@ -38,13 +38,13 @@ Thay thế rõ các yêu cầu cũ: external-only signing không còn là mode d
 
 ## Quyết định còn mở và verification blockers
 
-| ID      | Nội dung                                       | Trạng thái / cách xử lý                                                                           |
-| ------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| OPEN-01 | Holding maximum duration                       | Chưa duyệt; dùng Owner explicit expiry tương lai, không tự đặt 3/7/15 ngày                        |
-| OPEN-02 | CCCD retention/deletion duration, start basis, financial record scope và legal hold | Chưa duyệt; Owner metadata/hold/review đã chuẩn bị, mọi view CanDelete=false; không auto delete |
-| OPEN-03 | Residence deadline/reminder cadence            | Dùng existing explicit configuration; chưa cấu hình thì báo cần Owner thiết lập, không tự định kỳ |
-| EXT-01  | Bank provider/API docs/credentials/sandbox     | Người dùng chưa có, sẽ bổ sung; provider-specific implementation/live verification bị chặn        |
-| EXT-02  | MySign sandbox account/credential access       | Người dùng chưa có; reuse adapter, không fake live result                                         |
-| EXT-03  | Email/SMS delivery credentials                 | Người dùng chưa có; secure configured delivery boundary, actual delivery BLOCKED                  |
+| ID      | Nội dung                                                                            | Trạng thái / cách xử lý                                                                           |
+| ------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| OPEN-01 | Holding maximum duration                                                            | Chưa duyệt; dùng Owner explicit expiry tương lai, không tự đặt 3/7/15 ngày                        |
+| OPEN-02 | CCCD retention/deletion duration, start basis, financial record scope và legal hold | Chưa duyệt; Owner metadata/hold/review đã chuẩn bị, mọi view CanDelete=false; không auto delete   |
+| OPEN-03 | Residence deadline/reminder cadence                                                 | Dùng existing explicit configuration; chưa cấu hình thì báo cần Owner thiết lập, không tự định kỳ |
+| EXT-01  | Bank provider/API docs/credentials/sandbox                                          | Người dùng chưa có, sẽ bổ sung; provider-specific implementation/live verification bị chặn        |
+| EXT-02  | MySign sandbox account/credential access                                            | Người dùng chưa có; reuse adapter, không fake live result                                         |
+| EXT-03  | Email/SMS delivery credentials                                                      | Người dùng chưa có; secure configured delivery boundary, actual delivery BLOCKED                  |
 
 Không commit secrets, raw OTP/signing tokens, passwords, real CCCD hoặc financial private data. Chỉ synthetic test fixtures.

@@ -339,7 +339,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     private static async Task<Guid> Create(HttpClient c, string path, object data)
     {
         var response = await c.PostAsJsonAsync("/api/v1/capture/" + path, data);
-        Assert.True(response.IsSuccessStatusCode, $"{path}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+        Assert.True(response.IsSuccessStatusCode, $"{path}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}\n" + string.Join('\n', ApiFactory.Diagnostics.TakeLast(3)));
         return (await response.Content.ReadFromJsonAsync<IdResult>())!.Id;
     }
     private async Task<(HttpClient Owner, HttpClient Staff, Guid OwnerId, Guid StaffId, Guid Location, Guid Room, Guid Resident, Guid Meter)> Workspace()

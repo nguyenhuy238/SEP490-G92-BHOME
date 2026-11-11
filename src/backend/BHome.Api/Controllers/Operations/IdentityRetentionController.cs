@@ -10,6 +10,7 @@ namespace BHome.Api.Controllers.Operations;
 public sealed class IdentityRetentionController(IdentityRetentionService service) : ControllerBase
 {
     [HttpGet] public Task<IdentityRetentionView> Get(Guid id, CancellationToken token) => service.GetAsync(id, token);
-    [HttpPost("reviews")] public Task<IdentityRetentionView> Record(Guid id, IdentityRetentionInput input, CancellationToken token) =>
+    [HttpPost("reviews")]
+    public Task<IdentityRetentionView> Record(Guid id, IdentityRetentionInput input, CancellationToken token) =>
         service.RecordAsync(id, input, Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty, token);
 }

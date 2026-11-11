@@ -14,8 +14,21 @@ public static class SettlementChargeReviewRules
 {
     public static string Reference(Guid contractId, ContractFinalInspection? inspection, IEnumerable<SettlementReceivable> charges) =>
         "CHARGES-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-        { contractId, inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.ObservedSnapshot,
-            inspection.OwnerDecision, inspection.OwnerId, inspection.OwnerReason, inspection.ReviewedAt, inspection.NoAdditionalCharges }, charges = charges.OrderBy(c => c.Id).ToArray() })));
+        {
+            contractId,
+            inspection = inspection is null ? null : new
+            {
+                inspection.Id,
+                inspection.Version,
+                inspection.ObservedSnapshot,
+                inspection.OwnerDecision,
+                inspection.OwnerId,
+                inspection.OwnerReason,
+                inspection.ReviewedAt,
+                inspection.NoAdditionalCharges
+            },
+            charges = charges.OrderBy(c => c.Id).ToArray()
+        })));
 }
 public sealed partial class SettlementReceivablesService
 {

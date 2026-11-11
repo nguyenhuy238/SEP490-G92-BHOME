@@ -146,7 +146,7 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
         </View>
       )}
       <TenantBillingTabs active="invoices" />
-      <TenantSettlementReceivables />
+      {purpose !== 'adjustment' && <TenantSettlementReceivables />}
       <Text style={invoiceUi.secondary}>Hóa đơn chung của phòng trong những kỳ bạn đã ở.</Text>
       {purpose === 'adjustment' && (
         <Box>

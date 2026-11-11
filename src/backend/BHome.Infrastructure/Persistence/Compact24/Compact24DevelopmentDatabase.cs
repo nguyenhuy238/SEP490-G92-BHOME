@@ -47,6 +47,14 @@ public static class Compact24DevelopmentDatabase
                 return new("INITIALIZED");
             }
             if (await ReadyAsync(target, token)) return new("READY");
+            await using (var property = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(target).Options))
+            {
+                if (await Compact24Schema.CanRefreshPropertyAsync(property, token))
+                {
+                    if (checkOnly) return new("PROPERTY_UPGRADE_REQUIRED");
+                    throw new DevelopmentDatabaseException("property_upgrade_requires_explicit_command");
+                }
+            }
             if (allowPreviousPropertySchema)
             {
                 await using var compatible = new Compact24DbContext(

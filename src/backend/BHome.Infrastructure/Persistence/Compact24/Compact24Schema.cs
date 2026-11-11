@@ -44,9 +44,12 @@ public static class Compact24Schema
     internal static Task<bool> VerifyPreviousPropertyAsync(Compact24DbContext db, CancellationToken token) =>
         VerifyReferenceAsync(db, PreviousPropertyReference, token);
     internal static string PreviousPropertyReference { get; } = ReadScript("BHome.Compact24.PreviousProperty.schema-reference");
+    internal static int CurrentColumnCount => ExpectedColumns(Script).Length;
+    internal static Task<bool> CanRefreshPropertyAsync(Compact24DbContext db, CancellationToken token) =>
+        VerifyReferenceAsync(db, Script, token, propertyRefresh: true);
 
     // These profiles are used only for SELECT-based verification, never executed as SQL.
-    private static async Task<bool> VerifyReferenceAsync(Compact24DbContext db, string reference, CancellationToken token)
+    private static async Task<bool> VerifyReferenceAsync(Compact24DbContext db, string reference, CancellationToken token, bool propertyRefresh = false)
     {
         await db.Database.OpenConnectionAsync(token);
         var connection = (NpgsqlConnection)db.Database.GetDbConnection();
@@ -62,6 +65,14 @@ public static class Compact24Schema
             while (await reader.ReadAsync(token)) columns.Add($"{reader.GetString(0)}.{reader.GetString(1)}:{reader.GetString(2)}:{reader.GetBoolean(3)}");
         }
         var expected = ExpectedColumns(reference);
+        if (propertyRefresh)
+        {
+            var retired = ExpectedColumns(PreviousPropertyReference).Where(c => c.StartsWith("locations.room_types:", StringComparison.Ordinal) ||
+                c.StartsWith("rooms.room_type_id:", StringComparison.Ordinal) || c.StartsWith("billing_policies.room_type_id:", StringComparison.Ordinal)).ToArray();
+            var present = columns.Where(c => retired.Contains(c, StringComparer.Ordinal)).ToArray();
+            if (present.Length is not (0 or 3)) return false;
+            columns.RemoveAll(c => retired.Contains(c, StringComparer.Ordinal));
+        }
         if (columns.Count != expected.Length || !columns.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal)) ||
             !columns.Select(c => c.Split('.')[0]).Distinct().Order(StringComparer.Ordinal).SequenceEqual(Tables)) return false;
         var foreignKeys = new List<string>();
@@ -81,12 +92,14 @@ public static class Compact24Schema
         // Verify the original append-only/invoice/payment/refresh protections, including their bodies.
         foreach (Match function in Regex.Matches(reference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;"))
         {
+            if (propertyRefresh && function.Groups[1].Value == "bhome24_work_order_guard") continue;
             await using var query = new NpgsqlCommand("SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=@name", connection, transaction);
             query.Parameters.AddWithValue("name", function.Groups[1].Value);
             var actual = (string?)await query.ExecuteScalarAsync(token);
             if (actual?.Replace("\r\n", "\n", StringComparison.Ordinal).Trim() != function.Groups[2].Value.Replace("\r\n", "\n", StringComparison.Ordinal).Trim()) return false;
         }
         var requiredTriggers = Regex.Matches(reference, @"(?m)^CREATE TRIGGER ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        if (propertyRefresh) requiredTriggers.Remove("work_order_consistent");
         await using (var query = new NpgsqlCommand("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled='O'", connection, transaction))
         {
             await using var reader = await query.ExecuteReaderAsync(token);

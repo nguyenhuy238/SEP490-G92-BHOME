@@ -3,6 +3,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { TenantMeterReadingPage } from '../../../../packages/client-core/src/tenantReadings';
+import { loadTenantReadings } from '../features/workspace/tenantFinancialLoads';
 const state = vi.hoisted(() => ({
   query: vi.fn(),
   reload: vi.fn(),
@@ -86,7 +87,9 @@ afterEach(cleanup);
 it('uses confirmed-reading source before any Draft invoice and loads private evidence only on demand', async () => {
   state.request.mockResolvedValue(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   render(<TenantMeterHistoryScreen />);
-  expect(state.query).toHaveBeenCalledWith('/api/v1/tenant/meter-readings?page=1&pageSize=20');
+  expect(state.query).toHaveBeenCalledWith('/api/v1/tenant/meter-readings?page=1&pageSize=20', {
+    load: loadTenantReadings,
+  });
   expect(screen.getByText('Đã xác nhận: 125,5')).toBeTruthy();
   expect(screen.getByText('Tiêu thụ: 25,5 kWh')).toBeTruthy();
   expect(state.request).not.toHaveBeenCalled();
@@ -100,7 +103,7 @@ it('does not query Tenant records under another role and presents empty state', 
   state.role = 'Staff';
   state.query.mockReturnValue({ data: { ...data, items: [] }, reload: state.reload });
   render(<TenantMeterHistoryScreen />);
-  expect(state.query).toHaveBeenCalledWith(null);
+  expect(state.query).toHaveBeenCalledWith(null, { load: loadTenantReadings });
   expect(screen.getByText('Chưa có chỉ số đã xác nhận trong thời gian ở của bạn.')).toBeTruthy();
 });
 it('routes a reauthorized meter-reading notice to Tenant meter history', async () => {

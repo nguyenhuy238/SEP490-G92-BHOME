@@ -40,8 +40,17 @@ public static class HoldingCancellationRules
         var value = Decode(review);
         return "HOLDING-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            contractId, review.Id, review.Decision, value?.Kind, value?.Cause, value?.VerifiedDeposit,
-            value?.ForfeitedAmount, value?.RefundRequired, value?.OwnerId, value?.DecidedAt, value?.Reason
+            contractId,
+            review.Id,
+            review.Decision,
+            value?.Kind,
+            value?.Cause,
+            value?.VerifiedDeposit,
+            value?.ForfeitedAmount,
+            value?.RefundRequired,
+            value?.OwnerId,
+            value?.DecidedAt,
+            value?.Reason
         })));
     }
 }

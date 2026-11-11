@@ -8,6 +8,12 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { SettlementBankPanel } from './SettlementBankPanel';
 vi.mock('../payments/RefundPanel', () => ({ RefundPanel: () => <div>Refund workflow</div> }));
+vi.mock('../payments/ReceiptExcessPanel', () => ({
+  ReceiptExcessPanel: () => <div>Whole receipt excess workflow</div>,
+}));
+vi.mock('../payments/ExternalPaymentPayerPanel', () => ({
+  ExternalPaymentPayerPanel: () => <div>External payer verification</div>,
+}));
 const data = {
   contractId: 'contract',
   reference: 'source-1',

@@ -24,8 +24,14 @@ public static class FixedChargeCalculation
     public static string PolicyReference(PolicyDto policy, BillingSchedule schedule, string signedContractHash) =>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            policy.Id, policy.Version, policy.Category, policy.ChargeCode, policy.Method, policy.Rate,
-            schedule.PartialMonth, schedule.Rounding,
+            policy.Id,
+            policy.Version,
+            policy.Category,
+            policy.ChargeCode,
+            policy.Method,
+            policy.Rate,
+            schedule.PartialMonth,
+            schedule.Rounding,
             SignedContract = policy.Id == Guid.Empty ? signedContractHash : ""
         })));
 

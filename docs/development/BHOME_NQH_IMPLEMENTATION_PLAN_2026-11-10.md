@@ -58,3 +58,9 @@ Thực hiện restore/build theo CI, backend unit/digital-signing/full integrati
 ## 11/11/2026 — Tiếp nối receipt cọc
 
 Commit cọc trực tiếp 5a855aa đã chặn vượt phần thỏa thuận. Slice receipt tiếp theo nối actual Resident trước account/external payer, phân bổ canonical và hoàn excess; migration 8 chỉ chạy disposable. Không đánh dấu toàn bộ Phase 7/10/13 hoàn tất: full-excess Main, adjustment/reversal, external principal và real UI/provider vẫn còn như kết quả kiểm chứng.
+
+## 11/11/2026 — Phase 13: hồi quy đầy đủ local
+
+Đã chạy full solution backend + full Owner/Mobile tests trên môi trường tách biệt, bổ sung digital-signing suite ngoài solution, Mobile web export và SQL-log independence. Sửa các lỗi thực tế của DI test host, mapping nguồn offline, đối soát allocation cọc được chuẩn hóa, property schema refresh và các tham chiếu RoomType cũ trên UI. Giữ kiểm tra quyền/immutable/native guards; không sửa dữ liệu làm việc. CI bổ sung PostgreSQL riêng, query log không bind parameters, runsettings giới hạn worker, Mobile typecheck/export và digital-signing unit.
+
+Phase 13 vẫn còn browser E2E thực, nghiệm thu native, bộ ảnh/model OCR được pin và provider thật. Phase 7/8/10 vẫn cần adjustment-created excess/canonical reversal, principal deposit refund cho external payer, payer có Resident ngoài cohort và thông báo receipt refund. Không đánh dấu toàn bộ yêu cầu hoàn tất chỉ vì regression local đã PASS.

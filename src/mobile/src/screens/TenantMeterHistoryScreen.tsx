@@ -12,6 +12,7 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { ocrPreview } from '../lib/automaticOcr';
 import { errorMessage } from '../lib/api';
+import { loadTenantReadings } from '../features/workspace/tenantFinancialLoads';
 
 function ReadingEvidence({ id }: { id: string }) {
   const { api } = useSession();
@@ -75,6 +76,7 @@ export function TenantMeterHistoryScreen() {
     session?.roles.includes('Tenant')
       ? '/api/v1/tenant/meter-readings?page=' + page + '&pageSize=20'
       : null,
+    { load: loadTenantReadings },
   );
   const reload = query.reload;
   useFocusEffect(

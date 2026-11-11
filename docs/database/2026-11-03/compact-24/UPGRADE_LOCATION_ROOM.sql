@@ -3,9 +3,11 @@
 SET LOCAL lock_timeout='5s';
 LOCK TABLE locations,rooms,billing_policies,operational_tasks,incident_reports IN ACCESS EXCLUSIVE MODE;
 DO $guard$
+DECLARE expected_columns integer := current_setting('bhome.property_upgrade_column_count',true)::integer;
 BEGIN
     IF (SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE')<>24 OR
-       (SELECT count(*) FROM information_schema.columns WHERE table_schema='public') NOT IN (383,386) OR
+       expected_columns IS NULL OR
+       (SELECT count(*) FROM information_schema.columns WHERE table_schema='public') NOT IN (expected_columns,expected_columns+3) OR
        (SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND
         ((table_name='locations' AND column_name='room_types') OR (table_name IN ('rooms','billing_policies') AND column_name='room_type_id'))) NOT IN (0,3) THEN
         RAISE EXCEPTION 'Expected previous Compact24 schema' USING ERRCODE='23514';

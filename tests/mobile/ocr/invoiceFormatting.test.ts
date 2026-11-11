@@ -42,6 +42,8 @@ it('formats contract and billing amounts when native Intl rejects BigInt', () =>
     expect(formatBillingDecimal('999999999999999999.9999')).toBe('999.999.999.999.999.999,9999');
     expect(formatContractMoney('999999999999999999')).toBe('999.999.999.999.999.999\u00a0₫');
     expect(formatContractMoney('0003000000')).toBe('3.000.000\u00a0₫');
+    expect(formatContractMoney('999999999999999999.0000')).toBe('999.999.999.999.999.999\u00a0₫');
+    expect(formatContractMoney('1.25')).toBe('—');
     expect(formatBillingDecimal('0000.0000')).toBe('0');
     expect(formatContractMoney('invalid')).toBe('—');
     expect(formatDraftMoney('NaN')).toBe('—');

@@ -9,6 +9,7 @@ namespace BHome.Api.Controllers.PaymentsDebt;
 public sealed class ExternalPaymentPayerController(ExternalPaymentPayerService service) : ControllerBase
 {
     [HttpGet] public Task<ExternalPaymentPayerContext> Context(Guid id, CancellationToken token) => service.ContextAsync(id, token);
-    [HttpPost] public Task<ExternalPaymentPayer> Confirm(Guid id, ExternalPaymentPayerInput input, CancellationToken token) =>
+    [HttpPost]
+    public Task<ExternalPaymentPayer> Confirm(Guid id, ExternalPaymentPayerInput input, CancellationToken token) =>
         service.ConfirmAsync(id, input, Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty, token);
 }

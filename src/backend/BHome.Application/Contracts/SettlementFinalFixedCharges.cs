@@ -77,8 +77,15 @@ public sealed partial class SettlementReceivablesService
             var charge = new SettlementReceivable(Guid.NewGuid(), id, context.Context.View.RoomId, "FinalFixed",
                 $"fixed:{id:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{Fingerprint(id, row.Calculation)}",
                 context.Context.InspectionId, context.Context.InspectionVersion, null, row.Amount.Value, row.Name,
-                JsonSerializer.Serialize(new { kind = "OwnerConfirmedFixedSettlement/v1", row.Calculation, context.SignedContractHash, context.HandoverDate,
-                    scheduleVersion = context.Schedule!.Version, policyAppliesToSignedTermsConfirmed = true }),
+                JsonSerializer.Serialize(new
+                {
+                    kind = "OwnerConfirmedFixedSettlement/v1",
+                    row.Calculation,
+                    context.SignedContractHash,
+                    context.HandoverDate,
+                    scheduleVersion = context.Schedule!.Version,
+                    policyAppliesToSignedTermsConfirmed = true
+                }),
                 proofs, context.RecipientUserIds, Actor, clock.GetUtcNow(), key, fingerprint, context.Context.IsDevelopmentDemo, FixedCharge: row.Calculation);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);

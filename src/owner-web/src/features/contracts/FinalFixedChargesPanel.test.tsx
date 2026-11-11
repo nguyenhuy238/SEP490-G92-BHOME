@@ -20,11 +20,11 @@ const row: FinalFixedChargePreview = {
     billingPeriod: '2026-11-01',
     chargeCode: 'RENT',
     category: 'Rent',
-    rate: '3000000',
+    rate: '3000000.1250',
     partialMonth: 1,
     rounding: 0,
-    occupiedDays: 15,
-    periodDays: 30,
+    occupiedDays: '15',
+    periodDays: '30',
     cumulativePricedAmount: '1500000',
     alreadyPricedAmount: '0',
   },
@@ -51,6 +51,7 @@ function mount(value = row) {
 it('requires the Owner to verify signed terms and retries the same approval after delivery failure', async () => {
   const request = mount();
   await screen.findByText(/Theo 15\/30 ngày/);
+  expect(screen.getByText(/Đơn giá tháng: 3.000.000,125 ₫/)).toBeInTheDocument();
   const button = screen.getByRole('button', { name: 'Duyệt Tiền thuê' });
   expect(button).toBeDisabled();
   fireEvent.click(

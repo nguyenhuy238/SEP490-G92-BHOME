@@ -27,9 +27,16 @@ public static class ReceiptExcessRules
     public static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
     public static string TransferFingerprint(PaymentTransfer transfer) => Hash(new
     {
-        transfer.Id, transfer.NormalizedReference, Amount = transfer.Amount.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
-        transfer.Currency, transfer.OccurredAt, transfer.TransferDescription, transfer.StatementReference,
-        transfer.VerifiedByUserId, transfer.VerifiedAt, transfer.IsDevelopmentDemo
+        transfer.Id,
+        transfer.NormalizedReference,
+        Amount = transfer.Amount.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
+        transfer.Currency,
+        transfer.OccurredAt,
+        transfer.TransferDescription,
+        transfer.StatementReference,
+        transfer.VerifiedByUserId,
+        transfer.VerifiedAt,
+        transfer.IsDevelopmentDemo
     });
     public static void Validate(ReceiptExcessTarget target)
     {

@@ -23,10 +23,11 @@ import { usePortalData } from '../../../hooks/usePortalData';
 import { LocationAssetsTab } from '../components/tabs/LocationAssetsTab';
 import { LocationPricingTab } from '../components/tabs/LocationPricingTab';
 import { LocationRulesTab } from '../components/tabs/LocationRulesTab';
+import { useSharedConfigurationApi } from '../../configuration/useSharedConfigurationApi';
 
 const tabs = [
   ['overview', 'Tổng quan'],
-  ['room-types', 'Loại phòng'],
+  ['room-types', 'Gợi ý tạo phòng'],
   ['rooms', 'Phòng'],
   ['assets', 'Tài sản'],
   ['pricing', 'Giá & Phí'],
@@ -41,6 +42,7 @@ export function LocationApiWorkspace() {
   const { locationId = '' } = useParams();
   const route = useLocation();
   const api = usePropertySetupApi();
+  const sharedApi = useSharedConfigurationApi();
   const portalData = usePortalData();
   const { session } = useAuth();
   const active = route.pathname.split('/')[3] || 'overview';
@@ -53,7 +55,7 @@ export function LocationApiWorkspace() {
     queryKey: ['property-setup', 'location-summary', session?.userId, locationId],
     queryFn: async ({ signal }) => {
       const [roomTypes, rooms, assets, policies, rules, templates] = await Promise.all([
-        api.roomTypes(locationId, 1, '', signal),
+        sharedApi.roomDefaults(locationId, signal),
         api.rooms(locationId, 1, '', signal),
         api.assets(locationId, 1, '', signal),
         api.request<{ totalCount: number }>(
@@ -64,7 +66,7 @@ export function LocationApiWorkspace() {
         api.templates(locationId, signal),
       ]);
       return {
-        roomTypes: roomTypes.totalCount,
+        roomTypes: roomTypes.length,
         rooms: rooms.totalCount,
         assets: assets.totalCount,
         pricesAndFees: policies.totalCount,
@@ -136,7 +138,7 @@ export function LocationApiWorkspace() {
             </Typography>
             {summary.data && (
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
-                <Chip label={`${summary.data.roomTypes} loại phòng`} />
+                <Chip label={`${summary.data.roomTypes} cấu hình gợi ý tạo phòng`} />
                 <Chip label={`${summary.data.rooms} phòng`} />
                 <Chip label={`${summary.data.assets} tài sản thực tế`} />
                 <Chip label={`${summary.data.assetTemplates} bộ mẫu tài sản`} />

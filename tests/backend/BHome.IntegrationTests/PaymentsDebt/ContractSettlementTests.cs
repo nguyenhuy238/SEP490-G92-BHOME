@@ -25,7 +25,9 @@ public sealed partial class PaymentLedgerTests
         var paid = (await tenant.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.DoesNotContain("invoice_outstanding", paid.UnresolvedItems); Assert.False(paid.Resolved); Assert.Equal(90000, Assert.Single(paid.Invoices).Financials.AllocatedPayments);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); db.Add(new DepositVerification { ContractId = w.Contract, Amount = 20000, BankTransactionReference = "SYN-BH40-" + Guid.NewGuid(), VerificationReason = "Synthetic deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 20000; await db.SaveChangesAsync();
+            db.Add(new DepositVerification { ContractId = w.Contract, Amount = 20000, BankTransactionReference = "SYN-BH40-" + Guid.NewGuid(), VerificationReason = "Synthetic deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();
         }
         var deposit = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.Equal(20000, deposit.VerifiedSecurityDeposit); Assert.Null(deposit.RefundAmount); Assert.Null(deposit.ApprovedDeductions); Assert.Contains("deposit_deduction_refund_policy_required", deposit.UnresolvedItems);
         Assert.NotEqual(paid.Reference, deposit.Reference);
@@ -37,6 +39,9 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
         var path = $"/api/v1/contracts/{w.Contract}/move-out/settlement-summary";
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 400000;
+        var otherTarget = await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).FirstAsync(); otherTarget.RequiredDeposit = 50000;
+        await db.SaveChangesAsync();
         db.Add(new DepositVerification
         {
             ContractId = w.Contract,

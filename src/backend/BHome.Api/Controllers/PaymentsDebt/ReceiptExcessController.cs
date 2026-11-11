@@ -10,6 +10,7 @@ public sealed class ReceiptExcessController(ReceiptExcessService service) : Cont
 {
     [HttpGet] public Task<ReceiptExcessDisposition?> Get(Guid id, CancellationToken token) => service.GetAsync(id, token);
     [HttpGet("context")] public Task<ReceiptExcessContext> Context(Guid id, [FromQuery] ReceiptExcessTarget target, CancellationToken token) => service.ContextAsync(id, target, token);
-    [HttpPost] public Task<ReceiptExcessDisposition> Confirm(Guid id, ReceiptExcessConfirmation input, CancellationToken token) =>
+    [HttpPost]
+    public Task<ReceiptExcessDisposition> Confirm(Guid id, ReceiptExcessConfirmation input, CancellationToken token) =>
         service.ConfirmAsync(id, input, Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty, token);
 }

@@ -8,12 +8,13 @@ import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { TenantSettlementTransfer } from './TenantSettlementTransfer';
 import { formatBillingDecimal } from '../../../../packages/client-core/src/invoices';
+import { loadTenantSettlements } from '../features/workspace/tenantFinancialLoads';
 
 export function TenantSettlementReceivables() {
   const [page, setPage] = useState(1);
   const query = useWorkspaceQuery<{ items: SettlementReceivables[]; total: number }>(
     `/api/v1/tenant/settlement-receivables?page=${page}&pageSize=10`,
-    { notifyError: false },
+    { notifyError: false, load: loadTenantSettlements },
   );
   return (
     <Box>
@@ -35,7 +36,7 @@ export function TenantSettlementReceivables() {
                   {r.charge.fixedCharge.partialMonth === 0
                     ? 'Theo chính sách đủ tháng'
                     : `Theo ${r.charge.fixedCharge.occupiedDays}/${r.charge.fixedCharge.periodDays} ngày phòng có người ở`}{' '}
-                  · Đơn giá tháng {formatContractMoney(r.charge.fixedCharge.rate)}
+                  · Đơn giá tháng {formatBillingDecimal(r.charge.fixedCharge.rate)} ₫
                 </Text>
               )}
               {r.charge.utility && (

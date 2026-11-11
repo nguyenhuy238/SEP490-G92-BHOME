@@ -347,8 +347,8 @@ export interface FixedChargeSource {
   rate: string;
   partialMonth: number;
   rounding: number;
-  occupiedDays: number;
-  periodDays: number;
+  occupiedDays: string | number;
+  periodDays: string | number;
   cumulativePricedAmount: string;
   alreadyPricedAmount: string;
 }
@@ -1060,8 +1060,9 @@ export function contractError(error: unknown): string {
   );
 }
 export function formatContractMoney(value: string) {
-  if (!/^\d+$/.test(value)) return '—';
-  return groupVietnameseIntegerDigits(value) + '\u00a0₫';
+  const whole = /^(\d+)(?:\.0+)?$/.exec(value)?.[1];
+  if (whole === undefined) return '—';
+  return groupVietnameseIntegerDigits(whole) + '\u00a0₫';
 }
 export function dateOnly(value: string): string {
   const iso = /^\d{2}\/\d{2}\/\d{4}$/.test(value) ? value.split('/').reverse().join('-') : value;

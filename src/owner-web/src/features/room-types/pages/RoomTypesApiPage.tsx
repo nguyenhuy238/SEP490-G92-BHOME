@@ -1,189 +1,58 @@
-import { useState } from 'react';
-import {
-  Alert,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router';
+import { Alert, Button, Paper, Stack, Typography } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useParams } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
-import type { RoomTypeConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
-import { usePropertySetupApi } from '../../property/usePropertySetupApi';
-
-const emptyForm = {
-  name: '',
-  description: '',
-  capacity: '1',
-  area: '',
-  amenities: '',
-  reason: '',
-};
+import { useSharedConfigurationApi } from '../../configuration/useSharedConfigurationApi';
 
 export function RoomTypesApiPage() {
   const { locationId: routeLocation = '' } = useParams();
   const portal = usePortal();
   const locationId = routeLocation || (portal.locationId === 'all' ? '' : portal.locationId);
-  const api = usePropertySetupApi();
-  const cache = useQueryClient();
+  const api = useSharedConfigurationApi();
   const { session } = useAuth();
   const canManage = session?.roles.includes('Owner') ?? false;
-  const [editing, setEditing] = useState<RoomTypeConfiguration | null>(null);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
   const query = useQuery({
-    queryKey: ['property-setup', 'room-types', session?.userId, locationId],
-    queryFn: ({ signal }) => api.roomTypes(locationId, 1, '', signal),
-    enabled: !!locationId,
+    queryKey: ['property-setup', 'room-defaults', session?.userId, locationId],
+    queryFn: ({ signal }) => api.roomDefaults(locationId, signal),
+    enabled: !!locationId && canManage,
   });
-  const save = useMutation({
-    mutationFn: () =>
-      api.saveRoomType(editing?.id ?? null, {
-        locationId,
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        defaultCapacity: Number(form.capacity),
-        areaM2: form.area ? Number(form.area) : null,
-        amenities: form.amenities
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean),
-        isActive: editing?.isActive ?? true,
-        version: editing?.version ?? 0,
-        reason: form.reason.trim(),
-      }),
-    onSuccess: async () => {
-      await cache.invalidateQueries({ queryKey: ['property-setup'] });
-      setOpen(false);
-    },
-  });
-  const edit = (value: RoomTypeConfiguration | null) => {
-    save.reset();
-    setEditing(value);
-    setForm(
-      value
-        ? {
-            name: value.name,
-            description: value.description ?? '',
-            capacity: String(value.defaultCapacity),
-            area: value.areaM2 == null ? '' : String(value.areaM2),
-            amenities: value.amenities.join(', '),
-            reason: '',
-          }
-        : emptyForm,
-    );
-    setOpen(true);
-  };
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Loại phòng"
-        subtitle="Loại phòng của cơ sở được đọc và lưu trực tiếp trên Backend."
-        actions={
-          canManage ? (
-            <Button variant="contained" disabled={!locationId} onClick={() => edit(null)}>
-              Thêm loại phòng
-            </Button>
-          ) : undefined
-        }
-      />
-      {!locationId ? (
-        <Alert severity="info">Chọn cơ sở để quản lý loại phòng.</Alert>
+      <PageHeader title="Gợi ý tạo phòng" subtitle="Cấu hình đã áp dụng riêng tại cơ sở" />
+      {!canManage ? (
+        <Alert severity="info">Owner quản lý cấu hình gợi ý tạo phòng.</Alert>
+      ) : !locationId ? (
+        <Alert severity="info">Chọn một cơ sở để xem cấu hình gợi ý.</Alert>
       ) : query.isPending ? (
         <LoadingState />
-      ) : query.error ? (
+      ) : query.isError ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
-      ) : query.data.items.length === 0 ? (
-        <Alert severity="info">Cơ sở chưa có loại phòng.</Alert>
       ) : (
-        <Stack spacing={1.5}>
-          {query.data.items.map((item) => (
-            <Paper key={item.id} variant="outlined" sx={{ p: 2 }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <Typography sx={{ fontWeight: 800 }}>{item.name}</Typography>
-                  <Typography color="text.secondary">
-                    {item.defaultCapacity} người · {item.areaM2 ?? 'Chưa có'} m² ·{' '}
-                    {item.amenities.join(' · ')}
-                  </Typography>
-                </div>
-                {canManage && <Button onClick={() => edit(item)}>Chỉnh sửa</Button>}
-              </Stack>
+        <>
+          <Alert severity="info">
+            Chọn cấu hình gợi ý khi thêm phòng; xác nhận sức chứa và giá thu thực tế riêng cho từng
+            phòng.
+          </Alert>
+          {!query.data.length && <Typography>Chưa có cấu hình gợi ý tại cơ sở này.</Typography>}
+          {query.data.map((item) => (
+            <Paper key={item.id} sx={{ p: 2 }}>
+              <Typography variant="h6">{item.data.name}</Typography>
+              <Typography>Sức chứa gợi ý: {item.data.defaults.capacity} người</Typography>
+              <Typography>Diện tích tham khảo: {item.data.defaults.area} m²</Typography>
+              <Typography>
+                Tiện ích: {item.data.defaults.amenities.join(', ') || 'Chưa khai báo'}
+              </Typography>
             </Paper>
           ))}
-        </Stack>
+        </>
       )}
-      <Dialog open={open} onClose={() => !save.isPending && setOpen(false)} fullWidth maxWidth="sm">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate();
-          }}
-        >
-          <DialogTitle>{editing ? 'Chỉnh sửa loại phòng' : 'Thêm loại phòng'}</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField
-                required
-                label="Tên loại phòng"
-                value={form.name}
-                onChange={(event) => setForm((old) => ({ ...old, name: event.target.value }))}
-              />
-              <TextField
-                label="Mô tả"
-                multiline
-                value={form.description}
-                onChange={(event) =>
-                  setForm((old) => ({ ...old, description: event.target.value }))
-                }
-              />
-              <TextField
-                required
-                type="number"
-                label="Sức chứa mặc định"
-                value={form.capacity}
-                onChange={(event) => setForm((old) => ({ ...old, capacity: event.target.value }))}
-              />
-              <TextField
-                type="number"
-                label="Diện tích (m²)"
-                value={form.area}
-                onChange={(event) => setForm((old) => ({ ...old, area: event.target.value }))}
-              />
-              <TextField
-                label="Tiện nghi, phân cách bằng dấu phẩy"
-                value={form.amenities}
-                onChange={(event) => setForm((old) => ({ ...old, amenities: event.target.value }))}
-              />
-              <TextField
-                required={!!editing}
-                label="Lý do / ghi chú"
-                value={form.reason}
-                onChange={(event) => setForm((old) => ({ ...old, reason: event.target.value }))}
-              />
-              {save.error && (
-                <Alert severity="error">
-                  {save.error instanceof Error ? save.error.message : 'Không thể lưu loại phòng.'}
-                </Alert>
-              )}
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpen(false)}>Hủy</Button>
-            <Button type="submit" variant="contained" disabled={save.isPending}>
-              Lưu
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      {canManage && (
+        <Button component={Link} to="/configuration/room-types">
+          Mở thư viện mẫu và áp dụng vào cơ sở
+        </Button>
+      )}
     </Stack>
   );
 }

@@ -28,15 +28,35 @@ public sealed partial class InvoiceApiTests
             foreach (var c in contracts)
             {
                 c.ActualEndDate = finalDate; c.SnapshotHash = new string('A', 64);
-                db.Add(new ContractMoveOut { ContractId = c.Id, ProposedDate = finalDate, Status = MoveOutStatus.Inspected,
-                    RequestedByUserId = w.Tenant.Id, ApprovedByUserId = w.Owner.Id, ApprovedAt = DateTimeOffset.UtcNow, Reason = "Synthetic end" });
+                db.Add(new ContractMoveOut
+                {
+                    ContractId = c.Id,
+                    ProposedDate = finalDate,
+                    Status = MoveOutStatus.Inspected,
+                    RequestedByUserId = w.Tenant.Id,
+                    ApprovedByUserId = w.Owner.Id,
+                    ApprovedAt = DateTimeOffset.UtcNow,
+                    Reason = "Synthetic end"
+                });
             }
             var point = new HandoverReading(Guid.NewGuid(), "Synthetic", 0, finalDate, 100, Guid.NewGuid(), "synthetic-private", new string('B', 64));
             var observed = new HandoverSnapshot(finalDate, "Synthetic", "Synthetic condition", "Synthetic keys", "Synthetic notes", [], point, point with { UtilityType = 1 }, []);
-            db.Add(new ContractFinalInspection { ContractId = w.Contract, BaselineContractId = w.Contract, BaselineVersion = 1,
-                Version = 1, BaselineSnapshot = JsonSerializer.Serialize(observed), ObservedSnapshot = JsonSerializer.Serialize(observed),
-                StaffId = w.Staff.Id, InspectedAt = DateTimeOffset.UtcNow, OwnerDecision = "Confirmed", OwnerId = w.Owner.Id,
-                OwnerReason = "Synthetic approved fixture", ReviewedAt = DateTimeOffset.UtcNow, NoAdditionalCharges = true });
+            db.Add(new ContractFinalInspection
+            {
+                ContractId = w.Contract,
+                BaselineContractId = w.Contract,
+                BaselineVersion = 1,
+                Version = 1,
+                BaselineSnapshot = JsonSerializer.Serialize(observed),
+                ObservedSnapshot = JsonSerializer.Serialize(observed),
+                StaffId = w.Staff.Id,
+                InspectedAt = DateTimeOffset.UtcNow,
+                OwnerDecision = "Confirmed",
+                OwnerId = w.Owner.Id,
+                OwnerReason = "Synthetic approved fixture",
+                ReviewedAt = DateTimeOffset.UtcNow,
+                NoAdditionalCharges = true
+            });
             await db.SaveChangesAsync();
         }
         var missingSchedule = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route)));

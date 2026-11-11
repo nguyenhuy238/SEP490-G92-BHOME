@@ -32,16 +32,25 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
         // Status alone is not a reservation. Protect signed evidence or verified money;
         // do not infer a Holding Contract or replace activation's stricter readiness checks.
-        var pending = await contracts.AnyAsync(c =>
-            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation) &&
-            (c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
-                s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
-             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0) ||
-             db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0)), token);
+        var pending = await BindingPendingContractsAsync(db, contracts, token);
         return new(residents, occupancy, active, pending);
+    }
+    internal static Task<bool> BindingPendingContractsAsync(BHomePersistenceContext context, IQueryable<Contract> contracts, CancellationToken token)
+    {
+        var pending = contracts.Where(c => c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation);
+        // Choose the mapped representation before constructing SQL. The archived source model
+        // intentionally has no target-deposit allocation member; runtime is always Compact24.
+        return context is Compact24DbContext
+            ? pending.AnyAsync(c => c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
+                s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
+                context.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0), token)
+            : pending.AnyAsync(c => c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
+                s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
+                context.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0), token);
     }
     public async Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity
     {
+        RequireSupportedCatalog<T>();
         var tracked = db.ChangeTracker.Entries<T>().SingleOrDefault(x => x.Entity.Id == id);
         if (tracked is not null)
         {
@@ -57,6 +66,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity
     {
+        RequireSupportedCatalog<T>();
         var rows = db.Set<T>().AsNoTracking().Where(predicate);
         if (staffId is { } staff)
         {
@@ -103,7 +113,15 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             (c.Status == ContractStatus.Active || c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation)));
     public Task<bool> HasResidentsAsync(Guid roomId, CancellationToken token) =>
         UnresolvedResidents(db).AnyAsync(x => x.RoomId == roomId, token);
-    public void Add<T>(T entity) where T : class => db.Set<T>().Add(entity);
+    private void RequireSupportedCatalog<T>()
+    {
+        if (db is Compact24DbContext && typeof(T) == typeof(RoomType)) throw new PropertyException(404, "room_type_catalog_retired");
+    }
+    public void Add<T>(T entity) where T : class
+    {
+        RequireSupportedCatalog<T>();
+        db.Set<T>().Add(entity);
+    }
     public void Audit(PropertyChange change)
     {
         db.Set<PropertyChange>().Add(change);

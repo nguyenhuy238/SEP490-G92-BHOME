@@ -255,7 +255,7 @@ export function InitialLocationSetupWizard({
           rateOverrides: Record<string, number>;
         }>;
         if (draft.activeStep !== undefined) setActiveStep(draft.activeStep);
-        if (draft.setupMode) setSetupMode(draft.setupMode);
+        if (draft.setupMode) setSetupMode(isMockMode ? draft.setupMode : 'SCRATCH');
         if (draft.sourceLocationId) setSourceLocationId(draft.sourceLocationId);
         if (draft.copyGroups) setCopyGroups(draft.copyGroups);
         if (draft.locationName !== undefined) setLocationName(draft.locationName);
@@ -465,6 +465,12 @@ export function InitialLocationSetupWizard({
   };
 
   const loadSourceConfiguration = async () => {
+    if (!isMockMode) {
+      setCopyError(
+        'Tạo cơ sở đích, sau đó dùng Sao chép cấu hình trong trang cơ sở để xem và xác nhận các nhóm cấu hình.',
+      );
+      return;
+    }
     if (!sourceLocationId || !copyGroups.length) return;
     setIsLoadingCopy(true);
     setCopyError('');
@@ -878,34 +884,43 @@ export function InitialLocationSetupWizard({
                 </Paper>
               </Grid>
 
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    p: 2.5,
-                    borderRadius: 2.5,
-                    borderColor: setupMode === 'COPY' ? 'primary.main' : '#e2e8f0',
-                    bgcolor: setupMode === 'COPY' ? '#f0f7ff' : '#ffffff',
-                    borderWidth: setupMode === 'COPY' ? 2 : 1,
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setSetupMode('COPY')}
-                >
-                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                    <Radio checked={setupMode === 'COPY'} />
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        Sao chép từ cơ sở có sẵn (Copy Configuration)
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Thừa hưởng toàn bộ mẫu loại phòng, định mức trang bị và biểu phí từ một cơ
-                        sở đang vận hành tốt.
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Paper>
-              </Grid>
+              {isMockMode && (
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      borderColor: setupMode === 'COPY' ? 'primary.main' : '#e2e8f0',
+                      bgcolor: setupMode === 'COPY' ? '#f0f7ff' : '#ffffff',
+                      borderWidth: setupMode === 'COPY' ? 2 : 1,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setSetupMode('COPY')}
+                  >
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                      <Radio checked={setupMode === 'COPY'} />
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                          Sao chép từ cơ sở có sẵn (Copy Configuration)
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Thừa hưởng toàn bộ mẫu loại phòng, định mức trang bị và biểu phí từ một cơ
+                          sở đang vận hành tốt.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              )}
             </Grid>
+
+            {!isMockMode && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Để sao chép cấu hình, tạo cơ sở đích rồi mở Sao chép cấu hình trong trang cơ sở
+                nguồn. Owner xem trước và xác nhận các nhóm cấu hình trước khi áp dụng.
+              </Alert>
+            )}
 
             {setupMode === 'COPY' && (
               <Alert severity="info" icon={<Copy size={18} />} sx={{ mb: 3, borderRadius: 2 }}>

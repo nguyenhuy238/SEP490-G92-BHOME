@@ -139,14 +139,19 @@ describe('contract role and state actions', () => {
     expect(operations(recovered, null, 'Owner')).toContain('signing/sync');
     expect(operations(recovered, null, 'Owner')).not.toContain('signing/recover');
   });
-  it('gates completion on Settled and never offers editing a signed version', () => {
+  it('gates physical completion on inspection and keeps financial review after release', () => {
     const c = { ...draft, status: 'Active' };
     expect(operations(c, move('PendingSettlement'), 'Owner')).not.toContain('move-out/complete');
     expect(operations(c, move('Settled'), 'Owner')).toContain('move-out/complete');
     expect(
+      operations(c, { ...move('PendingSettlement'), ownerConfirmedInspection: true }, 'Owner'),
+    ).toContain('move-out/complete');
+    expect(
       operations({ ...draft, kind: 'Renewal', previousContractId: id }, null, 'Owner'),
     ).not.toContain('deposit-verifications');
-    expect(operations({ ...draft, status: 'Terminated' }, move('Completed'), 'Owner')).toEqual([]);
+    expect(operations({ ...draft, status: 'Terminated' }, move('Completed'), 'Owner')).toEqual([
+      'move-out/settlement',
+    ]);
   });
 });
 describe('contract input and exact Vietnamese values', () => {

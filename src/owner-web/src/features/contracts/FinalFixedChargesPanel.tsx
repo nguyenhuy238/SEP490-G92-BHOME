@@ -7,7 +7,10 @@ import {
   mutationKeys,
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
-import { missingBillingInput } from '../../../../../packages/client-core/src/invoices';
+import {
+  formatBillingDecimal,
+  missingBillingInput,
+} from '../../../../../packages/client-core/src/invoices';
 
 export function FinalFixedChargesPanel({
   api,
@@ -82,7 +85,7 @@ export function FinalFixedChargesPanel({
             {row.calculation && (
               <>
                 <Typography>
-                  Đơn giá tháng: {formatContractMoney(row.calculation.rate)} ·{' '}
+                  Đơn giá tháng: {formatBillingDecimal(row.calculation.rate)} ₫ ·{' '}
                   {row.calculation.partialMonth === 0
                     ? 'Tính đủ tháng theo chính sách'
                     : `Theo ${row.calculation.occupiedDays}/${row.calculation.periodDays} ngày phòng có người ở`}

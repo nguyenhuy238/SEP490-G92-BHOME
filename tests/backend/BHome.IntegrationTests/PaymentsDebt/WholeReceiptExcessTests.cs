@@ -95,10 +95,19 @@ public sealed partial class PaymentLedgerTests
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
         var resident = new BHome.Domain.TenantContracts.Resident { OwnerUserId = w.Owner, DisplayLabel = "SYNTHETIC PREACCOUNT PAYER", VerificationStatus = BHome.Domain.TenantContracts.IdentityVerificationStatus.Verified };
-        var holding = new BHome.Domain.TenantContracts.Contract { RoomId = w.Room, OwnerSignerId = w.Owner, RepresentativeResidentId = resident.Id,
-            Kind = main ? BHome.Domain.TenantContracts.ContractKind.Main : BHome.Domain.TenantContracts.ContractKind.Holding, Status = BHome.Domain.TenantContracts.ContractStatus.Cancelled,
-            RequiredDeposit = 100000, StartDate = DateOnly.FromDateTime(DateTime.UtcNow), EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)), Terms = "SYNTHETIC CLOSED HOLDING",
-            Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = resident.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative }] };
+        var holding = new BHome.Domain.TenantContracts.Contract
+        {
+            RoomId = w.Room,
+            OwnerSignerId = w.Owner,
+            RepresentativeResidentId = resident.Id,
+            Kind = main ? BHome.Domain.TenantContracts.ContractKind.Main : BHome.Domain.TenantContracts.ContractKind.Holding,
+            Status = BHome.Domain.TenantContracts.ContractStatus.Cancelled,
+            RequiredDeposit = 100000,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)),
+            Terms = "SYNTHETIC CLOSED HOLDING",
+            Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = resident.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative }]
+        };
         await using (var scope = fixture.Factory.Services.CreateAsyncScope()) { var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); db.AddRange(resident, holding); await db.SaveChangesAsync(); }
         var extra = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, 35000) with { ProposedInvoiceId = null, TransferDescription = PaymentRules.DepositReference(holding.Id) }, Guid.NewGuid(), default));
         var route = $"/api/v1/payment-transactions/{extra.Id}/excess-disposition";
