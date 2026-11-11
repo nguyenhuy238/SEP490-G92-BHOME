@@ -162,3 +162,11 @@ Evidence: .tools/ci-validation-2026-11-11/backend-final-retry/_.trx, independenc
 Regression mới gồm rollback toàn bộ migration target khi allocation cọc sinh thêm bị sửa amount; từ chối unknown column/money guard khi property refresh; Room API chặn retired/null/unknown fields; Owner form/wizard không gọi catalog/bulk RoomType cũ; applied defaults không phát query cho Staff; malformed financial page hiển thị lỗi, số tiền không mất chính xác và rate/day-count đúng wire JSON. Các lượt đầu thất bại được giữ log, đã sửa và rebuild/rerun; Owner lazy-route timeout đã chạy lại riêng và full suite thành công, không bỏ test.
 
 NOT RUN: GitHub Actions Linux, real-browser full lifecycle, native-device acceptance, 19 opt-in OCR/model-reference cases và accuracy >=50 ảnh; provider bank/MySign/SMTP/SMS thật chưa được cấu hình theo câu trả lời người dùng. Chưa có bằng chứng hoàn tất toàn bộ BR hoặc chỉ tiêu coverage/performance/accuracy; còn các gap tiền được ghi trong implementation plan.
+
+## 12/11/2026 — Receipt refund notifications
+
+Đã chạy regression native/PostgreSQL + notification/refund/deposit: **45 PASS / 0 SKIP / 0 FAIL**, có 5 ca mới. Full frontend: **Owner 335 PASS / Mobile 885 PASS**; related focused UI 20/35 PASS trước full run. Release non-incremental integration build 0 warning/error; Owner/Mobile typecheck, root ESLint, Owner/Public build, Expo Mobile web export và dotnet format verify PASS.
+
+Ca mới chứng minh đúng actual beneficiary, không co-occupants/Staff, Owner-only cho external/pre-account, không User/Resident giả, replay/parallel không nhân inbox, target bị gắn sai recipient vẫn 404, đọc lịch sử không cần current Room. Completion chưa được phát khi imported proof hash sai; sửa proof rồi pump chỉ có một event hợp lệ. EMAIL outbox đã enqueue nhưng proof không còn hợp lệ bị Suppressed trước synthetic provider; inbox còn và trạng thái tài chính không bị sửa. Không có email/push thật đã gửi, không có tiền thật đã chuyển.
+
+Evidence: .tools/ci-validation-2026-11-11/refund-notification-final/*.trx, frontend-refund-notification.log, mobile-refund-notification-export.log. Full integration baseline ee3f816 không được gộp thành kết quả full suite của source mới. Chưa browser E2E/native/provider acceptance mới; các giới hạn và gap tiền trước đó vẫn còn trừ receipt notifications vừa hoàn tất.

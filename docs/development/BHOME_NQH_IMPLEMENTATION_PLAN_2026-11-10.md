@@ -64,3 +64,7 @@ Commit cọc trực tiếp 5a855aa đã chặn vượt phần thỏa thuận. Sl
 Đã chạy full solution backend + full Owner/Mobile tests trên môi trường tách biệt, bổ sung digital-signing suite ngoài solution, Mobile web export và SQL-log independence. Sửa các lỗi thực tế của DI test host, mapping nguồn offline, đối soát allocation cọc được chuẩn hóa, property schema refresh và các tham chiếu RoomType cũ trên UI. Giữ kiểm tra quyền/immutable/native guards; không sửa dữ liệu làm việc. CI bổ sung PostgreSQL riêng, query log không bind parameters, runsettings giới hạn worker, Mobile typecheck/export và digital-signing unit.
 
 Phase 13 vẫn còn browser E2E thực, nghiệm thu native, bộ ảnh/model OCR được pin và provider thật. Phase 7/8/10 vẫn cần adjustment-created excess/canonical reversal, principal deposit refund cho external payer, payer có Resident ngoài cohort và thông báo receipt refund. Không đánh dấu toàn bộ yêu cầu hoàn tất chỉ vì regression local đã PASS.
+
+## 12/11/2026 — Receipt refund notifications
+
+Đã hoàn tất slice thông báo receipt refund qua committed history, scoped inbox, reauthorized target, Owner Web source-receipt navigation và Tenant own-refund history; external/pre-account không tạo tài khoản. Kênh ngoài kiểm lại eligibility trước gửi. Local regression đã ghi ở results; chưa có browser/provider acceptance mới. Các gap adjustment/reversal, external principal, payer ngoài cohort và các phần Phase 13 còn lại vẫn cần tiếp tục.

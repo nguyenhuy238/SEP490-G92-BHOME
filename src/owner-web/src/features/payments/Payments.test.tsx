@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 import { theme } from '../../theme/theme';
 import {
   OwnerInvoicePaymentPanel,
@@ -95,13 +96,13 @@ it('shows backend allocation and surplus separately without offering another all
   ).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xác nhận đối soát' })).not.toBeInTheDocument();
 });
-function mount(element: React.ReactNode) {
+function mount(element: React.ReactNode, route = '/payments') {
   return render(
     <ThemeProvider theme={theme}>
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        {element}
+        <MemoryRouter initialEntries={[route]}>{element}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
@@ -134,6 +135,18 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('loads the receipt selected by an authorized refund notification without allocating it automatically', async () => {
+  mocks.api.transfer.mockResolvedValue({ ...transfer, id });
+  mount(<PaymentManagementPage />, '/payments?transferId=' + id);
+  expect(await screen.findByText('Giao dịch từ thông báo hoàn tiền')).toBeInTheDocument();
+  await waitFor(() => expect(mocks.api.transfer).toHaveBeenCalledWith(id, expect.any(AbortSignal)));
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+});
+it('rejects malformed receipt links before loading a finance record', async () => {
+  mount(<PaymentManagementPage />, '/payments?transferId=..%2Fprivate');
+  expect(await screen.findByText('Liên kết giao dịch không hợp lệ.')).toBeInTheDocument();
+  expect(mocks.api.transfer).not.toHaveBeenCalled();
+});
 it('shows server-owned balance and explicit missing receiving configuration', async () => {
   mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
   await screen.findByText(/Còn phải trả:/);

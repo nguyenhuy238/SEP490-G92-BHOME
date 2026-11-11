@@ -218,3 +218,7 @@ classification đã qua unit/PG/Owner report/browser; retained compensation khô
 Hoàn cọc có consumer in-app theo committed history và Contract entitlement; xem
 [Notifications](NOTIFICATIONS.md). Không suy event/inbox thành push/email hoặc tiền đã được bank-provider xác nhận.
 Các nguồn cũ không phân loại tiếp tục manual review; không migration/đổi schema trong slice này.
+
+## 12/11/2026 — Lịch sử Tenant và thông báo receipt refund
+
+Ghi chú thiếu Tenant history/receipt notifications ở các mốc phía trên được cập nhật: Tenant đã có API scoped `/api/v1/tenant/refunds` và panel lịch sử của chính beneficiary, kể cả không còn current Room. Receipt excess refund phát thông báo persistent theo lịch sử committed, chỉ Owner và đúng actual payer có Tenant account; external/pre-account chỉ Owner. Target phải resolve lại qua notification API trước khi điều hướng. [Quy tắc và loại target](NOTIFICATIONS.md) mô tả chống trùng, proof gate, recipient và giới hạn provider; các số browser cũ không là bằng chứng acceptance mới cho slice này. Canonical reversal/adjustment-created excess và principal refund cho external payer vẫn chưa hoàn tất.

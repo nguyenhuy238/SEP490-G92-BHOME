@@ -100,6 +100,11 @@ beforeEach(() => {
   Object.assign(state, { role: 'Tenant', error: '', loading: false, total: 21, empty: false });
 });
 afterEach(cleanup);
+it('loads own refunds immediately when opened from an authorized notification', () => {
+  render(<TenantRefundPanel initiallyOpen />);
+  expect(state.query).toHaveBeenLastCalledWith('/api/v1/tenant/refunds?page=1&pageSize=20');
+  expect(screen.getByText('Đã duyệt · chờ hoàn thực tế')).toBeTruthy();
+});
 it('loads own refund status on demand, keeps approval pending actual execution and paginates from the backend', () => {
   render(<TenantRefundPanel />);
   expect(state.query).toHaveBeenLastCalledWith(null);

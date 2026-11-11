@@ -138,7 +138,10 @@ function PaymentLedger() {
         </View>
       )}
       <View style={invoiceUi.surface}>
-        <TenantRefundPanel />
+        <TenantRefundPanel
+          key={historyTab === 'refunds' ? 'refund-notice' : 'refund-history'}
+          initiallyOpen={historyTab === 'refunds'}
+        />
         <TenantBillingTabs
           active={tab}
           select={(next) => (next === 'invoices' ? go('invoice') : chooseTab(next))}

@@ -146,6 +146,9 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     }
     private async Task<bool> Relevant(NotificationView n, CancellationToken t)
     {
+        if (n.RelatedObjectType == "Refund" && n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS")
+            return await NotificationEventPublisher.ReceiptRefundNotices(db).AnyAsync(r => r.RefundId == n.RelatedObjectId &&
+                db.Set<BHome.Domain.Notifications.UserNotification>().Any(notice => notice.Id == n.Id && notice.EventKey == r.EventKey), t);
         if (n.EventType is "INVOICE_OVERDUE" or "INVOICE_DUE_SOON") return (await db.FinancialsAsync(n.RelatedObjectId, t)).OutstandingAmount > 0;
         if (n.EventType == "TASK_DUE_OR_OVERDUE") return await db.Set<OperationalTask>().AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
         if (n.EventType.StartsWith("EMERGENCY_ACK_")) return await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(x => x.Id == n.RelatedObjectId && x.AcknowledgedAt == null && (x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.Submitted || x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.InProgress), t);

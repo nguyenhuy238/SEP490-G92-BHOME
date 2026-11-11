@@ -21,9 +21,9 @@ const sources = {
   SecurityDeposit: 'Hoàn cọc thuê phòng',
   HoldingDeposit: 'Hoàn cọc giữ chỗ',
 };
-export function TenantRefundPanel() {
+export function TenantRefundPanel({ initiallyOpen = false }: { initiallyOpen?: boolean } = {}) {
   const { session } = useSession();
-  const [open, setOpen] = useState(false),
+  const [open, setOpen] = useState(initiallyOpen),
     [page, setPage] = useState(1);
   const allowed = session?.roles.includes('Tenant');
   const query = useWorkspaceQuery<Page<TenantRefund>>(

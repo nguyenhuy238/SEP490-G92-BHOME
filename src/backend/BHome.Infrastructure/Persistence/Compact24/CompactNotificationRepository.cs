@@ -95,6 +95,17 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
         command.Parameters.AddWithValue("target", related);
         if (type == "MeterReading")
             return scope.Tenant && await readings.CanViewAsync(scope.Actor, related, token) ? new(type, related, location) : null;
+        if (type == "Refund")
+        {
+            command.CommandText = """
+                SELECT r.source_payment_id FROM refund_requests r LEFT JOIN residents person ON person.id=r.beneficiary_resident_id
+                WHERE r.id=@target AND r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL
+                  AND (@owner OR (@tenant AND r.beneficiary_kind='RESIDENT' AND person.user_id=@actor))
+                  AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType'='ExcessReceiptRefundV1')
+                """;
+            var source = await command.ExecuteScalarAsync(token);
+            return source is Guid receipt ? scope.Owner ? new("BankTransfer", receipt) : new("Refund", related) : null;
+        }
         command.CommandText = type switch
         {
             "SettlementReceivable" => "SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h WHERE h->>'recordType'='SettlementReceivableV1' AND h->>'recordKey'=@target::text AND (@owner OR (@tenant AND h->'state'->'recipientUserIds' @> jsonb_build_array(@actor::text))))",
