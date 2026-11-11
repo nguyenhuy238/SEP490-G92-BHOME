@@ -54,3 +54,16 @@ Kiểm thử trên PostgreSQL local dùng DB `bhome_compact24_<uuid>` riêng, x�
 - Owner/Mobile typecheck, ESLint các file thay đổi, `git diff --check`: PASS. Chưa chạy native UI E2E hoặc kiểm thử provider thật cho phần này.
 
 Sau bước nối ngân hàng thủ công: nhóm 3 ca khoản phải thu + migration + snapshot **5 PASS**; payment/refund/finance/inbox regression **46 PASS**; Application unit **387 PASS**; Owner 3 file/**10 PASS**, Mobile 3 file/**25 PASS**; typecheck hai client và changed-file ESLint PASS. Ca mới chạy thiếu → dư → hoàn 50.000đ cho người thực trả khác đại diện; trùng reference/replay/concurrency; tài khoản nhận chưa cấu hình/đã cấu hình; trạng thái sau bàn giao; người vào cùng ngày nhưng sau kiểm tra bị loại; quyền target thông báo; không lộ sao kê trong thông báo. Đây là dữ liệu tổng hợp và xác minh thủ công trong test, **không phải PASS bank sandbox thật**.
+
+## Chốt tiền thuê/phí và xác nhận đủ khoản thu (11/11/2026)
+
+Owner-only, cùng prefix `/api/v1/contracts/{id}/move-out/receivables`:
+
+- GET/POST `final-fixed-charges`: preview/duyệt tiền thuê và phí cố định. POST có `chargeCode`, `expectedReference`, `policyAppliesToSignedTermsConfirmed`; header Idempotency-Key. Snapshot lưu giá, policy/version hoặc hash hợp đồng, số ngày phòng có người, lựa chọn tháng lẻ/làm tròn và vị trí giá lũy kế. Không tự phân chia nợ cá nhân hoặc suy luận free text.
+- GET/POST `charge-review`: kiểm tra/Owner xác nhận danh sách khoản thu đầy đủ. POST có `expectedReference`, `reason`, `allChargesConfirmed`; header Idempotency-Key. Thiếu điện/nước/rent/phí đã đối chiếu thì 409; nguồn thay đổi thì 409. Review gắn phiên bản biên bản, quyết định Owner và các khoản thu bất biến. Thanh toán không làm mất xác nhận nguồn.
+
+Khoản FinalFixed hoặc Utility đã ghi nhận được loại khỏi hóa đơn định kỳ sau đó; Final cũ giữ nguyên. Tháng cuối có nguồn phải thu đầy đủ và Owner review không yêu cầu tạo Final Settlement Invoice. Các tháng trước vẫn phải đủ đối chiếu. Nếu phòng còn người thuê tiếp, không tự dựng phần tiền thuê riêng; chờ hóa đơn chung/đối chiếu hợp lệ.
+
+Settlement summary và deposit-refund source có `approvedDepositOffsets` (decimal dạng string). Hoàn phần cọc sau offset yêu cầu `deductionsConfirmed=true`, `noDeductionsConfirmed=false`, không truyền `expectedDeductionPlanId` khi không có kế hoạch legacy. Backend xác nhận nguồn offset, số dư, mọi khoản nợ và review trước reserve/approve/execute. Cọc dùng hết có trạng thái không cần hoàn; còn dư chỉ Completed khi Owner ghi nhận thực chi và bằng chứng private. Quyền Tenant summary che operation key/fingerprint và lọc charge IDs.
+
+Giới hạn còn xử lý: điều chỉnh tiền thuê đã phát hành trước ngày đi thực tế cần đối chiếu rõ policy/coverage; không tự thu âm hay sửa Final. Legacy deduction creation, Holding cancellation disposition, finance aggregation và provider/UI E2E vẫn thuộc các slice tiếp theo.

@@ -34,6 +34,7 @@ export interface Refund {
   } | null;
 }
 export interface RefundSource {
+  approvedDepositOffsets?: string;
   sourcePaymentId: string | null;
   sourceDepositContractId?: string | null;
   verifiedDepositAmount?: string | null;

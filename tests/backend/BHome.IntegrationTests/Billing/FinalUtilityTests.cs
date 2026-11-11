@@ -33,7 +33,7 @@ public sealed partial class InvoiceApiTests
         var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", content));
         return await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true, value, evidence.Id)));
     }
-    internal async Task FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(bool settlementFirst = false, bool failuresOnly = false, bool raceInvoice = false, bool sameDayFinals = false)
+    internal async Task FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(bool settlementFirst = false, bool failuresOnly = false, bool raceInvoice = false, bool sameDayFinals = false, bool reviewRefund = false, bool offsetAllDeposit = false)
     {
         if (raceInvoice) settlementFirst = true;
         var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
@@ -121,6 +121,14 @@ public sealed partial class InvoiceApiTests
             departed.Status = ContractStatus.Terminated; departed.ActualEndDate = sameDayFinals ? finalDate : finalDate.AddDays(-1);
             (await db.Set<ContractResident>().SingleAsync(r => r.ContractId == otherContract)).ResidenceTo = departed.ActualEndDate;
             (await db.Set<Resident>().SingleAsync(r => r.TenantUserId == w.OtherTenant.Id)).RoomId = null;
+            if (reviewRefund)
+            {
+                move.InspectedAt = new DateTimeOffset(finalDate.ToDateTime(new TimeOnly(17, 0)), TimeSpan.FromHours(7)).ToUniversalTime();
+                var reviewContract = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract); reviewContract.StartDate = period; reviewContract.SnapshotHash = new string('A', 64);
+                (await db.Set<ContractResident>().SingleAsync(r => r.ContractId == w.Contract)).ResidenceFrom = period;
+                db.Add(new DepositVerification { ContractId = w.Contract, Amount = offsetAllDeposit ? invoice.Total + 74000 : 4000000, VerifiedByUserId = w.Owner.Id,
+                    VerifiedAt = DateTimeOffset.UtcNow, BankTransactionReference = "SYN-DEPOSIT-" + Guid.NewGuid(), VerificationReason = "Synthetic verified deposit precondition" });
+            }
             await db.SaveChangesAsync();
         }
         var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables/final-utilities";
@@ -194,6 +202,7 @@ public sealed partial class InvoiceApiTests
         var tenantView = await Success<SettlementReceivablesView>(await w.OtherTenant.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/receivables"));
         Assert.Equal(charge.Id, Assert.Single(tenantView.Receivables).Charge.Id);
         var receivablesRoute = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
+        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 74000 : 4000000); return; }
         var instructions = await Success<SettlementTransferInstructions>(await w.OtherTenant.Client.GetAsync(receivablesRoute + $"/{charge.Id}/transfer-instructions"));
         var receipt = await Success<TransferView>(await UtilityPost(w.Owner.Client, "/api/v1/payment-transactions",
             new PaymentTransferInput("SYNTHETIC-UTILITY", "SYN-UTILITY-" + Guid.NewGuid(), charge.Amount, "VND", DateTimeOffset.UtcNow.AddSeconds(-1),

@@ -221,6 +221,8 @@ export interface InspectionPreparation {
   otherTenantsRemain: boolean;
 }
 export interface SettlementSummary {
+  approvedDepositOffsets?: string;
+  chargeReview?: SettlementChargeReview | null;
   receivables?: SettlementReceivableBalance[] | null;
   obligationReference?: string;
   depositDeductions?: DepositDeductionPlan | null;
@@ -266,6 +268,20 @@ export interface SettlementSummary {
   resolved: boolean;
   reference: string;
   transferVerificationStatus: string;
+}
+export interface SettlementChargeReview {
+  id: string;
+  contractId: string;
+  sourceReference: string;
+  chargeIds: string[];
+  reason: string;
+  approvedAt: string;
+}
+export interface SettlementChargeReviewPreview {
+  reference: string;
+  review: SettlementChargeReview | null;
+  isCurrent: boolean;
+  missingInputs: string[];
 }
 export interface DepositDeductionItem {
   assetId: string | null;
@@ -494,6 +510,20 @@ export function contractClient(request: ContractRequest) {
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
     settlementReceivables: (id: string, signal?: AbortSignal) =>
       request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    settlementChargeReview: (id: string, signal?: AbortSignal) =>
+      request<SettlementChargeReviewPreview>(`${root}/${id}/move-out/receivables/charge-review`, {
+        signal,
+      }),
+    approveSettlementChargeReview: (
+      id: string,
+      body: { expectedReference: string; reason: string; allChargesConfirmed: boolean },
+      key: string,
+    ) =>
+      request<SettlementChargeReview>(`${root}/${id}/move-out/receivables/charge-review`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
     finalUtilities: (id: string, signal?: AbortSignal) =>
       request<FinalUtilityPreview[]>(`${root}/${id}/move-out/receivables/final-utilities`, {
         signal,

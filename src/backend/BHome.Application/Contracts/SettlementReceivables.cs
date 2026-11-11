@@ -53,6 +53,9 @@ public interface ISettlementReceivablesRepository
     Task<Guid> LocationAsync(Guid contractId, CancellationToken token);
     Task<FinalUtilityContext> FinalUtilityAsync(Guid contractId, BHome.Domain.Billing.UtilityType type, CancellationToken token);
     Task<FinalFixedChargeContext> FinalFixedAsync(Guid contractId, CancellationToken token);
+    Task<SettlementChargeReviewContext> ChargeReviewAsync(Guid contractId, CancellationToken token);
+    Task<SettlementChargeReview?> ReviewOperationAsync(Guid actor, Guid key, CancellationToken token);
+    Task SaveReviewAsync(SettlementChargeReview review, CancellationToken token);
 }
 
 public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,

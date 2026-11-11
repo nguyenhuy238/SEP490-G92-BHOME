@@ -74,11 +74,12 @@ public sealed record RefundSource(Guid? SourcePaymentId,
     bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries, IReadOnlyList<RefundView> Requests,
     Guid? SourceDepositContractId = null, string? FinancialReference = null, IReadOnlyList<string>? Blockers = null,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal? VerifiedDepositAmount = null,
-    DepositDeductionPlan? DepositDeductions = null);
+    DepositDeductionPlan? DepositDeductions = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal ApprovedDepositOffsets = 0);
 public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries,
     IReadOnlyList<RefundRecord> Requests, Guid? DepositContractId = null, string? FinancialReference = null,
     IReadOnlyList<string>? Blockers = null, decimal? AvailableDeposit = null, decimal? VerifiedDeposit = null,
-    DepositDeductionPlan? DepositDeductions = null);
+    DepositDeductionPlan? DepositDeductions = null, decimal ApprovedDepositOffsets = 0);
 public interface IRefundRepository
 {
     Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t);
@@ -125,7 +126,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 deposit ? source.AvailableDeposit : Math.Max(0, source.Excess - paid - held),
                 source.IsDevelopmentDemo, source.Beneficiaries, source.Requests.Select(View).ToArray(),
                 source.DepositContractId, source.FinancialReference, source.Blockers,
-                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions);
+                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions, source.ApprovedDepositOffsets);
         }, t);
     }
     public Task<RefundView> CreateAsync(Guid sourceId, RefundInput input, Guid key, CancellationToken t)
@@ -179,7 +180,9 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 throw new FinanceException(409, "refund_source_changed");
             if (deposit is not null && (source.DepositDeductions is { } plan
                 ? deposit.ExpectedDeductionPlanId != plan.Id || !deposit.DeductionsConfirmed || deposit.NoDeductionsConfirmed
-                : !deposit.NoDeductionsConfirmed || deposit.ExpectedDeductionPlanId is not null || deposit.DeductionsConfirmed))
+                : source.ApprovedDepositOffsets > 0
+                    ? !deposit.DeductionsConfirmed || deposit.NoDeductionsConfirmed || deposit.ExpectedDeductionPlanId is not null
+                    : !deposit.NoDeductionsConfirmed || deposit.ExpectedDeductionPlanId is not null || deposit.DeductionsConfirmed))
                 throw new FinanceException(409, "deposit_deduction_review_required");
             var person = source.Beneficiaries.SingleOrDefault(p => p.Id == x.BeneficiaryResidentId)
                 ?? throw new FinanceException(409, "refund_verified_payer_required");

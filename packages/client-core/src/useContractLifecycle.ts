@@ -68,6 +68,11 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
 }
 
 const blockers: Record<string, string> = {
+  final_charge_review_required: 'Owner cần xác nhận đủ danh sách khoản thu trả phòng hiện tại.',
+  settlement_charge_sources_incomplete:
+    'Còn nguồn khoản thu chưa xác nhận hoặc khoản phải thu chưa thanh toán.',
+  deposit_offset_reconciliation_required:
+    'Cần đối chiếu phân bổ cọc với từng quyết định cấn trừ đã duyệt.',
   settlement_receivable_outstanding: 'Còn khoản phải thu chuyển ra chưa thanh toán hết.',
   owner_termination_approval_required: 'Chờ Owner duyệt yêu cầu trả phòng.',
   owner_confirmed_inspection_required: 'Chờ Owner xác nhận biên bản kiểm tra.',
@@ -75,7 +80,7 @@ const blockers: Record<string, string> = {
     'Chờ xác minh phí cuối kỳ / thiệt hại và chính sách tính phí.',
   confirmed_handover_baseline_required: 'Thiếu biên bản nhận phòng đã xác nhận để đối chiếu.',
   deposit_deduction_refund_policy_required:
-    'Chờ xử lý khấu trừ hoặc hoàn cọc đã được xác minh; chưa thể hoàn tất trả phòng.',
+    'Chờ xử lý cấn trừ hoặc hoàn cọc; bàn giao vật lý và tình trạng phòng được xử lý riêng.',
   deposit_ledger_reconciliation_required:
     'Nguồn cọc và sổ phân bổ không khớp; cần Owner đối chiếu.',
   deposit_refund_manual_review_required:
@@ -84,7 +89,7 @@ const blockers: Record<string, string> = {
   deposit_deductions_require_review: 'Còn phí hoặc khấu trừ cần xử lý trước khi hoàn cọc.',
   deposit_deduction_reapproval_required:
     'Nghĩa vụ hoặc biên bản đã đổi; Owner cần xem xét lại quyết định khấu trừ.',
-  deposit_contract_not_active: 'Hợp đồng đã kết thúc hoặc chưa Active; không lập khoản hoàn mới.',
+  deposit_contract_not_active: 'Hợp đồng chưa đủ trạng thái để đối chiếu hoàn cọc.',
   refund_source_requires_manual_review:
     'Có khoản hoàn cũ chưa được phân loại; cần đối chiếu nguồn.',
   holding_allocation_settlement_required: 'Cọc giữ chỗ còn cần đối chiếu.',

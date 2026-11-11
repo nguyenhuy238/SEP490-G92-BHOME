@@ -168,7 +168,8 @@ public sealed record ContractSettlementSummary(Guid ContractId, Guid DepositCont
     IReadOnlyList<SettlementInvoice> Invoices, IReadOnlyList<string> UnresolvedItems, bool OtherActiveContracts, bool Resolved, string Reference,
     string TransferVerificationStatus = "PendingReview", SettlementCalculation? Calculation = null, string FinancialReference = "",
     DepositDeductionPlan? DepositDeductions = null, string ObligationReference = "",
-    IReadOnlyList<SettlementReceivableBalance>? Receivables = null);
+    IReadOnlyList<SettlementReceivableBalance>? Receivables = null, SettlementChargeReview? ChargeReview = null,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ApprovedDepositOffsets = 0);
 public interface IContractSettlementDetails
 {
     Task<ContractSettlementSummary> SummaryAsync(Guid contractId, CancellationToken t);

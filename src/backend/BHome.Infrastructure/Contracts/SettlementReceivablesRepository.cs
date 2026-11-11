@@ -14,7 +14,7 @@ namespace BHome.Infrastructure.Contracts;
 
 internal static class SettlementChargeRecords
 {
-    internal const string ChargeKind = "SettlementReceivableV1", OffsetKind = "DepositOffsetApprovalV1", BankKind = "SettlementBankAllocationV1";
+    internal const string ChargeKind = "SettlementReceivableV1", OffsetKind = "DepositOffsetApprovalV1", BankKind = "SettlementBankAllocationV1", ReviewKind = "SettlementChargeReviewV1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     internal static async Task<T[]> ReadAsync<T>(BHomePersistenceContext db, Guid contractId, string kind, CancellationToken token)
     {
@@ -146,6 +146,20 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     public Task<SettlementReceivable?> ChargeOperationAsync(Guid actor, Guid key, CancellationToken token) => OperationAsync<SettlementReceivable>(actor, key, SettlementChargeRecords.ChargeKind, token);
     public Task<DepositOffsetApproval?> OffsetOperationAsync(Guid actor, Guid key, CancellationToken token) => OperationAsync<DepositOffsetApproval>(actor, key, SettlementChargeRecords.OffsetKind, token);
     public Task<SettlementBankAllocationResult?> BankOperationAsync(Guid actor, Guid key, CancellationToken token) => OperationAsync<SettlementBankAllocationResult>(actor, key, SettlementChargeRecords.BankKind, token);
+    public Task<SettlementChargeReview?> ReviewOperationAsync(Guid actor, Guid key, CancellationToken token) => OperationAsync<SettlementChargeReview>(actor, key, SettlementChargeRecords.ReviewKind, token);
+    public async Task<SettlementChargeReviewContext> ChargeReviewAsync(Guid id, CancellationToken token)
+    {
+        var context = await ContextAsync(id, token);
+        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
+        var reference = SettlementChargeReviewRules.Reference(id, inspection, context.View.Receivables.Select(r => r.Charge));
+        var latest = (await SettlementChargeRecords.ReadAsync<SettlementChargeReview>(db, id, SettlementChargeRecords.ReviewKind, token)).OrderByDescending(r => r.ApprovedAt).FirstOrDefault();
+        return new(context, reference, latest);
+    }
+    public async Task SaveReviewAsync(SettlementChargeReview review, CancellationToken token)
+    {
+        await AppendAsync(review.ContractId, review.Id, SettlementChargeRecords.ReviewKind, review, review.ApprovedByUserId, review.ApprovedAt, token);
+        await db.SaveChangesAsync(token);
+    }
     public Task<Guid> LocationAsync(Guid id, CancellationToken token) => db.Set<Contract>().Where(c => c.Id == id).Select(c => c.Room.LocationId).SingleAsync(token);
     public async Task SaveBankResultAsync(SettlementBankAllocationResult result, CancellationToken token)
     {

@@ -17,7 +17,7 @@ internal sealed partial class RefundRepository
         var blockers = summary.UnresolvedItems.Where(b => b != "deposit_deduction_refund_policy_required").ToList();
         if (contract.Status is not (ContractStatus.Active or ContractStatus.Terminated)) blockers.Add("deposit_contract_not_active");
         if (summary.VerifiedSecurityDeposit <= 0 || summary.Calculation?.DepositPositionConsistent != true ||
-            summary.Calculation.DepositAllocated != 0) blockers.Add("deposit_source_requires_review");
+            summary.Calculation.DepositAllocated != summary.ApprovedDepositOffsets) blockers.Add("deposit_source_requires_review");
         if (summary.DepositDeductions is { } plan)
         {
             if (summary.ApprovedDeductions != plan.Total || summary.ApprovedFinalCharges != plan.Total)
@@ -27,6 +27,12 @@ internal sealed partial class RefundRepository
                 if (deductionEvidence is null) throw new FinanceException(503, "deduction_evidence_unavailable");
                 await deductionEvidence.VerifyAsync(plan, t);
             }
+        }
+        else if (summary.Receivables is { Count: > 0 })
+        {
+            if (summary.ChargeReview is null || summary.Receivables.Any(r => r.Outstanding > 0)) blockers.Add("settlement_charge_sources_incomplete");
+            if (chargeEvidence is null) throw new FinanceException(503, "settlement_evidence_unavailable");
+            foreach (var charge in summary.Receivables) await chargeEvidence.VerifyAsync(charge.Charge, t);
         }
         else if (summary.ApprovedFinalCharges != 0) blockers.Add("deposit_deductions_require_review");
         var requests = (await Rows.Where(r => r.SourceDepositContractId == summary.DepositContractId)
@@ -43,8 +49,8 @@ internal sealed partial class RefundRepository
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // Choices are eligible occupants, NOT inferred deposit payers. The Owner must explicitly verify
         // the original depositor before requesting; the attestation is retained in immutable refund history.
-        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0), contract.IsDevelopmentDemo, people, requests,
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
-            summary.VerifiedSecurityDeposit, summary.DepositDeductions);
+            summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets);
     }
 }

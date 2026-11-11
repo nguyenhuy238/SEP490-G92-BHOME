@@ -23,6 +23,7 @@ import {
 import { SettlementBankPanel } from './SettlementBankPanel';
 import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
 import { FinalFixedChargesPanel } from './FinalFixedChargesPanel';
+import { FinalChargeReviewPanel } from './FinalChargeReviewPanel';
 
 export function SettlementReceivablesPanel({
   api,
@@ -144,6 +145,15 @@ export function SettlementReceivablesPanel({
             <Typography>
               Cọc chưa dùng hoặc giữ cho hoàn tiền: {formatContractMoney(data.availableDeposit)}
             </Typography>
+            <FinalChargeReviewPanel
+              api={api}
+              id={id}
+              reference={data.reference}
+              saved={async () => {
+                await query.refetch();
+                await saved();
+              }}
+            />
             {data.receivables.map((r) => (
               <Alert key={r.charge.id} severity={r.status === 'Paid' ? 'success' : 'warning'}>
                 {r.charge.description} · Phải thu {formatContractMoney(r.charge.amount)} · Đã phân

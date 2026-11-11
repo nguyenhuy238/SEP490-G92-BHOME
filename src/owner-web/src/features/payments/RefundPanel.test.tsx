@@ -187,6 +187,47 @@ it('binds a remainder refund to the approved deduction instead of claiming there
   });
   expect(body.refund.amount).toBe('300000');
 });
+it('requires confirmation of source-specific deposit offsets before refunding the remainder', async () => {
+  request.mockImplementation(async (_url, init) => {
+    if (init?.method === 'POST') throw { status: 503 };
+    return {
+      ...source,
+      sourcePaymentId: null,
+      sourceDepositContractId: 'root',
+      verifiedDepositAmount: '400000',
+      availableAmount: '300000',
+      financialReference: 'D-offset',
+      approvedDepositOffsets: '100000',
+    };
+  });
+  mount('SecurityDeposit');
+  await screen.findByText('Hoàn phần cọc còn lại sau cấn trừ');
+  fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn đã xác minh'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
+  fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
+    target: { value: '300000' },
+  });
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
+    target: { value: 'Verified remaining deposit after approved offsets' },
+  });
+  for (const label of [
+    'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn',
+    'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    'Tôi đã đối chiếu 100.000 ₫ cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại',
+  ])
+    fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await vi.waitFor(() =>
+    expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+  );
+  const body = JSON.parse(request.mock.calls.find(([, init]) => init?.method === 'POST')![1].body);
+  expect(body).toMatchObject({
+    noDeductionsConfirmed: false,
+    deductionsConfirmed: true,
+    expectedFinancialReference: 'D-offset',
+  });
+  expect(body.expectedDeductionPlanId).toBeUndefined();
+});
 function mount(kind: 'Receipt' | 'SecurityDeposit' = 'Receipt') {
   return render(
     <QueryClientProvider

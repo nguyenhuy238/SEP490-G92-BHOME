@@ -56,11 +56,15 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
         source.data.refundedAmount,
         source.data.reservedAmount,
         source.data.depositDeductions?.id,
+        source.data.approvedDepositOffsets,
         source.data.beneficiaries.map((p) => p.id),
         source.data.requests.map((r) => [r.id, r.version, r.executionIntent?.key]),
       ])
     : '';
   const checked = !!signature && reviewedSource === signature;
+  const hasOffsets =
+    !!source.data?.approvedDepositOffsets &&
+    !/^0(?:\.0+)?$/.test(source.data.approvedDepositOffsets);
   const depositConfirmed =
     sourceKind !== 'SecurityDeposit' ||
     (beneficiarySource === signature && zeroDeductionSource === signature);
@@ -111,13 +115,15 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
             expectedFinancialReference: source.data.financialReference,
             beneficiaryVerified: beneficiarySource === signature,
             noDeductionsConfirmed:
-              !source.data.depositDeductions && zeroDeductionSource === signature,
+              !source.data.depositDeductions && !hasOffsets && zeroDeductionSource === signature,
             ...(source.data.depositDeductions
               ? {
                   expectedDeductionPlanId: source.data.depositDeductions.id,
                   deductionsConfirmed: zeroDeductionSource === signature,
                 }
-              : {}),
+              : hasOffsets
+                ? { deductionsConfirmed: zeroDeductionSource === signature }
+                : {}),
           },
           key.current.value,
         );
@@ -137,9 +143,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
     <Stack spacing={2}>
       <Typography variant="h6">
         {sourceKind === 'SecurityDeposit'
-          ? source.data?.depositDeductions
-            ? 'Hoàn cọc theo quyết định khấu trừ'
-            : 'Hoàn cọc không khấu trừ'
+          ? hasOffsets
+            ? 'Hoàn phần cọc còn lại sau cấn trừ'
+            : source.data?.depositDeductions
+              ? 'Hoàn cọc theo quyết định khấu trừ'
+              : 'Hoàn cọc không khấu trừ'
           : 'Hoàn tiền thừa từ giao dịch'}
       </Typography>
       <Alert severity="info">
@@ -272,9 +280,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                       />
                     }
                     label={
-                      source.data.depositDeductions
-                        ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
-                        : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'
+                      hasOffsets
+                        ? `Tôi đã đối chiếu ${formatContractMoney(source.data.approvedDepositOffsets ?? '0')} cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại`
+                        : source.data.depositDeductions
+                          ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
+                          : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'
                     }
                   />
                 </>

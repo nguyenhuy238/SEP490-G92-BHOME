@@ -75,7 +75,7 @@ public sealed partial class SettlementReceivablesService
             var context = await repository.FinalFixedAsync(id, token);
             var proofs = await evidence.CaptureAsync(id, context.Context.EvidenceIds.Order().ToArray(), token);
             var charge = new SettlementReceivable(Guid.NewGuid(), id, context.Context.View.RoomId, "FinalFixed",
-                $"fixed:{context.Context.View.RoomId:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{row.Calculation.CumulativePricedAmount}:{row.Calculation.OccupiedDays}",
+                $"fixed:{id:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{Fingerprint(id, row.Calculation)}",
                 context.Context.InspectionId, context.Context.InspectionVersion, null, row.Amount.Value, row.Name,
                 JsonSerializer.Serialize(new { kind = "OwnerConfirmedFixedSettlement/v1", row.Calculation, context.SignedContractHash, context.HandoverDate,
                     scheduleVersion = context.Schedule!.Version, policyAppliesToSignedTermsConfirmed = true }),

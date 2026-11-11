@@ -10,6 +10,7 @@ public sealed partial class ContractService
         var summary = ledger is IContractSettlementDetails details ? await details.SummaryAsync(id, t) : throw new ContractException(503, "settlement_summary_unavailable");
         return user.IsInRole(Roles.Owner) ? summary : summary with
         {
+            ChargeReview = summary.ChargeReview is { } review ? review with { OperationKey = Guid.Empty, Fingerprint = "", ChargeIds = summary.Receivables?.Where(r => r.Charge.RecipientUserIds.Contains(Actor)).Select(r => r.Charge.Id).ToArray() ?? [] } : null,
             Receivables = summary.Receivables?.Where(r => r.Charge.RecipientUserIds.Contains(Actor))
                 .Select(r => r with { Charge = r.Charge with { RecipientUserIds = [], OperationKey = Guid.Empty, Fingerprint = "" } }).ToArray()
         };

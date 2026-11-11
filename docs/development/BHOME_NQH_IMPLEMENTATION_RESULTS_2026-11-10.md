@@ -74,3 +74,17 @@ Thiếu lịch, bản hợp đồng hoặc dữ liệu khoảng ở giữ Amount
 Files: FixedChargeCalculation, FixedChargeCoverageRepository, SettlementFinalFixedCharges/Repository, InvoiceService, SettlementReceivablesRepository/Controller, shared client, FinalFixedChargesPanel, TenantSettlementReceivables và thông tin nguồn trên dòng hóa đơn.
 
 Đã chạy: Release solution build PASS; Application unit 398 PASS; PostgreSQL disposable final-fixed/final-utility/invoice regression 16 PASS (bao gồm thiếu policy, còn người tiếp tục thuê, từ chối Staff/Tenant, xác nhận điều khoản, concurrent replay, thứ tự invoice/charge); Owner UI 20 PASS; Mobile 4 PASS; Owner/Mobile typecheck và changed-file ESLint PASS. Inspection metadata trong test fixed-charge là fixture synthetic; không coi đó là UI E2E hay kiểm thử live storage. Tiếp tục xác nhận đầy đủ danh sách phí, hoàn cọc sau offset, Holding và các phase còn lại.
+
+## 11/11/2026 — Owner xác nhận đủ khoản thu và hoàn cọc sau cấn trừ
+
+BR-15/20/21/22/23: SettlementChargeReviewV1 bất biến gắn phiên bản/Owner decision/biên bản và danh sách khoản thu. Backend yêu cầu đủ điện, nước, rent/phí đã đối chiếu; nguồn thiếu hoặc reference cũ trả 409. Owner Web có bước xem/chấp thuận riêng, không biến việc duyệt phí thành nhận tiền. Tháng cuối đã phủ bằng khoản phải thu và review không cần Final Settlement Invoice. Từng offset khớp native allocation và Owner approval; deposit-refund source cho hoàn phần còn lại sau offset, cần xác minh người nộp và xác nhận offset. Cọc dùng hết không tạo refund giả. Refund vẫn Requested → Approved → Completed chỉ sau bằng chứng thực chi private; giữ phòng đã Available và quyền lịch sử.
+
+Files: SettlementChargeReview, SettlementReceivablesRepository/Controller, ContractSettlementLedger/LifecycleService/Contracts, RefundService/Repository/DepositRefundSource; shared client; FinalChargeReviewPanel, RefundPanel. JSON history, không đổi schema/migration. Tenant summary che operation keys/fingerprints và charge IDs ngoài quyền.
+
+Đã chạy: Application unit 398 PASS; PostgreSQL disposable final charge/fixed/utility/contract/receivable/physical release regression 36 PASS; Owner review/receivable/refund UI 15 PASS; Owner/Mobile typecheck, changed-file ESLint PASS. Luồng mới kiểm incomplete/stale review, partial/full offsets, physical release trước thanh toán, full cọc không cần refund, phần dư thực chi sau release và execute lặp không hoàn hai lần. Object-storage substitute và synthetic bank evidence, không phải provider hay UI E2E thật.
+
+Các lần chạy đầu đã phát hiện và sửa: test variable name trùng, TextField API không hỗ trợ inputProps, thiếu mốc InspectedAt trong fixture. Hồi quy recovery rộng phát hiện fault injection đứt kết nối ngay khi seed ảnh meter; đã giới hạn lỗi vào upload refund để giữ đúng assertion phục hồi intended. Kết quả rerun recovery/payment/invoice/snapshot sẽ ghi tiếp sau khi hoàn tất.
+
+Còn tiếp tục: điều chỉnh rent đã Final trước ngày đi thực tế, legacy deduction creation/corrections, Holding cancellation, whole/external-payer excess, finance aggregation, Owner Mobile scope, retention/residence, demo/UI E2E và full CI-equivalent. Không coi toàn bộ dự án hoàn thành.
+
+Rerun sau sửa fault injection: Compact24DepositRecoveryTests + Compact24InvoiceRegressionTests + Compact24PaymentRegressionTests + exact runtime migration snapshot: 49/49 PASS. Assertion về durable upload intent, sai ảnh khi retry, reserved balance và không double refund vẫn giữ nguyên. Full CI-equivalent và provider/native UI E2E chưa chạy.
