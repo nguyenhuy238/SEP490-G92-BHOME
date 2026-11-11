@@ -91,7 +91,7 @@ public sealed class DepositDeductionService(IDepositDeductionRepository reposito
             if (summary.Reference != input.ExpectedReference || (summary.DepositDeductions?.Version ?? 0) != input.ExpectedVersion)
                 throw ContractException.Conflict("deposit_deduction_review_changed");
             var allowed = new[] { "deposit_deduction_refund_policy_required", "final_charges_and_damage_policy_pending", "deposit_deduction_reapproval_required" };
-            if (context.ContractStatus != "Active" || context.MoveOutStatus is not ("Inspected" or "PendingSettlement") ||
+            if (context.ContractStatus is not ("Active" or "Terminated") || context.MoveOutStatus is not ("Inspected" or "PendingSettlement" or "Completed") ||
                 !context.InspectionConfirmed || context.NoAdditionalCharges || summary.Calculation?.DepositPositionConsistent != true ||
                 summary.VerifiedSecurityDeposit <= 0 || summary.Calculation.DepositAllocated != 0 ||
                 summary.Calculation.DepositRefunded != 0 || summary.Calculation.DepositReserved != 0 || summary.UnresolvedItems.Any(b => !allowed.Contains(b)))

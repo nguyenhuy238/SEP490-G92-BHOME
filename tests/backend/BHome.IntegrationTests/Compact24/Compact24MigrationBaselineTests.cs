@@ -14,7 +14,7 @@ public sealed class Compact24MigrationBaselineTests
         using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql("Host=127.0.0.1;Database=offline_snapshot;Username=unconfigured").Options);
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Equal([Compact24Baseline.Id, "20261110000100_LifecycleAlignment"], db.Database.GetMigrations());
+        Assert.Equal([Compact24Baseline.Id, "20261110000100_LifecycleAlignment", "20261111000100_PhysicalResidenceClosure"], db.Database.GetMigrations());
         Assert.Contains("CREATE TABLE users", Compact24Baseline.MigrationSql);
         Assert.DoesNotContain("\nCOMMIT;", Compact24Baseline.MigrationSql);
     }

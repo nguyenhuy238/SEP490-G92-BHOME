@@ -26,7 +26,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         var rooms = db.Set<Room>().Where(r => r.LocationId == locationId &&
             (!roomId.HasValue || r.Id == roomId)).Select(r => r.Id);
         var contracts = db.Set<Contract>().Where(c => rooms.Contains(c.RoomId));
-        var residents = await UnresolvedResidents(db).AnyAsync(r => rooms.Contains(r.RoomId), token);
+        var residents = await UnresolvedResidents(db).AnyAsync(r => r.RoomId != null && rooms.Contains(r.RoomId.Value), token);
         var occupancy = await contracts.AnyAsync(c => c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active &&
             c.Residents.Any(r => r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
         var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);

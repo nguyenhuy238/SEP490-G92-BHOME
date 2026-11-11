@@ -4821,7 +4821,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("ResidentType");
 
-                    b.Property<Guid>("RoomId")
+                    b.Property<Guid?>("RoomId")
                         .HasColumnType("uuid")
                         .HasColumnName("RoomId");
 
@@ -6411,8 +6411,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.PropertyManagement.Room", "Room")
                         .WithMany()
                         .HasForeignKey("RoomId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()

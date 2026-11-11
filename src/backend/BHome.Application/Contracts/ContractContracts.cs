@@ -98,7 +98,8 @@ public interface IAdministrativeContractReadiness
 public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, string Reason,
     DateTimeOffset? InspectionScheduledAt, string PendingReason, string? InspectionNotes = null,
     DateTimeOffset? InspectedAt = null, Guid? ElectricityReadingId = null, Guid? WaterReadingId = null,
-    IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1);
+    IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1,
+    bool OwnerConfirmedInspection = false, string FinancialReviewStatus = "PendingReview");
 public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
 public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset ScheduledAt, int Version);
 public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt, string FinancialSnapshot = "{}");
@@ -213,4 +214,6 @@ public interface IContractRepository
     void Add(object entity);
     void Audit(Guid actorId, string action, Guid targetId, DateTimeOffset at);
     void AuditAnonymous(string action, Guid targetId, DateTimeOffset at);
+    Task CloseResidenceAsync(Contract contract, DateOnly actualEndDate, Guid actorId, DateTimeOffset at, CancellationToken t);
+    Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t);
 }

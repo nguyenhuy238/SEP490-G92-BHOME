@@ -8,7 +8,7 @@ public enum IdentityVerificationStatus { Pending, Verified, Rejected }
 
 public sealed class Resident : AuditableEntity
 {
-    public Guid RoomId { get; set; }
+    public Guid? RoomId { get; set; }
     public Room Room { get; set; } = null!;
     // Non-sensitive workspace label. Actual name/DOB/address live only in the encrypted envelope.
     public string DisplayLabel { get; set; } = "";

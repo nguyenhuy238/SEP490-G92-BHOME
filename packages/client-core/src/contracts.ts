@@ -189,6 +189,8 @@ export interface MoveOut {
   evidenceIds: string[];
   inspectionStaffId?: string | null;
   version?: number;
+  ownerConfirmedInspection?: boolean;
+  financialReviewStatus?: 'PendingReview' | 'OwnerReviewed';
 }
 export interface ContractExpiryNotice {
   id: string;
@@ -681,7 +683,7 @@ export const labels: Record<string, string> = {
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
   room_contract_conflict: 'Phòng có hợp đồng đang xung đột.',
   financial_ledger_and_deposit_policy:
-    'Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế; chưa đủ điều kiện giải phóng phòng.',
+    'Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế; trạng thái bàn giao được theo dõi riêng.',
   contract_not_ready_for_activation:
     'Chưa đủ điều kiện kích hoạt. Hãy tải lại điều kiện từ máy chủ.',
   bank_transaction_already_allocated: 'Giao dịch ngân hàng đã được phân bổ. Hãy kiểm tra sao kê.',
@@ -712,6 +714,10 @@ export const labels: Record<string, string> = {
   inspection_changed_or_reviewed:
     'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
   move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
+  move_out_handover_required: 'Cần biên bản đã kiểm tra và ngày bàn giao thực tế hợp lệ.',
+  owner_confirmed_inspection_required:
+    'Owner cần duyệt biên bản kiểm tra và chỉ số chốt trước khi bàn giao.',
+  inspection_snapshot_invalid: 'Biên bản hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
   inspection_evidence_not_available: 'Ảnh không thuộc người lập biên bản hoặc đã được sử dụng.',
@@ -1027,7 +1033,7 @@ export function contractActions(
         'Cần đến ngày trả phòng, đủ ảnh hiện trạng và chỉ số chốt đúng hợp đồng/ngày kiểm tra.',
       ),
     );
-  if (owner && m && ['Inspected', 'PendingSettlement', 'Settled'].includes(m.status))
+  if (owner && m && ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status))
     result.push(
       action(
         'move-out/settlement',
@@ -1043,13 +1049,19 @@ export function contractActions(
         'Lưu quyết định vào lịch sử. Chỉ đánh dấu đã quyết toán khi máy chủ đối chiếu đầy đủ nghĩa vụ, cọc và giao dịch thực tế.',
       ),
     );
-  if (owner && m?.status === 'Settled')
+  if (
+    owner &&
+    active &&
+    m &&
+    ['Inspected', 'PendingSettlement', 'Settled'].includes(m.status) &&
+    (m.ownerConfirmedInspection || m.status === 'Settled')
+  )
     result.push(
       action(
         'move-out/complete',
         'Hoàn tất trả phòng',
         [{ name: 'actualEndDate', label: 'Ngày kết thúc thực tế', type: 'date' }],
-        'Máy chủ kiểm tra lại quyết toán trước khi kết thúc hợp đồng và giải phóng phòng. Ngày phải trùng ngày lập biên bản.',
+        'Xác nhận hoàn tất bàn giao vật lý theo biên bản Owner đã duyệt. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày phải trùng ngày lập biên bản.',
       ),
     );
   return result;

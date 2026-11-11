@@ -51,10 +51,20 @@ public static class Compact24DevelopmentDatabase
             {
                 await using var compatible = new Compact24DbContext(
                     new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(target).Options, new(true));
-                if (await Compact24Schema.VerifyPreviousPropertyAsync(compatible, token)) return new("READY_PREVIOUS_PROPERTY_COMPATIBILITY");
+                if (await Compact24Schema.VerifyPreviousPropertyAsync(compatible, token))
+                {
+                    if (checkOnly) return new("RUNTIME_MIGRATION_REQUIRED");
+                    throw new DevelopmentDatabaseException("runtime_migration_requires_explicit_command");
+                }
             }
             if (tables.Length == 24 && tables.Contains("locations") && tables.Contains("billing_policies"))
             {
+                await using var lifecycle = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='residents' AND column_name='contact_email')", target);
+                if ((bool)(await lifecycle.ExecuteScalarAsync(token))!)
+                {
+                    if (checkOnly) return new("RUNTIME_MIGRATION_REQUIRED");
+                    throw new DevelopmentDatabaseException("runtime_migration_requires_explicit_command");
+                }
                 await using var previous = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='locations' AND column_name='room_types'", target);
                 if ((long)(await previous.ExecuteScalarAsync(token))! == 1)
                 {

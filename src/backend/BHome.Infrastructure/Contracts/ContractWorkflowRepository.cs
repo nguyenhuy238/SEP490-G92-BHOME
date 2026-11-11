@@ -19,8 +19,8 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : I
             (r.Status == RoomStatus.Available || r.Status == RoomStatus.Occupied) && locations.Any(l => l.Id == r.LocationId))
             .OrderBy(r => r.RoomNumber).Take(100).Select(r => new ContractRoomChoice(r.Id, r.RoomNumber, r.LocationId, r.Status.ToString())).ToArrayAsync(t);
         var ids = rooms.Select(r => r.Id).ToArray();
-        var residents = await db.Set<Resident>().AsNoTracking().Where(r => ids.Contains(r.RoomId))
-            .OrderBy(r => r.DisplayLabel).Take(500).Select(r => new ContractResidentChoice(r.Id, r.RoomId, r.DisplayLabel, r.TenantUserId,
+        var residents = await db.Set<Resident>().AsNoTracking().Where(r => r.RoomId != null && ids.Contains(r.RoomId.Value))
+            .OrderBy(r => r.DisplayLabel).Take(500).Select(r => new ContractResidentChoice(r.Id, r.RoomId!.Value, r.DisplayLabel, r.TenantUserId,
                 r.VerificationStatus == IdentityVerificationStatus.Verified, r.ResidentType.ToString())).ToArrayAsync(t);
         var owners = await (from account in db.Users.AsNoTracking()
                             join grant in db.UserRoles on account.Id equals grant.UserId

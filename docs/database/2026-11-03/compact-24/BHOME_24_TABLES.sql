@@ -239,7 +239,7 @@ CREATE TABLE contract_residents (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     PRIMARY KEY(contract_id,resident_id),
     CHECK (residence_to IS NULL OR residence_to>=residence_from),
-    CHECK (actual_move_out_date IS NULL OR (actual_residence_from IS NOT NULL AND actual_move_out_date>=actual_residence_from))
+    CONSTRAINT ck_resident_actual_dates CHECK (actual_move_out_date IS NULL OR actual_residence_from IS NULL OR actual_move_out_date>=actual_residence_from)
 );
 
 -- 11 Independent incident lifecycle; child Work Orders use operational_tasks.

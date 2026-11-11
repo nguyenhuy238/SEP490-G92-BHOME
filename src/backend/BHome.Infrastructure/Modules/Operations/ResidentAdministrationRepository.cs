@@ -15,12 +15,12 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
 {
     private const string Select = """
         SELECT r.id,room.location_id,r.current_room_id,room.room_number,r.display_label,r.verification_status,
-          r.verified_at,r.user_id,u.email,u.phone,r.history::text,
+          r.verified_at,r.user_id,COALESCE(r.contact_email,u.email),u.phone,r.history::text,
           COALESCE((SELECT cr.resident_role FROM contract_residents cr WHERE cr.resident_id=r.id
             ORDER BY cr.residence_from DESC,cr.contract_id LIMIT 1),
             (SELECT (h.value->'state'->>'residentType')::smallint FROM jsonb_array_elements(r.history) WITH ORDINALITY h(value,n)
               WHERE h.value->>'recordType'='Resident' ORDER BY h.n DESC LIMIT 1),0)::smallint
-        FROM residents r JOIN rooms room ON room.id=r.current_room_id LEFT JOIN users u ON u.id=r.user_id
+        FROM residents r LEFT JOIN rooms room ON room.id=r.current_room_id LEFT JOIN users u ON u.id=r.user_id
         """;
     private NpgsqlCommand Command(string sql) => new(sql, (NpgsqlConnection)db.Database.GetDbConnection(),
         (NpgsqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction());
@@ -28,7 +28,7 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
     {
         await db.Database.OpenConnectionAsync(t);
         const string where = " WHERE (@location IS NULL OR room.location_id=@location) AND (@room IS NULL OR r.current_room_id=@room) AND (@status IS NULL OR r.verification_status=@status) AND r.display_label ILIKE '%'||@search||'%'";
-        await using var count = Command("SELECT count(*) FROM residents r JOIN rooms room ON room.id=r.current_room_id" + where);
+        await using var count = Command("SELECT count(*) FROM residents r LEFT JOIN rooms room ON room.id=r.current_room_id" + where);
         Bind(count, query); var total = Convert.ToInt32(await count.ExecuteScalarAsync(t));
         await using var command = Command(Select + where + " ORDER BY r.display_label,r.id OFFSET @skip LIMIT @take");
         Bind(command, query); command.Parameters.AddWithValue("skip", (query.Page - 1) * query.PageSize); command.Parameters.AddWithValue("take", query.PageSize);
@@ -71,8 +71,8 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
     }
     private static ResidentAdministrationView Read(NpgsqlDataReader r)
     {
-        var version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Label = r.GetString(4), History = r.GetString(10), User = r.IsDBNull(7) ? (Guid?)null : r.GetGuid(7), Room = r.GetGuid(2) }))));
-        return new(r.GetGuid(0), r.GetGuid(1), r.GetGuid(2), r.GetString(3), r.GetString(4), ((ResidentType)r.GetInt16(11)).ToString(),
+        var version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Label = r.GetString(4), History = r.GetString(10), User = r.IsDBNull(7) ? (Guid?)null : r.GetGuid(7), Room = r.IsDBNull(2) ? (Guid?)null : r.GetGuid(2) }))));
+        return new(r.GetGuid(0), r.IsDBNull(1) ? null : r.GetGuid(1), r.IsDBNull(2) ? null : r.GetGuid(2), r.IsDBNull(3) ? "" : r.GetString(3), r.GetString(4), ((ResidentType)r.GetInt16(11)).ToString(),
             ((IdentityVerificationStatus)r.GetInt16(5)).ToString(), r.IsDBNull(6) ? null : r.GetFieldValue<DateTimeOffset>(6),
             r.IsDBNull(7) ? null : r.GetGuid(7), r.IsDBNull(8) ? null : r.GetString(8), r.IsDBNull(9) ? null : r.GetString(9), version, []);
     }

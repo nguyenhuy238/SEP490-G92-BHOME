@@ -15,7 +15,7 @@ internal sealed partial class RefundRepository
         if (ledger is not IContractSettlementDetails details) throw new FinanceException(503, "settlement_summary_unavailable");
         var summary = await details.SummaryAsync(contractId, t);
         var blockers = summary.UnresolvedItems.Where(b => b != "deposit_deduction_refund_policy_required").ToList();
-        if (contract.Status != ContractStatus.Active) blockers.Add("deposit_contract_not_active");
+        if (contract.Status is not (ContractStatus.Active or ContractStatus.Terminated)) blockers.Add("deposit_contract_not_active");
         if (summary.VerifiedSecurityDeposit <= 0 || summary.Calculation?.DepositPositionConsistent != true ||
             summary.Calculation.DepositAllocated != 0) blockers.Add("deposit_source_requires_review");
         if (summary.DepositDeductions is { } plan)
@@ -37,7 +37,7 @@ internal sealed partial class RefundRepository
             """).SingleAsync(t);
         if (allReserved != requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount))
             blockers.Add("refund_source_requires_manual_review");
-        var people = await db.Set<Resident>().AsNoTracking().Where(r => r.RoomId == contract.RoomId &&
+        var people = await db.Set<Resident>().AsNoTracking().Where(r =>
             r.TenantUserId != null && r.VerificationStatus == IdentityVerificationStatus.Verified &&
             db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);

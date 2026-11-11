@@ -50,7 +50,7 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
             };
             var c = new Contract
             {
-                RoomId = family.RoomId,
+                RoomId = family.RoomId!.Value,
                 OwnerSignerId = Compact24SampleSeed.Id(1),
                 TenantUserId = Compact24SampleSeed.Id(3),
                 RepresentativeResidentId = Compact24SampleSeed.Id(100),

@@ -29,18 +29,32 @@ public sealed class LifecycleMigrationTests
                 INSERT INTO locations(id,name,address) VALUES ({location},'Synthetic','Synthetic');
                 INSERT INTO rooms(id,location_id,room_number,capacity,status) VALUES ({room},{location},'TEST',2,0);
                 """);
+            await db.GetService<IMigrator>().MigrateAsync("20261110000100_LifecycleAlignment");
+            Assert.False(await db.IsSchemaReadyAsync());
             await db.Database.MigrateAsync();
             Assert.True(await db.IsSchemaReadyAsync());
             Assert.Equal(1, await db.Users.CountAsync());
+            var person = Guid.NewGuid();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO residents(id,current_room_id,identity_owner_scope_id,display_label,verification_status,contact_email)
-                VALUES ({Guid.NewGuid()},{room},{owner},'Synthetic A',0,'occupant@example.invalid')
+                VALUES ({person},{room},{owner},'Synthetic A',0,'occupant@example.invalid')
                 """);
             var duplicate = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO residents(id,current_room_id,identity_owner_scope_id,display_label,verification_status,contact_email)
                 VALUES ({Guid.NewGuid()},{room},{owner},'Synthetic B',0,'OCCUPANT@example.invalid')
                 """));
             Assert.Equal("23505", duplicate.SqlState);
+            var contract = Guid.NewGuid();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO contracts(id,room_id,representative_resident_id,owner_signer_id,contract_type,start_date,end_date,deposit_required,terms,status)
+                VALUES ({contract},{room},{person},{owner},'MAIN',DATE '2026-11-01',DATE '2026-12-01',0,'Synthetic fixture',0);
+                INSERT INTO contract_residents(contract_id,resident_id,resident_role,residence_from,actual_move_out_date)
+                VALUES ({contract},{person},0,DATE '2026-11-01',DATE '2026-11-11');
+                """);
+            var reversedDates = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE contract_residents SET actual_residence_from=DATE '2026-11-12' WHERE contract_id={contract}
+                """));
+            Assert.Equal("23514", reversedDates.SqlState);
             await db.Database.MigrateAsync();
             Assert.Equal(1, await db.Users.CountAsync());
         }

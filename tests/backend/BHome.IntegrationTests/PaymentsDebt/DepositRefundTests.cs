@@ -72,7 +72,8 @@ public sealed partial class PaymentLedgerTests
         Assert.False(pending.Resolved); Assert.Equal(400000, pending.Calculation!.DepositReserved);
         await RefundValue<MoveOutView>(await Post(owner, contract + "/move-out/settlement", new SettlementInput("Still awaiting bank", pending.Reference)));
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, contract + "/move-out/complete", new CompletionInput(today))).StatusCode);
+        var completionKey = Guid.NewGuid();
+        (await Post(owner, contract + "/move-out/complete", new CompletionInput(today), completionKey)).EnsureSuccessStatusCode();
         using var mat = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var bytes = mat.ImEncode(".png");
         var at = DateTimeOffset.UtcNow; var executionKey = Guid.NewGuid();
         if (interruptedUpload)
@@ -95,7 +96,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(0, final.ApprovedDeductions); Assert.Equal("VerifiedManual", final.TransferVerificationStatus);
         Assert.Equal(summary.FinancialReference, final.FinancialReference); Assert.NotEqual(summary.Reference, final.Reference);
         await RefundValue<MoveOutView>(await Post(owner, contract + "/move-out/settlement", new SettlementInput("Synthetic final bank statement checked", final.Reference)));
-        await RefundValue<ContractView>(await Post(owner, contract + "/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, contract + "/move-out/complete", new CompletionInput(today), completionKey));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={w.Contract} AND status='COMPLETED'").SingleAsync());
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == row.Id && a.Event == "DepositRefundCompleted"));

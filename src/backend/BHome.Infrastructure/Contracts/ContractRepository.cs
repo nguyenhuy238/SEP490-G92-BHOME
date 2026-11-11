@@ -148,6 +148,33 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
     public Task<ContractOperation?> OperationAsync(Guid actorId, Guid key, string operation, CancellationToken t) =>
         db.Set<ContractOperation>().SingleOrDefaultAsync(o => o.ActorId == actorId && o.Key == key && o.Operation == operation, t);
     public void Add(object entity) => db.Add(entity);
+    public async Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t) =>
+        await (from cr in db.Set<ContractResident>().AsNoTracking()
+               join resident in db.Set<Resident>() on cr.ResidentId equals resident.Id
+               where cr.ContractId == contractId
+               select new ContractOccupantView(resident.Id, resident.DisplayLabel, cr.Role == ResidentType.Representative)).ToArrayAsync(t);
+    public async Task CloseResidenceAsync(Contract contract, DateOnly actualEndDate, Guid actorId, DateTimeOffset at, CancellationToken t)
+    {
+        // Only Compact24 is a deployed runtime. The offline legacy regression schema has a
+        // required RoomId column and no actual-residence fields; it cannot assert this integration.
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) { await db.SaveChangesAsync(t); return; }
+        var ids = contract.Residents.Select(r => r.ResidentId).ToArray();
+        var retained = await db.Set<ContractResident>().Where(cr => ids.Contains(cr.ResidentId) && cr.ContractId != contract.Id &&
+            (cr.ResidenceTo == null || cr.ResidenceTo >= actualEndDate) && db.Set<Contract>().Any(c => c.Id == cr.ContractId &&
+                c.Status == ContractStatus.Active && c.Kind != ContractKind.Holding && c.StartDate <= actualEndDate &&
+                (c.ActualEndDate ?? c.EndDate) >= actualEndDate)).Select(cr => cr.ResidentId).Distinct().ToArrayAsync(t);
+        foreach (var resident in await db.Set<Resident>().Where(r => ids.Contains(r.Id) && r.RoomId == contract.RoomId && !retained.Contains(r.Id)).ToArrayAsync(t))
+            resident.RoomId = null;
+        await db.SaveChangesAsync(t);
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE contract_residents SET actual_move_out_date={actualEndDate},
+                  registration_status=CASE WHEN registration_status='Completed' THEN registration_status ELSE 'Closed' END,
+                  history=history||jsonb_build_array(jsonb_build_object('action','PhysicalResidenceClosed','actorId',{actorId},
+                    'occurredAt',{at},'actualMoveOutDate',{actualEndDate},'previousRegistrationStatus',registration_status))
+                WHERE contract_id={contract.Id} AND resident_id=ANY({ids})
+                """, t);
+    }
     public void AuditAnonymous(string action, Guid targetId, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = null, Event = action, TargetId = targetId, TargetType = "Contract", Succeeded = true, OccurredAt = at });
     public void Audit(Guid actorId, string action, Guid targetId, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord

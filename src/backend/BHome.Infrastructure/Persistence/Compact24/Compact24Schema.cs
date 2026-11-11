@@ -7,7 +7,7 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 public static class Compact24Schema
 {
-    public const string Version = "compact24-2026-11-10-lifecycle";
+    public const string Version = "compact24-2026-11-11-residence";
     private static readonly string Script = ReadScript();
     public static string ScriptSha256 { get; } = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Script)));
     private static readonly string[] Tables = Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal).ToArray();
@@ -30,7 +30,17 @@ public static class Compact24Schema
         await using var command = new NpgsqlCommand(Script, connection); await command.ExecuteNonQueryAsync(token);
     }
 
-    internal static Task<bool> VerifyAsync(Compact24DbContext db, CancellationToken token) => VerifyReferenceAsync(db, Script, token);
+    internal static async Task<bool> VerifyAsync(Compact24DbContext db, CancellationToken token)
+    {
+        if (!await VerifyReferenceAsync(db, Script, token)) return false;
+        return await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.contracts'::regclass
+              AND conname='ck_contract_active_metadata' AND convalidated AND pg_get_constraintdef(oid) NOT LIKE '%tenant_user_id%')
+              AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.contract_residents'::regclass
+              AND conname='ck_resident_actual_dates' AND convalidated
+              AND pg_get_constraintdef(oid) LIKE '%actual_residence_from IS NULL%') AS "Value"
+            """).SingleAsync(token);
+    }
     internal static Task<bool> VerifyPreviousPropertyAsync(Compact24DbContext db, CancellationToken token) =>
         VerifyReferenceAsync(db, PreviousPropertyReference, token);
     internal static string PreviousPropertyReference { get; } = ReadScript("BHome.Compact24.PreviousProperty.schema-reference");

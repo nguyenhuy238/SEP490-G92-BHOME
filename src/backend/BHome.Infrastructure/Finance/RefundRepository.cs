@@ -69,9 +69,10 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             throw new FinanceException(409, "refund_source_requires_manual_review");
         var people = allocation?.PaidByUserId is not { } payer ? [] : await (
             from person in db.Set<Resident>().AsNoTracking()
-            join invoice in db.Set<Invoice>().AsNoTracking() on person.RoomId equals invoice.RoomId
+            from invoice in db.Set<Invoice>().AsNoTracking()
             where invoice.Id == allocation.InvoiceId && person.TenantUserId == payer &&
-                person.VerificationStatus == IdentityVerificationStatus.Verified && invoice.Recipients.Any(r => r.TenantUserId == payer)
+                person.VerificationStatus == IdentityVerificationStatus.Verified && invoice.Recipients.Any(r => r.TenantUserId == payer) &&
+                db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == invoice.RoomId))
             orderby person.Id
             select new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         return new(Math.Max(0, excess), payment.IsDevelopmentDemo, people, requests);

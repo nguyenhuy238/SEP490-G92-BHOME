@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
@@ -349,7 +350,7 @@ public sealed class ContractServiceTests
     [InlineData(MoveOutStatus.Inspected)]
     [InlineData(MoveOutStatus.PendingSettlement)]
     [InlineData(MoveOutStatus.Settled)]
-    public async Task T12_T13_MissingInspectionOrUnresolvedLedgerCannotReleaseRoom(MoveOutStatus status)
+    public async Task T12_T13_MissingInspectionCannotReleaseRoom(MoveOutStatus status)
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active; r.Room.Status = RoomStatus.Occupied;
         r.Moves.Add(new() { ContractId = c.Id, Status = status, ProposedDate = Today });
@@ -359,26 +360,37 @@ public sealed class ContractServiceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task T14_CompleteRequiresRevalidatedLedgerAndPreservesHistory(bool otherActive)
+    public async Task T14_OwnerReviewedHandoverReleasesPhysicalOccupancyWithUnresolvedFinanceAndPreservesHistory(bool otherActive)
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active; r.Room.Status = RoomStatus.Occupied;
         r.Moves.Add(new()
         {
             ContractId = c.Id,
-            Status = MoveOutStatus.Settled,
+            Status = MoveOutStatus.PendingSettlement,
             ProposedDate = Today,
             InspectedAt = new Clock().GetUtcNow(),
             ElectricityReadingId = Guid.NewGuid(),
             WaterReadingId = Guid.NewGuid(),
             SettlementLedgerReference = "verified-synthetic-ledger"
         });
-        r.Ledger.ReadAsync(default, default, default, default).ReturnsForAnyArgs(new SettlementLedgerState(true, true, true, "verified-synthetic-ledger"));
+        r.Ledger.ReadAsync(default, default, default, default).ReturnsForAnyArgs(new SettlementLedgerState(false, false, false, ""));
+        var image = Encoding.UTF8.GetBytes("synthetic private meter image");
+        var imageHash = Convert.ToHexString(SHA256.HashData(image));
+        var move = r.Moves.Single();
+        var electricity = new HandoverReading(move.ElectricityReadingId!.Value, "E-SYN", 0, Today, 120, Guid.NewGuid(), "private/e", imageHash);
+        var water = new HandoverReading(move.WaterReadingId!.Value, "W-SYN", 1, Today, 30, Guid.NewGuid(), "private/w", imageHash);
+        var observed = new HandoverSnapshot(Today, "SYN", "Checked", "Returned", "", [], electricity, water, []);
+        r.Repo.FinalInspectionsAsync(c.Id, default).Returns(new[] { new ContractFinalInspection { ContractId = c.Id, OwnerDecision = "Confirmed", ObservedSnapshot = JsonSerializer.Serialize(observed) } });
+        r.Repo.FinalReadingsAsync(c.Id, c.RoomId, Today, default).Returns(new[] { electricity, water });
+        r.Storage.CopyToAsync(Arg.Any<string>(), Arg.Any<Stream>(), default).Returns(call => call.Arg<Stream>().WriteAsync(image).AsTask());
         r.Repo.HasOtherActiveContractsAsync(c.RoomId, c.Id, default).Returns(otherActive);
         await r.Service.CompleteAsync(c.Id, new(Today), Guid.NewGuid(), default);
         Assert.Equal(ContractStatus.Terminated, c.Status); Assert.Equal(otherActive ? RoomStatus.Occupied : RoomStatus.Available, r.Room.Status);
         Assert.Equal(otherActive ? 1 : 2, r.Room.Version);
         r.Repo.Received(otherActive ? 0 : 1).Add(Arg.Any<PropertyChange>());
         Assert.Equal(Today, c.Residents.Single().ResidenceTo); Assert.Equal(2, c.Signatures.Count);
+        await r.Ledger.DidNotReceiveWithAnyArgs().ReadAsync(default, default, default, default);
+        await r.Repo.Received(1).CloseResidenceAsync(c, Today, r.User.UserId!.Value, Arg.Any<DateTimeOffset>(), default);
     }
     [Fact]
     public async Task T15_UnconfiguredProviderKeepsPendingSigning()
