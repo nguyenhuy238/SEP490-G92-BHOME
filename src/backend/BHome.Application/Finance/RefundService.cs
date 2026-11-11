@@ -52,6 +52,7 @@ public sealed class RefundRecord
 }
 public sealed class RefundState
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? BeneficiaryBasis { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? ExternalPayerAttestationId { get; set; }
     public Guid? ReceiptExcessDispositionId { get; set; }
     public string Classification { get; set; } = "ExcessReceiptRefundV1";
@@ -234,6 +235,8 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 SettlementContractId = sourceId,
                 SourceReference = source.FinancialReference,
                 BeneficiaryVerified = true,
+                BeneficiaryBasis = (source.DepositClassification ?? "SecurityDepositRefundV1") == "SecurityDepositRefundV1"
+                    ? "CONTRACT_AGREEMENT_OWNER_CONFIRMED" : null,
                 NoDeductionsConfirmed = deposit.NoDeductionsConfirmed,
                 DeductionsConfirmed = deposit.DeductionsConfirmed,
                 DeductionPlanId = deposit.ExpectedDeductionPlanId,

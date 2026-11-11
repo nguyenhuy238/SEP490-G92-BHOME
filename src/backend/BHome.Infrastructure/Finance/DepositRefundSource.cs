@@ -48,8 +48,8 @@ internal sealed partial class RefundRepository
             r.TenantUserId != null && r.VerificationStatus == IdentityVerificationStatus.Verified &&
             db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
-        // Choices are eligible occupants, NOT inferred deposit payers. The Owner must explicitly verify
-        // the original depositor before requesting; the attestation is retained in immutable refund history.
+        // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
+        // are eligible Residents, not an inference about who originally paid the deposit.
         return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
             summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets);

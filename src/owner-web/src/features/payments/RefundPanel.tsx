@@ -206,13 +206,16 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
           )}
           {sourceKind !== 'Receipt' && (
             <Alert severity="info">
-              Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu
-              bằng chứng nộp cọc trước khi chọn người nhận.
+              {sourceKind === 'SecurityDeposit'
+                ? 'Owner đối chiếu thỏa thuận hợp đồng và xác nhận người nhận phần cọc còn lại. Danh sách không tự chọn người đại diện hoặc người đã nộp cọc.'
+                : 'Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu bằng chứng nộp cọc trước khi chọn người nhận.'}
             </Alert>
           )}
           {source.data.beneficiaries.length === 0 && !source.data.externalBeneficiary ? (
             <Alert severity="warning">
-              Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.
+              {sourceKind === 'SecurityDeposit'
+                ? 'Chưa có người nhận đủ điều kiện trong danh sách. Owner cần làm rõ người nhận theo thỏa thuận hợp đồng.'
+                : 'Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.'}
             </Alert>
           ) : (
             <>
@@ -264,7 +267,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                     onChange={(e) => setReviewedSource(e.target.checked ? signature : null)}
                   />
                 }
-                label="Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn"
+                label={
+                  sourceKind === 'SecurityDeposit'
+                    ? 'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng'
+                    : 'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'
+                }
               />
               {sourceKind !== 'Receipt' && (
                 <>
@@ -276,7 +283,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                         onChange={(e) => setBeneficiarySource(e.target.checked ? signature : null)}
                       />
                     }
-                    label="Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp"
+                    label={
+                      sourceKind === 'SecurityDeposit'
+                        ? 'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc'
+                        : 'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp'
+                    }
                   />
                   <FormControlLabel
                     control={

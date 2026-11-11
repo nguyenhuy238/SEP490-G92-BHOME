@@ -52,8 +52,8 @@ Beneficiaries là occupants Verified/liên kết tài khoản trong Contract, ch
 đã nộp cọc. Owner bắt buộc đối chiếu khoản nộp/người nhận; không tự chọn representative.
 
 POST body `{refund:{beneficiaryResidentId,amount,reason,humanConfirmed:true},expectedFinancialReference,
-beneficiaryVerified:true,noDeductionsConfirmed:true}` + UUID Idempotency-Key. Owner xác nhận người
-nhận chính là người nộp theo bằng chứng đã kiểm và không khấu trừ; attestation/reference giữ trong
+beneficiaryVerified:true,noDeductionsConfirmed:true}` + UUID Idempotency-Key. Theo BR-30 (12/11/2026), Owner xác nhận người
+nhận theo thỏa thuận hợp đồng và không khấu trừ; attestation/reference giữ trong
 append-only history `SecurityDepositRefundV1`. Cho phép partial return trong giới hạn khả dụng.
 Quyết định/execution/evidence dùng ba route `/refund-requests/{id}/...` hiện hữu, cùng
 version/key/hash/private storage/recovery guards. RefundView có `sourcePaymentId:null`,
@@ -222,3 +222,7 @@ Các nguồn cũ không phân loại tiếp tục manual review; không migratio
 ## 12/11/2026 — Lịch sử Tenant và thông báo receipt refund
 
 Ghi chú thiếu Tenant history/receipt notifications ở các mốc phía trên được cập nhật: Tenant đã có API scoped `/api/v1/tenant/refunds` và panel lịch sử của chính beneficiary, kể cả không còn current Room. Receipt excess refund phát thông báo persistent theo lịch sử committed, chỉ Owner và đúng actual payer có Tenant account; external/pre-account chỉ Owner. Target phải resolve lại qua notification API trước khi điều hướng. [Quy tắc và loại target](NOTIFICATIONS.md) mô tả chống trùng, proof gate, recipient và giới hạn provider; các số browser cũ không là bằng chứng acceptance mới cho slice này. Canonical reversal/adjustment-created excess và principal refund cho external payer vẫn chưa hoàn tất.
+
+## 12/11/2026 — BR-30: người nhận Security Deposit theo thỏa thuận
+
+Người dùng đã chọn “Hoàn cho người nhận theo thỏa thuận hợp đồng, Owner xác nhận”. UI SecurityDeposit yêu cầu xác nhận nguồn tiền và người nhận theo thỏa thuận, không buộc khai người nhận là người nộp ban đầu. Hồ sơ mới lưu `beneficiaryBasis=CONTRACT_AGREEMENT_OWNER_CONFIRMED` trong append-only SecurityDepositRefundV1, cùng contract/source reference và Owner audit hiện có; không gán lại basis cho lịch sử cũ hoặc đổi replay fingerprint. Source-stale, available amount, offset/deduction, approval và execution proof giữ nguyên. Receipt excess vẫn theo actual payer; Holding refund giữ xác minh người nộp hiện hành. Slice này hỗ trợ recipient đủ điều kiện hiện có; người nhận ngoài cohort/external cần workflow dữ liệu tiếp theo, không khai sai receiver thành bank payer.

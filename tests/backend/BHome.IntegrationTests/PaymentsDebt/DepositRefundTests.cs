@@ -52,6 +52,15 @@ public sealed partial class PaymentLedgerTests
         var created = await Task.WhenAll(Post(owner, sourceRoute, input, key), Post(owner, sourceRoute, input, key));
         var row = await RefundValue<RefundView>(created[0]); Assert.Equal(row.Id, (await RefundValue<RefundView>(created[1])).Id);
         Assert.Null(row.SourcePaymentId); Assert.Equal(w.Contract, row.SourceDepositContractId);
+        await using (var savedScope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var saved = savedScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal("CONTRACT_AGREEMENT_OWNER_CONFIRMED", await saved.Database.SqlQuery<string>($"""
+                SELECT h->'state'->>'beneficiaryBasis' AS "Value" FROM refund_requests r
+                CROSS JOIN LATERAL jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
+                WHERE r.id={row.Id} AND h->>'recordType'='SecurityDepositRefundV1' ORDER BY n LIMIT 1
+                """).SingleAsync());
+        }
         var tenantRefund = Assert.Single((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync("/api/v1/tenant/refunds"))).Items);
         Assert.Equal("SecurityDeposit", tenantRefund.SourceKind); Assert.Equal(row.Id, tenantRefund.Id); Assert.Equal("REQUESTED", tenantRefund.Status);
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);

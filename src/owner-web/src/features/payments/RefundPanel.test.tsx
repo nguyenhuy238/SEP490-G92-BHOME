@@ -40,12 +40,16 @@ beforeEach(() => {
   vi.resetAllMocks();
   request.mockResolvedValue(source);
 });
-it('uses the deposit source, requires depositor and zero-deduction consent, and resets consent/key when obligations change', async () => {
+it('uses the agreed Security Deposit recipient, requires Owner consent, and resets consent/key when obligations change', async () => {
   let current = {
     ...source,
     sourcePaymentId: null,
     sourceDepositContractId: 'root',
     verifiedDepositAmount: '20000',
+    beneficiaries: [
+      ...source.beneficiaries,
+      { id: 'agreed-recipient', label: 'Synthetic agreed recipient' },
+    ],
     excessAmount: '0',
     financialReference: 'D1',
     blockers: [],
@@ -61,16 +65,21 @@ it('uses the deposit source, requires depositor and zero-deduction consent, and 
     expect.anything(),
   );
   fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn đã xác minh'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic agreed recipient' }));
   fireEvent.change(screen.getByLabelText('Số tiền yêu cầu hoàn (VND)'), {
     target: { value: '20000' },
   });
   fireEvent.change(screen.getByLabelText('Lý do yêu cầu hoàn'), {
-    target: { value: 'Original depositor checked' },
+    target: { value: 'Contract recipient checked by Owner' },
   });
   const create = screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' });
-  const general = 'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn';
-  const depositor = 'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp';
+  const general = 'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng';
+  const depositor = 'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc';
+  expect(
+    screen.queryByLabelText(
+      'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    ),
+  ).not.toBeInTheDocument();
   const deductions = 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý';
   fireEvent.click(screen.getByLabelText(general));
   expect(create).toBeDisabled();
@@ -84,9 +93,9 @@ it('uses the deposit source, requires depositor and zero-deduction consent, and 
   expect(first[0]).toBe('/api/v1/contracts/source/deposit-refunds');
   expect(JSON.parse(first[1].body)).toEqual({
     refund: {
-      beneficiaryResidentId: 'payer',
+      beneficiaryResidentId: 'agreed-recipient',
       amount: '20000',
-      reason: 'Original depositor checked',
+      reason: 'Contract recipient checked by Owner',
       humanConfirmed: true,
     },
     expectedFinancialReference: 'D1',
@@ -169,8 +178,8 @@ it('binds a remainder refund to the approved deduction instead of claiming there
     target: { value: 'Only return the remainder' },
   });
   for (const label of [
-    'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn',
-    'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng',
+    'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc',
     'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại',
   ])
     fireEvent.click(screen.getByLabelText(label));
@@ -211,8 +220,8 @@ it('requires confirmation of source-specific deposit offsets before refunding th
     target: { value: 'Verified remaining deposit after approved offsets' },
   });
   for (const label of [
-    'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn',
-    'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng',
+    'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc',
     'Tôi đã đối chiếu 100.000 ₫ cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại',
   ])
     fireEvent.click(screen.getByLabelText(label));
@@ -228,7 +237,27 @@ it('requires confirmation of source-specific deposit offsets before refunding th
   });
   expect(body.expectedDeductionPlanId).toBeUndefined();
 });
-function mount(kind: 'Receipt' | 'SecurityDeposit' = 'Receipt') {
+it('keeps Holding depositor verification separate from the Security Deposit agreement policy', async () => {
+  request.mockResolvedValue({
+    ...source,
+    sourcePaymentId: null,
+    sourceDepositContractId: 'holding',
+    verifiedDepositAmount: '20000',
+    excessAmount: '0',
+    financialReference: 'H1',
+    blockers: [],
+  });
+  mount('HoldingDeposit');
+  expect(
+    await screen.findByLabelText(
+      'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp',
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByLabelText('Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc'),
+  ).not.toBeInTheDocument();
+});
+function mount(kind: 'Receipt' | 'SecurityDeposit' | 'HoldingDeposit' = 'Receipt') {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}

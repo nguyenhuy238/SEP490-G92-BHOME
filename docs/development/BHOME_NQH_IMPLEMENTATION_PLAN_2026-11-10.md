@@ -68,3 +68,7 @@ Phase 13 vẫn còn browser E2E thực, nghiệm thu native, bộ ảnh/model OC
 ## 12/11/2026 — Receipt refund notifications
 
 Đã hoàn tất slice thông báo receipt refund qua committed history, scoped inbox, reauthorized target, Owner Web source-receipt navigation và Tenant own-refund history; external/pre-account không tạo tài khoản. Kênh ngoài kiểm lại eligibility trước gửi. Local regression đã ghi ở results; chưa có browser/provider acceptance mới. Các gap adjustment/reversal, external principal, payer ngoài cohort và các phần Phase 13 còn lại vẫn cần tiếp tục.
+
+## 12/11/2026 — Người nhận Security Deposit
+
+BR-30 đã được người dùng quyết định: theo thỏa thuận hợp đồng, Owner xác nhận. Đã nối UI/basis lịch sử và kiểm thử recipient hợp lệ hiện hữu. Tiếp theo sửa thông báo để đúng beneficiary, rồi mở rộng receiver ngoài cohort/external theo mô hình phù hợp; không áp rule actual payer của receipt excess sang principal.

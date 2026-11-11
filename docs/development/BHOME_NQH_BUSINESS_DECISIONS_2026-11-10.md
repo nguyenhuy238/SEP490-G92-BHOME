@@ -36,6 +36,10 @@ Nguồn phê duyệt: yêu cầu “FULL IMPLEMENTATION, BUSINESS ALIGNMENT, E2E
 
 Thay thế rõ các yêu cầu cũ: external-only signing không còn là mode duy nhất; account-before-signing bị bỏ; invoice credit không triển khai; physical Room release không còn phụ thuộc financial completion; OQ-08 email và OQ-02 Owner approval được giải quyết bởi BR-05/06/16. Không thêm Owner unrestricted early termination hoặc full Mobile finance.
 
+## BR-30 — Người nhận phần Security Deposit còn lại (12/11/2026)
+
+Quyết định trực tiếp trong hội thoại, sau câu hỏi về nhiều người từng nộp cọc: **“Hoàn cho người nhận theo thỏa thuận hợp đồng, Owner xác nhận”.** Người nhận principal Security Deposit không được tự suy từ người đại diện hoặc người chuyển tiền đầu tiên. Owner đối chiếu thỏa thuận hợp đồng và xác nhận người nhận; giữ nguồn cọc, số tiền còn lại, approval, execution proof và audit. BR-18 về hoàn tiền chuyển dư cho actual payer vẫn áp dụng riêng cho receipt excess. Không tự chia theo tỷ lệ hoặc chọn FIFO/LIFO; không tạo tài khoản/Resident giả. Quyết định này chưa quy định hình thức sửa thỏa thuận hoặc nghĩa vụ ký thêm, nên không tự thêm các điều kiện đó.
+
 ## Quyết định còn mở và verification blockers
 
 | ID      | Nội dung                                                                            | Trạng thái / cách xử lý                                                                           |

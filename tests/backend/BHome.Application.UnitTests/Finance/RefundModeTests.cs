@@ -38,6 +38,22 @@ public sealed class RefundModeTests
     }
     private sealed class User(string role) : ICurrentUser
     { public Guid? UserId => Guid.Parse("00000000-0000-0000-0000-000000000123"); public bool IsInRole(string value) => role == value; }
+    [Fact]
+    public async Task SecurityDepositRecordsOwnerConfirmedContractAgreementWithoutChangingReceiptActualPayerBasis()
+    {
+        var repo = new Source();
+        var service = new RefundService(repo, new NoStorage(), new NoImages(), new User("Owner"), TimeProvider.System, new(true));
+        var contract = Guid.NewGuid();
+        await service.CreateDepositAsync(contract,
+            new(new(repo.Person, 100, "Synthetic recipient agreed in Contract", true), "DEPOSIT-test", true, true), Guid.NewGuid(), default);
+        Assert.Equal("CONTRACT_AGREEMENT_OWNER_CONFIRMED", repo.Saved!.State.BeneficiaryBasis);
+        Assert.Equal(contract, repo.Saved.State.SettlementContractId);
+        Assert.Equal(repo.Person, repo.Saved.BeneficiaryResidentId);
+        Assert.True(repo.Saved.State.BeneficiaryVerified);
+        await service.CreateAsync(Guid.NewGuid(), new(repo.Person, 100, "Synthetic actual payer excess", true), Guid.NewGuid(), default);
+        Assert.Null(repo.Saved!.State.BeneficiaryBasis);
+        Assert.Equal("ExcessReceiptRefundV1", repo.Saved.State.Classification);
+    }
     [Theory]
     [InlineData("Owner", 1, 20, 403)]
     [InlineData("Staff", 1, 20, 403)]
@@ -63,14 +79,16 @@ public sealed class RefundModeTests
     {
         public Task<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>> TenantListAsync(Guid tenant, int page, int pageSize, CancellationToken t) => throw new InvalidOperationException();
         public Guid Person { get; } = Guid.NewGuid(); public int Writes; public int Reads;
+        public RefundRecord? Saved { get; private set; }
         public Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t) => work();
         public Task<RefundSourceData> SourceAsync(Guid id, CancellationToken t)
         { Reads++; return Task.FromResult(new RefundSourceData(100, true, [new(Person, "Synthetic")], [])); }
-        public Task<RefundSourceData> DepositSourceAsync(Guid id, CancellationToken t) => SourceAsync(id, t);
+        public async Task<RefundSourceData> DepositSourceAsync(Guid id, CancellationToken t) => (await SourceAsync(id, t)) with
+        { DepositContractId = id, FinancialReference = "DEPOSIT-test", AvailableDeposit = 100 };
         public Task<RefundRecord?> OperationAsync(Guid key, CancellationToken t) => Task.FromResult<RefundRecord?>(null);
         public Task<RefundRecord> GetAsync(Guid id, CancellationToken t) => throw new InvalidOperationException();
         public Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken t) => throw new InvalidOperationException();
         public Task SaveAsync(RefundRecord record, bool create, Guid actor, string action, DateTimeOffset now, CancellationToken t)
-        { Writes++; return Task.CompletedTask; }
+        { Saved = record; Writes++; return Task.CompletedTask; }
     }
 }
