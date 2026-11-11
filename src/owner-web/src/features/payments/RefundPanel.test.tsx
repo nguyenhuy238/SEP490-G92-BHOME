@@ -334,6 +334,7 @@ it('refreshes approval and completion only from the server and sends execution a
     if (init?.method === 'POST' && url.endsWith('/execution')) {
       expect(init.body).toBeInstanceOf(FormData);
       expect((init.body as FormData).get('humanConfirmed')).toBe('true');
+      expect((init.body as FormData).get('executedAt')).toBe('2026-11-06T05:00:12.345Z');
       current = { ...row, status: 'COMPLETED', version: 3 };
     }
     return init?.method === 'POST' ? current : { ...source, requests: [current] };
@@ -354,8 +355,12 @@ it('refreshes approval and completion only from the server and sends execution a
   fireEvent.change(screen.getByLabelText('Tham chiếu giao dịch hoàn trên sao kê'), {
     target: { value: 'SYN-REFUND' },
   });
+  expect(screen.getByLabelText('Thời gian hoàn thực tế (giờ Việt Nam)')).toHaveAttribute(
+    'step',
+    '0.001',
+  );
   fireEvent.change(screen.getByLabelText('Thời gian hoàn thực tế (giờ Việt Nam)'), {
-    target: { value: '2026-11-06T12:00:00' },
+    target: { value: '2026-11-06T12:00:12.345' },
   });
   fireEvent.change(screen.getByLabelText('Chứng từ giao dịch hoàn'), {
     target: { files: [new File(['synthetic'], 'test.png', { type: 'image/png' })] },

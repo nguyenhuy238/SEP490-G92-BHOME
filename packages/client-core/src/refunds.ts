@@ -142,11 +142,10 @@ export function refundError(error: unknown): string {
       'Chứng từ thiệt hại không khớp quyết định. Cần Owner đối chiếu lại.',
     refund_amount_unavailable: 'Nguồn tiền đã được giữ chỗ hoặc hoàn. Hãy tải lại nguồn.',
     deposit_refund_confirmation_required:
-      'Cần xác minh người nộp cọc và xác nhận không khấu trừ trước khi lập yêu cầu.',
+      'Cần xác nhận người nhận, nguồn cọc và việc có hoặc không khấu trừ trước khi lập yêu cầu.',
     deposit_refund_not_ready:
       'Cọc chưa đủ điều kiện hoàn. Hãy đọc các nghĩa vụ đang chờ và tải lại nguồn.',
-    refund_verified_payer_required:
-      'Cần xác định đúng người thực trả và hồ sơ đã liên kết trước khi hoàn.',
+    refund_verified_payer_required: 'Cần xác minh hồ sơ người nhận hoàn phù hợp với nguồn tiền.',
     refund_changed: 'Yêu cầu đã thay đổi hoặc chưa ở bước phù hợp. Hãy tải lại.',
     refund_source_changed: 'Nguồn tiền hoặc người nhận đã thay đổi. Cần Owner kiểm tra lại.',
     refund_reference_used: 'Tham chiếu hoàn tiền đã dùng cho yêu cầu khác.',

@@ -72,3 +72,5 @@ Phase 13 vẫn còn browser E2E thực, nghiệm thu native, bộ ảnh/model OC
 ## 12/11/2026 — Người nhận Security Deposit
 
 BR-30 đã được người dùng quyết định: theo thỏa thuận hợp đồng, Owner xác nhận. Đã nối UI/basis lịch sử và kiểm thử recipient hợp lệ hiện hữu. Thông báo principal cũng đã theo beneficiary, kiểm lại target và proof trước delivery. Còn mở rộng receiver ngoài cohort/external theo mô hình phù hợp; không áp rule actual payer của receipt excess sang principal. Chi tiết regression thực chạy ghi ở results.
+
+Phase 13 có thêm browser acceptance local cho Owner hoàn cọc theo thỏa thuận, qua UI thật/ASP.NET test host/PostgreSQL disposable; preconditions được seed và storage substitute. Chưa mở rộng kết quả sang Tenant Mobile/native/provider, các luồng E2E còn lại hoặc full migration/deployment acceptance. Bài browser opt-in có hướng dẫn riêng tại DEPOSIT_AGREEMENT_BROWSER_ACCEPTANCE.md.
