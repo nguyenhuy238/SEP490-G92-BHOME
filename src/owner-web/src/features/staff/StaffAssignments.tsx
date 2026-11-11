@@ -24,7 +24,8 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
   const [reason, setReason] = useState(''),
     [confirm, setConfirm] = useState(''),
     [replacementStaffId, setReplacementStaffId] = useState(''),
-    [editingAssignmentId, setEditingAssignmentId] = useState('');
+    [editingAssignmentId, setEditingAssignmentId] = useState(''),
+    [creating, setCreating] = useState(false);
   const locations = useOwnerQuery<OwnerPage<OwnerLocation>>(
     ['assignment-locations'],
     '/api/v1/locations?page=1&pageSize=100',
@@ -83,6 +84,7 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
       setConfirm('');
       setReason('');
       setEditingAssignmentId('');
+      setCreating(false);
       await Promise.all([
         staffAssignments.refetch(),
         selected.refetch(),
@@ -99,6 +101,22 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={2}>
         <Typography variant="h6">Phân công cơ sở · {staff.fullName}</Typography>
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setCreating(true);
+              setEditingAssignmentId('');
+              setLocation('');
+              setStart(today);
+              setEnd('');
+              setReason('');
+              setReplacementStaffId('');
+            }}
+          >
+            Tạo phân công mới
+          </Button>
+        </Stack>
         <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -117,6 +135,7 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
                   setStart(x.startDate);
                   setEnd(x.endDate);
                   setEditingAssignmentId(x.id);
+                  setCreating(false);
                   setReplacementStaffId('');
                   setReason('');
                 }}
@@ -164,28 +183,39 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={2}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Chỉnh sửa phân công
+              {editingAssignment
+                ? `Chỉnh sửa phân công · ${editingAssignment.locationName}`
+                : creating
+                  ? 'Tạo phân công mới'
+                  : 'Chọn “Chỉnh sửa” tại một phân công hoặc tạo phân công mới'}
             </Typography>
-            <TextField
-              select
-              label="Cơ sở cần xem hoặc phân công"
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                setReplacementStaffId('');
-                setEditingAssignmentId('');
-                setStart(today);
-                setEnd('');
-              }}
-            >
-              <MenuItem value="">Chọn cơ sở</MenuItem>
-              {locations.data?.items.map((x) => (
-                <MenuItem key={x.id} value={x.id}>
-                  {x.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            {location && (
+            {creating && (
+              <TextField
+                select
+                label="Cơ sở cần phân công"
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  setReplacementStaffId('');
+                  setStart(today);
+                  setEnd('');
+                }}
+              >
+                <MenuItem value="">Chọn cơ sở</MenuItem>
+                {locations.data?.items.map((x) => (
+                  <MenuItem key={x.id} value={x.id}>
+                    {x.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {editingAssignment && (
+              <Alert severity="info">
+                Bạn đang cập nhật trực tiếp phân công tại {editingAssignment.locationName}. Thao tác
+                lưu ngày hiệu lực không tạo thêm phân công mới.
+              </Alert>
+            )}
+            {(creating || editingAssignment) && location && (
               <>
                 {changePreview.data && !changePreview.data.canRemove && (
                   <Alert severity="warning">
@@ -207,7 +237,7 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
                   Thay hoặc gỡ phân công có hiệu lực hôm nay; máy chủ kiểm tra và cập nhật công việc
                   còn mở.
                 </Alert>
-                {current && !editingAssignment && (
+                {current && editingAssignment && current.id === editingAssignment.id && (
                   <TextField
                     select
                     label="Người phụ trách mới"
@@ -237,7 +267,7 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
                     { label: 'Đến ngày', render: (x) => x.endDate },
                   ]}
                 />
-                {(!current || editingAssignment) && (
+                {(creating || editingAssignment) && (
                   <>
                     <TextField
                       required
@@ -288,55 +318,57 @@ export function StaffAssignments({ staff }: { staff: Staff }) {
                       Lưu ngày hiệu lực
                     </Button>
                   )}
-                  {!editingAssignment && (
-                    <>
-                      <Button
-                        disabled={
-                          action.busy ||
-                          !staff.isActive ||
-                          !selected.data?.isActive ||
-                          !!assignments.error ||
-                          assignments.isFetching ||
-                          !assignments.data ||
-                          !!current ||
-                          !start ||
-                          !end ||
-                          end < start
-                        }
-                        onClick={() => setConfirm('assign')}
-                      >
-                        Phân công nhân viên này
-                      </Button>
-                      <Button
-                        disabled={
-                          action.busy ||
-                          !staff.isActive ||
-                          !selected.data ||
-                          !!assignments.error ||
-                          assignments.isFetching ||
-                          !current ||
-                          !replacementStaffId ||
-                          !reason.trim()
-                        }
-                        onClick={() => setConfirm('replace')}
-                      >
-                        Thay người phụ trách
-                      </Button>
-                    </>
+                  {creating && (
+                    <Button
+                      variant="contained"
+                      disabled={
+                        action.busy ||
+                        !staff.isActive ||
+                        !selected.data?.isActive ||
+                        !!assignments.error ||
+                        assignments.isFetching ||
+                        !assignments.data ||
+                        !!current ||
+                        !start ||
+                        !end ||
+                        end < start
+                      }
+                      onClick={() => setConfirm('assign')}
+                    >
+                      Tạo phân công
+                    </Button>
                   )}
-                  {editingAssignment && (
+                  {editingAssignment && current?.id === editingAssignment.id && (
+                    <Button
+                      disabled={
+                        action.busy ||
+                        !staff.isActive ||
+                        !selected.data ||
+                        !!assignments.error ||
+                        assignments.isFetching ||
+                        !replacementStaffId ||
+                        !reason.trim()
+                      }
+                      onClick={() => setConfirm('replace')}
+                    >
+                      Thay người phụ trách
+                    </Button>
+                  )}
+                  {(creating || editingAssignment) && (
                     <Button
                       onClick={() => {
                         setEditingAssignmentId('');
+                        setCreating(false);
+                        setLocation('');
                         setReason('');
                         setStart(today);
                         setEnd('');
                       }}
                     >
-                      Hủy chỉnh sửa
+                      Hủy
                     </Button>
                   )}
-                  {!editingAssignment && (
+                  {editingAssignment && current?.id === editingAssignment.id && (
                     <Button
                       color="error"
                       disabled={

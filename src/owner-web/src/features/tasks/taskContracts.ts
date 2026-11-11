@@ -52,6 +52,9 @@ export interface RecurringTemplate extends Omit<TaskWork, 'dueAt'> {
   dueAfterHours: number;
   isActive: boolean;
   version: number;
+  scheduleType?: 'IntervalDays' | 'Daily' | 'Weekly' | 'Monthly';
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
 }
 export const taskStatus: Record<string, string> = {
   Assigned: 'Đã giao',

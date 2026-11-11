@@ -38,7 +38,7 @@ import {
   type TaskEvidence,
   type RecurringTemplate,
 } from './taskContracts';
-import type { Staff } from '../staff/staffContracts';
+import { todayVietnam, type Staff, type StaffAssignment } from '../staff/staffContracts';
 import type { OwnerLocation } from '../../hooks/useOwnerWorkspace';
 const root = '/api/v1/operational-tasks';
 const emptyWork: TaskWork = {
@@ -519,7 +519,15 @@ function taskActionLabel(action: string) {
   };
   return labels[action] ?? action;
 }
-function WorkFields({ work, change }: { work: TaskWork; change: (value: TaskWork) => void }) {
+function WorkFields({
+  work,
+  change,
+  includeDueAt = true,
+}: {
+  work: TaskWork;
+  change: (value: TaskWork) => void;
+  includeDueAt?: boolean;
+}) {
   return (
     <>
       <TextField
@@ -546,14 +554,16 @@ function WorkFields({ work, change }: { work: TaskWork; change: (value: TaskWork
         <MenuItem value="Normal">Bình thường</MenuItem>
         <MenuItem value="High">Cao</MenuItem>
       </TextField>
-      <TextField
-        required
-        type="datetime-local"
-        label="Thời điểm (giờ Việt Nam)"
-        value={work.dueAt}
-        onChange={(e) => change({ ...work, dueAt: e.target.value })}
-        slotProps={{ inputLabel: { shrink: true } }}
-      />
+      {includeDueAt && (
+        <TextField
+          required
+          type="datetime-local"
+          label="Thời điểm (giờ Việt Nam)"
+          value={work.dueAt}
+          onChange={(e) => change({ ...work, dueAt: e.target.value })}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
+      )}
       <FormControlLabel
         label="Bắt buộc minh chứng"
         control={
@@ -589,6 +599,23 @@ function TaskEditor({
       : emptyWork,
   );
   const action = useOwnerAction();
+  const assignments = useOwnerQuery<StaffAssignment[]>(
+    ['task-editor-assignment', location],
+    `/api/v1/staff-location-assignments?locationId=${location}`,
+    !!location && !task,
+  );
+  const staffDirectory = useOwnerQuery<OwnerPage<Staff>>(
+    ['task-editor-staff-directory'],
+    '/api/v1/staff?page=1&pageSize=100',
+    !task,
+  );
+  const today = todayVietnam();
+  const responsible = assignments.data?.find(
+    (item) => item.startDate <= today && today <= item.endDate,
+  );
+  const responsibleName = responsible
+    ? displayStaffName(staffDirectory.data?.items, responsible.staffUserId)
+    : null;
   return (
     <Dialog
       open
@@ -628,6 +655,17 @@ function TaskEditor({
           <Stack spacing={2} sx={{ pt: 1 }}>
             <OwnerFeedback {...action} />
             {!task && <OwnerLocationPicker required simple value={location} change={setLocation} />}
+            {!task && location && (
+              <Alert severity={assignments.error ? 'error' : responsible ? 'success' : 'warning'}>
+                {assignments.error
+                  ? 'Không thể tải phân công Staff của cơ sở. Hãy tải lại trước khi tạo công việc.'
+                  : assignments.isFetching || staffDirectory.isFetching
+                    ? 'Đang kiểm tra Staff phụ trách cơ sở...'
+                    : responsibleName
+                      ? `Staff phụ trách: ${responsibleName}. Công việc sẽ được giao theo phân công đang hiệu lực.`
+                      : 'Chưa có Staff phụ trách. Công việc vẫn được tạo nhưng sẽ ở trạng thái chưa có người phụ trách.'}
+              </Alert>
+            )}
             <WorkFields work={work} change={setWork} />
             {task && (
               <TextField
@@ -645,7 +683,15 @@ function TaskEditor({
         <Button disabled={action.busy} onClick={close}>
           Hủy
         </Button>
-        <Button disabled={action.busy || !location} type="submit" form="task-editor">
+        <Button
+          disabled={
+            action.busy ||
+            !location ||
+            (!task && (assignments.isFetching || staffDirectory.isFetching || !!assignments.error))
+          }
+          type="submit"
+          form="task-editor"
+        >
           Lưu công việc
         </Button>
       </DialogActions>
@@ -678,7 +724,7 @@ function RecurringTemplates({ location }: { location: string }) {
             { label: 'Mẫu', render: (x) => x.title },
             {
               label: 'Lặp lại',
-              render: (x) => `${x.intervalDays} ngày · hạn ${x.dueAfterHours} giờ`,
+              render: (x) => `${recurringLabel(x)} · hạn ${x.dueAfterHours} giờ`,
             },
             { label: 'Lần tiếp', render: (x) => formatInstant(x.nextRunAt) },
             { label: 'Hoạt động', render: (x) => (x.isActive ? 'Có' : 'Không') },
@@ -711,7 +757,10 @@ function RecurringTemplates({ location }: { location: string }) {
           <TemplateEditor
             location={location}
             template={editor}
-            close={() => setEditor(undefined)}
+            close={() => {
+              setEditor(undefined);
+              void list.refetch();
+            }}
           />
         )}
       </Stack>
@@ -738,7 +787,15 @@ function TemplateEditor({
         }
       : emptyWork,
   );
+  const initialRun = vietnamDateInput(template?.nextRunAt ?? '');
+  const [scheduleType, setScheduleType] = useState(
+    template?.scheduleType ?? ('Daily' as NonNullable<RecurringTemplate['scheduleType']>),
+  );
   const [days, setDays] = useState(template?.intervalDays ?? 1),
+    [dayOfWeek, setDayOfWeek] = useState(template?.dayOfWeek ?? 1),
+    [dayOfMonth, setDayOfMonth] = useState(template?.dayOfMonth ?? 1),
+    [startDate, setStartDate] = useState(initialRun.slice(0, 10) || todayVietnam()),
+    [runTime, setRunTime] = useState(initialRun.slice(11, 16) || '08:00'),
     [hours, setHours] = useState(template?.dueAfterHours ?? 24),
     [active, setActive] = useState(template?.isActive ?? true);
   const action = useOwnerAction();
@@ -756,7 +813,14 @@ function TemplateEditor({
           id="recurring-editor"
           onSubmit={(e) => {
             e.preventDefault();
-            const { dueAt, ...fields } = work;
+            const { dueAt: _dueAt, ...fields } = work;
+            const nextRunAt = nextRecurringInstant(
+              scheduleType,
+              startDate,
+              runTime,
+              dayOfWeek,
+              dayOfMonth,
+            );
             void action
               .run(() =>
                 action.command(
@@ -765,9 +829,13 @@ function TemplateEditor({
                   {
                     ...fields,
                     locationId: location,
-                    intervalDays: days,
+                    intervalDays:
+                      scheduleType === 'Weekly' ? 7 : scheduleType === 'IntervalDays' ? days : 1,
                     dueAfterHours: hours,
-                    nextRunAt: vietnamInstant(dueAt),
+                    nextRunAt,
+                    scheduleType,
+                    dayOfWeek: scheduleType === 'Weekly' ? dayOfWeek : null,
+                    dayOfMonth: scheduleType === 'Monthly' ? dayOfMonth : null,
                     isActive: active,
                     version: template?.version ?? 0,
                   },
@@ -780,15 +848,91 @@ function TemplateEditor({
         >
           <Stack spacing={2} sx={{ pt: 1 }}>
             <OwnerFeedback {...action} />
-            <WorkFields work={work} change={setWork} />
+            <WorkFields work={work} change={setWork} includeDueAt={false} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Lịch lặp lại
+            </Typography>
             <TextField
-              type="number"
+              select
               required
-              label="Chu kỳ (ngày)"
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              slotProps={{ htmlInput: { min: 1, max: 365 } }}
-            />
+              label="Tần suất"
+              value={scheduleType}
+              onChange={(e) =>
+                setScheduleType(e.target.value as NonNullable<RecurringTemplate['scheduleType']>)
+              }
+            >
+              <MenuItem value="Daily">Hàng ngày</MenuItem>
+              <MenuItem value="Weekly">Hàng tuần</MenuItem>
+              <MenuItem value="Monthly">Hàng tháng</MenuItem>
+              {scheduleType === 'IntervalDays' && (
+                <MenuItem value="IntervalDays">Theo số ngày (mẫu cũ)</MenuItem>
+              )}
+            </TextField>
+            {scheduleType === 'Weekly' && (
+              <TextField
+                select
+                required
+                label="Ngày chạy trong tuần"
+                value={dayOfWeek}
+                onChange={(e) => setDayOfWeek(Number(e.target.value))}
+              >
+                {weekdays.map((day, index) => (
+                  <MenuItem key={day} value={index + 1}>
+                    {day}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {scheduleType === 'Monthly' && (
+              <TextField
+                select
+                required
+                label="Ngày chạy trong tháng"
+                value={dayOfMonth}
+                onChange={(e) => setDayOfMonth(Number(e.target.value))}
+                helperText="Tháng không có ngày đã chọn sẽ được bỏ qua (ví dụ ngày 30 không chạy trong tháng 2)."
+              >
+                {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
+                  <MenuItem key={day} value={day}>
+                    Ngày {day}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {scheduleType === 'IntervalDays' && (
+              <TextField
+                type="number"
+                required
+                label="Chu kỳ (ngày)"
+                value={days}
+                onChange={(e) => setDays(Number(e.target.value))}
+                slotProps={{ htmlInput: { min: 1, max: 365 } }}
+              />
+            )}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                required
+                type="date"
+                label="Bắt đầu áp dụng từ"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                fullWidth
+                required
+                type="time"
+                label="Giờ tạo công việc"
+                value={runTime}
+                onChange={(e) => setRunTime(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+            <Alert severity="info">
+              {recurringSummary(scheduleType, dayOfWeek, dayOfMonth, runTime)} Thời gian được tính
+              theo giờ Việt Nam.
+            </Alert>
             <TextField
               type="number"
               required
@@ -814,4 +958,59 @@ function TemplateEditor({
       </DialogActions>
     </Dialog>
   );
+}
+
+const weekdays = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
+
+function recurringLabel(template: RecurringTemplate) {
+  switch (template.scheduleType) {
+    case 'Daily':
+      return 'Hàng ngày';
+    case 'Weekly':
+      return `Hàng tuần · ${weekdays[(template.dayOfWeek ?? 1) - 1]}`;
+    case 'Monthly':
+      return `Hàng tháng · ngày ${template.dayOfMonth ?? 1}`;
+    default:
+      return `Mỗi ${template.intervalDays} ngày`;
+  }
+}
+
+function recurringSummary(
+  scheduleType: NonNullable<RecurringTemplate['scheduleType']>,
+  dayOfWeek: number,
+  dayOfMonth: number,
+  runTime: string,
+) {
+  if (scheduleType === 'Weekly')
+    return `Công việc được tạo vào ${weekdays[dayOfWeek - 1]} hàng tuần lúc ${runTime}.`;
+  if (scheduleType === 'Monthly')
+    return `Công việc được tạo vào ngày ${dayOfMonth} hàng tháng lúc ${runTime}.`;
+  if (scheduleType === 'Daily') return `Công việc được tạo hàng ngày lúc ${runTime}.`;
+  return `Mẫu tiếp tục chạy theo chu kỳ số ngày hiện có lúc ${runTime}.`;
+}
+
+function nextRecurringInstant(
+  scheduleType: NonNullable<RecurringTemplate['scheduleType']>,
+  startDate: string,
+  runTime: string,
+  dayOfWeek: number,
+  dayOfMonth: number,
+) {
+  const [year, month, day] = startDate.split('-').map(Number);
+  const cursor = new Date(Date.UTC(year, month - 1, day));
+  const now = new Date();
+  for (let offset = 0; offset < 800; offset += 1) {
+    const isoDay = cursor.getUTCDay() === 0 ? 7 : cursor.getUTCDay();
+    const matches =
+      scheduleType === 'Weekly'
+        ? isoDay === dayOfWeek
+        : scheduleType === 'Monthly'
+          ? cursor.getUTCDate() === dayOfMonth
+          : true;
+    const date = cursor.toISOString().slice(0, 10);
+    const candidate = new Date(`${date}T${runTime}:00+07:00`);
+    if (matches && candidate >= now) return candidate.toISOString();
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  throw new Error('Không thể xác định lần chạy tiếp theo từ lịch đã chọn.');
 }
