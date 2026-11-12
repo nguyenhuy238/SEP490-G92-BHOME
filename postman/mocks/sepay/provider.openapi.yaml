@@ -1,0 +1,31 @@
+openapi: 3.0.3
+info:
+  title: SePay transaction list contract subset
+  version: '2026-11-12'
+  description: Derived from https://developer.sepay.vn/vi/sepay-api/v2/giao-dich/danh-sach
+servers:
+  - url: https://userapi-sandbox.sepay.vn/v2
+paths:
+  /transactions:
+    get:
+      summary: List bank transactions
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, maximum: 100 }
+        - in: query
+          name: since_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: transaction_date_sort
+          schema: { type: string, enum: [asc, desc] }
+      responses:
+        '200':
+          description: Success envelope with data array and meta.pagination
+        '401':
+          description: Invalid API token
+        '429':
+          description: Provider rate limit

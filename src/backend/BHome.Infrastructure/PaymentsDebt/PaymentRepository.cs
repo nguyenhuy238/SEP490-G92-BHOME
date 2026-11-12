@@ -12,6 +12,16 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IPaymentRepository
 {
+    public Task<bool> ProviderReferenceReceivedAsync(string reference, CancellationToken token) => db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+        ? Task.FromResult(false) : db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM payments WHERE provider_code IN ('SEPAY:TEST','SEPAY:LIVE') AND verification_method='AUTO'
+              AND upper(btrim(verification_data->'sepay'->>'bankReference'))={reference}) AS "Value"
+            """).SingleAsync(token);
+    public Task<bool> ManualReferenceReceivedAsync(string reference, CancellationToken token) => db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+        ? Task.FromResult(false) : db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM payments WHERE provider_code NOT IN ('SEPAY:TEST','SEPAY:LIVE')
+              AND upper(btrim(transaction_reference))={reference}) AS "Value"
+            """).SingleAsync(token);
     public Task<bool> ExternalPayerRecordedAsync(Guid transferId, CancellationToken token) => db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
         ? db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h WHERE p.id={transferId} AND h->>'recordType'={ExternalPaymentPayerRecords.Kind}) AS \"Value\"").SingleAsync(token)
         : Task.FromResult(false);

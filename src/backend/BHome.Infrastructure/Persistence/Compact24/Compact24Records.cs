@@ -142,6 +142,7 @@ internal static class Compact24Records
         var payment = Root("PaymentTransfer", "payments", "ProviderIdentity:provider_code BankReference:transaction_reference OccurredAt:received_at Amount:amount Currency:currency TransferDescription:remittance_info VerifiedByUserId:verified_by_user_id VerifiedAt:verified_at");
         payment.CustomFrom = "payments t"; payment.CustomState = "t.verification_data->'compactState'";
         payment.Where = "t.verification_data ? 'compactState'";
+        payment.Read["VerifiedByUserId"] = "COALESCE(t.verified_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid)";
         payment.Write["receiving_account_key"] = "'legacy-unscoped'";
         payment.Write["status"] = "'VERIFIED'"; payment.Write["verification_method"] = "'MANUAL'";
         payment.Write["effect_key"] = "'receipt:'||(@state::jsonb->>'providerIdentity')||':'||(@state::jsonb->>'normalizedReference')";
@@ -151,6 +152,7 @@ internal static class Compact24Records
         var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id TargetSettlementContractId:target_settlement_contract_id SettlementReceivableId:settlement_receivable_id DepositOffsetApprovalId:deposit_offset_approval_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
         allocation.CustomFrom = "payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE";
         allocation.CustomState = "s.data";
+        allocation.Read["VerifiedByUserId"] = "COALESCE(t.created_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid)";
         // Include verified bank receipts allocated to a deposit as well as invoice payments
         // and Holding-to-Main transfers; otherwise the Holding ledger cannot see received money.
         allocation.Where = "t.target_invoice_id IS NOT NULL OR t.target_deposit_contract_id IS NOT NULL OR t.target_settlement_contract_id IS NOT NULL";

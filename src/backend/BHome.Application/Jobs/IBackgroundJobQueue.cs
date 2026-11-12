@@ -11,5 +11,6 @@ public interface IBackgroundJobQueue
 public interface IBackgroundJobHandler
 {
     string Name { get; }
+    bool Enabled => true;
     Task ExecuteAsync(JobExecution job, CancellationToken cancellationToken);
 }
