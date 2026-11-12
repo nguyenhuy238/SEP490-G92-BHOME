@@ -1,5 +1,7 @@
 # Email xác thực BHOME — 12/11/2026
 
+> Bản audit hoàn tất sau tài liệu này: [Authentication final verification](AUTHENTICATION_FINAL_VERIFICATION.md). Staff mới chờ setup ngay từ khi tạo; auth-only worker xử lý post-activation account invitations bằng worker/job hiện có. Kết quả SMTP cũ bên dưới không phải test SMTP mới của lần audit 8 phase.
+
 > Bổ sung được chủ dự án phê duyệt sau triển khai: [xác nhận email trước khi khôi phục mật khẩu](EMAIL_VERIFICATION_FIX_2026-11-12.md). Các phần bên dưới ghi lại phạm vi và kết quả của lần triển khai ban đầu; API hiện tại có thêm email verification theo quyết định này.
 
 Yêu cầu tiếp nối Gmail SMTP, FE-02/UC-01..02, GBR-02/13/14/18, JOB-04 và Report 4 Identity/token design.

@@ -55,8 +55,13 @@ Chưa có file định nghĩa ITC-AUTH-001..026/Round 1 và OQ-AUTH-01..03 trong
 | Phase | Status | Commit | Evidence |
 | --- | --- | --- | --- |
 | 1 Audit | Completed sau kiểm chứng baseline | `40b5c84` | Report này + route audit test + logs baseline |
-| 2 Validation | Completed | xem commit `fix(auth): improve login validation and errors` | 24 unit / 20 IT / 16 Web / 24 Mobile |
-| 3–8 | Pending | — | Thực hiện tuần tự sau commit phase trước |
+| 2 Validation | Completed | `79d26a5` | 24 unit / 20 IT / 16 Web / 24 Mobile |
+| 3 Session | Completed | `e95f0d2` | 13 backend/E2E / 40 Web / 23 Mobile |
+| 4 Profile | Completed | `66db85c` | 63 backend/E2E / 3 Web / 49 Mobile |
+| 5 Password | Completed | `acbd490` | 52 backend / 36 Web / 13 Mobile |
+| 6 Staff invitation | Completed | `4e48db5` | 41 backend + 1 rerun / 7 Web |
+| 7 Tenant provisioning | Completed | `403bce3` | 49 backend / 26 Web |
+| 8 Regression | Completed | Commit chứa báo cáo final | 557 unit / 98 IT/E2E + 2 rerun / 360 Web / 914 Mobile |
 
 ## Phase 2 — Login validation và errors
 
@@ -159,3 +164,11 @@ Owner detail GET residents/{id} thêm projection account (isActive, emailConfirm
 Thực thi cuối Phase 7: 49 backend tests passed (Compact24NotificationMvp, AnonymousSigning, PreAccountOnboarding, OwnerResidentAdministration), 26 Web Tenant/Contract tests passed; Web typecheck/lint và diff check passed. Bao gồm actual Main activation tạo 2 occupant accounts, resident/holding không tạo login, repeated activation không duplicate, explicit existing link reuse, no email-only auto-link, async worker dispatch, enabled synthetic business handler vẫn Pending/0 executions, safe account status, invitation acceptance, SMTP failure giữ Active contract và grant. Lượt đầu test worker thiếu contact_email trong fixture nên bị Owner-review refusal/timeout; đã bổ sung synthetic Owner-approved contact, targeted 4 tests passed, sau đó chạy cả 49 tests passed. Không nới production guard để làm test pass.
 
 Commands: disposable wrapper filter Compact24NotificationMvpTests|AnonymousSigningTests|PreAccountOnboardingTests|OwnerResidentAdministrationTests, BHOME_GMAIL_SMOKE=0; Web tenants + Contracts.test.tsx, typecheck/lint. Logs `.tmp/auth-completion-phase7*` ignored. Mobile không đổi ở phase này; physical native và SMTP thật NOT RUN. Existing internal contract signing là behavior của baseline, không được thay đổi/phê duyệt mới bởi audit auth này; đối chiếu ngoại lệ external-provider SRS vẫn là vấn đề kiến trúc riêng.
+
+## Phase 8 — Regression và bàn giao
+
+Báo cáo đầy đủ: [AUTHENTICATION_FINAL_VERIFICATION.md](AUTHENTICATION_FINAL_VERIFICATION.md), 11 sections, Round 1 nguyên trạng và evidence mới cho ITC-AUTH-001..026/regressions riêng. Restore solution, API Release build 0 warnings/errors; 451 Application + 106 Domain unit; 98 integration/E2E; 360 Web/71 files; 914 Mobile/80 files passed. Typecheck/lint hai client và production Web build passed (bundle chunk-size warning). Thêm 2 targeted rerun passed, dùng tracked Test-Compact24Isolated.ps1 -Configuration Release, kiểm API reset token expired không đổi hash và protected/public anonymous boundary. Không cộng duplicate rerun như unique coverage.
+
+Initial full-run failures không bị che: Web 37 selector/demo fixture fail, Mobile 1 expectation cũ fail, integration 6 established-account fixture fail. Sửa selector email-or-phone; Mobile kiểm access còn hạn trong memory nhưng vẫn xóa refresh credential unknown; established contract actors có EmailConfirmed=true và pending accounts được test riêng. Targeted 37 router/18 contract tests rồi full suites chạy lại passed. Không xóa failing tests hoặc hạ security/permissions. Browser real API evidence: same-origin cookie, Secure/HttpOnly/Strict, nested F5, new tab restore, profile save không logout đều true.
+
+Live SMTP, physical native và live database NOT RUN/không thay đổi. API VS Debug chưa tự restart; bản build kiểm chứng là Release. Không push/merge/migration. Lịch sử file và short English descriptions nằm trong từng phase commit; final report nêu rõ source priority/approved policy và hạn chế deployment/native/SMS.

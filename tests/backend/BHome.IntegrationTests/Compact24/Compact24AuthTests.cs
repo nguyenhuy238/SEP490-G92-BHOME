@@ -40,6 +40,15 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     private const string NewPassword = "Synthetic!Password-927";
 
     [CompactPostgresFact]
+    public async Task AnonymousRequestsCannotReadProtectedProfilesSessionsOrContractsButCanReadThePublishedCatalog()
+    {
+        using var client = fixture.Factory!.CreateClient();
+        foreach (var path in new[] { "/api/v1/auth/me", "/api/v1/session", "/api/v1/account/profile", "/api/v1/contracts" })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/public/locations")).StatusCode);
+    }
+
+    [CompactPostgresFact]
     public async Task InvalidPasswordChangesLeaveBothSessionsAndPasswordHashUnchanged()
     {
         var user = await Seed(); using var a = fixture.Factory!.CreateClient(); using var b = fixture.Factory.CreateClient();

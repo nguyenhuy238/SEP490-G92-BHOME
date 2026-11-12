@@ -85,6 +85,11 @@ public sealed partial class Compact24NotificationMvpTests
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         probe.Failure = null; await SendEmail(host, delivery);
         Assert.Equal(first.ActionUrl, probe.Messages[1].ActionUrl); Assert.Equal(first.IdempotencyKey, probe.Messages[1].IdempotencyKey);
+        var expiredQuery = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(first.ActionUrl!).Fragment.TrimStart('#'));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={w.Tenants[1].Id}");
+        var originalHash = (await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[1].Id)).PasswordHash;
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/reset-password", new { userName = expiredQuery["userName"].ToString(), token = expiredQuery["token"].ToString(), newPassword = "Synthetic!Expired-Rejected-725" })).StatusCode);
+        Assert.Equal(originalHash, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[1].Id)).PasswordHash);
         (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = w.Tenants[2].Email })).EnsureSuccessStatusCode();
         var expired = await AuthenticationDelivery(host, w.Tenants[2].Id);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={w.Tenants[2].Id}");
