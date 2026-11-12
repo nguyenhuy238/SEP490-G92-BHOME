@@ -26,8 +26,9 @@ fail without issuing a session. UserName is not a login request field. Passwords
 passed unchanged to Identity. Login body limit is 16 KiB; oversized requests return
 sanitized 413 ProblemDetails. This describes the current LoginRequest/Controller;
 the former email-only convention was superseded by the implemented phone workflow.
-On success, HTTP 200 returns `userId`, `roles`, `accessToken`, ISO-8601 `expiresAt`, `sessionId`,
-`refreshToken` and `sessionExpiresAt`. An optional `device` label is bounded to 256 characters and
+On success, HTTP 200 returns `accessToken` and, for mobile transport, `refreshToken`. The client derives
+the current `userId`, `role`, access-token expiry and session ID from the signed JWT claims when needed.
+The absolute session expiry remains server-controlled and is not exposed in the response. An optional `device` label is bounded to 256 characters and
 never used as an authorization signal. Roles come
 only from Identity persistence; extra request properties cannot select roles. Responses use
 `Cache-Control: no-store` and `Pragma: no-cache`. Send the token as Bearer authorization for the
@@ -95,7 +96,7 @@ network/503 error preserves it and surfaces the failure. A 403 permission denial
 refresh. See [refresh implementation and verification](../development/REFRESH_TOKEN_SESSIONS.md).
 
 Web opts in using `X-BHome-Client: web` on auth POSTs and browser `credentials: include`. The server
-returns `refreshToken: null` and a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,
+omits `refreshToken` and returns a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,
 host-only, path `/api/v1/auth`. Cookie writes/reads require the custom header and an exact Origin in
 `AuthWeb:AllowedOrigins` or the API's own origin. CORS also needs the Owner origin explicitly allowed.
 General CORS origins (including Public Web) do not automatically qualify for auth cookie transport.
