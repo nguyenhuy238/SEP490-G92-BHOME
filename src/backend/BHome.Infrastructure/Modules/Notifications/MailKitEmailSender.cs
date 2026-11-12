@@ -25,7 +25,11 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         mail.To.Add(new MailboxAddress("", message.Destination));
         mail.MessageId = $"{key}@bhome.notification";
         mail.Subject = EmailTemplate.Subject(message.Title);
-        mail.Body = new BodyBuilder { TextBody = message.Body + (message.ActionUrl is null ? "" : "\n\n" + message.ActionUrl), HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl) }.ToMessageBody();
+        mail.Body = new BodyBuilder
+        {
+            TextBody = message.Body + (message.ActionUrl is null ? "" : "\n\n" + message.ActionUrl),
+            HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl, EmailTemplate.ActionLabel(message.EventType))
+        }.ToMessageBody();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t);
         timeout.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
         using var client = new SmtpClient { Timeout = config.TimeoutSeconds * 1000 };

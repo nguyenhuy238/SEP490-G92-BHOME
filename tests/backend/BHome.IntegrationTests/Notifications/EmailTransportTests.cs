@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Configuration;
 using BHome.Api.Configuration;
+using System.Net;
+using System.Text.RegularExpressions;
 
 namespace BHome.IntegrationTests.Notifications;
 
@@ -69,6 +71,31 @@ public sealed class EmailTransportTests
         Assert.DoesNotContain("<script>", html); Assert.DoesNotContain("<img", html);
         Assert.Contains("<br>", html);
         Assert.Equal("[BHOME] Hóa đơn  Bcc: injected", EmailTemplate.Subject("Hóa đơn\r\nBcc: injected"));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:5173/confirm-email#userName=owner%40example.invalid&token=synthetic-token", "EMAIL_CONFIRMATION_REQUESTED", "Xác nhận email")]
+    [InlineData("https://owner.example.invalid/reset-password#userName=owner&token=synthetic-token", "PASSWORD_RESET_REQUESTED", "Đặt lại mật khẩu")]
+    [InlineData("bhome://accept-invitation?userName=staff&token=synthetic-token", "ACCOUNT_INVITATION", "Thiết lập tài khoản")]
+    public void AuthenticationHtmlKeepsTheFullCopyableUrlBeforeRepeatedContentEvenWhenTheClientRemovesAnchors(string url, string eventType, string label)
+    {
+        var html = EmailTemplate.Html("BHOME", "Repeated authentication body", url, EmailTemplate.ActionLabel(eventType));
+        Assert.Contains(">" + WebUtility.HtmlEncode(label) + "</a>", html);
+        Assert.Contains("href=\"" + WebUtility.HtmlEncode(url) + "\"", html);
+        // Strip tags just as a client that does not preserve the href might do.
+        var visible = WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]*>", ""));
+        Assert.Contains(url, visible);
+        Assert.True(visible.IndexOf(url, StringComparison.Ordinal) < visible.IndexOf("Repeated authentication body", StringComparison.Ordinal));
+        Assert.Contains("sao chép toàn bộ liên kết", visible);
+    }
+
+    [Fact]
+    public void ActionLabelAndCopyableUrlAreEncodedAndOrdinaryEmailsDoNotShowAnEmptyAction()
+    {
+        var html = EmailTemplate.Html("BHOME", "Nội dung", "https://example.invalid/#token=synthetic&value=\"<tag>", "<img src=x>");
+        Assert.DoesNotContain("<img", html); Assert.Contains("&lt;img", html); Assert.Contains("&quot;&lt;tag&gt;", html);
+        var ordinary = EmailTemplate.Html("BHOME", "Nội dung");
+        Assert.DoesNotContain("href=", ordinary); Assert.DoesNotContain("sao chép toàn bộ liên kết", ordinary);
     }
 
     [Fact]
