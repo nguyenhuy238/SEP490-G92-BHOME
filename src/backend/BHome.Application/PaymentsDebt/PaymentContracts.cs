@@ -80,6 +80,8 @@ public sealed class PaymentException(int status, string code) : Exception("Payme
 }
 public interface IPaymentRepository
 {
+    Task<bool> ProviderReferenceReceivedAsync(string reference, CancellationToken token) => Task.FromResult(false);
+    Task<bool> ManualReferenceReceivedAsync(string reference, CancellationToken token) => Task.FromResult(false);
     Task<IReadOnlyList<DepositPayerChoice>> DepositPayersAsync(Guid contractId, CancellationToken token);
     Task<bool> VerifiedReceiptAsync(Guid transferId, CancellationToken token);
     Task<ExternalPaymentPayer?> ExternalPayerAsync(Guid transferId, CancellationToken token);

@@ -18,6 +18,8 @@ Provider receipts use the existing payments table with AUTO verification, durabl
 
 SePay webhook numeric IDs and API v2 UUIDs can differ. Inbox identity is scoped by mode, gateway, receiving account and provider ID. Canonical receipt identity additionally uses a digest of mode, gateway, account and bank reference, so webhook and API backfill cannot credit the same bank reference twice. Conflicting amounts/timestamps/content are rejected.
 
+Manual receipts lack provider account scope. A provider callback that encounters an existing manual bank reference stays in the durable inbox for Owner review. Manual registration that encounters an existing provider reference directs the Owner to the existing receipt. Native allocation guards also block a second effect across these pathways, including direct Contract deposit receipts. Functional reference indexes keep these checks bounded. This guard extends the unreleased SePay migration; no working or production database was migrated.
+
 The webhook durably commits inbox plus a queued reconciliation command before processing money. A processing failure rolls money back while retaining the inbox for JOB-03. Terminal unmatched and ignored events have explicit reasons. Owner can inspect safe event summaries through GET /api/v1/integrations/sepay/events and receipt evidence through existing payment APIs.
 
 ## JOB-03 and provider HTTP verification

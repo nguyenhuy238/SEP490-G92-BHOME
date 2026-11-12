@@ -396,4 +396,46 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         Assert.Equal(HttpStatusCode.Conflict, (await owner.SendAsync(request)).StatusCode);
     }
+
+    [CompactPostgresFact]
+    public async Task ManualAndProviderPathsCannotDoubleCreditTheSameUnscopedBankReference()
+    {
+        await using var first = await Create(); using var owner = await first.Client(first.Owner);
+        var reference = "SYN-MANUAL-FIRST-" + Guid.NewGuid();
+        async Task<HttpResponseMessage> Register(HttpClient actor, Scenario scenario, string bankReference)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/payment-transactions")
+            {
+                Content = JsonContent.Create(new PaymentTransferInput("SYNTHETIC-MANUAL", bankReference, 100000, "VND", DateTimeOffset.UtcNow.AddSeconds(-5),
+                scenario.Code, "Synthetic statement", "Synthetic Owner confirmation", scenario.Invoice, true, true))
+            };
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); return await actor.SendAsync(request);
+        }
+        var registered = await Register(owner, first, reference); registered.EnsureSuccessStatusCode();
+        (await first.Send(100000, reference)).EnsureSuccessStatusCode();
+        await using (var scope = first.Host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            Assert.Single(await db.Set<PaymentTransfer>().Where(p => p.ProposedInvoiceId == first.Invoice).ToArrayAsync());
+            Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == first.Invoice).ToArrayAsync());
+            var events = await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventsAsync(1, 100, default);
+            Assert.Contains(events.Items, e => e.Reason == "legacy_bank_reference_requires_manual_review");
+        }
+        await using var second = await Create(); using var secondOwner = await second.Client(second.Owner);
+        var providerFirst = "SYN-PROVIDER-FIRST-" + Guid.NewGuid();
+        (await second.Send(100000, providerFirst)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await Register(secondOwner, second, providerFirst)).StatusCode);
+        await using var check = second.Host.Services.CreateAsyncScope(); var native = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var shadow = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
+        await native.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO payments(id,provider_code,receiving_account_key,transaction_reference,effect_key,received_at,amount,currency,status,
+              verification_method,verified_by_user_id,verified_at) VALUES({shadow},'SYNTHETIC','unscoped',{providerFirst},{"synthetic-shadow:" + shadow},
+              {now},100000,'VND','VERIFIED','MANUAL',{second.Owner},{now})
+            """);
+        var blocked = await Assert.ThrowsAsync<PostgresException>(() => native.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO payment_allocations(id,source_payment_id,target_deposit_contract_id,amount,operation_key,line_number,created_by_user_id,allocated_at,reason)
+            VALUES({Guid.NewGuid()},{shadow},{second.Contract},100000,{Guid.NewGuid()},1,{second.Owner},{now},'Synthetic duplicate attempt')
+            """));
+        Assert.Equal("23514", blocked.SqlState);
+    }
 }

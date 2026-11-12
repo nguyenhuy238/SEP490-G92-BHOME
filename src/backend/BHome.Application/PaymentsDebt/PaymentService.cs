@@ -81,6 +81,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
         return await repository.TransactionAsync<TransferView>(null, x.ProposedInvoiceId, async () =>
         {
             if (await Replay(key, "register", identity, t) is { } prior) return await TransferAsync(prior, t);
+            if (await repository.ProviderReferenceReceivedAsync(normalized, t)) throw new PaymentException(409, "provider_transaction_requires_existing_receipt");
             var existing = await repository.TransferReferenceAsync(x.ProviderIdentity, normalized, t);
             if (existing is not null)
             {

@@ -37,6 +37,8 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
                 throw new PaymentException(409, "sepay_transaction_identity_conflict");
             return await Finish("Duplicate", "bank_transaction_already_received", prior.Id);
         }
+        if (await payments.ManualReferenceReceivedAsync(PaymentRules.NormalizeReference(tx.ReferenceCode), token))
+            return await Finish("ManualReview", "legacy_bank_reference_requires_manual_review");
         var code = ResolveCode(tx);
         var target = code is null ? null : await repository.ResolveAsync(code, token);
         var receipt = new PaymentTransfer

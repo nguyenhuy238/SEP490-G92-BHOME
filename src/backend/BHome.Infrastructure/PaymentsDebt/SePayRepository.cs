@@ -70,7 +70,7 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
     {
         receipt.Stamp(clock.GetUtcNow(), true);
         var snapshot = JsonSerializer.Serialize(receipt, Json);
-        var proof = JsonSerializer.Serialize(new { eventId = received.Id, mode = received.Mode, providerTransactionId = received.Transaction.Id }, Json);
+        var proof = JsonSerializer.Serialize(new { eventId = received.Id, mode = received.Mode, providerTransactionId = received.Transaction.Id, bankReference = received.Transaction.ReferenceCode }, Json);
         var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = "SePayVerificationV1", state = new { eventId = received.Id, mode = received.Mode, verifiedAt = receipt.VerifiedAt } } }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO payments(id,provider_code,receiving_account_key,transaction_reference,effect_key,received_at,amount,currency,status,
