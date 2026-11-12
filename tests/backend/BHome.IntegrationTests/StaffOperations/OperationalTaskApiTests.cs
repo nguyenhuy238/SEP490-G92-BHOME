@@ -77,6 +77,22 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
     }
 
     [Fact]
+    public async Task LocalOffsetDeadlineFiltersPreserveInclusiveBoundsAndExcludeOtherDays()
+    {
+        var w = await Setup();
+        var due = DateTimeOffset.UtcNow.AddDays(2).ToOffset(TimeSpan.FromHours(7));
+        var task = await Success<TaskView>(await Send(w.Owner, Base, Input(w) with { Work = Input(w).Work with { DueAt = due } }));
+        var start = new DateTimeOffset(due.Year, due.Month, due.Day, 0, 0, 0, due.Offset);
+        var end = start.AddDays(1).AddTicks(-1);
+        async Task<TaskPage<TaskView>> List(DateTimeOffset from, DateTimeOffset to) =>
+            await Success<TaskPage<TaskView>>(await w.Owner.Client.GetAsync(
+                $"{Base}?locationId={w.Location}&page=1&pageSize=1&dueFrom={Uri.EscapeDataString(from.ToString("O"))}&dueTo={Uri.EscapeDataString(to.ToString("O"))}"));
+
+        Assert.Equal(task.Id, Assert.Single((await List(start, end)).Items).Id);
+        Assert.Equal(task.Id, Assert.Single((await List(due, due)).Items).Id);
+        Assert.Empty((await List(start.AddDays(1), end.AddDays(1))).Items);
+    }
+    [Fact]
     public async Task CompleteWorkflowPersistsPrivateEvidenceNotificationsReworkAndOwnerVerification()
     {
         var w = await Setup(); var task = await Success<TaskView>(await Send(w.Owner, Base, Input(w)));

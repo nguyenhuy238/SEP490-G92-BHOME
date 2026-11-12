@@ -241,7 +241,7 @@ export function WorkspaceShell({
         style={[ui.grow, styles.staffBody]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {notificationInbox ? (
+        {notificationInbox || (staff && screen === 'rooms') ? (
           children
         ) : (
           <KeyboardFormScrollView
@@ -256,7 +256,8 @@ export function WorkspaceShell({
               tenantResidence && { gap: 12, paddingTop: 8 },
               tenantInvoice && { gap: 12, paddingTop: 8 },
               tenantHomeLayout && { gap: 20, paddingTop: 12 },
-              screen === 'meter-reading' && { gap: 16 },
+              screen === 'meter-reading' && { gap: 12, paddingTop: 8 },
+              screen === 'rooms' && { gap: 12, paddingTop: 8, paddingBottom: 100 },
             ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}

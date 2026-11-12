@@ -63,6 +63,7 @@ export function LocationRulesTab({ locationId }: { locationId: string }) {
   const queryClient = useQueryClient();
   const [houseRules, setHouseRules] = useState<HouseRuleItem[]>(INITIAL_HOUSE_RULES);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [ruleSearch, setRuleSearch] = useState('');
 
   // Policy versioning dialog state
   const [selectedPolicyForVersion, setSelectedPolicyForVersion] = useState<HouseRuleItem | null>(
@@ -216,6 +217,14 @@ export function LocationRulesTab({ locationId }: { locationId: string }) {
           được hiển thị trong nhóm “Vận hành khác”.
         </Alert>
       )}
+      <TextField
+        fullWidth
+        label="Tìm nội quy"
+        placeholder="Nhập tên hoặc nội dung…"
+        value={ruleSearch}
+        onChange={(e) => setRuleSearch(e.target.value)}
+        sx={{ mb: 2 }}
+      />
       {/* Top Banner explaining Policy Versioning */}
       <Alert
         severity="info"
@@ -280,99 +289,105 @@ export function LocationRulesTab({ locationId }: { locationId: string }) {
 
       {/* Rules Grid */}
       <Grid container spacing={2.5}>
-        {filteredRules.map((rule) => {
-          const isApplied = rule.isAppliedToContracts;
+        {filteredRules
+          .filter((rule) =>
+            `${rule.name} ${rule.content}`
+              .toLocaleLowerCase('vi')
+              .includes(ruleSearch.toLocaleLowerCase('vi')),
+          )
+          .map((rule) => {
+            const isApplied = rule.isAppliedToContracts;
 
-          return (
-            <Grid key={rule.id} size={{ xs: 12, md: 6 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 2.5,
-                  borderRadius: 2.5,
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: '#ffffff',
-                }}
-              >
-                <Stack
-                  direction="row"
-                  sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
-                >
-                  <Chip
-                    size="small"
-                    label={CATEGORY_NAMES[rule.category] || rule.category}
-                    color="primary"
-                    variant="outlined"
-                    sx={{ fontWeight: 750, fontSize: 11 }}
-                  />
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Chip
-                      size="small"
-                      label={isApplied ? 'Đã áp dụng vào hợp đồng' : 'Bản nháp'}
-                      color={isApplied ? 'warning' : 'default'}
-                      sx={{ fontSize: 10, fontWeight: 750 }}
-                    />
-                    <Chip
-                      size="small"
-                      label={`Phiên bản ${rule.version}`}
-                      sx={{
-                        bgcolor: '#ebf2ff',
-                        color: 'primary.main',
-                        fontWeight: 800,
-                      }}
-                    />
-                  </Stack>
-                </Stack>
-
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>
-                  {rule.name}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
+            return (
+              <Grid key={rule.id} size={{ xs: 12, md: 6 }}>
+                <Paper
+                  variant="outlined"
                   sx={{
-                    mb: 2,
-                    flex: 1,
-                    fontSize: 13.5,
-                    lineHeight: 1.6,
-                    bgcolor: '#f8fafc',
-                    p: 1.5,
-                    borderRadius: 1.5,
-                    border: '1px solid #f1f5f9',
+                    p: 2.5,
+                    borderRadius: 2.5,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    bgcolor: '#ffffff',
                   }}
                 >
-                  {rule.content}
-                </Typography>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                <Stack
-                  direction="row"
-                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Clock size={14} color="#64748b" />
-                    <Typography variant="caption" color="text.secondary">
-                      Hiệu lực: {rule.effectiveDate}
-                    </Typography>
+                  <Stack
+                    direction="row"
+                    sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
+                  >
+                    <Chip
+                      size="small"
+                      label={CATEGORY_NAMES[rule.category] || rule.category}
+                      color="primary"
+                      variant="outlined"
+                      sx={{ fontWeight: 750, fontSize: 11 }}
+                    />
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Chip
+                        size="small"
+                        label={isApplied ? 'Đã áp dụng vào hợp đồng' : 'Bản nháp'}
+                        color={isApplied ? 'warning' : 'default'}
+                        sx={{ fontSize: 10, fontWeight: 750 }}
+                      />
+                      <Chip
+                        size="small"
+                        label={`Phiên bản ${rule.version}`}
+                        sx={{
+                          bgcolor: '#ebf2ff',
+                          color: 'primary.main',
+                          fontWeight: 800,
+                        }}
+                      />
+                    </Stack>
                   </Stack>
 
-                  <Button
-                    size="small"
-                    variant={isApplied ? 'outlined' : 'contained'}
-                    startIcon={isApplied ? <Sparkles size={14} /> : <Edit2 size={14} />}
-                    onClick={() => handleOpenVersionDialog(rule)}
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>
+                    {rule.name}
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mb: 2,
+                      flex: 1,
+                      fontSize: 13.5,
+                      lineHeight: 1.6,
+                      bgcolor: '#f8fafc',
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      border: '1px solid #f1f5f9',
+                    }}
                   >
-                    {isApplied ? 'Tạo phiên bản mới' : 'Chỉnh sửa bản nháp'}
-                  </Button>
-                </Stack>
-              </Paper>
-            </Grid>
-          );
-        })}
+                    {rule.content}
+                  </Typography>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Stack
+                    direction="row"
+                    sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Clock size={14} color="#64748b" />
+                      <Typography variant="caption" color="text.secondary">
+                        Hiệu lực: {rule.effectiveDate}
+                      </Typography>
+                    </Stack>
+
+                    <Button
+                      size="small"
+                      variant={isApplied ? 'outlined' : 'contained'}
+                      startIcon={isApplied ? <Sparkles size={14} /> : <Edit2 size={14} />}
+                      onClick={() => handleOpenVersionDialog(rule)}
+                    >
+                      {isApplied ? 'Tạo phiên bản mới' : 'Chỉnh sửa bản nháp'}
+                    </Button>
+                  </Stack>
+                </Paper>
+              </Grid>
+            );
+          })}
       </Grid>
 
       {/* Policy Versioning Dialog */}

@@ -55,6 +55,9 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
         if (query.Status is { } s && !Enum.IsDefined(s) || query.Priority is { } p && !Enum.IsDefined(p) ||
             query.LocationId == Guid.Empty || query.DueFrom > query.DueTo) throw OperationalTaskException.Invalid("invalid_task_filter");
         var staffFilter = Owner ? query.StaffUserId : Actor;
+        // PostgreSQL timestamptz parameters require UTC; preserve the caller's exact instants.
+        query.DueFrom = query.DueFrom?.ToUniversalTime();
+        query.DueTo = query.DueTo?.ToUniversalTime();
         return await repository.ListAsync(query, staffFilter, Today, Now, t);
     }
     public async Task<TaskView> GetAsync(Guid id, CancellationToken t)

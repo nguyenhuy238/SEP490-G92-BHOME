@@ -15,10 +15,12 @@ export function MainDraftStart({
   api,
   onCancel,
   onList,
+  onReleased,
 }: {
   api: ContractClient;
   onCancel: () => void;
   onList: () => void;
+  onReleased?: (id: string) => void;
 }) {
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
@@ -51,6 +53,7 @@ export function MainDraftStart({
   if (open)
     return (
       <MainDraftScreen
+        onReleased={onReleased}
         initialId={draftId || undefined}
         persistRoute={false}
         onSaved={setDraftId}

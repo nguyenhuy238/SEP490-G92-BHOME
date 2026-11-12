@@ -47,7 +47,7 @@ public sealed partial class ContractService
         Role(Roles.Owner, Roles.Staff); Validate(input); Money(input.HoldingDeposit);
         var now = clock.GetUtcNow();
         if (input.OwnerSignerId == input.TenantUserId || input.StartDate == default || input.EndDate <= input.StartDate ||
-            input.ExpiresAt.Offset != TimeSpan.Zero || input.ExpiresAt <= now || input.ResidentIds is null || input.ResidentIds.Length == 0 ||
+            input.ExpiresAt.Offset != TimeSpan.Zero || input.ExpiresAt <= now || input.ResidentIds is null || input.ResidentIds.Length != 1 ||
             input.ResidentIds.Distinct().Count() != input.ResidentIds.Length || !input.ResidentIds.Contains(input.RepresentativeResidentId) ||
             input.ReservedCapacity is <= 0 || input.ReservedCapacity is { } capacity && capacity < input.ResidentIds.Length)
             throw ContractException.Invalid("invalid_holding_terms");

@@ -176,7 +176,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await using var command = Command("""
             UPDATE contract_residents cr SET actual_residence_from=@actual,registration_status=@status,
                 registration_result_at=@result,owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
-                history=history||jsonb_build_array(jsonb_build_object('action','TenantStatusUpdated','actorId',@actor,
+                history=cr.history||jsonb_build_array(jsonb_build_object('action','TenantStatusUpdated','actorId',@actor,
                     'occurredAt',@now,'status',@status,'note',@note))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
               AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
@@ -185,8 +185,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
               AND (@status<>'Completed' OR (cr.registration_evidence_key IS NOT NULL AND @result IS NOT NULL))
             """);
         command.Parameters.AddWithValue("actual", input.ActualResidenceFrom); command.Parameters.AddWithValue("status", input.Status);
-        command.Parameters.AddWithValue("result", (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
-        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", (object?)input.Note ?? DBNull.Value);
+        command.Parameters.AddWithValue("result", NpgsqlDbType.TimestampTz, (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
+        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", NpgsqlDbType.Text, (object?)input.Note ?? DBNull.Value);
         command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId);
         if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("invalid_residence_transition");
     });
@@ -211,7 +211,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await using var command = Command("""
             UPDATE contract_residents cr SET registration_evidence_key=@key,
                 owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
-                history=history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
+                history=cr.history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
                   'occurredAt',@now,'contentType',@type,'length',@length))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
               AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
@@ -420,7 +420,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         if (existing >= 0 && templates[existing].Version != input.Version) throw OperationsException.Conflict("stale_recurring_template_version");
         if (!id.HasValue && input.Version != 0) throw OperationsException.Invalid("invalid_recurring_template_version");
         var next = new RecurringTaskTemplateView(templateId, input.LocationId, input.Title, input.Requirements, input.Priority,
-            input.EvidenceRequired, input.IntervalDays, input.NextRunAt, input.DueAfterHours, input.IsActive, existing < 0 ? 1 : templates[existing].Version + 1);
+            input.EvidenceRequired, input.IntervalDays, input.NextRunAt, input.DueAfterHours, input.IsActive,
+            existing < 0 ? 1 : templates[existing].Version + 1, input.ScheduleType, input.DayOfWeek, input.DayOfMonth);
         if (existing < 0) templates.Add(next); else templates[existing] = next;
         await SaveTemplates(input.LocationId, templates, actorId, now, "RecurringTemplateSaved", t);
         await tx.CommitAsync(t); return next;
@@ -449,7 +450,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
                 var template = templates[i]; if (!template.IsActive || template.NextRunAt > now) continue;
                 var scheduled = template.NextRunAt; var assignment = await CurrentResponsible(location, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime), t);
                 if (await InsertRecurringTask(template, scheduled, assignment, now, t)) created++;
-                do { scheduled = scheduled.AddDays(template.IntervalDays); } while (scheduled <= now);
+                do { scheduled = RecurringTaskSchedule.Next(template, scheduled); } while (scheduled <= now);
                 templates[i] = template with { NextRunAt = scheduled, Version = template.Version + 1 }; changed = true;
             }
             if (changed) await SaveTemplates(location, templates, Guid.Empty, now, "RecurringTasksGenerated", t);

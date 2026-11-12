@@ -46,7 +46,7 @@ it('exposes Owner-only decision screens without opening them to Tenant', () => {
   }
 });
 
-it('preserves Owner Web Holding decisions while Mobile has no Owner mutation actions', () => {
+it('enables Holding management for Owner on Mobile while other contract decisions remain on Owner Web', () => {
   expect(contractActions(holding('Draft'), null, 'Owner', id).map((x) => x.operation)).toContain(
     'holding-approval',
   );
@@ -59,8 +59,29 @@ it('preserves Owner Web Holding decisions while Mobile has no Owner mutation act
   expect(active).toContain('holding-conversion');
   expect(active).not.toContain('renewals');
   expect(active).not.toContain('expiry-move-out');
-  for (const status of ['Draft', 'PendingSigning', 'PendingActivation', 'Active', 'Cancelled'])
-    expect(mobileContractActions(holding(status), null, 'Owner', id)).toEqual([]);
+  expect(
+    mobileContractActions(holding('Draft'), null, 'Owner', id).map((item) => item.operation),
+  ).toContain('holding-approval');
+  expect(
+    mobileContractActions(holding('PendingActivation'), null, 'Owner', id).map(
+      (item) => item.operation,
+    ),
+  ).toContain('holding-activation');
+  expect(
+    mobileContractActions(holding('Active'), null, 'Owner', id).map((item) => item.operation),
+  ).toContain('holding-conversion');
+  for (const status of ['Draft', 'PendingSigning', 'PendingActivation', 'Active', 'Cancelled']) {
+    expect(mobileContractActions({ ...holding(status), kind: 'Main' }, null, 'Owner', id)).toEqual(
+      [],
+    );
+    expect(
+      mobileContractActions(holding(status), null, 'Staff', id).some((item) =>
+        ['holding-approval', 'holding-activation', 'deposit-verifications'].includes(
+          item.operation,
+        ),
+      ),
+    ).toBe(false);
+  }
 });
 
 it('routes an Owner adjustment notification to the real review screen', async () => {

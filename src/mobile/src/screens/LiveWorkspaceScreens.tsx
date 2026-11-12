@@ -112,6 +112,12 @@ export function StaffHomeScreen() {
           onPress={() => go('prepare-contract')}
         />
         <InfoRow
+          title="Tạo hợp đồng giữ chỗ"
+          icon="file-document-plus-outline"
+          detail="Một người đại diện · Owner duyệt và kích hoạt"
+          onPress={() => go('prepare-contract', { kind: 'Holding' })}
+        />
+        <InfoRow
           title="Trả phòng & kiểm tra"
           icon="clipboard-text-outline"
           detail="Theo hồ sơ hợp đồng thực tế"

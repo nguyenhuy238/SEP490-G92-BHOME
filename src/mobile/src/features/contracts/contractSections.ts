@@ -6,13 +6,15 @@ import {
 export function mobileContractActions(...args: Parameters<typeof contractActions>) {
   const actions = contractActions(...args);
   if (args[2] === 'Owner') {
-    if (args[0].kind === 'Holding') return [];
     return actions.filter((item) =>
       [
         'signing',
         'signing/sync',
         'signing/recover',
         'activate',
+        'holding-approval',
+        'holding-activation',
+        'holding-conversion',
       ].includes(item.operation),
     );
   }

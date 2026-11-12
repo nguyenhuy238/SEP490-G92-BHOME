@@ -61,41 +61,45 @@ export function IdentityPersonCard({
       >
         {status}
       </Pill>
-      <View style={styles.progress}>
-        {(['front', 'back'] as const).map((face) => (
-          <View key={face} style={styles.face}>
-            <Icon
-              source={
-                progress[face] === 'recognized'
-                  ? 'check-circle-outline'
-                  : 'card-account-details-outline'
-              }
-              size={20}
-              color={progress[face] === 'recognized' ? s.green : '#64748B'}
-            />
-            <Text style={styles.faceName}>Mặt {face === 'front' ? 'trước' : 'sau'}</Text>
-            <Text style={styles.faceStatus}>
-              {
-                { unscanned: 'Chưa quét', captured: 'Đã chụp', recognized: 'Đã nhận diện' }[
-                  progress[face]
-                ]
-              }
-            </Text>
-          </View>
-        ))}
-      </View>
-      <Button
-        mode="contained"
-        buttonColor={s.blue}
-        contentStyle={styles.touch}
-        onPress={onScan}
-        disabled={disabled}
-      >
-        {action}
-      </Button>
+      {person.status !== 'confirmed' && (
+        <View style={styles.progress}>
+          {(['front', 'back'] as const).map((face) => (
+            <View key={face} style={styles.face}>
+              <Icon
+                source={
+                  progress[face] === 'recognized'
+                    ? 'check-circle-outline'
+                    : 'card-account-details-outline'
+                }
+                size={20}
+                color={progress[face] === 'recognized' ? s.green : '#64748B'}
+              />
+              <Text style={styles.faceName}>Mặt {face === 'front' ? 'trước' : 'sau'}</Text>
+              <Text style={styles.faceStatus}>
+                {
+                  { unscanned: 'Chưa quét', captured: 'Đã chụp', recognized: 'Đã nhận diện' }[
+                    progress[face]
+                  ]
+                }
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
       {person.status !== 'confirmed' && (
         <Button
           mode="outlined"
+          textColor={s.blue}
+          contentStyle={styles.touch}
+          onPress={onScan}
+          disabled={disabled}
+        >
+          {action}
+        </Button>
+      )}
+      {person.status !== 'confirmed' && (
+        <Button
+          mode="text"
           icon="pencil-outline"
           contentStyle={styles.touch}
           onPress={onManual}

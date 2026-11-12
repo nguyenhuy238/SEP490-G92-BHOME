@@ -72,8 +72,9 @@ export function StaffDashboard() {
           : 'Chưa có cơ sở được phân công';
   const taskValue = preview ? '6' : data.tasks.data ? String(data.tasks.data.totalCount) : '—';
   const pendingInspections = data.inspections.data?.filter((item) => item.status === 'Approved');
-  function open(screen: WorkspaceScreen) {
+  function open(screen: WorkspaceScreen, params?: Record<string, string>) {
     if (screen === 'move-in') setHandover(true);
+    else if (params) go(screen, params);
     else go(screen);
   }
   return (

@@ -5,6 +5,7 @@ import { conciseMessage, showToast, type ToastType } from './toast';
 // State setters do not show notifications on render, and clearing a field never emits a toast.
 export function useFeedbackState(
   type: ToastType = 'error',
+  announce = true,
 ): [string, Dispatch<SetStateAction<string>>] {
   const [message, setMessage] = useState('');
   const current = useRef('');
@@ -14,9 +15,9 @@ export function useFeedbackState(
       const text = raw ? conciseMessage(raw) : '';
       current.current = text;
       setMessage(text);
-      if (text) showToast(type, text);
+      if (text && announce) showToast(type, text);
     },
-    [type],
+    [type, announce],
   );
   return [message, setFeedback];
 }

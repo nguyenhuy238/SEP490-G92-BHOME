@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Alert, Button, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import type {
@@ -27,12 +39,23 @@ export function UtilityWorkspace({ locationId }: { locationId: string }) {
     return <Alert severity="warning">Chỉ Owner được quản lý cấu hình điện nước.</Alert>;
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">Cấu hình điện nước của cơ sở</Typography>
+      <Paper variant="outlined" sx={{ p: 2.5 }}>
+        <Typography variant="h5">Điện & nước</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Quản lý từ biểu giá, công tơ và chỉ số đến hóa đơn nguồn và đối soát theo kỳ. Chọn nhóm
+          nghiệp vụ bên dưới để bắt đầu.
+        </Typography>
+      </Paper>
       <Alert severity="info">
         Giá và định mức do Owner xác minh. Phép tính chính thức, kiểm tra thiếu dữ liệu và chênh
         lệch do máy chủ quyết định.
       </Alert>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable">
+      <Tabs
+        value={tab}
+        onChange={(_, value) => setTab(value)}
+        variant="scrollable"
+        sx={{ bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}
+      >
         {[
           ['tariffs', 'Biểu giá'],
           ['profiles', 'Cấu hình phòng'],
@@ -118,14 +141,21 @@ function TariffsPanel({ locationId }: { locationId: string }) {
           ))}
         </>
       )}
-      {editing && (
-        <TariffEditor
-          key={source?.id ?? 'new'}
-          locationId={locationId}
-          source={source}
-          onClose={() => setEditing(false)}
-        />
-      )}
+      <Dialog open={editing} fullWidth maxWidth="md">
+        <DialogTitle>
+          {source ? 'Thay thế biểu giá điện nước' : 'Thêm biểu giá điện nước'}
+        </DialogTitle>
+        <DialogContent>
+          {editing && (
+            <TariffEditor
+              key={source?.id ?? 'new'}
+              locationId={locationId}
+              source={source}
+              onClose={() => setEditing(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 }
@@ -325,16 +355,21 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
           </Paper>
         ))
       )}
-      {profile !== undefined && (
-        <ProfileEditor
-          key={profile?.id ?? 'new'}
-          locationId={locationId}
-          source={profile}
-          rooms={rooms.data ?? []}
-          tariffs={tariffs.data ?? []}
-          onClose={() => setProfile(undefined)}
-        />
-      )}
+      <Dialog open={profile !== undefined} fullWidth maxWidth="md">
+        <DialogTitle>Cấu hình biểu giá của phòng</DialogTitle>
+        <DialogContent>
+          {profile !== undefined && (
+            <ProfileEditor
+              key={profile?.id ?? 'new'}
+              locationId={locationId}
+              source={profile}
+              rooms={rooms.data ?? []}
+              tariffs={tariffs.data ?? []}
+              onClose={() => setProfile(undefined)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <Typography variant="h6">Định mức theo kỳ đã lưu</Typography>
       {quotas.error && <ErrorState error={quotas.error} retry={() => void quotas.refetch()} />}
       {quotas.data?.map((row) => (
@@ -346,15 +381,20 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
           <Button onClick={() => setQuota(row)}>Chỉnh định mức</Button>
         </Paper>
       ))}
-      {quota !== undefined && (
-        <QuotaEditor
-          key={quota?.id ?? 'new'}
-          locationId={locationId}
-          source={quota}
-          rooms={rooms.data ?? []}
-          onClose={() => setQuota(undefined)}
-        />
-      )}
+      <Dialog open={quota !== undefined} fullWidth maxWidth="sm">
+        <DialogTitle>Định mức miễn phí theo kỳ</DialogTitle>
+        <DialogContent>
+          {quota !== undefined && (
+            <QuotaEditor
+              key={quota?.id ?? 'new'}
+              locationId={locationId}
+              source={quota}
+              rooms={rooms.data ?? []}
+              onClose={() => setQuota(undefined)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 }

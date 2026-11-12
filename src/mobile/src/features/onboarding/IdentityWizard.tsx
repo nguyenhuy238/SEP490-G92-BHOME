@@ -1,3 +1,4 @@
+import { workflowFailure } from '../../lib/workflowFailure';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, View } from 'react-native';
@@ -43,6 +44,7 @@ interface Props {
   onDismiss?: () => void;
   onComplete: () => void;
   onConfirmed?: () => void;
+  onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
   onStatusChange?: (status: IdentityStatus) => void;
   onCaptureProgress?: (progress: CaptureProgress) => void;
   onCancel: () => void;
@@ -60,6 +62,7 @@ export function IdentityWizard({
   onComplete,
   onCancel,
   onConfirmed,
+  onVerifiedSummary,
   onStatusChange,
   onCaptureProgress,
 }: Props) {
@@ -88,8 +91,8 @@ export function IdentityWizard({
   const fieldOrigin = useRef<Partial<Record<keyof IdentityFields, IdentitySide | 'manual'>>>({});
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useFeedbackState();
-  const [notice, setNotice] = useFeedbackState('info');
+  const [error, setError] = useFeedbackState('error', false);
+  const [notice, setNotice] = useFeedbackState('info', false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const sideWarnings = useRef<Record<IdentitySide, string[]>>({ front: [], back: [] });
   const [placeOfIssue, setPlaceOfIssue] = useState('');
@@ -239,6 +242,7 @@ export function IdentityWizard({
       );
       if (epoch === generation.current) acceptProposal(proposal);
     } catch (e) {
+      workflowFailure('identity', e);
       if (epoch === generation.current) {
         setError(errorMessage(e));
         setNotice('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
@@ -255,7 +259,7 @@ export function IdentityWizard({
     }
   };
   const save = async () => {
-    if (lock.current || !checked) return;
+    if (lock.current || confirmed.current || !checked) return;
     setAttempted(true);
     let input: ReturnType<typeof confirmedIdentity>;
     try {
@@ -289,7 +293,7 @@ export function IdentityWizard({
       confirmed.current = true;
       if (!preview) showSuccess('Đã xác nhận và lưu thông tin CCCD.');
       statusCallback.current?.('confirmed');
-      onConfirmed?.();
+      onVerifiedSummary?.({ fullName: input.fullName, dateOfBirth: input.dateOfBirth });
       current.current = emptyIdentity();
       setFields(emptyIdentity());
       setSources({});
@@ -298,7 +302,9 @@ export function IdentityWizard({
       setWarnings([]);
       setStep('done');
       resetScroll();
+      onConfirmed?.();
     } catch (e) {
+      workflowFailure('identity', e);
       if (epoch === generation.current) setError(errorMessage(e));
     } finally {
       clearTimeout(timeout);

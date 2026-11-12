@@ -70,6 +70,11 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
          where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
          select account.PhoneNumber).SingleOrDefaultAsync(t);
     public string Protect(Contract c, MainDraftState state) => JsonSerializer.Serialize(Encode(state, new(c.OwnerSignerId, c.Id)));
+    public Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) =>
+        (from r in db.Set<Resident>().AsNoTracking()
+         join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
+         where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
+         select account.Email).SingleOrDefaultAsync(t);
     public MainDraftState Unprotect(Contract c) => Decode<MainDraftState>(JsonSerializer.Deserialize<EncryptedIdentity>(c.DraftMetadata)!, new(c.OwnerSignerId, c.Id));
     public Task<ContractDocumentFile?> FileAsync(Guid id, Guid fileId, CancellationToken t) => db.Set<ContractDocumentFile>().AsNoTracking().SingleOrDefaultAsync(f => f.Id == fileId && f.ContractId == id, t);
     public async Task<IReadOnlyList<ContractDocumentFile>> FilesAsync(Guid id, string hash, CancellationToken t) => await db.Set<ContractDocumentFile>().AsNoTracking().Where(f => f.ContractId == id && f.SnapshotHash == hash).OrderByDescending(f => f.RecordedAt).ToArrayAsync(t);

@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import {
-  ActivityIndicator,
-  Button,
-  Checkbox,
-  ProgressBar,
-  Searchbar,
-  Text,
-} from 'react-native-paper';
+import { Button, Checkbox, ProgressBar, Text } from 'react-native-paper';
 import { Action, Box, Heading, InfoRow, Pill, Row, ui } from '../components/WorkspaceKit';
 import {
   ChoiceField,
@@ -18,7 +11,6 @@ import {
 } from '../components/WorkflowControls';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkflowDraft } from '../features/workflows/useWorkflowDraft';
-import { useCaptureScope } from '../features/onboarding/useCaptureScope';
 import { workflowFixtures as f } from '../services/workflowFixtures';
 import { sampleWorkOrders } from '../services/workspaceData';
 import { colors as c } from '../theme/theme';
@@ -306,76 +298,7 @@ export function Inspection({ moveIn = false }: { moveIn?: boolean }) {
     </>
   );
 }
-export function RoomOverview() {
-  const { preview, go } = useWorkspace();
-  const scope = useCaptureScope();
-  const [query, setQuery] = useState('');
-  return (
-    <>
-      <Heading title="Phòng & Người ở" detail="UC-05 / UC-13 • Chỉ dữ liệu được cấp quyền" />
-      <Box>
-        <ChoiceField
-          label="Cơ sở được phân công"
-          value={scope.location}
-          options={scope.locations}
-          onChange={scope.selectLocation}
-        />
-        <Searchbar placeholder="Tìm phòng…" value={query} onChangeText={setQuery} />
-        {scope.loading && <ActivityIndicator />}
-        {!!scope.error && (
-          <>
-            <Text style={ui.red}>{scope.error}</Text>
-            <Button onPress={scope.reload}>Thử lại</Button>
-          </>
-        )}
-        {!scope.loading && !scope.locations.length && <Text>Chưa có cơ sở được phân công.</Text>}
-      </Box>
-      {scope.rooms
-        .filter((room) => room.label.toLowerCase().includes(query.toLowerCase()))
-        .map((room) => (
-          <Box key={room.id}>
-            <Heading
-              title={`Phòng ${room.label}`}
-              detail={
-                preview ? 'BHOME Đống Đa - Tòa B • Mẫu' : 'Phòng trong phạm vi máy chủ trả về'
-              }
-            />
-            {scope.residents
-              .filter((resident) => resident.roomId === room.id)
-              .map((resident) => (
-                <InfoRow
-                  key={resident.id}
-                  icon="account-outline"
-                  title={resident.displayLabel}
-                  detail={
-                    resident.verificationStatus === 1
-                      ? 'Thông tin đã được xác nhận'
-                      : 'Chờ Staff xác nhận thông tin'
-                  }
-                  onPress={() => go('onboarding', { residentId: resident.id })}
-                />
-              ))}
-            {!scope.residents.some((resident) => resident.roomId === room.id) && (
-              <Text variant="bodySmall" style={ui.muted}>
-                Chưa có hồ sơ cư dân được trả về.
-              </Text>
-            )}
-            <Action secondary onPress={() => go('onboarding')}>
-              Tiếp nhận / Xác minh cư dân
-            </Action>
-          </Box>
-        ))}
-      {!!scope.location && !scope.loading && !scope.rooms.length && (
-        <Box>
-          <Text>Không có phòng phù hợp.</Text>
-        </Box>
-      )}
-      <Text variant="labelSmall" style={ui.muted}>
-        Không tải CCCD, số tài khoản hoặc dữ liệu định danh sâu trong danh sách phòng.
-      </Text>
-    </>
-  );
-}
+export { RoomOverview } from './StaffRoomResidentsScreen';
 export function DebtFollowUp() {
   const form = useWorkflowDraft('debt', { outcome: '', note: '' });
   const [room, setRoom] = useState('debt-302');

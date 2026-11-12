@@ -19,17 +19,25 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ContractEvidence } from './ContractEvidence';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
+import { HoldingDepositAllocation } from './HoldingDepositAllocation';
+import type { Readiness } from '../../../../../packages/client-core/src/contracts';
 
 export function ContractWorkflowPanel({
   api,
   contract,
   role,
   section = 'all',
+  showDeposits = true,
+  readiness,
+  onChanged,
 }: {
   api: ContractClient;
   contract: ContractView;
   role: string;
   section?: 'all' | 'documents' | 'history';
+  showDeposits?: boolean;
+  readiness?: Readiness | null;
+  onChanged?: () => void;
 }) {
   const [data, setData] = useState<{
     previews: PreviewDocument[];
@@ -46,8 +54,11 @@ export function ContractWorkflowPanel({
   const documents = section !== 'history';
   const history = section !== 'documents';
   const holding = useWorkspaceQuery<HoldingDepositStatus>(
-    privileged && history && contract.kind === 'Holding'
-      ? `/api/v1/contracts/${contract.id}/holding-deposit`
+    contract.kind === 'Holding' ? `/api/v1/contracts/${contract.id}/holding-deposit` : null,
+  );
+  const room = useWorkspaceQuery<{ status: number }>(
+    contract.kind === 'Holding' && ['Owner', 'Staff'].includes(role)
+      ? `/api/v1/rooms/${contract.roomId}`
       : null,
   );
   const versions = useWorkspaceQuery<Awaited<ReturnType<ContractClient['versions']>>>(
@@ -61,7 +72,9 @@ export function ContractWorkflowPanel({
       try {
         const [previews, deposits, audit] = await Promise.all([
           privileged && documents ? api.previews(contract.id, c.signal) : Promise.resolve([]),
-          privileged && documents ? api.deposits(contract.id, c.signal) : Promise.resolve([]),
+          privileged && documents && showDeposits
+            ? api.deposits(contract.id, c.signal)
+            : Promise.resolve([]),
           history ? api.audit(contract.id, c.signal) : Promise.resolve([]),
         ]);
         if (!c.signal.aborted) setData({ previews, deposits, audit });
@@ -73,7 +86,7 @@ export function ContractWorkflowPanel({
     }
     void load();
     return () => c.abort();
-  }, [api, contract, privileged, documents, history, revision, setError]);
+  }, [api, contract, privileged, documents, history, showDeposits, revision, setError]);
   async function preview() {
     if (lock.current) return;
     lock.current = true;
@@ -92,9 +105,21 @@ export function ContractWorkflowPanel({
   }
   return (
     <>
-      {privileged && history && contract.kind === 'Holding' && (
+      {contract.kind === 'Holding' && (
         <Box>
           <Heading title="Tình trạng cọc giữ chỗ" />
+          <Text>Cọc yêu cầu: {formatContractMoney(contract.requiredDeposit)}</Text>
+          {!contract.approvedAt && contract.status === 'Draft' && (
+            <Text>Chờ Owner phê duyệt. Bản nháp chưa giữ phòng.</Text>
+          )}
+          {room.data && (
+            <Text>
+              Trạng thái phòng:{' '}
+              {['Trống', 'Đang giữ chỗ', 'Đang thuê', 'Không sẵn sàng'][room.data.status] ??
+                'Chưa xác định'}
+            </Text>
+          )}
+          {!!room.error && <Text style={ui.red}>{conciseMessage(room.error)}</Text>}
           {!!holding.error && <Text style={ui.red}>{conciseMessage(holding.error)}</Text>}
           {holding.data?.disposition && (
             <>
@@ -131,7 +156,25 @@ export function ContractWorkflowPanel({
               {formatContractMoney(holding.data.remaining)}
             </Text>
           )}
-          {role === 'Owner' && <Text>Thực hiện hủy hoặc hoàn cọc tại Owner Web.</Text>}
+          {role === 'Owner' &&
+            documents &&
+            contract.approvedAt &&
+            readiness &&
+            !readiness.blockers.includes('verified_signature_evidence_required') &&
+            holding.data &&
+            !/^0(?:\.0+)?$/.test(holding.data.remaining) &&
+            ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status) && (
+              <HoldingDepositAllocation
+                api={api}
+                role={role}
+                contract={contract}
+                onChanged={() => {
+                  holding.reload();
+                  setRevision((value) => value + 1);
+                  onChanged?.();
+                }}
+              />
+            )}
           <Action secondary onPress={holding.reload}>
             Tải lại cọc giữ chỗ
           </Action>
@@ -157,24 +200,29 @@ export function ContractWorkflowPanel({
       {!!error && <Text style={ui.red}>{error}</Text>}
       {documents && privileged && (
         <Box>
-          <Heading title="PDF xem trước" detail="Tạo từ bản nội dung đã niêm phong tại máy chủ" />
+          <Heading title="Bản hợp đồng PDF" detail="Nội dung hợp đồng đã lưu" />
           <Action disabled={busy} onPress={() => void preview()}>
-            {busy ? 'Đang tạo…' : 'Tạo / lấy bản PDF xem trước'}
+            {busy
+              ? 'Đang tạo…'
+              : data?.previews.length
+                ? 'Tạo lại bản xem trước'
+                : 'Tạo bản xem trước'}
           </Action>
           {!loading && !data?.previews.length && <Text>Chưa có bản xem trước.</Text>}
           {data?.previews.map((f) => (
             <Box key={f.id}>
-              <Text>
-                {f.templateId} · v{f.templateVersion} · {formatInstant(f.recordedAt)}
-              </Text>
-              <Text selectable>SHA-256: {f.snapshotHash}</Text>
-              {f.developmentOnly && <Text>DEVELOPMENT — mẫu chưa được duyệt cho Production.</Text>}
+              <Text>Bản xem trước · {formatInstant(f.recordedAt)}</Text>
+              {f.developmentOnly && (
+                <Text variant="bodySmall" style={ui.muted}>
+                  Tài liệu Development · Chưa duyệt cho production
+                </Text>
+              )}
               <ContractEvidence api={api} contractId={contract.id} previewId={f.id} pdf />
             </Box>
           ))}
         </Box>
       )}
-      {documents && privileged && (
+      {documents && privileged && showDeposits && (
         <Box>
           <Heading title="Cọc đã xác minh" />
           {!data?.deposits.length && <Text>Chưa có khoản cọc được xác minh.</Text>}

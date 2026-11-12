@@ -1,8 +1,9 @@
+import { RentalContractFlow } from './RentalContractFlow';
 import { conciseMessage, showError } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
@@ -56,8 +57,10 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     roomId?: string;
     representativeResidentId?: string;
     residentIds?: string;
+    kind?: string;
   }>();
   const [mainDraftId, setMainDraftId] = useState('');
+  const [createHolding, setCreateHolding] = useState(params.kind === 'Holding');
   const [selected, setSelected] = useState(''),
     [create, setCreate] = useState(prepare);
   const [page, setPage] = useState(1),
@@ -110,21 +113,50 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     return () => controller.abort();
   }, [client, page, filter, revision, role]);
   const id = selected || deepId;
+  function released(next: string) {
+    setCreate(false);
+    setMainDraftId('');
+    setSelected(next);
+    setRevision((v) => v + 1);
+    router.setParams({ mainDraftId: '', roomId: '', contractId: next });
+  }
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
-  if (role === 'Owner' && (create || mainDraftId || params.mainDraftId || params.roomId))
+  if (
+    role === 'Owner' &&
+    !createHolding &&
+    (create || createHolding || mainDraftId || params.mainDraftId || params.roomId)
+  )
     return (
       <>
         <OwnerWebNotice task="Chuẩn bị và quyết định hợp đồng" />
         <Action
           onPress={() => {
             setCreate(false);
+            setCreateHolding(false);
             setMainDraftId('');
-            router.setParams({ mainDraftId: '', roomId: '' });
+            router.setParams({ mainDraftId: '', roomId: '', kind: '' });
           }}
         >
           Về danh sách hợp đồng
         </Action>
       </>
+    );
+  if (createHolding && ['Owner', 'Staff'].includes(role))
+    return (
+      <ContractDraftForm
+        api={client}
+        initialRoomId={params.roomId}
+        onCancel={() => {
+          setCreateHolding(false);
+          setCreate(false);
+          router.setParams({ kind: '' });
+        }}
+        onCreated={(next) => {
+          setCreateHolding(false);
+          released(next);
+          router.setParams({ kind: '' });
+        }}
+      />
     );
   if (
     (mainDraftId || params.mainDraftId || (create && params.roomId)) &&
@@ -158,6 +190,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     return (
       <MainDraftScreen
         {...references}
+        onReleased={released}
         onCancel={() => {
           setCreate(false);
           setMainDraftId('');
@@ -172,9 +205,10 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       />
     );
   }
-  if (create && role === 'Staff')
+  if (create && ['Staff', 'Owner'].includes(role))
     return (
       <MainDraftStart
+        onReleased={released}
         api={client}
         onCancel={() => setCreate(false)}
         onList={() => {
@@ -184,23 +218,12 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         }}
       />
     );
-  if (create && ['Owner', 'Staff'].includes(role))
-    return (
-      <ContractDraftForm
-        api={client}
-        onCancel={() => setCreate(false)}
-        onCreated={(next) => {
-          setCreate(false);
-          setSelected(next);
-          setRevision((v) => v + 1);
-        }}
-      />
-    );
   if (id)
     return (
       <>
-        <Action
-          secondary
+        <Button
+          icon="arrow-left"
+          contentStyle={{ minHeight: 44 }}
           onPress={() => {
             setSelected('');
             if (deepId) router.setParams({ contractId: '' });
@@ -208,7 +231,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           }}
         >
           Về danh sách hợp đồng
-        </Action>
+        </Button>
         <LiveContractDetail
           key={id}
           api={client}
@@ -221,6 +244,11 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
               : 'overview'
           }
           onNext={setSelected}
+          onList={() => {
+            setSelected('');
+            router.setParams({ contractId: '' });
+            setRevision((v) => v + 1);
+          }}
         />
       </>
     );
@@ -231,6 +259,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         viewState={staffListView}
         onViewStateChange={setStaffListView}
         onCreate={() => setCreate(true)}
+        onCreateHolding={() => setCreateHolding(true)}
         onOpen={(contract) =>
           contract.onboardingDraft ? setMainDraftId(contract.id) : setSelected(contract.id)
         }
@@ -243,6 +272,9 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         title="Hợp đồng & Vòng đời"
         detail="Theo dõi hợp đồng trong phạm vi tài khoản của bạn."
       />
+      {role === 'Owner' && (
+        <Action onPress={() => setCreateHolding(true)}>Tạo hợp đồng giữ chỗ</Action>
+      )}
       {['Owner', 'Tenant'].includes(role) && (
         <ContractExpiryPanel api={client} onOpen={setSelected} />
       )}
@@ -312,6 +344,7 @@ function LiveContractDetail({
   role,
   actorId,
   onNext,
+  onList,
   initialSection = 'overview',
 }: {
   api: ReturnType<typeof contractClient>;
@@ -319,6 +352,7 @@ function LiveContractDetail({
   role: string;
   actorId: string;
   onNext: (id: string) => void;
+  onList: () => void;
   initialSection?: ContractSection;
 }) {
   const detail = useContractDetail(api, id, role);
@@ -353,6 +387,11 @@ function LiveContractDetail({
     return (
       <MainDraftScreen
         initialId={c.id}
+        onReleased={(next) => {
+          router.setParams({ mainDraftId: '', roomId: '', contractId: next });
+          onNext(next);
+          detail.reload();
+        }}
         roomId={c.roomId}
         representativeResidentId={c.representativeResidentId}
         residentIds={c.residentIds}
@@ -366,40 +405,81 @@ function LiveContractDetail({
         }}
       />
     );
+  const rental =
+    role !== 'Owner' &&
+    c.kind === 'Main' &&
+    ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = mobileContractActions(c, m, role, actorId);
+  const actions = mobileContractActions(c, m, role, actorId).filter(
+    (item) =>
+      c.kind !== 'Holding' ||
+      item.operation !== 'deposit-verifications' ||
+      (!!c.approvedAt && !!r && !r.blockers.includes('verified_signature_evidence_required')),
+  );
   const action = actions.find((a) => a.operation === selectedAction);
-  const signer = role === 'Tenant' && c.tenantUserId === actorId;
+  const signer =
+    (role === 'Tenant' && c.tenantUserId === actorId) ||
+    (c.kind === 'Holding' && role === 'Owner' && c.ownerSignerId === actorId);
   return (
     <>
-      <Heading
-        title={`Phòng ${c.roomNumber || c.roomId}`}
-        detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
-      />
-      {c.isDevelopmentDemo && (
+      {!rental && (
+        <Heading
+          title={`Phòng ${c.roomNumber || c.roomId}`}
+          detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
+        />
+      )}
+      {!rental && c.isDevelopmentDemo && (
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
-      <View style={ui.wrap}>
-        {contractSections.map((item) => (
-          <Button
-            key={item.id}
-            mode={section === item.id ? 'contained' : 'outlined'}
-            contentStyle={{ minHeight: 44 }}
-            disabled={uploading}
-            accessibilityState={{ selected: section === item.id }}
-            onPress={() => {
-              setSection(item.id);
-              setSelectedAction('');
-            }}
-          >
-            {item.label}
-          </Button>
-        ))}
-      </View>
-      {section === 'overview' && <ContractProgress contract={c} readiness={r} />}
+      {role === 'Owner' && c.kind !== 'Holding' && <OwnerWebNotice />}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 8 }}
+      >
+        {contractSections
+          .filter((item) => c.kind !== 'Holding' || !['handover', 'lifecycle'].includes(item.id))
+          .map((item) => (
+            <Button
+              key={item.id}
+              mode={section === item.id ? 'contained' : 'outlined'}
+              contentStyle={{ minHeight: 44 }}
+              disabled={uploading}
+              accessibilityState={{ selected: section === item.id }}
+              onPress={() => {
+                setSection(item.id);
+                setSelectedAction('');
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+      </ScrollView>
+      {rental && (section === 'overview' || section === 'signing') && (
+        <RentalContractFlow
+          key={`${c.id}:${section}`}
+          api={api}
+          contract={c}
+          readiness={r}
+          role={role}
+          actorId={actorId}
+          onChanged={detail.reload}
+          onList={onList}
+        />
+      )}
+      {section === 'overview' && !rental && <ContractProgress contract={c} readiness={r} />}
+      <Button
+        disabled={uploading}
+        onPress={() => {
+          setSelectedAction('');
+          detail.reload();
+        }}
+      >
+        Tải lại trạng thái
+      </Button>
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
-      {section === 'overview' && (
+      {section === 'overview' && !rental && (
         <>
           <Box>
             <Heading title="Kỳ thuê & Người ở" />
@@ -415,6 +495,18 @@ function LiveContractDetail({
               <Text>Ngày kết thúc thực tế: {displayContractDate(c.actualEndDate)}</Text>
             )}
             <Text>Cọc yêu cầu: {formatContractMoney(c.requiredDeposit)}</Text>
+            {c.kind === 'Holding' && (
+              <>
+                <Text>
+                  Hạn giữ chỗ: {c.holdingExpiresAt ? formatInstant(c.holdingExpiresAt) : '—'}
+                </Text>
+                <Text>Owner: {c.approvedAt ? 'Đã duyệt' : 'Chờ duyệt'}</Text>
+                <Text>
+                  Giá thuê được máy chủ xác định theo chính sách phòng. Phòng chỉ được giữ sau khi
+                  Owner kích hoạt.
+                </Text>
+              </>
+            )}
             <Text>Cọc giữ chỗ áp dụng: {formatContractMoney(c.appliedHoldingDeposit)}</Text>
             <Text>
               {c.residentIds.length} người ở · Đại diện:{' '}
@@ -431,7 +523,7 @@ function LiveContractDetail({
           </Box>
         </>
       )}
-      {section === 'signing' && (
+      {section === 'signing' && !rental && (
         <Box>
           <Heading title="Chữ ký và bằng chứng" />
           {[
@@ -463,12 +555,14 @@ function LiveContractDetail({
           {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
         </Box>
       )}
-      {(section === 'signing' || section === 'history') && (
+      {((section === 'signing' && !rental) || section === 'history') && (
         <ContractWorkflowPanel
           api={api}
           contract={c}
           role={role}
           section={section === 'history' ? 'history' : 'documents'}
+          readiness={r}
+          onChanged={detail.reload}
         />
       )}
       {section === 'handover' && ['Active', 'Terminated', 'Superseded'].includes(c.status) && (
@@ -480,13 +574,13 @@ function LiveContractDetail({
           <Text>Chỉ thực hiện bàn giao sau khi hợp đồng được kích hoạt.</Text>
         </Box>
       )}
-      {section === 'signing' && role === 'Staff' && (
+      {section === 'signing' && !rental && role === 'Staff' && (
         <Text style={ui.muted}>
           Staff chuẩn bị và theo dõi hồ sơ. Owner/Tenant thực hiện ký; Owner xác minh cọc và kích
           hoạt.
         </Text>
       )}
-      {section === 'signing' && r && (
+      {section === 'signing' && !rental && r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />
           <Text>Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)}</Text>
@@ -616,29 +710,30 @@ function LiveContractDetail({
           }}
         />
       )}
-      {actions.some((a) => contractActionSection(a.operation) === section) && (
-        <Box>
-          <Heading title="Thao tác theo trạng thái" />
-          {actions
-            .filter((a) => contractActionSection(a.operation) === section)
-            .map((a) => (
-              <Action
-                key={a.operation}
-                disabled={
-                  uploading ||
-                  (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
-                }
-                secondary={!['activate', 'holding-activation'].includes(a.operation)}
-                onPress={() => {
-                  setSelectedAction(a.operation);
-                  setNotice('');
-                }}
-              >
-                {a.label}
-              </Action>
-            ))}
-        </Box>
-      )}
+      {!(rental && section === 'signing') &&
+        actions.some((a) => contractActionSection(a.operation) === section) && (
+          <Box>
+            <Heading title="Thao tác theo trạng thái" />
+            {actions
+              .filter((a) => contractActionSection(a.operation) === section)
+              .map((a) => (
+                <Action
+                  key={a.operation}
+                  disabled={
+                    uploading ||
+                    (['activate', 'holding-activation'].includes(a.operation) && !!r && !r.ready)
+                  }
+                  secondary={!['activate', 'holding-activation'].includes(a.operation)}
+                  onPress={() => {
+                    setSelectedAction(a.operation);
+                    setNotice('');
+                  }}
+                >
+                  {a.label}
+                </Action>
+              ))}
+          </Box>
+        )}
       {action && (
         <ContractActionForm
           key={action.operation}

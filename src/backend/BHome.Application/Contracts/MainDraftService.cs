@@ -89,7 +89,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             if (string.IsNullOrWhiteSpace(identity.FullName) || !identity.HumanConfirmed || identity.DateOfBirth == default || !System.Text.RegularExpressions.Regex.IsMatch(identity.CitizenIdentityNumber ?? "", "^[0-9]{12}$")) blockers.Add("confirmed_identity_required");
             if (r.Id == representative && (identity.DateOfIssue is null || string.IsNullOrWhiteSpace(identity.ResidentialAddress))) blockers.Add("tenant_issue_date_and_address_required");
             var number = identity.CitizenIdentityNumber;
-            summaries.Add(new(r.Id, identity.FullName, number is { Length: >= 4 } ? "********" + number[^4..] : "Chưa có dữ liệu", identity.DateOfIssue, r.Id == representative, await data.PhoneAsync(roomId, r.Id, t)));
+            summaries.Add(new(r.Id, identity.FullName, number is { Length: >= 4 } ? "********" + number[^4..] : "Chưa có dữ liệu", identity.DateOfIssue, r.Id == representative, await data.PhoneAsync(roomId, r.Id, t), r.Id == representative ? await data.EmailAsync(roomId, r.Id, t) : null));
         }
         return new(roomId, room.LocationId, room.Location.Name, room.RoomNumber, room.Location.Address, on, summaries, pricing.Charges,
             settings?.SecurityDeposit, settings?.PaymentTerms, settings?.Owner.FullName, blockers.Distinct().ToArray());
@@ -97,7 +97,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
     private static void Validate(MainDraftInput x)
     {
         if (x.StartDate == default || x.EndDate <= x.StartDate || x.Notes is null || x.Notes.Length > 4000 ||
-           string.IsNullOrWhiteSpace(x.TenantPhone) || x.TenantPhone.Length > 30 || string.IsNullOrWhiteSpace(x.TenantPlaceOfIssue) || x.TenantPlaceOfIssue.Length > 200)
+           string.IsNullOrWhiteSpace(x.TenantPhone) || x.TenantPhone.Length > 30 || x.TenantPlaceOfIssue is null || x.TenantPlaceOfIssue.Length > 200 ||
+           x.TenantEmail is { } email && (string.IsNullOrWhiteSpace(email) || email.Length > 256 || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)))
             throw ContractException.Invalid("invalid_main_draft_input");
     }
     public async Task<MainDraftView> SaveAsync(Guid? id, MainDraftInput x, Guid key, CancellationToken t)
@@ -106,6 +107,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         await Room(x.RoomId, t);
         var existingPhone = await data.PhoneAsync(x.RoomId, x.RepresentativeResidentId, t);
         if (!string.IsNullOrWhiteSpace(existingPhone)) x = x with { TenantPhone = existingPhone };
+        // Contact for this draft only. This never changes an account email or issues an invitation.
+        if (x.TenantEmail is not null) x = x with { TenantEmail = x.TenantEmail.Trim() };
         Validate(x);
         return await repository.InTransactionAsync(x.RoomId, async () =>
         {

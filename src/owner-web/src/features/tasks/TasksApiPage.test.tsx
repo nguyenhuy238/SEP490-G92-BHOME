@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -60,7 +60,9 @@ it('uses the reviewed task version for Owner verification and exposes no Staff e
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Nghiệm thu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Nghiệm thu' });
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /Đã kiểm tra kết quả/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
       '/api/v1/operational-tasks/task/verify',
@@ -82,9 +84,11 @@ it('keeps the same command key on an uncertain verification retry', async () => 
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Nghiệm thu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await screen.findByRole('alert');
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Nghiệm thu' });
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /Đã kiểm tra kết quả/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
+  await within(dialog).findByRole('alert');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
     expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -94,6 +98,7 @@ it('keeps the same command key on an uncertain verification retry', async () => 
 
 it('forwards the selected Staff filter to the server', async () => {
   mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Bộ lọc nâng cao' }));
   const staffFilter = await screen.findByRole('combobox', { name: 'Staff phụ trách' });
   fireEvent.mouseDown(staffFilter);
   fireEvent.click(await screen.findByRole('option', { name: 'Staff synthetic' }));

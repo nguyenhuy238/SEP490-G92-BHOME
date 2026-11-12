@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const native = vi.hoisted(() => ({ listeners: new Set<(state: string) => void>() }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
   StyleSheet: { create: (s: unknown) => s },
   useWindowDimensions: () => ({ width: 320, height: 640 }),
   Keyboard: { dismiss: vi.fn() },

@@ -132,7 +132,8 @@ public sealed record RoomPublicContentWrite(
 
 public sealed record RecurringTaskTemplateView(Guid Id, Guid LocationId, string Title, string Requirements,
     string Priority, bool EvidenceRequired, int IntervalDays, DateTimeOffset NextRunAt,
-    int DueAfterHours, bool IsActive, int Version);
+    int DueAfterHours, bool IsActive, int Version, string ScheduleType = "IntervalDays",
+    int? DayOfWeek = null, int? DayOfMonth = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RecurringTaskTemplateWrite(
@@ -145,7 +146,10 @@ public sealed record RecurringTaskTemplateWrite(
     DateTimeOffset NextRunAt,
     [Range(1, 720)] int DueAfterHours,
     bool IsActive,
-    int Version = 0);
+    int Version = 0,
+    [RegularExpression("IntervalDays|Daily|Weekly|Monthly")] string ScheduleType = "IntervalDays",
+    [Range(1, 7)] int? DayOfWeek = null,
+    [Range(1, 31)] int? DayOfMonth = null);
 
 public sealed record OperationsFile(string ObjectKey, string ContentType, long Length);
 

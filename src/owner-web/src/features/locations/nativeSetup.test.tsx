@@ -115,25 +115,27 @@ function defaultsPage() {
   );
 }
 
-it('reads applied Location defaults and links to the existing template library', async () => {
-  state.request.mockResolvedValue([
-    {
-      id: 'defaults',
-      data: {
+it('reads the Location Room Types from the native API', async () => {
+  state.request.mockResolvedValue({
+    items: [
+      {
+        id: 'defaults',
+        locationId: 'native-location',
         name: 'Synthetic applied defaults',
-        defaults: { capacity: 3, area: 20, amenities: ['Synthetic amenity'] },
+        description: null,
+        defaultCapacity: 3,
+        areaM2: 20,
+        amenities: ['Synthetic amenity'],
+        isActive: true,
+        version: 1,
       },
-    },
-  ]);
+    ],
+    totalCount: 1,
+  });
   defaultsPage();
-  expect(await screen.findByText('Synthetic applied defaults')).toBeInTheDocument();
-  expect(screen.getByText('Sức chứa gợi ý: 3 người')).toBeInTheDocument();
-  expect(
-    screen.getByRole('link', { name: 'Mở thư viện mẫu và áp dụng vào cơ sở' }),
-  ).toHaveAttribute('href', '/configuration/room-types');
-  expect(state.request.mock.calls.map(([path]) => path)).toEqual([
-    '/api/v1/locations/native-location/room-defaults',
-  ]);
+  expect((await screen.findAllByText('Synthetic applied defaults')).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/3 người/).length).toBeGreaterThan(0);
+  expect(state.request.mock.calls[0][0]).toContain('/api/v1/room-types?');
 });
 
 it('keeps Owner configuration unavailable to Staff without querying it', () => {
