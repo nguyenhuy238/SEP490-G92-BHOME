@@ -22,6 +22,7 @@ public sealed class SePayOptions
         return Mode is "Test" or "Live" && (Mode == "Test") == (environment is "Development" or "Testing") &&
             ApiBaseUrl.TrimEnd('/') == expectedApi && WebhookPath == WebhookRoute && PaymentCodePrefix == "BH" &&
             WebhookSecret is { Length: >= 32 } && !WebhookSecret.Contains("replace", StringComparison.OrdinalIgnoreCase) &&
+            (string.IsNullOrEmpty(ApiToken) || !ApiToken.Contains("replace", StringComparison.OrdinalIgnoreCase) && !ApiToken.Contains('\r') && !ApiToken.Contains('\n')) &&
             RequestTimeoutSeconds is >= 1 and <= 30 && SignatureToleranceSeconds is >= 1 and <= 300 &&
             PollIntervalSeconds is >= 30 and <= 3600 && ReceivingAccounts.Count > 0 &&
             ReceivingAccounts.All(a => a.Valid()) && ReceivingAccounts.Select(a => a.LocationId).Distinct().Count() == ReceivingAccounts.Count;

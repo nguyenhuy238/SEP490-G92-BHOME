@@ -50,7 +50,8 @@ public sealed record SePayTransaction(string Id, string Gateway, string Transact
     }
     public void Validate(DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(Id) || Id.Length > 80 || !Regex.IsMatch(Id, "^[A-Za-z0-9-]+$") ||
+        var validId = long.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var numericId) && numericId > 0 || Guid.TryParse(Id, out var uuid) && uuid != Guid.Empty;
+        if (!validId ||
             string.IsNullOrWhiteSpace(Gateway) || Gateway.Length > 80 || !Regex.IsMatch(AccountNumber ?? "", "^[0-9]{6,19}$") ||
             Content is null || Content.Length > 4000 || Description?.Length > 4000 || SubAccount?.Length > 100 || Code?.Length > 100 ||
             TransferType is not ("in" or "out") || !PaymentRules.ValidMoney(TransferAmount) ||

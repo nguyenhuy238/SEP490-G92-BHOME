@@ -6,17 +6,19 @@ using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.PaymentsDebt;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class SePayRepository(Compact24DbContext db, IPaymentRepository payments, IBackgroundJobQueue jobs,
+internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentRepository payments, IBackgroundJobQueue jobs,
     SePayOptions options, TimeProvider clock) : ISePayRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken token) => payments.TransactionAsync(null, null, work, token);
     public Task<Guid> ReceiveAsync(SePayTransaction transaction, CancellationToken token) => TransactionAsync(async () =>
     {
+        if (db is not Compact24DbContext) throw new PaymentException(503, "sepay_storage_unavailable");
         var identity = ReceiptExcessRules.Hash(new[] { options.Mode, transaction.Gateway.ToUpperInvariant(), transaction.AccountNumber, transaction.Id });
         var key = "sepay-event:" + identity;
         var previous = await db.Database.SqlQuery<string>($"SELECT task_data::text AS \"Value\" FROM operational_tasks WHERE source_key={key}").SingleOrDefaultAsync(token);
@@ -32,7 +34,7 @@ internal sealed class SePayRepository(Compact24DbContext db, IPaymentRepository 
             INSERT INTO operational_tasks(id,task_type,source_key,status,assigned_at,task_data)
             VALUES({id},'COMMAND',{key},'Pending',{clock.GetUtcNow()},CAST({data} AS jsonb)||jsonb_build_object('recordType','SePayEventV1'))
             """, token);
-        await jobs.EnqueueAsync(new("sepay-reconcile", id.ToString(), JsonSerializer.Serialize(new { EventId = id })), token);
+        await jobs.EnqueueAsync(new("sepay-reconcile-" + options.Mode.ToLowerInvariant(), id.ToString(), JsonSerializer.Serialize(new { EventId = id })), token);
         return id;
     }, token);
     public async Task<SePayEvent> EventAsync(Guid id, CancellationToken token)
@@ -90,11 +92,16 @@ internal sealed class SePayRepository(Compact24DbContext db, IPaymentRepository 
     public async Task<PagedResult<SePayEventView>> EventsAsync(int page, int pageSize, CancellationToken token)
     {
         if (page < 1 || pageSize is < 1 or > 100 || page > int.MaxValue / pageSize) throw new PaymentException(400, "invalid_payment_query");
+        if (db is not Compact24DbContext) throw new PaymentException(503, "sepay_storage_unavailable");
         var count = await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM operational_tasks WHERE task_data->>'recordType'='SePayEventV1'").SingleAsync(token);
         var values = await db.Database.SqlQuery<SePayEventView>($"""
-            SELECT id AS "Id",task_data->>'mode' AS "Mode",status AS "Status",task_data->>'reason' AS "Reason",
-              (task_data->>'transferId')::uuid AS "TransferId",assigned_at AS "ReceivedAt"
-            FROM operational_tasks WHERE task_data->>'recordType'='SePayEventV1' ORDER BY assigned_at DESC,id LIMIT {pageSize} OFFSET {(page - 1) * pageSize}
+            SELECT e.id AS "Id",e.task_data->>'mode' AS "Mode",
+              CASE WHEN e.status='Pending' AND j.status='Failed' THEN 'ManualReview' ELSE e.status END AS "Status",
+              CASE WHEN e.status='Pending' AND j.status='Failed' THEN 'sepay_technical_retry_exhausted' ELSE e.task_data->>'reason' END AS "Reason",
+              (e.task_data->>'transferId')::uuid AS "TransferId",e.assigned_at AS "ReceivedAt"
+            FROM operational_tasks e LEFT JOIN operational_tasks j ON j.task_type='SYSTEM_JOB'
+              AND j.task_data->>'name'='sepay-reconcile-'||lower(e.task_data->>'mode') AND j.task_data->'payload'->>'EventId'=e.id::text
+            WHERE e.task_data->>'recordType'='SePayEventV1' ORDER BY e.assigned_at DESC,e.id LIMIT {pageSize} OFFSET {(page - 1) * pageSize}
             """).ToArrayAsync(token);
         return new(values, page, pageSize, count);
     }

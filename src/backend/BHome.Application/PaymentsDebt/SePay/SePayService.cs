@@ -41,18 +41,32 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         var target = code is null ? null : await repository.ResolveAsync(code, token);
         var receipt = new PaymentTransfer
         {
-            ProviderIdentity = "SEPAY:" + received.Mode.ToUpperInvariant(), BankReference = reference, NormalizedReference = reference,
-            Amount = tx.TransferAmount, OccurredAt = PaymentRules.Timestamp(tx.OccurredAt), TransferDescription = tx.Content,
-            StatementReference = "SePay/" + received.Mode + "/" + tx.Id, VerificationReason = "Authenticated SePay bank transaction",
-            VerificationSource = "SePay" + received.Mode, VerifiedAt = PaymentRules.Timestamp(clock.GetUtcNow()),
-            IsDevelopmentDemo = received.Mode == "Test", ProposedInvoiceId = target?.Kind == "Invoice" ? target.ObligationId : null,
+            ProviderIdentity = "SEPAY:" + received.Mode.ToUpperInvariant(),
+            BankReference = reference,
+            NormalizedReference = reference,
+            Amount = tx.TransferAmount,
+            OccurredAt = PaymentRules.Timestamp(tx.OccurredAt),
+            TransferDescription = tx.Content,
+            StatementReference = "SePay/" + received.Mode + "/" + tx.Id + "/" + tx.ReferenceCode,
+            VerificationReason = "Authenticated SePay bank transaction",
+            VerificationSource = "SePay" + received.Mode,
+            VerifiedAt = PaymentRules.Timestamp(clock.GetUtcNow()),
+            IsDevelopmentDemo = received.Mode == "Test",
+            ProposedInvoiceId = target?.Kind == "Invoice" ? target.ObligationId : null,
             ProposedDepositContractId = target?.Kind == "Deposit" ? target.ObligationId : null
         };
         await repository.AddReceiptAsync(received, receipt, token);
         async Task<bool> Review(string reason)
         {
-            payments.Add(new PaymentReconciliation { TransferId = receipt.Id, InvoiceId = receipt.ProposedInvoiceId,
-                DepositContractId = receipt.ProposedDepositContractId, Decision = "PendingReview", Reason = reason, OccurredAt = receipt.VerifiedAt });
+            payments.Add(new PaymentReconciliation
+            {
+                TransferId = receipt.Id,
+                InvoiceId = receipt.ProposedInvoiceId,
+                DepositContractId = receipt.ProposedDepositContractId,
+                Decision = "PendingReview",
+                Reason = reason,
+                OccurredAt = receipt.VerifiedAt
+            });
             return await Finish("ManualReview", reason, receipt.Id);
         }
         if (target is null) return await Review("unknown_or_ambiguous_payment_code");
@@ -83,23 +97,47 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             {
                 if (contract.ApprovedAt is null || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
                     return await Review("holding_deposit_requires_manual_review");
-                if (outstanding > 0 && !await contracts.ConfirmProviderHoldingDepositAsync(contract.Id, Math.Min(receipt.Amount, outstanding), receipt.VerifiedAt, token))
-                    return await Review("holding_room_commitment_requires_manual_review");
+                try
+                {
+                    if (outstanding > 0 && !await contracts.ConfirmProviderHoldingDepositAsync(contract.Id, Math.Min(receipt.Amount, outstanding), receipt.VerifiedAt, token))
+                        return await Review("holding_room_commitment_requires_manual_review");
+                }
+                catch (ContractException error) when (error.Status == 409)
+                { return await Review(error.Code); }
             }
         }
         if (outstanding <= 0) return await Review(target.Kind == "Invoice" ? "invoice_already_settled" : "deposit_already_satisfied");
         if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
-        var allocation = new PaymentAllocation { TransferId = receipt.Id, InvoiceId = invoice?.Id,
-            TargetDepositContractId = invoice is null ? target.ObligationId : null, Amount = Math.Min(receipt.Amount, outstanding), AllocatedAt = receipt.VerifiedAt };
+        var allocation = new PaymentAllocation
+        {
+            TransferId = receipt.Id,
+            InvoiceId = invoice?.Id,
+            TargetDepositContractId = invoice is null ? target.ObligationId : null,
+            Amount = Math.Min(receipt.Amount, outstanding),
+            AllocatedAt = receipt.VerifiedAt
+        };
         payments.Add(allocation);
         var reason = receipt.Amount < outstanding ? "verified_partial_payment" : receipt.Amount > outstanding ? "verified_excess_payment_pending_review" : "verified_full_payment";
-        payments.Add(new PaymentReconciliation { TransferId = receipt.Id, InvoiceId = invoice?.Id, DepositContractId = allocation.TargetDepositContractId,
-            Decision = "Allocated", Reason = reason, OccurredAt = receipt.VerifiedAt });
+        payments.Add(new PaymentReconciliation
+        {
+            TransferId = receipt.Id,
+            InvoiceId = invoice?.Id,
+            DepositContractId = allocation.TargetDepositContractId,
+            Decision = "Allocated",
+            Reason = reason,
+            OccurredAt = receipt.VerifiedAt
+        });
         if (invoice is not null)
         {
             var financial = await payments.FinancialsAsync(invoice.Id, token);
-            payments.Add(new PaymentConfirmedEvent { AllocationId = allocation.Id, InvoiceId = invoice.Id, OccurredAt = receipt.VerifiedAt,
-                PaidAmount = financial.AllocatedPayments + allocation.Amount, OutstandingAmount = outstanding - allocation.Amount });
+            payments.Add(new PaymentConfirmedEvent
+            {
+                AllocationId = allocation.Id,
+                InvoiceId = invoice.Id,
+                OccurredAt = receipt.VerifiedAt,
+                PaidAmount = financial.AllocatedPayments + allocation.Amount,
+                OutstandingAmount = outstanding - allocation.Amount
+            });
         }
         return await Finish("Completed", reason, receipt.Id);
     }, token);

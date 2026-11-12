@@ -52,4 +52,15 @@ public sealed class SePaySecurityTests
         options.ApiBaseUrl = "https://userapi.sepay.vn/v2"; Assert.False(options.Valid("Testing"));
         options.Enabled = false; Assert.True(options.Valid("Production"));
     }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("0.5")]
+    [InlineData("1000000000000000000")]
+    public void RejectsInvalidMoneyBeforeIngestion(string amount)
+    {
+        var body = Body.Replace("\"transferAmount\":100000", "\"transferAmount\":" + amount, StringComparison.Ordinal);
+        Assert.Equal(400, Assert.Throws<PaymentException>(() => SePayTransaction.Parse(Encoding.UTF8.GetBytes(body), Now)).Status);
+    }
 }

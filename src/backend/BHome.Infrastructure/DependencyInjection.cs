@@ -182,7 +182,9 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
-        services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
+        services.AddScoped<UnconfiguredBankProvider>();
+        services.AddScoped<IBankTransactionProvider>(p => p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>().Enabled
+            ? p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>() : p.GetRequiredService<UnconfiguredBankProvider>());
         services.AddOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>()
             .Configure<IConfiguration>((options, config) => config.GetSection("SePay").Bind(options))
             .Validate<IHostEnvironment>((options, host) => options.Valid(host.EnvironmentName),
@@ -193,6 +195,19 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayRepository, BHome.Infrastructure.PaymentsDebt.SePayRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry, BHome.Infrastructure.PaymentsDebt.PaymentCodeRegistry>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayService>();
+        services.AddHttpClient<BHome.Infrastructure.PaymentsDebt.SePayApiClient>((p, client) =>
+        {
+            var settings = p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            if (!settings.Enabled) return;
+            client.BaseAddress = new Uri(settings.ApiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayTransactionClient>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>());
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayReconciliationJob>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayPollingJob>();
+        services.AddScoped<BHome.Infrastructure.PaymentsDebt.SePayScheduling>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayScheduling>());
+        services.AddHostedService<BHome.Infrastructure.PaymentsDebt.SePayAutomationWorker>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
@@ -335,7 +350,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
         services.AddScoped<BHome.Application.Contracts.ContractExpiryService>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractExpiryScheduler>();
-        services.AddHostedService<PostgresJobWorker>();
+        services.AddSingleton<PostgresJobWorker>();
+        services.AddHostedService(p => p.GetRequiredService<PostgresJobWorker>());
         return services;
     }
 }

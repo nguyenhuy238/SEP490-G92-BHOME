@@ -4,19 +4,21 @@ using System.Text.RegularExpressions;
 using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
 using BHome.Domain.Billing;
+using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class PaymentCodeRegistry(Compact24DbContext db, IPaymentRepository payments, SePayOptions options) : IPaymentCodeRegistry
+internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRepository payments, SePayOptions options) : IPaymentCodeRegistry
 {
-    public Task<string?> GetAsync(string kind, Guid id, CancellationToken token) => db.Database.SqlQuery<string>($"""
+    public Task<string?> GetAsync(string kind, Guid id, CancellationToken token) => db is not Compact24DbContext ? Task.FromResult<string?>(null) : db.Database.SqlQuery<string>($"""
         SELECT task_data->'state'->>'code' AS "Value" FROM operational_tasks WHERE task_data->>'recordType'='PaymentCodeV1'
           AND task_data->'state'->>'kind'={kind} AND task_data->'state'->>'obligationId'={id.ToString()} AND task_data->'state'->>'mode'={options.Mode}
         """).SingleOrDefaultAsync(token);
     public async Task<string?> IssueAsync(string kind, Guid id, Guid locationId, CancellationToken token)
     {
+        if (db is not Compact24DbContext) return null;
         if (!options.Enabled) return await GetAsync(kind, id, token);
         if (kind is not ("Invoice" or "Deposit") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
         return await payments.TransactionAsync<string?>(null, null, async () =>
@@ -41,6 +43,7 @@ internal sealed class PaymentCodeRegistry(Compact24DbContext db, IPaymentReposit
     }
     public async Task<bool> MatchesAsync(string kind, Guid id, string description, CancellationToken token)
     {
+        if (db is not Compact24DbContext) return false;
         var codes = Regex.Matches(description.ToUpperInvariant(), "(?<![A-Z0-9])BH[0-9]{8}(?![A-Z0-9])").Select(m => m.Value).Distinct().ToArray();
         if (codes.Length != 1) return false;
         return await db.Database.SqlQuery<bool>($"""

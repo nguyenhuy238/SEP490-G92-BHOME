@@ -19,3 +19,13 @@ Provider receipts use the existing payments table with AUTO verification, durabl
 SePay webhook numeric IDs and API v2 UUIDs can differ. Inbox identity is scoped by mode, gateway, receiving account and provider ID. Canonical receipt identity additionally uses a digest of mode, gateway, account and bank reference, so webhook and API backfill cannot credit the same bank reference twice. Conflicting amounts/timestamps/content are rejected.
 
 The webhook durably commits inbox plus a queued reconciliation command before processing money. A processing failure rolls money back while retaining the inbox for JOB-03. Terminal unmatched and ignored events have explicit reasons. Owner can inspect safe event summaries through GET /api/v1/integrations/sepay/events and receipt evidence through existing payment APIs.
+
+## JOB-03 and provider HTTP verification
+
+SePay reconciliation jobs use the existing PostgreSQL worker lease, four-attempt bounded backoff and failure records. Handler names include Test or Live. Unmatched codes are terminal manual-review decisions. Pending events whose jobs exhaust retries appear as ManualReview with sepay_technical_retry_exhausted in the Owner event API. A provider redelivery can recover the retained inbox after the underlying issue is repaired.
+
+SePayAutomationWorker schedules only SePay work when Jobs.Enabled is false. When the general worker is enabled, it processes the same registered handlers. This allows webhook recovery without enabling unrelated billing or Contract jobs. Optional API polling requires ApiToken and uses the official sandbox or Live v2 host, disabled redirects and bounded request/body timeouts.
+
+Polling requests one ascending page of at most 100 records per job. The durable cursor retains sinceId and candidateId while page increases. Only the final page advances sinceId and synchronizedAt. A separate PostgreSQL synchronization lock prevents concurrent checkpoint races. Each received transaction commits through the existing inbox and ledger; a failed page is safe to repeat.
+
+The Postman CLI was unsigned-in, so owner-workspace mock discovery was unavailable. Orbit returned unrelated providers; the implementation follows official SePay documentation. The committed local contract mock and simulation exercise SePayApiClient over actual HTTP using synthetic credentials. Local HTTP tests additionally cover 401, 429, 500, malformed responses and body timeout. Provider account acceptance and public connectivity require external configuration.
