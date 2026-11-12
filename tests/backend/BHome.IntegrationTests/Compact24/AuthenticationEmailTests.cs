@@ -59,6 +59,11 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/reset-password", reset)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await oldSession.GetAsync("/api/v1/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Tenants[0].Email, password = reset.newPassword })).StatusCode);
+        var publisher = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+        await publisher.PublishAuthenticationAsync(default); await publisher.PublishAuthenticationAsync(default);
+        var completed = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_RESET_COMPLETED").ToArrayAsync();
+        Assert.Single(completed);
+        Assert.False(await db.Set<BHome.Domain.Notifications.UserNotification>().AnyAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_CHANGED"));
     }
 
     [CompactPostgresFact]
@@ -211,5 +216,21 @@ public sealed partial class Compact24NotificationMvpTests
         await publisher.PublishAuthenticationAsync(default);
         await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(default, true);
         Assert.Single(probe.Messages, m => m.EventType == "ACCOUNT_ACTIVATED" && m.Destination == w.Tenants[1].Email);
+    }
+
+    [CompactPostgresFact]
+    public async Task AuthenticationPublicRecoveryRateLimitAndUnconfirmedAccountsDoNotSendEmail()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var configured = AuthenticationHost(probe);
+        await using (var scope = configured.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.Where(u => u.Id == w.Tenants[0].Id).ExecuteUpdateAsync(x => x.SetProperty(u => u.EmailConfirmed, false));
+        using var host = configured.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["AuthRateLimit:PermitLimit"] = "2" })));
+        using var anonymous = host.CreateClient();
+        foreach (var identifier in new[] { w.Tenants[0].Email!, "invalid-email" })
+            Assert.Equal(HttpStatusCode.Accepted, (await anonymous.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = identifier })).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await anonymous.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = "unknown@example.invalid" })).StatusCode);
+        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data->>'protectedAuthenticationEmail' IS NOT NULL AND event_data->>'recipient'={w.Tenants[0].Id.ToString()}) AS \"Value\"").SingleAsync());
+        Assert.Empty(probe.Messages);
     }
 }

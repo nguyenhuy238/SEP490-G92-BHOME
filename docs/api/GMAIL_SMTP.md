@@ -74,8 +74,9 @@ emergency có Location/Room và hướng dẫn xử lý. Nội dung hướng ng�
 chi tiết, không chứa CCCD, mật khẩu, JWT, tham chiếu ngân hàng hoặc mã allocation. Template có
 HTML encode, UTF-8, plain-text alternative và subject `[BHOME]`. Announcement giữ body đã
 được tác giả có quyền nhập; HTML vẫn được encode, không thực thi markup.
-Không backfill/replay publication đã phát trước thay đổi này. Account reset/invitation vẫn dùng
-abstraction EMAIL hiện có; token một lần của Auth không được ghi vào notification/outbox để retry.
+Không backfill/replay publication đã phát trước thay đổi này. Account reset/invitation dùng
+abstraction EMAIL hiện có; luồng link, protected outbox và token-expiry-aware retry được cập nhật
+tại [Email xác thực](AUTHENTICATION_EMAIL.md). Raw token không vào inbox/log/API.
 
 ## Trạng thái và vận hành
 
