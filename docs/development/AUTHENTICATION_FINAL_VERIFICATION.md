@@ -10,50 +10,50 @@ Không thay quy tắc ký/thanh toán/kích hoạt hợp đồng, Staff assignme
 
 ## 2. Authentication policies
 
-| Nội dung | Chính sách áp dụng |
-| --- | --- |
-| Login | Email hoặc phone; required/format dưới field; unknown/wrong/inactive dùng cùng generic 401 tiếng Việt |
-| Phone | Canonical 0/+84; từ chối ambiguous identity, không rewrite toàn bộ dữ liệu cũ |
-| Access / refresh | JWT 30 phút; refresh/session tối đa 7 ngày từ login, không gia hạn deadline; rotation, hash và reuse revocation |
-| Profile | Giữ phiên; currentPassword bắt buộc khi đổi liên hệ; version và uniqueness được kiểm tra server |
-| Email mới | Unconfirmed; hủy reset grant cũ; yêu cầu xác minh qua infrastructure hiện có |
-| Phone mới | Unverified; không có SMS provider, không giả OTP |
-| Change/reset password | Identity hash/policy hiện có; change không cho new=current; thành công revoke mọi phiên và yêu cầu đăng nhập lại |
-| Recovery | EmailConfirmed prerequisite; generic 202, cooldown/token một lần/lifetime hiện có 15 phút |
-| Staff | Không phát mật khẩu khởi tạo; pending setup từ lúc tạo, Owner gửi invitation qua action hiện có |
-| Tenant | Quyết định của người dùng: mọi occupant có email Owner duyệt trong Main Contract đang kích hoạt; không cấp từ Holding/Resident đơn thuần |
-| Linking | Reuse liên kết Tenant đã được duyệt và đúng email/role/active; không tự ghép bằng email trùng |
-| Delivery | Queued/Sent là trạng thái queue/provider, không chứng minh thư đến inbox; retry/PendingReview giữ nguyên |
+| Nội dung              | Chính sách áp dụng                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Login                 | Email hoặc phone; required/format dưới field; unknown/wrong/inactive dùng cùng generic 401 tiếng Việt                                    |
+| Phone                 | Canonical 0/+84; từ chối ambiguous identity, không rewrite toàn bộ dữ liệu cũ                                                            |
+| Access / refresh      | JWT 30 phút; refresh/session tối đa 7 ngày từ login, không gia hạn deadline; rotation, hash và reuse revocation                          |
+| Profile               | Giữ phiên; currentPassword bắt buộc khi đổi liên hệ; version và uniqueness được kiểm tra server                                          |
+| Email mới             | Unconfirmed; hủy reset grant cũ; yêu cầu xác minh qua infrastructure hiện có                                                             |
+| Phone mới             | Unverified; không có SMS provider, không giả OTP                                                                                         |
+| Change/reset password | Identity hash/policy hiện có; change không cho new=current; thành công revoke mọi phiên và yêu cầu đăng nhập lại                         |
+| Recovery              | EmailConfirmed prerequisite; generic 202, cooldown/token một lần/lifetime hiện có 15 phút                                                |
+| Staff                 | Không phát mật khẩu khởi tạo; pending setup từ lúc tạo, Owner gửi invitation qua action hiện có                                          |
+| Tenant                | Quyết định của người dùng: mọi occupant có email Owner duyệt trong Main Contract đang kích hoạt; không cấp từ Holding/Resident đơn thuần |
+| Linking               | Reuse liên kết Tenant đã được duyệt và đúng email/role/active; không tự ghép bằng email trùng                                            |
+| Delivery              | Queued/Sent là trạng thái queue/provider, không chứng minh thư đến inbox; retry/PendingReview giữ nguyên                                 |
 
 OQ-AUTH-01..03 trong sheet giữ nguyên lịch sử. Không đặt thêm lockout threshold hoặc provider policy; chính sách 30 phút/7 ngày, giữ phiên Profile, email prerequisite, revoke sau password và occupant provisioning được nhiệm vụ/quyết định người dùng xác nhận. Xem thêm [fixed session deadline](REFRESH_TOKEN_SESSIONS.md).
 
 ## 3. Audit findings
 
-| Finding | Kết quả xử lý |
-| --- | --- |
-| UI gửi phone dưới field email; alias 0/+84 không thống nhất | Shared normalization/payload và server lookup an toàn |
-| Lỗi required/format chung, credential message không nhất quán | Backend và hai client dùng cùng semantics tiếng Việt |
-| Same-origin base rỗng không restore; lỗi tạm bị redirect Login | Restore/retry gate; bảo vệ dữ liệu trong lúc chưa xác định session |
-| Development HTTP Web → HTTPS API làm cookie Strict khác site | Auth proxy cùng origin, giữ TLS verification bằng public localhost certificate |
-| Đổi contact làm đổi stamp và UI logout | Current-password proof trong PUT; giữ stamp/session; reset verification flags |
-| Thiếu Tenant first-profile gate/Staff assigned Locations trong Profile | Tái dùng profile form/query và scoped capture/locations |
-| Web tự login sau change; backend cho password trùng | Interactive login sau change; chặn new=current |
-| Staff dùng mật khẩu Owner nhập trước invitation | Unknown random credential + pending setup, bỏ input khởi tạo |
-| AccountInvitationJob không chạy trong auth-only mode | Dùng ProcessAllowedAsync của worker hiện có, chỉ allow invitation |
-| Owner chưa thấy kết quả invitation/setup | Projection Owner-only từ flags/audit/job/outbox, không token |
+| Finding                                                                | Kết quả xử lý                                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| UI gửi phone dưới field email; alias 0/+84 không thống nhất            | Shared normalization/payload và server lookup an toàn                          |
+| Lỗi required/format chung, credential message không nhất quán          | Backend và hai client dùng cùng semantics tiếng Việt                           |
+| Same-origin base rỗng không restore; lỗi tạm bị redirect Login         | Restore/retry gate; bảo vệ dữ liệu trong lúc chưa xác định session             |
+| Development HTTP Web → HTTPS API làm cookie Strict khác site           | Auth proxy cùng origin, giữ TLS verification bằng public localhost certificate |
+| Đổi contact làm đổi stamp và UI logout                                 | Current-password proof trong PUT; giữ stamp/session; reset verification flags  |
+| Thiếu Tenant first-profile gate/Staff assigned Locations trong Profile | Tái dùng profile form/query và scoped capture/locations                        |
+| Web tự login sau change; backend cho password trùng                    | Interactive login sau change; chặn new=current                                 |
+| Staff dùng mật khẩu Owner nhập trước invitation                        | Unknown random credential + pending setup, bỏ input khởi tạo                   |
+| AccountInvitationJob không chạy trong auth-only mode                   | Dùng ProcessAllowedAsync của worker hiện có, chỉ allow invitation              |
+| Owner chưa thấy kết quả invitation/setup                               | Projection Owner-only từ flags/audit/job/outbox, không token                   |
 
 ## 4. Changes by phase
 
-| Phase | Thành phần/file tiêu biểu | Acceptance |
-| --- | --- | --- |
-| 1 | Audit, AuthenticationRouteAuditTests | Inventory route từ controller descriptors, baseline thực thi |
-| 2 | LoginIdentifier, IdentityCredentialVerifier, AuthController, client-core/loginValidation, Web LoginForm/MobileLoginScreen | Field validation, phone aliases, generic failures |
-| 3 | client-core/auth, routeGuards, Vite proxy, Prepare-OcrMobile, MobileSessions/SessionProvider, AuthenticationBrowserTests | F5/nested/new tab; cold start/offline/rotation |
-| 4 | OperationsService/CompactOperationsRepository, Profile DTO/controller, Web AccountProfilePage, Mobile ProfileEditScreen/ProfileScreen/TenantProfileGate | Giữ hai session, proof, email verification, readonly scope |
-| 5 | IdentityPasswordService, ChangePasswordDialog, AccountSecurityScreen | Negative password mutations; revoke current/other sessions |
-| 6 | AccountInvitations, Staff create/repository/UI | Pending trước invite; cooldown/expiry/resend/one-use/active/scope |
-| 7 | PostActivationTenantProvisioning, AccountInvitationJob, NotificationAutomationWorker, ResidentAdministrationRepository, TenantAccountStatus | Atomic Main provisioning; durable dispatch; visibility |
-| 8 | Regression fixtures/tests, Test-Compact24Isolated.ps1, báo cáo này | Full client suites, relevant PostgreSQL/API/browser regression, unit/build |
+| Phase | Thành phần/file tiêu biểu                                                                                                                               | Acceptance                                                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 1     | Audit, AuthenticationRouteAuditTests                                                                                                                    | Inventory route từ controller descriptors, baseline thực thi               |
+| 2     | LoginIdentifier, IdentityCredentialVerifier, AuthController, client-core/loginValidation, Web LoginForm/MobileLoginScreen                               | Field validation, phone aliases, generic failures                          |
+| 3     | client-core/auth, routeGuards, Vite proxy, Prepare-OcrMobile, MobileSessions/SessionProvider, AuthenticationBrowserTests                                | F5/nested/new tab; cold start/offline/rotation                             |
+| 4     | OperationsService/CompactOperationsRepository, Profile DTO/controller, Web AccountProfilePage, Mobile ProfileEditScreen/ProfileScreen/TenantProfileGate | Giữ hai session, proof, email verification, readonly scope                 |
+| 5     | IdentityPasswordService, ChangePasswordDialog, AccountSecurityScreen                                                                                    | Negative password mutations; revoke current/other sessions                 |
+| 6     | AccountInvitations, Staff create/repository/UI                                                                                                          | Pending trước invite; cooldown/expiry/resend/one-use/active/scope          |
+| 7     | PostActivationTenantProvisioning, AccountInvitationJob, NotificationAutomationWorker, ResidentAdministrationRepository, TenantAccountStatus             | Atomic Main provisioning; durable dispatch; visibility                     |
+| 8     | Regression fixtures/tests, Test-Compact24Isolated.ps1, báo cáo này                                                                                      | Full client suites, relevant PostgreSQL/API/browser regression, unit/build |
 
 Danh sách đầy đủ từng file nằm trong `git show --stat <phase hash>` ở mục 11; không có thay đổi ngoài Authentication và test harness liên quan.
 
@@ -91,20 +91,20 @@ Thời gian: 12/11/2026, Windows, Node 22.23.4, .NET SDK 8.0.427, PostgreSQL 16 
 
 ### Execution ledger
 
-| Check | Kết quả mới | Evidence (ignored local artifacts) |
-| --- | --- | --- |
-| dotnet restore BHome.sln | Passed | .tmp/auth-completion-phase8-build.log |
-| API Release build --no-restore | Passed, 0 warnings/errors | Cùng log build |
-| Application unit tests | 451 passed, 0 failed/skipped | .tmp/auth-completion-phase8-unit/ + unit.log |
-| Domain unit tests | 106 passed, 0 failed/skipped | .tmp/auth-completion-phase8-domain/ |
-| Relevant integration + browser | 98 passed, 0 failed/skipped | .tmp/auth-completion-phase8-integration-verified/ |
-| Expired reset + anonymous/public API, tracked harness Release | 2 passed, 0 failed/skipped; hai case rerun, không cộng là unique coverage | .tmp/auth-completion-phase8-expiry/ |
-| Owner Web full Vitest | 360 passed / 71 files, 0 failed/skipped | .tmp/auth-completion-phase8-web-verified.log |
-| Mobile full Vitest | 914 passed / 80 files, 0 failed/skipped | .tmp/auth-completion-phase8-mobile-verified.log |
-| Typecheck/lint cả hai client | Passed | .tmp/auth-completion-phase8-client-checks.log |
-| Owner Web production build | Passed; chunk-size warning | .tmp/auth-completion-phase8-web.log |
-| git diff --check | Passed trước mỗi commit | Git command execution |
-| Live Gmail SMTP / physical native device | Not Run | Không có ủy quyền SMTP smoke; không thiết bị |
+| Check                                                         | Kết quả mới                                                               | Evidence (ignored local artifacts)                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------- |
+| dotnet restore BHome.sln                                      | Passed                                                                    | .tmp/auth-completion-phase8-build.log             |
+| API Release build --no-restore                                | Passed, 0 warnings/errors                                                 | Cùng log build                                    |
+| Application unit tests                                        | 451 passed, 0 failed/skipped                                              | .tmp/auth-completion-phase8-unit/ + unit.log      |
+| Domain unit tests                                             | 106 passed, 0 failed/skipped                                              | .tmp/auth-completion-phase8-domain/               |
+| Relevant integration + browser                                | 98 passed, 0 failed/skipped                                               | .tmp/auth-completion-phase8-integration-verified/ |
+| Expired reset + anonymous/public API, tracked harness Release | 2 passed, 0 failed/skipped; hai case rerun, không cộng là unique coverage | .tmp/auth-completion-phase8-expiry/               |
+| Owner Web full Vitest                                         | 360 passed / 71 files, 0 failed/skipped                                   | .tmp/auth-completion-phase8-web-verified.log      |
+| Mobile full Vitest                                            | 914 passed / 80 files, 0 failed/skipped                                   | .tmp/auth-completion-phase8-mobile-verified.log   |
+| Typecheck/lint cả hai client                                  | Passed                                                                    | .tmp/auth-completion-phase8-client-checks.log     |
+| Owner Web production build                                    | Passed; chunk-size warning                                                | .tmp/auth-completion-phase8-web.log               |
+| git diff --check                                              | Passed trước mỗi commit                                                   | Git command execution                             |
+| Live Gmail SMTP / physical native device                      | Not Run                                                                   | Không có ủy quyền SMTP smoke; không thiết bị      |
 
 Lượt regression đầu: Web 323 passed/37 failed do selector nhãn Email cũ làm demo login fixture thất bại; sửa selector và targeted router 37/37 passed. Mobile 913 passed/1 failed vì expectation cũ logout sau refresh 503; cập nhật theo policy mới và vẫn kiểm credential bị xóa, lỗi 503/correlationId và không replay. Integration 88 passed/6 failed trong contract fixture: actors chưa được đánh dấu established/confirmed, dẫn đến pending setup đúng policy khi activation; fixture được làm rõ, rerun 18/18 contract tests và lượt integration 98/98 passed. Không bỏ test hoặc hạ guard production.
 
@@ -112,52 +112,52 @@ Lượt regression đầu: Web 323 passed/37 failed do selector nhãn Email cũ 
 
 “Final” là kết quả automated API/component/browser theo phạm vi evidence, không phải lần nghiệm thu thủ công trên tài khoản thật hoặc physical device. Round 1 giữ nguyên nhãn `Fail`/`Pending` từ sheet.
 
-| Test Case ID | Previous Result | Final Result | Verification Evidence | Notes |
-| --- | --- | --- | --- | --- |
-| ITC-AUTH-001 | Passed | Passed | AuthenticationBrowserTests, LoginService/Compact24LoginValidation | Owner email, browser/API thật |
-| ITC-AUTH-002 | Passed | Passed | AuthenticationInvitationsQueueRoleSpecificLinks..., ScopedStaff, Contract ScopeRevocation | Staff chỉ assigned Locations |
-| ITC-AUTH-003 | Passed | Passed | AnonymousSigningTests, Contract Scope, InvoiceFilters, RecipientInbox | Tenant own contract/invoice/inbox |
-| ITC-AUTH-004 | Fail | Passed | DomesticAndInternationalPhoneAliases..., login-validation client tests | 0/+84, ambiguous fail closed |
-| ITC-AUTH-005 | Passed | Passed | UnknownWrongPasswordAndInactiveAccounts... | Generic message |
-| ITC-AUTH-006 | Fail | Passed | Cùng test generic + Web/Mobile validation | Không lộ registered identifier |
-| ITC-AUTH-007 | Fail | Passed | Cùng test + LockoutInactiveTwoFactor... | Inactive cùng public failure |
-| ITC-AUTH-008 | Fail | Passed | LoginReturnsSafeVietnameseFieldErrors + client login tests | Required/format/length dưới field |
-| ITC-AUTH-009 | Passed | Passed | Identity hash, encrypted outbox, safe audit tests + code inspection | Không scan production logs; không sử dụng real passwords |
-| ITC-AUTH-010 | Pending | Passed | AnonymousRequestsCannotReadProtected... | Protected 401, published catalog anonymous 200 |
-| ITC-AUTH-011 | Passed | Passed | ProfileAuthenticationTests + client Profile tests | Own DTO, không credential |
-| ITC-AUTH-012 | Fail | Passed | RotationRejectsReplay..., session lifecycle, revoked-session tests | Tách riêng F5 regression |
-| ITC-AUTH-013 | Pending | Passed | LogoutOneDevice...ForgedOwnerRoleIsRejected | Forged JWT 401; role denial 403 |
-| ITC-AUTH-014 | Passed | Passed | Session lifecycle + LogoutAllAndPasswordChange... | Logout current/all đúng phạm vi |
-| ITC-AUTH-015 | Passed | Passed | LogoutOneDeviceLeavesTheOtherSessionActive... | A logout không revoke B |
-| ITC-AUTH-016 | Passed | Passed | AccountProfilePage/profile-screens tests | Role/status readonly |
-| ITC-AUTH-017 | Passed | Passed | ProfileContactChangeKeepsBothSessions..., profile UI/browser | Chính sách mới giữ phiên thay ghi chú cũ |
-| ITC-AUTH-018 | Pending | Passed | Profile overposting + ScopedStaff/OwnerResidentAdministration + readonly UI | Không tự đổi role/status/assignment |
-| ITC-AUTH-019 | Pending | Passed | tenant-profile-gate, profile-screens, backend Tenant phone required | Component/API; physical first-login E2E Not Run |
-| ITC-AUTH-020 | Passed | Passed | ProfileRejectsWrongContactPasswordAndOverposting... + validateProfile | Không lưu required fields rỗng |
-| ITC-AUTH-021 | Fail | Passed | LogoutAllAndPasswordChange..., ChangePasswordDialog/AccountSecurity | Old login fail/new login pass, current reauth |
-| ITC-AUTH-022 | Fail | Passed | InvalidPasswordChangesLeaveBothSessions... | Wrong current không mutate hash/session |
-| ITC-AUTH-023 | Fail | Passed | Cùng backend test + password client tests | Weak/empty/same/confirmation mismatch |
-| ITC-AUTH-024 | Pending | Passed | EmailVerificationEnablesRecovery..., AuthenticationResetByEmail... | Fake delivery; live inbox Not Run |
-| ITC-AUTH-025 | Pending | Passed | AuthenticationResetByEmailIsGenericDeduplicatedEncrypted... | Unknown generic 202, không outbox riêng |
-| ITC-AUTH-026 | Pending | Passed | AuthenticationResetRetriesTransientSmtp... + one-use reset | API expired/reused đều 400, hash giữ nguyên khi rejected |
+| Test Case ID | Previous Result | Final Result | Verification Evidence                                                                     | Notes                                                    |
+| ------------ | --------------- | ------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| ITC-AUTH-001 | Passed          | Passed       | AuthenticationBrowserTests, LoginService/Compact24LoginValidation                         | Owner email, browser/API thật                            |
+| ITC-AUTH-002 | Passed          | Passed       | AuthenticationInvitationsQueueRoleSpecificLinks..., ScopedStaff, Contract ScopeRevocation | Staff chỉ assigned Locations                             |
+| ITC-AUTH-003 | Passed          | Passed       | AnonymousSigningTests, Contract Scope, InvoiceFilters, RecipientInbox                     | Tenant own contract/invoice/inbox                        |
+| ITC-AUTH-004 | Fail            | Passed       | DomesticAndInternationalPhoneAliases..., login-validation client tests                    | 0/+84, ambiguous fail closed                             |
+| ITC-AUTH-005 | Passed          | Passed       | UnknownWrongPasswordAndInactiveAccounts...                                                | Generic message                                          |
+| ITC-AUTH-006 | Fail            | Passed       | Cùng test generic + Web/Mobile validation                                                 | Không lộ registered identifier                           |
+| ITC-AUTH-007 | Fail            | Passed       | Cùng test + LockoutInactiveTwoFactor...                                                   | Inactive cùng public failure                             |
+| ITC-AUTH-008 | Fail            | Passed       | LoginReturnsSafeVietnameseFieldErrors + client login tests                                | Required/format/length dưới field                        |
+| ITC-AUTH-009 | Passed          | Passed       | Identity hash, encrypted outbox, safe audit tests + code inspection                       | Không scan production logs; không sử dụng real passwords |
+| ITC-AUTH-010 | Pending         | Passed       | AnonymousRequestsCannotReadProtected...                                                   | Protected 401, published catalog anonymous 200           |
+| ITC-AUTH-011 | Passed          | Passed       | ProfileAuthenticationTests + client Profile tests                                         | Own DTO, không credential                                |
+| ITC-AUTH-012 | Fail            | Passed       | RotationRejectsReplay..., session lifecycle, revoked-session tests                        | Tách riêng F5 regression                                 |
+| ITC-AUTH-013 | Pending         | Passed       | LogoutOneDevice...ForgedOwnerRoleIsRejected                                               | Forged JWT 401; role denial 403                          |
+| ITC-AUTH-014 | Passed          | Passed       | Session lifecycle + LogoutAllAndPasswordChange...                                         | Logout current/all đúng phạm vi                          |
+| ITC-AUTH-015 | Passed          | Passed       | LogoutOneDeviceLeavesTheOtherSessionActive...                                             | A logout không revoke B                                  |
+| ITC-AUTH-016 | Passed          | Passed       | AccountProfilePage/profile-screens tests                                                  | Role/status readonly                                     |
+| ITC-AUTH-017 | Passed          | Passed       | ProfileContactChangeKeepsBothSessions..., profile UI/browser                              | Chính sách mới giữ phiên thay ghi chú cũ                 |
+| ITC-AUTH-018 | Pending         | Passed       | Profile overposting + ScopedStaff/OwnerResidentAdministration + readonly UI               | Không tự đổi role/status/assignment                      |
+| ITC-AUTH-019 | Pending         | Passed       | tenant-profile-gate, profile-screens, backend Tenant phone required                       | Component/API; physical first-login E2E Not Run          |
+| ITC-AUTH-020 | Passed          | Passed       | ProfileRejectsWrongContactPasswordAndOverposting... + validateProfile                     | Không lưu required fields rỗng                           |
+| ITC-AUTH-021 | Fail            | Passed       | LogoutAllAndPasswordChange..., ChangePasswordDialog/AccountSecurity                       | Old login fail/new login pass, current reauth            |
+| ITC-AUTH-022 | Fail            | Passed       | InvalidPasswordChangesLeaveBothSessions...                                                | Wrong current không mutate hash/session                  |
+| ITC-AUTH-023 | Fail            | Passed       | Cùng backend test + password client tests                                                 | Weak/empty/same/confirmation mismatch                    |
+| ITC-AUTH-024 | Pending         | Passed       | EmailVerificationEnablesRecovery..., AuthenticationResetByEmail...                        | Fake delivery; live inbox Not Run                        |
+| ITC-AUTH-025 | Pending         | Passed       | AuthenticationResetByEmailIsGenericDeduplicatedEncrypted...                               | Unknown generic 202, không outbox riêng                  |
+| ITC-AUTH-026 | Pending         | Passed       | AuthenticationResetRetriesTransientSmtp... + one-use reset                                | API expired/reused đều 400, hash giữ nguyên khi rejected |
 
 ### New regressions
 
-| ID | Final | Evidence |
-| --- | --- | --- |
-| AUTH-REG-F5 | Passed | Real browser nested reload + new tab, secure cookie rotation |
-| AUTH-REG-COLD-START | Passed (automated) | Mobile sessions/SessionProvider tests; native physical Not Run |
-| AUTH-REG-TOKEN-EXPIRY | Passed | Mutable clock JWT 30 min, fixed 7-day deadline |
-| AUTH-REG-ROTATION-REUSE | Passed | DB token hashes, replay revokes family, parallel refresh one winner |
-| AUTH-REG-CONCURRENT-401 | Passed | Web/Mobile refresh coalescing and retry bounds |
-| AUTH-REG-PROFILE | Passed | Two backend sessions retained; browser save then F5; two client forms |
-| AUTH-REG-EMAIL-CHANGE | Passed | New email unconfirmed, verification after historical invitation, old links rejected |
-| AUTH-REG-STAFF-INVITATION | Passed | Before-invite denial, role-specific recipient, expire/resend/one-use, inactive denial |
-| AUTH-REG-TENANT-ACTIVATION | Passed | Actual activation creates two approved occupant accounts, Holding/Resident no account |
-| AUTH-REG-INVITATION-IDEMPOTENCY | Passed | Duplicate enqueue/activation/handler execution, single identity and dispatch |
-| AUTH-REG-PASSWORD-REVOKE | Passed | Two sessions invalid after change/reset; wrong inputs retain them |
-| AUTH-REG-EMAIL-RESET | Passed | Unconfirmed → verification → recovery, generic anonymous behavior |
-| AUTH-REG-SMTP-FAILURE | Passed (fake provider) | Retry/suppression/PendingReview; active contract not rolled back |
+| ID                              | Final                  | Evidence                                                                              |
+| ------------------------------- | ---------------------- | ------------------------------------------------------------------------------------- |
+| AUTH-REG-F5                     | Passed                 | Real browser nested reload + new tab, secure cookie rotation                          |
+| AUTH-REG-COLD-START             | Passed (automated)     | Mobile sessions/SessionProvider tests; native physical Not Run                        |
+| AUTH-REG-TOKEN-EXPIRY           | Passed                 | Mutable clock JWT 30 min, fixed 7-day deadline                                        |
+| AUTH-REG-ROTATION-REUSE         | Passed                 | DB token hashes, replay revokes family, parallel refresh one winner                   |
+| AUTH-REG-CONCURRENT-401         | Passed                 | Web/Mobile refresh coalescing and retry bounds                                        |
+| AUTH-REG-PROFILE                | Passed                 | Two backend sessions retained; browser save then F5; two client forms                 |
+| AUTH-REG-EMAIL-CHANGE           | Passed                 | New email unconfirmed, verification after historical invitation, old links rejected   |
+| AUTH-REG-STAFF-INVITATION       | Passed                 | Before-invite denial, role-specific recipient, expire/resend/one-use, inactive denial |
+| AUTH-REG-TENANT-ACTIVATION      | Passed                 | Actual activation creates two approved occupant accounts, Holding/Resident no account |
+| AUTH-REG-INVITATION-IDEMPOTENCY | Passed                 | Duplicate enqueue/activation/handler execution, single identity and dispatch          |
+| AUTH-REG-PASSWORD-REVOKE        | Passed                 | Two sessions invalid after change/reset; wrong inputs retain them                     |
+| AUTH-REG-EMAIL-RESET            | Passed                 | Unconfirmed → verification → recovery, generic anonymous behavior                     |
+| AUTH-REG-SMTP-FAILURE           | Passed (fake provider) | Retry/suppression/PendingReview; active contract not rolled back                      |
 
 ### Reproduction
 
@@ -202,13 +202,13 @@ Lần Phase 6 chạy hai build integration đồng thời bị DLL lock; rerun t
 
 Nhánh `member/QHuy`, baseline `d7885f9`; không push/merge. Mỗi phase commit có description tiếng Anh ngắn gọn. Hash phase 8 là commit chứa báo cáo này (`git log -1` sau khi commit), được báo trực tiếp trong kết quả bàn giao.
 
-| Phase | Status | Commit Hash | Commit Message | Tests thực thi trong phase |
-| --- | --- | --- | --- | --- |
-| 1 Audit | Completed | 40b5c84 | docs(auth): audit authentication workflows | 50 backend; 36 Web; 53 Mobile |
-| 2 Validation | Completed | 79d26a5 | fix(auth): improve login validation and errors | 24 unit; 20 IT; 16 Web; 24 Mobile |
-| 3 Session | Completed | e95f0d2 | fix(auth): stabilize session persistence | 13 backend/E2E; 40 Web; 23 Mobile |
-| 4 Profile | Completed | 66db85c | fix(profile): preserve sessions on updates | 63 backend/E2E; 3 Web; 49 Mobile |
-| 5 Password | Completed | acbd490 | fix(auth): harden password workflows | 52 backend; 36 Web; 13 Mobile |
-| 6 Staff Invitation | Completed | 4e48db5 | fix(auth): complete staff invitations | 41 backend + 1 targeted rerun; 7 Web |
-| 7 Tenant Provisioning | Completed | 403bce3 | fix(onboarding): align tenant provisioning | 49 backend; 26 Web |
-| 8 Regression | Completed | Current report commit | test(auth): complete regression verification | 557 unit; 98 IT/E2E + 2 rerun; 360 Web; 914 Mobile |
+| Phase                 | Status    | Commit Hash           | Commit Message                                 | Tests thực thi trong phase                         |
+| --------------------- | --------- | --------------------- | ---------------------------------------------- | -------------------------------------------------- |
+| 1 Audit               | Completed | 40b5c84               | docs(auth): audit authentication workflows     | 50 backend; 36 Web; 53 Mobile                      |
+| 2 Validation          | Completed | 79d26a5               | fix(auth): improve login validation and errors | 24 unit; 20 IT; 16 Web; 24 Mobile                  |
+| 3 Session             | Completed | e95f0d2               | fix(auth): stabilize session persistence       | 13 backend/E2E; 40 Web; 23 Mobile                  |
+| 4 Profile             | Completed | 66db85c               | fix(profile): preserve sessions on updates     | 63 backend/E2E; 3 Web; 49 Mobile                   |
+| 5 Password            | Completed | acbd490               | fix(auth): harden password workflows           | 52 backend; 36 Web; 13 Mobile                      |
+| 6 Staff Invitation    | Completed | 4e48db5               | fix(auth): complete staff invitations          | 41 backend + 1 targeted rerun; 7 Web               |
+| 7 Tenant Provisioning | Completed | 403bce3               | fix(onboarding): align tenant provisioning     | 49 backend; 26 Web                                 |
+| 8 Regression          | Completed | Current report commit | test(auth): complete regression verification   | 557 unit; 98 IT/E2E + 2 rerun; 360 Web; 914 Mobile |

@@ -58,16 +58,16 @@ New business actions use `[Authorize(Policy = Permissions.<Module>.<Action>)]` p
 `PermissionAccess.CanAccessAsync` with server-loaded scope. Permission grants are fixed in Domain,
 not accepted from request/JWT permission claims. See the [catalog and integration guide](../development/FIXED_ROLE_PERMISSIONS.md).
 
-| Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                                              |
-| ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                                          |
-| POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                                                  |
-| POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                                         |
-| POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                                     |
-| GET `me`                       | Bearer                                                                                    | 200 `{userId,sessionId,roles}`                                                                      |
-| POST `change-password`         | Bearer; `currentPassword`, `newPassword`                                                  | 204 + revoke all sessions; generic 400 on failure                                                   |
-| POST `forgot-password`         | Anonymous; `userName` (registered email or legacy username)                                  | Generic 202 when SMTP/callbacks are configured; uniformly 503 when unavailable                       |
-| POST `reset-password`          | Anonymous; `userName`, `token` (max 4096), `newPassword`                                  | 204 + revoke all sessions; generic 400 on failure                                                   |
+| Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                     |
+| POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                             |
+| POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                    |
+| POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                |
+| GET `me`                       | Bearer                                                                                    | 200 `{userId,sessionId,roles}`                                                 |
+| POST `change-password`         | Bearer; `currentPassword`, `newPassword`                                                  | 204 + revoke all sessions; generic 400 on failure                              |
+| POST `forgot-password`         | Anonymous; `userName` (registered email or legacy username)                               | Generic 202 when SMTP/callbacks are configured; uniformly 503 when unavailable |
+| POST `reset-password`          | Anonymous; `userName`, `token` (max 4096), `newPassword`                                  | 204 + revoke all sessions; generic 400 on failure                              |
 
 All auth bodies are limited to 16 KiB; bounded validation failures return 400. New passwords use
 Identity's existing policy: at least 12 characters with uppercase, lowercase, digit and non-alphanumeric.

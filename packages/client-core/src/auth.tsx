@@ -41,23 +41,28 @@ export function AuthProvider({
   const [restoreError, setRestoreError] = useState('');
   const [client] = useState(() => new SessionClient(apiBaseUrl, transport));
   useEffect(() => client.subscribe(setSession), [client]);
-  const retryRestore = useCallback(async () => {
+  const restore = useCallback(
+    () =>
+      client.refresh().then(
+        () => setIsRestoring(false),
+        (e: unknown) => {
+          if (!(e instanceof ApiError && e.status === 401))
+            setRestoreError(
+              'Chưa thể khôi phục phiên do kết nối hoặc máy chủ. Vui lòng thử lại; bạn có thể cần đăng nhập lại nếu phiên đã hết hạn.',
+            );
+          setIsRestoring(false);
+        },
+      ),
+    [client],
+  );
+  const retryRestore = useCallback(() => {
     setIsRestoring(true);
     setRestoreError('');
-    try {
-      await client.refresh();
-    } catch (e) {
-      if (!(e instanceof ApiError && e.status === 401))
-        setRestoreError(
-          'Chưa thể khôi phục phiên do kết nối hoặc máy chủ. Vui lòng thử lại; bạn có thể cần đăng nhập lại nếu phiên đã hết hạn.',
-        );
-    } finally {
-      setIsRestoring(false);
-    }
-  }, [client]);
+    return restore();
+  }, [restore]);
   useEffect(() => {
-    if (transport === 'web' && restoreOnMount) void retryRestore();
-  }, [retryRestore, transport, restoreOnMount]);
+    if (transport === 'web' && restoreOnMount) void restore();
+  }, [restore, transport, restoreOnMount]);
   const value = useMemo(
     () => ({
       session,

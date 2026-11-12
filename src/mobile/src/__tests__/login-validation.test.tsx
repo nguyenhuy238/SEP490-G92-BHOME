@@ -125,18 +125,16 @@ it.each(['0901234567', '+84 (90) 123-4567'])(
   async (phone) => {
     expect(normalizeLoginPhone(phone)).toBe('+84901234567');
     expect(loginIdentifierError(phone)).toBe('');
-    const transport = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            userId: 'synthetic-user',
-            roles: ['Tenant'],
-            accessToken: 'synthetic-access',
-            refreshToken: 'synthetic-refresh',
-          }),
-        ),
-      );
+    const transport = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          userId: 'synthetic-user',
+          roles: ['Tenant'],
+          accessToken: 'synthetic-access',
+          refreshToken: 'synthetic-refresh',
+        }),
+      ),
+    );
     const manager = new MobileSessions(
       { read: async () => null, write: async () => {}, remove: async () => {} },
       'https://api.example.invalid',

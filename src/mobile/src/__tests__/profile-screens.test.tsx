@@ -349,7 +349,9 @@ it('validates name, email and phone before making any PUT', async () => {
   fireEvent.change(screen.getByLabelText('Số điện thoại'), { target: { value: 'abc' } });
   fireEvent.click(screen.getByText('Lưu thay đổi'));
   expect(screen.getAllByRole('alert')).toHaveLength(4);
-  expect(screen.getByText('Vui lòng nhập mật khẩu hiện tại để xác nhận thay đổi liên hệ.')).toBeTruthy();
+  expect(
+    screen.getByText('Vui lòng nhập mật khẩu hiện tại để xác nhận thay đổi liên hệ.'),
+  ).toBeTruthy();
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 it.each(['email_already_used', 'phone_already_used'])(

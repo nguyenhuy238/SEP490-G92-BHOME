@@ -199,9 +199,6 @@ it('creates with the existing DTO, retains input on validation errors, and close
   fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
   fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'New synthetic' } });
   fireEvent.change(screen.getByLabelText(/Email/), { target: { value: 'new@example.invalid' } });
-  fireEvent.change(screen.getByLabelText(/Mật khẩu khởi tạo/), {
-    target: { value: 'Synthetic-test-123!' },
-  });
   fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'Task' } });
   mocks.request.mockImplementation(async (_path: string, init?: RequestInit) => {
     if (init?.method === 'POST')
@@ -225,8 +222,8 @@ it('creates with the existing DTO, retains input on validation errors, and close
   expect(JSON.parse(init.body)).toMatchObject({
     fullName: 'New synthetic',
     employment: { employmentType: 'Task' },
-    initialPassword: 'Synthetic-test-123!',
   });
+  expect(JSON.parse(init.body)).not.toHaveProperty('initialPassword');
   expect(JSON.parse(init.body)).not.toHaveProperty('accountVersion');
 });
 

@@ -21,8 +21,11 @@ public sealed class AuthenticationBrowserTests
             var apiUrl = $"http://127.0.0.1:{apiPort}"; var webUrl = $"http://127.0.0.1:{webPort}";
             using var host = fixture.Factory!.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Cors:AllowedOrigins:0"] = webUrl, ["AuthWeb:AllowedOrigins:0"] = webUrl,
-                ["Api:UseHttpsRedirection"] = "false", ["Email:Enabled"] = "false", ["Jobs:Enabled"] = "false"
+                ["Cors:AllowedOrigins:0"] = webUrl,
+                ["AuthWeb:AllowedOrigins:0"] = webUrl,
+                ["Api:UseHttpsRedirection"] = "false",
+                ["Email:Enabled"] = "false",
+                ["Jobs:Enabled"] = "false"
             })));
             var email = Guid.NewGuid().ToString("N") + "@example.invalid";
             await using (var scope = host.Services.CreateAsyncScope())

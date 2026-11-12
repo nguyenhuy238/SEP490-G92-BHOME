@@ -12,13 +12,13 @@ không vào repository. Không dùng mật khẩu tài khoản Google để SMTP
 
 ## Audit và traceability
 
-| Yêu cầu | Hiện trạng và phần bổ sung | Tiêu chí kiểm chứng |
-| --- | --- | --- |
-| Recovery qua email | IdentityPasswordService có reset/hash grant/expiry/session revoke; trước chỉ tìm username và gửi mã đồng bộ | Tìm theo email, generic response, cooldown, link, invalid/expired/reused/weak token, login mật khẩu mới |
-| UI recovery | Web có form reset thủ công; Mobile nút chưa nối API | Web đọc fragment, Mobile có route/link và form; không persist token |
-| Staff/Tenant invite | AccountInvitations, Owner endpoints, tenancy approval job và UI accept có sẵn | Role-aware email, pending setup, resend, duplicate/scope, không tạo login cho Resident không được provision |
-| Security email | Audit đã commit → CompactNotificationEvents → Account inbox/EMAIL | Đúng actor/event/time, không failed action, không double-notify/reset rollback |
-| Retry | JOB-04 ChannelDelivery lease/status/history có sẵn | Grant + protected payload + outbox atomic; transient retry, invalid/expired/consumed/superseded suppress |
+| Yêu cầu             | Hiện trạng và phần bổ sung                                                                                  | Tiêu chí kiểm chứng                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Recovery qua email  | IdentityPasswordService có reset/hash grant/expiry/session revoke; trước chỉ tìm username và gửi mã đồng bộ | Tìm theo email, generic response, cooldown, link, invalid/expired/reused/weak token, login mật khẩu mới     |
+| UI recovery         | Web có form reset thủ công; Mobile nút chưa nối API                                                         | Web đọc fragment, Mobile có route/link và form; không persist token                                         |
+| Staff/Tenant invite | AccountInvitations, Owner endpoints, tenancy approval job và UI accept có sẵn                               | Role-aware email, pending setup, resend, duplicate/scope, không tạo login cho Resident không được provision |
+| Security email      | Audit đã commit → CompactNotificationEvents → Account inbox/EMAIL                                           | Đúng actor/event/time, không failed action, không double-notify/reset rollback                              |
+| Retry               | JOB-04 ChannelDelivery lease/status/history có sẵn                                                          | Grant + protected payload + outbox atomic; transient retry, invalid/expired/consumed/superseded suppress    |
 
 Token đang chờ gửi được mã hóa/xác thực bằng ASP.NET Data Protection với purpose riêng;
 raw token chỉ tồn tại trong bộ nhớ và email riêng. Database giữ grant hash hiện có và protected
@@ -90,17 +90,17 @@ API/config/template/manual test chi tiết tại [Email xác thực](../api/AUTH
 
 Kết quả thực thi cuối:
 
-| Kiểm tra | Kết quả |
-| --- | --- |
-| API build cuối | PASS, 0 warnings/errors |
-| Application UT / Domain UT | 450 / 106 passed, không fail/skip |
+| Kiểm tra                                            | Kết quả                                               |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| API build cuối                                      | PASS, 0 warnings/errors                               |
+| Application UT / Domain UT                          | 450 / 106 passed, không fail/skip                     |
 | Integration auth/notification/invoice/payment/inbox | 101 passed, không fail/skip; DB PostgreSQL disposable |
-| Mobile toàn bộ, Node 22.23.4 | 77 files, 889 passed, không fail |
-| Owner Web toàn bộ, Node 22.23.4 | 69 files, 343 passed, không fail |
-| Web tests mục tiêu recovery/login/invitation | 13 recovery/login + 4 invitation passed |
-| Typecheck/lint Web và Mobile cuối | PASS |
-| Owner Web production build | PASS; cảnh báo chunk >500 kB, không phải lỗi build |
-| Gmail authentication smoke thật | 1 passed, 11.7 giây; không gửi Tenant thật |
+| Mobile toàn bộ, Node 22.23.4                        | 77 files, 889 passed, không fail                      |
+| Owner Web toàn bộ, Node 22.23.4                     | 69 files, 343 passed, không fail                      |
+| Web tests mục tiêu recovery/login/invitation        | 13 recovery/login + 4 invitation passed               |
+| Typecheck/lint Web và Mobile cuối                   | PASS                                                  |
+| Owner Web production build                          | PASS; cảnh báo chunk >500 kB, không phải lỗi build    |
+| Gmail authentication smoke thật                     | 1 passed, 11.7 giây; không gửi Tenant thật            |
 
 SMTP thực tế: một recovery email về chính mailbox sender/test đã cấu hình → Gmail accepted →
 IMAP read-only tìm đúng Message-Id trong INBOX và chỉ đọc thư test → lấy link → reset Owner tổng hợp
@@ -156,12 +156,12 @@ là trạng thái tại thời điểm nghiệm thu email, không còn là bư�
 
 ## Commit
 
-| Hash | Message | Short English description | Kiểm chứng trước commit |
-| --- | --- | --- | --- |
-| f185655 | feat(auth): implement password recovery via email | Add secure password reset links, protected delivery retries, and web/mobile recovery forms. | Build; 14 backend; 13 Web; 3 Mobile; lint/typecheck/build |
-| f729d0f | feat(auth): add staff and tenant invitation emails | Queue protected role-aware invitations, preserve pending setup, and connect web/mobile activation links. | Build; 28 backend + 2 focused after guard; 4 Web + 4 Mobile; lint/typecheck |
-| 7aaa220 | feat(auth): add account security email notifications | Notify committed password and account changes, cover Identity lockout, and suppress failed-action alerts. | Build; 40 backend; 450 Application UT; 106 Domain UT |
-| Final phase | test(auth): verify authentication email workflows | Verify real recovery delivery and document configuration, reliability, and client flows. | 101 IT; real SMTP/INBOX/reset/login; 889 Mobile; 343 Web; final checks |
+| Hash        | Message                                              | Short English description                                                                                 | Kiểm chứng trước commit                                                     |
+| ----------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| f185655     | feat(auth): implement password recovery via email    | Add secure password reset links, protected delivery retries, and web/mobile recovery forms.               | Build; 14 backend; 13 Web; 3 Mobile; lint/typecheck/build                   |
+| f729d0f     | feat(auth): add staff and tenant invitation emails   | Queue protected role-aware invitations, preserve pending setup, and connect web/mobile activation links.  | Build; 28 backend + 2 focused after guard; 4 Web + 4 Mobile; lint/typecheck |
+| 7aaa220     | feat(auth): add account security email notifications | Notify committed password and account changes, cover Identity lockout, and suppress failed-action alerts. | Build; 40 backend; 450 Application UT; 106 Domain UT                        |
+| Final phase | test(auth): verify authentication email workflows    | Verify real recovery delivery and document configuration, reliability, and client flows.                  | 101 IT; real SMTP/INBOX/reset/login; 889 Mobile; 343 Web; final checks      |
 
 ## Thành phần thay đổi
 

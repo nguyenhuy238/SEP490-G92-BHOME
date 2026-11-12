@@ -22,7 +22,7 @@ public sealed partial class Compact24NotificationMvpTests
         var id = w.Tenants[0].Id; var before = await db.Users.AsNoTracking().SingleAsync(u => u.Id == id);
         var oldName = before.UserName;
         // A historical accepted setup must not block verification of a subsequently changed email.
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_token_hash={new string('A',64)},reset_expires_at={DateTimeOffset.UtcNow.AddMinutes(-1)},reset_consumed_at={DateTimeOffset.UtcNow.AddHours(-1)} WHERE id={id}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_token_hash={new string('A', 64)},reset_expires_at={DateTimeOffset.UtcNow.AddMinutes(-1)},reset_consumed_at={DateTimeOffset.UtcNow.AddHours(-1)} WHERE id={id}");
         await scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>().EnqueueAsync(new(AccountInvitationJob.JobName, "profile-historical:" + id,
             JsonSerializer.Serialize(new ApprovedTenantInvitation(w.Owner.Id, w.Residents[0], w.Contracts[0]))), default);
         var profile = (await a.GetFromJsonAsync<ProfileView>("/api/v1/account/profile"))!;

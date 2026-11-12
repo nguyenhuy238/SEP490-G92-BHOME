@@ -70,7 +70,7 @@ public sealed class Compact24LoginValidationTests(Compact24Fixture fixture) : IC
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(LoginService.InvalidCredentialsMessage, body.GetProperty("title").GetString());
         }
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = new string('a',257) + "@example.invalid", password = Password })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = new string('x',1025) })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = new string('a', 257) + "@example.invalid", password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = new string('x', 1025) })).StatusCode);
     }
 }

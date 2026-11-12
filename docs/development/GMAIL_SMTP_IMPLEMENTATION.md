@@ -10,14 +10,14 @@ UC-22..25/GBR-10/JOB-01, hợp đồng UC-19/JOB-02, emergency UC-26..30/GBR-11.
 Không thay đổi lịch nhắc, quyền tạm trú, chính sách tài chính hoặc PUSH production.
 Report 5 gốc chưa có trong `docs/reports`; không dùng số liệu mẫu làm bằng chứng.
 
-| Hành vi | Thành phần hiện có / thay đổi | Tiêu chí kiểm thử |
-| --- | --- | --- |
-| Email thật, STARTTLS, bí mật ngoài Git | INotificationChannelProvider → MailKitEmailSender, EmailOptions | Địa chỉ sai, thiếu cấu hình, TLS bắt buộc, lỗi SMTP an toàn |
-| Inbox bền vững, email bất đồng bộ | NotificationEventPublisher, CompactNotificationWriter, NotificationChannelWorker | Một outbox/inbox/channel, concurrent claim, không rollback/read-state |
-| Chỉ người có quyền nhận | InvoiceRecipient, scope/TargetAsync, assignment và users hiện hành | Cross-Tenant/Location, inactive/unverified, assignment hết hiệu lực |
-| Retry và kết quả không chắc chắn | notifications OUTBOX + lease + delivery_history (JOB-04) | 4xx retry hữu hạn; 5xx/auth dừng; timeout sau submit → PendingReview |
-| Nội dung Việt và dữ liệu thật | EmailTemplate, builder từ Invoice/Contract/Location | HTML encoding, kỳ/hạn/phòng đúng, không lộ bank reference |
-| Test thật có kiểm soát | Development-only Owner endpoint, recipient cấu hình sẵn | Không token/Staff/Tenant/Production bị từ chối; giới hạn gửi |
+| Hành vi                                | Thành phần hiện có / thay đổi                                                    | Tiêu chí kiểm thử                                                     |
+| -------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Email thật, STARTTLS, bí mật ngoài Git | INotificationChannelProvider → MailKitEmailSender, EmailOptions                  | Địa chỉ sai, thiếu cấu hình, TLS bắt buộc, lỗi SMTP an toàn           |
+| Inbox bền vững, email bất đồng bộ      | NotificationEventPublisher, CompactNotificationWriter, NotificationChannelWorker | Một outbox/inbox/channel, concurrent claim, không rollback/read-state |
+| Chỉ người có quyền nhận                | InvoiceRecipient, scope/TargetAsync, assignment và users hiện hành               | Cross-Tenant/Location, inactive/unverified, assignment hết hiệu lực   |
+| Retry và kết quả không chắc chắn       | notifications OUTBOX + lease + delivery_history (JOB-04)                         | 4xx retry hữu hạn; 5xx/auth dừng; timeout sau submit → PendingReview  |
+| Nội dung Việt và dữ liệu thật          | EmailTemplate, builder từ Invoice/Contract/Location                              | HTML encoding, kỳ/hạn/phòng đúng, không lộ bank reference             |
+| Test thật có kiểm soát                 | Development-only Owner endpoint, recipient cấu hình sẵn                          | Không token/Staff/Tenant/Production bị từ chối; giới hạn gửi          |
 
 ## Kết quả audit trước thay đổi
 
@@ -73,20 +73,20 @@ Lệnh script đầu tiên bị PowerShell ExecutionPolicy chặn; đã chạy l
 
 ## Giai đoạn 3 — kết quả thực thi cuối
 
-| Kiểm chứng thực tế | Kết quả |
-| --- | --- |
-| `dotnet restore src/backend/BHome.sln --verbosity quiet` | PASS |
-| `dotnet build src/backend/BHome.Api/BHome.Api.csproj --no-restore --verbosity quiet` | PASS, 0 warnings/errors |
-| Application.UnitTests toàn bộ | 450 passed, 0 failed/skipped |
-| Domain.UnitTests toàn bộ | 106 passed, 0 failed/skipped |
-| Bộ integration liên quan bên dưới | 92 passed, 0 failed/skipped, PostgreSQL Docker disposable |
-| Gmail smoke opt-in, Development Owner endpoint | 1 passed; gửi một email tới chính hộp thư BHOME; không Tenant nào nhận thư test |
-| SMTP acceptance | `SMTP_ACCEPTED`: Gmail chấp nhận thư qua STARTTLS/auth thực tế |
-| Inbox verification | `INBOX_CONFIRMED`: tìm đúng Message-Id trong INBOX bằng IMAP read-only, không fetch nội dung thư khác |
-| API Development chạy bằng `dotnet run`, TLS mặc định | `/health/live` 200; notifications/channel-status/email-test không token 401; Swagger có endpoint mới |
-| `/health/ready` với database đang cấu hình | 503; nguyên nhân xác minh bên dưới, không che thành PASS |
-| DI/options/config | Startup thành công với User Secrets; test thiếu AppPassword chặn startup; dotenv giữ thứ tự ưu tiên |
-| `git diff --check` và scan supplied App Password trên tracked files | PASS; không phát hiện secret được cung cấp |
+| Kiểm chứng thực tế                                                                   | Kết quả                                                                                               |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `dotnet restore src/backend/BHome.sln --verbosity quiet`                             | PASS                                                                                                  |
+| `dotnet build src/backend/BHome.Api/BHome.Api.csproj --no-restore --verbosity quiet` | PASS, 0 warnings/errors                                                                               |
+| Application.UnitTests toàn bộ                                                        | 450 passed, 0 failed/skipped                                                                          |
+| Domain.UnitTests toàn bộ                                                             | 106 passed, 0 failed/skipped                                                                          |
+| Bộ integration liên quan bên dưới                                                    | 92 passed, 0 failed/skipped, PostgreSQL Docker disposable                                             |
+| Gmail smoke opt-in, Development Owner endpoint                                       | 1 passed; gửi một email tới chính hộp thư BHOME; không Tenant nào nhận thư test                       |
+| SMTP acceptance                                                                      | `SMTP_ACCEPTED`: Gmail chấp nhận thư qua STARTTLS/auth thực tế                                        |
+| Inbox verification                                                                   | `INBOX_CONFIRMED`: tìm đúng Message-Id trong INBOX bằng IMAP read-only, không fetch nội dung thư khác |
+| API Development chạy bằng `dotnet run`, TLS mặc định                                 | `/health/live` 200; notifications/channel-status/email-test không token 401; Swagger có endpoint mới  |
+| `/health/ready` với database đang cấu hình                                           | 503; nguyên nhân xác minh bên dưới, không che thành PASS                                              |
+| DI/options/config                                                                    | Startup thành công với User Secrets; test thiếu AppPassword chặn startup; dotenv giữ thứ tự ưu tiên   |
+| `git diff --check` và scan supplied App Password trên tracked files                  | PASS; không phát hiện secret được cung cấp                                                            |
 
 Filter integration cuối:
 

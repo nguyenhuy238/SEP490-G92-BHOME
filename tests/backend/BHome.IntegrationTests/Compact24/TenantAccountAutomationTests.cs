@@ -77,7 +77,7 @@ public sealed partial class Compact24NotificationMvpTests
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email_confirmed=false,reset_token_hash={new string('A',64)},reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)},reset_consumed_at=NULL WHERE id={w.Tenants[0].Id}");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email_confirmed=false,reset_token_hash={new string('A', 64)},reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)},reset_consumed_at=NULL WHERE id={w.Tenants[0].Id}");
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET contact_email={w.Tenants[0].Email} WHERE id={w.Residents[0]}");
             var queue = scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>();
             var job = new JobSubmission(AccountInvitationJob.JobName, key, JsonSerializer.Serialize(new ApprovedTenantInvitation(w.Owner.Id, w.Residents[0], w.Contracts[0])));

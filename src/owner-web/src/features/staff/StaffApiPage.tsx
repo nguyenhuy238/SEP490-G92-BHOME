@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   Button,
   IconButton,
   InputAdornment,
@@ -226,7 +227,10 @@ export function StaffApiPage() {
         onClose={() => setInvite(false)}
         onConfirm={() => {
           void action
-            .run(() => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'))
+            .run(
+              () => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'),
+              'Đã tiếp nhận yêu cầu lời mời. Email đang chờ xử lý; chưa phải xác nhận đã giao thư.',
+            )
             .then((ok) => {
               if (ok) setInvite(false);
             });
@@ -237,191 +241,5 @@ export function StaffApiPage() {
       </ConfirmDialog>
       {editor !== undefined && <StaffEditor staff={editor} close={() => setEditor(undefined)} />}
     </Stack>
-  );
-}
-function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void }) {
-  const action = useOwnerAction();
-  const [name, setName] = useState(staff?.fullName ?? ''),
-    [email, setEmail] = useState(staff?.email ?? ''),
-    [phone, setPhone] = useState(staff?.phone ?? ''),
-    [password, setPassword] = useState(''),
-    [reason, setReason] = useState(''),
-    [active, setActive] = useState(staff?.isActive ?? true);
-  const [employment, setEmployment] = useState<Employment>(
-    staff?.employment ?? {
-      contractNumber: null,
-      employmentType: '',
-      startDate: todayVietnam(),
-      endDate: null,
-      salaryType: null,
-      baseRate: null,
-      status: 'Active',
-    },
-  );
-  const [confirm, setConfirm] = useState(false);
-  const set = <K extends keyof Employment>(key: K, value: Employment[K]) =>
-    setEmployment((x) => ({ ...x, [key]: value }));
-  async function save() {
-    const work = { ...employment };
-    delete work.id;
-    const body = {
-      fullName: name.trim(),
-      email: email.trim(),
-      phone: phone || null,
-      employment: work,
-      ...(staff
-        ? { accountVersion: staff.accountVersion, isActive: active, reason }
-        : { initialPassword: password }),
-    };
-    if (
-      await action.run(() =>
-        action.command(
-          staff ? `/api/v1/staff/${staff.userId}` : '/api/v1/staff',
-          staff ? 'PUT' : 'POST',
-          body,
-        ),
-      )
-    )
-      close();
-  }
-  return (
-    <Dialog
-      open
-      onClose={() => {
-        if (!action.busy) close();
-      }}
-      fullWidth
-      maxWidth="sm"
-    >
-      <DialogTitle>{staff ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'}</DialogTitle>
-      <DialogContent>
-        <form
-          id="staff-editor"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setConfirm(true);
-          }}
-        >
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <OwnerFeedback {...action} />
-            <TextField
-              required
-              label="Họ tên"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              slotProps={{ htmlInput: { minLength: 2, maxLength: 150 } }}
-            />
-            <TextField
-              required
-              type="email"
-              label="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <TextField
-              label="Số điện thoại"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-            {!staff && (
-              <TextField
-                required
-                type="password"
-                autoComplete="new-password"
-                label="Mật khẩu khởi tạo"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                slotProps={{ htmlInput: { minLength: 12, maxLength: 256 } }}
-              />
-            )}
-            <TextField
-              label="Số hợp đồng lao động"
-              value={employment.contractNumber ?? ''}
-              onChange={(e) => set('contractNumber', e.target.value || null)}
-            />
-            <TextField
-              required
-              label="Loại công việc"
-              value={employment.employmentType}
-              onChange={(e) => set('employmentType', e.target.value)}
-            />
-            <TextField
-              required
-              type="date"
-              label="Ngày bắt đầu"
-              value={employment.startDate}
-              slotProps={{ inputLabel: { shrink: true } }}
-              onChange={(e) => set('startDate', e.target.value)}
-            />
-            <TextField
-              type="date"
-              required={employment.status === 'Ended'}
-              label="Ngày kết thúc"
-              value={employment.endDate ?? ''}
-              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: employment.startDate } }}
-              onChange={(e) => set('endDate', e.target.value || null)}
-            />
-            <TextField
-              label="Hình thức lương"
-              value={employment.salaryType ?? ''}
-              onChange={(e) => set('salaryType', e.target.value || null)}
-            />
-            <TextField
-              type="number"
-              label="Mức lương thỏa thuận (VND)"
-              value={employment.baseRate ?? ''}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }}
-              onChange={(e) =>
-                set('baseRate', e.target.value === '' ? null : Number(e.target.value))
-              }
-            />
-            <TextField
-              select
-              label="Trạng thái công việc"
-              value={employment.status}
-              onChange={(e) => set('status', e.target.value)}
-            >
-              <MenuItem value="Active">Đang làm việc</MenuItem>
-              <MenuItem value="Ended">Đã kết thúc</MenuItem>
-            </TextField>
-            {staff && (
-              <>
-                <FormControlLabel
-                  label="Tài khoản hoạt động"
-                  control={<Checkbox checked={active} onChange={(_, v) => setActive(v)} />}
-                />
-                <TextField
-                  required
-                  label="Lý do cập nhật"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  slotProps={{ htmlInput: { maxLength: 500 } }}
-                />
-              </>
-            )}
-          </Stack>
-        </form>
-      </DialogContent>
-      <DialogActions>
-        <Button disabled={action.busy} onClick={close}>
-          Hủy
-        </Button>
-        <Button form="staff-editor" type="submit" disabled={action.busy}>
-          Kiểm tra và lưu
-        </Button>
-      </DialogActions>
-      <ConfirmDialog
-        error={action.error}
-        open={confirm}
-        title="Xác nhận lưu hồ sơ"
-        busy={action.busy}
-        onClose={() => setConfirm(false)}
-        onConfirm={() => void save()}
-      >
-        {active
-          ? 'Lưu thông tin tài khoản và công việc.'
-          : 'Ngừng tài khoản. Máy chủ sẽ từ chối nếu còn trách nhiệm chưa giải quyết.'}
-      </ConfirmDialog>
-    </Dialog>
   );
 }

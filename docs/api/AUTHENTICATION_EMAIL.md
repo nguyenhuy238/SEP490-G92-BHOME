@@ -44,16 +44,16 @@ phải true. Nếu Jobs.Enabled=true, scheduler/queue hiện có xử lý JOB-04
 
 ## API và client
 
-| API | Hành vi |
-| --- | --- |
-| POST `/api/v1/auth/forgot-password` | Anonymous `{userName}`; email đăng ký hoặc username legacy; generic 202 khi adapter sẵn sàng |
-| POST `/api/v1/auth/request-email-verification` | Anonymous `{userName}`; generic 202; gửi link tới email đã lưu của tài khoản đủ điều kiện |
-| POST `/api/v1/auth/confirm-email` | `{userName,token}`; Identity + verification grant hợp lệ → 204; lỗi chung 400 |
-| POST `/api/v1/auth/reset-password` | `{userName,token,newPassword}`; Identity + grant hợp lệ → 204; lỗi chung 400 |
-| POST `/api/v1/auth/change-password` | Phiên xác thực; body cũ; giữ 204/400 và revoke sessions |
-| POST `/api/v1/staff/{id}/invitation` | Owner; dùng email Staff đã lưu |
-| POST `/api/v1/residents/{id}/invitation` | Owner; `{email}` khớp Resident/contact và active tenancy hiện có |
-| POST `/api/v1/auth/accept-invitation` | `{userName,token,newPassword}`; Identity AccountInvitation token một lần |
+| API                                            | Hành vi                                                                                      |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| POST `/api/v1/auth/forgot-password`            | Anonymous `{userName}`; email đăng ký hoặc username legacy; generic 202 khi adapter sẵn sàng |
+| POST `/api/v1/auth/request-email-verification` | Anonymous `{userName}`; generic 202; gửi link tới email đã lưu của tài khoản đủ điều kiện    |
+| POST `/api/v1/auth/confirm-email`              | `{userName,token}`; Identity + verification grant hợp lệ → 204; lỗi chung 400                |
+| POST `/api/v1/auth/reset-password`             | `{userName,token,newPassword}`; Identity + grant hợp lệ → 204; lỗi chung 400                 |
+| POST `/api/v1/auth/change-password`            | Phiên xác thực; body cũ; giữ 204/400 và revoke sessions                                      |
+| POST `/api/v1/staff/{id}/invitation`           | Owner; dùng email Staff đã lưu                                                               |
+| POST `/api/v1/residents/{id}/invitation`       | Owner; `{email}` khớp Resident/contact và active tenancy hiện có                             |
+| POST `/api/v1/auth/accept-invitation`          | `{userName,token,newPassword}`; Identity AccountInvitation token một lần                     |
 
 Body/route cũ giữ nguyên. Lookup email giải quyết username khác email. Unknown/invalid identifier,
 unconfirmed/ineligible account không tạo reset email, vẫn generic 202. Required/length validation
@@ -92,16 +92,16 @@ Tài khoản đang có invitation chưa dùng hoặc có provisioning invitation
 
 ## Templates và security events
 
-| Event/template | Nội dung |
-| --- | --- |
-| PASSWORD_RESET_REQUESTED | Giải thích reset, link một lần, hạn dùng, hướng dẫn nếu không yêu cầu |
-| ACCOUNT_INVITATION / StaffInvitation | Lời mời Staff, tên/tài khoản và hướng dẫn thiết lập |
-| ACCOUNT_INVITATION / TenantInvitation | Chào mừng Tenant, tài khoản riêng và cách mở ứng dụng |
-| PASSWORD_CHANGED | Đổi mật khẩu thành công, thời gian Việt Nam, liên hệ Owner nếu trái phép |
-| PASSWORD_RESET_COMPLETED | Reset thành công, không chứa token/password hoặc email change trùng |
-| ACCOUNT_SETUP_COMPLETED | Hoàn tất invitation theo audit đã commit |
-| ACCOUNT_ACTIVATED / DEACTIVATED / ACCESS_CHANGED | Thay đổi trạng thái/quyền từ audit hiện có |
-| ACCOUNT_LOCKED | Lockout thực tế do Identity thiết lập, dedup user + lockout window |
+| Event/template                                   | Nội dung                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------ |
+| PASSWORD_RESET_REQUESTED                         | Giải thích reset, link một lần, hạn dùng, hướng dẫn nếu không yêu cầu    |
+| ACCOUNT_INVITATION / StaffInvitation             | Lời mời Staff, tên/tài khoản và hướng dẫn thiết lập                      |
+| ACCOUNT_INVITATION / TenantInvitation            | Chào mừng Tenant, tài khoản riêng và cách mở ứng dụng                    |
+| PASSWORD_CHANGED                                 | Đổi mật khẩu thành công, thời gian Việt Nam, liên hệ Owner nếu trái phép |
+| PASSWORD_RESET_COMPLETED                         | Reset thành công, không chứa token/password hoặc email change trùng      |
+| ACCOUNT_SETUP_COMPLETED                          | Hoàn tất invitation theo audit đã commit                                 |
+| ACCOUNT_ACTIVATED / DEACTIVATED / ACCESS_CHANGED | Thay đổi trạng thái/quyền từ audit hiện có                               |
+| ACCOUNT_LOCKED                                   | Lockout thực tế do Identity thiết lập, dedup user + lockout window       |
 
 Subject [BHOME], UTF-8/Vietnamese, HTML encoding + plain-text. Link chỉ từ callback tin cậy.
 StaffCreated giữ in-app để không trùng invitation email. Audit thất bại không phát security email;
