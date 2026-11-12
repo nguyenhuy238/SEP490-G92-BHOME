@@ -183,6 +183,13 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
+        services.AddOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>()
+            .Configure<IConfiguration>((options, config) => config.GetSection("SePay").Bind(options))
+            .Validate<IHostEnvironment>((options, host) => options.Valid(host.EnvironmentName),
+                "SePay requires isolated Test/Live configuration, a strong webhook secret and receiving accounts.")
+            .ValidateOnStart();
+        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value);
+        services.AddSingleton<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
