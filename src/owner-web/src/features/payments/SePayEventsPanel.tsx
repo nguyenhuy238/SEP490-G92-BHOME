@@ -49,8 +49,8 @@ export function SePayEventsPanel() {
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2}>
         <Typography variant="body2">
-          Trạng thái dưới đây ghi nhận kết quả xử lý webhook. Mở giao dịch liên kết để xem kết quả đối
-          soát thủ công hiện tại.
+          Trạng thái dưới đây ghi nhận kết quả xử lý webhook. Mở giao dịch liên kết để xem kết quả
+          đối soát thủ công hiện tại.
         </Typography>
         <Button disabled={events.isFetching} onClick={() => void events.refetch()}>
           Làm mới webhook

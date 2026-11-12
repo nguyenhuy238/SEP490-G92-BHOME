@@ -21,6 +21,16 @@ BHOME nhận webhook SePay qua `POST /api/v1/integrations/sepay/webhook`. Endpoi
 | Receipt/evidence     | API payment-transactions và reconciliation-history hiện có, Owner                                                                  |
 | Payment history/debt | API payment-history/debts hiện có với quyền và snapshot Tenant hiện hành                                                           |
 
+| Thông tin vận hành                    | Giá trị                                                                                                                                               |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local Webhook URL theo launch profile | `https://localhost:7240/api/v1/integrations/sepay/webhook`                                                                                            |
+| Public Webhook URL                    | **CHƯA XÁC ĐỊNH** — cần hostname HTTPS từ deployment hoặc tunnel                                                                                      |
+| Payment Code Format                   | `BH` + đúng 8 chữ số                                                                                                                                  |
+| Test API Base URL                     | `https://userapi-sandbox.sepay.vn/v2`                                                                                                                 |
+| Runtime prerequisites                 | .NET 8, PostgreSQL đã áp dụng migration Compact24, cấu hình API/MinIO hiện có, environment Development/Testing và receiving account demo khớp binding |
+
+Local URL trên là binding được khai báo trong launch profile, không phải bằng chứng API hiện đang chạy hoặc đã nhận được delivery từ SePay. Trong tác vụ phát triển, route và ledger được kiểm tra qua test host; public hosting và credential thực chưa được thiết lập.
+
 SePay payload được đọc gồm `id`, `gateway`, `transactionDate`, `accountNumber`, `subAccount`, `code`, `content`, `transferType`, `transferAmount`, `referenceCode`, `description`, `accumulated`. Payer được giữ trống. Thông tin mã/thời điểm/tài khoản nhận không xác minh danh tính người chuyển.
 
 Owner Web có tab **Webhook SePay** tại trang Thanh toán, hiển thị inbox và lý do cần xem xét. Receipt liên kết mở màn hình đối soát hiện có. API event list loại số tài khoản, raw payload và credential khỏi response. Tenant Mobile tiếp tục nhận QR và payment status qua API hiện có.
@@ -55,6 +65,8 @@ Thêm phần tử `__1__`, `__2__` cho các Location khác. Binding này phải 
 ## Database và tính nhất quán
 
 Migration `20261112000100_SePayIntegration` giữ 24 bảng. Registry dùng COMMAND records trong operational_tasks vì JSONB payment_requests phân tán trên các Invoice không bảo đảm uniqueness giữa Invoice và deposit. Unique indexes bảo vệ code và obligation. Trigger bảo vệ mapping bất biến và bằng chứng provider. Cột allocation creator cho phép null với source AUTO SePay có bằng chứng hợp lệ, thể hiện actor provider riêng.
+
+Migration từ chối `Down` để bảo toàn mã đã cấp và bằng chứng tài chính. Tắt `SePay:Enabled` dừng tích hợp; phương án phục hồi schema cần backup và quy trình restore được kiểm tra riêng, không xóa technical records hoặc nullable actor bằng SQL tùy ý.
 
 Mã mới có dạng `BH` cộng 8 chữ số ngẫu nhiên, ví dụ hình thức `BH12345678`. Mã được phát một lần cho obligation trong môi trường tương ứng, không tái sử dụng cho obligation khác. GUID và reference lịch sử được giữ. Owner vẫn có thể đối soát reference cũ. Automatic matcher chỉ nhận BH code đã đăng ký và một nghĩa vụ xác định.
 
