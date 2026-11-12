@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { MobileApi } from '../lib/api';
+import type { TenantMeterReading } from '../../../../packages/client-core/src/tenantReadings';
 import { TenantInvoicesScreen } from '../screens/TenantInvoicesScreen';
 import { TenantMeterHistoryScreen } from '../screens/TenantMeterHistoryScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
@@ -392,23 +393,64 @@ afterEach(() => {
 describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
   it('Test 1 & 2: displays confirmed periodic electricity & water readings and distinguishes missing baseline vs confirmed consumption', async () => {
     mocks.roomId = roomId;
+    const electricity: TenantMeterReading = {
+      id: readingId,
+      roomId,
+      roomNumber: 'P202',
+      locationName: 'Cơ sở Quận 7',
+      meterCode: 'ELEC-P202',
+      utilityType: 'Electricity',
+      purpose: 'Periodic',
+      readingDate: '2026-11-01',
+      billingPeriod: '2026-11-01',
+      previousValue: '1000',
+      confirmedValue: '1120',
+      consumption: '120',
+      confirmedAt: '2026-11-01T03:00:00Z',
+      status: 'Confirmed',
+    };
+    const readings: TenantMeterReading[] = [
+      electricity,
+      {
+        ...electricity,
+        id: secondInvoiceId,
+        meterCode: 'WATER-P202',
+        utilityType: 'Water',
+        previousValue: '50',
+        confirmedValue: '58',
+        consumption: '8',
+      },
+      {
+        ...electricity,
+        id: locationId,
+        purpose: 'Initial',
+        billingPeriod: null,
+        previousValue: null,
+        confirmedValue: '1000',
+        consumption: null,
+      },
+    ];
     const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
-      expect(String(url)).toContain(`roomId=${roomId}`);
-      return json(page([baseInvoice]));
+      expect(String(url)).toBe(
+        `https://api.example.invalid/api/v1/tenant/meter-readings?page=1&pageSize=20&roomId=${roomId}`,
+      );
+      return json(page(readings));
     });
     setApi(fetcher);
     render(<TenantMeterHistoryScreen />);
 
-    await screen.findByText('Kỳ 2026-11 · Phòng P202');
+    expect(await screen.findAllByText('Ngày đo: 01/11/2026 · Kỳ 2026-11')).toHaveLength(2);
     expect(screen.getByText('Chỉ số trước: 1.000')).toBeTruthy();
     expect(screen.getByText('Đã xác nhận: 1.120')).toBeTruthy();
     expect(screen.getByText('Tiêu thụ: 120 kWh')).toBeTruthy();
     expect(screen.getByText('Chỉ số trước: 50')).toBeTruthy();
     expect(screen.getByText('Đã xác nhận: 58')).toBeTruthy();
     expect(screen.getByText('Tiêu thụ: 8 m³')).toBeTruthy();
+    expect(screen.getByText('Chỉ số trước: Chưa có')).toBeTruthy();
+    expect(screen.getByText('Tiêu thụ: Chỉ số mốc')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('Xem hóa đơn của kỳ'));
-    expect(mocks.go).toHaveBeenCalledWith('invoice', { invoiceId });
+    fireEvent.click(screen.getByText('Xem hóa đơn và thanh toán'));
+    expect(mocks.go).toHaveBeenCalledWith('billing-history');
   });
 
   it('Test 3: renders Draft Invoice with full charge breakdown (Rent, Electricity, Water, ServiceFee, Other) and hides VietQR payment', async () => {

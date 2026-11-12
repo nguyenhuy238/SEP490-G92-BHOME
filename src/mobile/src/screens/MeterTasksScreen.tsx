@@ -19,7 +19,10 @@ import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type MeterTask, type Named } from '../lib/api';
 import { conciseMessage } from '../lib/toast';
 import { displayContractDate } from '../../../../packages/client-core/src/contracts';
-import { formatInstant, formatMeterReading } from '../../../../packages/client-core/src/localization';
+import {
+  formatInstant,
+  formatMeterReading,
+} from '../../../../packages/client-core/src/localization';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 import { colors as c } from '../theme/theme';
 
@@ -152,11 +155,7 @@ export function MeterTasksScreen() {
       if (task.locationId && task.locationId !== assignedLocation.id) return false;
       if (!task.locationId && task.location && task.location !== assignedLocation.label)
         return false;
-      if (
-        task.assignedStaffUserId &&
-        currentUserId &&
-        task.assignedStaffUserId !== currentUserId
-      )
+      if (task.assignedStaffUserId && currentUserId && task.assignedStaffUserId !== currentUserId)
         return false;
       return true;
     });
@@ -164,11 +163,7 @@ export function MeterTasksScreen() {
 
   const periods = useMemo(
     () =>
-      [
-        ...new Set(
-          scopedTasks.map((task) => task.billingPeriod).filter((p): p is string => !!p),
-        ),
-      ]
+      [...new Set(scopedTasks.map((task) => task.billingPeriod).filter((p): p is string => !!p))]
         .sort()
         .reverse(),
     [scopedTasks],
@@ -236,10 +231,8 @@ export function MeterTasksScreen() {
   };
 
   const hasActiveFilters = Boolean(room || period || due || status);
-  const advancedFilterCount =
-    (room ? 1 : 0) + (period ? 1 : 0) + (due ? 1 : 0) + (status ? 1 : 0);
-  const selectedRoomLabel =
-    rooms.data?.find((item) => item.id === room)?.label ?? room;
+  const advancedFilterCount = (room ? 1 : 0) + (period ? 1 : 0) + (due ? 1 : 0) + (status ? 1 : 0);
+  const selectedRoomLabel = rooms.data?.find((item) => item.id === room)?.label ?? room;
 
   if (!staff) return <Text>Chỉ Staff được phép ghi chỉ số điện nước.</Text>;
 
@@ -343,10 +336,7 @@ export function MeterTasksScreen() {
               accessibilityRole="button"
               accessibilityLabel="Bộ lọc"
               onPress={() => setFilterOpen(true)}
-              style={[
-                styles.filterTrigger,
-                advancedFilterCount > 0 && styles.filterTriggerActive,
-              ]}
+              style={[styles.filterTrigger, advancedFilterCount > 0 && styles.filterTriggerActive]}
             >
               <View style={styles.filterTriggerRow}>
                 <Icon
@@ -460,8 +450,7 @@ export function MeterTasksScreen() {
             !current?.error &&
             items.map((group) => {
               const ordered = [...group].sort(
-                (a, b) =>
-                  a.utilityType - b.utilityType || a.meterCode.localeCompare(b.meterCode),
+                (a, b) => a.utilityType - b.utilityType || a.meterCode.localeCompare(b.meterCode),
               );
               const primaryTask = ordered.find((item) => item.status < 2) ?? ordered[0]!;
               const requiredTasks = ordered.filter((item) => item.status !== 3);
@@ -472,11 +461,7 @@ export function MeterTasksScreen() {
               const progressLabel = allCompleted
                 ? 'Hoàn thành'
                 : `${completedCount}/${totalRequired || ordered.length} đã ghi`;
-              const progressTone = allCompleted
-                ? 'green'
-                : completedCount > 0
-                  ? 'blue'
-                  : 'amber';
+              const progressTone = allCompleted ? 'green' : completedCount > 0 ? 'blue' : 'amber';
               const dueTask =
                 ordered.find((item) => item.status < 2 && item.dueAt) ??
                 ordered.find((item) => item.dueAt) ??
@@ -523,31 +508,18 @@ export function MeterTasksScreen() {
                         ? readings[meter.confirmedReadingId]
                         : undefined;
                       const statusLabel =
-                        meter.status === 2
-                          ? 'Đã ghi'
-                          : meter.status === 3
-                            ? 'Đã hủy'
-                            : 'Chưa ghi';
+                        meter.status === 2 ? 'Đã ghi' : meter.status === 3 ? 'Đã hủy' : 'Chưa ghi';
                       const statusTone =
-                        meter.status === 2
-                          ? 'green'
-                          : meter.status === 3
-                            ? 'neutral'
-                            : 'amber';
+                        meter.status === 2 ? 'green' : meter.status === 3 ? 'neutral' : 'amber';
 
                       return (
                         <View
                           key={meter.id}
-                          style={[
-                            styles.meterRow,
-                            index > 0 && styles.meterRowDivider,
-                          ]}
+                          style={[styles.meterRow, index > 0 && styles.meterRowDivider]}
                         >
                           <View style={styles.meterLabelGroup}>
                             <Icon
-                              source={
-                                isElectric ? 'lightning-bolt-outline' : 'water-outline'
-                              }
+                              source={isElectric ? 'lightning-bolt-outline' : 'water-outline'}
                               size={18}
                               color={isElectric ? c.amber : c.blue}
                             />

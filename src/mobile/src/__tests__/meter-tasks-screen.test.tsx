@@ -346,9 +346,9 @@ it('shows error state and does not load meter tasks when assigned Location fails
   });
   render(<MeterTasksScreen />);
   await screen.findByText('Không tải được cơ sở được phân công');
-  expect(
-    state.request.mock.calls.some(([url]) => String(url).includes('/meter-tasks')),
-  ).toBe(false);
+  expect(state.request.mock.calls.some(([url]) => String(url).includes('/meter-tasks'))).toBe(
+    false,
+  );
   expect(screen.queryByText('Phòng 101')).toBeNull();
 });
 
@@ -360,9 +360,9 @@ it('supports filtering in the bottom sheet and removing active filter chips', as
   fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
 
   await waitFor(() =>
-    expect(
-      state.request.mock.calls.some(([url]) => String(url).includes('roomId=room-101')),
-    ).toBe(true),
+    expect(state.request.mock.calls.some(([url]) => String(url).includes('roomId=room-101'))).toBe(
+      true,
+    ),
   );
   const chip = await screen.findByRole('button', { name: 'Xóa lọc phòng 101' });
   fireEvent.click(chip);
@@ -421,4 +421,3 @@ it('formats 55555.0000 to 55.555 kWh and 65555.0000 to 65.555 m³, and cleans al
   expect(screen.getByText('Tiêu thụ: 1.234,5 kWh')).toBeTruthy();
   expect(screen.getByText('Tiêu thụ: 1.234,5678 m³')).toBeTruthy();
 });
-

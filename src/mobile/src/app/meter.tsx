@@ -351,9 +351,7 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
         <Box style={{ padding: 14, gap: 10 }}>
           <Pill tone="green">Đã lưu chỉ số</Pill>
           {isInitial && <Pill tone="blue">Đã lưu chỉ số ban đầu</Pill>}
-          <Text variant="headlineMedium">
-            {formatMeterReading(saved.confirmedValue, unit)}
-          </Text>
+          <Text variant="headlineMedium">{formatMeterReading(saved.confirmedValue, unit)}</Text>
           <Text>
             Chỉ số trước:{' '}
             {saved.previousValue !== null

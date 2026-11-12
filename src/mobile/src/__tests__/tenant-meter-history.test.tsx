@@ -10,8 +10,12 @@ const state = vi.hoisted(() => ({
   go: vi.fn(),
   request: vi.fn(),
   role: 'Tenant',
+  roomId: undefined as string | undefined,
 }));
-vi.mock('expo-router', () => ({ useFocusEffect: () => {} }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: () => {},
+  useLocalSearchParams: () => ({ roomId: state.roomId }),
+}));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: { roles: [state.role] }, api: { request: state.request } }),
 }));
@@ -81,6 +85,7 @@ const data: TenantMeterReadingPage = {
 beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Tenant';
+  state.roomId = undefined;
   state.query.mockReturnValue({ data, reload: state.reload, loading: false, error: '' });
 });
 afterEach(cleanup);
@@ -101,11 +106,23 @@ it('uses confirmed-reading source before any Draft invoice and loads private evi
 });
 it('does not query Tenant records under another role and presents empty state', () => {
   state.role = 'Staff';
+  state.roomId = id;
   state.query.mockReturnValue({ data: { ...data, items: [] }, reload: state.reload });
   render(<TenantMeterHistoryScreen />);
   expect(state.query).toHaveBeenCalledWith(null, { load: loadTenantReadings });
   expect(screen.getByText('Chưa có chỉ số đã xác nhận trong thời gian ở của bạn.')).toBeTruthy();
 });
+it.each([id, 'invalid-room', '00000000-0000-0000-0000-000000000000'])(
+  'only forwards a valid room filter to the Tenant readings query (%s)',
+  (roomId) => {
+    state.roomId = roomId;
+    render(<TenantMeterHistoryScreen />);
+    expect(state.query).toHaveBeenCalledWith(
+      '/api/v1/tenant/meter-readings?page=1&pageSize=20' + (roomId === id ? '&roomId=' + id : ''),
+      { load: loadTenantReadings },
+    );
+  },
+);
 it('routes a reauthorized meter-reading notice to Tenant meter history', async () => {
   const api = { request: vi.fn().mockResolvedValue({ objectType: 'MeterReading', objectId: id }) };
   expect(

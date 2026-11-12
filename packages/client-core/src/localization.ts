@@ -57,4 +57,3 @@ export function formatMeterReading(
   const signed = isNegative ? `-${formatted}` : formatted;
   return unit ? `${signed} ${unit}` : signed;
 }
-

@@ -113,7 +113,8 @@ export function MeterRoomOverview({
                       {task.meterCode}
                     </Text>
                     <Text style={ui.muted}>
-                      Chỉ số trước: {previous === null ? 'Chưa có' : formatMeterReading(previous, unit)}
+                      Chỉ số trước:{' '}
+                      {previous === null ? 'Chưa có' : formatMeterReading(previous, unit)}
                     </Text>
                     {isInitial && (
                       <Text variant="bodySmall" style={ui.muted}>
