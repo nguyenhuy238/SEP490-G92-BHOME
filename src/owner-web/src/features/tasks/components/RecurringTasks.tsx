@@ -1,0 +1,387 @@
+import { useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Checkbox,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { OwnerFeedback, OwnerTable } from '../../../components/common/OwnerWorkspace';
+import { OwnerLocationPicker } from '../../../components/common/OwnerSelectors';
+import { useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
+import { formatInstant } from '../../../../../../packages/client-core/src/localization';
+import {
+  vietnamDateInput,
+  vietnamInstant,
+  type RecurringTemplate,
+  type TaskWork,
+} from '../taskContracts';
+import { useTaskAction } from '../useOperationalTasksApi';
+import { TaskWorkFields } from './TaskEditorDialog';
+const root = '/api/v1/operational-task-templates';
+export function RecurringTasks({
+  location,
+  change,
+  locationName,
+  notify,
+}: {
+  location: string;
+  change: (id: string) => void;
+  locationName: (id: string) => string;
+  notify: (message: string) => void;
+}) {
+  const list = useOwnerQuery<RecurringTemplate[]>(
+    ['recurring-tasks', location],
+    `${root}?locationId=${location}`,
+    !!location,
+  );
+  const [editor, setEditor] = useState<RecurringTemplate | null | undefined>();
+  const [command, setCommand] = useState<{ item: RecurringTemplate; mode: 'toggle' | 'delete' }>();
+  return (
+    <Stack spacing={2}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ justifyContent: 'space-between' }}
+      >
+        <Box>
+          <Typography sx={{ fontSize: 18, fontWeight: 600 }}>Lịch công việc định kỳ</Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
+            Thiết lập các công việc được hệ thống tạo tự động theo chu kỳ.
+          </Typography>
+        </Box>
+        <Button variant="contained" disabled={!location} onClick={() => setEditor(null)}>
+          Tạo lịch định kỳ
+        </Button>
+      </Stack>
+      <OwnerLocationPicker simple value={location} change={change} />
+      {!location ? (
+        <Typography>Chọn cơ sở để xem và tạo lịch định kỳ.</Typography>
+      ) : (
+        <>
+          <OwnerFeedback busy={list.isFetching} error={list.error} />
+          <Button onClick={() => void list.refetch()}>Làm mới lịch</Button>
+          <OwnerTable
+            rows={list.data ?? []}
+            loading={list.isPending}
+            error={list.error}
+            retry={() => void list.refetch()}
+            id={(item) => item.id}
+            columns={[
+              {
+                label: 'Tên công việc',
+                render: (item) => (
+                  <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{item.title}</Typography>
+                ),
+              },
+              { label: 'Cơ sở', render: () => locationName(location) },
+              {
+                label: 'Chu kỳ',
+                render: (item) =>
+                  item.scheduleType === 'Weekly'
+                    ? 'Hàng tuần (lịch đã có)'
+                    : item.scheduleType === 'Monthly'
+                      ? 'Hàng tháng (lịch đã có)'
+                      : `Mỗi ${item.intervalDays} ngày`,
+              },
+              { label: 'Lần tạo tiếp theo', render: (item) => formatInstant(item.nextRunAt) },
+              { label: 'Hạn hoàn thành', render: (item) => `${item.dueAfterHours} giờ` },
+              { label: 'Trạng thái', render: (item) => (item.isActive ? 'Đang bật' : 'Đã tắt') },
+              {
+                label: 'Thao tác',
+                render: (item) => (
+                  <Stack direction="row">
+                    <Button onClick={() => setEditor(item)}>Chỉnh sửa</Button>
+                    <Button onClick={() => setCommand({ item, mode: 'toggle' })}>
+                      {item.isActive ? 'Tắt lịch' : 'Bật lịch'}
+                    </Button>
+                    <Button color="error" onClick={() => setCommand({ item, mode: 'delete' })}>
+                      Xóa
+                    </Button>
+                  </Stack>
+                ),
+              },
+            ]}
+          />
+        </>
+      )}
+      {editor !== undefined && (
+        <RecurringEditor
+          key={editor?.id ?? 'new'}
+          template={editor}
+          location={location}
+          close={() => setEditor(undefined)}
+          reload={async () => (await list.refetch()).data}
+          notify={notify}
+        />
+      )}{' '}
+      {command && (
+        <TemplateCommand
+          key={command.item.id + command.mode}
+          {...command}
+          close={() => setCommand(undefined)}
+          reload={async () => (await list.refetch()).data}
+          notify={notify}
+        />
+      )}
+    </Stack>
+  );
+}
+function TemplateCommand({
+  item,
+  mode,
+  close,
+  reload,
+  notify,
+}: {
+  item: RecurringTemplate;
+  mode: 'toggle' | 'delete';
+  close: () => void;
+  reload: () => Promise<RecurringTemplate[] | undefined>;
+  notify: (message: string) => void;
+}) {
+  const action = useTaskAction();
+  const [current, setCurrent] = useState(item);
+  const [missing, setMissing] = useState(false);
+  const { id, ...write } = current;
+  return (
+    <Dialog
+      open
+      fullWidth
+      maxWidth="xs"
+      onClose={() => {
+        if (!action.busy) close();
+      }}
+    >
+      <DialogTitle>
+        {mode === 'delete'
+          ? 'Xóa lịch định kỳ'
+          : item.isActive
+            ? 'Tắt lịch định kỳ'
+            : 'Bật lịch định kỳ'}
+      </DialogTitle>
+      <DialogContent>
+        <OwnerFeedback error={action.error} busy={action.busy} />
+        <Typography>{current.title}</Typography>
+        <Typography sx={{ fontSize: 14, mt: 1 }}>
+          Các công việc đã tạo và lịch sử vẫn được giữ nguyên.
+        </Typography>
+        {action.conflict && (
+          <Alert severity="warning">
+            Mẫu đã thay đổi.
+            <Button
+              onClick={async () => {
+                const latest = (await reload())?.find((x) => x.id === item.id);
+                if (latest) {
+                  setCurrent(latest);
+                  action.reviewed();
+                } else setMissing(true);
+              }}
+            >
+              Tải dữ liệu mới
+            </Button>
+          </Alert>
+        )}
+        {missing && (
+          <Alert severity="error">Không tìm thấy mẫu. Đóng hộp thoại để kiểm tra danh sách.</Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button disabled={action.busy} onClick={close}>
+          Hủy
+        </Button>
+        <Button
+          color={mode === 'delete' ? 'error' : 'primary'}
+          variant="contained"
+          disabled={action.busy || action.conflict || missing}
+          onClick={() =>
+            void action
+              .run(() =>
+                action.command(
+                  mode === 'delete'
+                    ? `${root}/${id}?locationId=${current.locationId}&version=${current.version}`
+                    : `${root}/${id}`,
+                  mode === 'delete' ? 'DELETE' : 'PUT',
+                  mode === 'delete' ? undefined : { ...write, isActive: !item.isActive },
+                ),
+              )
+              .then((ok) => {
+                if (ok) {
+                  notify('Đã cập nhật lịch định kỳ.');
+                  close();
+                }
+              })
+          }
+        >
+          Xác nhận
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+function RecurringEditor({
+  template,
+  location,
+  close,
+  reload,
+  notify,
+}: {
+  template: RecurringTemplate | null;
+  location: string;
+  close: () => void;
+  reload: () => Promise<RecurringTemplate[] | undefined>;
+  notify: (message: string) => void;
+}) {
+  const [snapshot, setSnapshot] = useState(template);
+  const [work, setWork] = useState<TaskWork>({
+    title: template?.title ?? '',
+    requirements: template?.requirements ?? '',
+    priority: template?.priority ?? 'Normal',
+    evidenceRequired: template?.evidenceRequired ?? false,
+    dueAt: '',
+  });
+  const [days, setDays] = useState(template?.intervalDays ?? 1),
+    [hours, setHours] = useState(template?.dueAfterHours ?? 24),
+    [next, setNext] = useState(vietnamDateInput(template?.nextRunAt ?? '')),
+    [active, setActive] = useState(template?.isActive ?? true),
+    [missing, setMissing] = useState(false);
+  const action = useTaskAction();
+  const calendar = snapshot?.scheduleType && snapshot.scheduleType !== 'IntervalDays';
+  const valid =
+    work.title.trim() &&
+    work.requirements.trim() &&
+    Number.isInteger(days) &&
+    days >= 1 &&
+    days <= 365 &&
+    Number.isInteger(hours) &&
+    hours >= 1 &&
+    hours <= 720 &&
+    next &&
+    Number.isFinite(Date.parse(next + ':00+07:00'));
+  return (
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      onClose={() => {
+        if (!action.busy) close();
+      }}
+    >
+      <DialogTitle>{template ? 'Chỉnh sửa lịch định kỳ' : 'Tạo lịch định kỳ'}</DialogTitle>
+      <DialogContent>
+        <Stack
+          component="form"
+          id="recurring-editor"
+          spacing={2}
+          sx={{ pt: 1 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!valid || action.conflict || missing) return;
+            const { dueAt: _dueAt, ...fields } = work;
+            void action
+              .run(() =>
+                action.command(
+                  root + (template ? `/${template.id}` : ''),
+                  template ? 'PUT' : 'POST',
+                  {
+                    ...fields,
+                    locationId: location,
+                    intervalDays: days,
+                    nextRunAt: vietnamInstant(next),
+                    dueAfterHours: hours,
+                    isActive: active,
+                    version: snapshot?.version ?? 0,
+                    scheduleType: snapshot?.scheduleType ?? 'IntervalDays',
+                    dayOfWeek: snapshot?.dayOfWeek ?? null,
+                    dayOfMonth: snapshot?.dayOfMonth ?? null,
+                  },
+                ),
+              )
+              .then((ok) => {
+                if (ok) {
+                  notify('Đã lưu lịch định kỳ.');
+                  close();
+                }
+              });
+          }}
+        >
+          <OwnerFeedback error={action.error} busy={action.busy} />
+          <TaskWorkFields work={work} change={setWork} includeDue={false} errors={action.fields} />
+          <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Cấu hình định kỳ</Typography>
+          {calendar && (
+            <Typography sx={{ fontSize: 13 }}>
+              Giữ nguyên lịch {snapshot?.scheduleType} đã cấu hình. Thao tác này không chuyển lịch
+              sang chu kỳ N ngày.
+            </Typography>
+          )}
+          <TextField
+            required
+            type="number"
+            disabled={!!calendar}
+            label="Mỗi bao nhiêu ngày"
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            slotProps={{ htmlInput: { min: 1, max: 365 } }}
+          />
+          <TextField
+            required
+            type="datetime-local"
+            label="Thời điểm sinh việc tiếp theo (giờ Việt Nam)"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            required
+            type="number"
+            label="Thời gian hoàn thành (giờ)"
+            value={hours}
+            onChange={(e) => setHours(Number(e.target.value))}
+            slotProps={{ htmlInput: { min: 1, max: 720 } }}
+          />
+          <FormControlLabel
+            label="Lịch đang bật"
+            control={<Checkbox checked={active} onChange={(_, v) => setActive(v)} />}
+          />
+          {action.conflict && (
+            <Alert severity="warning">
+              Mẫu đã thay đổi. Nội dung nhập được giữ nguyên.
+              <Button
+                onClick={async () => {
+                  const latest = (await reload())?.find((item) => item.id === template?.id);
+                  if (latest) {
+                    setSnapshot(latest);
+                    action.reviewed();
+                  } else setMissing(true);
+                }}
+              >
+                Tải dữ liệu mới
+              </Button>
+            </Alert>
+          )}
+          {missing && <Alert severity="error">Không tìm thấy mẫu.</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button disabled={action.busy} onClick={close}>
+          Hủy
+        </Button>
+        <Button
+          variant="contained"
+          type="submit"
+          form="recurring-editor"
+          disabled={action.busy || action.conflict || !valid || missing}
+        >
+          Lưu mẫu
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

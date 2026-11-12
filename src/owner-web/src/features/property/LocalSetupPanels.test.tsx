@@ -193,7 +193,8 @@ it('publishes OperatingPolicy without overwriting a Contract and requests policy
       expect.anything(),
     ),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Công bố nội quy' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Công bố nội quy' }));
   await screen.findByText('Máy chủ đã công bố nội quy. Hợp đồng đã ký được giữ nguyên.');
   expect(state.request).toHaveBeenCalledWith('/api/v1/operating-policies/policy/publish', {
     method: 'POST',

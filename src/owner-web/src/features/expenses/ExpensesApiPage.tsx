@@ -114,6 +114,7 @@ export function ExpensesApiPage() {
   return (
     <>
       <PageHeader
+        group={null}
         title="Đầu tư ban đầu & Chi phí"
         subtitle="Khoản chi thực tế theo cơ sở; lịch sử chỉnh sửa được lưu trên máy chủ."
         actions={
@@ -213,7 +214,20 @@ export function ExpensesApiPage() {
       )}
       {!rows.error &&
         rows.data?.items.map((e) => (
-          <Paper key={e.id} sx={{ p: 2, mb: 1 }}>
+          <Paper
+            key={e.id}
+            variant="outlined"
+            sx={{
+              p: 2.5,
+              mb: 2,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' },
+              columnGap: 3,
+              rowGap: 1,
+              '& > .MuiTypography-h6': { fontWeight: 750 },
+              '& > .MuiButton-root': { justifySelf: 'start' },
+            }}
+          >
             <Typography variant="h6">
               {e.category} — {formatDraftMoney(e.amount)}
             </Typography>
@@ -222,7 +236,9 @@ export function ExpensesApiPage() {
               {locations.data?.find((l) => l.id === e.locationId)?.label} ·{' '}
               {types.find((t) => t.id === e.expenseType)?.name}
             </Typography>
-            <Typography>{e.note}</Typography>
+            <Typography sx={{ whiteSpace: 'pre-wrap', color: 'text.secondary', lineHeight: 1.7 }}>
+              {e.note}
+            </Typography>
             {(e.assetName || e.taskTitle) && (
               <Typography>{[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}</Typography>
             )}
@@ -287,7 +303,7 @@ export function ExpensesApiPage() {
                   select
                   required
                   label="Cơ sở ghi nhận"
-                  disabled={busy || !!editor.previous}
+                  disabled={busy || !!editor.previous || !!routeLocation}
                   value={editor.value.locationId}
                   onChange={(e) =>
                     setEditor(

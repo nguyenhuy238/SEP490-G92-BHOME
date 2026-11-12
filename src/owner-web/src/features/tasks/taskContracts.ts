@@ -59,7 +59,7 @@ export interface RecurringTemplate extends Omit<TaskWork, 'dueAt'> {
 export const taskStatus: Record<string, string> = {
   Assigned: 'Đã giao',
   InProgress: 'Đang thực hiện',
-  PendingVerification: 'Chờ Owner nghiệm thu',
+  PendingVerification: 'Chờ nghiệm thu',
   Completed: 'Đã hoàn thành',
   Cancelled: 'Đã hủy',
 };

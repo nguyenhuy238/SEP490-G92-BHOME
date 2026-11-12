@@ -137,7 +137,7 @@ it.each([400, 409, 403])(
       target: { value: 'Synthetic correction' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
-    await screen.findByRole('alert');
+    await screen.findAllByRole('alert');
     expect(screen.queryByText('Máy chủ đã lưu cấu hình.')).toBeNull();
   },
 );
@@ -251,6 +251,24 @@ it('reads physical Asset fields through the scoped native list and pagination', 
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
       '/api/v1/assets?locationId=location&page=2&pageSize=20',
+      expect.anything(),
+    ),
+  );
+});
+
+it('sends room status filtering to the backend instead of filtering a paginated subset', async () => {
+  state.request.mockImplementation(async (path: string) =>
+    path === '/api/v1/capture/locations'
+      ? [{ id: 'location', label: 'Synthetic Location' }]
+      : { items: [], totalCount: 0 },
+  );
+  mount('rooms');
+  await chooseLocation();
+  fireEvent.mouseDown(screen.getByLabelText('Trạng thái'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Đang có khách thuê' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/rooms?locationId=location&page=1&pageSize=20&roomStatus=2',
       expect.anything(),
     ),
   );

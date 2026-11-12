@@ -1,92 +1,75 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
-import { createApiClient } from '../../../../../packages/client-core/src/api';
-import { getApiBaseUrl } from '../../../../../packages/client-core/src/config';
+import { ApiError } from '../../../../../packages/client-core/src/api';
+import { useOwnerAction, type OwnerLocation } from '../../hooks/useOwnerWorkspace';
+import { useMeterApi } from '../meters/useMeterApi';
+import { readAllPages } from '../staff/useLocationAssignments';
+import type { Staff } from '../staff/staffContracts';
+import type { OwnerTask } from './taskContracts';
 
-export type TaskStatus =
-  'Assigned' | 'InProgress' | 'PendingVerification' | 'Completed' | 'Cancelled';
-export interface OperationalTask {
-  id: string;
-  locationId: string;
-  kind: 'AdHoc' | 'MeterReading';
-  title: string;
-  requirements: string;
-  priority: 'Normal' | 'High';
-  dueAt: string | null;
-  evidenceRequired: boolean;
-  status: TaskStatus;
-  isOverdue: boolean;
-  currentResponsibleStaffUserId: string | null;
-  recordedStaffUserId: string | null;
-  responsibilityAvailable: boolean;
-  result: string | null;
-  version: number;
-  verifiedByUserId: string | null;
-  verifiedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+export const taskRoot = '/api/v1/operational-tasks';
+export function useTaskDirectory() {
+  const { request } = useMeterApi();
+  const { session } = useAuth();
+  const enabled = !!session?.roles.includes('Owner');
+  const staff = useQuery({
+    queryKey: ['owner-workspace', session?.userId, 'task-directory-staff'],
+    enabled,
+    staleTime: 60000,
+    queryFn: ({ signal }) => readAllPages<Staff>(request, '/api/v1/staff', signal),
+  });
+  const locations = useQuery({
+    queryKey: ['owner-workspace', session?.userId, 'task-directory-locations'],
+    enabled,
+    staleTime: 60000,
+    queryFn: ({ signal }) => readAllPages<OwnerLocation>(request, '/api/v1/locations', signal),
+  });
+  return { staff, locations };
 }
-export interface TaskPage<T> {
-  items: T[];
-  page: number;
-  pageSize: number;
-  totalCount: number;
+export function useTaskAction() {
+  const action = useOwnerAction();
+  const [conflict, setConflict] = useState(false);
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const run = (work: () => Promise<unknown>) =>
+    action.run(async () => {
+      setFields({});
+      try {
+        return await work();
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setConflict(error.status === 409);
+          setFields(
+            Object.fromEntries(
+              Object.entries(error.problem?.errors ?? {}).map(([key, messages]) => [
+                key.split('.').pop()!.toLowerCase(),
+                messages.join(' '),
+              ]),
+            ),
+          );
+        }
+        throw error;
+      }
+    });
+  return { ...action, run, conflict, fields, reviewed: () => setConflict(false) };
 }
-export interface TaskHistory {
-  id: string;
-  actorId: string;
-  action: string;
-  note: string;
-  responsibleStaffUserId: string | null;
-  occurredAt: string;
-  wasOverdue: boolean;
-  taskVersion: number;
+export const responsibleName = (task: OwnerTask, staff: Staff[]) =>
+  !task.responsibilityAvailable
+    ? 'Chưa có người phụ trách'
+    : staff.find((item) => item.userId === task.currentResponsibleStaffUserId)?.fullName?.trim() ||
+      'Không tải được tên nhân viên';
+export function taskActions(task: OwnerTask) {
+  if (task.kind !== 'AdHoc') return [];
+  if (task.status === 'PendingVerification') return ['verify', 'rework'];
+  if (['Assigned', 'InProgress'].includes(task.status))
+    return ['edit', 'coordinate', ...(task.responsibilityAvailable ? ['assign'] : []), 'cancel'];
+  return [];
 }
-export interface TaskEvidence {
-  id: string;
-  contentType: string;
-  length: number;
-  uploadedByUserId: string;
-  createdAt: string;
-  submissionId: string | null;
-}
-export interface TaskWork {
-  title: string;
-  requirements: string;
-  priority: 'Normal' | 'High';
-  dueAt: string;
-  evidenceRequired: boolean;
-}
-export type OwnerTaskAction = 'assign' | 'coordinate' | 'verify' | 'rework' | 'cancel';
-
-export function useOperationalTasksApi() {
-  const { client } = useAuth();
-  return useMemo(() => {
-    const request = createApiClient(
-      getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV),
-      () => client.session?.accessToken,
-      client.clear,
-      client.refresh,
-    );
-    const command = <T>(path: string, body: unknown, key: string, method = 'POST') =>
-      request<T>(path, { method, body: JSON.stringify(body), headers: { 'Idempotency-Key': key } });
-    const path = (id: string) => `/api/v1/operational-tasks/${encodeURIComponent(id)}`;
-    return {
-      list: (query: string, signal?: AbortSignal) =>
-        request<TaskPage<OperationalTask>>(`/api/v1/operational-tasks?${query}`, { signal }),
-      get: (id: string, signal?: AbortSignal) => request<OperationalTask>(path(id), { signal }),
-      history: (id: string, signal?: AbortSignal) =>
-        request<TaskPage<TaskHistory>>(`${path(id)}/history?page=1&pageSize=100`, { signal }),
-      evidence: (id: string, signal?: AbortSignal) =>
-        request<TaskEvidence[]>(`${path(id)}/evidence`, { signal }),
-      evidenceFile: (id: string, evidenceId: string) =>
-        request<Blob>(`${path(id)}/evidence/${encodeURIComponent(evidenceId)}`, {}, 'blob'),
-      create: (locationId: string, work: TaskWork, key: string) =>
-        command<OperationalTask>('/api/v1/operational-tasks', { locationId, work }, key),
-      update: (id: string, version: number, work: TaskWork, reason: string, key: string) =>
-        command<OperationalTask>(path(id), { version, work, reason }, key, 'PUT'),
-      act: (id: string, action: OwnerTaskAction, version: number, note: string, key: string) =>
-        command<OperationalTask>(`${path(id)}/${action}`, { version, note, evidenceIds: [] }, key),
-    };
-  }, [client]);
-}
+export const actionNames: Record<string, string> = {
+  edit: 'Chỉnh sửa',
+  coordinate: 'Ghi chú phối hợp',
+  assign: 'Đồng bộ người phụ trách',
+  cancel: 'Hủy công việc',
+  verify: 'Nghiệm thu',
+  rework: 'Yêu cầu làm lại',
+};
