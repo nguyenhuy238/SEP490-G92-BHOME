@@ -7,6 +7,7 @@ import {
   mobileResponse,
   type Session,
 } from './api';
+import { sessionFromTokenResponse } from '../../../../packages/client-core/src/jwtSession';
 
 export interface CredentialStore {
   read(): Promise<string | null>;
@@ -98,19 +99,7 @@ export class MobileSessions {
         },
         this.transport,
         async (response) => {
-          const value: unknown = await response.json();
-          if (!value || typeof value !== 'object') throw new Error('Invalid session');
-          const result = value as Session;
-          if (
-            ![result.userId, result.accessToken, result.refreshToken].every(
-              (field) => typeof field === 'string' && field.trim().length > 0,
-            ) ||
-            !Array.isArray(result.roles) ||
-            !result.roles.length ||
-            !result.roles.every((role) => typeof role === 'string')
-          )
-            throw new Error('Invalid session');
-          return result;
+          return sessionFromTokenResponse(await response.json(), true) as Session;
         },
       );
     } catch (error) {

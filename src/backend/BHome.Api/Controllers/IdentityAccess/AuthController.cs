@@ -5,6 +5,7 @@ using BHome.Api.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Text.Json.Serialization;
 
 namespace BHome.Api.Controllers.IdentityAccess;
 
@@ -18,7 +19,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     [HttpPost("login")]
     [AllowAnonymous]
     [RequestSizeLimit(16 * 1024)]
-    public async Task<ActionResult<LoginResult>> Login(LoginRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthTokenResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
@@ -35,7 +36,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
 
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public async Task<ActionResult<LoginResult>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthTokenResponse>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
     {
         var token = AuthTransportFilter.IsWeb(Request) ? Request.Cookies[AuthTransportFilter.CookieName] : request.RefreshToken;
         var result = string.IsNullOrWhiteSpace(token) ? null : await sessions.RefreshAsync(token, cancellationToken);
@@ -87,11 +88,11 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     private Guid UserId => Guid.Parse(User.FindFirst("sub")!.Value);
     private Guid SessionId => Guid.Parse(User.FindFirst("sid")!.Value);
 
-    private LoginResult Transport(LoginResult result)
+    private AuthTokenResponse Transport(LoginResult result)
     {
-        if (!AuthTransportFilter.IsWeb(Request)) return result;
+        if (!AuthTransportFilter.IsWeb(Request)) return new AuthTokenResponse(result.AccessToken, result.RefreshToken);
         Response.Cookies.Append(AuthTransportFilter.CookieName, result.RefreshToken!, AuthTransportFilter.CookieOptions(result.SessionExpiresAt));
-        return result with { RefreshToken = null };
+        return new AuthTokenResponse(result.AccessToken);
     }
 
     private void ClearCookie() => Response.Cookies.Delete(AuthTransportFilter.CookieName, AuthTransportFilter.CookieOptions());
@@ -111,6 +112,9 @@ public sealed record LoginRequest(
     [StringLength(256)] string? Device = null);
 
 public sealed record RefreshRequest([StringLength(256)] string? RefreshToken = null);
+public sealed record AuthTokenResponse(
+    string AccessToken,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RefreshToken = null);
 public sealed record ChangePasswordRequest(
     [Required, StringLength(LoginService.MaxPasswordLength)] string? CurrentPassword,
     [Required, StringLength(LoginService.MaxPasswordLength, MinimumLength = 12)] string? NewPassword);

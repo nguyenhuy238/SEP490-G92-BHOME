@@ -72,7 +72,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         client.DefaultRequestHeaders.Authorization = null;
         var byPhone = await client.PostAsJsonAsync("/api/v1/auth/login", new { phone = "090 123 4567", password = Password });
         Assert.Equal(HttpStatusCode.OK, byPhone.StatusCode);
-        Assert.Equal(user.Id, (await byPhone.Content.ReadFromJsonAsync<LoginResult>())!.UserId);
+        Assert.Equal(user.Id, (await TestAuthResponse.ReadAsync(byPhone.Content)).UserId);
     }
 
     [CompactPostgresFact]
@@ -83,7 +83,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var first = await Login(client, user.Email!);
         var rotated = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { first.RefreshToken });
         Assert.Equal(HttpStatusCode.OK, rotated.StatusCode);
-        var second = (await rotated.Content.ReadFromJsonAsync<LoginResult>())!;
+        var second = await TestAuthResponse.ReadAsync(rotated.Content);
         Assert.NotEqual(first.RefreshToken, second.RefreshToken);
         Assert.Equal(first.SessionId, second.SessionId);
         var replay = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { first.RefreshToken });
@@ -101,7 +101,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => client.PostAsJsonAsync("/api/v1/auth/refresh", new { first.RefreshToken })));
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Unauthorized);
-        var winner = (await responses.Single(r => r.StatusCode == HttpStatusCode.OK).Content.ReadFromJsonAsync<LoginResult>())!;
+        var winner = await TestAuthResponse.ReadAsync(responses.Single(r => r.StatusCode == HttpStatusCode.OK).Content);
         Bearer(client, winner);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
     }
@@ -248,7 +248,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     {
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<LoginResult>())!;
+        return await TestAuthResponse.ReadAsync(response.Content);
     }
     private static void Bearer(HttpClient client, LoginResult session) => client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
     private sealed class ResetDelivery : IPasswordResetDelivery
