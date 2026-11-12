@@ -1,33 +1,17 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
-import type {
-  ContractView,
-  Readiness,
-  Signature,
-} from '../../../../../packages/client-core/src/contracts';
+import type { ContractView, Readiness } from '../../../../../packages/client-core/src/contracts';
 import { OnboardingStepper } from '../../components/OnboardingStepper';
 import { Box, Heading, ui } from '../../components/WorkspaceKit';
 import { staffColors as s } from '../../theme/theme';
 
-export type SignerState = 'unsigned' | 'waiting' | 'signed';
-export function signerState(
-  signatures: readonly Signature[],
-  signerId: string | null,
-): SignerState {
-  const mine = signatures.filter((signature) => signature.signerUserId === signerId);
-  if (mine.some((signature) => signature.status === 'Signed')) return 'signed';
-  return mine.some((signature) => !['Failed', 'Simulated'].includes(signature.status))
-    ? 'waiting'
-    : 'unsigned';
-}
-const steps = [
-  { key: 'prepare', label: 'Chuẩn bị' },
-  { key: 'approve', label: 'Phê duyệt' },
-  { key: 'sign', label: 'Hai bên ký' },
-  { key: 'deposit', label: 'Tiền cọc' },
-  { key: 'activate', label: 'Kích hoạt' },
-];
+export { signerState } from './rentalContractState';
+import {
+  rentalContractState,
+  rentalContractSteps as steps,
+  type SignerState,
+} from './rentalContractState';
 const labels: Record<SignerState, string> = {
   unsigned: 'Chưa ký',
   waiting: 'Đang chờ ký',
@@ -40,29 +24,15 @@ export function ContractProgress({
   contract: ContractView;
   readiness: Readiness | null;
 }) {
-  const owner = signerState(contract.signatures, contract.ownerSignerId);
-  const tenant = signerState(contract.signatures, contract.tenantUserId);
-  const bothSigned = owner === 'signed' && tenant === 'signed';
-  const active = contract.status === 'Active';
-  const depositVerified = !!readiness && /^0(?:\.0+)?$/.test(readiness.remainingDeposit);
-  const current = active
-    ? 4
-    : bothSigned
-      ? 3
-      : ['PendingSigning', 'PendingActivation'].includes(contract.status) ||
-          owner !== 'unsigned' ||
-          tenant !== 'unsigned'
-        ? 2
-        : 0;
-  // The contract DTO has no separate approval event. Never infer Owner approval from signatures.
-  const completed = [
-    ...(['PendingSigning', 'PendingActivation', 'Active'].includes(contract.status)
-      ? ['prepare']
-      : []),
-    ...(bothSigned ? ['sign'] : []),
-    ...(depositVerified ? ['deposit'] : []),
-    ...(active ? ['activate'] : []),
-  ];
+  const {
+    owner,
+    tenant,
+    signed: bothSigned,
+    active,
+    depositVerified,
+    current,
+    completed,
+  } = rentalContractState(contract, readiness);
   const message = active
     ? 'Hợp đồng đã được kích hoạt.'
     : owner === 'signed' && tenant !== 'signed'
@@ -102,9 +72,6 @@ export function ContractProgress({
           </View>
         ))}
       </View>
-      <Text variant="bodySmall" style={ui.muted}>
-        Trạng thái phê duyệt riêng chưa được cung cấp.
-      </Text>
       {bothSigned && (
         <Text>
           {readiness

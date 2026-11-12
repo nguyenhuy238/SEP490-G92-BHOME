@@ -493,6 +493,25 @@ it('never exposes an inaccessible room task or opens its camera', async () => {
   expect(state.image).not.toHaveBeenCalled();
   expect(screen.queryByText('Đồng hồ điện')).toBeNull();
 });
+it('shows initial baseline reading without calculating monthly consumption', async () => {
+  serverTasks = [
+    { ...electric, purpose: 0, billingPeriod: null, previousValue: null },
+    { ...water, purpose: 0, billingPeriod: null, previousValue: null },
+  ];
+  await overview();
+  expect(screen.getAllByText(/Mốc chỉ số ban đầu/)).toHaveLength(2);
+  await capture();
+  expect(screen.getByText(/Loại ghi: Chỉ số ban đầu/)).toBeTruthy();
+  expect(screen.queryByText(/Tiêu thụ dự kiến/)).toBeNull();
+  await save();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết đồng hồ điện' }));
+  await screen.findByText('Đã lưu chỉ số');
+  expect(screen.getByText('Đã lưu chỉ số ban đầu')).toBeTruthy();
+  expect(screen.getByText('Tiêu thụ: Chỉ số ban đầu')).toBeTruthy();
+  expect(screen.queryByText(/Đã gửi hóa đơn cho Tenant/)).toBeNull();
+  expect(screen.queryByText(/Đã tạo mã QR/)).toBeNull();
+  expect(screen.queryByText(/Tenant đã nhận thông báo/)).toBeNull();
+});
 it('does not fetch Staff meter data for a Tenant', async () => {
   state.role = 'Tenant';
   render(<MeterScreen />);

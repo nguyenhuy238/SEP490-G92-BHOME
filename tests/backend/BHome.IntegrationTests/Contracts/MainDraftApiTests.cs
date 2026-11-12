@@ -115,6 +115,34 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         Assert.Contains(code, await response.Content.ReadAsStringAsync());
     }
     [Fact]
+    public async Task ContactEmailRoundTripsEncryptedWithoutAccountCreationOrIssuePlaceSupplement()
+    {
+        var w = await Setup();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var beforeUsers = await db.Users.CountAsync();
+        var input = Input(w) with { TenantEmail = "  synthetic.contact@example.invalid  ", TenantPlaceOfIssue = "" };
+        var key = Guid.NewGuid();
+        var draft = await Save(w, input, key);
+        Assert.Equal("synthetic.contact@example.invalid", draft.Input.TenantEmail);
+        Assert.Equal(draft.Id, (await Save(w, input, key)).Id);
+        var reopened = await w.Staff.GetFromJsonAsync<MainDraftView>($"{Root}/{draft.Id}");
+        Assert.Equal(draft.Input.TenantEmail, reopened!.Input.TenantEmail);
+        var stored = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == draft.Id);
+        Assert.DoesNotContain("synthetic.contact", stored.DraftMetadata);
+        Assert.Null(stored.TenantUserId);
+        Assert.Equal(beforeUsers, await db.Users.CountAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Outside.GetAsync($"{Root}/{draft.Id}")).StatusCode);
+        var documents = await w.Staff.PostAsync($"{Root}/{draft.Id}/documents", null);
+        await Success(documents);
+        using var invalid = new HttpRequestMessage(HttpMethod.Put, $"{Root}/{draft.Id}")
+        { Content = JsonContent.Create(input with { TenantEmail = "invalid email", ExpectedVersion = draft.Version }) };
+        invalid.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.SendAsync(invalid)).StatusCode);
+        // Adding an optional contact must not change serialization/snapshots of older drafts.
+        Assert.DoesNotContain("TenantEmail", JsonSerializer.Serialize(Input(w)));
+    }
+    [Fact]
     public async Task ActualLibreOfficeConversionPersistsPrivatePdfWithVietnameseAndIssueDate()
     {
         var w = await Setup(); var draft = await Save(w);
@@ -177,7 +205,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var updatedInfo = await client.GetFromJsonAsync<DraftPreviewInfo>($"{Root}/{draft.Id}/documents/{updatedFiles.Pdf.Id}/preview");
         Assert.Equal(updatedFiles.Pdf.Id, updatedInfo!.FileId);
         await using var verification = fixture.Factory.Services.CreateAsyncScope();
-        var context = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var context = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var stored = await context.Set<Contract>().Include(c => c.Signatures).SingleAsync(c => c.Id == updated.Id);
         Assert.Equal(ContractStatus.Draft, stored.Status); Assert.Empty(stored.Signatures);
         Assert.Equal(RoomStatus.Available, (await context.Set<Room>().FindAsync(w.Room))!.Status);

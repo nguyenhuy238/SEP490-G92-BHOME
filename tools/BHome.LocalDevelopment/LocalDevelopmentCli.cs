@@ -8,6 +8,32 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Length == 3 && args[0] == "seed-tenant-mobile-demo" && args[2] is "--inspect" or "--seed" or "--verify")
+        {
+            try
+            {
+                var settings = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var setup = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(settings);
+                setup.AddInfrastructure(settings);
+                setup.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
+                setup.AddSingleton<LifecycleSeedActor>();
+                setup.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
+                await using var provider = setup.BuildServiceProvider();
+                await TenantMobileDemoSeed.RunAsync(provider, args[1], args[2]);
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error is LocalTestAccountException ? error.Message : $"TENANT_DEMO_FAILED ({error.GetType().Name}); credentials and row details suppressed.");
+                var postgres = error as Npgsql.PostgresException ?? error.InnerException as Npgsql.PostgresException;
+                if (postgres is not null) Console.Error.WriteLine($"DATABASE_DIAGNOSTIC code={postgres.SqlState}; constraint={postgres.ConstraintName}; table={postgres.TableName}; message={postgres.MessageText}");
+                else if (error is BHome.Application.PaymentsDebt.PaymentException payment) Console.Error.WriteLine("PAYMENT_CODE=" + payment.Code);
+                else if (error is BHome.Application.Operations.OperationsException operation) Console.Error.WriteLine("OPERATIONS_CODE=" + operation.Code);
+                else if (error is BHome.Application.Billing.AdjustmentException adjustment) Console.Error.WriteLine("ADJUSTMENT_CODE=" + adjustment.Code);
+                else if (error is BHome.Application.IncidentMaintenance.IncidentException incident) Console.Error.WriteLine("INCIDENT_CODE=" + incident.Code);
+                return 1;
+            }
+        }
         if (args.SequenceEqual(new[] { "provision-shared-development-roles" }))
         {
             try
@@ -131,13 +157,20 @@ internal static class LocalDevelopmentCli
             var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
             var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
             services.AddInfrastructure(config);
-            if (args.Length == 1 && args[0] is "seed-contract-demo" or "seed-billing-automation-demo" or "demo-billing-retry")
+            if ((args.Length == 1 && args[0] is "seed-contract-demo" or "seed-billing-automation-demo" or "demo-billing-retry") ||
+                (args.Length is 1 or 2 && args[0] == "seed-e2e-meter-workflow"))
             {
                 services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
                 services.AddSingleton<LifecycleSeedActor>();
                 services.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
             }
             await using var provider = services.BuildServiceProvider();
+            if (args.Length is 1 or 2 && args[0] == "seed-e2e-meter-workflow")
+            {
+                var mode = args.Length == 2 ? args[1] : "--seed";
+                await E2eMeterWorkflowSeed.RunAsync(provider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password, mode);
+                return 0;
+            }
             if (args.SequenceEqual(new[] { "seed-mobile-test" })) { await MobileTestSeed.RunAsync(provider, password); return 0; }
             if (args.SequenceEqual(new[] { "seed-billing-automation-demo" })) { await BillingAutomationDemoSeed.PrepareAsync(provider); return 0; }
             if (args.SequenceEqual(new[] { "demo-billing-retry" })) { await BillingAutomationDemoSeed.RetryAsync(provider); return 0; }

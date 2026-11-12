@@ -5,6 +5,7 @@ import {
   Image,
   Keyboard,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
@@ -20,7 +21,7 @@ import {
   type mainDraftClient,
 } from '../../../../../packages/client-core/src/mainDrafts';
 import { ToastHost } from '../../components/ToastHost';
-import { showError } from '../../lib/toast';
+import { workflowFailure } from '../../lib/workflowFailure';
 import { colors as c } from '../../theme/theme';
 import { previewError, previewPngUri, validPreviewInfo } from './pdfPreview';
 
@@ -62,7 +63,7 @@ function PdfPage({
           if (!controller.signal.aborted) {
             const message = previewError(error);
             setResult({ client, key, uri: '', error: message });
-            showError(message);
+            workflowFailure('main-draft', error);
           }
         } finally {
           bytes.fill(0);
@@ -72,7 +73,7 @@ function PdfPage({
         if (!controller.signal.aborted) {
           const message = previewError(error);
           setResult({ client, key, uri: '', error: message });
-          showError(message);
+          workflowFailure('main-draft', error);
         }
       },
     );
@@ -175,7 +176,6 @@ export function ContractPdfPreview({
             info: null,
             error: 'Bản xem trước không hợp lệ. Hãy tải lại tài liệu.',
           });
-          showError('Bản xem trước không hợp lệ. Hãy tải lại tài liệu.');
           return;
         }
         setResult({ client, key, info, error: '' });
@@ -184,7 +184,7 @@ export function ContractPdfPreview({
         if (!controller.signal.aborted) {
           const message = previewError(error);
           setResult({ client, key, info: null, error: message });
-          showError(message);
+          workflowFailure('main-draft', error);
         }
       },
     );
@@ -198,6 +198,7 @@ export function ContractPdfPreview({
     setZoom(1);
     setFullscreen(true);
   };
+  const ModalSafeArea = Platform.OS === 'web' ? React.Fragment : SafeAreaProvider;
   const error = fileId
     ? current?.error
     : busy
@@ -302,7 +303,7 @@ export function ContractPdfPreview({
           animationType="slide"
           onRequestClose={() => setFullscreen(false)}
         >
-          <SafeAreaProvider>
+          <ModalSafeArea>
             <SafeAreaView style={styles.fullscreen} edges={['top', 'bottom', 'left', 'right']}>
               <View style={styles.toolbar}>
                 <IconButton
@@ -362,7 +363,7 @@ export function ContractPdfPreview({
               />
             </SafeAreaView>
             <ToastHost modal />
-          </SafeAreaProvider>
+          </ModalSafeArea>
         </Modal>
       )}
     </View>

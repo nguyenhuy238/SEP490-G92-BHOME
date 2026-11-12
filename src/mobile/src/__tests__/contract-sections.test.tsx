@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ContractSummary } from '../../../../packages/client-core/src/contracts';
+import type { ContractSummary, Readiness } from '../../../../packages/client-core/src/contracts';
 import { contractActionSection, groupContracts } from '../features/contracts/contractSections';
 
 const state = vi.hoisted(() => ({
@@ -11,10 +11,11 @@ const state = vi.hoisted(() => ({
   section: undefined as string | undefined,
   request: vi.fn(),
   contract: {} as Record<string, unknown>,
+  readiness: null as Readiness | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
 const transport = { request: state.request };
-vi.mock('../theme/theme', () => ({ colors: {} }));
+vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => (state.deep ? { contractId: id, section: state.section } : {}),
   router: { setParams: vi.fn() },
@@ -36,14 +37,16 @@ vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
     loading: false,
     error: '',
     reload: vi.fn(),
-    data: { contract: state.contract, moveOut: null, readiness: null, history: [] },
+    data: { contract: state.contract, moveOut: null, readiness: state.readiness, history: [] },
   }),
 }));
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles },
+  ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('react-native-paper', () => ({
+  Icon: () => null,
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   ActivityIndicator: () => <span>Loading</span>,
   Checkbox: { Item: () => null },
@@ -90,7 +93,11 @@ vi.mock('../features/contracts/ContractActionForm', () => ({
   ContractActionForm: () => <span>Action form</span>,
   SigningCertificates: () => null,
 }));
-vi.mock('../features/contracts/ContractDraftForm', () => ({ ContractDraftForm: () => null }));
+vi.mock('../features/contracts/ContractDraftForm', () => ({
+  ContractDraftForm: ({ onCancel }: { onCancel: () => void }) => (
+    <button onClick={onCancel}>Cấu hình giữ chỗ</button>
+  ),
+}));
 vi.mock('../features/contracts/MainDraftScreen', () => ({ MainDraftScreen: () => null }));
 vi.mock('../features/contracts/MainDraftStart', () => ({ MainDraftStart: () => null }));
 vi.mock('../features/contracts/ContractEvidence', () => ({
@@ -127,6 +134,7 @@ beforeEach(() => {
   state.role = 'Staff';
   state.deep = true;
   state.section = undefined;
+  state.readiness = null;
   state.contract = {
     ...summary('Active'),
     id,
@@ -160,6 +168,60 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it('allows Owner to approve a Holding draft while Staff cannot approve, verify deposits or activate', () => {
+  state.contract.kind = 'Holding';
+  state.contract.status = 'Draft';
+  state.contract.holdingExpiresAt = '2099-12-01T00:00:00Z';
+  state.role = 'Owner';
+  const view = render(<ContractScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  expect(screen.getByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeTruthy();
+  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
+  view.unmount();
+  state.role = 'Staff';
+  render(<ContractScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt giữ chỗ' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
+});
+it.each([true, false])('gates Holding activation on backend readiness=%s', (ready) => {
+  state.role = 'Owner';
+  state.contract.kind = 'Holding';
+  state.contract.status = 'PendingActivation';
+  state.contract.approvedAt = '2026-11-01T00:00:00Z';
+  state.contract.holdingExpiresAt = '2099-12-01T00:00:00Z';
+  state.readiness = {
+    ready,
+    verifiedDeposit: '1000000',
+    remainingDeposit: '0',
+    blockers: ready ? [] : ['verified_signature_evidence_required'],
+  };
+  render(<ContractScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  expect(
+    (screen.getByRole('button', { name: 'Kích hoạt giữ chỗ' }) as HTMLButtonElement).disabled,
+  ).toBe(!ready);
+});
+it('preserves Staff conversion for an active unexpired Holding contract', () => {
+  state.contract.kind = 'Holding';
+  state.contract.status = 'Active';
+  state.contract.holdingExpiresAt = '2099-12-01T00:00:00Z';
+  render(<ContractScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  expect(screen.getByRole('button', { name: 'Chuyển sang hợp đồng thuê chính' })).toBeTruthy();
+});
+it('lets Owner open holding configuration directly and return to the contract list', () => {
+  state.role = 'Owner';
+  state.deep = false;
+  render(<ContractScreen />);
+  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
+  expect(screen.getByText('Cấu hình giữ chỗ')).toBeTruthy();
+  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
+  fireEvent.click(screen.getByText('Cấu hình giữ chỗ'));
+  expect(screen.getByText('Hợp đồng & Vòng đời')).toBeTruthy();
+});
 
 it('opens the handover section directly for the selected Tenant contract', () => {
   state.role = 'Tenant';
@@ -172,7 +234,7 @@ it('ignores an invalid initial contract section', () => {
   state.role = 'Tenant';
   state.section = '../unknown';
   render(<ContractScreen />);
-  expect(screen.getByText('Điều khoản đưa đi ký')).toBeTruthy();
+  expect(screen.getByText('Hợp đồng đã được kích hoạt')).toBeTruthy();
   expect(screen.queryByText('Handover panel')).toBeNull();
 });
 
@@ -224,6 +286,7 @@ it('routes an old Owner prepare entry to Owner Web without opening a draft form'
 });
 it('defaults to overview and switches sections without displaying all forms at once', () => {
   render(<ContractScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết hợp đồng' }));
   expect(screen.getByText('Điều khoản test đã lưu')).toBeTruthy();
   expect(screen.queryByText('Handover panel')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao' }));
@@ -234,12 +297,13 @@ it('defaults to overview and switches sections without displaying all forms at o
   expect(screen.queryByText('Handover panel')).toBeNull();
 });
 it('keeps Staff restrictions in the signing section', () => {
+  state.contract.status = 'PendingSigning';
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
-  expect(screen.getByText('Chữ ký và bằng chứng')).toBeTruthy();
+  expect(screen.getByText('Bước 2/4 · Ký hợp đồng')).toBeTruthy();
   expect(screen.queryByText('Signed PDF')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
-  expect(screen.getByText(/Staff chuẩn bị và theo dõi hồ sơ/)).toBeTruthy();
+  expect(screen.getByText(/Staff theo dõi hồ sơ/)).toBeTruthy();
 });
 it('does not open handover forms before activation', () => {
   state.contract.status = 'Draft';

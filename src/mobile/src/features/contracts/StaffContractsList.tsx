@@ -47,6 +47,7 @@ type Snapshot = {
 export function StaffContractsList({
   api,
   onCreate,
+  onCreateHolding,
   onOpen,
   onInspection,
   viewState,
@@ -54,6 +55,7 @@ export function StaffContractsList({
 }: {
   api: ContractClient;
   onCreate: () => void;
+  onCreateHolding?: () => void;
   onOpen: (contract: ContractSummary) => void;
   onInspection: (id: string) => void;
   viewState?: StaffContractListView;
@@ -146,6 +148,16 @@ export function StaffContractsList({
           />
         )}
       </View>
+      {onCreateHolding && (
+        <Button
+          mode="outlined"
+          icon="file-document-plus-outline"
+          contentStyle={{ minHeight: 48 }}
+          onPress={onCreateHolding}
+        >
+          Tạo hợp đồng giữ chỗ
+        </Button>
+      )}
       <TouchableRipple
         accessibilityRole="button"
         accessibilityLabel={`Lịch kiểm tra trả phòng, ${loading || scheduleError ? 'chưa tải được' : schedules.length + ' lịch'}`}

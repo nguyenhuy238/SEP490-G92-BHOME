@@ -13,12 +13,12 @@ export interface OnboardingPerson {
   residentId?: string;
   status: IdentityStatus;
   captureProgress?: CaptureProgress;
+  creationUncertain?: boolean;
 }
 export const onboardingSteps = [
   { key: 'room', label: 'Chọn phòng' },
   { key: 'people', label: 'Người ở' },
   { key: 'identity', label: 'CCCD' },
-  { key: 'review', label: 'Xác nhận' },
 ] as const;
 export const identityStatusLabels: Record<IdentityStatus, string> = {
   unscanned: 'Chưa quét',
