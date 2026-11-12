@@ -1,5 +1,42 @@
 # Tích hợp SePay và hướng dẫn Test Mode
 
+## Workspace kiểm thử Sandbox (13/11/2026)
+
+`GET /api/v1/integrations/sepay/testing-context` yêu cầu Owner JWT. Trả HTTP 200
+`{"mode":"Test"}` chỉ khi `SePay:Enabled=true`, `Mode=Test` và host là Development/Testing;
+trường hợp integration tắt, Live hoặc môi trường khác trả 404. Anonymous 401, Tenant/Staff 403.
+Response không chứa token, webhook secret hoặc cấu hình tài khoản.
+
+Owner mở **Thanh toán → Webhook SePay → Kiểm thử SePay**. Workspace tái sử dụng
+PaymentInvoicePicker để lọc Location/Room và chọn hóa đơn Final còn dư nợ. Các số tiền,
+mã BH, nội dung, tài khoản và QR đọc từ API payment/transfer-instructions hiện có.
+Chỉ hướng dẫn demo khớp số dư/mã BH hiện tại mới có liên kết tới
+[trình mô phỏng chính thức](https://my.sepay.vn/testmode/transaction/simulate).
+Mở liên kết không tạo giao dịch và không xác nhận đã trả tiền.
+Khi quay lại tab, React Query làm mới payment, instructions và event list; có nút làm mới riêng.
+Danh sách sự kiện ghi cả webhook/polling, cho mở receipt để xem số đã/chưa phân bổ,
+bank reference, provider, memo và kết quả khớp hóa đơn đang kiểm thử. Review/history
+tiếp tục dùng đường dẫn receipt và API thủ công hiện có.
+
+Mobile dùng cache trong bộ nhớ theo API/session để gộp request đồng thời. Khi màn hình
+được focus hoặc app về foreground, đọc lại payment. Poll mỗi 30 giây trong tối đa 5 phút,
+dừng khi Paid/NotIssued, background hoặc blur. Thông báo nhẹ chỉ xuất hiện khi dữ liệu
+thanh toán backend thay đổi. Instructions được vô hiệu hóa theo thay đổi payment, không
+có timer instructions chạy riêng. Hết cửa sổ theo dõi vẫn có thể làm mới thủ công hoặc
+quay lại màn hình. Khoảng thời gian này chỉ là UI polling, không đổi JOB-03 hoặc hạn thanh toán.
+
+Kiểm tra token và binding mà không xuất credential/payload:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Test-SePayConnection.ps1 `
+  -EnvironmentFile .env.sepay.local
+```
+
+Script chỉ GET tới host Sandbox chính thức, chặn redirect, timeout 20 giây, in HTTP/status/count
+và kết quả binding; không ghi ledger. Cấu hình private phải được Backend nạp qua
+`Start-Api.ps1 -EnvironmentFile .env.sepay.local` rồi restart sau khi đổi.
+Kết quả đã chạy và checklist acceptance: [biên bản 13/11](../development/SEPAY_SANDBOX_COMPLETION_2026-11-13.md).
+
 BHOME nhận webhook SePay qua `POST /api/v1/integrations/sepay/webhook`. Endpoint dùng HMAC-SHA256 và raw body. Backend lưu inbox bền vững trước khi xử lý receipt, allocation và payment event trong ledger Compact24. Phạm vi truy vết gồm BF-06, UC-22/23/25, GBR-10/18, DBR-08, JOB-03 và API-01.
 
 ## Contract và phân quyền
