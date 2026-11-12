@@ -53,6 +53,14 @@ try {
   await page.getByRole('heading', { name: 'Hồ sơ tài khoản', exact: true }).waitFor();
   assert.equal(new URL(page.url()).pathname, '/account/profile');
   const before = (await credential()).value;
+  await page.getByLabel(/^Họ và tên/).fill('Synthetic Browser Profile');
+  await page.getByRole('button', { name: 'Lưu thay đổi', exact: true }).click();
+  await page.getByText('Đã cập nhật hồ sơ tài khoản.', { exact: true }).waitFor();
+  assert.equal(
+    (await credential()).value,
+    before,
+    'Profile save must preserve the current session.',
+  );
   await page.reload();
   await page.getByRole('heading', { name: 'Hồ sơ tài khoản', exact: true }).waitFor();
   assert.equal(new URL(page.url()).pathname, '/account/profile');
@@ -67,6 +75,7 @@ try {
       secureHttpOnlyStrict: true,
       nestedReload: true,
       newTabRestore: true,
+      profileSaveWithoutLogout: true,
       realApi: true,
     }),
   );

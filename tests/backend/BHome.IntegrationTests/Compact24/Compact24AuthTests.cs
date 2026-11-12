@@ -63,7 +63,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     }
 
     [CompactPostgresFact]
-    public async Task UpdatedProfilePhoneCanSignInAndRevokesThePreviousSession()
+    public async Task UpdatedProfilePhoneCanSignInAndPreservesThePreviousSession()
     {
         var user = await Seed(); using var client = fixture.Factory!.CreateClient();
         var session = await Login(client, user.Email!); Bearer(client, session);
@@ -73,10 +73,12 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
             fullName = "Synthetic Tenant",
             phone = "090-123 4567",
             email = user.Email,
-            version = profile.Version
+            version = profile.Version,
+            currentPassword = Password
         });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
+        // Approved 12/11/2026 policy: profile changes preserve an authenticated session.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
 
         client.DefaultRequestHeaders.Authorization = null;
         var byPhone = await client.PostAsJsonAsync("/api/v1/auth/login", new { phone = "090 123 4567", password = Password });

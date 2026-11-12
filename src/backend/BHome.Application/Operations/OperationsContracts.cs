@@ -23,7 +23,8 @@ public sealed record ProfileUpdate(
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
     [StringLength(30)] string? Phone,
     [Required, EmailAddress, StringLength(256)] string Email,
-    [Required, StringLength(256)] string Version);
+    [Required, StringLength(256)] string Version,
+    [StringLength(1024)] string? CurrentPassword = null);
 
 public sealed record EmploymentView(Guid Id, string? ContractNumber, string EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status);

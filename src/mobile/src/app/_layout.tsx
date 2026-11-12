@@ -9,6 +9,7 @@ import { SessionProvider, useSession } from '../lib/SessionProvider';
 import { WorkspaceProvider, useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { theme } from '../theme/theme';
 import { ToastProvider } from '../components/ToastHost';
+import { TenantProfileGate } from '../features/profile/TenantProfileGate';
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     'Inter-Regular': require('../../assets/fonts/Inter-Regular.ttf'),
@@ -34,7 +35,9 @@ export default function RootLayout() {
         <ToastProvider>
           <SessionProvider>
             <WorkspaceProvider>
-              <WorkspaceNavigation />
+              <TenantProfileGate>
+                <WorkspaceNavigation />
+              </TenantProfileGate>
             </WorkspaceProvider>
           </SessionProvider>
         </ToastProvider>

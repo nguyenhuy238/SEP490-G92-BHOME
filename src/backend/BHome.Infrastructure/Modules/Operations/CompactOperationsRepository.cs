@@ -2,6 +2,7 @@ using System.Data;
 using System.Globalization;
 using System.Text.Json;
 using BHome.Application.Operations;
+using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -13,7 +14,8 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Modules.Operations;
 
-internal sealed class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users)
+internal sealed class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
+    SignInManager<ApplicationUser> signIn)
     : IOperationsRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -32,24 +34,42 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<ProfileView> UpdateProfileAsync(Guid userId, ProfileUpdate input, DateTimeOffset now, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t); await Open(t);
+        var account = await db.Users.FromSqlInterpolated($"SELECT * FROM users WHERE id={userId} FOR UPDATE").SingleOrDefaultAsync(t)
+            ?? throw OperationsException.Missing();
+        await db.Entry(account).ReloadAsync(t);
+        if (!account.IsActive) throw OperationsException.Forbidden();
+        if (account.ConcurrencyStamp != input.Version) throw OperationsException.Conflict("stale_profile_version");
+        var emailChanged = !string.Equals(account.Email, input.Email, StringComparison.OrdinalIgnoreCase);
+        var phoneChanged = LoginIdentifier.NormalizePhone(account.PhoneNumber) != input.Phone;
+        if (emailChanged || phoneChanged)
+        {
+            if (string.IsNullOrWhiteSpace(input.CurrentPassword)) throw OperationsException.Invalid("current_password_required");
+            if (!(await signIn.CheckPasswordSignInAsync(account, input.CurrentPassword, lockoutOnFailure: true)).Succeeded)
+            {
+                await Audit(userId, "ProfileContactReauthenticationFailed", "User", userId, now, t);
+                await tx.CommitAsync(t); // Preserve Identity failed-attempt/lockout state, without applying profile changes.
+                throw OperationsException.Invalid("current_password_invalid");
+            }
+        }
         await EnsurePhoneAvailable(userId, input.Phone, t);
         var normalized = input.Email.ToUpperInvariant(); var nextVersion = Guid.NewGuid().ToString("N");
         await using var command = Command("""
             UPDATE users SET full_name=@name,phone=@phone,email=@email,normalized_email=@normalized,
-                username=@email,normalized_username=@normalized,
-                email_confirmed=CASE WHEN normalized_email=@normalized THEN email_confirmed ELSE false END,
-                phone_confirmed=CASE WHEN phone IS NOT DISTINCT FROM @phone THEN phone_confirmed ELSE false END,
-                security_stamp=CASE WHEN normalized_email=@normalized AND phone IS NOT DISTINCT FROM @phone THEN security_stamp ELSE @stamp END,
+                username=CASE WHEN @emailChanged THEN @email ELSE username END,
+                normalized_username=CASE WHEN @emailChanged THEN @normalized ELSE normalized_username END,
+                email_confirmed=CASE WHEN @emailChanged THEN false ELSE email_confirmed END,
+                phone_confirmed=CASE WHEN @phoneChanged THEN false ELSE phone_confirmed END,
+                reset_consumed_at=CASE WHEN @emailChanged AND reset_token_hash IS NOT NULL THEN @now ELSE reset_consumed_at END,
                 concurrency_stamp=@next,
                 history=history||jsonb_build_array(jsonb_build_object('action','ProfileUpdated','actorId',id,
-                    'occurredAt',@now,'emailChanged',normalized_email IS DISTINCT FROM @normalized,
-                    'phoneChanged',phone IS DISTINCT FROM @phone))
+                    'occurredAt',@now,'emailChanged',@emailChanged,'phoneChanged',@phoneChanged))
             WHERE id=@id AND concurrency_stamp=@version
             """);
         command.Parameters.AddWithValue("name", input.FullName); command.Parameters.AddWithValue("phone", (object?)input.Phone ?? DBNull.Value);
         command.Parameters.AddWithValue("email", input.Email); command.Parameters.AddWithValue("normalized", normalized);
-        command.Parameters.AddWithValue("stamp", Guid.NewGuid().ToString("N")); command.Parameters.AddWithValue("next", nextVersion);
-        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("id", userId); command.Parameters.AddWithValue("version", input.Version);
+        command.Parameters.AddWithValue("emailChanged", emailChanged); command.Parameters.AddWithValue("phoneChanged", phoneChanged);
+        command.Parameters.AddWithValue("next", nextVersion);
+        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("id", userId); command.Parameters.AddWithValue("version", account.ConcurrencyStamp!);
         try
         {
             if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("stale_profile_version");

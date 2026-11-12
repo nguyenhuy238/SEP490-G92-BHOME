@@ -21,13 +21,13 @@ import { MobileApiError } from '../lib/api';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
-import { showError, showInfo, showSuccess } from '../lib/toast';
+import { showError, showInfo, showSuccess, showWarning } from '../lib/toast';
 
 const noop = () => {};
-export function ProfileEditScreen() {
+export function ProfileEditScreen({ completion = false }: { completion?: boolean }) {
   const query = useProfile();
   return query.data ? (
-    <ProfileEditForm initial={query.data} query={query} />
+    <ProfileEditForm initial={query.data} query={query} completion={completion} />
   ) : query.rawError ? (
     <ProfileFailure
       message={profileError(query.rawError)}
@@ -41,21 +41,31 @@ export function ProfileEditScreen() {
 function ProfileEditForm({
   initial,
   query,
+  completion,
 }: {
   initial: AccountProfile;
   query: ReturnType<typeof useProfile>;
+  completion: boolean;
 }) {
-  const { logout } = useSession();
+  const { api } = useSession();
   const { go } = useWorkspace();
   // Keep the version the user actually edited. Background reads never rebase a draft.
   const [baseline, setBaseline] = useState(initial);
   const [fields, setFields] = useState(() => profileFields(initial));
-  const [validation, setValidation] = useState<Partial<Record<keyof ProfileFields, string>>>({});
+  const [validation, setValidation] = useState<
+    Partial<Record<keyof ProfileFields | 'currentPassword', string>>
+  >({});
+  const [currentPassword, setCurrentPassword] = useState('');
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false),
     alive = useRef(true);
+  const sensitiveChanged = contactChanged(baseline, {
+    ...baseline,
+    email: fields.email.trim(),
+    phone: normalizeProfilePhone(fields.phone) ?? null,
+  });
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -68,9 +78,12 @@ function ProfileEditForm({
     else go('profile');
   }, [go]);
   const persist = query.save;
+  const refreshProfile = query.refresh;
   const save = useCallback(async () => {
     if (lock.current || stale) return;
-    const errors = validateProfile(fields);
+    const errors: typeof validation = validateProfile(fields, baseline.roles.includes('Tenant'));
+    if (sensitiveChanged && !currentPassword)
+      errors.currentPassword = 'Vui lòng nhập mật khẩu hiện tại để xác nhận thay đổi liên hệ.';
     setValidation(errors);
     if (Object.keys(errors).length) return;
     lock.current = true;
@@ -82,24 +95,44 @@ function ProfileEditForm({
         email: fields.email.trim(),
         phone: normalizeProfilePhone(fields.phone) ?? null,
         version: baseline.version,
+        ...(sensitiveChanged ? { currentPassword } : {}),
       });
       if (!result || !alive.current) return;
-      if (contactChanged(baseline, result)) {
+      if (baseline.email?.toUpperCase() !== result.email?.toUpperCase() && api) {
         try {
-          await logout();
+          await api.json('/api/v1/auth/request-email-verification', { userName: result.email });
+          showInfo(
+            'Đã tiếp nhận yêu cầu xác nhận email mới. Kiểm tra hộp thư trước khi dùng quên mật khẩu.',
+          );
         } catch {
-          /* Existing logout always clears local credentials. */
+          showWarning(
+            'Đã lưu hồ sơ. Chưa thể gửi yêu cầu xác nhận email; hãy yêu cầu lại tại màn hình Xác nhận email.',
+          );
         }
-        router.replace('/');
-        showSuccess('Đã lưu hồ sơ. Vui lòng đăng nhập lại bằng thông tin mới.');
-      } else {
+      }
+      setCurrentPassword('');
+      if (!completion) {
         lock.current = false;
         back();
-        showSuccess('Đã cập nhật hồ sơ.');
       }
+      showSuccess('Đã cập nhật hồ sơ. Phiên đăng nhập được giữ.');
     } catch (e) {
       if (!alive.current) return;
       const message = profileError(e);
+      if (e instanceof MobileApiError && e.code === 'current_password_invalid') {
+        setCurrentPassword('');
+        try {
+          const latest = await refreshProfile();
+          if (
+            latest &&
+            JSON.stringify(profileFields(latest)) === JSON.stringify(profileFields(baseline))
+          )
+            setBaseline(latest);
+          else if (latest) setStale(true);
+        } catch {
+          /* Keep the original safe error; API client handles a genuinely revoked session. */
+        }
+      }
       setError(message);
       showError(message);
       if (e instanceof MobileApiError && e.code === 'stale_profile_version') setStale(true);
@@ -107,7 +140,18 @@ function ProfileEditForm({
       lock.current = false;
       if (alive.current) setBusy(false);
     }
-  }, [fields, baseline, stale, persist, logout, back]);
+  }, [
+    fields,
+    baseline,
+    stale,
+    persist,
+    api,
+    back,
+    completion,
+    currentPassword,
+    sensitiveChanged,
+    refreshProfile,
+  ]);
   const footer = useMemo(
     () => (
       <View style={styles.footer}>
@@ -120,12 +164,14 @@ function ProfileEditForm({
         >
           Lưu thay đổi
         </Button>
-        <Button mode="text" disabled={busy} onPress={back}>
-          Hủy
-        </Button>
+        {!completion && (
+          <Button mode="text" disabled={busy} onPress={back}>
+            Hủy
+          </Button>
+        )}
       </View>
     ),
-    [busy, stale, save, back],
+    [busy, stale, save, back, completion],
   );
   const shell = useWorkspaceHeaderRefresh(noop, busy, {
     title: 'Chỉnh sửa hồ sơ',
@@ -183,7 +229,9 @@ function ProfileEditForm({
           </HelperText>
         )}
         <TextInput
-          label="Số điện thoại (không bắt buộc)"
+          label={
+            baseline.roles.includes('Tenant') ? 'Số điện thoại' : 'Số điện thoại (không bắt buộc)'
+          }
           accessibilityLabel="Số điện thoại"
           value={fields.phone}
           onChangeText={(value) => change('phone', value)}
@@ -220,6 +268,27 @@ function ProfileEditForm({
             {validation.email}
           </HelperText>
         )}
+        {sensitiveChanged && (
+          <TextInput
+            label="Mật khẩu hiện tại để xác nhận"
+            accessibilityLabel="Mật khẩu hiện tại để xác nhận"
+            value={currentPassword}
+            onChangeText={(value) => {
+              setCurrentPassword(value);
+              setValidation((v) => ({ ...v, currentPassword: undefined }));
+            }}
+            secureTextEntry
+            autoCapitalize="none"
+            disabled={busy}
+          />
+        )}
+        {!!validation.currentPassword && (
+          <HelperText type="error">{validation.currentPassword}</HelperText>
+        )}
+        <Text>
+          Số điện thoại là thông tin liên hệ; BHOME chưa có kênh xác minh SMS. Email mới cần được
+          xác nhận trước khi khôi phục mật khẩu.
+        </Text>
       </View>
       {!!error && (
         <View style={styles.card}>
