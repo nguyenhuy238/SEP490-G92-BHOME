@@ -96,6 +96,8 @@ $trustedLocalhost = Get-ChildItem Cert:\CurrentUser\My | Where-Object {
 if ($trustedLocalhost) {
     $localhostPfx = Join-Path (Split-Path -Parent $pfxPath) 'localhost.pfx'
     Export-PfxCertificate -Cert $trustedLocalhost -FilePath $localhostPfx -Password (ConvertTo-SecureString $existingPassword -AsPlainText -Force) | Out-Null
+    # Public certificate only, used by the Owner Web development proxy for strict TLS validation.
+    Export-Certificate -Cert $trustedLocalhost -FilePath (Join-Path (Split-Path -Parent $pfxPath) 'localhost.cer') | Out-Null
     Write-Output 'Browser HTTPS: using the already-trusted localhost development certificate; LAN certificate unchanged.'
 } else {
     Write-Warning 'No trusted localhost development certificate found. Browser HTTPS requires explicit certificate trust; see docs/development/MOBILE_LIVE_WORKSPACE.md.'

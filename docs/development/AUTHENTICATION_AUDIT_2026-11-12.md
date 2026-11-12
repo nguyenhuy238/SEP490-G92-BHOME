@@ -67,3 +67,56 @@ LoginIdentifier và client-core chuẩn hóa số Việt Nam 10/11 chữ số b�
 Kiểm chứng: 20 integration tests LoginValidation/Auth/Route trên disposable PostgreSQL passed; 16 Web tests passed; 24 Mobile tests passed; typecheck/lint hai client passed. LoginService unit được mở rộng thêm +84 và canonical expectation theo yêu cầu mới; lỗi assertion cũ về domestic string và message email-only đã được cập nhật vì contract normalization/message đã thay đổi có chủ đích, không nới validation. Rerun 24 LoginService unit tests passed, không fail/skip. Các log/TRX dưới `.tmp/auth-completion-phase2*` ignored. Không SMTP thật/migration/live DB.
 
 Commands: `.tmp/Test-ReadinessIsolated.ps1 -Filter 'FullyQualifiedName~Compact24LoginValidationTests|FullyQualifiedName~Compact24AuthTests|FullyQualifiedName~AuthenticationRouteAuditTests'`; `dotnet test ...BHome.Application.UnitTests.csproj -c Release --filter FullyQualifiedName~LoginServiceTests`; npm workspace owner-web/mobile targeted test, typecheck, lint. Expo 58 đã đối chiếu [versioned reference](https://docs.expo.dev/versions/v58.0.0/) và [documentation index](https://docs.expo.dev/llms.txt).
+
+## Đối chiếu nguồn Google Sheet nhận sau Phase 2
+
+Đã đọc thành công CSV read-only của [sheet gốc, gid 1655824798](https://docs.google.com/spreadsheets/d/1rAzpBD-_e309XhPNB-Gt8wNw6Bn7cn1a/edit?gid=1655824798#gid=1655824798). Không sửa sheet hoặc Round 1. Bảng này thay thế các mapping theo nhóm tạm thời của Phase 1 ở trên; nội dung audit kỹ thuật giữ làm lịch sử. Source cache ignored, không copy tester, credentials hoặc dữ liệu cá nhân vào Git.
+
+| ID | Nội dung đúng theo nguồn | Round 1 nguyên văn | Phase xử lý / ghi chú |
+| --- | --- | --- | --- |
+| ITC-AUTH-001 | Owner đăng nhập email | Passed | 2/3/8, browser + API |
+| ITC-AUTH-002 | Staff đăng nhập email, đúng Location | Passed | 2/6/8 |
+| ITC-AUTH-003 | Tenant đăng nhập email, chỉ dữ liệu của mình | Passed | 2/7/8 |
+| ITC-AUTH-004 | Đăng nhập phone | Fail | 2 |
+| ITC-AUTH-005 | Sai mật khẩu, MSG17 chung | Passed | 2 |
+| ITC-AUTH-006 | Identifier chưa đăng ký, cùng MSG17 | Fail | 2 |
+| ITC-AUTH-007 | Tài khoản inactive, cùng MSG17 | Fail | 2 |
+| ITC-AUTH-008 | Field rỗng, MSG02 dưới field | Fail | 2 |
+| ITC-AUTH-009 | Không lưu/log mật khẩu rõ | Passed | 5/6/8 |
+| ITC-AUTH-010 | Protected cần login; public approved vẫn anonymous | Pending | 8 |
+| ITC-AUTH-011 | Xem account của chính mình, không secrets | Passed | 4; ghi chú F5/profile logout được tách thành regression |
+| ITC-AUTH-012 | Request không có valid session bị từ chối | Fail | 3/8; ghi chú F5 không thay thế mục tiêu case này |
+| ITC-AUTH-013 | Token sửa/giả role bị từ chối | Pending | 3/8 |
+| ITC-AUTH-014 | Logout current session | Passed | 3/8 |
+| ITC-AUTH-015 | Logout A không ảnh hưởng B | Passed | 3/8 |
+| ITC-AUTH-016 | Profile hiển thị name/phone/email/role/status readonly | Passed | 4 |
+| ITC-AUTH-017 | Lưu Full Name và Phone | Passed | 4; ghi chú logout sau contact change bị supersede bởi chính sách mới giữ phiên |
+| ITC-AUTH-018 | Không tự sửa role/employment/Location assignment | Pending | 4/6; kiểm tra cả assigned Locations trong UI |
+| ITC-AUTH-019 | Tenant lần đầu phải hoàn tất Full Name/Phone trước Home | Pending | 4/7; tái dùng GET/PUT profile, không cần endpoint mới |
+| ITC-AUTH-020 | Profile field required rỗng không lưu | Passed | 4 |
+| ITC-AUTH-021 | Đổi mật khẩu đúng, login cũ bị từ chối/login mới được | Fail | 5 |
+| ITC-AUTH-022 | Current password sai không thay mật khẩu | Fail | 5 |
+| ITC-AUTH-023 | Input đổi password không hợp lệ không mutate | Fail | 5 |
+| ITC-AUTH-024 | Forgot/reset qua email đăng ký | Pending | 5; giữ prerequisite EmailConfirmed đã được người dùng xác nhận |
+| ITC-AUTH-025 | Forgot unknown email generic, không phát thư | Pending | 5 |
+| ITC-AUTH-026 | Reset token hết hạn/reuse bị từ chối | Pending | 5 |
+
+OQ-AUTH-01 hỏi lockout/rate limit: giữ cấu hình hiện tại, không invent ngưỡng. OQ-AUTH-02 hỏi lifetime/rotation/reuse/logout-all: chính sách 30 phút/7 ngày và fixed deadline được nhiệm vụ mới cùng quyết định cũ trong REFRESH_TOKEN_SESSIONS.md xác nhận. OQ-AUTH-03 hỏi password/reset/verification/identifier: giữ Identity policy và token lifetime hiện tại, áp dụng quyết định mới revoke all sau change, email prerequisite và canonical phone của Phase 2. OQ trong sheet vẫn là lịch sử chưa sửa; không tuyên bố đã sửa SRS/BA baseline.
+
+Quyết định project-owner trong lượt này: cho phép tự cấp Tenant cho **mọi occupant có email đã được Owner duyệt trong Main Contract đang kích hoạt**. Phase 7 kiểm tra chính phạm vi này, transaction/signing/payment/Owner activation không thay đổi. Không tự cấp từ Holding/Resident đơn thuần.
+
+## Phase 3 — Session persistence
+
+FE-02/UC-01..02, ITC-AUTH-012..015 và các regression F5/cold-start riêng. Sửa AuthProvider để same-origin base rỗng vẫn refresh, lỗi network/5xx có trạng thái khôi phục unavailable và nút retry; protected route không render dữ liệu hoặc chuyển sang Login khi chưa xác định được session. Các form unit test dùng `restoreOnMount=false` để tách background restoration; test provider/route/browser dùng restoration thực, không bỏ test F5.
+
+Owner Web Development dùng proxy cùng origin cho auth để cookie Strict không phụ thuộc HTTP frontend → HTTPS API khác scheme. Proxy tới API tiếp tục kiểm tra TLS, chỉ dùng public certificate localhost đã được máy tin cậy. `Prepare-OcrMobile.ps1` xuất thêm localhost.cer public; không sửa trust store hoặc xuất thêm private key. App production giữ API HTTPS cấu hình như trước; deployment phải phục vụ Web/API cùng site với cùng scheme để cookie Strict hoạt động. Không đổi cookie sang None hoặc lưu token trong localStorage. Public certificate đã xuất local vào `.tools/mobile-tls/localhost.cer` (ignored).
+
+Mobile giữ SecureStore, ready gate, server binding và probe anonymous trước refresh. Offline trước khi gửi credential giữ refresh token, hiển thị chờ/retry. 403/429 đã biết không revoke current session. Với network/5xx sau khi rotation có thể đã xảy ra, không replay refresh token: xóa credential không xác định, chỉ giữ access session còn hạn và yêu cầu login khi hết hạn. Cold start không có access session được xác thực thì vẫn fail closed. Không thêm grace period, sliding deadline hoặc bảng token.
+
+Kiểm chứng vừa chạy:
+
+- 13 backend tests passed, không fail/skip: Compact24SessionLifecycle/Auth + **AuthenticationBrowserTests**. Bao gồm access token hết hạn 30 phút → refresh trong session 7 ngày fixed deadline; DB chỉ token hash; replay revoke family; logout A giữ B; JWT giả Owner bị 401, Tenant gọi Staff bị 403.
+- Real headless Edge + Vite + loopback bridge tới ASP.NET host thực + disposable PostgreSQL: cookie Secure/HttpOnly/Strict, F5 nested `/account/profile` giữ trang, cookie rotate, tab mới restore. Không mock route/fetch ở E2E; loopback HTTP là transport test, không chứng minh TLS deployment/physical device. Evidence `.tools/auth-browser-*/passed.json` ignored.
+- 40 Web tests, 23 Mobile tests passed; typecheck/lint cả hai client passed. Mobile native secure-store/AppState được mock trong component tests; thiết bị thật NOT RUN.
+- Commands: `.tmp/Test-ReadinessIsolated.ps1 -Filter 'FullyQualifiedName~Compact24SessionLifecycleTests|FullyQualifiedName~Compact24AuthTests|FullyQualifiedName~AuthenticationBrowserTests'` với BHOME_RUN_BROWSER_E2E=true và BHOME_GMAIL_SMOKE=0; workspace Web auth/routeGuards + Mobile sessions/sessionProvider tests, typecheck, lint. Logs/TRX `.tmp/auth-completion-phase3*` ignored.
+- Local .env/User Secrets đã đối chiếu session refresh/absolute = 7 ngày; Jwt default = 30 phút được test bằng issued token. Không query/mutate Neon, không live SMTP.

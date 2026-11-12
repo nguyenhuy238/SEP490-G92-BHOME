@@ -23,7 +23,7 @@ function setup() {
   return render(
     <ThemeProvider theme={theme}>
       <MemoryRouter>
-        <AuthProvider transport="web">
+        <AuthProvider transport="web" restoreOnMount={false}>
           <LoginPage />
         </AuthProvider>
       </MemoryRouter>
