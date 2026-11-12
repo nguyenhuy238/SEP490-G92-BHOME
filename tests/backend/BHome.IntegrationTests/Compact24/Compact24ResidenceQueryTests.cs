@@ -56,11 +56,22 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         var room = new Room { LocationId = location.Id, RoomNumber = "RES-TEST", Capacity = 1, Status = RoomStatus.Occupied };
         var resident = new Resident { RoomId = room.Id, TenantUserId = identity.UserId, OwnerUserId = owner.Id, DisplayLabel = "Synthetic resident" };
         var from = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-10);
-        var contract = new Contract { RoomId = room.Id, OwnerSignerId = owner.Id, TenantUserId = identity.UserId,
-            RepresentativeResidentId = resident.Id, StartDate = from, EndDate = from.AddMonths(12), Status = ContractStatus.Active,
-            IsDevelopmentDemo = true, Terms = "Synthetic SQL regression fixture", SnapshotHash = new string('0', 64),
-            ActivatedByUserId = owner.Id, ActivatedAt = DateTimeOffset.UtcNow,
-            Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = from }] };
+        var contract = new Contract
+        {
+            RoomId = room.Id,
+            OwnerSignerId = owner.Id,
+            TenantUserId = identity.UserId,
+            RepresentativeResidentId = resident.Id,
+            StartDate = from,
+            EndDate = from.AddMonths(12),
+            Status = ContractStatus.Active,
+            IsDevelopmentDemo = true,
+            Terms = "Synthetic SQL regression fixture",
+            SnapshotHash = new string('0', 64),
+            ActivatedByUserId = owner.Id,
+            ActivatedAt = DateTimeOffset.UtcNow,
+            Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = from }]
+        };
         contract.Residents[0].ContractId = contract.Id;
         db.AddRange(location, room, resident, contract);
         await db.SaveChangesAsync();
