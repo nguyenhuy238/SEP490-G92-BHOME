@@ -81,6 +81,7 @@ vi.mock('expo-clipboard', () => ({
 }));
 
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   StyleSheet: { create: (styles: unknown) => styles },
   Platform: { OS: 'ios' },
   View: ({

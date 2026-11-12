@@ -1,8 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { AppState, Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
-import { useFocusEffect } from 'expo-router';
 import { formatContractMoney } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { signedVnd } from '../../../../packages/client-core/src/adjustments';
@@ -23,6 +22,7 @@ import {
   tenantPaymentLabel,
 } from '../features/tenant/paymentPresentation';
 import { loadInvoiceTransfer } from '../services/tenantInvoices';
+import { queryPolicies } from '../lib/queryPolicies';
 
 export function TenantPaymentDetails({ state }: { state: InvoicePayment }) {
   const [expanded, setExpanded] = useState(false);
@@ -99,7 +99,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
     canRequestTransfer
       ? `/api/v1/invoices/${encodeURIComponent(invoiceId)}/transfer-instructions`
       : null,
-    { load: loadInvoiceTransfer, notifyError: false },
+    { load: loadInvoiceTransfer, notifyError: false, cache: queryPolicies.payments },
   );
   const [notice, setNotice] = useFeedbackState('info');
   const reloadPayment = payment.reload,
@@ -108,16 +108,6 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
     reloadPayment();
     reloadInstructions();
   }, [reloadPayment, reloadInstructions]);
-  useFocusEffect(
-    useCallback(() => {
-      // Keep bank instructions fresh alongside the existing 30-second payment polling.
-      const timer = setInterval(() => {
-        if (AppState.currentState !== 'background' && AppState.currentState !== 'inactive')
-          reloadInstructions();
-      }, 30000);
-      return () => clearInterval(timer);
-    }, [reloadInstructions]),
-  );
   async function copy(value: string) {
     try {
       await Clipboard.setStringAsync(value, { android: { isSensitive: true } });
@@ -156,7 +146,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
           <InvoiceFeedback {...instructions} />
           {transfer?.isDevelopmentDemo && (
             <Text accessibilityRole="alert" style={styles.warning}>
-              Tài khoản demo. Không chuyển tiền thật.
+              QR thử nghiệm – Không chuyển tiền thật.
             </Text>
           )}
           {transfer && !matches && (
