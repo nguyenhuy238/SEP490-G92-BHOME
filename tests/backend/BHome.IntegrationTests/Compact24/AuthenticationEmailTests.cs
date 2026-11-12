@@ -21,9 +21,12 @@ public sealed partial class Compact24NotificationMvpTests
             ["AuthenticationEmail:WebInvitationUrl"] = "https://owner.example.invalid/accept-invitation",
             ["AuthenticationEmail:MobileResetUrl"] = "bhome://reset-password",
             ["AuthenticationEmail:MobileInvitationUrl"] = "bhome://accept-invitation",
+            ["AuthenticationEmail:WebVerificationUrl"] = "https://owner.example.invalid/confirm-email",
+            ["AuthenticationEmail:MobileVerificationUrl"] = "bhome://confirm-email",
             ["AuthenticationEmail:TrustedOrigins:0"] = "https://owner.example.invalid",
             ["AuthenticationEmail:TrustedOrigins:1"] = "bhome://reset-password",
-            ["AuthenticationEmail:TrustedOrigins:2"] = "bhome://accept-invitation"
+            ["AuthenticationEmail:TrustedOrigins:2"] = "bhome://accept-invitation",
+            ["AuthenticationEmail:TrustedOrigins:3"] = "bhome://confirm-email"
         })));
 
     private static async Task<Guid> AuthenticationDelivery(WebApplicationFactory<Program> host, Guid user)
