@@ -17,12 +17,16 @@ const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {} }));
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => (state.deep ? { contractId: id, section: state.section } : {}),
+  useFocusEffect: () => {},
   router: { setParams: vi.fn() },
+}));
+vi.mock('../components/WorkspaceHeaderContext', () => ({
+  useWorkspaceHeaderRefresh: () => false,
 }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
     api: transport,
-    session: { userId: 'staff', roles: [state.role] },
+    session: { userId: state.role === 'Owner' ? 'owner' : 'staff', roles: [state.role] },
   }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
@@ -36,7 +40,12 @@ vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
     loading: false,
     error: '',
     reload: vi.fn(),
-    data: { contract: state.contract, moveOut: null, readiness: null, history: [] },
+    data: {
+      contract: state.contract,
+      moveOut: null,
+      readiness: { ready: true, reasons: [] },
+      history: [],
+    },
   }),
 }));
 vi.mock('react-native', () => ({
@@ -203,15 +212,15 @@ it('shows separate populated lifecycle groups on the list page', async () => {
   expect(screen.getByText('5. Đã kết thúc / hủy')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Tạo nháp hợp đồng thuê' })).toBeNull();
 });
-it('keeps Owner contract status and navigation without financial mutation forms', () => {
+it('offers only guarded signing and activation quick actions to Owner', () => {
   state.role = 'Owner';
+  state.contract = { ...state.contract, status: 'PendingActivation' };
   render(<ContractScreen />);
-  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
-  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }));
+  expect(screen.getByText('Action form')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Gia hạn & trả phòng' }));
   expect(screen.queryByRole('button', { name: 'Tạo bản gia hạn' })).toBeNull();
-  expect(screen.queryByText('Action form')).toBeNull();
 });
 it('routes an old Owner prepare entry to Owner Web without opening a draft form', () => {
   state.role = 'Owner';

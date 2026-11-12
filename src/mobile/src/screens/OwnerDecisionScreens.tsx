@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Text } from 'react-native-paper';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   adjustmentClient,
   adjustmentStatus,
@@ -32,6 +32,7 @@ import type { Named } from '../lib/api';
 import { Action, Box, Heading, Metric, Pill, Row, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { AdjustmentEvidenceImage } from './TenantAdjustmentPanel';
 
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,6 +83,38 @@ export function OwnerApprovalCenterScreen() {
     '/api/v1/payment-transactions?page=1&pageSize=3&paymentStatus=PendingReview',
   );
   const queries = [tasks, plans, verification, adjustments, signing, activation, payments];
+  const reloadTasks = tasks.reload;
+  const reloadPlans = plans.reload;
+  const reloadVerification = verification.reload;
+  const reloadAdjustments = adjustments.reload;
+  const reloadSigning = signing.reload;
+  const reloadActivation = activation.reload;
+  const reloadPayments = payments.reload;
+  const refresh = useCallback(() => {
+    reloadTasks();
+    reloadPlans();
+    reloadVerification();
+    reloadAdjustments();
+    reloadSigning();
+    reloadActivation();
+    reloadPayments();
+  }, [
+    reloadTasks,
+    reloadPlans,
+    reloadVerification,
+    reloadAdjustments,
+    reloadSigning,
+    reloadActivation,
+    reloadPayments,
+  ]);
+  const focused = React.useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focused.current) refresh();
+      focused.current = true;
+    }, [refresh]),
+  );
+  useWorkspaceHeaderRefresh(refresh, queries.some((query) => query.loading));
   return (
     <>
       <OwnerScreenIntro
@@ -91,6 +124,77 @@ export function OwnerApprovalCenterScreen() {
       {queries.map((query, index) => (
         <QueryState key={index} {...query} />
       ))}
+      <OwnerSection
+        title="Cần xử lý trước"
+        detail="Mở thẳng hồ sơ đang chờ quyết định, không cần tìm lại trong danh sách"
+      >
+        <OwnerSurface>
+          {plans.data?.items[0] && (
+            <>
+              <OwnerLinkRow
+                icon="wrench-clock-outline"
+                title="Duyệt phương án sửa chữa"
+                detail={plans.data.items[0].proposedSolution || plans.data.items[0].expectedOutcome}
+                onPress={() =>
+                  go('maintenance-detail', { workOrderId: plans.data!.items[0].id })
+                }
+              />
+              <OwnerDivider />
+            </>
+          )}
+          {verification.data?.items[0] && (
+            <>
+              <OwnerLinkRow
+                icon="shield-check-outline"
+                title="Nghiệm thu bảo trì"
+                detail={
+                  verification.data.items[0].result || verification.data.items[0].expectedOutcome
+                }
+                onPress={() =>
+                  go('maintenance-detail', { workOrderId: verification.data!.items[0].id })
+                }
+              />
+              <OwnerDivider />
+            </>
+          )}
+          {tasks.data?.items[0] && (
+            <>
+              <OwnerLinkRow
+                icon="clipboard-check-outline"
+                title={tasks.data.items[0].title}
+                detail="Công việc nhân viên đang chờ Owner nghiệm thu"
+                onPress={() => go('task-detail', { taskId: tasks.data!.items[0].id })}
+              />
+              <OwnerDivider />
+            </>
+          )}
+          {activation.data?.items[0] ? (
+            <OwnerLinkRow
+              icon="file-check-outline"
+              title={`Kích hoạt hợp đồng phòng ${activation.data.items[0].roomNumber}`}
+              detail={activation.data.items[0].locationName}
+              onPress={() => go('signing', { contractId: activation.data!.items[0].id })}
+            />
+          ) : signing.data?.items[0] ? (
+            <OwnerLinkRow
+              icon="file-sign"
+              title={`Ký hợp đồng phòng ${signing.data.items[0].roomNumber}`}
+              detail={signing.data.items[0].locationName}
+              onPress={() => go('signing', { contractId: signing.data!.items[0].id })}
+            />
+          ) : !queries.some((query) => query.loading || query.error) &&
+            !plans.data?.items.length &&
+            !verification.data?.items.length &&
+            !tasks.data?.items.length ? (
+            <OwnerLinkRow
+              icon="check-circle-outline"
+              title="Không có hồ sơ khẩn cần xử lý"
+              detail="Các nhóm nghiệp vụ bên dưới vẫn hiển thị toàn bộ số lượng chờ"
+              onPress={refresh}
+            />
+          ) : null}
+        </OwnerSurface>
+      </OwnerSection>
       <OwnerSection title="Vận hành & bảo trì">
         <OwnerSurface>
           <CountCard

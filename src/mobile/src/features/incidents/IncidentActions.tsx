@@ -5,7 +5,6 @@ import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { QueryState, Pagination } from '../../components/WorkspaceQueryState';
 import { IncidentEvidencePicker } from '../../components/IncidentEvidencePicker';
 import { useSession } from '../../lib/SessionProvider';
-import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { businessToday } from '../../../../../packages/client-core/src/contracts';
 import { useIncidentMutation, useIncidentQuery } from './useIncidentData';
 import {
@@ -107,12 +106,9 @@ export function IncidentActionPanel({
   emergencyActions?: EmergencyAction[];
 }) {
   const { api, session } = useSession();
-  const allowed =
-    role === 'Owner'
-      ? []
-      : work
-        ? workActions(work, role, session?.userId ?? '')
-        : incidentActions(report, role);
+  const allowed = work
+    ? workActions(work, role, session?.userId ?? '')
+    : incidentActions(report, role);
   const actions = [
     ...allowed,
     ...(!work &&
@@ -383,10 +379,6 @@ export function IncidentActionPanel({
       ? `${incidentRoot}?locationId=${report.locationId}${report.roomId ? '&roomId=' + report.roomId : ''}${report.assetId ? '&assetId=' + report.assetId : ''}&page=${originalPage}&pageSize=20`
       : null,
   );
-  if (role === 'Owner')
-    return (
-      <OwnerWebNotice task="Phân loại, giao việc, duyệt phương án hoặc chi phí và nghiệm thu" />
-    );
   if (!actions.length) return null;
   return (
     <Box>

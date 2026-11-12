@@ -150,7 +150,7 @@ export function LoginScreen() {
                 </Text>
               </Row>
               <View style={ui.wrap}>
-                {(['Owner', 'Staff', 'Tenant'] as MobileRole[]).map((role) => (
+                {(['Staff', 'Tenant'] as MobileRole[]).map((role) => (
                   <View key={role} style={{ flex: 1, minWidth: 85 }}>
                     <Button
                       mode="elevated"

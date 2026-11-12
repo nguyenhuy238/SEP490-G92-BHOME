@@ -4,9 +4,20 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 
 export function mobileContractActions(...args: Parameters<typeof contractActions>) {
-  if (args[2] === 'Owner') return [];
-  return contractActions(...args).filter(
-    (action) => !['move-out/inspection', 'move-out/settlement'].includes(action.operation),
+  const actions = contractActions(...args);
+  if (args[2] === 'Owner') {
+    if (args[0].kind === 'Holding') return [];
+    return actions.filter((item) =>
+      [
+        'signing',
+        'signing/sync',
+        'signing/recover',
+        'activate',
+      ].includes(item.operation),
+    );
+  }
+  return actions.filter(
+    (item) => !['move-out/inspection', 'move-out/settlement'].includes(item.operation),
   );
 }
 

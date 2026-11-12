@@ -1,7 +1,6 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { Text } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import {
@@ -169,14 +168,6 @@ export function OwnerOperationsScreen() {
           />
         </OwnerSurface>
       </OwnerSection>
-      <OwnerSurface>
-        <OwnerLinkRow
-          icon="office-building-outline"
-          title="Cơ sở, phòng & phân công"
-          detail="Mở khu vực thiết lập vận hành"
-          onPress={() => router.push('/setup')}
-        />
-      </OwnerSurface>
       <OwnerSection title="Công việc nhân viên" detail="Theo dõi tiến độ và nghiệm thu">
         <OperationalTasksScreen />
       </OwnerSection>

@@ -1,7 +1,7 @@
 import { conciseMessage, showError } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
 import { View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
@@ -43,6 +43,7 @@ import { StaffContractsList } from './StaffContractsList';
 import { defaultStaffContractListView } from './staffContractList';
 import { mobileContractActions } from './contractSections';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
+import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -72,6 +73,23 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       transport ? contractClient((path, init, type) => transport.request(path, init, type)) : null,
     [transport],
   );
+  let deepId = '';
+  if (params.contractId) {
+    try {
+      deepId = guid(params.contractId);
+    } catch {
+      /* Do not send untrusted route text to an API path. */
+    }
+  }
+  const refreshList = React.useCallback(() => setRevision((value) => value + 1), []);
+  const listFocused = useRef(false);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (listFocused.current && !selected && !deepId) refreshList();
+      listFocused.current = true;
+    }, [selected, deepId, refreshList]),
+  );
+  useWorkspaceHeaderRefresh(refreshList, listing.loading);
   useEffect(() => {
     if (!client || role === 'Staff') return;
     const controller = new AbortController();
@@ -91,14 +109,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     void load();
     return () => controller.abort();
   }, [client, page, filter, revision, role]);
-  let deepId = '';
-  if (params.contractId) {
-    try {
-      deepId = guid(params.contractId);
-    } catch {
-      /* Do not send untrusted route text to an API path. */
-    }
-  }
   const id = selected || deepId;
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
   if (role === 'Owner' && (create || mainDraftId || params.mainDraftId || params.roomId))
@@ -248,11 +258,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           setPage(1);
         }}
       />
-      <Row>
-        <Button disabled={listing.loading} onPress={() => setRevision((v) => v + 1)}>
-          Tải lại
-        </Button>
-      </Row>
       {listing.loading && <ActivityIndicator accessibilityLabel="Đang tải hợp đồng" />}
       {!!listing.error && <Text style={ui.red}>{conciseMessage(listing.error)}</Text>}
       {!listing.loading && !listing.error && !listing.data?.items.length && (
@@ -326,6 +331,14 @@ function LiveContractDetail({
     [uploadChecked, setUploadChecked] = useState(false);
   const uploadLock = useRef(false);
   const [notice, setNotice] = useFeedbackState('success');
+  const focused = useRef(false);
+  const reloadDetail = detail.reload;
+  useFocusEffect(
+    React.useCallback(() => {
+      if (focused.current) reloadDetail();
+      focused.current = true;
+    }, [reloadDetail]),
+  );
   if (detail.loading) return <ActivityIndicator accessibilityLabel="Đang tải chi tiết hợp đồng" />;
   if (detail.error)
     return (
@@ -367,7 +380,6 @@ function LiveContractDetail({
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
-      {role === 'Owner' && <OwnerWebNotice />}
       <View style={ui.wrap}>
         {contractSections.map((item) => (
           <Button
@@ -386,15 +398,6 @@ function LiveContractDetail({
         ))}
       </View>
       {section === 'overview' && <ContractProgress contract={c} readiness={r} />}
-      <Button
-        disabled={uploading}
-        onPress={() => {
-          setSelectedAction('');
-          detail.reload();
-        }}
-      >
-        Tải lại trạng thái
-      </Button>
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
       {section === 'overview' && (
         <>
