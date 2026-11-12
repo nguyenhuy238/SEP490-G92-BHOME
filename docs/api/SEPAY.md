@@ -127,6 +127,56 @@ ngrok http https://localhost:7240
 
 Lấy hostname HTTPS thực tế từ output ngrok. Thêm hostname vào `AllowedHosts` của profile test và khởi động lại API. Kiểm tra `{PUBLIC_HTTPS_BASE_URL}/health/live`, rồi probe POST không chữ ký như trên qua public hostname. Public Webhook URL bằng hostname thực tế cộng `/api/v1/integrations/sepay/webhook`.
 
+### Tránh lỗi 400 Invalid Hostname
+
+`appsettings.json` chỉ cho phép `localhost;127.0.0.1`. Nếu profile có cấu hình LAN,
+phải giữ các hostname/IP đó khi thêm hostname tunnel. Trong `.env.sepay.local`, dùng
+**một dòng không có dấu nháy**, không ghi scheme, port hoặc path:
+
+```dotenv
+AllowedHosts=localhost;127.0.0.1;<LAN_IP>;<DEVELOPMENT_HOST>;<NGROK_HOST>
+```
+
+Thay placeholder bằng giá trị thực, bỏ các mục LAN nếu không dùng. Ví dụ hostname
+tunnel là `your-tunnel.ngrok-free.dev`, không phải `https://your-tunnel.ngrok-free.dev`.
+Không dùng `*` hoặc `*.ngrok-free.dev`. Sau khi đổi hostname, khởi động lại
+`scripts/Start-Api.ps1 -EnvironmentFile .env.sepay.local`; không chỉ restart ngrok.
+
+`Start-Api.ps1` resolve đường dẫn profile từ repository root, đặt `BHOME_ENV_FILE`
+và xuất các khóa được hỗ trợ (gồm `AllowedHosts`, `SePay__*`) vào process environment
+**trước** `dotnet run`. Với đường chạy này, giá trị file trở thành environment override.
+Development chạy trực tiếp/F5 dùng `DevelopmentEnvironmentFile` như fallback sau
+appsettings, dưới user-secrets, process environment và command line. File không tự
+chọn `.env.sepay.local`: phải truyền `-EnvironmentFile` hoặc đặt `BHOME_ENV_FILE`.
+Các khóa `ASPNETCORE_URLS`/`ASPNETCORE_ENVIRONMENT` không được loader nhập từ dotenv;
+profile `https` hiện có khai báo Development và các cổng 7240/5240.
+
+Giữ lệnh `ngrok http https://localhost:7240` khi đã cho phép hostname cụ thể.
+Không cần `--host-header=rewrite`. Cấu hình hiện tại dùng HTTPS cho cả public endpoint
+và upstream nên không cần thêm `UseForwardedHeaders`. Không bật tin cậy forwarded
+headers toàn cục hoặc xóa `KnownProxies`/`KnownNetworks` để chữa lỗi host.
+Nếu đổi sang upstream HTTP, phải đánh giá lại trusted proxy và redirect riêng.
+
+Kiểm tra bằng chứng chỉ local đã trust, không dùng `-k`:
+
+```powershell
+$publicBase = 'https://<NGROK_HOST>'
+curl.exe -i https://localhost:7240/health/live
+curl.exe -i https://localhost:7240/health/ready
+curl.exe -i "$publicBase/health/live"
+curl.exe -i -X POST "$publicBase/api/v1/integrations/sepay/webhook" `
+  -H 'Content-Type: application/json' --data '{}'
+curl.exe -i https://localhost:7240/health/live -H 'Host: unexpected.example.invalid'
+```
+
+Kết quả cần có: health `200`, webhook thiếu HMAC `401` khi SePay bật, host lạ `400`.
+`503 sepay_disabled` nghĩa là đã tới handler nhưng chưa bật tích hợp. Ngrok trả
+`404 ERR_NGROK_3200` nghĩa là tunnel offline, khác lỗi Host Filtering của Kestrel.
+Không dùng một signed payment webhook để probe kết nối.
+
+Xem [biên bản kiểm tra 13/11/2026](../development/SEPAY_NGROK_HOST_FIX_2026-11-13.md)
+để biết bằng chứng runtime, phạm vi dữ liệu test và các bước Dashboard còn lại.
+
 | Trường Dashboard Test Mode  | Giá trị cần dùng                                                           |
 | --------------------------- | -------------------------------------------------------------------------- |
 | Tên                         | `BHOME Test Mode`, tên đề xuất                                             |

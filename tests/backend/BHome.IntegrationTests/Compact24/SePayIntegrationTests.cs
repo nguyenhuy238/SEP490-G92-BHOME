@@ -169,6 +169,28 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/integrations/sepay/events")).StatusCode);
     }
     [CompactPostgresFact]
+    public async Task ConfiguredTunnelStillRequiresHmacAndCannotCreatePaymentsWithoutIt()
+    {
+        await using var scenario = await Create();
+        using var host = scenario.Host.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            { ["AllowedHosts"] = "localhost;127.0.0.1;configured.ngrok-free.dev" })));
+        using var client = host.CreateClient();
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var paymentsBefore = await db.Set<PaymentTransfer>().CountAsync();
+        var repository = scope.ServiceProvider.GetRequiredService<ISePayRepository>();
+        var eventsBefore = (await repository.EventsAsync(1, 20, default)).TotalCount;
+        using var request = new HttpRequestMessage(HttpMethod.Post, SePayOptions.WebhookRoute)
+        { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+        request.Headers.Host = "configured.ngrok-free.dev";
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(paymentsBefore, await db.Set<PaymentTransfer>().CountAsync());
+        Assert.Equal(eventsBefore, (await repository.EventsAsync(1, 20, default)).TotalCount);
+    }
+
+    [CompactPostgresFact]
     public async Task ExactPartialAndExcessUseCanonicalLedgerAndSharedTenantStatus()
     {
         await using var scenario = await Create();
