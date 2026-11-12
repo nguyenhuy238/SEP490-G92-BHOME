@@ -409,6 +409,7 @@ export function TasksApiPage() {
                       >
                         <TableCell sx={{ maxWidth: 280 }}>
                           <Typography
+                            component="div"
                             sx={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}
                           >
                             {task.title}{' '}

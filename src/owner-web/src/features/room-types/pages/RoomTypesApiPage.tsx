@@ -54,7 +54,7 @@ export function RoomTypesApiPage() {
   const query = useQuery({
     queryKey: ['property-setup', 'room-types', session?.userId, locationId, page, search],
     queryFn: ({ signal }) => api.roomTypes(locationId, page + 1, search, signal),
-    enabled: !!locationId,
+    enabled: canManage && !!locationId,
   });
   const save = useMutation({
     mutationFn: () =>
@@ -126,13 +126,15 @@ export function RoomTypesApiPage() {
           </Button>
         </Stack>
       </Paper>
-      {!locationId ? (
+      {!canManage ? (
+        <Alert severity="info">Owner quản lý cấu hình gợi ý tạo phòng.</Alert>
+      ) : !locationId ? (
         <Alert severity="info">Chọn cơ sở để quản lý loại phòng.</Alert>
       ) : query.isPending ? (
         <LoadingState />
       ) : query.isError ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
-      ) : query.data.items.length === 0 ? (
+      ) : !query.data || query.data.items.length === 0 ? (
         <Alert severity="info">
           {search
             ? 'Không tìm thấy loại phòng phù hợp. Hãy thử từ khóa khác.'
@@ -147,7 +149,7 @@ export function RoomTypesApiPage() {
           inspect={setInspecting}
         />
       )}
-      {query.data && (
+      {canManage && query.data && (
         <TablePagination
           component="div"
           count={query.data.totalCount}

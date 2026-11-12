@@ -169,7 +169,7 @@ it('requires confirmation before deactivating an existing Location', async () =>
     ).toBe(true),
   );
 });
-it('creates a native Room in the selected Location without a retired RoomType request', async () => {
+it('creates a native Room while loading RoomType display metadata', async () => {
   state.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/capture/locations')
       return [{ id: 'location', label: 'Synthetic Location' }];
@@ -196,9 +196,7 @@ it('creates a native Room in the selected Location without a retired RoomType re
       }),
     }),
   );
-  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(
-    false,
-  );
+  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(true);
 });
 it('reads physical Asset fields through the scoped native list and pagination', async () => {
   state.request.mockImplementation(async (path: string) => {
