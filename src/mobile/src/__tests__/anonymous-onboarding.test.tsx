@@ -2,6 +2,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), router: { replace: vi.fn() } }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ baseUrl: 'https://api.example.invalid', session: null }),
 }));

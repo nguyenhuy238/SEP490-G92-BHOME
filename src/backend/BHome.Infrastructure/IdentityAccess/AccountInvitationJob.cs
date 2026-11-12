@@ -15,7 +15,7 @@ internal sealed class AccountInvitationJob(Compact24DbContext db, AccountInvitat
             SELECT COALESCE(task_data->>'invitationDispatchState','') AS "Value"
             FROM operational_tasks WHERE id={job.Id} AND task_type='SYSTEM_JOB'
             """).SingleAsync(t);
-        if (accepted is "AcceptedByProvider" or "SupersededByExistingInvitation") return;
+        if (accepted is "AcceptedByProvider" or "SupersededByExistingInvitation" or "Queued") return;
         var input = JsonSerializer.Deserialize<ApprovedTenantInvitation>(job.PayloadJson) ?? throw new InvalidOperationException("Invalid invitation intent.");
         var email = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == input.ResidentId &&
             db.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.Id == input.ContractId &&

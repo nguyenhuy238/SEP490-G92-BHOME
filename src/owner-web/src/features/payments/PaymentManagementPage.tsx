@@ -29,6 +29,7 @@ import {
 import { PageHeader, FilterToolbar, KPIGrid, StatusChip } from '../../components/common/PortalUI';
 import { OwnerTable, OwnerPagination } from '../../components/common/OwnerWorkspace';
 import { usePaymentApi } from './usePaymentApi';
+import { SePayEventsPanel } from './SePayEventsPanel';
 import {
   OwnerInvoicePaymentPanel,
   ReconcileTransfer,
@@ -124,7 +125,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
       <Stack spacing={2}>
         {!debtOnly && linkedReceipt && (
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6">Giao dịch từ thông báo hoàn tiền</Typography>
+            <Typography variant="h6">Giao dịch được liên kết</Typography>
             {!validLinkedReceipt ? (
               <Alert severity="error">Liên kết giao dịch không hợp lệ.</Alert>
             ) : linked.isPending ? (
@@ -153,6 +154,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             <Tab label="Đối soát giao dịch" />
             <Tab label="Lịch sử đã xác minh" />
             <Tab label="Tài khoản nhận tiền" />
+            <Tab label="Webhook SePay" />
           </Tabs>
         )}
         <Button
@@ -172,6 +174,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
         >
           Làm mới đối soát và công nợ
         </Button>
+        {!debtOnly && section === 4 && <SePayEventsPanel />}
         {!debtOnly && section === 1 && (
           <Button onClick={() => setRecordUnmatched(true)}>
             Ghi nhận giao dịch chưa xác định hóa đơn

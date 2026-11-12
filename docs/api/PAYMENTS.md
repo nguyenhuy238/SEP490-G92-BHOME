@@ -56,8 +56,10 @@ List giao dịch theo Location/Room/kỳ dùng hóa đơn đã allocate, rồi t
 Amounts đọc từ debt query được chuẩn hóa scale 0; không trả chuỗi `.0` làm UI mất số tiền.
 Giao dịch đánh dấu isDevelopmentDemo không được allocate ngoài Development/Testing.
 
-Provider production hiện Unconfigured. `OwnerBankStatement` chỉ là Owner xác minh bằng sao kê,
-không phải xác minh callback ngân hàng hay receipt Tenant. Không có endpoint fake bank success.
+SePay là provider opt-in với HMAC webhook, registry BH và JOB-03 trên ledger hiện có.
+Mặc định `SePay:Enabled=false` giữ workflow Owner manual. `OwnerBankStatement` là Owner xác minh
+bằng sao kê; `SePayTest`/`SePayLive` là provider xác thực, payer chưa được gán. Namespace
+`SEPAY:TEST`/`SEPAY:LIVE` được dành riêng cho provider. Xem [SEPAY.md](SEPAY.md).
 Event `payment.confirmed.v1` lưu trong PaymentConfirmedEvents cùng allocation, key allocationId,
 payload contract `{allocationId, invoiceId, occurredAt}`; recipient lấy từ InvoiceRecipients và Owner.
 `notification-publish` đã consume event sau commit, tạo inbox bền vững và dedup theo recipient/event;
@@ -85,6 +87,9 @@ Mobile dùng expo-clipboard bản SDK 58 để sao chép thông tin theo thao t�
 không có nút Tenant tự xác minh hay sửa balance. QR bị ẩn ngay khi trạng thái server Paid.
 
 # Chính sách thiếu/thừa tiền được ủy quyền ngày 05/11/2026
+
+Nhánh SePay được yêu cầu ngày 12/11/2026 bổ sung provider-verified pathway, không giả danh Owner.
+Quy tắc dưới đây tiếp tục áp dụng cho xác minh thủ công; cách phân bổ thiếu/thừa dùng chung ledger.
 
 Trong phiên triển khai, người dùng yêu cầu chọn hướng xử lý khi chưa có tài liệu OQ và báo cáo lại. Compact24 áp dụng: chỉ Owner đã đối chiếu sao kê và xác nhận `humanVerified=true` được phân bổ; đúng mã hóa đơn/reference, invoice Final, dư nợ dương và bank claim chưa dùng vẫn là điều kiện bắt buộc. Số phân bổ = min(số nhận đã xác minh, dư nợ hiện tại) trong transaction/lock hiện hữu. Thiếu tiền giữ phần nợ còn lại và cho phép một giao dịch khác thanh toán tiếp; quá hạn vẫn tính trên dư nợ. Thừa tiền chỉ ghi có đủ hóa đơn, phần còn lại vẫn gắn receipt, không trở thành doanh thu/credit/hoàn tiền tự động và không dùng lại bank claim cho nghĩa vụ khác.
 

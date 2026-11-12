@@ -11,6 +11,28 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class RuntimeSchemaUpgradeTests
 {
     [CompactPostgresFact]
+    public async Task ReadinessStillRejectsModifiedGuardBodyAfterCatalogBatching()
+    {
+        var fixture = new Compact24Fixture(); await fixture.InitializeAsync();
+        try
+        {
+            await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(fixture.Connection).Options);
+            Assert.True(await db.IsSchemaReadyAsync());
+            await using (var tx = await db.Database.BeginTransactionAsync())
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE OR REPLACE FUNCTION bhome24_sepay_receipt_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                    BEGIN RETURN NEW; END $fn$;
+                    """);
+                Assert.False(await db.IsSchemaReadyAsync());
+                await tx.RollbackAsync();
+            }
+            Assert.True(await db.IsSchemaReadyAsync());
+        }
+        finally { await fixture.DisposeAsync(); }
+    }
+
+    [CompactPostgresFact]
     public async Task BaselineUpgradeRepairsMissingRuntimeColumnsAndPreservesExistingRecords()
     {
         var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN"));
@@ -58,7 +80,7 @@ public sealed class RuntimeSchemaUpgradeTests
             Assert.Equal("42703", missing.SqlState);
             using var diagnostics = new StringWriter();
             Assert.Equal(2, await DatabaseProbe.RunAsync(target.ConnectionString, diagnostics));
-            Assert.Contains("applied=1; pending=7; unknown=0", diagnostics.ToString());
+            Assert.Contains("applied=1; pending=8; unknown=0", diagnostics.ToString());
             Assert.Contains("20261110000100_LifecycleAlignment", diagnostics.ToString());
             Assert.Contains("20261111080000_DepositReceiptAllocation", diagnostics.ToString());
             var upgrade = db.GetService<IMigrator>().GenerateScript("20261108112733_InitialCompact24", null, MigrationsSqlGenerationOptions.NoTransactions);

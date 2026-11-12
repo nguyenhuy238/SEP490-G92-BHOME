@@ -129,6 +129,11 @@ try {
         Write-Output "API: https://${lanIp}:7240; Expo: exp://${lanIp}:$Port"
         Write-Output "API checked from this computer: $env:EXPO_PUBLIC_DEV_API_BASE_URL"
         Write-Output 'Scan the QR/open the Expo URL. Use the new QR when reloading Expo on a new network.'
+        # Certificate preparation and API probes can take time. Another terminal may have
+        # started Metro since the initial port check; never launch over that instance.
+        if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
+            throw "Metro port $Port became active while checking the API. Use the existing Expo terminal, or stop it with Ctrl+C before retrying."
+        }
         $expoLauncher = Join-Path $repo 'scripts/Start-ExpoMobile.cjs'
         $expoArguments = @(('"' + $expoLauncher + '"'), '--metro-only', '--lan', '--port', [string]$Port)
         if ($Clear) { $expoArguments += '--clear' }

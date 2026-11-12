@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Link } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
 import { getApiBaseUrl } from '../../../../../../packages/client-core/src/config';
 import {
@@ -9,6 +10,12 @@ import {
 } from '../../../../../../packages/client-core/src/internalSigning';
 
 export default function AcceptInvitationPage() {
+  const location = useLocation(),
+    navigate = useNavigate();
+  const [link] = useState(() => readAuthenticationFragment(location.hash));
+  useEffect(() => {
+    if (location.hash) void navigate(location.pathname, { replace: true });
+  }, [location.hash, location.pathname, navigate]);
   const api = useMemo(
     () =>
       internalSigningClient(
@@ -16,8 +23,8 @@ export default function AcceptInvitationPage() {
       ),
     [],
   );
-  const [email, setEmail] = useState(''),
-    [token, setToken] = useState(''),
+  const [email, setEmail] = useState(link.userName),
+    [token, setToken] = useState(link.token),
     [password, setPassword] = useState(''),
     [repeat, setRepeat] = useState('');
   const [busy, setBusy] = useState(false),
@@ -68,7 +75,7 @@ export default function AcceptInvitationPage() {
               <TextField
                 required
                 label="Email nhận lời mời"
-                type="email"
+                type="text"
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

@@ -33,11 +33,14 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
         }
     }
 
-    internal async Task<bool> ProcessOneAsync(CancellationToken stoppingToken)
+    internal Task<bool> ProcessOneAsync(CancellationToken stoppingToken) => ProcessAllowedAsync(stoppingToken, null);
+
+    internal async Task<bool> ProcessAllowedAsync(CancellationToken stoppingToken, string[]? allowedHandlers)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var persistence = scope.ServiceProvider.GetRequiredService<IJobPersistence>();
-        var handlers = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().ToDictionary(h => h.Name, StringComparer.Ordinal);
+        var handlers = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().Where(h => h.Enabled && (allowedHandlers is null || allowedHandlers.Contains(h.Name)))
+            .ToDictionary(h => h.Name, StringComparer.Ordinal);
         var names = handlers.Keys.ToArray();
         var now = DateTimeOffset.UtcNow;
         var lockToken = Guid.NewGuid();

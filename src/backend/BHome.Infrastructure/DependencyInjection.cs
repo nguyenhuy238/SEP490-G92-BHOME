@@ -110,7 +110,11 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
-        services.AddScoped<IPasswordResetDelivery, BHome.Infrastructure.Modules.Notifications.PasswordEmailDelivery>();
+        services.AddOptions<AuthenticationEmailOptions>().BindConfiguration("AuthenticationEmail")
+            .Validate(o => o.ResendCooldownSeconds is >= 30 and <= 3600, "Authentication email cooldown must be 30-3600 seconds.").ValidateOnStart();
+        services.AddScoped<AuthenticationEmailDelivery>();
+        services.AddScoped<IEmailVerification, EmailVerificationService>();
+        services.AddScoped<IPasswordResetDelivery>(p => p.GetRequiredService<AuthenticationEmailDelivery>());
         services.AddScoped<IAccountInvitations, AccountInvitations>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
@@ -118,6 +122,22 @@ public static class DependencyInjection
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
         services.AddOptions<BHome.Application.Notifications.NotificationChannelOptions>().BindConfiguration("NotificationChannels")
             .Validate(o => o.Mode is "Unconfigured" or "Sandbox" or "Smtp" && o.MaxAttempts is >= 1 and <= 10 && o.RetrySeconds is >= 1 and <= 3600 && o.TimeoutSeconds is >= 1 and <= 45, "Invalid notification channel options.").ValidateOnStart();
+        services.AddOptions<BHome.Application.Notifications.EmailOptions>().BindConfiguration("Email")
+            .PostConfigure(o =>
+            {
+                // Compatibility for deployments using the previous SMTP configuration keys.
+                if (!o.Enabled && configuration["NotificationChannels:Mode"] == "Smtp")
+                {
+                    var legacy = configuration.GetSection("NotificationChannels").Get<BHome.Application.Notifications.NotificationChannelOptions>()!;
+                    o.Enabled = true; o.Host = legacy.SmtpHost ?? ""; o.Port = legacy.SmtpPort;
+                    o.Username = legacy.SmtpUser ?? ""; o.AppPassword = legacy.SmtpPassword ?? "";
+                    o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
+                }
+            })
+            .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
+        services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
         services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();
@@ -182,7 +202,32 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
-        services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
+        services.AddScoped<UnconfiguredBankProvider>();
+        services.AddScoped<IBankTransactionProvider>(p => p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>().Enabled
+            ? p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>() : p.GetRequiredService<UnconfiguredBankProvider>());
+        services.AddOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>()
+            .Configure<IConfiguration>((options, config) => config.GetSection("SePay").Bind(options))
+            .Validate<IHostEnvironment>((options, host) => options.Valid(host.EnvironmentName),
+                "SePay requires isolated Test/Live configuration, a strong webhook secret and receiving accounts.")
+            .ValidateOnStart();
+        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value);
+        services.AddSingleton<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayRepository, BHome.Infrastructure.PaymentsDebt.SePayRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry, BHome.Infrastructure.PaymentsDebt.PaymentCodeRegistry>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayService>();
+        services.AddHttpClient<BHome.Infrastructure.PaymentsDebt.SePayApiClient>((p, client) =>
+        {
+            var settings = p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            if (!settings.Enabled) return;
+            client.BaseAddress = new Uri(settings.ApiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayTransactionClient>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>());
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayReconciliationJob>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayPollingJob>();
+        services.AddScoped<BHome.Infrastructure.PaymentsDebt.SePayScheduling>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayScheduling>());
+        services.AddHostedService<BHome.Infrastructure.PaymentsDebt.SePayAutomationWorker>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
@@ -325,7 +370,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
         services.AddScoped<BHome.Application.Contracts.ContractExpiryService>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractExpiryScheduler>();
-        services.AddHostedService<PostgresJobWorker>();
+        services.AddSingleton<PostgresJobWorker>();
+        services.AddHostedService(p => p.GetRequiredService<PostgresJobWorker>());
         return services;
     }
 }

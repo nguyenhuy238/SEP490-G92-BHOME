@@ -167,6 +167,8 @@ public sealed partial class Compact24DbContext
             return;
         }
         var values = new Dictionary<string, string>(spec.Write, StringComparer.Ordinal);
+        if (entry.Entity is PaymentAllocation { VerifiedByUserId: var verifier } && verifier == Guid.Empty)
+            values["created_by_user_id"] = "NULL";
         if (entry.Entity is BHome.Domain.Locations.Location)
             values["operating_settings"] = "COALESCE((SELECT operating_settings FROM locations WHERE id=(@state::jsonb->>'id')::uuid),'{}'::jsonb)||jsonb_build_object('contractSettings',(@state::jsonb->>'contractSettings')::jsonb)";
         if (entry.Entity is Invoice invoice)

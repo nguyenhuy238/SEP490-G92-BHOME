@@ -24,7 +24,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.IntegrationTests.Compact24;
 
 [Trait("Category", "CompactPostgres")]
-public sealed class Compact24NotificationMvpTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
+public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!Notification-927";
     private sealed record Workspace(ApplicationUser Owner, ApplicationUser Staff, ApplicationUser[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);

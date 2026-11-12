@@ -15,7 +15,7 @@ namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersistence identity, IdentitySecurityStore security,
     UserManager<ApplicationUser> users, IPasswordResetDelivery delivery, ICurrentUser actor, CompactNotificationWriter sql,
-    IOptions<SessionOptions> options) : IAccountInvitations
+    IOptions<SessionOptions> options, IOptions<AuthenticationEmailOptions> emailOptions) : IAccountInvitations
 {
     public async Task<TenantInvitationResult> InviteStaffAsync(Guid userId, CancellationToken t)
     {
@@ -25,11 +25,15 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         var user = await security.LockUserAsync(userId, t);
         if (user is null || !user.IsActive || !(await security.RolesAsync(userId, t)).Contains(Roles.Staff)) throw new NotificationException(404, "staff_not_found");
         if (user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email)) throw new NotificationException(409, "account_not_eligible_for_invitation");
-        var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AccountInvitation")));
         var grant = await identity.ResetGrantAsync(user.Id, t);
+        if (CoolingDown(grant)) return new(user.Id, "ExistingInvitationPreserved");
+        var token = await InvitationToken(user, t);
         if (grant is null) { grant = new PasswordResetGrant { UserId = user.Id }; identity.AddResetGrant(grant); }
         grant.TokenHash = IdentitySecurityStore.Hash(token); grant.ExpiresAt = sql.Now.AddMinutes(options.Value.PasswordResetMinutes); grant.ConsumedAt = null;
-        security.Audit("AccountInvitationCreated", true, user.Id); await identity.SaveChangesAsync(t); await tx.CommitAsync(t);
+        security.Audit("AccountInvitationCreated", true, user.Id);
+        if (delivery.IsDurable) await delivery.QueueAsync(new(user.Id, user.Email, token, grant.ExpiresAt, "StaffInvitation"), t);
+        await identity.SaveChangesAsync(t); await tx.CommitAsync(t);
+        if (delivery.IsDurable) return new(user.Id, "Queued");
         try { await delivery.SendAsync(user.Id, user.Email, token, t); return new(user.Id, "AcceptedByProvider"); }
         catch (Exception e) when (e is not OperationCanceledException) { return new(user.Id, "PendingRetry"); }
     }
@@ -91,7 +95,6 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
             await db.SaveChangesAsync(t);
             await sql.Execute("UPDATE residents SET user_id=@user WHERE id=@resident AND user_id IS NULL", t, ("user", id), ("resident", residentId));
         }
-        var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AccountInvitation")));
         var grant = await identity.ResetGrantAsync(user.Id, t);
         if (dispatchJob is { } queued && grant is { ConsumedAt: null } && grant.ExpiresAt > sql.Now)
         {
@@ -100,9 +103,20 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
                 """, t);
             await tx.CommitAsync(t); return new(user.Id, "ExistingInvitationPreserved");
         }
+        if (CoolingDown(grant)) { await tx.CommitAsync(t); return new(user.Id, "ExistingInvitationPreserved"); }
+        var token = await InvitationToken(user, t);
         if (grant is null) { grant = new PasswordResetGrant { UserId = user.Id }; identity.AddResetGrant(grant); }
         grant.TokenHash = IdentitySecurityStore.Hash(token); grant.ExpiresAt = sql.Now.AddMinutes(options.Value.PasswordResetMinutes); grant.ConsumedAt = null;
-        security.Audit("AccountInvitationCreated", true, user.Id); await identity.SaveChangesAsync(t); await tx.CommitAsync(t);
+        security.Audit("AccountInvitationCreated", true, user.Id);
+        if (delivery.IsDurable)
+        {
+            await delivery.QueueAsync(new(user.Id, request.Email, token, grant.ExpiresAt, "TenantInvitation"), t);
+            if (dispatchJob is { } scheduled) await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE operational_tasks SET task_data=jsonb_set(task_data,ARRAY['invitationDispatchState'],'"Queued"'::jsonb) WHERE id={scheduled}
+                """, t);
+        }
+        await identity.SaveChangesAsync(t); await tx.CommitAsync(t);
+        if (delivery.IsDurable) return new(user.Id, "Queued");
         // Email failure cannot undo the account or tenancy; Owner can retry and replace the one-time grant.
         try
         {
@@ -133,5 +147,15 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         user.EmailConfirmed = true; if (!(await users.UpdateAsync(user)).Succeeded) return false;
         grant.ConsumedAt = sql.Now; await security.RevokeAllAsync(user.Id, "InvitationAccepted", t); security.Audit("AccountInvitationAccepted", true, user.Id);
         await identity.SaveChangesAsync(t); await tx.CommitAsync(t); return true;
+    }
+
+    private bool CoolingDown(PasswordResetGrant? grant) => grant is { ConsumedAt: null } && grant.ExpiresAt > sql.Now &&
+        grant.ExpiresAt.AddMinutes(-options.Value.PasswordResetMinutes).AddSeconds(emailOptions.Value.ResendCooldownSeconds) > sql.Now;
+
+    private async Task<string> InvitationToken(ApplicationUser user, CancellationToken t)
+    {
+        if (!(await users.UpdateSecurityStampAsync(user)).Succeeded) throw new NotificationException(409, "invitation_account_changed");
+        await security.RevokeAllAsync(user.Id, "InvitationIssued", t);
+        return WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AccountInvitation")));
     }
 }

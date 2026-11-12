@@ -15,6 +15,15 @@ using Npgsql;
 
 namespace BHome.IntegrationTests.Compact24;
 
+public sealed class CompactPostgresTheoryAttribute : TheoryAttribute
+{
+    public CompactPostgresTheoryAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")))
+            Skip = "Set BHOME_COMPACT24_TEST_ADMIN to an authorized loopback PostgreSQL admin for disposable databases.";
+    }
+}
+
 public sealed class CompactPostgresFactAttribute : FactAttribute
 {
     public CompactPostgresFactAttribute()

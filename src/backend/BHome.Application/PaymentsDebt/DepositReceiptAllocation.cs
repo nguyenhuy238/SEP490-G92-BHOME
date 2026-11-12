@@ -23,7 +23,8 @@ public sealed partial class PaymentService
         if (contract.Kind is not (ContractKind.Main or ContractKind.Holding) || contract.PreviousContractId is not null) throw new PaymentException(400, "deposit_contract_required");
         if (contract.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
         var received = await repository.DepositAllocatedAsync(contract.Id, token);
-        return new(contract.Id, PaymentRules.DepositReference(contract.Id), contract.RequiredDeposit.ToString("0", CultureInfo.InvariantCulture),
+        var reference = codes is null ? null : await codes.IssueAsync("Deposit", contract.Id, contract.Room.LocationId, token);
+        return new(contract.Id, reference ?? PaymentRules.DepositReference(contract.Id), contract.RequiredDeposit.ToString("0", CultureInfo.InvariantCulture),
             received.ToString("0", CultureInfo.InvariantCulture), Math.Max(0, contract.RequiredDeposit - received).ToString("0", CultureInfo.InvariantCulture), contract.IsDevelopmentDemo);
     }
     public async Task<DepositAllocationContext> DepositContextAsync(Guid transferId, Guid contractId, CancellationToken token)
@@ -48,11 +49,13 @@ public sealed partial class PaymentService
         if (review?.Decision == "Rejected") problems.Add("bank_transfer_rejected");
         if (review?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") problems.Add("receipt_excess_already_confirmed");
         if (remaining <= 0) problems.Add("deposit_already_satisfied");
-        if (!string.Equals(transfer.TransferDescription.Trim(), PaymentRules.DepositReference(contract.Id), StringComparison.OrdinalIgnoreCase)) problems.Add("deposit_transfer_reference_mismatch");
+        if (!string.Equals(transfer.TransferDescription.Trim(), PaymentRules.DepositReference(contract.Id), StringComparison.OrdinalIgnoreCase) &&
+            (codes is null || !await codes.MatchesAsync("Deposit", contract.Id, transfer.TransferDescription, token))) problems.Add("deposit_transfer_reference_mismatch");
         if (external is not null && external.TransferFingerprint != ReceiptExcessRules.TransferFingerprint(transfer)) problems.Add("external_payer_history_invalid");
         var payers = external is null ? await repository.DepositPayersAsync(contract.Id, token) : [];
         static string MoneyText(decimal value) => value.ToString("0", CultureInfo.InvariantCulture);
-        var context = new DepositAllocationContext(transferId, contractId, "", PaymentRules.DepositReference(contractId),
+        var reference = codes is null ? null : await codes.GetAsync("Deposit", contractId, token);
+        var context = new DepositAllocationContext(transferId, contractId, "", reference ?? PaymentRules.DepositReference(contractId),
             MoneyText(contract.RequiredDeposit), MoneyText(received), MoneyText(remaining), MoneyText(proposed), MoneyText(transfer.Amount - proposed),
             payers, external, problems.Distinct().Order().ToArray(), transfer.IsDevelopmentDemo);
         return context with { Reference = "DEPOSIT-" + Fingerprint(new { context, Receipt = ReceiptExcessRules.TransferFingerprint(transfer), contract.Status, contract.AppliedHoldingDeposit }) };
