@@ -15,6 +15,13 @@ import type { FinancialReport } from '../../../../packages/client-core/src/finan
 import { paymentText, type BankTransfer } from '../../../../packages/client-core/src/payments';
 import type { Page } from '../../../../packages/client-core/src/invoices';
 import { OwnerWebNotice } from '../components/OwnerWebNotice';
+import {
+  OwnerDivider,
+  OwnerLinkRow,
+  OwnerScreenIntro,
+  OwnerSection,
+  OwnerSurface,
+} from '../components/OwnerMobileKit';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import type { IncidentPage, WorkOrder } from '../services/incidents';
 import type { OperationalTask, TaskPage } from '../services/operationalTasks';
@@ -41,17 +48,13 @@ function CountCard({
   open: () => void;
 }) {
   return (
-    <Box style={ui.half}>
-      <Metric
-        label={label}
-        value={count === null ? '…' : String(count)}
-        detail="Cần Owner xem xét"
-        icon={icon}
-      />
-      <Action secondary onPress={open}>
-        Mở danh sách
-      </Action>
-    </Box>
+    <OwnerLinkRow
+      icon={icon}
+      title={label}
+      detail="Cần Owner xem xét"
+      value={count === null ? '…' : String(count)}
+      onPress={open}
+    />
   );
 }
 
@@ -81,64 +84,79 @@ export function OwnerApprovalCenterScreen() {
   const queries = [tasks, plans, verification, adjustments, signing, activation, payments];
   return (
     <>
-      <Heading title="Trung tâm phê duyệt" detail="Các quyết định nhanh thuộc thẩm quyền Owner" />
+      <OwnerScreenIntro
+        title="Trung tâm phê duyệt"
+        detail="Các quyết định thuộc thẩm quyền Owner, được nhóm theo nghiệp vụ"
+      />
       {queries.map((query, index) => (
         <QueryState key={index} {...query} />
       ))}
-      <Row>
-        <CountCard
-          label="Công việc chờ nghiệm thu"
-          count={tasks.data?.totalCount ?? null}
-          icon="clipboard-check-outline"
-          open={() => go('operations')}
+      <OwnerSection title="Vận hành & bảo trì">
+        <OwnerSurface>
+          <CountCard
+            label="Công việc chờ nghiệm thu"
+            count={tasks.data?.totalCount ?? null}
+            icon="clipboard-check-outline"
+            open={() => go('operations')}
+          />
+          <OwnerDivider />
+          <CountCard
+            label="Phương án sửa chữa"
+            count={plans.data?.totalCount ?? null}
+            icon="wrench-clock-outline"
+            open={() => go('owner-maintenance')}
+          />
+          <OwnerDivider />
+          <CountCard
+            label="Bảo trì chờ nghiệm thu"
+            count={verification.data?.totalCount ?? null}
+            icon="shield-check-outline"
+            open={() => go('owner-maintenance')}
+          />
+        </OwnerSurface>
+      </OwnerSection>
+      <OwnerSection title="Tài chính & hóa đơn">
+        <OwnerSurface>
+          <CountCard
+            label="Điều chỉnh hóa đơn"
+            count={adjustments.data?.totalCount ?? null}
+            icon="receipt-text-edit-outline"
+            open={() => go('owner-adjustments')}
+          />
+          <OwnerDivider />
+          <CountCard
+            label="Giao dịch chờ đối soát"
+            count={payments.data?.totalCount ?? null}
+            icon="bank-transfer"
+            open={() => go('owner-payments')}
+          />
+        </OwnerSurface>
+      </OwnerSection>
+      <OwnerSection title="Hợp đồng">
+        <OwnerSurface>
+          <CountCard
+            label="Hợp đồng chờ ký"
+            count={signing.data?.totalCount ?? null}
+            icon="file-sign"
+            open={() => go('signing')}
+          />
+          <OwnerDivider />
+          <CountCard
+            label="Hợp đồng chờ kích hoạt"
+            count={activation.data?.totalCount ?? null}
+            icon="file-check-outline"
+            open={() => go('signing')}
+          />
+        </OwnerSurface>
+      </OwnerSection>
+      <OwnerSurface>
+        <OwnerLinkRow
+          icon="bullhorn-outline"
+          title="Thông báo đã gửi"
+          detail="Xem lịch sử thông báo tới người dùng"
+          onPress={() => go('owner-announcements')}
         />
-        <CountCard
-          label="Phương án sửa chữa"
-          count={plans.data?.totalCount ?? null}
-          icon="wrench-clock-outline"
-          open={() => go('owner-maintenance')}
-        />
-      </Row>
-      <Row>
-        <CountCard
-          label="Bảo trì chờ nghiệm thu"
-          count={verification.data?.totalCount ?? null}
-          icon="shield-check-outline"
-          open={() => go('owner-maintenance')}
-        />
-        <CountCard
-          label="Điều chỉnh hóa đơn"
-          count={adjustments.data?.totalCount ?? null}
-          icon="receipt-text-edit-outline"
-          open={() => go('owner-adjustments')}
-        />
-      </Row>
-      <Row>
-        <CountCard
-          label="Hợp đồng chờ ký"
-          count={signing.data?.totalCount ?? null}
-          icon="file-sign"
-          open={() => go('signing')}
-        />
-        <CountCard
-          label="Hợp đồng chờ kích hoạt"
-          count={activation.data?.totalCount ?? null}
-          icon="file-check-outline"
-          open={() => go('signing')}
-        />
-      </Row>
-      <CountCard
-        label="Giao dịch chờ đối soát"
-        count={payments.data?.totalCount ?? null}
-        icon="bank-transfer"
-        open={() => go('owner-payments')}
-      />
-      <Box>
-        <Heading title="Lối tắt" />
-        <Action secondary onPress={() => go('owner-announcements')}>
-          Thông báo đã gửi
-        </Action>
-      </Box>
+      </OwnerSurface>
     </>
   );
 }
@@ -152,9 +170,9 @@ export function OwnerAdjustmentListScreen() {
   );
   return (
     <>
-      <Heading
+      <OwnerScreenIntro
         title="Điều chỉnh hóa đơn"
-        detail="Owner xem bằng chứng và quyết định từng yêu cầu"
+        detail="Xem bằng chứng và quyết định từng yêu cầu"
       />
       <ChoiceField
         label="Trạng thái"
@@ -289,7 +307,7 @@ export function OwnerPaymentListScreen() {
   );
   return (
     <>
-      <Heading
+      <OwnerScreenIntro
         title="Đối soát giao dịch"
         detail="Chỉ xác nhận sau khi đã đối chiếu sao kê ngân hàng"
       />
@@ -392,20 +410,19 @@ export function OwnerAnnouncementScreen() {
   const sent = useWorkspaceQuery<Announcement[]>('/api/v1/announcements/sent?page=1&pageSize=20');
   return (
     <>
+      <OwnerScreenIntro title="Thông báo đã gửi" detail="Theo dõi nội dung và phạm vi người nhận" />
       <OwnerWebNotice task="Soạn và gửi thông báo cho Tenant" />
-      <Action secondary onPress={sent.reload}>
-        Tải lại thông báo đã gửi
-      </Action>
-      <Heading title="Đã gửi gần đây" />
-      <QueryState {...sent} />
-      {sent.data?.length === 0 && <Text>Chưa có thông báo đã gửi.</Text>}
-      {sent.data?.map((x) => (
-        <Box key={x.id}>
-          <Heading title={x.title} detail={x.sentAt ? formatInstant(x.sentAt) : x.status} />
-          <Text>{x.body}</Text>
-          <Text>{x.recipientCount} người nhận</Text>
-        </Box>
-      ))}
+      <OwnerSection title="Đã gửi gần đây">
+        <QueryState {...sent} />
+        {sent.data?.length === 0 && <Text>Chưa có thông báo đã gửi.</Text>}
+        {sent.data?.map((x) => (
+          <Box key={x.id}>
+            <Heading title={x.title} detail={x.sentAt ? formatInstant(x.sentAt) : x.status} />
+            <Text>{x.body}</Text>
+            <Text>{x.recipientCount} người nhận</Text>
+          </Box>
+        ))}
+      </OwnerSection>
     </>
   );
 }
@@ -421,7 +438,7 @@ export function OwnerFinanceScreen() {
   const t = query.data?.total;
   return (
     <>
-      <Heading
+      <OwnerScreenIntro
         title="Tài chính tháng này"
         detail="Số liệu quản trị từ giao dịch đã xác minh; không phải báo cáo thuế"
       />

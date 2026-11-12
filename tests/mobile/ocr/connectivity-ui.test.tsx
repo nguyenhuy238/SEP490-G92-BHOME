@@ -11,7 +11,10 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (s: unknown) => s },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
-vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
+vi.mock('expo-router', () => ({
+  router: { push: vi.fn() },
+  useFocusEffect: (effect: () => void | (() => void)) => React.useEffect(effect, [effect]),
+}));
 vi.mock('react-native-paper', () => ({
   MD3LightTheme: { colors: {} },
   configureFonts: () => ({}),
@@ -108,7 +111,7 @@ it('shows loading, an explicit failure, and a retry that really reloads the Owne
   await screen.findByText(/Máy chủ gặp lỗi xử lý/);
   expect(screen.queryByText(/HTTP 500|GET \/api\/v1\//)).toBeNull();
   expect(screen.queryByText('Phòng')).toBeNull();
-  fireEvent.click(screen.getByText('Tải lại dữ liệu'));
+  fireEvent.click(screen.getByText('Thử lại'));
   await screen.findByText('Phòng');
   expect(mocks.load).toHaveBeenCalledTimes(2);
   expect(screen.queryByText(/HTTP 500/)).toBeNull();

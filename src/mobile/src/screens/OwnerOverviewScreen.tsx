@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
@@ -15,6 +16,7 @@ import { errorMessage } from '../lib/api';
 import { conciseMessage, showError } from '../lib/toast';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { loadOwnerOverview, type OwnerOverview } from '../services/ownerOverview';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -91,16 +93,20 @@ function OverviewCard({ data }: { data: OwnerOverview }) {
 export function OwnerOverviewScreen() {
   const { api, session } = useSession();
   const { go } = useWorkspace();
-  const [revision, setRevision] = useState(0);
+  const request = useRef<AbortController | null>(null);
   const [state, setState] = useState<{
     data: OwnerOverview | null;
     error: string;
     loading: boolean;
   }>({ data: null, error: '', loading: true });
 
-  useEffect(() => {
-    if (!api || !session?.roles.includes('Owner')) return;
+  const allowed = !!api && !!session?.roles.includes('Owner');
+  const reload = useCallback(() => {
+    if (!api || !allowed) return;
+    request.current?.abort();
     const controller = new AbortController();
+    request.current = controller;
+    setState((current) => ({ ...current, error: '', loading: true }));
     void loadOwnerOverview(api, controller.signal).then(
       (data) => {
         if (!controller.signal.aborted) setState({ data, error: '', loading: false });
@@ -108,20 +114,22 @@ export function OwnerOverviewScreen() {
       (error) => {
         if (!controller.signal.aborted) {
           const message = conciseMessage(errorMessage(error));
-          setState({ data: null, error: message, loading: false });
+          setState((current) => ({ ...current, error: message, loading: false }));
           showError(message);
         }
       },
     );
-    return () => controller.abort();
-  }, [api, session, revision]);
+  }, [api, allowed]);
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+      return () => request.current?.abort();
+    }, [reload]),
+  );
 
-  if (!api || !session?.roles.includes('Owner'))
-    return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
-  const reload = () => {
-    setState({ data: null, error: '', loading: true });
-    setRevision((value) => value + 1);
-  };
+  useWorkspaceHeaderRefresh(reload, state.loading);
+
+  if (!allowed) return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
 
   return (
     <View style={styles.page}>
@@ -130,20 +138,7 @@ export function OwnerOverviewScreen() {
           <Text style={styles.title}>Tổng quan BHOME</Text>
           <Text style={styles.secondary}>Theo dõi cơ sở và xử lý công việc quan trọng</Text>
         </View>
-        <TouchableRipple
-          borderless
-          style={styles.refresh}
-          onPress={reload}
-          disabled={state.loading}
-          accessibilityRole="button"
-          accessibilityLabel="Tải lại dữ liệu"
-        >
-          {state.loading ? (
-            <ActivityIndicator size={20} accessibilityLabel="Đang tải tổng quan" />
-          ) : (
-            <Icon source="refresh" size={22} color={s.blue} />
-          )}
-        </TouchableRipple>
+        {state.loading && <ActivityIndicator size={20} accessibilityLabel="Đang tải tổng quan" />}
       </View>
 
       {!!state.error && (
@@ -152,7 +147,7 @@ export function OwnerOverviewScreen() {
             {state.error}
           </Text>
           <Button compact onPress={reload}>
-            Tải lại dữ liệu
+            Thử lại
           </Button>
         </View>
       )}
@@ -226,14 +221,6 @@ const styles = StyleSheet.create({
   title: { ...typography.screenTitle, color: '#173654' },
   secondary: { ...typography.secondary, color: c.muted, flexShrink: 1 },
   grow: { flex: 1, minWidth: 0, gap: 3 },
-  refresh: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: s.blueSoft,
-  },
   surface: {
     backgroundColor: c.white,
     borderRadius: 18,

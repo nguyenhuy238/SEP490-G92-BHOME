@@ -16,12 +16,18 @@ import {
   ui,
 } from '../components/WorkspaceKit';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
+import {
+  OwnerDivider,
+  OwnerLinkRow,
+  OwnerScreenIntro,
+  OwnerSection,
+  OwnerSurface,
+} from '../components/OwnerMobileKit';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type Named } from '../lib/api';
 import { OperationalTasksScreen } from './OperationalTaskScreens';
-import { MeterTasksScreen } from './MeterTasksScreen';
 import {
   operationalTasks,
   taskActionLabels,
@@ -131,28 +137,49 @@ export function StaffHomeScreen() {
 
 export { MeterTasksScreen } from './MeterTasksScreen';
 
-function OwnerIncidentLinks() {
+export function OwnerOperationsScreen() {
   const { go } = useWorkspace();
   return (
-    <Box>
-      <Action onPress={() => go('owner-incidents')}>Quản lý báo cáo sự cố</Action>
-      <Action onPress={() => go('owner-maintenance')}>Phê duyệt và nghiệm thu bảo trì</Action>
-      <Action onPress={() => go('owner-emergencies')}>Sự cố khẩn cấp</Action>
-    </Box>
-  );
-}
-export function OwnerOperationsScreen() {
-  return (
     <>
-      <Heading title="Vận hành cơ sở" />
-      <OwnerIncidentLinks />
-      <Box>
-        <Action icon="office-building-outline" onPress={() => router.push('/setup')}>
-          Thiết lập cơ sở, phòng & phân công
-        </Action>
-      </Box>
-      <OperationalTasksScreen />
-      <MeterTasksScreen />
+      <OwnerScreenIntro
+        title="Vận hành cơ sở"
+        detail="Theo dõi sự cố, bảo trì, công việc và chỉ số theo từng nhóm"
+      />
+      <OwnerSection title="Sự cố & bảo trì">
+        <OwnerSurface>
+          <OwnerLinkRow
+            icon="alert-circle-outline"
+            title="Báo cáo sự cố"
+            detail="Xem và phân loại các báo cáo đang mở"
+            onPress={() => go('owner-incidents')}
+          />
+          <OwnerDivider />
+          <OwnerLinkRow
+            icon="tools"
+            title="Bảo trì"
+            detail="Phê duyệt phương án và nghiệm thu kết quả"
+            onPress={() => go('owner-maintenance')}
+          />
+          <OwnerDivider />
+          <OwnerLinkRow
+            icon="alarm-light-outline"
+            title="Sự cố khẩn cấp"
+            detail="Theo dõi xác nhận và hành động ứng phó"
+            onPress={() => go('owner-emergencies')}
+          />
+        </OwnerSurface>
+      </OwnerSection>
+      <OwnerSurface>
+        <OwnerLinkRow
+          icon="office-building-outline"
+          title="Cơ sở, phòng & phân công"
+          detail="Mở khu vực thiết lập vận hành"
+          onPress={() => router.push('/setup')}
+        />
+      </OwnerSurface>
+      <OwnerSection title="Công việc nhân viên" detail="Theo dõi tiến độ và nghiệm thu">
+        <OperationalTasksScreen />
+      </OwnerSection>
     </>
   );
 }

@@ -20,11 +20,11 @@ export function QueryState({
           <Text accessibilityRole="alert" style={ui.red}>
             {conciseMessage(error)}
           </Text>
+          <Action secondary disabled={loading} onPress={reload}>
+            Thử lại
+          </Action>
         </Box>
       )}
-      <Action secondary disabled={loading} icon="refresh" onPress={reload}>
-        Tải lại dữ liệu
-      </Action>
     </>
   );
 }

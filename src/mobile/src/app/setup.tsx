@@ -114,15 +114,19 @@ export default function Setup() {
     <Page>
       <Text variant="headlineSmall">Thiết lập thu thập dữ liệu</Text>
       <Text>Thực hiện từ trên xuống. Không tạo hợp đồng, kích hoạt phòng thuê hoặc hóa đơn.</Text>
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      {!!error && (
+        <>
+          <Text style={styles.error}>{error}</Text>
+          <Button disabled={busy || loading} onPress={() => void load()}>
+            Thử lại
+          </Button>
+        </>
+      )}
       {!!notice && <Text>{notice}</Text>}
       {loading && <Text>Đang tải cấu hình…</Text>}
       {!loading && !locations.length && (
         <Text>Chưa có cơ sở. Owner có thể tạo cơ sở bên dưới.</Text>
       )}
-      <Button disabled={busy || loading} onPress={() => void load()}>
-        Tải lại cấu hình
-      </Button>
       <Text variant="titleLarge">1. Cơ sở</Text>
       <Field label="Tên cơ sở" value={locationName} onChange={setLocationName} />
       <Field label="Địa chỉ cơ sở" value={address} onChange={setAddress} />
