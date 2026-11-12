@@ -48,9 +48,13 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Empty(probe.Messages);
         var delivery = await AuthenticationDelivery(host, w.Tenants[0].Id);
         await SendEmail(host, delivery);
-        var mail = Assert.Single(probe.Messages); Assert.StartsWith("bhome://reset-password?", mail.ActionUrl);
-        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        var mail = Assert.Single(probe.Messages); Assert.StartsWith("https://owner.example.invalid/reset-password#", mail.ActionUrl);
+        Assert.Contains("bhome://reset-password?", mail.Body);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         var token = query["token"].ToString(); Assert.NotEmpty(token);
+        var nativeQuery = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.Body.Split('\n').Last()).Query);
+        Assert.Equal(token, nativeQuery["token"].ToString());
+        Assert.Equal(query["userName"].ToString(), nativeQuery["userName"].ToString());
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var stored = await db.Database.SqlQuery<string>($"SELECT event_data::text AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.DoesNotContain(token, stored); Assert.DoesNotContain(mail.ActionUrl!, stored); Assert.DoesNotContain(w.Tenants[0].Email!, stored);
@@ -143,8 +147,9 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
         var delivery = await AuthenticationDelivery(host, staff.UserId); await SendEmail(host, delivery);
         var mail = Assert.Single(probe.Messages); Assert.Contains("Staff", mail.Title);
-        Assert.DoesNotContain(Password, mail.Body); Assert.StartsWith("bhome://accept-invitation?", mail.ActionUrl);
-        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        Assert.DoesNotContain(Password, mail.Body); Assert.StartsWith("https://owner.example.invalid/accept-invitation#", mail.ActionUrl);
+        Assert.Contains("bhome://accept-invitation?", mail.Body);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         var accept = new AcceptInvitationRequest(query["userName"].ToString(), query["token"].ToString(), "Synthetic!Invited-725");
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { Token = "invalid" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
@@ -171,7 +176,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal("Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={invited.UserId}");
         using var anonymous = host.CreateClient();
-        var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new AcceptInvitationRequest(q["userName"].ToString(), q["token"].ToString(), "Synthetic!Invited-725"))).StatusCode);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         await SendEmail(host, delivery); Assert.Single(probe.Messages);

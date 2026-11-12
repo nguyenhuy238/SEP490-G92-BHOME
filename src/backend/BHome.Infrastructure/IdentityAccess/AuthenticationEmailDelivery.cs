@@ -96,13 +96,25 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         var url = verification ? owner ? options.Value.WebVerificationUrl : options.Value.MobileVerificationUrl :
             reset ? owner ? options.Value.WebResetUrl : options.Value.MobileResetUrl : owner ? options.Value.WebInvitationUrl : options.Value.MobileInvitationUrl;
         if (!options.Value.Trusted(url, environment.IsDevelopment())) throw new ChannelDeliveryException("authentication_email_url_invalid");
-        var link = url + (new Uri(url).Scheme == "bhome" ? "?" : "#") + "userName=" + Uri.EscapeDataString(user.UserName!) + "&token=" + Uri.EscapeDataString(request.Token);
+        string Link(string callback) => callback + (new Uri(callback).Scheme == "bhome" ? "?" : "#") +
+            "userName=" + Uri.EscapeDataString(user.UserName!) + "&token=" + Uri.EscapeDataString(request.Token);
+        var nativeLink = new Uri(url).Scheme == "bhome" ? Link(url) : null;
+        // Mail clients may remove custom-scheme anchors. Existing anonymous Web pages
+        // accept the same token for every role; retain the native link as an alternative.
+        if (nativeLink is not null)
+        {
+            url = verification ? options.Value.WebVerificationUrl : reset ? options.Value.WebResetUrl : options.Value.WebInvitationUrl;
+            if (!options.Value.Trusted(url, environment.IsDevelopment()) || new Uri(url).Scheme is not ("https" or "http"))
+                throw new ChannelDeliveryException("authentication_email_url_invalid");
+        }
+        var link = Link(url);
         var title = verification ? "Xác nhận email BHOME" : reset ? "Yêu cầu đặt lại mật khẩu" : request.Kind == "StaffInvitation" ? "Lời mời tài khoản Staff" : "Chào mừng bạn đến BHOME";
         var name = await db.Users.Where(u => u.Id == recipient).Select(u => EF.Property<string>(u, "full_name")).SingleAsync(t);
         var expiry = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(request.ExpiresAt, "Asia/Ho_Chi_Minh");
-        var body = $"Xin chào {name ?? "bạn"},\n\n" + (verification ? "Vui lòng xác nhận địa chỉ email đã đăng ký với BHOME bằng liên kết bên dưới. Sau khi xác nhận, bạn có thể yêu cầu đặt lại mật khẩu." :
+        var body = $"Xin chào {name ?? "bạn"},\n\n" + (verification ? "Vui lòng xác nhận địa chỉ email đã đăng ký với BHOME bằng liên kết trong email này. Sau khi xác nhận, bạn có thể yêu cầu đặt lại mật khẩu." :
             reset ? "BHOME nhận được yêu cầu đặt lại mật khẩu của bạn." : "Bạn được mời sử dụng tài khoản BHOME. Hãy thiết lập mật khẩu trước khi đăng nhập trên ứng dụng BHOME.") +
             $"\nTài khoản: {request.Destination}\nLiên kết chỉ dùng một lần, hết hạn lúc {expiry:HH:mm dd/MM/yyyy} (giờ Việt Nam).\n\nNếu không yêu cầu thao tác này, hãy bỏ qua email hoặc liên hệ Owner. Không chia sẻ liên kết này.";
+        if (nativeLink is not null) body += "\n\nNếu đã cài ứng dụng BHOME, bạn cũng có thể mở liên kết ứng dụng này:\n" + nativeLink;
         return new(request.Destination, title, body, link);
     }
 }

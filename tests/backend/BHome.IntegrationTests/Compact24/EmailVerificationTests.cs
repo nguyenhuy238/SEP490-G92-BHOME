@@ -34,8 +34,12 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(await results[0].Content.ReadAsStringAsync(), await unknown.Content.ReadAsStringAsync());
         var delivery = await AuthenticationDelivery(host, before.Id); await SendEmail(host, delivery);
         var mail = Assert.Single(probe.Messages); Assert.Equal("EMAIL_CONFIRMATION_REQUESTED", mail.EventType);
-        Assert.StartsWith("bhome://confirm-email?", mail.ActionUrl);
-        var q = QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        Assert.StartsWith("https://owner.example.invalid/confirm-email#", mail.ActionUrl);
+        Assert.Contains("bhome://confirm-email?", mail.Body);
+        var q = QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
+        var nativeQuery = QueryHelpers.ParseQuery(new Uri(mail.Body.Split('\n').Last()).Query);
+        Assert.Equal(q["token"].ToString(), nativeQuery["token"].ToString());
+        Assert.Equal(q["userName"].ToString(), nativeQuery["userName"].ToString());
         var confirm = new { userName = q["userName"].ToString(), token = q["token"].ToString() };
         var payload = await db.Database.SqlQuery<string>($"SELECT event_data::text AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.DoesNotContain(confirm.token, payload); Assert.DoesNotContain(before.Email!, payload);
@@ -71,7 +75,7 @@ public sealed partial class Compact24NotificationMvpTests
         var delivery = await AuthenticationDelivery(host, id);
         // Inspect through the same protected delivery resolver; the token remains local to this synthetic test.
         await SendEmail(host, delivery); var mail = Assert.Single(probe.Messages);
-        var q = QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        var q = QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         if (reason == "expired") clock.Now = clock.Now.AddHours(1);
         if (reason == "email-changed") await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.Email, "changed@example.invalid"));
         if (reason == "inactive") await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, false));

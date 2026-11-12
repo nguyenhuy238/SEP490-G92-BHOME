@@ -84,6 +84,8 @@ Theo quyết định bổ sung ngày 12/11/2026, có luồng email-verification 
 
 Nếu tài khoản đang hoạt động nhưng `EmailConfirmed=false`, yêu cầu quên mật khẩu vẫn trả 202 chung và không tạo email khôi phục. Trên Web/Mobile, chọn **Chưa xác nhận email? Gửi liên kết xác nhận**, nhập email đã đăng ký, mở thư và bấm **Xác nhận email**. Sau khi thành công, quay lại quên mật khẩu để nhận thư đặt lại mật khẩu.
 
+Email mới đặt nút thao tác và **đường dẫn đầy đủ để sao chép** ở đầu thư. Khi callback Mobile là `bhome://`, nút chính dùng Web callback đã được tin cậy và giữ deep link ứng dụng như lựa chọn phụ trong nội dung. Trang Web confirm/reset/accept là anonymous, dùng được cho chính tài khoản Owner/Staff/Tenant mà token thuộc về; không cấp quyền đăng nhập Owner Portal cho vai trò khác. Nếu Gmail không cho bấm nút với URL Development `localhost`, sao chép toàn bộ URL ngay dưới nút và dán vào thanh địa chỉ của trình duyệt trên máy đang chạy BHOME; không chỉ lấy phần trước dấu `#` và không chia sẻ link. Khi đã yêu cầu gửi lại, dùng thư mới nhất. Không dùng URL localhost cho người nhận trên máy khác; môi trường triển khai phải cấu hình callback HTTPS truy cập được theo trusted origins.
+
 Không tự đánh dấu email đã xác nhận. Link dùng Identity email-confirmation token, chỉ dùng một lần, có thời hạn Sessions.PasswordResetMinutes và cooldown AuthenticationEmail.ResendCooldownSeconds. Chỉ link mới nhất còn hiệu lực; email, security stamp, trạng thái tài khoản hoặc invitation thay đổi sẽ chặn link cũ. Verification có grant riêng trong outbox và không thay reset/invitation grant, mật khẩu, session, role hay IsActive.
 
 Tài khoản đang có invitation chưa dùng hoặc có provisioning invitation job phải hoàn tất luồng lời mời của Owner; verification không bỏ qua setup. Không bắt mọi tài khoản cũ xác nhận email trước login. Hai verification URL cần được cấu hình riêng; thiếu chúng chỉ làm request verification trả 503 chung, không ảnh hưởng reset/invitation đã cấu hình.
@@ -136,7 +138,7 @@ Remove-Item Env:BHOME_GMAIL_SMOKE
 ```
 
 Opt-in gửi một verification và một recovery email về chính mailbox sender được cấu hình, dùng DB disposable.
-IMAP read-only tìm đúng Message-Id và chỉ đọc thư test để xác nhận email rồi reset Owner tổng hợp,
+IMAP read-only tìm đúng Message-Id và chỉ đọc thư test để xác nhận email rồi reset tài khoản tổng hợp,
 thử reuse và login mới. Không gửi Tenant thật/tiếp security email thật, không log link/token.
 Không chạy trong CI; domain .invalid trong smoke chỉ là fixture.
 Kết quả/giới hạn tại [báo cáo triển khai](../development/AUTHENTICATION_EMAIL_IMPLEMENTATION.md).
