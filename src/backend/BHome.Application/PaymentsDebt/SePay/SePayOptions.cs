@@ -15,6 +15,8 @@ public sealed class SePayOptions
     public int PollIntervalSeconds { get; set; } = 60;
     public List<SePayReceivingAccount> ReceivingAccounts { get; set; } = [];
 
+    public bool TestingAvailable(string environment) => Enabled && Mode == "Test" && environment is "Development" or "Testing";
+
     public bool Valid(string environment)
     {
         if (!Enabled) return true;

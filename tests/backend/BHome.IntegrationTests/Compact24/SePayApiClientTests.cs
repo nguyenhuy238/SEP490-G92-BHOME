@@ -49,6 +49,7 @@ public sealed class SePayApiClientTests
     }
     [Theory]
     [InlineData(401)]
+    [InlineData(403)]
     [InlineData(429)]
     [InlineData(500)]
     public async Task ProviderFailuresRemainFailures(int status)

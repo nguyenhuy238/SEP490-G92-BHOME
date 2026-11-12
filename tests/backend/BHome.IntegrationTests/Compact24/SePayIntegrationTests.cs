@@ -160,6 +160,28 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         return client.SendAsync(request);
     }
     [CompactPostgresFact]
+    public async Task TestingContextIsOwnerOnlyAndDoesNotExposeCredentials()
+    {
+        await using var scenario = await Create();
+        using var anonymous = scenario.Anonymous();
+        using var tenant = await scenario.Client(scenario.Tenants[0]);
+        using var owner = await scenario.Client(scenario.Owner);
+        const string path = "/api/v1/integrations/sepay/testing-context";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(path)).StatusCode);
+        var response = await owner.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var context = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Test", context.RootElement.GetProperty("mode").GetString());
+        Assert.Single(context.RootElement.EnumerateObject());
+        var options = scenario.Host.Services.GetRequiredService<SePayOptions>();
+        options.Enabled = false;
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
+        options.Enabled = true; options.Mode = "Live";
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
+    }
+
+    [CompactPostgresFact]
     public async Task AnonymousWebhookAuthenticatesBeforeParsingAndRejectsExpiredRequests()
     {
         await using var scenario = await Create(); using var client = scenario.Anonymous();
