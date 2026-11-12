@@ -23,12 +23,3 @@ internal sealed class NotificationChannelProvider(IOptions<NotificationChannelOp
         throw new IntegrationUnavailableException("Notification channel is not configured.");
     }
 }
-
-// Sandbox validates the delivery boundary without exposing reset tokens through an API or log.
-internal sealed class PasswordEmailDelivery(INotificationChannelProvider provider) : IPasswordResetDelivery
-{
-    public bool IsAvailable => provider.IsConfigured("EMAIL");
-    public async Task SendAsync(Guid userId, string destination, string token, CancellationToken cancellationToken) =>
-        _ = await provider.SendAsync(new("auth:" + userId + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))), "EMAIL", destination,
-            "ACCOUNT_PASSWORD_TOKEN", "BHOME: xác nhận tài khoản hoặc đặt lại mật khẩu", "Mã xác nhận dùng một lần: " + token + "\nNếu bạn không yêu cầu, hãy bỏ qua email này."), cancellationToken);
-}

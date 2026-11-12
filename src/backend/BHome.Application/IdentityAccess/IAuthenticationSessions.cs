@@ -27,5 +27,11 @@ public interface IPasswordService
 public interface IPasswordResetDelivery
 {
     bool IsAvailable { get; }
+    bool IsDurable => false;
     Task SendAsync(Guid userId, string destination, string token, CancellationToken cancellationToken);
+    Task QueueAsync(AuthenticationEmailRequest request, CancellationToken cancellationToken) =>
+        SendAsync(request.UserId, request.Destination, request.Token, cancellationToken);
 }
+
+public sealed record AuthenticationEmailRequest(Guid UserId, string Destination, string Token, DateTimeOffset ExpiresAt,
+    string Kind = "PasswordReset");

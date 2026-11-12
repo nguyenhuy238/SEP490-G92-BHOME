@@ -112,7 +112,7 @@ export function LoginScreen() {
                   ? 'Tải lại hoặc đóng trang sẽ kết thúc phiên đăng nhập'
                   : 'Phiên đăng nhập được lưu bảo mật trên thiết bị'}
               </Text>
-              <Button compact textColor={c.blue} onPress={() => unavailable('Khôi phục mật khẩu')}>
+              <Button compact textColor={c.blue} onPress={() => router.push('/forgot-password')}>
                 Quên mật khẩu?
               </Button>
             </Row>

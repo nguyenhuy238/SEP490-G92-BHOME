@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   Alert,
   Box,
@@ -14,7 +14,8 @@ import {
   Typography,
 } from '@mui/material';
 import { Apartment, LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
-import { Link as RouterLink, useNavigate } from 'react-router';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
+import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 
@@ -23,8 +24,13 @@ const passwordRule = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}]).{
 export default function ResetPasswordPage() {
   const { client } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
+  const location = useLocation();
+  const [link] = useState(() => readAuthenticationFragment(location.hash));
+  const [email, setEmail] = useState(link.userName);
+  const [token, setToken] = useState(link.token);
+  useEffect(() => {
+    if (location.hash) void navigate(location.pathname, { replace: true });
+  }, [location.hash, location.pathname, navigate]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [visible, setVisible] = useState(false);
@@ -34,8 +40,8 @@ export default function ResetPasswordPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError('Email không đúng định dạng.');
+    if (!email.trim()) {
+      setError('Vui lòng nhập email hoặc tên đăng nhập trong liên kết.');
       return;
     }
     if (!token.trim()) {
@@ -124,7 +130,7 @@ export default function ResetPasswordPage() {
             color="text.secondary"
             sx={{ display: 'block', mt: 0.5, mb: 3 }}
           >
-            Dùng mã một lần được cấp cho tài khoản Owner của bạn
+            Dùng liên kết hoặc mã một lần được gửi đến email của bạn
           </Typography>
 
           <Box component="form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
@@ -135,7 +141,7 @@ export default function ResetPasswordPage() {
                 required
                 disabled={busy}
                 label="Email"
-                type="email"
+                type="text"
                 autoComplete="username"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}

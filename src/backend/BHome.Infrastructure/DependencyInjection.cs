@@ -110,7 +110,10 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
-        services.AddScoped<IPasswordResetDelivery, BHome.Infrastructure.Modules.Notifications.PasswordEmailDelivery>();
+        services.AddOptions<AuthenticationEmailOptions>().BindConfiguration("AuthenticationEmail")
+            .Validate(o => o.ResendCooldownSeconds is >= 30 and <= 3600, "Authentication email cooldown must be 30-3600 seconds.").ValidateOnStart();
+        services.AddScoped<AuthenticationEmailDelivery>();
+        services.AddScoped<IPasswordResetDelivery>(p => p.GetRequiredService<AuthenticationEmailDelivery>());
         services.AddScoped<IAccountInvitations, AccountInvitations>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();

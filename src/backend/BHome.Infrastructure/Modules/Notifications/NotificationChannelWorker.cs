@@ -13,22 +13,22 @@ namespace BHome.Infrastructure.Modules.Notifications;
 // One durable OUTBOX delivery per inbox/channel; retries never recreate the inbox.
 internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNotificationWriter sql, INotificationRepository inbox,
     INotificationChannelProvider provider, IOptions<NotificationChannelOptions> options, IBackgroundJobQueue queue,
-    NotificationEmailContent content) : IBackgroundJobHandler, IJobScheduleContributor
+    NotificationEmailContent content, BHome.Infrastructure.IdentityAccess.AuthenticationEmailDelivery authenticationEmail) : IBackgroundJobHandler, IJobScheduleContributor
 {
     public string Name => "notification-channels";
     private sealed record Work(Guid Id, int Sequence);
-    private sealed record Claim(Guid Id, Guid Lease, Guid Notice, Guid Recipient, string Role, string Channel, string EventType, int Attempt);
+    private sealed record Claim(Guid Id, Guid Lease, Guid Notice, Guid Recipient, string Role, string Channel, string EventType, int Attempt, string? ProtectedAuthenticationEmail);
     public async Task EnqueueDueAsync(CancellationToken t)
     {
         foreach (var work in await DueAsync(t)) await queue.EnqueueAsync(new(Name, $"channel/{work.Id}/{work.Sequence}/{sql.Now:yyyyMMddHHmm}", JsonSerializer.Serialize(work.Id)), t);
     }
-    internal async Task ProcessPendingAsync(CancellationToken t)
-    { foreach (var work in await DueAsync(t)) await DeliverAsync(work.Id, t); }
-    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t)
+    internal async Task ProcessPendingAsync(CancellationToken t, bool authenticationOnly = false)
+    { foreach (var work in await DueAsync(t, authenticationOnly)) await DeliverAsync(work.Id, t); }
+    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false)
     {
         if (!options.Value.Enabled) return [];
         // event_data remains immutable; delivery status/history is the mutable envelope.
-        await sql.Execute("""
+        if (!authenticationOnly) await sql.Execute("""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
             SELECT gen_random_uuid(),'OUTBOX','channel:'||n.id::text||':'||c.channel,'CHANNEL_DELIVERY',
               jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',n.id,'recipient',n.recipient_user_id,
@@ -40,9 +40,10 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         var due = new List<Work>();
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
+              AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail')
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
-            """, t, ("now", sql.Now)))
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly)))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) due.Add(new(reader.GetGuid(0), reader.GetInt32(1))); }
         return due;
     }
@@ -56,7 +57,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         {
             await using var cmd = await sql.Command("""
                 SELECT (event_data->>'notificationId')::uuid,(event_data->>'recipient')::uuid,event_data->>'role',event_data->>'channel',
-                  COALESCE(event_data->>'eventType',''),(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1,delivery_status
+                  COALESCE(event_data->>'eventType',''),(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1,delivery_status,event_data->>'protectedAuthenticationEmail'
                 FROM notifications WHERE id=@id AND event_data->>'recordType'='ChannelDelivery' AND
                  ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now)) FOR UPDATE SKIP LOCKED
                 """, t, ("id", id), ("now", sql.Now));
@@ -64,7 +65,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             await using (var reader = await cmd.ExecuteReaderAsync(t))
             {
                 if (!await reader.ReadAsync(t)) return;
-                claim = new(id, Guid.NewGuid(), reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5)); previous = reader.GetString(6);
+                claim = new(id, Guid.NewGuid(), reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.IsDBNull(7) ? null : reader.GetString(7)); previous = reader.GetString(6);
             }
             if (!provider.IsConfigured(claim.Channel)) return;
             if (previous == "Processing" && !provider.SupportsIdempotency(claim.Channel))
@@ -89,30 +90,35 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 if (!eligible || notice is null || await inbox.TargetAsync(scope, claim.Notice, t) is null || !await Relevant(notice, t)) state = "Suppressed";
                 else
                 {
-                    var destinations = new List<(string Id, string Value)>();
-                    if (claim.Channel == "EMAIL")
-                    {
-                        var email = await sql.Scalar<string>("SELECT email FROM users WHERE id=@id AND email_confirmed AND (is_active OR @security)", t, ("id", claim.Recipient), ("security", notice.Category == "Account"));
-                        if (!EmailOptions.ValidAddress(email)) throw new ChannelDeliveryException("email_recipient_unavailable");
-                        destinations.Add(("email", email!));
-                    }
+                    var auth = claim.ProtectedAuthenticationEmail is null ? null : await authenticationEmail.ResolveAsync(claim.Recipient, claim.ProtectedAuthenticationEmail, t);
+                    if (claim.ProtectedAuthenticationEmail is not null && auth is null) state = "Suppressed";
                     else
                     {
-                        await using var cmd = await sql.Command("""
-                            SELECT d.id,d.task_data->>'pushToken' FROM operational_tasks d JOIN users u ON u.id=d.assigned_user_id
-                            WHERE d.assigned_user_id=@id AND d.task_data->>'recordType'='PushDevice' AND d.status='Active' AND u.is_active AND d.task_data ? 'pushToken'
-                            """, t, ("id", claim.Recipient));
-                        await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) destinations.Add((reader.GetGuid(0).ToString("N"), reader.GetString(1)));
-                        if (destinations.Count == 0) throw new InvalidOperationException("push_device_unavailable");
-                    }
-                    var emailContent = claim.Channel == "EMAIL" ? await content.BuildAsync(notice, t) : (notice.Title, notice.Summary);
-                    foreach (var destination in destinations)
-                    {
-                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
-                        // Stable per-device key protects fanout retries after a partial provider failure.
-                        var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, notice.EventType, emailContent.Item1, emailContent.Item2), timeout.Token);
-                        if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
-                        providerReference = receipt;
+                        var destinations = new List<(string Id, string Value)>();
+                        if (claim.Channel == "EMAIL")
+                        {
+                            var email = auth?.Destination ?? await sql.Scalar<string>("SELECT email FROM users WHERE id=@id AND email_confirmed AND (is_active OR @security)", t, ("id", claim.Recipient), ("security", notice.Category == "Account"));
+                            if (!EmailOptions.ValidAddress(email)) throw new ChannelDeliveryException("email_recipient_unavailable");
+                            destinations.Add(("email", email!));
+                        }
+                        else
+                        {
+                            await using var cmd = await sql.Command("""
+                                SELECT d.id,d.task_data->>'pushToken' FROM operational_tasks d JOIN users u ON u.id=d.assigned_user_id
+                                WHERE d.assigned_user_id=@id AND d.task_data->>'recordType'='PushDevice' AND d.status='Active' AND u.is_active AND d.task_data ? 'pushToken'
+                                """, t, ("id", claim.Recipient));
+                            await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) destinations.Add((reader.GetGuid(0).ToString("N"), reader.GetString(1)));
+                            if (destinations.Count == 0) throw new InvalidOperationException("push_device_unavailable");
+                        }
+                        var emailContent = auth is not null ? (auth.Title, auth.Body) : claim.Channel == "EMAIL" ? await content.BuildAsync(notice, t) : (notice.Title, notice.Summary);
+                        foreach (var destination in destinations)
+                        {
+                            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
+                            // Stable per-device key protects fanout retries after a partial provider failure.
+                            var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl), timeout.Token);
+                            if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
+                            providerReference = receipt;
+                        }
                     }
                 }
             }

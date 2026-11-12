@@ -52,6 +52,8 @@ function WorkspaceNavigation() {
     <Stack key={identity} screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="accept-invitation" options={{ title: 'Thiết lập tài khoản' }} />
+      <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu' }} />
+      <Stack.Screen name="reset-password" options={{ title: 'Đặt lại mật khẩu' }} />
       <Stack.Screen name="contract-signing" options={{ title: 'Chấp thuận hợp đồng' }} />
       <Stack.Protected guard={!!role}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
