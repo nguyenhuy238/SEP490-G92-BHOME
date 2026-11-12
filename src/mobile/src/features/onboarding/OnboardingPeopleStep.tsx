@@ -19,6 +19,7 @@ interface Props {
   onRepresentative: (key: string) => void;
   onDelete: (key: string) => void;
   onLabelChange: (key: string, label: string) => void;
+  onEmailChange: (key: string, email: string) => void;
   onBack: () => void;
   onContinue: () => void;
 }
@@ -175,6 +176,22 @@ export function OnboardingPeopleStep(props: Props) {
               </Text>
               <Text style={styles.counter}>{person.label.length}/150</Text>
             </View>
+            <TextInput
+              mode="outlined"
+              label="Email người ở *"
+              accessibilityLabel="Email người ở"
+              value={person.email ?? ''}
+              maxLength={256}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              disabled={!!person.residentId}
+              style={styles.input}
+              onChangeText={(email) => props.onEmailChange(person.key, email)}
+            />
+            <Text style={styles.helper}>
+              Mỗi người ở cần email riêng. Tài khoản chỉ được cấp sau khi hợp đồng thuê được kích
+              hoạt.
+            </Text>
           </>
         )}
         <Text style={styles.note}>

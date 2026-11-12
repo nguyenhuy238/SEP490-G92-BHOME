@@ -1,5 +1,33 @@
 # Hoàn tiền thủ công — receipt thừa và cọc không khấu trừ
 
+## 11/11/2026 — Payer bên ngoài không có Resident
+
+Đã bổ sung [xác minh payer ngoài và hoàn tiền receipt](EXTERNAL_PAYMENT_PAYERS.md). Beneficiary phân biệt RESIDENT/EXTERNAL; external dùng attestation đúng receipt với beneficiaryResidentId null, không tạo hồ sơ giả. Request/approve/execution/private proof, source budget và Owner-only giữ nguyên; old Resident request fingerprint tương thích. Các giới hạn lịch sử bên dưới về thiếu external-payer refund đã được thay thế cho nguồn receipt; principal deposit và adjustment-generated excess vẫn cần xử lý riêng.
+
+## 11/11/2026 — Tenant xem hoàn tiền của chính mình
+
+`GET /api/v1/tenant/refunds?page=1&pageSize=20` chỉ dành cho Tenant. Quyền theo `refund_requests.beneficiary_resident_id → residents.user_id` hiện được liên kết với authenticated user; không theo RoomId hiện tại. Áp quyền trước count, sort và pagination; page >= 1, pageSize 1..100, chặn overflow. Chỉ đọc các workflow refund đã phân loại, không expose legacy chưa đối chiếu.
+
+Response `PagedResult` với items `{id,amount,sourceKind,status,requestedAt,decidedAt,executedAt,isDevelopmentDemo}`. `amount` chuỗi VND; sourceKind ReceiptExcess/SecurityDeposit/HoldingDeposit; status REQUESTED/APPROVED/REJECTED/COMPLETED. Không có lý do nội bộ, actor, payer khác, bank reference, upload intent, object key hoặc endpoint tải chứng từ. Owner/Staff không dùng route Tenant này; Tenant vẫn không được dùng các mutation/evidence Owner. Không nhận userId/residentId từ client để chọn chủ hồ sơ.
+
+Tenant Mobile: Hóa đơn & thanh toán → Lịch sử → Xem hoàn tiền của tôi. Đã duyệt hiển thị chờ thực hiện, chỉ COMPLETED có thời điểm thực chi; tải lại, trang tiếp, empty/error/retry riêng. Loader kiểm hợp đồng dữ liệu và chỉ giữ trường Tenant. Có thể xem sau physical release, không tạo financial state mới. Slice không thêm migration, không gọi bank hoặc sửa dữ liệu làm việc. Nội dung lịch sử bên dưới ghi lại các giới hạn tại thời điểm cũ; endpoint/màn hình này thay thế giới hạn thiếu Tenant refund history.
+
+## 11/11/2026 — Giao dịch dư toàn bộ sau khi nghĩa vụ đã đủ tiền
+
+BR-17/18/19/23, BF-06, UC-22/25, GBR-10/18. Owner dùng:
+
+- `GET /api/v1/payment-transactions/{id}/excess-disposition` để đọc quyết định đã lưu (chưa có trả null/204).
+- `GET .../excess-disposition/context?invoiceId=...`, hoặc `settlementContractId=...&receivableId=...`, hoặc `holdingContractId=...` để lấy số liệu đối chiếu. Chỉ một loại đích mỗi lần.
+- `POST .../excess-disposition` với `{target,expectedReference,payerResidentId,reason,humanConfirmed:true}` và UUID `Idempotency-Key`.
+
+Backend yêu cầu receipt VERIFIED/VND, đúng tham chiếu đích, nghĩa vụ không còn phải trả, nguồn chưa phân bổ/claim/refund/rejected, cùng chế độ dữ liệu. Người thực trả phải là Resident Verified có quan hệ hợp lệ với đích; Holding cho phép Resident chưa có User. Confirmation binds receipt fingerprint, balance và payer choices; stale context hoặc key dùng với nội dung khác bị chặn. Quyết định bất biến `ReceiptExcessDispositionV1` và `BankReferenceClaim` được ghi trong cùng transaction. Không tạo allocation 0, không ghi thêm doanh thu hoặc Tenant Credit.
+
+Sau xác nhận, dùng các route receipt refunds request/decision/execution hiện hữu. Chỉ người thực trả trong disposition được nhận; chỉ bằng chứng thực chi hoàn tất mới giảm số còn phải hoàn. Trạng thái receipt `ExcessRefundPending` → `ExcessRefundCompleted`; partial return vẫn Pending. Không được reject/phân bổ lại receipt đã xác nhận. Invoice pending review và settlement unresolved giữ nghĩa vụ này đến khi hoàn đủ, kể cả sau physical release.
+
+Migration SQL-only `20261111060000_ReceiptExcessDisposition` thêm native allocation guard; fresh DDL đồng bộ, vẫn 24 bảng, không thay EF model. Guard ngăn reuse receipt được claim hoặc phần tiền đã reserve/refund. Không migrate database làm việc.
+
+Owner Web: mục Thanh toán lọc hai trạng thái hoàn toàn bộ; invoice picker có lựa chọn hóa đơn đã đủ tiền; ReconcileTransfer/SettlementBankPanel/HoldingDepositPanel dùng context thực và chọn người theo nhãn. Việc xác nhận chưa phải đã hoàn tiền. Payer bên ngoài không có Resident hợp lệ và Main Deposit overage còn cần nhánh riêng; không tạo hồ sơ giả hoặc tự chọn representative. Tenant refund history được bổ sung ở mục trên. Provider bank thực và browser/native E2E chưa được xác nhận.
+
 Cập nhật **06/11/2026**, triển khai `12043f0`, UI recovery `17c4228`. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md),
 [Payment](PAYMENTS.md), [Finance](FINANCE.md). Đây là API đã triển khai trên Compact24, không phải đề xuất.
 
@@ -24,8 +52,8 @@ Beneficiaries là occupants Verified/liên kết tài khoản trong Contract, ch
 đã nộp cọc. Owner bắt buộc đối chiếu khoản nộp/người nhận; không tự chọn representative.
 
 POST body `{refund:{beneficiaryResidentId,amount,reason,humanConfirmed:true},expectedFinancialReference,
-beneficiaryVerified:true,noDeductionsConfirmed:true}` + UUID Idempotency-Key. Owner xác nhận người
-nhận chính là người nộp theo bằng chứng đã kiểm và không khấu trừ; attestation/reference giữ trong
+beneficiaryVerified:true,noDeductionsConfirmed:true}` + UUID Idempotency-Key. Theo BR-30 (12/11/2026), Owner xác nhận người
+nhận theo thỏa thuận hợp đồng và không khấu trừ; attestation/reference giữ trong
 append-only history `SecurityDepositRefundV1`. Cho phép partial return trong giới hạn khả dụng.
 Quyết định/execution/evidence dùng ba route `/refund-requests/{id}/...` hiện hữu, cùng
 version/key/hash/private storage/recovery guards. RefundView có `sourcePaymentId:null`,
@@ -190,3 +218,11 @@ classification đã qua unit/PG/Owner report/browser; retained compensation khô
 Hoàn cọc có consumer in-app theo committed history và Contract entitlement; xem
 [Notifications](NOTIFICATIONS.md). Không suy event/inbox thành push/email hoặc tiền đã được bank-provider xác nhận.
 Các nguồn cũ không phân loại tiếp tục manual review; không migration/đổi schema trong slice này.
+
+## 12/11/2026 — Lịch sử Tenant và thông báo receipt refund
+
+Ghi chú thiếu Tenant history/receipt notifications ở các mốc phía trên được cập nhật: Tenant đã có API scoped `/api/v1/tenant/refunds` và panel lịch sử của chính beneficiary, kể cả không còn current Room. Receipt excess refund phát thông báo persistent theo lịch sử committed, chỉ Owner và đúng actual payer có Tenant account; external/pre-account chỉ Owner. Target phải resolve lại qua notification API trước khi điều hướng. [Quy tắc và loại target](NOTIFICATIONS.md) mô tả chống trùng, proof gate, recipient và giới hạn provider; các số browser cũ không là bằng chứng acceptance mới cho slice này. Canonical reversal/adjustment-created excess và principal refund cho external payer vẫn chưa hoàn tất.
+
+## 12/11/2026 — BR-30: người nhận Security Deposit theo thỏa thuận
+
+Người dùng đã chọn “Hoàn cho người nhận theo thỏa thuận hợp đồng, Owner xác nhận”. UI SecurityDeposit yêu cầu xác nhận nguồn tiền và người nhận theo thỏa thuận, không buộc khai người nhận là người nộp ban đầu. Hồ sơ mới lưu `beneficiaryBasis=CONTRACT_AGREEMENT_OWNER_CONFIRMED` trong append-only SecurityDepositRefundV1, cùng contract/source reference và Owner audit hiện có; không gán lại basis cho lịch sử cũ hoặc đổi replay fingerprint. Source-stale, available amount, offset/deduction, approval và execution proof giữ nguyên. Receipt excess vẫn theo actual payer; Holding refund giữ xác minh người nộp hiện hành. Slice này hỗ trợ recipient đủ điều kiện hiện có; người nhận ngoài cohort/external cần workflow dữ liệu tiếp theo, không khai sai receiver thành bank payer.

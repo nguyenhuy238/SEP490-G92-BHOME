@@ -20,6 +20,13 @@ public static class Compact24PropertyUpgrade
             await using (var gate = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtextextended('compact24-property-upgrade',0))", connection, tx))
                 await gate.ExecuteNonQueryAsync(token);
             if (await db.IsSchemaReadyAsync(token)) return new("READY");
+            if (!await Compact24Schema.CanRefreshPropertyAsync(db, token))
+                throw new DevelopmentDatabaseException("property_upgrade_source_requires_manual_review");
+            await using (var shape = new NpgsqlCommand("SELECT set_config('bhome.property_upgrade_column_count',@columns,true)", connection, tx))
+            {
+                shape.Parameters.AddWithValue("columns", Compact24Schema.CurrentColumnCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await shape.ExecuteNonQueryAsync(token);
+            }
             await using var stream = typeof(Compact24Schema).Assembly.GetManifestResourceStream("BHome.Compact24.PropertyUpgrade.sql")!;
             using var reader = new StreamReader(stream);
             await using var command = new NpgsqlCommand(await reader.ReadToEndAsync(token), connection, tx);

@@ -310,7 +310,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             if (c.IsDevelopmentDemo != (workflowMode?.SimulatedSigningEnabled == true)) throw ContractException.Conflict("signing_mode_mismatch");
             if (c.DraftVersion != input.ExpectedVersion) throw ContractException.Conflict("draft_version_or_status_changed");
             var (_, settings, _) = await ReviewInputs(c, t);
-            if (!await repository.ActiveUserInRoleAsync(input.TenantUserId, Roles.Tenant, t)) throw ContractException.Invalid("verified_tenant_account_required");
+            if (input.TenantUserId is { } tenant && !await repository.ActiveUserInRoleAsync(tenant, Roles.Tenant, t)) throw ContractException.Invalid("verified_tenant_account_required");
             var representative = (await repository.ResidentsAsync(c.RoomId, [c.RepresentativeResidentId], t)).Single();
             if (representative.TenantUserId is { } linked && linked != input.TenantUserId || c.TenantUserId is { } signer && signer != input.TenantUserId)
                 throw ContractException.Conflict("resident_account_already_linked");
@@ -321,8 +321,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             using var bytes = new MemoryStream(); await storage.CopyToAsync(review.ObjectKey, bytes, t);
             if (bytes.Length != review.Length || FileHash(bytes.ToArray()) != review.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
             representative.TenantUserId = input.TenantUserId; c.TenantUserId = input.TenantUserId;
+            c.SigningMode = input.TenantUserId is null ? ContractSigningModes.Internal : "";
             c.Terms = string.Join("\n", new[] { settings.PaymentTerms, c.Terms }.Where(term => !string.IsNullOrWhiteSpace(term)));
-            var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, input.TenantUserId, c.RepresentativeResidentId,
+            var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, input.TenantUserId ?? Guid.Empty, c.RepresentativeResidentId,
                 c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, "");
             c.SnapshotHash = ContractDocumentSnapshot.Hash(document); c.Status = ContractStatus.PendingSigning;
             var canonical = new ContractDocumentFile

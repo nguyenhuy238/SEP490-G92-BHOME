@@ -18,16 +18,10 @@ public sealed record DepositDeductionPlan(Guid Id, Guid ContractId, Guid Deposit
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Total,
     IReadOnlyList<DepositDeductionItem> Items, IReadOnlyList<DeductionEvidence> Evidence, Guid OperationKey, string Fingerprint,
     bool IsDevelopmentDemo = false);
-public sealed record DeductionFile(Guid Id, string ObjectKey, string ContentType);
-public sealed record DepositDeductionContext(ContractSettlementSummary Summary, string ContractStatus, string MoveOutStatus,
-    Guid InspectionId, int InspectionVersion, bool InspectionConfirmed, bool NoAdditionalCharges,
-    Guid[] AssetIds, IReadOnlyList<DeductionFile> Files, bool IsDevelopmentDemo = false);
 public interface IDepositDeductionRepository
 {
     Task<T> TransactionAsync<T>(Guid contractId, Func<Task<T>> work, CancellationToken token);
-    Task<DepositDeductionContext> ContextAsync(Guid contractId, CancellationToken token);
     Task<DepositDeductionPlan?> OperationAsync(Guid actor, Guid key, CancellationToken token);
-    Task SaveAsync(DepositDeductionPlan plan, CancellationToken token);
 }
 public interface IDepositDeductionEvidence
 {
@@ -59,8 +53,7 @@ public static class DepositDeductionPolicy
     }
 }
 
-public sealed class DepositDeductionService(IDepositDeductionRepository repository, IDepositDeductionEvidence evidence,
-    ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null)
+public sealed class DepositDeductionService(IDepositDeductionRepository repository, ICurrentUser user, PaymentRuntimeMode? mode = null)
 {
     public Task<DepositDeductionPlan> ApproveAsync(Guid contractId, DepositDeductionInput input, Guid key, CancellationToken token)
     {
@@ -83,24 +76,7 @@ public sealed class DepositDeductionService(IDepositDeductionRepository reposito
                     throw ContractException.Conflict("deposit_deduction_idempotency_conflict");
                 return previous;
             }
-            var context = await repository.ContextAsync(contractId, token); var summary = context.Summary;
-            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
-            var budget = summary.VerifiedSecurityDeposit - (summary.Calculation?.DepositAllocated ?? 0) -
-                (summary.Calculation?.DepositRefunded ?? 0) - (summary.Calculation?.DepositReserved ?? 0);
-            items = DepositDeductionPolicy.Normalize(input, budget, context.AssetIds, context.Files.Select(f => f.Id).ToArray());
-            if (summary.Reference != input.ExpectedReference || (summary.DepositDeductions?.Version ?? 0) != input.ExpectedVersion)
-                throw ContractException.Conflict("deposit_deduction_review_changed");
-            var allowed = new[] { "deposit_deduction_refund_policy_required", "final_charges_and_damage_policy_pending", "deposit_deduction_reapproval_required" };
-            if (context.ContractStatus != "Active" || context.MoveOutStatus is not ("Inspected" or "PendingSettlement") ||
-                !context.InspectionConfirmed || context.NoAdditionalCharges || summary.Calculation?.DepositPositionConsistent != true ||
-                summary.VerifiedSecurityDeposit <= 0 || summary.Calculation.DepositAllocated != 0 ||
-                summary.Calculation.DepositRefunded != 0 || summary.Calculation.DepositReserved != 0 || summary.UnresolvedItems.Any(b => !allowed.Contains(b)))
-                throw ContractException.Conflict("deposit_deduction_not_ready");
-            var proofs = await evidence.CaptureAsync(contractId, items.SelectMany(i => i.EvidenceIds).Distinct().Order().ToArray(), token);
-            var plan = new DepositDeductionPlan(Guid.NewGuid(), contractId, summary.DepositContractId, context.InspectionId,
-                context.InspectionVersion, input.ExpectedVersion + 1, actor, clock.GetUtcNow(), normalized.Reason,
-                summary.ObligationReference, items.Sum(i => i.Amount), items, proofs, key, fingerprint, context.IsDevelopmentDemo);
-            await repository.SaveAsync(plan, token); return plan;
+            throw ContractException.Conflict("settlement_receivables_replace_legacy_deductions");
         }, token);
     }
 }

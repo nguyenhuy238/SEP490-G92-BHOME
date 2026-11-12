@@ -1,5 +1,14 @@
 # BH-25 Payment API
 
+10/11/2026 — GET `/api/v1/debts/summary` dành riêng Owner, service kiểm tra lại Owner.
+Nhận cùng bộ lọc Location/Room/billingPeriod/overdueOnly/paymentStatus/invoiceIds như danh sách debt;
+trả `outstandingAmount`, `overdueAmount` (decimal string VND), `invoiceCount`, `overdueInvoiceCount`.
+Tổng hợp toàn bộ bộ lọc, không áp Skip/Take; tham số phân trang vẫn được kiểm tra hợp lệ.
+Chỉ Final Invoice có dư nợ, dựa trên cùng projection original + approved adjustments - verified allocations
+và cùng ngày nghiệp vụ Asia/Ho_Chi_Minh với debt list. Không thay phân bổ, trạng thái hoặc chính sách tiền.
+Không có dữ liệu trả số 0 xác nhận từ server; 401/403/400 giữ quy tắc auth/validation hiện có.
+Truy vết UC-23, BF-06, GBR-02/10; không migration hoặc state transition.
+
 Cập nhật **06/11/2026**, contract runtime Compact24. [Trạng thái toàn API](API_IMPLEMENTATION_STATUS.md),
 [hoàn phần receipt chưa phân bổ](REFUNDS.md), [notification consumers](NOTIFICATIONS.md).
 
@@ -84,3 +93,11 @@ Status contract hiện hữu giữ `Paid/Unpaid`, hiển thị paidAmount/outsta
 Một receipt chỉ có một allocation hiện hữu. Số dư thừa giữ chờ Owner; bổ sung [hoàn tiền thủ công](REFUNDS.md): Owner lập yêu cầu/duyệt, tự chuyển khoản bên ngoài rồi đối chiếu sao kê và ghi chứng từ private. Không tự giải ngân hoặc tạo credit. TransferView.unallocatedAmount vẫn là phần receipt chưa phân bổ vào Invoice, không trừ trực tiếp bằng refund; RefundSource tách excess/refunded/reserved/available để không dùng lại số đã hoàn. PendingReview của Invoice chỉ tắt khi phần thừa đã Completed đủ (các lý do khác vẫn giữ). Không sửa Payment/Allocation/Final Invoice hoặc dùng lại bank claim.
 
 Offline legacy regression giữ constraint exact cũ qua capability repository; production DI luôn Compact24, không dò schema/fallback legacy. Refunds chỉ dùng schema Compact24 hiện hữu. Không thay schema legacy hoặc database làm việc. Browser đã kiểm đúng payer/3 Tenant/Completed/evidence MinIO với dữ liệu tổng hợp; đây không phải bank provider acceptance. Chứng từ hoàn chỉ Owner xem, không đưa cho Staff hoặc Tenant khác cùng hóa đơn.
+
+# Giao dịch dư toàn bộ — 11/11/2026
+
+Receipt nhận sau khi hóa đơn/khoản phải thu đã thanh toán đủ hoặc Holding đã đóng có Owner confirmation riêng. Xem [hợp đồng hoàn tiền](REFUNDS.md). `paymentStatus` của danh sách receipt hỗ trợ thêm `ExcessRefundPending` và `ExcessRefundCompleted`; filter `settlementContractId` bao gồm disposition đích tương ứng. Chúng không tạo allocation và không tăng verified collections. Existing allocated excess vẫn dùng luồng refund cũ.
+
+## Xác minh cọc trực tiếp — giới hạn số tiền (11/11/2026)
+
+POST contracts/{id}/deposit-verifications giữ DTO/key cũ. Main tính remaining = RequiredDeposit - AppliedHoldingDeposit - tổng receipt cọc đã xác minh; số tiền vượt remaining trả 409 main_deposit_excess_requires_manual_review. Holding giữ lỗi holding_deposit_excess_requires_manual_review. Không nhận mới trên hợp đồng đóng hoặc phiên bản renewal/addendum (deposit_not_payable); exact-key replay vẫn hợp lệ. Không sửa số tiền sao kê để làm vừa remaining. Receipt vượt cọc cần nguồn receipt đầy đủ, phân bổ cọc và hoàn phần dư riêng; đường xác minh trực tiếp không thực hiện thay luồng này. Lịch sử đã có không bị viết lại.

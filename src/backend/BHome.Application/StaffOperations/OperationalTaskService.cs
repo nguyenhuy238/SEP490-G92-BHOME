@@ -54,7 +54,8 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
         Permit(Permissions.OperationalTasks.View); Page(query.Page, query.PageSize);
         if (query.Status is { } s && !Enum.IsDefined(s) || query.Priority is { } p && !Enum.IsDefined(p) ||
             query.LocationId == Guid.Empty || query.DueFrom > query.DueTo) throw OperationalTaskException.Invalid("invalid_task_filter");
-        return await repository.ListAsync(query, StaffFilter, Today, Now, t);
+        var staffFilter = Owner ? query.StaffUserId : Actor;
+        return await repository.ListAsync(query, staffFilter, Today, Now, t);
     }
     public async Task<TaskView> GetAsync(Guid id, CancellationToken t)
     {
@@ -64,6 +65,8 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
     }
     public async Task<TaskPage<TaskHistoryView>> HistoryAsync(Guid id, int page, int size, CancellationToken t)
     { await GetAsync(id, t); Page(page, size); return await repository.HistoryAsync(id, page, size, t); }
+    public async Task<IReadOnlyList<TaskActorView>> ActorsAsync(Guid id, CancellationToken t)
+    { await GetAsync(id, t); return await repository.ActorsAsync(id, t); }
 
     public async Task<TaskView> CreateAsync(TaskCreate input, Guid key, CancellationToken t)
     {

@@ -1,4 +1,15 @@
 import type { ContractRequest, DepositDeductionPlan } from './contracts';
+import type { Page } from './invoices';
+export interface TenantRefund {
+  id: string;
+  amount: string;
+  sourceKind: 'ReceiptExcess' | 'SecurityDeposit' | 'HoldingDeposit';
+  status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+  requestedAt: string;
+  decidedAt: string | null;
+  executedAt: string | null;
+  isDevelopmentDemo: boolean;
+}
 export interface RefundEvent {
   action: string;
   actor: string;
@@ -10,7 +21,9 @@ export interface Refund {
   id: string;
   sourcePaymentId: string | null;
   sourceDepositContractId?: string | null;
-  beneficiaryResidentId: string;
+  beneficiaryResidentId: string | null;
+  beneficiaryKind?: 'RESIDENT' | 'EXTERNAL';
+  externalPayerAttestationId?: string | null;
   beneficiaryLabel: string;
   amount: string;
   reason: string;
@@ -34,6 +47,8 @@ export interface Refund {
   } | null;
 }
 export interface RefundSource {
+  externalBeneficiary?: { attestationId: string; label: string } | null;
+  approvedDepositOffsets?: string;
   sourcePaymentId: string | null;
   sourceDepositContractId?: string | null;
   verifiedDepositAmount?: string | null;
@@ -49,7 +64,8 @@ export interface RefundSource {
   requests: Refund[];
 }
 export interface RefundInput {
-  beneficiaryResidentId: string;
+  beneficiaryResidentId: string | null;
+  externalPayerAttestationId?: string;
   amount: string;
   reason: string;
   humanConfirmed: boolean;
@@ -63,6 +79,10 @@ export interface RefundExecution {
 }
 export function refundClient(request: ContractRequest) {
   return {
+    own: (page = 1, pageSize = 20, signal?: AbortSignal) =>
+      request<Page<TenantRefund>>(`/api/v1/tenant/refunds?page=${page}&pageSize=${pageSize}`, {
+        signal,
+      }),
     source: (id: string, signal?: AbortSignal) =>
       request<RefundSource>(`/api/v1/payment-transactions/${id}/refunds`, { signal }),
     depositSource: (id: string, signal?: AbortSignal) =>
@@ -122,11 +142,10 @@ export function refundError(error: unknown): string {
       'Chứng từ thiệt hại không khớp quyết định. Cần Owner đối chiếu lại.',
     refund_amount_unavailable: 'Nguồn tiền đã được giữ chỗ hoặc hoàn. Hãy tải lại nguồn.',
     deposit_refund_confirmation_required:
-      'Cần xác minh người nộp cọc và xác nhận không khấu trừ trước khi lập yêu cầu.',
+      'Cần xác nhận người nhận, nguồn cọc và việc có hoặc không khấu trừ trước khi lập yêu cầu.',
     deposit_refund_not_ready:
       'Cọc chưa đủ điều kiện hoàn. Hãy đọc các nghĩa vụ đang chờ và tải lại nguồn.',
-    refund_verified_payer_required:
-      'Cần xác định đúng người thực trả và hồ sơ đã liên kết trước khi hoàn.',
+    refund_verified_payer_required: 'Cần xác minh hồ sơ người nhận hoàn phù hợp với nguồn tiền.',
     refund_changed: 'Yêu cầu đã thay đổi hoặc chưa ở bước phù hợp. Hãy tải lại.',
     refund_source_changed: 'Nguồn tiền hoặc người nhận đã thay đổi. Cần Owner kiểm tra lại.',
     refund_reference_used: 'Tham chiếu hoàn tiền đã dùng cho yêu cầu khác.',

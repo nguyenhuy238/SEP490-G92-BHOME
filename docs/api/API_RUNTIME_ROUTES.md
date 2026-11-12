@@ -1,5 +1,10 @@
 # Runtime API route inventory
 
+Delta 10/11/2026: snapshot/counts bên dưới giữ nguyên bằng chứng ngày sinh. Có thêm
+`GET /api/v1/debts/summary` (policy `finance.view`, Owner), xem [Payment API](PAYMENTS.md).
+Invoice list có thêm query filters, xem [Billing API](INVOICES.md). Các thay đổi này được
+kiểm thử riêng; chưa tạo lại toàn bộ runtime export hoặc số liệu probe của snapshot này.
+
 Generated: **2026-11-09**, runtime export UTC: **2026-11-09T05:51:58.8133815+00:00**.
 
 Source commit: `b9cff6566df6ddf0c0d339b95c6d226bc22faf24`. Branch: `member/QHuy`.

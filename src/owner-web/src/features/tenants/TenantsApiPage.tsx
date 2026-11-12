@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IdentityRetentionPanel } from './IdentityRetentionPanel';
 import {
   Button,
   Dialog,
@@ -12,8 +13,13 @@ import {
   Typography,
   Alert,
 } from '@mui/material';
-import { Link } from 'react-router';
-import { PageHeader, StatusChip, ConfirmDialog } from '../../components/common/PortalUI';
+import { Link, useSearchParams } from 'react-router';
+import {
+  PageHeader,
+  StatusChip,
+  ConfirmDialog,
+  FilterToolbar,
+} from '../../components/common/PortalUI';
 import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../components/common/OwnerSelectors';
 import {
@@ -25,8 +31,8 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 interface Resident {
   id: string;
-  locationId: string;
-  roomId: string;
+  locationId: string | null;
+  roomId: string | null;
   roomNumber: string;
   displayLabel: string;
   residentType: string;
@@ -45,12 +51,13 @@ interface Resident {
   }[];
 }
 export function TenantsApiPage() {
+  const [params] = useSearchParams();
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [search, setSearch] = useState(''),
     [status, setStatus] = useState(''),
     [page, setPage] = useState(1),
-    [id, setId] = useState(''),
+    [id, setId] = useState(params.get('residentId') ?? ''),
     [create, setCreate] = useState(false);
   const list = useOwnerQuery<OwnerPage<Resident>>(
     ['residents', location, room, search, status, page],
@@ -75,49 +82,56 @@ export function TenantsApiPage() {
           </Button>
         }
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(v) => {
-          setLocation(v);
-          setRoom('');
-          setPage(1);
-        }}
-      />
-      <OwnerRoomPicker
-        key={location}
-        location={location}
-        value={room}
-        change={(v) => {
-          setRoom(v);
-          setPage(1);
-        }}
-      />
-      <TextField
-        label="Tìm tên hiển thị"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setPage(1);
-        }}
-      />
-      <TextField
-        select
-        label="Xác minh định danh"
-        value={status}
-        onChange={(e) => {
-          setStatus(e.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Tất cả</MenuItem>
-        <MenuItem value="0">Chờ xác minh</MenuItem>
-        <MenuItem value="1">Đã xác minh</MenuItem>
-        <MenuItem value="2">Đã từ chối</MenuItem>
-      </TextField>
-      <Button onClick={() => void list.refetch()}>Tải lại</Button>
-      <OwnerFeedback busy={list.isFetching} error={list.error} />
+      <FilterToolbar>
+        <OwnerLocationPicker
+          value={location}
+          change={(v) => {
+            setLocation(v);
+            setRoom('');
+            setPage(1);
+          }}
+        />
+        <OwnerRoomPicker
+          key={location}
+          location={location}
+          value={room}
+          change={(v) => {
+            setRoom(v);
+            setPage(1);
+          }}
+        />
+        <TextField
+          label="Tìm tên hiển thị"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+        />
+        <TextField
+          select
+          label="Xác minh định danh"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <MenuItem value="">Tất cả</MenuItem>
+          <MenuItem value="0">Chờ xác minh</MenuItem>
+          <MenuItem value="1">Đã xác minh</MenuItem>
+          <MenuItem value="2">Đã từ chối</MenuItem>
+        </TextField>
+        <Button disabled={list.isFetching} onClick={() => void list.refetch()}>
+          Tải lại
+        </Button>
+      </FilterToolbar>
       <Paper>
         <OwnerTable
+          loading={list.isFetching}
+          error={list.error}
+          retry={() => void list.refetch()}
+          label="Khách thuê và người ở"
           rows={list.data?.items ?? []}
           id={(x) => x.id}
           select={(x) => setId(x.id)}
@@ -181,8 +195,8 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
   const r = q.data;
   const house = useOwnerQuery<OwnerPage<Resident>>(
     ['cooccupants', r?.roomId],
-    '/api/v1/residents?' + ownerQuery({ roomId: r?.roomId, pageSize: 20 }),
-    !!r,
+    '/api/v1/residents?' + ownerQuery({ roomId: r?.roomId ?? undefined, pageSize: 20 }),
+    !!r?.roomId,
   );
   async function act() {
     if (!r) return;
@@ -216,7 +230,7 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
         {r && (
           <>
             <Typography variant="h6">
-              {r.displayLabel} · Phòng {r.roomNumber}
+              {r.displayLabel} · {r.roomId ? 'Phòng ' + r.roomNumber : 'Đã rời phòng'}
             </Typography>
             <Typography>
               Tài khoản: {r.tenantUserId ?? 'Chưa liên kết'} · {r.contactEmail} · {r.contactPhone}
@@ -299,6 +313,7 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
                 Phòng có thêm người ở. Dùng bộ lọc phòng và phân trang ở danh sách để xem đầy đủ.
               </Alert>
             )}
+            <IdentityRetentionPanel residentId={r.id} />
             <Typography variant="subtitle1">Hợp đồng / vai trò người ở</Typography>
             {r.tenancies.map((x) => (
               <Button

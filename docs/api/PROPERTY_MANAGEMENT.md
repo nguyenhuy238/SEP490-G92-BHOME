@@ -37,3 +37,8 @@ Physical assets require actual verification.
 
 The [previous document](history/PROPERTY_MANAGEMENT_before_2026-11-09.md) preserves the
 superseded Chain/RoomType design as history and is not an active implementation contract.
+
+Current Room and billing-policy writes reject the retired `roomTypeId` field, including
+an explicit null, with HTTP 400. Unknown fields remain invalid. Read DTOs omit the retired
+field when absent. Archived source-schema regression uses an explicit test-only composition;
+it does not enable an alternate runtime schema or public contract.

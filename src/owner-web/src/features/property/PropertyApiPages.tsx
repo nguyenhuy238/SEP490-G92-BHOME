@@ -85,11 +85,6 @@ export function PropertyApiPage({
     queryFn: ({ signal }) => api.roomOptions(location, signal),
     enabled: kind === 'assets' && !!location,
   });
-  const roomTypes = useQuery({
-    queryKey: ['property-setup', 'room-types-options', session?.userId, location],
-    queryFn: ({ signal }) => api.roomTypes(location, 1, '', signal),
-    enabled: kind === 'rooms' && !!location,
-  });
   const query = useQuery({
     queryKey: ['property-setup', kind, session?.userId, location, page, search],
     queryFn: async ({ signal }): Promise<Page<Row>> =>
@@ -122,7 +117,6 @@ export function PropertyApiPage({
           status: Number(values.status ?? 0),
           version,
           reason,
-          roomTypeId: values.roomTypeId || null,
         });
       return api.saveAsset(editing?.id ?? null, {
         locationId: location,
@@ -362,22 +356,6 @@ export function PropertyApiPage({
                   )}
                   {field('roomNumber', 'Số phòng')}
                   {field('floor', 'Tầng', false)}
-                  <TextField
-                    select
-                    required
-                    label="Loại phòng"
-                    value={values.roomTypeId ?? ''}
-                    onChange={(event) =>
-                      setValues((old) => ({ ...old, roomTypeId: event.target.value }))
-                    }
-                  >
-                    <MenuItem value="">Chọn loại phòng</MenuItem>
-                    {roomTypes.data?.items.map((type) => (
-                      <MenuItem key={type.id} value={type.id}>
-                        {type.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
                   {field('capacity', 'Sức chứa', true, 'number')}
                 </>
               ) : (

@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
-import { PageHeader, ConfirmDialog, StatusChip } from '../../components/common/PortalUI';
+import {
+  PageHeader,
+  ConfirmDialog,
+  StatusChip,
+  FilterToolbar,
+} from '../../components/common/PortalUI';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../components/common/OwnerSelectors';
 import { OwnerFeedback } from '../../components/common/OwnerWorkspace';
 import { useOwnerAction, useOwnerQuery } from '../../hooks/useOwnerWorkspace';
@@ -40,18 +45,23 @@ export function PublicContentApiPage() {
         title="Nội dung website công khai"
         subtitle="Chỉ xuất bản thông tin và ảnh Owner đã duyệt. Khách xem thông tin; liên hệ qua số điện thoại/email tĩnh."
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(id) => {
-          setLocation(id);
-          setRoom('');
-        }}
-        required
-      />
-      <OwnerRoomPicker key={location} location={location} value={room} change={setRoom} />
+      <FilterToolbar>
+        <OwnerLocationPicker
+          value={location}
+          change={(id) => {
+            setLocation(id);
+            setRoom('');
+          }}
+          required
+        />
+        <OwnerRoomPicker key={location} location={location} value={room} change={setRoom} />
+      </FilterToolbar>
+      {!location && (
+        <Alert severity="info">Chọn cơ sở để quản lý nội dung; chọn thêm phòng nếu cần.</Alert>
+      )}
       {location && (
         <ContentRecord
-          key={room || location}
+          key={`content-${room || location}`}
           target={room ? 'rooms' : 'locations'}
           id={room || location}
         />
@@ -65,7 +75,8 @@ export function ContentRecord({ target, id }: { target: 'locations' | 'rooms'; i
   return (
     <>
       <OwnerFeedback busy={q.isFetching} error={q.error} />
-      {q.data && (
+      {!!q.error && <Button onClick={() => void q.refetch()}>Thử tải lại nội dung</Button>}
+      {!q.error && q.data && (
         <ContentEditor
           key={JSON.stringify(q.data)}
           data={q.data}
@@ -77,6 +88,7 @@ export function ContentRecord({ target, id }: { target: 'locations' | 'rooms'; i
   );
 }
 function ContentEditor({ data, path, room }: { data: PublicContent; path: string; room: boolean }) {
+  const fileInput = useRef<HTMLInputElement>(null);
   const [description, setDescription] = useState(
       room ? (data.description ?? '') : (data.summary ?? ''),
     ),
@@ -131,6 +143,7 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           body: file,
         });
         setFile(null);
+        if (fileInput.current) fileInput.current.value = '';
       } else await action.command(`${path}/${confirm}`, 'POST');
     });
     if (ok) setConfirm('');
@@ -248,12 +261,20 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           </Stack>
         ))}
         <input
+          ref={fileInput}
           aria-label="Ảnh công khai mới"
           type="file"
+          hidden
           accept="image/png,image/jpeg"
           disabled={action.busy}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
+        <Stack direction="row" useFlexGap sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button disabled={action.busy} onClick={() => fileInput.current?.click()}>
+            Chọn ảnh công khai
+          </Button>
+          <Typography variant="body2">{file?.name || 'Chưa chọn ảnh'}</Typography>
+        </Stack>
         <Button disabled={!file || action.busy} onClick={() => setConfirm('upload')}>
           Tải ảnh được phép công khai
         </Button>

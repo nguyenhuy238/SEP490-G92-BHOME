@@ -169,27 +169,10 @@ it('requires confirmation before deactivating an existing Location', async () =>
     ).toBe(true),
   );
 });
-it('creates a Room in the selected Location with its RoomType', async () => {
+it('creates a native Room in the selected Location without a retired RoomType request', async () => {
   state.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/capture/locations')
       return [{ id: 'location', label: 'Synthetic Location' }];
-    if (path.includes('/api/v1/room-types'))
-      return {
-        items: [
-          {
-            id: 'studio',
-            locationId: 'location',
-            name: 'Studio',
-            description: null,
-            defaultCapacity: 2,
-            areaM2: 25,
-            amenities: [],
-            isActive: true,
-            version: 1,
-          },
-        ],
-        totalCount: 1,
-      };
     return { items: [], totalCount: 0 };
   });
   mount('rooms');
@@ -197,8 +180,7 @@ it('creates a Room in the selected Location with its RoomType', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Thêm phòng' }));
   fireEvent.change(screen.getByLabelText(/Số phòng/), { target: { value: 'A101' } });
   fireEvent.change(screen.getByLabelText(/Sức chứa/), { target: { value: '2' } });
-  fireEvent.mouseDown(screen.getByLabelText(/Loại phòng/));
-  fireEvent.click(await screen.findByRole('option', { name: 'Studio' }));
+  expect(screen.queryByLabelText(/Loại phòng/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith('/api/v1/rooms', {
@@ -211,9 +193,11 @@ it('creates a Room in the selected Location with its RoomType', async () => {
         status: 0,
         version: 0,
         reason: '',
-        roomTypeId: 'studio',
       }),
     }),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(
+    false,
   );
 });
 it('reads physical Asset fields through the scoped native list and pagination', async () => {

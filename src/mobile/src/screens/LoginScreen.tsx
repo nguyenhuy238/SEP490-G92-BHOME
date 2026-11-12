@@ -2,6 +2,7 @@ import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
 import { useFeedbackState } from '../lib/useFeedbackState';
 import { conciseMessage } from '../lib/toast';
 import React, { useState } from 'react';
+import { router } from 'expo-router';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -130,6 +131,12 @@ export function LoginScreen() {
               icon="arrow-right"
             >
               Đăng nhập
+            </Button>
+            <Button disabled={busy} onPress={() => router.push('/contract-signing')}>
+              Mở lời mời ký hợp đồng
+            </Button>
+            <Button disabled={busy} onPress={() => router.push('/accept-invitation')}>
+              Thiết lập tài khoản từ lời mời
             </Button>
           </Box>
           {__DEV__ && (

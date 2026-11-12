@@ -24,6 +24,7 @@ import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { TenantPaymentPanel } from './TenantPaymentPanel';
 import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
+import { TenantSettlementReceivables } from './TenantSettlementReceivables';
 import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
 export function TenantInvoicesScreen({ intent }: { intent?: 'adjustment' } = {}) {
@@ -145,6 +146,7 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
         </View>
       )}
       <TenantBillingTabs active="invoices" />
+      {purpose !== 'adjustment' && <TenantSettlementReceivables />}
       <Text style={invoiceUi.secondary}>Hóa đơn chung của phòng trong những kỳ bạn đã ở.</Text>
       {purpose === 'adjustment' && (
         <Box>

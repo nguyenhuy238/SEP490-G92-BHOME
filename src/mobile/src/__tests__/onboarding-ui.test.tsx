@@ -279,6 +279,14 @@ function selectRoom() {
 }
 function namePerson(label: string) {
   fireEvent.change(screen.getByLabelText('Tên gọi hồ sơ'), { target: { value: label } });
+  fireEvent.change(screen.getByLabelText('Email người ở'), {
+    target: {
+      value:
+        Array.from(label)
+          .map((c) => c.codePointAt(0)!.toString(16))
+          .join('') + '@example.invalid',
+    },
+  });
 }
 async function openIdentity(index = 0) {
   if (screen.queryByRole('dialog')) closeIdentity();

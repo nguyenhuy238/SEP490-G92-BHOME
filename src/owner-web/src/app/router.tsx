@@ -20,7 +20,6 @@ const RoomTypesPage = lazy(() => import('../features/room-types/pages/RoomTypesP
 const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage'));
 const PricingPage = lazy(() => import('../features/pricing/pages/PricingPage'));
 const StaffPage = lazy(() => import('../features/staff/pages/StaffPage'));
-const SchedulesPage = lazy(() => import('../features/schedules/pages/SchedulesPage'));
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
@@ -68,6 +67,8 @@ const PolicyTemplatesPage = lazy(() =>
   })),
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
+const AcceptInvitationPage = lazy(() => import('../features/auth/pages/AcceptInvitationPage'));
+const AnonymousSigningPage = lazy(() => import('../features/contracts/pages/AnonymousSigningPage'));
 const AccountProfilePage = lazy(() => import('../features/auth/pages/AccountProfilePage'));
 export function AppRouter() {
   return (
@@ -76,6 +77,8 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+          <Route path="/contract-signing" element={<AnonymousSigningPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
@@ -108,7 +111,6 @@ export function AppRouter() {
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/pricing" element={<PricingPage />} />
               <Route path="/staff" element={<StaffPage />} />
-              <Route path="/schedules" element={<SchedulesPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/tenants" element={<TenantsPage />} />
               <Route path="/contracts" element={<ContractsPage />} />

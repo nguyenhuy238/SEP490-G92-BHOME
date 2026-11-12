@@ -119,6 +119,6 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
 
 internal sealed class UnconfiguredContractHoldingLedger : IContractHoldingLedger
 {
-    public Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId, Guid tenantUserId, decimal requiredDeposit, CancellationToken t)
+    public Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId, Guid? tenantUserId, decimal requiredDeposit, CancellationToken t)
         => throw new IntegrationUnavailableException("BF-03A holding-contract allocation ledger");
 }

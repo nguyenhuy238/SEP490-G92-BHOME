@@ -61,7 +61,8 @@ internal static class Compact24Records
         Root("Room", "rooms", "LocationId:location_id RoomNumber:room_number Floor:floor Capacity:capacity Status:status Version:version");
         Root("Asset", "assets", "LocationId:location_id RoomId:room_id CommonArea:common_area Code:asset_code Name:name Category:category Condition:condition Status:status Version:version");
         Root("Resident", "residents", "TenantUserId:user_id RoomId:current_room_id OwnerUserId:identity_owner_scope_id DisplayLabel:display_label IdentityHmac:identity_hmac HmacKeyVersion:hmac_key_version VerificationStatus:verification_status ConfirmedByUserId:verified_by_user_id ConfirmedAt:verified_at")
-            .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)");
+            .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)")
+            .Map("ContactEmail", "contact_email");
         var policy = Root("BillingPolicy", "billing_policies", "LocationId:location_id RoomId:room_id ChargeCode:charge_code Category:category Rate:rate EffectiveFrom:effective_from EffectiveTo:effective_to FirstUsedAt:first_used_at Version:version");
         policy.Map("Method", "calculation_method", "CASE t.calculation_method WHEN 'METERED' THEN 1 ELSE 0 END", "CASE WHEN (@state::jsonb->>'method')::int=1 THEN 'METERED' ELSE 'FIXED_PER_ROOM_PER_MONTH' END");
         var contract = Root("Contract", "contracts", "RoomId:room_id RepresentativeResidentId:representative_resident_id TenantUserId:tenant_user_id OwnerSignerId:owner_signer_id PreviousContractId:previous_contract_id HoldingContractId:source_holding_contract_id HoldingExpiryAt:holding_expiry_at ReservedCapacity:reserved_capacity StartDate:start_date EndDate:end_date MonthlyRent:monthly_rent RequiredDeposit:deposit_required AppliedHoldingDeposit:applied_holding_deposit Terms:terms SnapshotHash:snapshot_hash Status:status ActivatedAt:activated_at ActivatedByUserId:activated_by_user_id ActualEndDate:actual_end_date DraftVersion:version");
@@ -147,18 +148,19 @@ internal static class Compact24Records
         payment.Write["verification_data"] = "jsonb_build_object('schemaVersion',1,'compactState',@state::jsonb)";
         History("PaymentReconciliation", "payments", "TransferId").AppendOnly = true;
         History("BankReferenceClaim", "payments", "AllocationId").AppendOnly = true;
-        var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
+        var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id TargetSettlementContractId:target_settlement_contract_id SettlementReceivableId:settlement_receivable_id DepositOffsetApprovalId:deposit_offset_approval_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
         allocation.CustomFrom = "payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE";
         allocation.CustomState = "s.data";
         // Include verified bank receipts allocated to a deposit as well as invoice payments
         // and Holding-to-Main transfers; otherwise the Holding ledger cannot see received money.
-        allocation.Where = "(t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL) OR (t.target_deposit_contract_id IS NOT NULL AND (t.source_payment_id IS NOT NULL OR t.source_deposit_contract_id IS NOT NULL))";
+        allocation.Where = "t.target_invoice_id IS NOT NULL OR t.target_deposit_contract_id IS NOT NULL OR t.target_settlement_contract_id IS NOT NULL";
         allocation.Read["CreatedAt"] = "COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at)";
         allocation.Read["UpdatedAt"] = "COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at)";
         allocation.Write["operation_key"] = "@state::jsonb->>'id'"; allocation.Write["line_number"] = "1";
-        allocation.Write["reason"] = "CASE WHEN @state::jsonb->>'sourceDepositContractId' IS NOT NULL THEN 'Applied verified Holding Deposit to Main Contract' ELSE 'Verified invoice bank receipt' END"; allocation.AppendOnly = true;
+        allocation.Write["reason"] = "CASE WHEN @state::jsonb->>'depositOffsetApprovalId' IS NOT NULL THEN 'Owner approved source-specific deposit offset' WHEN @state::jsonb->>'sourceDepositContractId' IS NOT NULL THEN 'Applied verified Holding Deposit to Main Contract' ELSE 'Verified bank receipt' END"; allocation.AppendOnly = true;
         // Deposit receipts use a canonical payment plus an allocation, preserving the original receipt UUID.
         History("DepositVerification", "payments", "Id").AppendOnly = true;
+        History("ContractSigningInvitation", "contracts", "ContractId");
         Technical("PaymentCommand", true).AppendOnly = true; Notification("PaymentConfirmedEvent");
 
         // Incident aggregates reuse the native report/task/expense tables. Child records

@@ -58,6 +58,32 @@ public sealed class OperationalTaskServiceTests
         Assert.Equal(new DateOnly(2026, 10, 31), r.Repo.ReceivedCalls().First(c => c.GetMethodInfo().Name == nameof(IOperationalTaskRepository.ResponsibilityAsync)).GetArguments()[1]);
     }
     [Fact]
+    public async Task OwnerTaskListForwardsStaffFilterWhileStaffScopeRemainsAuthenticated()
+    {
+        var r = new Rig();
+        r.Repo.ListAsync(Arg.Any<TaskQuery>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new TaskPage<TaskView>([], 1, 20, 0));
+        var requestedStaff = Guid.NewGuid();
+
+        await r.Service.ListAsync(new TaskQuery { StaffUserId = requestedStaff }, default);
+
+        await r.Repo.Received(1).ListAsync(
+            Arg.Is<TaskQuery>(query => query.StaffUserId == requestedStaff),
+            requestedStaff,
+            Arg.Any<DateOnly>(),
+            Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>());
+
+        r.AsStaff();
+        await r.Service.ListAsync(new TaskQuery { StaffUserId = Guid.NewGuid() }, default);
+        await r.Repo.Received(1).ListAsync(
+            Arg.Is<TaskQuery>(query => query.StaffUserId != r.User.UserId),
+            r.User.UserId,
+            Arg.Any<DateOnly>(),
+            Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>());
+    }
+    [Fact]
     public async Task MissingStaffAndInvalidWorkCannotCreateTask()
     {
         var r = new Rig(); r.Responsibility = null;

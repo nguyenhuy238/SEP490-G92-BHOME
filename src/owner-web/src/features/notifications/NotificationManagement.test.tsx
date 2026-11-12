@@ -45,12 +45,67 @@ it('recovers a saved draft and sends its persisted ID without creating a replace
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   expect(screen.getByLabelText('Tiêu đề thông báo')).toHaveValue(draft.title);
+  expect(screen.getByRole('combobox', { name: 'Phạm vi người nhận' })).toHaveTextContent(
+    'Tất cả Tenant',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Gửi nháp này' }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
     expect(mocks.request.mock.calls.filter(([p]) => p.endsWith('/recovered/send'))).toHaveLength(1),
   );
   expect(mocks.request.mock.calls.filter(([p]) => p === '/api/v1/announcements')).toHaveLength(0);
+});
+it('selects linked Tenant accounts by name and previews their real IDs without manual UUID entry', async () => {
+  const userId = '00000000-0000-4000-8000-000000000002';
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/residents?'))
+      return {
+        items: [
+          { id: 'a', displayLabel: 'Tenant tổng hợp', roomNumber: '101', tenantUserId: userId },
+          { id: 'b', displayLabel: 'Chưa có tài khoản', roomNumber: '102', tenantUserId: null },
+        ],
+        totalCount: 2,
+        page: 1,
+        pageSize: 20,
+      };
+    if (path.endsWith('preview-recipients')) return { recipientCount: 1, missingEmailCount: 0 };
+    if (path.includes('delivery-status')) return { deliveries: { items: [], totalCount: 0 } };
+    if (path.endsWith('channel-status')) return { mode: 'Sandbox', deliveries: [] };
+    return [];
+  });
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <NotificationManagement />
+    </QueryClientProvider>,
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phạm vi người nhận' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Nhiều tài khoản' }));
+  expect(screen.queryByLabelText(/UUID/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chọn tài khoản người nhận' }));
+  const dialog = screen.getByRole('dialog');
+  expect(
+    await within(dialog).findByRole('checkbox', { name: 'Chọn người nhận Chưa có tài khoản' }),
+  ).toBeDisabled();
+  fireEvent.click(
+    within(dialog).getByRole('checkbox', { name: 'Chọn người nhận Tenant tổng hợp' }),
+  );
+  fireEvent.change(within(dialog).getByLabelText('Tìm tên người nhận'), {
+    target: { value: 'Tenant' },
+  });
+  await waitFor(() =>
+    expect(
+      mocks.request.mock.calls.some(
+        ([p]) => p.includes('/residents?') && p.includes('search=Tenant') && p.includes('page=1'),
+      ),
+    ).toBe(true),
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xong' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra người nhận' }));
+  await screen.findByText('1 người nhận · 0 tài khoản thiếu email');
+  const preview = mocks.request.mock.calls.find(([p]) => p.endsWith('preview-recipients'))!;
+  expect(JSON.parse(preview[1].body)).toEqual({ type: 'SELECTED_USERS', userIds: [userId] });
 });
 it('reuses the create intent after a lost response instead of creating another draft', async () => {
   let attempts = 0;

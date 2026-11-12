@@ -23,6 +23,15 @@ export interface StaffAssignment {
   startDate: string;
   endDate: string;
 }
+export interface StaffAssignmentDetail extends StaffAssignment {
+  locationId: string;
+  locationName: string;
+}
+export interface StaffChangePreview {
+  locationId: string;
+  canRemove: boolean;
+  openResponsibilities: Array<{ code: string; count: number }>;
+}
 export const todayVietnam = () =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Ho_Chi_Minh',

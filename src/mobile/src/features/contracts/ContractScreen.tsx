@@ -6,7 +6,6 @@ import { View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
-  contractActions,
   contractClient,
   contractError,
   contractStates,
@@ -42,6 +41,8 @@ import {
 } from './contractSections';
 import { StaffContractsList } from './StaffContractsList';
 import { defaultStaffContractListView } from './staffContractList';
+import { mobileContractActions } from './contractSections';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -100,6 +101,21 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   }
   const id = selected || deepId;
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
+  if (role === 'Owner' && (create || mainDraftId || params.mainDraftId || params.roomId))
+    return (
+      <>
+        <OwnerWebNotice task="Chuẩn bị và quyết định hợp đồng" />
+        <Action
+          onPress={() => {
+            setCreate(false);
+            setMainDraftId('');
+            router.setParams({ mainDraftId: '', roomId: '' });
+          }}
+        >
+          Về danh sách hợp đồng
+        </Action>
+      </>
+    );
   if (
     (mainDraftId || params.mainDraftId || (create && params.roomId)) &&
     ['Owner', 'Staff'].includes(role)
@@ -236,9 +252,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         <Button disabled={listing.loading} onPress={() => setRevision((v) => v + 1)}>
           Tải lại
         </Button>
-        {['Owner', 'Staff'].includes(role) && (
-          <Button onPress={() => setCreate(true)}>Tạo nháp hợp đồng thuê</Button>
-        )}
       </Row>
       {listing.loading && <ActivityIndicator accessibilityLabel="Đang tải hợp đồng" />}
       {!!listing.error && <Text style={ui.red}>{conciseMessage(listing.error)}</Text>}
@@ -323,7 +336,7 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (c.onboardingDraft)
+  if (c.onboardingDraft && role === 'Staff')
     return (
       <MainDraftScreen
         initialId={c.id}
@@ -341,12 +354,9 @@ function LiveContractDetail({
       />
     );
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = contractActions(c, m, role, actorId).filter(
-    (a) => !['move-out/inspection', 'move-out/settlement'].includes(a.operation),
-  );
+  const actions = mobileContractActions(c, m, role, actorId);
   const action = actions.find((a) => a.operation === selectedAction);
-  const signer =
-    ['Owner', 'Tenant'].includes(role) && [c.ownerSignerId, c.tenantUserId].includes(actorId);
+  const signer = role === 'Tenant' && c.tenantUserId === actorId;
   return (
     <>
       <Heading
@@ -357,6 +367,7 @@ function LiveContractDetail({
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
+      {role === 'Owner' && <OwnerWebNotice />}
       <View style={ui.wrap}>
         {contractSections.map((item) => (
           <Button

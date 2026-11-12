@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   LinearProgress,
-  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -13,11 +13,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   financeError,
+  formatFinanceMoney,
   type ScenarioInput,
   type ScenarioView,
 } from '../../../../../packages/client-core/src/finance';
-import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
 import { PageHeader } from '../../components/common/PortalUI';
+import { OptionPicker } from '../../components/common/OptionPicker';
+import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
+import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { useFinanceApi } from '../expenses/useFinanceApi';
 import { OwnerTable } from '../../components/common/OwnerWorkspace';
 import { downloadFinance } from '../../services/financeExport';
@@ -130,7 +133,23 @@ export function FinancialScenariosApiPage() {
       </Alert>
       {(busy || locations.isPending || saved.isPending) && <LinearProgress />}
       {(error || locations.error || saved.error) && (
-        <Alert severity="error">{error || financeError(locations.error || saved.error)}</Alert>
+        <Alert
+          severity="error"
+          action={
+            (locations.error || saved.error) && (
+              <Button
+                onClick={() => {
+                  void locations.refetch();
+                  void saved.refetch();
+                }}
+              >
+                Thử tải lại
+              </Button>
+            )
+          }
+        >
+          {error || financeError(locations.error || saved.error)}
+        </Alert>
       )}
       {success && <Alert severity="success">{success}</Alert>}
       <Paper sx={{ p: 2, my: 2 }}>
@@ -149,25 +168,21 @@ export function FinancialScenariosApiPage() {
               slotProps={{ htmlInput: { maxLength: 150 } }}
               onChange={(e) => change({ ...input, name: e.target.value })}
             />
-            <TextField
-              select
+            <OptionPicker
               label="Cơ sở"
               disabled={busy}
               value={input.baseline.locationId || ''}
-              onChange={(e) =>
+              options={locations.data ?? []}
+              loading={locations.isPending}
+              error={!!locations.error}
+              emptyLabel="Toàn chuỗi"
+              change={(id) =>
                 change({
                   ...input,
-                  baseline: { ...input.baseline, locationId: e.target.value || undefined },
+                  baseline: { ...input.baseline, locationId: id || undefined },
                 })
               }
-            >
-              <MenuItem value="">Toàn chuỗi</MenuItem>
-              {locations.data?.map((l) => (
-                <MenuItem key={l.id} value={l.id}>
-                  {l.label}
-                </MenuItem>
-              ))}
-            </TextField>
+            />
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
                 required
@@ -204,28 +219,33 @@ export function FinancialScenariosApiPage() {
                 onChange={(e) => change({ ...input, forecastMonths: Number(e.target.value) })}
               />
             </Stack>
-            {fields.map(([field, label]) => (
-              <TextField
-                key={field}
-                required
-                label={label}
-                disabled={busy}
-                value={input.assumptions[field]}
-                slotProps={{
-                  htmlInput: {
-                    inputMode: 'decimal',
-                    pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
-                    maxLength: 24,
-                  },
-                }}
-                onChange={(e) =>
-                  change({
-                    ...input,
-                    assumptions: { ...input.assumptions, [field]: e.target.value },
-                  })
-                }
-              />
-            ))}
+            <Typography variant="h6">Giả định hàng tháng</Typography>
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}
+            >
+              {fields.map(([field, label]) => (
+                <TextField
+                  key={field}
+                  required
+                  label={label}
+                  disabled={busy}
+                  value={input.assumptions[field]}
+                  slotProps={{
+                    htmlInput: {
+                      inputMode: 'decimal',
+                      pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
+                      maxLength: 24,
+                    },
+                  }}
+                  onChange={(e) =>
+                    change({
+                      ...input,
+                      assumptions: { ...input.assumptions, [field]: e.target.value },
+                    })
+                  }
+                />
+              ))}
+            </Box>
             <Stack direction="row" spacing={2}>
               <Button type="submit" variant="contained" disabled={busy}>
                 Phân tích
@@ -282,12 +302,13 @@ export function FinancialScenariosApiPage() {
             columns={[
               { label: 'Chỉ tiêu', render: (r) => r.label },
               {
-                label: view.input.name,
-                render: (r) => (r.current == null ? 'Chưa xác định' : formatDraftMoney(r.current)),
+                label: `Đang xem: ${view.input.name}`,
+                render: (r) =>
+                  r.current == null ? 'Chưa xác định' : formatFinanceMoney(r.current),
               },
               {
-                label: comparison.input.name,
-                render: (r) => (r.other == null ? 'Chưa xác định' : formatDraftMoney(r.other)),
+                label: `Đối chiếu: ${comparison.input.name}`,
+                render: (r) => (r.other == null ? 'Chưa xác định' : formatFinanceMoney(r.other)),
               },
             ]}
           />
@@ -300,20 +321,23 @@ export function FinancialScenariosApiPage() {
         </Paper>
       )}
       <Typography variant="h6">Kịch bản đã lưu</Typography>
-      {saved.data?.length === 0 && <Alert severity="info">Chưa có kịch bản ở trang này.</Alert>}
-      {saved.data?.map((s) => (
-        <Paper key={s.id} sx={{ p: 2, my: 1 }}>
-          <Typography>
-            {s.name} · {s.forecastMonths} tháng
-          </Typography>
-          <Button disabled={busy} onClick={() => void load(s.id)}>
-            Xem {s.name}
-          </Button>
-          <Button disabled={busy || !view} onClick={() => void load(s.id, true)}>
-            So sánh {s.name}
-          </Button>
-        </Paper>
-      ))}
+      {!saved.error && !saved.isPending && saved.data?.length === 0 && (
+        <Alert severity="info">Chưa có kịch bản ở trang này.</Alert>
+      )}
+      {!saved.error &&
+        saved.data?.map((s) => (
+          <Paper key={s.id} sx={{ p: 2, my: 1 }}>
+            <Typography>
+              {s.name} · {s.forecastMonths} tháng
+            </Typography>
+            <Button disabled={busy} onClick={() => void load(s.id)}>
+              Xem {s.name}
+            </Button>
+            <Button disabled={busy || !view} onClick={() => void load(s.id, true)}>
+              So sánh {s.name}
+            </Button>
+          </Paper>
+        ))}
       <Stack direction="row" spacing={2}>
         <Button disabled={page === 1 || saved.isFetching} onClick={() => setPage((v) => v - 1)}>
           Trang trước
@@ -334,6 +358,23 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
   return (
     <Paper sx={{ p: 2, my: 2 }}>
       <Typography variant="h6">{title}</Typography>
+      {value.baseline.total && (
+        <Stack spacing={0.5} sx={{ my: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+          <Typography variant="subtitle2">
+            Dữ liệu thực tế trong kỳ nền {displayContractDate(value.input.baseline.from)} –{' '}
+            {displayContractDate(value.input.baseline.to)}
+          </Typography>
+          <Typography>
+            Phát hành kỳ nền: {formatFinanceMoney(value.baseline.total.issued)}
+          </Typography>
+          <Typography>
+            Thu đã xác minh kỳ nền: {formatFinanceMoney(value.baseline.total.verifiedCollections)}
+          </Typography>
+          <Typography>
+            Lợi nhuận kỳ nền: {formatFinanceMoney(value.baseline.total.operatingProfit)}
+          </Typography>
+        </Stack>
+      )}
       {(
         [
           ['Doanh thu dự kiến / tháng', r.monthlyRevenue],
@@ -347,7 +388,7 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
         ] as const
       ).map(([label, amount]) => (
         <Typography key={label}>
-          {label}: {amount === null ? 'Chưa xác định' : formatDraftMoney(amount)}
+          {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
         </Typography>
       ))}
       <Typography>
@@ -360,7 +401,8 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
         </Alert>
       )}
       <Typography variant="caption">
-        Dữ liệu nền: {value.baseline.snapshotAt} · Mô hình {value.calculationVersion}
+        Ảnh chụp dữ liệu nền: {formatInstant(value.baseline.snapshotAt)} · Mô hình{' '}
+        {value.calculationVersion}
       </Typography>
     </Paper>
   );

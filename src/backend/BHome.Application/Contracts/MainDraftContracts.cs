@@ -27,7 +27,7 @@ public sealed record MainDraftState(MainDraftInput Input, IReadOnlyList<PolicyDt
     int SettingsVersion, string SettingsHash, string TemplateHash);
 public sealed record MainDraftView(Guid Id, string Status, int Version, MainDraftInput Input, MainDraftPreparation Preparation);
 public sealed record MainDraftFiles(ContractDocumentView Docx, ContractDocumentView? Pdf, string? PreviewError);
-public sealed record MainDraftReleaseInput(Guid TenantUserId, int ExpectedVersion, Guid ReviewedFileId,
+public sealed record MainDraftReleaseInput(Guid? TenantUserId, int ExpectedVersion, Guid ReviewedFileId,
     [property: System.Text.Json.Serialization.JsonRequired] bool HumanReviewed);
 public sealed record MainDraftRenderData(Contract Contract, MainDraftState State, MainContractSettings Settings,
     IdentityConfirmation Tenant, string LocationName, string RoomNumber, string Address, string[]? Occupants = null, bool SigningReview = false);

@@ -42,9 +42,11 @@ import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { HoldingDepositPanel } from './HoldingDepositPanel';
+import { DepositReceiptPanel } from './DepositReceiptPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 import { ContractPolicyPanel } from './ContractPolicyPanel';
+import { InternalSigningPanel } from './InternalSigningPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -199,6 +201,7 @@ export function ContractDetailPanel({
         <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           Mã hợp đồng {c.id}
         </Typography>
+        <ContractNavigation id={c.id} />
         <Stepper activeStep={activeStep} alternativeLabel sx={{ my: 2 }}>
           {steps.map((s) => (
             <Step key={s.label} completed={s.done}>
@@ -347,6 +350,15 @@ export function ContractDetailPanel({
       </ChartCard>
 
       {/* 4. Reference material, folded away until needed */}
+      {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
+        <DepositReceiptPanel
+          contract={c}
+          changed={() => {
+            detail.reload();
+            onChanged();
+          }}
+        />
+      )}
       {c.kind === 'Holding' && (
         <HoldingDepositPanel
           contract={c}
@@ -378,6 +390,9 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
+      {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
+        <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+      )}
       <ContractWorkflowPanel api={api} contract={c} />
       {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel
@@ -480,6 +495,20 @@ export function ContractDetailPanel({
           }}
         />
       )}
+    </Stack>
+  );
+}
+function ContractNavigation({ id }: { id: string }) {
+  const routed = useInRouterContext();
+  if (!routed) return null;
+  return (
+    <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+      <Button component={RouterLink} to={`/handovers?contractId=${encodeURIComponent(id)}`}>
+        Mở biên bản bàn giao
+      </Button>
+      <Button component={RouterLink} to="/temporary-residence">
+        Theo dõi tạm trú
+      </Button>
     </Stack>
   );
 }

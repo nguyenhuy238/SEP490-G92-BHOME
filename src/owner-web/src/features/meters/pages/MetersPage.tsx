@@ -14,12 +14,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import { contractError } from '../../../../../../packages/client-core/src/contracts';
-import { PageHeader } from '../../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useMeterApi } from '../useMeterApi';
 import { MeterAssignment } from '../MeterAssignment';
 import { downloadOwnerFile } from '../../../services/ownerDownloads';
+import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 
 export default function MetersPage() {
   return isMockMode ? <ResourcePage kind="meters" variant="table" /> : <LiveMetersPage />;
@@ -74,68 +75,70 @@ export function LiveMetersPage() {
         subtitle="Kết quả Staff xác nhận được lưu trên hệ thống và dùng làm đầu vào lập hóa đơn."
       />
       <Stack spacing={2}>
-        <TextField
-          select
-          label="Cơ sở ghi số"
-          value={location}
-          onChange={(e) => {
-            setLocation(e.target.value);
-            setRoom('');
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem key={l.id} value={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Phòng ghi số"
-          value={room}
-          disabled={!location}
-          onChange={(e) => {
-            setRoom(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả phòng</MenuItem>
-          {rooms.data?.map((r) => (
-            <MenuItem key={r.id} value={r.id}>
-              {r.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Trạng thái tác vụ"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả trạng thái</MenuItem>
-          {['Đã giao', 'Đang thực hiện', 'Đã xác nhận', 'Đã hủy', 'Chờ xác minh'].map(
-            (label, i) => (
-              <MenuItem key={i} value={String(i)}>
-                {label}
+        <FilterToolbar>
+          <TextField
+            select
+            label="Cơ sở ghi số"
+            value={location}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              setRoom('');
+              setPage(1);
+            }}
+          >
+            <MenuItem value="">Tất cả cơ sở</MenuItem>
+            {locations.data?.map((l) => (
+              <MenuItem key={l.id} value={l.id}>
+                {l.label}
               </MenuItem>
-            ),
-          )}
-        </TextField>
-        <TextField
-          label="Ngày đến hạn"
-          type="date"
-          value={dueDate}
-          slotProps={{ inputLabel: { shrink: true } }}
-          onChange={(e) => {
-            setDueDate(e.target.value);
-            setPage(1);
-          }}
-        />
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Phòng ghi số"
+            value={room}
+            disabled={!location}
+            onChange={(e) => {
+              setRoom(e.target.value);
+              setPage(1);
+            }}
+          >
+            <MenuItem value="">Tất cả phòng</MenuItem>
+            {rooms.data?.map((r) => (
+              <MenuItem key={r.id} value={r.id}>
+                {r.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Trạng thái tác vụ"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <MenuItem value="">Tất cả trạng thái</MenuItem>
+            {['Đã giao', 'Đang thực hiện', 'Đã xác nhận', 'Đã hủy', 'Chờ xác minh'].map(
+              (label, i) => (
+                <MenuItem key={i} value={String(i)}>
+                  {label}
+                </MenuItem>
+              ),
+            )}
+          </TextField>
+          <TextField
+            label="Ngày đến hạn"
+            type="date"
+            value={dueDate}
+            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(e) => {
+              setDueDate(e.target.value);
+              setPage(1);
+            }}
+          />
+        </FilterToolbar>
         {(locations.error || rooms.error || evidenceError) && (
           <Alert severity="error">
             {evidenceError || contractError(locations.error || rooms.error)}
@@ -153,21 +156,38 @@ export function LiveMetersPage() {
         {tasks.data && !tasks.data.length && (
           <Alert severity="info">Chưa có tác vụ ghi chỉ số.</Alert>
         )}
-        {!!tasks.data?.length && (
-          <TextField
-            select
-            label="Tác vụ trong trang (tối đa 100)"
-            value={tasks.data.some((t) => t.id === selected) ? selected : ''}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            <MenuItem value="">Chọn tác vụ</MenuItem>
-            {tasks.data.map((t) => (
-              <MenuItem key={t.id} value={t.id}>
-                {t.location} · {t.room} · {t.meterCode} · {t.readingDate} ·{' '}
-                {t.status === 2 ? 'Đã xác nhận' : t.status === 3 ? 'Đã hủy' : 'Chờ ghi chỉ số'}
-              </MenuItem>
-            ))}
-          </TextField>
+        {!!tasks.data?.length && !tasks.error && (
+          <Paper>
+            <OwnerTable
+              rows={tasks.data}
+              id={(t) => t.id}
+              select={(t) => setSelected(t.id)}
+              label="Tác vụ ghi chỉ số"
+              columns={[
+                { label: 'Cơ sở / Phòng', render: (t) => `${t.location} · ${t.room}` },
+                {
+                  label: 'Đồng hồ',
+                  render: (t) => `${t.meterCode} · ${t.utilityType === 0 ? 'Điện' : 'Nước'}`,
+                },
+                {
+                  label: 'Kỳ / Ngày ghi',
+                  render: (t) =>
+                    `${t.billingPeriod?.slice(0, 7) ?? 'Ban đầu / trả phòng'} · ${t.readingDate.split('-').reverse().join('/')}`,
+                },
+                { label: 'Chỉ số trước', render: (t) => t.previousValue ?? 'Thiếu baseline' },
+                {
+                  label: 'Trạng thái',
+                  render: (t) =>
+                    t.status === 2 ? 'Đã xác nhận' : t.status === 3 ? 'Đã hủy' : 'Chờ ghi chỉ số',
+                },
+                {
+                  label: 'Phân công',
+                  render: (t) =>
+                    t.assignedStaffUserId ? 'Đã phân công (xem chi tiết)' : 'Chưa phân công',
+                },
+              ]}
+            />
+          </Paper>
         )}
         <Stack direction="row" spacing={1}>
           <Button disabled={page === 1 || tasks.isFetching} onClick={() => setPage(page - 1)}>
