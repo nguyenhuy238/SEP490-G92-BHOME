@@ -23,10 +23,15 @@ internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> us
         {
             var phone = LoginIdentifier.NormalizePhone(identifier);
             if (phone is null) return null;
-            matches = await users.Users.Where(user => user.PhoneNumber != null &&
-                    user.PhoneNumber.Replace(" ", "").Replace("-", "").Replace(".", "")
-                        .Replace("(", "").Replace(")", "") == phone)
-                .Take(2).ToArrayAsync(cancellationToken);
+            var phones = users.Users.Where(user => user.PhoneNumber != null).Select(user => new
+            {
+                User = user,
+                Phone = user.PhoneNumber!.Replace(" ", "").Replace("-", "").Replace(".", "").Replace("(", "").Replace(")", "")
+            });
+            matches = await phones.Where(row =>
+                (row.Phone.StartsWith("0") && (row.Phone.Length == 10 || row.Phone.Length == 11)
+                    ? "+84" + row.Phone.Substring(1) : row.Phone) == phone)
+                .Select(row => row.User).Take(2).ToArrayAsync(cancellationToken);
         }
         if (matches.Length != 1 || !matches[0].IsActive) return null;
         var user = matches[0];

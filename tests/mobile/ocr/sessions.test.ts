@@ -114,7 +114,7 @@ it.each([400, 401, 0])('does not save a session or retry a failed login (%s)', a
   expect(manager.snapshot.session).toBeNull();
   expect(errorMessage(failure)).not.toContain('PRIVATE_NETWORK_DETAIL');
   if (status === 401) {
-    expect(errorMessage(failure)).toContain('Email hoặc mật khẩu');
+    expect(errorMessage(failure)).toContain('Email, số điện thoại hoặc mật khẩu không chính xác');
     expect(errorMessage(failure)).not.toContain('hết hạn');
   }
 });

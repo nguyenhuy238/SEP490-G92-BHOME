@@ -54,5 +54,16 @@ Chưa có file định nghĩa ITC-AUTH-001..026/Round 1 và OQ-AUTH-01..03 trong
 
 | Phase | Status | Commit | Evidence |
 | --- | --- | --- | --- |
-| 1 Audit | Completed sau kiểm chứng baseline | xem commit `docs(auth): audit authentication workflows` | Report này + route audit test + logs baseline |
-| 2–8 | Pending | — | Thực hiện tuần tự sau commit phase trước |
+| 1 Audit | Completed sau kiểm chứng baseline | `40b5c84` | Report này + route audit test + logs baseline |
+| 2 Validation | Completed | xem commit `fix(auth): improve login validation and errors` | 24 unit / 20 IT / 16 Web / 24 Mobile |
+| 3–8 | Pending | — | Thực hiện tuần tự sau commit phase trước |
+
+## Phase 2 — Login validation và errors
+
+Traceability: FE-02/UC-01, Report 3 Authentication Login Identifier, task Phase 2/ITC-AUTH-004..008. DTO giữ email/phone/password/device; IValidatableObject trả đủ lỗi required/format/length tiếng Việt (identifier/email/phone/password). Auth failure 401 có cùng generic title cho unknown/inactive/wrong password. Không sửa lockout/rate limit/RBAC.
+
+LoginIdentifier và client-core chuẩn hóa số Việt Nam 10/11 chữ số bắt đầu 0 về +84; các international number khác giữ nguyên. Query hiện có so khớp canonical trên dữ liệu phone cũ, Take(2) từ chối ambiguous. Không rewrite user identities. EnsurePhoneAvailable dùng cùng canonical và advisory lock để không thêm duplicate qua profile/Staff update. Web và Mobile sử dụng payload phone khi nhập phone, không gửi phone trong field email. Hai UI hiển thị lỗi sát field và chỉ cập nhật lỗi field đang sửa.
+
+Kiểm chứng: 20 integration tests LoginValidation/Auth/Route trên disposable PostgreSQL passed; 16 Web tests passed; 24 Mobile tests passed; typecheck/lint hai client passed. LoginService unit được mở rộng thêm +84 và canonical expectation theo yêu cầu mới; lỗi assertion cũ về domestic string và message email-only đã được cập nhật vì contract normalization/message đã thay đổi có chủ đích, không nới validation. Rerun 24 LoginService unit tests passed, không fail/skip. Các log/TRX dưới `.tmp/auth-completion-phase2*` ignored. Không SMTP thật/migration/live DB.
+
+Commands: `.tmp/Test-ReadinessIsolated.ps1 -Filter 'FullyQualifiedName~Compact24LoginValidationTests|FullyQualifiedName~Compact24AuthTests|FullyQualifiedName~AuthenticationRouteAuditTests'`; `dotnet test ...BHome.Application.UnitTests.csproj -c Release --filter FullyQualifiedName~LoginServiceTests`; npm workspace owner-web/mobile targeted test, typecheck, lint. Expo 58 đã đối chiếu [versioned reference](https://docs.expo.dev/versions/v58.0.0/) và [documentation index](https://docs.expo.dev/llms.txt).

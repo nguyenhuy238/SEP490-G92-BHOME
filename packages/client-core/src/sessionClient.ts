@@ -1,6 +1,7 @@
 import { ApiError, type ApiProblem } from './api';
 import type { Session } from './auth';
 import { sessionFromTokenResponse } from './jwtSession';
+import { loginPayload } from './loginValidation';
 
 type SessionResponse = Session & { refreshToken?: string | null };
 export type AuthTransport = 'web' | 'mobile';
@@ -49,7 +50,7 @@ export class SessionClient {
   async login(email: string, password: string) {
     if (this.pendingRefresh) await this.pendingRefresh.catch(() => undefined);
     const version = ++this.revision;
-    const raw = await this.send<unknown>('login', { email: email.trim(), password });
+    const raw = await this.send<unknown>('login', loginPayload(email, password));
     const response = sessionFromTokenResponse(raw, this.transport === 'mobile');
     if (version === this.revision) this.publish(response);
   }

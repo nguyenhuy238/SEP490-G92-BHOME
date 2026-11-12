@@ -10,6 +10,7 @@ public sealed class LoginService(ICredentialVerifier credentials, IAuthenticatio
     public const int MaxUserNameLength = 256;
     public const int MaxEmailLength = 256;
     public const int MaxPasswordLength = 1024;
+    public const string InvalidCredentialsMessage = "Email, số điện thoại hoặc mật khẩu không chính xác. Vui lòng kiểm tra và thử lại.";
 
     public async Task<LoginResult?> LoginAsync(string? identifier, string? password, CancellationToken cancellationToken = default,
         string? device = null)

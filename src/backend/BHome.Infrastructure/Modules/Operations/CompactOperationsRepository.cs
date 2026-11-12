@@ -694,8 +694,10 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             await phoneLock.ExecuteNonQueryAsync(t);
         }
         await using var duplicate = Command("""
-            SELECT EXISTS(SELECT 1 FROM users WHERE id<>@id AND phone IS NOT NULL AND
-              replace(replace(replace(replace(replace(phone,' ',''),'-',''),'.',''),'(',''),')','')=@phone)
+            SELECT EXISTS(SELECT 1 FROM users u CROSS JOIN LATERAL
+              (SELECT replace(replace(replace(replace(replace(u.phone,' ',''),'-',''),'.',''),'(',''),')','') AS value) p
+              WHERE u.id<>@id AND u.phone IS NOT NULL AND
+                CASE WHEN p.value LIKE '0%' AND length(p.value) IN (10,11) THEN '+84'||substring(p.value FROM 2) ELSE p.value END=@phone)
             """);
         duplicate.Parameters.AddWithValue("id", userId); duplicate.Parameters.AddWithValue("phone", phone);
         if ((bool)(await duplicate.ExecuteScalarAsync(t))!) throw OperationsException.Conflict("phone_already_used");

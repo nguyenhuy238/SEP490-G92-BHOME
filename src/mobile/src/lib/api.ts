@@ -1,4 +1,5 @@
 import { requestDiagnostic } from '../../../../packages/client-core/src/api';
+import { invalidCredentialsMessage } from '../../../../packages/client-core/src/loginValidation';
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
 import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
@@ -143,7 +144,7 @@ export function errorMessage(error: unknown): string {
       'Máy chủ không phản hồi trong 15 giây. Kết quả chưa được xác nhận; hãy tải lại trước khi gửi lại.',
     invalid_response:
       'Phản hồi máy chủ không đúng định dạng BHOME. Kiểm tra địa chỉ API và phiên bản ứng dụng.',
-    invalid_credentials: 'Email hoặc mật khẩu không đúng, hoặc tài khoản chưa thể đăng nhập.',
+    invalid_credentials: invalidCredentialsMessage,
     human_confirmation_required: 'Bạn cần xác nhận đã kiểm tra dữ liệu.',
     duplicate_or_conflicting_record:
       'Dữ liệu bị trùng hoặc đã thay đổi. Hãy tải lại danh sách; hệ thống không tự gộp hồ sơ.',

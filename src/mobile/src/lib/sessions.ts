@@ -8,6 +8,7 @@ import {
   type Session,
 } from './api';
 import { sessionFromTokenResponse } from '../../../../packages/client-core/src/jwtSession';
+import { loginPayload } from '../../../../packages/client-core/src/loginValidation';
 
 export interface CredentialStore {
   read(): Promise<string | null>;
@@ -204,8 +205,7 @@ export class MobileSessions {
     this.emit({ baseUrl: base, restoreError: undefined });
     const epoch = this.epoch;
     const next = await this.auth(base, 'login', {
-      email: email.trim(),
-      password,
+      ...loginPayload(email, password),
       device: 'BHOME Mobile',
     });
     if (epoch !== this.epoch) return;
