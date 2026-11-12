@@ -120,6 +120,8 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   const matches =
     state && transfer && sameAmount(state.outstandingAmount, transfer.outstandingAmount);
   const usable =
+    !payment.fetching &&
+    !instructions.fetching &&
     !payment.error &&
     !instructions.error &&
     matches &&
@@ -144,6 +146,9 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
       {canRequestTransfer && (
         <>
           <InvoiceFeedback {...instructions} />
+          {(payment.fetching || instructions.fetching) && (
+            <Text style={invoiceUi.secondary}>Đang cập nhật thông tin chuyển khoản...</Text>
+          )}
           {transfer?.isDevelopmentDemo && (
             <Text accessibilityRole="alert" style={styles.warning}>
               QR thử nghiệm – Không chuyển tiền thật.
@@ -194,7 +199,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
               />
             </>
           )}
-          {transfer && matches && !usable && (
+          {transfer && matches && !usable && !payment.fetching && !instructions.fetching && (
             <Text style={invoiceUi.secondary}>
               {paymentText(
                 transfer.availability === 'NotIssued'
@@ -212,7 +217,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
       <Button
         mode="outlined"
         contentStyle={styles.touch}
-        disabled={payment.loading || instructions.loading}
+        disabled={payment.fetching || instructions.fetching}
         onPress={refresh}
       >
         Cập nhật trạng thái

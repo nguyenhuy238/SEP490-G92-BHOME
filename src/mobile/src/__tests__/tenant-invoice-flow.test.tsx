@@ -726,6 +726,53 @@ function redesignApi(payment: unknown = finalPayment, paymentStatus = 200) {
   });
 }
 describe('Compact invoice detail navigation and financial safety', () => {
+  it('hides cached QR during refresh and waits for the server before showing Paid', async () => {
+    mocks.invoiceId = invoiceId;
+    mocks.view = 'payment';
+    let pending = false;
+    let complete!: (response: Response) => void;
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.endsWith(`/invoices/${invoiceId}`)) return json({ ...baseInvoice, status: 'Final' });
+      if (path.endsWith('/payment')) {
+        if (pending)
+          return new Promise<Response>((resolve) => {
+            complete = resolve;
+          });
+        return json(finalPayment);
+      }
+      if (path.endsWith('/transfer-instructions'))
+        return json({
+          invoiceId,
+          availability: 'Available',
+          outstandingAmount: '3280000',
+          bankIdentifier: '970416',
+          accountNumber: '0000001234',
+          accountHolder: 'SYNTHETIC TEST',
+          transferDescription: 'BH12345678',
+          qrImageDataUri: 'data:image/png;base64,synthetic',
+        });
+      return json(page([]));
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+    await screen.findByAltText('QR chuyển khoản hóa đơn');
+    pending = true;
+    fireEvent.click(screen.getByText('Cập nhật trạng thái'));
+    expect(screen.queryByAltText('QR chuyển khoản hóa đơn')).toBeNull();
+    expect(screen.queryByText('Đã thanh toán')).toBeNull();
+    await waitFor(() => expect(complete).toBeTypeOf('function'));
+    complete(
+      json({
+        ...finalPayment,
+        paymentStatus: 'Paid',
+        paidAmount: finalPayment.payableAmount,
+        outstandingAmount: '0',
+      }),
+    );
+    await screen.findByText('Đã thanh toán');
+    expect(screen.queryByAltText('QR chuyển khoản hóa đơn')).toBeNull();
+  });
   it('keeps financial breakdown and full adjustment history off the main detail until requested', async () => {
     mocks.invoiceId = invoiceId;
     const fetcher = redesignApi();
