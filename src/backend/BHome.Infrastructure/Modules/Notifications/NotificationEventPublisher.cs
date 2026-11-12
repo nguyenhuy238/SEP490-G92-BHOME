@@ -43,7 +43,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 EventKey = key,
                 EventType = i.EventType.Length > 0 ? i.EventType : EventType(key),
                 Priority = i.Priority,
-                Channels = i.Channels ?? ["IN_APP", "PUSH"],
+                Channels = NotificationEmailPolicy.Channels(i.EventType.Length > 0 ? i.EventType : EventType(key), i.Role, i.Channels ?? ["IN_APP", "PUSH"]),
                 SourceTaskNotificationId = i.TaskSource,
                 CreatedAt = clock.GetUtcNow(),
                 ReadAt = i.ReadAt,

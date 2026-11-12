@@ -132,6 +132,8 @@ public static class DependencyInjection
             })
             .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
+        services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
         services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();

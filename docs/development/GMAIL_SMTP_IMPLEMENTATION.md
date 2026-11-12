@@ -42,3 +42,31 @@ nghĩa SMTP chấp nhận. Giữ cấu hình SMTP legacy qua mapping, cấu hìn
 
 Kiểm chứng giai đoạn 1: restore solution thành công; build API 0 warning/error;
 `EmailTransportTests`: 9 passed, 0 failed/skipped (không gọi SMTP thật).
+
+## Giai đoạn 2
+
+- EMAIL được thêm tại lúc publish mới cho invoice finalized/due-soon/overdue, payment partial/full,
+  contract expiry; emergency submitted chỉ Owner/Staff. Announcement giữ nguyên kênh được chọn và
+  recipient selection hiện có. Không replay publication cũ hoặc mở rộng quyền của người nhận.
+- Nội dung Invoice/Payment lấy Room, Location, kỳ và due date thật sau khi kiểm tra TargetAsync;
+  không đưa mã phân bổ/tham chiếu ngân hàng hay chi tiết tài chính vào email. Contract và emergency
+  có context thật; tất cả nội dung HTML được encode. Giữ nguyên API inbox/count/read/filter.
+- JOB-04 dùng outbox/channel hiện tại; unique key `channel:<inboxId>:<channel>`, claim bằng row lock,
+  lease, kiểm tra tài khoản/email đã xác nhận/scope trước gửi. Lưu receipt an toàn trong history.
+- Retry mặc định tối đa 4 lần: ngay, sau 1/5/15 phút tính từ lần lỗi trước. SMTP 4xx/connection failure
+  trước submit được retry; 5xx/auth/TLS/địa chỉ không hợp lệ → PermanentlyFailed; mất kết nối/timeout
+  trong submit hoặc lease SMTP hết hạn → PendingReview, không tự gửi lại. Inbox vẫn tồn tại.
+- Trạng thái giữ model hiện có: Pending = chờ hoặc đã lên lịch retry, Processing = đang claim,
+  Sent = SMTP accepted, PermanentlyFailed = dừng, PendingReview = kết quả không chắc chắn,
+  Suppressed = không còn quyền/không còn phù hợp. Inbox Delivered là aggregate tương thích,
+  **không phải bằng chứng thư đã vào hộp thư**. PUSH chưa cấu hình có thể khiến aggregate Pending
+  dù EMAIL đã Sent; kiểm tra từng channel qua API deliveries.
+- `POST /api/v1/notifications/email-test`: Owner đã đăng nhập, Development + Email.TestEnabled;
+  recipient cấu hình sẵn, không nhận body; giới hạn toàn instance 1 lần/10 phút. Production trả 404.
+  Không ghi email test thành sự kiện nghiệp vụ; không bật worker tài chính để kiểm tra email.
+
+Đã chạy: build API 0 warning/error; toàn bộ Application UT 450 passed;
+Compact24NotificationMvpTests 21 passed, 0 failed/skipped trên PostgreSQL disposable.
+Bao gồm sự kiện hóa đơn, thanh toán partial/full thực sự qua API, dedup, scope, retry, lease và endpoint test.
+Lệnh script đầu tiên bị PowerShell ExecutionPolicy chặn; đã chạy lại bằng process riêng
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Compact24Isolated.ps1 ...`, không đổi policy hệ thống.
