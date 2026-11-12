@@ -6,14 +6,14 @@ Yêu cầu redesign đính kèm của Owner, BF-02 / UC-08, GBR-01/02: trang `/s
 
 Đã đối chiếu `API_IMPLEMENTATION_STATUS.md`, `OperationsControllers`, `OperationsContracts`, `CompactOperationsRepository.StaffAsync`, `useOwnerWorkspace` và `staffContracts.ts`.
 
-| Yêu cầu | Thành phần | Kiểm chứng |
-| --- | --- | --- |
-| Danh sách dễ đọc, trạng thái độc lập | StaffApiPage, StaffPresentation | Thiếu tên/điện thoại/hợp đồng; Active account + Ended employment |
-| Drawer giữ ngữ cảnh danh sách | StaffDetailDrawer | Mở/đóng và giữ search |
-| API và phiên bản giữ nguyên | StaffEditor, useOwnerAction hiện có | Payload create/update, accountVersion, reason, lỗi trách nhiệm và stale version |
-| Phân trang đúng | StaffApiPage | Tổng từ server, page reset khi tìm kiếm |
-| Invitation | ConfirmDialog + useOwnerAction hiện có | Lỗi và retry thành công |
-| Form | StaffEditor | Input giữ sau lỗi, lỗi theo trường, ngày kết thúc không trước bắt đầu |
+| Yêu cầu                              | Thành phần                             | Kiểm chứng                                                                      |
+| ------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------- |
+| Danh sách dễ đọc, trạng thái độc lập | StaffApiPage, StaffPresentation        | Thiếu tên/điện thoại/hợp đồng; Active account + Ended employment                |
+| Drawer giữ ngữ cảnh danh sách        | StaffDetailDrawer                      | Mở/đóng và giữ search                                                           |
+| API và phiên bản giữ nguyên          | StaffEditor, useOwnerAction hiện có    | Payload create/update, accountVersion, reason, lỗi trách nhiệm và stale version |
+| Phân trang đúng                      | StaffApiPage                           | Tổng từ server, page reset khi tìm kiếm                                         |
+| Invitation                           | ConfirmDialog + useOwnerAction hiện có | Lỗi và retry thành công                                                         |
+| Form                                 | StaffEditor                            | Input giữ sau lỗi, lỗi theo trường, ngày kết thúc không trước bắt đầu           |
 
 ## API giữ nguyên
 

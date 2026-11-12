@@ -96,12 +96,10 @@ it('never represents failed occupancy/incident reads as zero people or no incide
   expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
 });
 it('follows server pagination for operation data and marks bounded results incomplete', async () => {
-  const request = vi
-    .fn()
-    .mockResolvedValue({
-      items: Array.from({ length: 100 }, (_, id) => ({ id })),
-      totalCount: 1001,
-    });
+  const request = vi.fn().mockResolvedValue({
+    items: Array.from({ length: 100 }, (_, id) => ({ id })),
+    totalCount: 1001,
+  });
   const result = await readRoomOperationsPages(
     request,
     '/api/v1/incidents?locationId=location',
