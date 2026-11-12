@@ -198,6 +198,9 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
         >
           {busy ? 'Đang xác thực...' : 'Đăng nhập vào hệ thống'}
         </Button>
+        <Button href="/accept-invitation" disabled={busy}>
+          Thiết lập tài khoản từ lời mời
+        </Button>
       </Stack>
     </Box>
   );

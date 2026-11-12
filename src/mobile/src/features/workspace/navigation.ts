@@ -85,7 +85,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
   {
     Owner: [
       { screen: 'owner-home', title: 'Tổng quan', icon: 'view-dashboard-outline' },
-      { screen: 'approvals', title: 'Phê duyệt', icon: 'clipboard-check-outline' },
+      { screen: 'approvals', title: 'Theo dõi duyệt', icon: 'clipboard-check-outline' },
       { screen: 'operations', title: 'Vận hành', icon: 'tune-variant' },
       { screen: 'profile', title: 'Tài khoản', icon: 'account-cog-outline' },
     ],

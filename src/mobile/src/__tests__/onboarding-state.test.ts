@@ -6,11 +6,21 @@ import {
   residentType,
   type OnboardingPerson,
 } from '../features/onboarding/onboarding';
-const person: OnboardingPerson = { key: 'p1', label: 'Hồ sơ mẫu', status: 'unscanned' };
+const person: OnboardingPerson = {
+  key: 'p1',
+  label: 'Hồ sơ mẫu',
+  email: 'occupant@example.invalid',
+  status: 'unscanned',
+};
 it('requires a representative, nonempty labels and explicit confirmation for every created resident', () => {
   expect(peopleReady([person], 'unknown')).toBe(false);
   expect(peopleReady([{ ...person, label: ' ' }], 'p1')).toBe(false);
   expect(peopleReady([person], 'p1')).toBe(true);
+  expect(peopleReady([{ ...person, email: '' }], 'p1')).toBe(false);
+  expect(peopleReady([{ ...person, email: 'invalid' }], 'p1')).toBe(false);
+  expect(
+    peopleReady([person, { ...person, key: 'p2', email: 'OCCUPANT@example.invalid' }], 'p1'),
+  ).toBe(false);
   expect(allIdentitiesConfirmed([])).toBe(false);
   expect(allIdentitiesConfirmed([{ ...person, status: 'confirmed' }])).toBe(false);
   expect(allIdentitiesConfirmed([{ ...person, residentId: 'r1', status: 'pending' }])).toBe(false);

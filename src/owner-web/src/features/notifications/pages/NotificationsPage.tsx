@@ -185,6 +185,8 @@ export function LiveNotificationsPage() {
                       'Invoice',
                       'Adjustment',
                       'Contract',
+                      'Refund',
+                      'BankTransfer',
                       'MeterTask',
                       'OperationalTask',
                       'AutomationExecution',

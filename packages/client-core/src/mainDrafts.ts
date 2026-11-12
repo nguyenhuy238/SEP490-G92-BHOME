@@ -58,7 +58,7 @@ export interface DraftPreviewInfo {
   pages: DraftPreviewPage[];
 }
 export interface MainDraftReleaseInput {
-  tenantUserId: string;
+  tenantUserId: string | null;
   expectedVersion: number;
   reviewedFileId: string;
   humanReviewed: boolean;

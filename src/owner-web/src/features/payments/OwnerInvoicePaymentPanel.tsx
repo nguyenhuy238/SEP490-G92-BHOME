@@ -33,6 +33,8 @@ import {
 import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { RefundPanel } from './RefundPanel';
+import { ReceiptExcessPanel } from './ReceiptExcessPanel';
+import { ExternalPaymentPayerPanel } from './ExternalPaymentPayerPanel';
 import { PaymentInvoicePicker } from './PaymentInvoicePicker';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
@@ -82,8 +84,8 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {state.data.reviewStatus === 'PendingReview' && (
               <Alert severity="warning">
                 Tiền thừa chờ xem xét:{' '}
-                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Chưa hoàn tiền hoặc
-                chuyển credit.
+                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Owner cần đối chiếu
+                người thực trả và ghi bằng chứng hoàn tiền thực tế.
               </Alert>
             )}
             {state.data.pendingReview && state.data.reviewStatus !== 'PendingReview' && (
@@ -147,10 +149,16 @@ export function RecordTransferForm({
   invoiceId,
   state,
   onClose,
+  initialDescription,
+  onRecorded,
+  depositContractId,
 }: {
   invoiceId: string;
   state?: InvoicePayment;
   onClose: () => void;
+  initialDescription?: string;
+  onRecorded?: (receiptId: string) => void;
+  depositContractId?: string;
 }) {
   const api = usePaymentApi();
   const cache = useQueryClient();
@@ -160,7 +168,7 @@ export function RecordTransferForm({
     [reference, setReference] = useState(''),
     [amount, setAmount] = useState(state?.outstandingAmount ?? ''),
     [occurred, setOccurred] = useState(''),
-    [description, setDescription] = useState(state?.transferReference ?? '');
+    [description, setDescription] = useState(state?.transferReference ?? initialDescription ?? '');
   const [statement, setStatement] = useState(''),
     [reason, setReason] = useState(''),
     [checked, setChecked] = useState(false),
@@ -176,7 +184,11 @@ export function RecordTransferForm({
     return (
       <>
         <Alert severity="success">Đã lưu giao dịch đã đối chiếu sao kê.</Alert>
-        <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
+        {onRecorded ? (
+          <Button onClick={() => onRecorded(saved.id)}>Đối chiếu receipt cọc vừa lưu</Button>
+        ) : (
+          <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
+        )}
         <Button onClick={onClose}>Đóng biểu mẫu</Button>
       </>
     );
@@ -212,6 +224,7 @@ export function RecordTransferForm({
               statementReference: statement,
               verificationReason: reason,
               proposedInvoiceId: invoiceId || null,
+              ...(depositContractId ? { proposedDepositContractId: depositContractId } : {}),
               humanVerified: checked,
               isDevelopmentDemo: demo,
             },
@@ -416,12 +429,22 @@ export function ReconcileTransfer({
           </Typography>
         )}
         {notice && <Alert severity="info">{notice}</Alert>}
+        <ExternalPaymentPayerPanel transferId={transfer.id} />
         {data.status === 'Allocated' &&
           data.unallocatedAmount !== undefined &&
           /^0*(?:\.0+)?$/.test(data.unallocatedAmount) === false && (
             <Button onClick={() => setRefundsOpen(true)}>Xử lý hoàn tiền thừa</Button>
           )}
         {refundsOpen && <RefundPanel key={transfer.id} sourceId={transfer.id} />}
+        {(data.status === 'ExcessRefundPending' ||
+          data.status === 'ExcessRefundCompleted' ||
+          (data.status === 'PendingReview' && invoiceId)) && (
+          <ReceiptExcessPanel
+            key={`${transfer.id}:${invoiceId}`}
+            transferId={transfer.id}
+            target={data.status === 'PendingReview' ? { invoiceId } : undefined}
+          />
+        )}
         {(latest.error || history.error) && (
           <Alert
             severity="error"

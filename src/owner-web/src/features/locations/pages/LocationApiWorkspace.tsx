@@ -42,7 +42,7 @@ import { formatInstant } from '../../../../../../packages/client-core/src/locali
 
 const tabs = [
   ['overview', 'Tổng quan'],
-  ['room-types', 'Loại phòng'],
+  ['room-types', 'Gợi ý tạo phòng'],
   ['rooms', 'Phòng'],
   ['assets', 'Tài sản'],
   ['pricing', 'Giá & Phí'],

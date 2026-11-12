@@ -32,7 +32,9 @@ public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string R
 public sealed record InvoiceScope(Guid Actor, bool Owner, bool Tenant);
 public sealed record InvoiceListFilter(Guid? LocationId = null, DateOnly? BillingPeriod = null, InvoiceStatus? Status = null);
 public sealed record BillingOccupancy(Contract Contract, IReadOnlyList<Guid> TenantIds, bool ContactsComplete = true);
-public sealed record BillingReading(MeterReading Reading, DateOnly ReadingDate);
+public sealed record BillingReading(MeterReading Reading, DateOnly ReadingDate, decimal? BillablePrevious = null,
+    decimal? BillableConsumption = null, decimal AlreadyBilledQuantity = 0, string? PreviousPricingSnapshot = null,
+    bool FullyCovered = false, string? CoverageSnapshot = null, IReadOnlyList<string>? MissingInputs = null);
 public sealed class InvoiceException(int status, string code) : Exception("Billing operation rejected.")
 {
     public int Status { get; } = status;

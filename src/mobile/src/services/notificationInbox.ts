@@ -97,6 +97,12 @@ export async function notificationDestination(
     throw invalid();
   if (target.objectType === 'Invoice' && role === 'Tenant')
     return { screen: 'invoice', params: { invoiceId: target.objectId } };
+  if (target.objectType === 'MeterReading' && role === 'Tenant')
+    return { screen: 'tenant-meters', params: { readingId: target.objectId } };
+  if (target.objectType === 'SettlementReceivable' && role === 'Tenant')
+    return { screen: 'invoice', params: { focus: 'settlement' } };
+  if (target.objectType === 'Refund' && role === 'Tenant')
+    return { screen: 'billing-history', params: { historyTab: 'refunds' } };
   if (target.objectType === 'Adjustment' && role === 'Tenant') {
     const adjustment = await api.request<{ invoiceId: string }>(
       `/api/v1/invoice-adjustments/${encodeURIComponent(target.objectId)}`,
@@ -122,7 +128,10 @@ export async function notificationDestination(
     return { screen: 'incident-detail', params: { incidentId: target.objectId } };
   if (target.objectType === 'WorkOrder' && role !== 'Tenant')
     return { screen: 'maintenance-detail', params: { workOrderId: target.objectId } };
-  if (target.objectType === 'PaymentTransaction' && role === 'Owner')
+  if (
+    (target.objectType === 'PaymentTransaction' || target.objectType === 'BankTransfer') &&
+    role === 'Owner'
+  )
     return { screen: 'owner-payment-detail', params: { paymentId: target.objectId } };
   return null; // The related record may only have an Owner Web destination.
 }

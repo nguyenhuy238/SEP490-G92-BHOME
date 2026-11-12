@@ -13,6 +13,7 @@ import {
   type ContractAudit,
   type DepositVerification,
   type PreviewDocument,
+  type HoldingDepositStatus,
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
@@ -44,6 +45,11 @@ export function ContractWorkflowPanel({
   const privileged = ['Owner', 'Tenant'].includes(role);
   const documents = section !== 'history';
   const history = section !== 'documents';
+  const holding = useWorkspaceQuery<HoldingDepositStatus>(
+    privileged && history && contract.kind === 'Holding'
+      ? `/api/v1/contracts/${contract.id}/holding-deposit`
+      : null,
+  );
   const versions = useWorkspaceQuery<Awaited<ReturnType<ContractClient['versions']>>>(
     history ? `/api/v1/contracts/${contract.id}/versions` : null,
   );
@@ -86,6 +92,51 @@ export function ContractWorkflowPanel({
   }
   return (
     <>
+      {privileged && history && contract.kind === 'Holding' && (
+        <Box>
+          <Heading title="Tình trạng cọc giữ chỗ" />
+          {!!holding.error && <Text style={ui.red}>{conciseMessage(holding.error)}</Text>}
+          {holding.data?.disposition && (
+            <>
+              <Text>
+                {holding.data.disposition.cause === 'TenantVoluntary'
+                  ? 'Tenant tự nguyện hủy — cọc không hoàn'
+                  : 'Owner không cung cấp được phòng — phải hoàn cọc'}
+              </Text>
+              <Text>
+                Cọc không hoàn: {formatContractMoney(holding.data.disposition.forfeitedAmount)} ·
+                Phải hoàn: {formatContractMoney(holding.data.disposition.refundRequired)}
+              </Text>
+              <Text>
+                Đã hoàn: {formatContractMoney(holding.data.disposition.refunded)} · Đang giữ cho yêu
+                cầu hoàn: {formatContractMoney(holding.data.disposition.reserved)}
+              </Text>
+              <Text>
+                {(
+                  {
+                    Forfeited: 'Đã ghi nhận mất cọc',
+                    RefundPending: 'Chờ Owner xử lý hoàn',
+                    RefundReserved: 'Đang chờ thực chi',
+                    RefundCompleted: 'Đã xác minh thực chi hoàn cọc',
+                    NotRequired: 'Không có tiền cọc cần xử lý',
+                    PendingManualReview: 'Cần Owner đối chiếu',
+                  } as Record<string, string>
+                )[holding.data.disposition.status] ?? 'Cần đối chiếu trạng thái'}
+              </Text>
+            </>
+          )}
+          {holding.data && !holding.data.disposition && (
+            <Text>
+              Đã xác minh: {formatContractMoney(holding.data.verified)} · Còn thiếu:{' '}
+              {formatContractMoney(holding.data.remaining)}
+            </Text>
+          )}
+          {role === 'Owner' && <Text>Thực hiện hủy hoặc hoàn cọc tại Owner Web.</Text>}
+          <Action secondary onPress={holding.reload}>
+            Tải lại cọc giữ chỗ
+          </Action>
+        </Box>
+      )}
       {history && (
         <Box>
           <Heading title="Các phiên bản hợp đồng" />

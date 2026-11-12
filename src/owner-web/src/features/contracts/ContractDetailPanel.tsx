@@ -42,9 +42,11 @@ import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { HoldingDepositPanel } from './HoldingDepositPanel';
+import { DepositReceiptPanel } from './DepositReceiptPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 import { ContractPolicyPanel } from './ContractPolicyPanel';
+import { InternalSigningPanel } from './InternalSigningPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -348,6 +350,15 @@ export function ContractDetailPanel({
       </ChartCard>
 
       {/* 4. Reference material, folded away until needed */}
+      {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
+        <DepositReceiptPanel
+          contract={c}
+          changed={() => {
+            detail.reload();
+            onChanged();
+          }}
+        />
+      )}
       {c.kind === 'Holding' && (
         <HoldingDepositPanel
           contract={c}
@@ -379,6 +390,9 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
+      {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
+        <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+      )}
       <ContractWorkflowPanel api={api} contract={c} />
       {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel

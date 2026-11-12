@@ -20,6 +20,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 
 export function ContractLifecyclePanel({
   api,
@@ -40,8 +41,6 @@ export function ContractLifecyclePanel({
   const [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
-    [reviewedReference, setReviewedReference] = useState<string | null>(null),
-    [noChargesInspection, setNoChargesInspection] = useState<string | null>(null),
     [confirmedInspectionInput, setConfirmedInspectionInput] = useState<string | null>(null);
   const [error, setError] = useFeedbackState(),
     [notice, setNotice] = useFeedbackState('success');
@@ -49,7 +48,7 @@ export function ContractLifecyclePanel({
   const lock = useRef(false);
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
   async function save(operation: string, body: Record<string, unknown>) {
-    if (lock.current) return;
+    if (role === 'Owner' || lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -57,8 +56,6 @@ export function ContractLifecyclePanel({
     try {
       await api.mutate(id, operation, body, keys.get(operation, body));
       keys.confirmed(operation, body);
-      setReviewedReference(null);
-      setNoChargesInspection(null);
       setConfirmedInspectionInput(null);
       setSelected([]);
       setValues({});
@@ -73,11 +70,7 @@ export function ContractLifecyclePanel({
     }
   }
   const baseline = q.preparation?.baseline?.snapshot,
-    inspection = q.inspections[0],
     summary = q.summary;
-  const inspectionKey = inspection ? `${id}:${inspection.id}:${inspection.version}` : null;
-  const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
-  const checked = !!summary && reviewedReference === summary.reference;
   const inspectionInput = JSON.stringify([
     id,
     moveOut.version,
@@ -320,71 +313,8 @@ export function ContractLifecyclePanel({
           )}
         </>
       )}
-      {role === 'Owner' && !q.loading && !q.error && moveOut.status !== 'Completed' && (
-        <>
-          <Input
-            label="Căn cứ quyết định"
-            value={values.reason ?? ''}
-            onChange={(v) => set('reason', v)}
-            multiline
-            disabled={busy}
-          />
-          {inspection && !inspection.ownerDecision && moveOut.status === 'Inspected' && (
-            <>
-              <Checkbox.Item
-                label="Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu"
-                status={noCharges ? 'checked' : 'unchecked'}
-                onPress={() => setNoChargesInspection(noCharges ? null : inspectionKey)}
-              />
-              <Action
-                disabled={busy || !values.reason?.trim()}
-                onPress={() =>
-                  void save('move-out/inspection-review', {
-                    version: inspection.version,
-                    confirmed: true,
-                    reason: values.reason,
-                    noAdditionalCharges: noCharges,
-                  })
-                }
-              >
-                Xác nhận kiểm tra
-              </Action>
-              <Action
-                secondary
-                disabled={busy || !values.reason?.trim()}
-                onPress={() =>
-                  void save('move-out/inspection-review', {
-                    version: inspection.version,
-                    confirmed: false,
-                    reason: values.reason,
-                  })
-                }
-              >
-                Yêu cầu kiểm tra lại
-              </Action>
-            </>
-          )}
-          {summary && ['Inspected', 'PendingSettlement', 'Settled'].includes(moveOut.status) && (
-            <>
-              <Checkbox.Item
-                label="Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý"
-                status={checked ? 'checked' : 'unchecked'}
-                onPress={() => setReviewedReference(checked ? null : summary.reference)}
-              />
-              <Action
-                disabled={busy || !checked || !values.reason?.trim()}
-                onPress={() =>
-                  void save('move-out/settlement', {
-                    decision: values.reason,
-                    expectedReference: summary.reference,
-                  })
-                }
-              >
-                Lưu xem xét quyết toán
-              </Action>
-            </>
-          )}
-        </>
+      {role === 'Owner' && (
+        <OwnerWebNotice task="Xác nhận biên bản, duyệt khoản phải thu, cấn trừ và quyết toán" />
       )}
       {q.history.map((h) => (
         <Text key={h.version} variant="bodySmall">

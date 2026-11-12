@@ -18,7 +18,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
-import type { RoomTypeConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
@@ -130,7 +129,7 @@ export function RoomTypesApiPage() {
         <Alert severity="info">Chọn cơ sở để quản lý loại phòng.</Alert>
       ) : query.isPending ? (
         <LoadingState />
-      ) : query.error ? (
+      ) : query.isError ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : query.data.items.length === 0 ? (
         <Alert severity="info">

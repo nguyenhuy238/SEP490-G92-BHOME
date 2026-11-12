@@ -28,6 +28,8 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
   formatBillingDecimal,
+  hasSettlementUsageCoverage,
+  hasSettlementFixedCoverage,
   missingBillingInput,
   type InvoiceListFilter,
 } from '../../../../../../packages/client-core/src/invoices';
@@ -461,9 +463,13 @@ export function LiveInvoicesPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {line.meterReadingId
-                          ? `${formatBillingDecimal(line.previousReading ?? '')} → ${formatBillingDecimal(line.confirmedReading ?? '')}`
-                          : '—'}
+                        {hasSettlementFixedCoverage(line)
+                          ? 'Đã loại phần ghi nhận trong khoản phải thu trả phòng'
+                          : hasSettlementUsageCoverage(line)
+                            ? 'Đã ghi nhận trong khoản phải thu chuyển ra'
+                            : line.meterReadingId
+                              ? `${formatBillingDecimal(line.previousReading ?? '')} → ${formatBillingDecimal(line.confirmedReading ?? '')}`
+                              : '—'}
                       </TableCell>
                       <TableCell>
                         {formatBillingDecimal(line.quantity)}{' '}

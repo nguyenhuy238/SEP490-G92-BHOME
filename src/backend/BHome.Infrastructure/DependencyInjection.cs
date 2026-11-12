@@ -144,6 +144,10 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.Operations.OperationsFiles>();
         services.AddScoped<BHome.Application.Operations.OperationsService>();
         services.AddScoped<BHome.Application.Operations.IResidentAdministrationRepository, BHome.Infrastructure.Modules.Operations.ResidentAdministrationRepository>();
+        services.AddOptions<BHome.Application.Operations.IdentityRetentionOptions>().BindConfiguration("IdentityRetention");
+        services.AddScoped(sp => sp.GetRequiredService<IOptions<BHome.Application.Operations.IdentityRetentionOptions>>().Value);
+        services.AddScoped<BHome.Application.Operations.IIdentityRetentionRepository, BHome.Infrastructure.Modules.Operations.IdentityRetentionRepository>();
+        services.AddScoped<BHome.Application.Operations.IdentityRetentionService>();
         services.AddScoped<BHome.Application.Operations.ResidentAdministrationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
@@ -183,6 +187,16 @@ public static class DependencyInjection
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Billing.ITenantMeterReadings, BHome.Infrastructure.Billing.TenantMeterReadingsRepository>();
+        services.AddScoped<BHome.Application.Billing.TenantMeterReadingService>();
+        services.AddScoped<BHome.Application.Contracts.AnonymousContractSigningService>();
+        services.AddScoped<BHome.Application.Contracts.IPostActivationTenantProvisioning, BHome.Infrastructure.IdentityAccess.PostActivationTenantProvisioning>();
+        services.AddScoped<BHome.Infrastructure.IdentityAccess.AccountInvitations>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.IdentityAccess.AccountInvitationJob>();
+        services.AddScoped<BHome.Application.Contracts.IAnonymousSigningRepository, BHome.Infrastructure.Contracts.AnonymousSigningRepository>();
+        services.AddOptions<BHome.Infrastructure.Contracts.AnonymousSigningOptions>().Bind(configuration.GetSection("AnonymousSigning"));
+        services.AddScoped<BHome.Application.Contracts.IAnonymousSigningSecurity, BHome.Infrastructure.Contracts.AnonymousSigningSecurity>();
+        services.AddScoped<BHome.Application.Contracts.IInternalAcceptanceRenderer, BHome.Infrastructure.Contracts.InternalAcceptanceRenderer>();
         services.AddScoped<BHome.Application.Contracts.IAdministrativeContractReadiness>(provider =>
             provider.GetRequiredService<BHome.Application.Contracts.ContractService>());
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
@@ -217,7 +231,10 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractDepositPosition, BHome.Infrastructure.Contracts.ContractDepositPosition>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionRepository, BHome.Infrastructure.Contracts.DepositDeductionRepository>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionEvidence, BHome.Infrastructure.Contracts.DepositDeductionEvidence>();
+        services.AddScoped<BHome.Application.Contracts.ISettlementChargeEvidence, BHome.Infrastructure.Contracts.SettlementChargeEvidence>();
         services.AddScoped<BHome.Application.Contracts.DepositDeductionService>();
+        services.AddScoped<BHome.Application.Contracts.ISettlementReceivablesRepository, BHome.Infrastructure.Contracts.SettlementReceivablesRepository>();
+        services.AddScoped<BHome.Application.Contracts.SettlementReceivablesService>();
         services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.CompactContractHoldingLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
@@ -254,6 +271,11 @@ public static class DependencyInjection
         services.AddScoped<ICaptureRepository, CaptureRepository>();
         services.AddScoped<CaptureService>();
         services.AddScoped<BHome.Application.Billing.IInvoiceRepository, BHome.Infrastructure.Billing.InvoiceRepository>();
+        services.AddScoped<BHome.Application.Billing.IFixedChargeCoverage, BHome.Infrastructure.Billing.FixedChargeCoverageRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IReceiptExcessRepository, BHome.Infrastructure.PaymentsDebt.ReceiptExcessRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IExternalPaymentPayerRepository, BHome.Infrastructure.PaymentsDebt.ExternalPaymentPayerRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.ExternalPaymentPayerService>();
+        services.AddScoped<BHome.Application.PaymentsDebt.ReceiptExcessService>();
         services.AddScoped<BHome.Application.Billing.IAdjustmentRepository, BHome.Infrastructure.Billing.AdjustmentRepository>();
         services.AddScoped<BHome.Application.Billing.IAdjustmentEvidenceFiles, BHome.Infrastructure.Billing.AdjustmentEvidenceFiles>();
         services.AddScoped<BHome.Application.Billing.AdjustmentService>();

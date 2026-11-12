@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -36,9 +37,17 @@ import {
 
 export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean }) {
   const api = usePaymentApi();
+  const [searchParams] = useSearchParams();
+  const linkedReceipt = searchParams.get('transferId') ?? '';
+  const validLinkedReceipt = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(linkedReceipt);
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const cache = useQueryClient();
+  const linked = useQuery({
+    queryKey: ['payment-transfer-link', actor, linkedReceipt],
+    queryFn: ({ signal }) => api.transfer(linkedReceipt, signal),
+    enabled: !debtOnly && !!actor && validLinkedReceipt,
+  });
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [period, setPeriod] = useState(''),
@@ -113,6 +122,25 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
         }
       />
       <Stack spacing={2}>
+        {!debtOnly && linkedReceipt && (
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6">Giao dịch từ thông báo hoàn tiền</Typography>
+            {!validLinkedReceipt ? (
+              <Alert severity="error">Liên kết giao dịch không hợp lệ.</Alert>
+            ) : linked.isPending ? (
+              <LinearProgress />
+            ) : linked.error ? (
+              <Alert
+                severity="error"
+                action={<Button onClick={() => void linked.refetch()}>Thử lại</Button>}
+              >
+                {paymentError(linked.error)}
+              </Alert>
+            ) : linked.data ? (
+              <ReconcileTransfer key={linkedReceipt} transfer={linked.data} />
+            ) : null}
+          </Paper>
+        )}
         {!debtOnly && (
           <Tabs
             value={section}
@@ -352,6 +380,8 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                 }}
               >
                 <MenuItem value="PendingReview">Chờ xác minh / chưa ghép hóa đơn</MenuItem>
+                <MenuItem value="ExcessRefundPending">Phải hoàn toàn bộ tiền dư</MenuItem>
+                <MenuItem value="ExcessRefundCompleted">Đã hoàn toàn bộ tiền dư</MenuItem>
                 <MenuItem value="Allocated">Đã phân bổ</MenuItem>
                 <MenuItem value="Rejected">Không phân bổ</MenuItem>
                 <MenuItem value="">Tất cả giao dịch</MenuItem>

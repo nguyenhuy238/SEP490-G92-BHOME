@@ -86,12 +86,12 @@ export function MainDraftReleasePanel({
     }
   }
   async function release() {
-    if (lock.current || disabled || !file || !reviewed || !tenant) return;
+    if (lock.current || disabled || !file || !reviewed) return;
     lock.current = true;
     setBusy(true);
     setError('');
     const input = {
-      tenantUserId: tenant,
+      tenantUserId: tenant || null,
       expectedVersion: draft.version,
       reviewedFileId: file.id,
       humanReviewed: true,
@@ -111,8 +111,9 @@ export function MainDraftReleasePanel({
     <Stack spacing={2}>
       <Typography variant="h6">Chuyển bản nháp sang ký</Typography>
       <Alert severity="info">
-        Owner duyệt PDF của phiên bản đã lưu và chọn tài khoản Tenant đại diện. Chuyển sang ký chưa
-        có nghĩa đã ký hoặc đã thanh toán; backend tiếp tục kiểm tra trước khi kích hoạt.
+        Owner duyệt PDF của phiên bản đã lưu. Người ở mới ký bằng OTP trước khi tạo tài khoản.
+        Chuyển sang ký chưa có nghĩa đã ký hoặc đã thanh toán; backend tiếp tục kiểm tra trước khi
+        kích hoạt.
       </Alert>
       {disabled && (
         <Alert severity="info">Lưu thay đổi bản nháp trước khi tạo tài liệu đưa đi ký.</Alert>
@@ -130,9 +131,7 @@ export function MainDraftReleasePanel({
           setReviewed(false);
         }}
       >
-        <MenuItem value="" disabled>
-          Chọn tài khoản Tenant
-        </MenuItem>
+        <MenuItem value="">Người ở mới — ký bằng OTP, tạo tài khoản sau kích hoạt</MenuItem>
         {accounts.data?.map((a) => (
           <MenuItem key={a.id} value={a.id}>
             {a.label}
@@ -141,7 +140,8 @@ export function MainDraftReleasePanel({
       </TextField>
       {accounts.data?.length === 0 && (
         <Alert severity="warning">
-          Chưa có tài khoản Tenant đang hoạt động để liên kết. Không tự tạo tài khoản từ bản nháp.
+          Tài khoản cho từng người ở được tạo sau khi Main Active; không cần tài khoản để ký bằng
+          OTP.
         </Alert>
       )}
       <Button disabled={busy || disabled} onClick={() => void preview()}>
@@ -161,18 +161,18 @@ export function MainDraftReleasePanel({
         />
       )}
       <FormControlLabel
-        label="Tôi đã xem đúng PDF trên và xác nhận tài khoản Tenant đại diện"
+        label="Tôi đã xem đúng PDF trên và xác nhận người đại diện"
         control={
           <Checkbox
             checked={reviewed}
-            disabled={!url || !tenant || busy || disabled}
+            disabled={!url || busy || disabled}
             onChange={(_, value) => setReviewed(value)}
           />
         }
       />
       <Button
         variant="contained"
-        disabled={!reviewed || !tenant || !file || busy || disabled}
+        disabled={!reviewed || !file || busy || disabled}
         onClick={() => void release()}
       >
         Xác nhận chuyển sang ký

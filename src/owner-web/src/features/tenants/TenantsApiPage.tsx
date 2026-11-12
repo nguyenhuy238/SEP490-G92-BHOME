@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IdentityRetentionPanel } from './IdentityRetentionPanel';
 import {
   Button,
   Dialog,
@@ -30,8 +31,8 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 interface Resident {
   id: string;
-  locationId: string;
-  roomId: string;
+  locationId: string | null;
+  roomId: string | null;
   roomNumber: string;
   displayLabel: string;
   residentType: string;
@@ -194,8 +195,8 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
   const r = q.data;
   const house = useOwnerQuery<OwnerPage<Resident>>(
     ['cooccupants', r?.roomId],
-    '/api/v1/residents?' + ownerQuery({ roomId: r?.roomId, pageSize: 20 }),
-    !!r,
+    '/api/v1/residents?' + ownerQuery({ roomId: r?.roomId ?? undefined, pageSize: 20 }),
+    !!r?.roomId,
   );
   async function act() {
     if (!r) return;
@@ -229,7 +230,7 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
         {r && (
           <>
             <Typography variant="h6">
-              {r.displayLabel} · Phòng {r.roomNumber}
+              {r.displayLabel} · {r.roomId ? 'Phòng ' + r.roomNumber : 'Đã rời phòng'}
             </Typography>
             <Typography>
               Tài khoản: {r.tenantUserId ?? 'Chưa liên kết'} · {r.contactEmail} · {r.contactPhone}
@@ -312,6 +313,7 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
                 Phòng có thêm người ở. Dùng bộ lọc phòng và phân trang ở danh sách để xem đầy đủ.
               </Alert>
             )}
+            <IdentityRetentionPanel residentId={r.id} />
             <Typography variant="subtitle1">Hợp đồng / vai trò người ở</Typography>
             {r.tenancies.map((x) => (
               <Button

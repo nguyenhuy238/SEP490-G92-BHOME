@@ -323,6 +323,41 @@ it.each([403, 404])(
     await screen.findByText('Chưa đọc (0)');
   },
 );
+it('routes a server-authorized settlement notice to Tenant receivables', async () => {
+  server(undefined, async (url) =>
+    url.pathname.endsWith('/target')
+      ? json({ objectType: 'SettlementReceivable', objectId: targetId })
+      : undefined,
+  );
+  render(<NotificationsScreen />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thông báo 1' }));
+  await waitFor(() => expect(s.go).toHaveBeenCalledWith('invoice', { focus: 'settlement' }));
+});
+it('opens own refund history from a server-authorized refund notification', async () => {
+  server(undefined, async (url) =>
+    url.pathname.endsWith('/target')
+      ? json({ objectType: 'Refund', objectId: targetId })
+      : undefined,
+  );
+  render(<NotificationsScreen />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thông báo 1' }));
+  await waitFor(() =>
+    expect(s.go).toHaveBeenCalledWith('billing-history', { historyTab: 'refunds' }),
+  );
+});
+it('opens the existing Owner monitoring destination for a server-authorized bank receipt', async () => {
+  s.role = 'Owner';
+  server(undefined, async (url) =>
+    url.pathname.endsWith('/target')
+      ? json({ objectType: 'BankTransfer', objectId: targetId })
+      : undefined,
+  );
+  render(<NotificationsScreen />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thông báo 1' }));
+  await waitFor(() =>
+    expect(s.go).toHaveBeenCalledWith('owner-payment-detail', { paymentId: targetId }),
+  );
+});
 it('allows reading a notification without a related record and does not request a target', async () => {
   const { fetcher } = server([
     item(1, { relatedObjectType: '', relatedObjectId: '00000000-0000-0000-0000-000000000000' }),

@@ -1,4 +1,5 @@
 import type { ContractRequest } from './contracts';
+import { infrastructureError } from './api';
 import { formatBillingDecimal } from './invoices';
 
 // Financial results can be negative; preserve the server's exact decimal string.
@@ -80,10 +81,16 @@ export interface FinanceTotals {
   occupiedRooms: number;
 }
 export interface FinancialReport {
+  settlementSources?: SettlementFinanceSources | null;
   filter: ReportFilter;
   snapshotAt: string;
   total: FinanceTotals;
-  locations: { locationId: string; locationName: string; totals: FinanceTotals }[];
+  locations: {
+    locationId: string;
+    locationName: string;
+    totals: FinanceTotals;
+    settlementSources?: SettlementFinanceSources | null;
+  }[];
   capital: {
     initialInvestment: string;
     netRecovery: string | null;
@@ -103,6 +110,13 @@ export interface FinancialReport {
     occupancyRate: number | null;
     limitations: string[];
   } | null;
+}
+export interface SettlementFinanceSources {
+  approvedCharges: string;
+  outstandingNow: string;
+  verifiedBankCollections: string;
+  depositOffsetsApplied: string;
+  holdingForfeitures: string;
 }
 export interface ScenarioInput {
   name: string;
@@ -221,6 +235,10 @@ export function financeClient(request: ContractRequest) {
   };
 }
 export function financeError(error: unknown) {
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure;
+  if ((error as { code?: string })?.code === 'settlement_report_sources_require_review')
+    return 'Nguồn khoản phải thu hoặc phân bổ tiền chưa khớp. Cần Owner đối chiếu trước khi lập báo cáo.';
   const status = (error as { status?: number })?.status;
   if (status === 403) return 'Chỉ Owner được truy cập chức năng tài chính.';
   if (status === 404) return 'Không tìm thấy dữ liệu trong phạm vi cho phép.';

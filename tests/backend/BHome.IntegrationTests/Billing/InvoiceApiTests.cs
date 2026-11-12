@@ -45,7 +45,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
-    private async Task<Workspace> Setup()
+    private async Task<Workspace> Setup(DateTimeOffset? activatedAt = null)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
@@ -67,7 +67,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             MonthlyRent = 3000000,
             RequiredDeposit = 0,
             Terms = "SYNTHETIC TEST",
-            ActivatedAt = DateTimeOffset.UtcNow,
+            ActivatedAt = activatedAt ?? DateTimeOffset.UtcNow,
             ActivatedByUserId = owner.Id,
             Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.Representative }]
         };

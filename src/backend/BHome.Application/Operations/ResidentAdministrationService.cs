@@ -15,7 +15,7 @@ public sealed class ResidentAdministrationQuery
     public int PageSize { get; set; } = 20;
 }
 public sealed record ResidentTenancy(Guid ContractId, string Status, string Role, DateOnly ResidenceFrom, DateOnly? ResidenceTo);
-public sealed record ResidentAdministrationView(Guid Id, Guid LocationId, Guid RoomId, string RoomNumber,
+public sealed record ResidentAdministrationView(Guid Id, Guid? LocationId, Guid? RoomId, string RoomNumber,
     string DisplayLabel, string ResidentType, string VerificationStatus, DateTimeOffset? ConfirmedAt,
     Guid? TenantUserId, string? ContactEmail, string? ContactPhone, string Version,
     IReadOnlyList<ResidentTenancy> Tenancies);

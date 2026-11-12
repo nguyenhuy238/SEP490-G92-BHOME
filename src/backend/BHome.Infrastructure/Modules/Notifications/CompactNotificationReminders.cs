@@ -69,13 +69,15 @@ internal sealed partial class CompactNotificationEvents
                     SELECT cr.contract_id,cr.resident_id,r.user_id,c.owner_signer_id FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id
                     JOIN rooms rm ON rm.id=c.room_id JOIN residents r ON r.id=cr.resident_id WHERE rm.location_id=@location AND c.status=3
                     AND cr.actual_residence_from<=@today AND (cr.residence_to IS NULL OR cr.residence_to>=@today)
-                    AND COALESCE(cr.registration_status,'Pending') IN ('Pending','InProgress') AND cr.owner_confirmed_at IS NULL
+                    AND cr.actual_move_out_date IS NULL AND COALESCE(cr.registration_status,'Pending') IN ('Pending','InProgress')
+                    FOR UPDATE OF cr
                     """, t, ("location", location), ("today", Today)))
                 { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) rows.Add((reader.GetGuid(0), reader.GetGuid(1), reader.IsDBNull(2) ? null : reader.GetGuid(2), reader.GetGuid(3))); }
                 foreach (var r in rows)
                 {
                     var key = $"residence:{r.Contract}:{r.Resident}:{window}"; if (await Done(key, t)) continue;
-                    foreach (var user in await Roles(new[] { r.User ?? Guid.Empty, r.Owner }, t)) count += await sql.Emit(user.Id, user.Role, location, key, "TEMPORARY_RESIDENCE_ACTION", "Residence",
+                    foreach (var user in (await Roles(new[] { r.User ?? Guid.Empty, r.Owner }, t))
+                        .Where(user => user.Id == r.Owner && user.Role == "Owner" || user.Id == r.User && user.Role == "Tenant")) count += await sql.Emit(user.Id, user.Role, location, key, "TEMPORARY_RESIDENCE_ACTION", "Residence",
                         "Tạm trú còn bước cần thực hiện", "Tenant thực hiện đăng ký qua VNeID bên ngoài BHOME; Owner xác nhận thông tin lưu trú trong hệ thống.", "Residence", r.Resident, t);
                     await Mark(key, t);
                 }

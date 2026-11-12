@@ -756,24 +756,25 @@ it('Tenant reads persisted invoice consumption and amount without a fake payment
 });
 it('Tenant invoice detail failure removes prior data and offers reload', async () => {
   mocks.role = 'Tenant';
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(
-      json(
-        page([
-          {
-            id: 'bill',
-            roomNumber: 'P101',
-            locationName: 'Synthetic',
-            billingPeriod: '2026-10-01',
-            status: 'Draft',
-            total: '3000000',
-            missingInputs: [],
-          },
-        ]),
-      ),
-    )
-    .mockResolvedValue(json({}, 404));
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    String(url).includes('/invoices?')
+      ? json(
+          page([
+            {
+              id: 'bill',
+              roomNumber: 'P101',
+              locationName: 'Synthetic',
+              billingPeriod: '2026-10-01',
+              status: 'Draft',
+              total: '3000000',
+              missingInputs: [],
+            },
+          ]),
+        )
+      : String(url).includes('/tenant/settlement-receivables?')
+        ? json({ items: [], total: 0 })
+        : json({}, 404),
+  );
   setApi(fetcher);
   const view = render(<TenantInvoicesScreen />);
   fireEvent.click(
@@ -2046,35 +2047,26 @@ it('shows room authorization errors without exposing rejected private data', asy
   await screen.findAllByText(/Tài khoản không được phép/);
   expect(screen.queryByText('OTHER-TENANT-SECRET')).toBeNull();
 });
-it('shows confirmed readings from a Draft invoice but never displays an OCR proposal', async () => {
+it('shows backend-confirmed readings before an invoice exists and never requests OCR proposals', async () => {
   mocks.role = 'Tenant';
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
     json(
       page([
         {
           id,
+          roomId: id,
           roomNumber: 'T.101',
           locationName: 'Cơ sở của tôi',
           billingPeriod: '2026-11-01',
-          status: 'Draft',
-          lines: [
-            {
-              id: 'confirmed',
-              category: 'Electricity',
-              meterReadingId: 'reading',
-              previousReading: '100',
-              confirmedReading: '125.5',
-              quantity: '25.5',
-            },
-            {
-              id: 'proposal',
-              category: 'Water',
-              meterReadingId: null,
-              proposedValue: '999999',
-              confirmedReading: null,
-              quantity: '999999',
-            },
-          ],
+          status: 'Confirmed',
+          utilityType: 'Electricity',
+          purpose: 'Periodic',
+          meterCode: 'SYNTHETIC-METER',
+          readingDate: '2026-11-01',
+          previousValue: '100',
+          confirmedValue: '125.5',
+          consumption: '25.5',
+          confirmedAt: '2026-11-01T03:00:00Z',
         },
       ]),
     ),
@@ -2084,7 +2076,9 @@ it('shows confirmed readings from a Draft invoice but never displays an OCR prop
   await screen.findByText('Đã xác nhận: 125,5');
   expect(screen.getByText('Tiêu thụ: 25,5 kWh')).toBeTruthy();
   expect(screen.queryByText(/999999/)).toBeNull();
-  expect(fetcher.mock.calls.every(([url]) => String(url).includes('/invoices?'))).toBe(true);
+  expect(fetcher.mock.calls.every(([url]) => String(url).includes('/tenant/meter-readings?'))).toBe(
+    true,
+  );
 });
 it('uses reporting lookups and submits the actual Tenant incident API', async () => {
   mocks.role = 'Tenant';

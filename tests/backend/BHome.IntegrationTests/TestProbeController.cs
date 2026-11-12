@@ -40,6 +40,14 @@ public sealed class TestProbeController : ControllerBase
     [AllowAnonymous]
     public IActionResult Error() => throw new InvalidOperationException("PRIVATE_TEST_DETAIL");
 
+    [HttpGet("schema-error/{state}/{wrapped:bool}")]
+    [AllowAnonymous]
+    public IActionResult SchemaError(string state, bool wrapped)
+    {
+        var error = new Npgsql.PostgresException("PRIVATE_TEST_DETAIL", "ERROR", "ERROR", state);
+        throw wrapped ? new Microsoft.EntityFrameworkCore.DbUpdateException("PRIVATE_TEST_DETAIL", error) : error;
+    }
+
     [HttpGet("property-error/{status:int}")]
     [AllowAnonymous]
     public IActionResult PropertyError(int status) => throw new PropertyException(status, "synthetic_property_rejection");

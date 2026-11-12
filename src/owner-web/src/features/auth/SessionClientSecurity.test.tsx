@@ -17,6 +17,28 @@ const json = (body: unknown, status = 200) =>
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('derives the client session from a minimal token response', async () => {
+  const payload = btoa(
+    JSON.stringify({ sub: 'synthetic-owner', role: ['Owner'], sid: 'synthetic-session' }),
+  )
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(json({ accessToken: `header.${payload}.signature` })),
+  );
+  const client = new SessionClient('https://api.example.invalid', 'web');
+
+  await client.login('synthetic@example.invalid', 'test-password');
+
+  expect(client.session).toMatchObject({
+    userId: 'synthetic-owner',
+    roles: ['Owner'],
+    sessionId: 'synthetic-session',
+  });
+});
+
 it('coalesces concurrent web refresh calls into one cookie rotation request', async () => {
   let finish!: (response: Response) => void;
   const fetchMock = vi.fn().mockReturnValue(

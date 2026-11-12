@@ -39,7 +39,7 @@ export function FilterToolbar({ children }: { children: ReactNode }) {
   );
 }
 export function StatusChip({ label }: { label: string }) {
-  const error = /Khẩn|Hỏng|Quá hạn|Trùng/.test(label),
+  const error = /Khẩn|Hỏng|Quá hạn|Trùng|[Tt]ừ chối/.test(label),
     success = /Hoàn thành|Đã |Đang hiệu lực|Vận hành tốt|Đang thuê/.test(label),
     pending = /Chờ|Nháp|nháp/.test(label);
   return (
