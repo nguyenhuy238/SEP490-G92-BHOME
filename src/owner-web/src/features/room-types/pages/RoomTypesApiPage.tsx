@@ -22,6 +22,7 @@ import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { invoiceError } from '../../../../../../packages/client-core/src/invoices';
+import type { RoomTypeConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import { ConflictReload } from '../../locations/components/ConflictReload';
 import { RoomTypeMasterDetail } from './RoomTypeMasterDetail';
 

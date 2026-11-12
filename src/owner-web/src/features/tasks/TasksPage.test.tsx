@@ -405,3 +405,96 @@ it('does not expose generic mutations for meter tasks or invalid states', () => 
     'edit',
   );
 });
+
+it.each(['Tắt lịch', 'Xóa'])(
+  'confirms recurring %s and preserves the existing calendar contract',
+  async (label) => {
+    const template = {
+      id: 'template',
+      locationId: location.id,
+      title: 'Synthetic schedule',
+      requirements: 'Inspect',
+      priority: 'Normal',
+      evidenceRequired: false,
+      intervalDays: 1,
+      nextRunAt: '2099-01-30T01:00:00Z',
+      dueAfterHours: 24,
+      isActive: true,
+      version: 7,
+      scheduleType: 'Monthly',
+      dayOfWeek: null,
+      dayOfMonth: 30,
+    };
+    const base = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation((path: string, init?: RequestInit) =>
+      path.startsWith('/api/v1/operational-task-templates?')
+        ? Promise.resolve([template])
+        : base(path, init),
+    );
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lịch công việc định kỳ' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Cơ sở/ }));
+    fireEvent.click(await screen.findByRole('option', { name: location.name }));
+    fireEvent.click(await screen.findByRole('button', { name: label }));
+    expect(
+      mocks.request.mock.calls.some(([, init]) => ['PUT', 'DELETE'].includes(init?.method)),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+    await waitFor(() =>
+      expect(
+        mocks.request.mock.calls.some(([, init]) => ['PUT', 'DELETE'].includes(init?.method)),
+      ).toBe(true),
+    );
+    const call = mocks.request.mock.calls.find(([, init]) =>
+      ['PUT', 'DELETE'].includes(init?.method),
+    )!;
+    if (label === 'Xóa')
+      expect(call[0]).toBe(
+        `/api/v1/operational-task-templates/template?locationId=${location.id}&version=7`,
+      );
+    else
+      expect(JSON.parse(call[1].body)).toMatchObject({
+        version: 7,
+        isActive: false,
+        scheduleType: 'Monthly',
+        dayOfMonth: 30,
+      });
+  },
+);
+
+it('rework removes a task from the pending list without deleting evidence', async () => {
+  const base = mocks.request.getMockImplementation()!;
+  let state = 'PendingVerification';
+  mocks.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path.endsWith('/rework') && init?.method === 'POST') {
+      state = 'InProgress';
+      return Promise.resolve({ ...task, status: state });
+    }
+    if (path === '/api/v1/operational-tasks/task')
+      return Promise.resolve({ ...task, status: state });
+    if (path.startsWith('/api/v1/operational-tasks?') && path.includes('status=4'))
+      return Promise.resolve({
+        items: state === 'PendingVerification' ? [task] : [],
+        totalCount: state === 'PendingVerification' ? 1 : 0,
+      });
+    return base(path, init);
+  });
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: /Chờ nghiệm thu/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Yêu cầu làm lại' }));
+  fireEvent.change(await screen.findByLabelText(/Lý do yêu cầu làm lại/), {
+    target: { value: 'Bổ sung kết quả' },
+  });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Xác nhận' })).not.toBeDisabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết' }));
+  expect(await screen.findByText('Không có công việc phù hợp.')).toBeInTheDocument();
+  expect(
+    mocks.request.mock.calls.some(
+      ([path, init]) => path.includes('/evidence') && init?.method === 'DELETE',
+    ),
+  ).toBe(false);
+});

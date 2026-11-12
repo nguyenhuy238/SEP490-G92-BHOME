@@ -284,7 +284,12 @@ function RecurringEditor({
           onSubmit={(event) => {
             event.preventDefault();
             if (!valid || action.conflict || missing) return;
-            const { dueAt: _dueAt, ...fields } = work;
+            const fields = {
+              title: work.title,
+              requirements: work.requirements,
+              priority: work.priority,
+              evidenceRequired: work.evidenceRequired,
+            };
             void action
               .run(() =>
                 action.command(

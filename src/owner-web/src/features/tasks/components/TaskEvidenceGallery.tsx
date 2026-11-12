@@ -30,8 +30,6 @@ function EvidenceImage({
   useEffect(() => {
     const controller = new AbortController();
     let objectUrl = '';
-    setError(undefined);
-    setUrl('');
     void request<Blob>(
       `${taskRoot}/${taskId}/evidence/${evidence.id}`,
       { signal: controller.signal },
@@ -52,10 +50,18 @@ function EvidenceImage({
   }, [taskId, evidence.id, attempt, request]);
   return (
     <Box sx={{ minWidth: 0 }}>
-      {!!error ? (
+      {error ? (
         <>
           <OwnerFeedback error={error} />
-          <Button onClick={() => setAttempt((value) => value + 1)}>Tải lại ảnh {index + 1}</Button>
+          <Button
+            onClick={() => {
+              setError(undefined);
+              setUrl('');
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Tải lại ảnh {index + 1}
+          </Button>
         </>
       ) : !url ? (
         <LinearProgress aria-label="Đang tải ảnh" />

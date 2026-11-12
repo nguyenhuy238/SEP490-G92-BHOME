@@ -131,11 +131,7 @@ export function TaskEditorDialog({
   const person = staff.data?.find((item) => item.userId === responsible?.staffUserId);
   const dateValid = work.dueAt && Number.isFinite(Date.parse(work.dueAt + ':00+07:00'));
   const unchangedDate = !!task && work.dueAt === vietnamDateInput(task.dueAt ?? '');
-  const deadlineError =
-    work.dueAt &&
-    (!dateValid || (!unchangedDate && Date.parse(work.dueAt + ':00+07:00') <= Date.now()))
-      ? 'Thời hạn mới phải ở tương lai.'
-      : '';
+  const deadlineError = work.dueAt && !dateValid ? 'Thời hạn mới phải ở tương lai.' : '';
   const blocked =
     action.busy ||
     action.conflict ||

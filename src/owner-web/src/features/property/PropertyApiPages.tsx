@@ -95,6 +95,11 @@ export function PropertyApiPage({
     queryFn: ({ signal }) => api.roomOptions(location, signal),
     enabled: kind === 'assets' && !!location,
   });
+  const roomTypes = useQuery({
+    queryKey: ['property-setup', 'room-types-options', session?.userId, location],
+    queryFn: ({ signal }) => api.roomTypes(location, 1, '', signal),
+    enabled: kind === 'rooms' && !!location,
+  });
   const query = useQuery({
     queryKey: ['property-setup', kind, session?.userId, location, page, search, statusFilter],
     queryFn: async ({ signal }): Promise<Page<Row>> =>
