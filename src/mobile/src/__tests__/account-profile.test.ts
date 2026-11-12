@@ -33,7 +33,7 @@ it('accepts nullable contact fields but rejects incomplete or malformed profile 
 it.each([
   ['', null],
   ['  ', null],
-  ['090-123 4567', '0901234567'],
+  ['090-123 4567', '+84901234567'],
   ['+84 (90).123-4567', '+84901234567'],
   ['12345678', '12345678'],
   ['123456789012345', '123456789012345'],
@@ -60,7 +60,7 @@ it('validates the backend name/email boundaries without inventing a required ema
   ).toHaveProperty('email');
   expect(validateProfile({ fullName: 'AB', phone: '', email: 'a@b\r\n' })).toEqual({}); // sent trimmed
 });
-it('compares normalized saved contacts to decide whether to sign in again', () => {
+it('compares normalized saved contacts to require proof only for a different contact', () => {
   expect(contactChanged({ ...profile, email: 'A@B' }, { ...profile, email: 'a@b' })).toBe(false);
   expect(contactChanged(profile, { ...profile, phone: '12345678' })).toBe(true);
 });

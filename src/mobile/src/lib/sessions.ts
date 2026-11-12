@@ -8,6 +8,7 @@ import {
   type Session,
 } from './api';
 import { sessionFromTokenResponse } from '../../../../packages/client-core/src/jwtSession';
+import { loginPayload } from '../../../../packages/client-core/src/loginValidation';
 
 export interface CredentialStore {
   read(): Promise<string | null>;
@@ -20,6 +21,7 @@ export interface SessionView {
   ready: boolean;
   api: MobileApi | null;
   restoreError?: string;
+  reconnecting?: boolean;
 }
 // Refresh, restore and Keychain writes are serialized, including React Strict Mode/remounts.
 export class MobileSessions {
@@ -72,7 +74,7 @@ export class MobileSessions {
     this.value.api?.queryCache.dispose();
     this.credential = undefined;
     this.waitingForConnection = false;
-    this.emit({ session: null, api: null, restoreError: undefined });
+    this.emit({ session: null, api: null, restoreError: undefined, reconnecting: false });
     await this.persist(epoch, null);
   }
   private api(base: string) {
@@ -137,8 +139,8 @@ export class MobileSessions {
         }
       } catch (error) {
         if (this.epoch === epoch || !this.value.session) {
-          if (!this.waitingForConnection) await this.clear().catch(() => {});
-          this.emit({ restoreError: errorMessage(error) });
+          if (!this.waitingForConnection && !this.credential) await this.clear().catch(() => {});
+          this.emit({ restoreError: errorMessage(error), reconnecting: true });
         }
       } finally {
         this.emit({ ready: true });
@@ -184,10 +186,35 @@ export class MobileSessions {
           session: next,
           api: changedPrincipal ? this.api(base) : this.value.api || this.api(base),
           restoreError: undefined,
+          reconnecting: false,
         });
         return next.accessToken;
       } catch (error) {
-        if (epoch === this.epoch) await this.clear();
+        if (epoch === this.epoch) {
+          if (error instanceof MobileApiError && (error.status === 403 || error.status === 429)) {
+            // These responses precede refresh execution, so the credential was not consumed.
+            this.waitingForConnection = error.status === 429;
+            this.emit({
+              restoreError: errorMessage(error),
+              reconnecting: this.waitingForConnection,
+            });
+          } else if (
+            error instanceof MobileApiError &&
+            (error.status === 0 || error.status >= 500) &&
+            this.value.session &&
+            (!this.value.session.expiresAt || Date.parse(this.value.session.expiresAt) > Date.now())
+          ) {
+            // The rotation outcome is unknown. Never replay the old refresh token. Keep
+            // the currently validated access session until it expires, requiring sign-in then.
+            this.credential = undefined;
+            await this.persist(epoch, null);
+            this.emit({
+              restoreError:
+                'Kết nối bị gián đoạn khi gia hạn phiên. Bạn có thể tiếp tục trong phiên hiện tại và cần đăng nhập lại khi phiên hết hạn.',
+              reconnecting: false,
+            });
+          } else await this.clear();
+        }
         throw error;
       }
     })().finally(() => {
@@ -204,8 +231,7 @@ export class MobileSessions {
     this.emit({ baseUrl: base, restoreError: undefined });
     const epoch = this.epoch;
     const next = await this.auth(base, 'login', {
-      email: email.trim(),
-      password,
+      ...loginPayload(email, password),
       device: 'BHOME Mobile',
     });
     if (epoch !== this.epoch) return;

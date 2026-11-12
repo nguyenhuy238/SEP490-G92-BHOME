@@ -7,12 +7,19 @@ import {
   signingMessage,
 } from '../../../../packages/client-core/src/internalSigning';
 import { useSession } from '../lib/SessionProvider';
+import { router, useLocalSearchParams } from 'expo-router';
+import { authenticationLinkValues } from '../../../../packages/client-core/src/authLinks';
 
 export default function AcceptInvitationScreen() {
+  const params = useLocalSearchParams<{
+    userName?: string | string[];
+    token?: string | string[];
+  }>();
+  const [link] = useState(() => authenticationLinkValues(params));
   const { baseUrl } = useSession();
   const api = useMemo(() => internalSigningClient(createApiClient(baseUrl)), [baseUrl]);
-  const [email, setEmail] = useState(''),
-    [token, setToken] = useState(''),
+  const [email, setEmail] = useState(link.userName),
+    [token, setToken] = useState(link.token),
     [password, setPassword] = useState(''),
     [repeat, setRepeat] = useState('');
   const [busy, setBusy] = useState(false),
@@ -87,6 +94,9 @@ export default function AcceptInvitationScreen() {
         </>
       )}
       {!!error && <HelperText type="error">{error}</HelperText>}
+      <Button disabled={busy} onPress={() => router.replace('/')}>
+        Quay lại đăng nhập
+      </Button>
     </ScrollView>
   );
 }

@@ -19,6 +19,20 @@ function fill(repeat = 'Synthetic!NewPassword493') {
   });
   fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/), { target: { value: repeat } });
 }
+it('reads invitation credentials from the fragment without sending them on page load', () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  render(
+    <MemoryRouter
+      initialEntries={['/accept-invitation#userName=staff%40example.invalid&token=synthetic-link']}
+    >
+      <AcceptInvitationPage />
+    </MemoryRouter>,
+  );
+  expect(screen.getByLabelText(/Email nhận/)).toHaveValue('staff@example.invalid');
+  expect(screen.getByLabelText(/Mã lời mời/)).toHaveValue('synthetic-link');
+  expect(fetch).not.toHaveBeenCalled();
+});
 it('accepts invitation anonymously once and waits for server confirmation', async () => {
   let finish!: (response: Response) => void;
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(

@@ -219,6 +219,9 @@ export function LoginPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Nhập email của tài khoản đã được cấp để yêu cầu hướng dẫn khôi phục.
             </Typography>
+            <Button component={RouterLink} to="/confirm-email" disabled={auth.resetBusy}>
+              Chưa xác nhận email? Gửi liên kết xác nhận
+            </Button>
             <TextField
               autoFocus
               fullWidth

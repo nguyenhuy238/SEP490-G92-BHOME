@@ -472,15 +472,23 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
     public async Task ResetNewestTokenIsSingleUseAndRevokesSessionsUsingRealIdentityHasher()
     {
         var delivery = new CapturingTestDelivery();
-        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services => services.AddSingleton<IPasswordResetDelivery>(delivery)));
+        var clock = new SessionTestClock(DateTimeOffset.UtcNow);
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<IPasswordResetDelivery>(delivery);
+            services.AddSingleton<TimeProvider>(clock);
+        }));
         using var client = host.CreateClient();
         var user = await CreateUser();
         var session = await Login(client, user);
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { user.UserName })).StatusCode);
         var first = delivery.Tokens.Last();
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { user.UserName })).StatusCode);
+        Assert.Single(delivery.Tokens); // An immediate resend preserves the current one-time grant.
+        clock.UtcNow = clock.UtcNow.AddSeconds(host.Services.GetRequiredService<IOptions<AuthenticationEmailOptions>>().Value.ResendCooldownSeconds + 1);
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { user.UserName })).StatusCode);
         var latest = delivery.Tokens.Last();
-        Assert.NotEqual(first, latest);
+        Assert.True(first != latest, "A resend after cooldown must replace the previous reset grant.");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/reset-password", new { user.UserName, token = first, newPassword = NewPassword })).StatusCode);
         var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => client.PostAsJsonAsync("/api/v1/auth/reset-password",
             new { user.UserName, token = latest, newPassword = NewPassword })));

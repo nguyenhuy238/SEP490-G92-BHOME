@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -24,7 +25,6 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
   const [name, setName] = useState(staff?.fullName ?? ''),
     [email, setEmail] = useState(staff?.email ?? ''),
     [phone, setPhone] = useState(staff?.phone ?? ''),
-    [password, setPassword] = useState(''),
     [reason, setReason] = useState(''),
     [active, setActive] = useState(staff?.isActive ?? true);
   const [employment, setEmployment] = useState<Employment>(
@@ -63,9 +63,7 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
       email: email.trim(),
       phone: phone || null,
       employment: work,
-      ...(staff
-        ? { accountVersion: staff.accountVersion, isActive: active, reason }
-        : { initialPassword: password }),
+      ...(staff ? { accountVersion: staff.accountVersion, isActive: active, reason } : {}),
     };
     if (
       await action.run(async () => {
@@ -147,19 +145,13 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
-              {!staff && (
-                <TextField
-                  required
-                  type="password"
-                  autoComplete="new-password"
-                  label="Mật khẩu khởi tạo"
-                  {...fieldError('initialpassword')}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  slotProps={{ htmlInput: { minLength: 12, maxLength: 256 } }}
-                />
-              )}
             </Box>
+            {!staff && (
+              <Alert severity="info">
+                Nhân viên tự đặt mật khẩu qua lời mời email. Sau khi tạo, chọn Gửi thông tin tài
+                khoản trong chi tiết nhân viên.
+              </Alert>
+            )}
             {staff && (
               <FormControlLabel
                 label="Tài khoản hoạt động"

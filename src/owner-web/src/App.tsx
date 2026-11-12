@@ -9,13 +9,15 @@ import { isMockMode } from './services/config';
 
 const apiBaseUrl = isMockMode
   ? ''
-  : getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV);
+  : import.meta.env.DEV
+    ? ''
+    : getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, false);
 
 export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider apiBaseUrl={apiBaseUrl} transport="web">
+      <AuthProvider apiBaseUrl={apiBaseUrl} transport="web" restoreOnMount={!isMockMode}>
         <PortalProvider>
           <BrowserRouter>
             <AppRouter />

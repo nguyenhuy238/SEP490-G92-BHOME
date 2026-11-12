@@ -1,0 +1,23 @@
+purpose:
+  stands_in_for: SePay API v2 transaction listing with synthetic records
+  unblocks: Local verification of the BHOME HTTP transaction adapter without provider credentials
+assumptions:
+  - id: v2-transaction-envelope
+    status: supported
+    claim: SePay v2 uses a data array and meta.pagination with current_page and has_more.
+    reason: The adapter parses the documented provider envelope and maintains paging state.
+    verification: The local Postman simulation received GET /v2/transactions from the real BHOME SePayApiClient. The adapter smoke test parsed the synthetic bank reference and transaction amount. Separate loopback HTTP tests exercise pagination, authorization, provider errors and timeout.
+    source: https://developer.sepay.vn/vi/sepay-api/v2/giao-dich/danh-sach
+    updated_at: '2026-11-12'
+  - id: live-acceptance
+    status: unknown
+    claim: The user's configured SePay sandbox account can deliver and backfill transactions to BHOME.
+    reason: Local contract fixtures cannot establish account configuration or public connectivity.
+    verification: No real provider account or credential was used.
+    source: docs/development/SEPAY_IMPLEMENTATION.md
+    updated_at: '2026-11-12'
+fingerprints:
+  - id: initial-contract
+    date: '2026-11-12'
+    commit: 9797889
+    cli: 1.80.0

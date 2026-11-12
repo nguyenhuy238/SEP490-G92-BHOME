@@ -204,7 +204,11 @@ it('reports the refresh outage rather than rewriting it as expired authenticatio
   const store = storage();
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValueOnce(new Response(JSON.stringify(validSession)))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...validSession, expiresAt: new Date(Date.now() + 60000).toISOString() }),
+      ),
+    )
     .mockResolvedValueOnce(new Response('{}', { status: 401 }))
     .mockResolvedValueOnce(new Response('Healthy'))
     .mockResolvedValueOnce(new Response(JSON.stringify({ correlationId }), { status: 503 }));
@@ -215,7 +219,9 @@ it('reports the refresh outage rather than rewriting it as expired authenticatio
     requestPath: '/api/v1/auth/refresh',
     correlationId,
   });
-  expect(sessions.snapshot.session).toBeNull();
+  // Approved policy: keep the unexpired in-memory session during a transient outage,
+  // but discard the ambiguously rotated refresh credential so it is never replayed.
+  expect(sessions.snapshot.session?.accessToken).toBe(validSession.accessToken);
   expect(await store.read()).toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(4);
 });

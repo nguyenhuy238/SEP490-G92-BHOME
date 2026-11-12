@@ -1,5 +1,11 @@
 # BHOME API implementation status
 
+SePay update **2026-11-12**: opt-in authenticated webhook, permanent BH code registry,
+provider-verified ledger allocation, JOB-03 recovery/polling and Owner event review are
+implemented. See [SePay configuration and test guide](SEPAY.md). The inventory and
+historical configuration-scope results below describe their original dated audit;
+they do not include the two new SePay method-route pairs or current regression results.
+
 Updated **2026-11-09** on `member/QHuy`. Runtime implementation source:
 `b9cff6566df6ddf0c0d339b95c6d226bc22faf24`. The subsequent documentation commit
 does not change that implementation. The delivery report records the final HEAD

@@ -1,6 +1,7 @@
 import { ApiError, type ApiProblem } from './api';
 import type { Session } from './auth';
 import { sessionFromTokenResponse } from './jwtSession';
+import { loginPayload } from './loginValidation';
 
 type SessionResponse = Session & { refreshToken?: string | null };
 export type AuthTransport = 'web' | 'mobile';
@@ -49,7 +50,7 @@ export class SessionClient {
   async login(email: string, password: string) {
     if (this.pendingRefresh) await this.pendingRefresh.catch(() => undefined);
     const version = ++this.revision;
-    const raw = await this.send<unknown>('login', { email: email.trim(), password });
+    const raw = await this.send<unknown>('login', loginPayload(email, password));
     const response = sessionFromTokenResponse(raw, this.transport === 'mobile');
     if (version === this.revision) this.publish(response);
   }
@@ -99,6 +100,12 @@ export class SessionClient {
   requestPasswordReset(userName: string) {
     return this.send('forgot-password', { userName });
   }
+  requestEmailVerification(userName: string) {
+    return this.send('request-email-verification', { userName });
+  }
+  confirmEmail(userName: string, token: string) {
+    return this.send('confirm-email', { userName, token });
+  }
   resetPassword(userName: string, token: string, newPassword: string) {
     return this.send('reset-password', { userName, token, newPassword });
   }
@@ -115,7 +122,14 @@ export class SessionClient {
         error instanceof ApiError &&
         error.status === 401 &&
         this.current &&
-        !['login', 'refresh', 'forgot-password', 'reset-password'].includes(action)
+        ![
+          'login',
+          'refresh',
+          'forgot-password',
+          'reset-password',
+          'request-email-verification',
+          'confirm-email',
+        ].includes(action)
       ) {
         if (await this.refresh()) return this.send<T>(action, body, false);
       }
@@ -129,7 +143,14 @@ export class SessionClient {
     if (this.transport === 'web') headers.set('X-BHome-Client', 'web');
     if (
       this.current?.accessToken &&
-      !['login', 'refresh', 'forgot-password', 'reset-password'].includes(action)
+      ![
+        'login',
+        'refresh',
+        'forgot-password',
+        'reset-password',
+        'request-email-verification',
+        'confirm-email',
+      ].includes(action)
     )
       headers.set('Authorization', 'Bearer ' + this.current.accessToken);
     let response: Response;

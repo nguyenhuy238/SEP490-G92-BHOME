@@ -63,10 +63,7 @@ function Wait-MobileApi([string]$Address) {
     # can be stale when this launcher reuses a Visual Studio API.
     & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
     $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
-    $connectionHint = if (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue) {
-        'API port 7240 is listening. Check the HTTP status, TLS diagnosis and readiness timeout above.'
-    } else { 'No API HTTPS listener on port 7240 (ECONNREFUSED). Check startup exceptions or a paused debugger.' }
-    throw "API HTTPS readiness failed. $connectionHint $logHint Read-only database check for the selected profile: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile `"$EnvironmentFile`". No TLS checks were bypassed."
+    throw "API HTTPS readiness failed. $logHint ECONNREFUSED means no API listener; check startup exceptions or a paused debugger first. Run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check. For PROPERTY_UPGRADE_REQUIRED, back up the database, stop the API, then use -UpgradePropertySchema and restart. If the upgrade refuses populated retired catalog fields, preserve the data and resolve their migration explicitly; do not recreate the database to bypass it. Use no switch only for MISSING/EMPTY initialization, and -RecreateDatabase only for an explicitly approved legacy archive. Also check local database/storage and Development settings. No TLS checks were bypassed."
 }
 
 function Wait-MobileMetro([string]$Address) {
@@ -129,6 +126,11 @@ try {
         Write-Output "API: https://${lanIp}:7240; Expo: exp://${lanIp}:$Port"
         Write-Output "API checked from this computer: $env:EXPO_PUBLIC_DEV_API_BASE_URL"
         Write-Output 'Scan the QR/open the Expo URL. Use the new QR when reloading Expo on a new network.'
+        # Certificate preparation and API probes can take time. Another terminal may have
+        # started Metro since the initial port check; never launch over that instance.
+        if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) {
+            throw "Metro port $Port became active while checking the API. Use the existing Expo terminal, or stop it with Ctrl+C before retrying."
+        }
         $expoLauncher = Join-Path $repo 'scripts/Start-ExpoMobile.cjs'
         $expoArguments = @(('"' + $expoLauncher + '"'), '--metro-only', '--lan', '--port', [string]$Port)
         if ($Clear) { $expoArguments += '--clear' }

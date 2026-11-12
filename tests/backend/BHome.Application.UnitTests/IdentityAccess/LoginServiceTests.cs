@@ -72,11 +72,13 @@ public sealed class LoginServiceTests
         await sessions.DidNotReceiveWithAnyArgs().CreateAsync(default!, default, default);
     }
 
-    [Fact]
-    public async Task PhoneIsNormalizedWithoutChangingThePassword()
+    [Theory]
+    [InlineData(" 090-123 4567 ")]
+    [InlineData("+84 (90) 123-4567")]
+    public async Task PhoneIsNormalizedWithoutChangingThePassword(string phone)
     {
-        await new LoginService(credentials, sessions, audit).LoginAsync(" 090-123 4567 ", " password ");
-        await credentials.Received(1).VerifyAsync("0901234567", " password ", Arg.Any<CancellationToken>());
+        await new LoginService(credentials, sessions, audit).LoginAsync(phone, " password ");
+        await credentials.Received(1).VerifyAsync("+84901234567", " password ", Arg.Any<CancellationToken>());
     }
 
     [Theory]

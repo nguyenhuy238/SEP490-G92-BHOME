@@ -3,6 +3,9 @@ using BHome.Application.Operations;
 using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Application.IdentityAccess;
+using BHome.Infrastructure.IdentityAccess;
+using BHome.Infrastructure.Modules.Notifications;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,17 +34,20 @@ public sealed class PersistenceCompositionTests
         var names = services.GetServices<IBackgroundJobHandler>().Select(h => h.Name).Order().ToArray();
         var shared = new[] { "billing-draft", "billing-final", "billing-meter", "contract-expiry",
             "incident.notification", "notification-publish", "notification-delivery" };
-        var expected = compact ? shared.Concat(["asset-template-sync", "notification-channels", "recurring-operational-tasks", "post-activation-account-invitation"]) : shared;
+        var expected = compact ? shared.Concat(["asset-template-sync", "notification-channels", "recurring-operational-tasks", "post-activation-account-invitation", "sepay-poll-test", "sepay-reconcile-test"]) : shared;
         Assert.Equal(expected.Order(), names);
-        Assert.Equal(compact ? 6 : 3, services.GetServices<IJobScheduleContributor>().Count());
+        Assert.Equal(compact ? 7 : 3, services.GetServices<IJobScheduleContributor>().Count());
         var compactOnlyServices = new[] { typeof(ISharedConfigurationStore), typeof(ISharedDataValidator),
             typeof(SharedConfigurationService), typeof(SharedConfigurationApplicationService), typeof(LocationConfigurationCopyService),
-            typeof(IResidentAdministrationRepository), typeof(ResidentAdministrationService) };
+            typeof(IResidentAdministrationRepository), typeof(ResidentAdministrationService),
+            typeof(AuthenticationEmailDelivery), typeof(IEmailVerification), typeof(NotificationEmailContent) };
         foreach (var service in compactOnlyServices)
         {
             if (compact) Assert.NotNull(services.GetRequiredService(service));
             else Assert.Null(services.GetService(service));
         }
         if (!compact) Assert.Null(services.GetService<Compact24DbContext>());
+        Assert.IsType(compact ? typeof(AuthenticationEmailDelivery) : typeof(UnconfiguredPasswordResetDelivery),
+            services.GetRequiredService<IPasswordResetDelivery>());
     }
 }

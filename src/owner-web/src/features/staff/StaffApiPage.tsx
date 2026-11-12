@@ -229,14 +229,15 @@ export function StaffApiPage() {
           void action
             .run(
               () => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'),
-              'Đã gửi yêu cầu gửi thông tin tài khoản.',
+              'Đã tiếp nhận yêu cầu lời mời. Email đang chờ xử lý; chưa phải xác nhận đã giao thư.',
             )
             .then((ok) => {
               if (ok) setInvite(false);
             });
         }}
       >
-        Gửi thông tin tài khoản đến địa chỉ email hiện tại của nhân viên.
+        Gửi liên kết dùng một lần để nhân viên tự đặt mật khẩu đến email hiện tại. Không gửi mật
+        khẩu rõ.
       </ConfirmDialog>
       {editor !== undefined && <StaffEditor staff={editor} close={() => setEditor(undefined)} />}
     </Stack>

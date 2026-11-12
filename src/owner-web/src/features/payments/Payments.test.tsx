@@ -138,7 +138,7 @@ afterEach(cleanup);
 it('loads the receipt selected by an authorized refund notification without allocating it automatically', async () => {
   mocks.api.transfer.mockResolvedValue({ ...transfer, id });
   mount(<PaymentManagementPage />, '/payments?transferId=' + id);
-  expect(await screen.findByText('Giao dịch từ thông báo hoàn tiền')).toBeInTheDocument();
+  expect(await screen.findByText('Giao dịch được liên kết')).toBeInTheDocument();
   await waitFor(() => expect(mocks.api.transfer).toHaveBeenCalledWith(id, expect.any(AbortSignal)));
   expect(mocks.api.allocate).not.toHaveBeenCalled();
 });

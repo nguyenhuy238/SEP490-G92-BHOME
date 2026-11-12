@@ -42,9 +42,34 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
         var value = await FindAsync(id, false, t); if (value is null) return null;
         await using var command = Command("SELECT cr.contract_id,c.status,cr.resident_role,cr.residence_from,cr.residence_to FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id WHERE cr.resident_id=@id ORDER BY cr.residence_from DESC,cr.contract_id");
         command.Parameters.AddWithValue("id", id); var contracts = new List<ResidentTenancy>();
+        await using (var reader = await command.ExecuteReaderAsync(t))
+            while (await reader.ReadAsync(t)) contracts.Add(new(reader.GetGuid(0), ((ContractStatus)reader.GetInt16(1)).ToString(), ((ResidentType)reader.GetInt16(2)).ToString(), reader.GetFieldValue<DateOnly>(3), reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4)));
+        return value with { Tenancies = contracts, Account = await AccountAsync(id, t) };
+    }
+    // Owner-only detail projection of existing flags, audit and delivery states; no token/contact payload.
+    private async Task<ResidentAccountView?> AccountAsync(Guid resident, CancellationToken t)
+    {
+        await using var command = Command("""
+            SELECT u.is_active,u.email_confirmed,
+              (SELECT a.event_at FROM notifications a WHERE a.record_kind='AUDIT'
+                AND a.actor_user_id=u.id AND a.notification_type='AccountInvitationAccepted'
+                AND (a.event_data->>'Succeeded')::boolean ORDER BY a.event_at DESC,a.id DESC LIMIT 1),
+              j.task_data->>'invitationDispatchState',j.status,
+              n.delivery_status
+            FROM residents r JOIN users u ON u.id=r.user_id
+            LEFT JOIN LATERAL (SELECT task_data,status FROM operational_tasks WHERE task_type='SYSTEM_JOB'
+              AND task_data->>'name'='post-activation-account-invitation'
+              AND task_data->'payload'->>'ResidentId'=r.id::text ORDER BY next_run_at DESC,id DESC LIMIT 1) j ON TRUE
+            LEFT JOIN LATERAL (SELECT delivery_status FROM notifications WHERE record_kind='OUTBOX'
+              AND event_data->>'recipient'=u.id::text AND event_data->>'authenticationKind'='TenantInvitation'
+              ORDER BY event_at DESC,id DESC LIMIT 1) n ON TRUE
+            WHERE r.id=@resident
+            """);
+        command.Parameters.AddWithValue("resident", resident);
         await using var reader = await command.ExecuteReaderAsync(t);
-        while (await reader.ReadAsync(t)) contracts.Add(new(reader.GetGuid(0), ((ContractStatus)reader.GetInt16(1)).ToString(), ((ResidentType)reader.GetInt16(2)).ToString(), reader.GetFieldValue<DateOnly>(3), reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4)));
-        return value with { Tenancies = contracts };
+        if (!await reader.ReadAsync(t)) return null;
+        return new(reader.GetBoolean(0), reader.GetBoolean(1), reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5));
     }
     private async Task<ResidentAdministrationView?> FindAsync(Guid id, bool locked, CancellationToken t)
     {
