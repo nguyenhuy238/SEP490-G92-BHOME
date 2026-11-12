@@ -61,16 +61,22 @@ public sealed class Compact24MigrationTests
         while (!File.Exists(Path.Combine(root.FullName, "src", "backend", "BHome.sln"))) root = root.Parent ?? throw new InvalidOperationException("Repository root unavailable.");
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var executable = Path.Combine(root.FullName, "tools", "BHome.Compact24Migration", "bin", configuration, "net8.0", "BHome.Compact24Migration.dll");
-        var report = Path.Combine(Path.GetTempPath(), "bhome-compact24-cli-" + Guid.NewGuid().ToString("N") + ".json");
+        Assert.True(File.Exists(executable), $"The migration CLI was not built for {configuration}. Build src/backend/BHome.sln before running this test.");
         async Task<(int Exit, JsonDocument Report)> Run(string action, string connection)
         {
-            var start = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            start.ArgumentList.Add(executable); start.ArgumentList.Add(action); start.ArgumentList.Add(report);
-            start.Environment["BHOME_COMPACT24_SOURCE"] = connection; start.Environment["BHOME_COMPACT24_TARGET"] = pair.Fixture.Connection;
-            using var process = System.Diagnostics.Process.Start(start)!;
-            var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync(); await Task.WhenAll(output, error);
-            return (process.ExitCode, JsonDocument.Parse(await File.ReadAllTextAsync(report)));
+            var report = Path.Combine(Path.GetTempPath(), "bhome-compact24-cli-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                var start = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                start.ArgumentList.Add(executable); start.ArgumentList.Add(action); start.ArgumentList.Add(report);
+                start.Environment["BHOME_COMPACT24_SOURCE"] = connection; start.Environment["BHOME_COMPACT24_TARGET"] = pair.Fixture.Connection;
+                using var process = System.Diagnostics.Process.Start(start)!;
+                var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync(); await Task.WhenAll(output, error);
+                Assert.True(File.Exists(report), $"The migration CLI exited with code {process.ExitCode} without writing its report.");
+                return (process.ExitCode, JsonDocument.Parse(await File.ReadAllTextAsync(report)));
+            }
+            finally { File.Delete(report); }
         }
         var inspected = await Run("--inspect", source);
         using (inspected.Report) { Assert.Equal(0, inspected.Exit); Assert.Equal("PREFLIGHT_READY", inspected.Report.RootElement.GetProperty("Status").GetString()); }
@@ -84,7 +90,6 @@ public sealed class Compact24MigrationTests
         var forbidden = new NpgsqlConnectionStringBuilder(source) { Database = "bhome" };
         var rejected = await Run("--inspect", forbidden.ConnectionString);
         using (rejected.Report) { Assert.NotEqual(0, rejected.Exit); Assert.Equal("fixture_database_names_required", rejected.Report.RootElement.GetProperty("Code").GetString()); }
-        File.Delete(report);
     }
 
     [CompactPostgresFact]
