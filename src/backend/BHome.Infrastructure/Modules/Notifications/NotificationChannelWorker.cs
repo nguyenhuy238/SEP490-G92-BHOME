@@ -114,7 +114,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                         if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
                         providerReference = receipt;
                     }
-            }
+                }
             }
         }
         catch (OperationCanceledException) when (t.IsCancellationRequested) { throw; }

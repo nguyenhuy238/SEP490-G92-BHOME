@@ -3,11 +3,40 @@ using BHome.Infrastructure.Modules.Notifications;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
+using BHome.Api.Configuration;
 
 namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailTransportTests
 {
+    [Fact]
+    public void EnabledEmailWithoutPasswordFailsHostValidationWithSafeConfigurationMessage()
+    {
+        using var factory = new ApiFactory();
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+        { ["Email:Enabled"] = "true", ["Email:AppPassword"] = "" })));
+        var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());
+        Assert.Contains("Email:AppPassword", error.Message); Assert.DoesNotContain("bhome.notification@gmail.com", error.Message);
+    }
+
+    [Fact]
+    public void EmailDotEnvFallbackLoadsWithoutOverridingHigherPriorityConfiguration()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "bhome-email-config-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            File.WriteAllText(file, "Email__Enabled=true\nEmail__AppPassword=SYNTHETIC_FILE_SECRET\nEmail__TestRecipient=mailbox@example.invalid");
+            var config = new ConfigurationManager();
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Email:AppPassword"] = "SYNTHETIC_EXPLICIT_SECRET" });
+            DevelopmentEnvironmentFile.AddFile(config, file);
+            Assert.True(config.GetValue<bool>("Email:Enabled"));
+            Assert.Equal("SYNTHETIC_EXPLICIT_SECRET", config["Email:AppPassword"]);
+            Assert.Equal("mailbox@example.invalid", config["Email:TestRecipient"]);
+        }
+        finally { File.Delete(file); }
+    }
+
     [Theory]
     [InlineData("tenant@example.invalid", true)]
     [InlineData("", false)]

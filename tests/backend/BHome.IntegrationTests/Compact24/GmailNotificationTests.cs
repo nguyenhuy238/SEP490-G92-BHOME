@@ -18,6 +18,44 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed partial class Compact24NotificationMvpTests
 {
     [CompactPostgresFact]
+    public async Task GmailContractExpiryAndEmergencyReusePartiesAndRecheckStaffLocationBeforeSend()
+    {
+        var w = await Seed(); var other = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var contract = await db.Set<BHome.Domain.TenantContracts.Contract>().SingleAsync(c => c.Id == w.Contracts[0]);
+        contract.EndDate = Today.AddDays(7); await db.SaveChangesAsync();
+        using var tenant = await Client(w.Tenants[0], host);
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent(w.Location.ToString()), "LocationId" }, { new StringContent(w.Room.ToString()), "RoomId" },
+            { new StringContent("Emergency"), "Severity" }, { new StringContent("Synthetic urgent maintenance report"), "Description" }
+        };
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/incidents") { Content = form };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var response = await tenant.SendAsync(request); response.EnsureSuccessStatusCode();
+        var result = (await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("incidentId").GetGuid();
+        await Pump(host); await Pump(host);
+        var expiry = await db.Set<UserNotification>().Where(n => n.LocationId == w.Location && n.EventType == "CONTRACT_EXPIRY_REMINDER").ToArrayAsync();
+        Assert.Equal(3, expiry.Length); Assert.All(expiry, n => Assert.Contains("EMAIL", n.Channels));
+        Assert.Contains(expiry, n => n.RecipientUserId == w.Owner.Id); Assert.Contains(expiry, n => n.RecipientUserId == w.Tenants[0].Id);
+        var emergency = await db.Set<UserNotification>().Where(n => n.RelatedObjectId == result && n.EventType == "INCIDENT_EMERGENCY_SUBMITTED").ToArrayAsync();
+        var emails = emergency.Where(n => n.Channels.Contains("EMAIL")).ToArray();
+        Assert.Equal(2, emails.Length); Assert.All(emails, n => Assert.Contains(n.RecipientUserId, new[] { w.Owner.Id, w.Staff.Id }));
+        Assert.DoesNotContain(emails, n => n.RecipientUserId == other.Staff.Id);
+        await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().EnqueueDueAsync(default);
+        var ownerExpiry = expiry.Single(n => n.RecipientUserId == w.Owner.Id);
+        var expiryDelivery = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_key={"channel:" + ownerExpiry.Id + ":EMAIL"}").SingleAsync();
+        await SendEmail(host, expiryDelivery); Assert.Contains(contract.EndDate.ToString("dd/MM/yyyy"), Assert.Single(probe.Messages).Body);
+        var staffNotice = emails.Single(n => n.RecipientUserId == w.Staff.Id);
+        var delivery = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_key={"channel:" + staffNotice.Id + ":EMAIL"}").SingleAsync();
+        var assignment = await db.StaffLocationAssignments.SingleAsync(a => a.LocationId == w.Location && a.StaffUserId == w.Staff.Id);
+        assignment.ChangePeriod(Today.AddYears(-1), Today.AddDays(-1)); await db.SaveChangesAsync();
+        await SendEmail(host, delivery);
+        Assert.Single(probe.Messages);
+        Assert.Equal("Suppressed", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
+    }
+
+    [CompactPostgresFact]
     public async Task GmailInvoiceAndVerifiedPaymentEventsReachEachEligibleRecipientOnceWithSafeRealDetails()
     {
         var w = await Seed(); var other = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
