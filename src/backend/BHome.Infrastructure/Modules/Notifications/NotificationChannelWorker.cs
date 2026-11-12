@@ -28,19 +28,21 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     {
         if (!options.Value.Enabled) return [];
         // event_data remains immutable; delivery status/history is the mutable envelope.
-        if (!authenticationOnly) await sql.Execute("""
+        await sql.Execute("""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
             SELECT gen_random_uuid(),'OUTBOX','channel:'||n.id::text||':'||c.channel,'CHANNEL_DELIVERY',
               jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',n.id,'recipient',n.recipient_user_id,
                 'role',n.event_data->>'audienceRole','channel',c.channel,'eventType',n.event_data->'state'->>'eventType'),@now,'Pending',@now
             FROM notifications n CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(n.event_data->'state'->'channels','[]'::jsonb)) c(channel)
             WHERE n.record_kind='INBOX' AND c.channel IN ('EMAIL','PUSH')
+              AND (NOT @authenticationOnly OR n.event_data->>'category'='Account')
             ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
-            """, t, ("now", sql.Now));
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly));
         var due = new List<Work>();
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
-              AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail')
+              AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
+                ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED'))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
             """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly)))

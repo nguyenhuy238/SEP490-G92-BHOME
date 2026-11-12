@@ -20,7 +20,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
         await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
-        var count = await Audits(t) + await Incidents(t) + await MeterReadings(t) + await Reminders(t) + await Unmatched(t) + await OperationalAlerts(t);
+        var count = await Audits(t) + await AccountLockouts(t) + await Incidents(t) + await MeterReadings(t) + await Reminders(t) + await Unmatched(t) + await OperationalAlerts(t);
         await tx.CommitAsync(t); return count;
     }
     private async Task<List<(Guid Id, string Role)>> Roles(IEnumerable<Guid> ids, CancellationToken t)
@@ -38,27 +38,47 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         .Select(a => a.StaffUserId).Distinct().ToArrayAsync(t);
     private async Task<Guid[]> Owners(CancellationToken t) => await db.Users.AsNoTracking()
         .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == BHome.Domain.IdentityAccess.Roles.Owner))).Select(u => u.Id).ToArrayAsync(t);
-    private async Task<int> Audits(CancellationToken t)
+    internal async Task<int> PublishAuthenticationAsync(CancellationToken t)
     {
-        var source = new List<(Guid Id, string Event, Guid Target)>();
+        db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        var count = await Audits(t, true) + await AccountLockouts(t);
+        await tx.CommitAsync(t); return count;
+    }
+
+    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false)
+    {
+        var source = new List<(Guid Id, string Event, Guid Target, DateTimeOffset At)>();
         await using (var cmd = await sql.Command("""
-            SELECT n.id,n.notification_type,COALESCE(n.related_entity_id,(n.event_data->'state'->>'targetId')::uuid,(n.event_data->'state'->>'targetUserId')::uuid)
-            FROM notifications n WHERE n.record_kind='AUDIT' AND COALESCE((n.event_data->'state'->>'succeeded')::boolean,(n.event_data->>'succeeded')::boolean,true)
-            AND n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','RoleChanged','StaffCreated','InvoiceDraftGenerated',
+            SELECT n.id,n.notification_type,COALESCE(n.related_entity_id,(n.event_data->'state'->>'targetId')::uuid,(n.event_data->'state'->>'targetUserId')::uuid),n.event_at
+            FROM notifications n WHERE n.record_kind='AUDIT' AND COALESCE((n.event_data->'state'->>'succeeded')::boolean,(n.event_data->>'succeeded')::boolean,(n.event_data->>'Succeeded')::boolean,true)
+            AND n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated','InvoiceDraftGenerated',
               'ContractSigningInitiated','ContractSigningPrepared','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied')
+            AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
-            """, t))
-        { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) if (!reader.IsDBNull(2)) source.Add((reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2))); }
+            """, t, ("authenticationOnly", authenticationOnly)))
+        { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) if (!reader.IsDBNull(2)) source.Add((reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetFieldValue<DateTimeOffset>(3))); }
         var count = 0;
         foreach (var e in source)
         {
             var key = "extended-audit:" + e.Id;
-            if (e.Event.StartsWith("Password") || e.Event is "AccountActivated" or "AccountDeactivated" or "RoleChanged" or "StaffCreated")
+            if (e.Event.StartsWith("Password") || e.Event is "AccountActivated" or "AccountDeactivated" or "AccountInvitationAccepted" or "RoleChanged" or "StaffCreated")
             {
+                var (eventType, title) = e.Event switch
+                {
+                    "PasswordChange" => ("PASSWORD_CHANGED", "Mật khẩu của bạn đã được thay đổi"),
+                    "PasswordReset" => ("PASSWORD_RESET_COMPLETED", "Mật khẩu của bạn đã được đặt lại"),
+                    "AccountActivated" => ("ACCOUNT_ACTIVATED", "Tài khoản BHOME đã được kích hoạt"),
+                    "AccountDeactivated" => ("ACCOUNT_DEACTIVATED", "Tài khoản BHOME đã bị vô hiệu hóa"),
+                    "AccountInvitationAccepted" => ("ACCOUNT_SETUP_COMPLETED", "Đã hoàn tất thiết lập tài khoản BHOME"),
+                    "StaffCreated" => ("STAFF_ACCOUNT_CREATED", "Tài khoản Staff đã được tạo"),
+                    _ => ("ACCOUNT_ACCESS_CHANGED", "Quyền truy cập tài khoản có cập nhật")
+                };
+                var at = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(e.At, "Asia/Ho_Chi_Minh");
                 foreach (var r in await Roles([e.Target], t)) count += await sql.Emit(r.Id, r.Role, null, key,
-                    e.Event.StartsWith("Password") ? "PASSWORD_CHANGED" : e.Event == "StaffCreated" ? "STAFF_ACCOUNT_CREATED" : "ACCOUNT_ACCESS_CHANGED", "Account", "Bảo mật tài khoản có cập nhật",
-                    "Thông tin đăng nhập hoặc quyền truy cập của tài khoản đã thay đổi. Nếu không phải bạn, hãy liên hệ Owner.", "Account", r.Id, t, channels: ["IN_APP", "EMAIL"]);
+                    eventType, "Account", title, $"{title}.\nThời điểm: {at:HH:mm dd/MM/yyyy} (giờ Việt Nam).\nNếu không phải bạn hoặc không được thông báo về thay đổi này, hãy liên hệ Owner ngay để kiểm tra tài khoản.",
+                    "Account", r.Id, t, channels: e.Event == "StaffCreated" ? ["IN_APP"] : ["IN_APP", "EMAIL"]);
             }
             else if (e.Event == "InvoiceDraftGenerated")
             {
@@ -81,6 +101,27 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 }
             }
             await Mark(key, t);
+        }
+        return count;
+    }
+
+    private async Task<int> AccountLockouts(CancellationToken t)
+    {
+        var rows = new List<(Guid User, DateTimeOffset Until, string Key)>();
+        await using (var cmd = await sql.Command("""
+            SELECT u.id,u.lockout_end,'account-lockout:'||u.id::text||':'||floor(extract(epoch FROM u.lockout_end)*1000)::bigint::text AS key
+            FROM users u WHERE u.is_active AND u.lockout_end>@now AND NOT EXISTS(
+              SELECT 1 FROM notifications n WHERE n.record_kind='INBOX' AND n.recipient_user_id=u.id AND
+              n.event_key='account-lockout:'||u.id::text||':'||floor(extract(epoch FROM u.lockout_end)*1000)::bigint::text)
+            ORDER BY u.lockout_end,u.id LIMIT 25
+            """, t, ("now", sql.Now)))
+        { await using var r = await cmd.ExecuteReaderAsync(t); while (await r.ReadAsync(t)) rows.Add((r.GetGuid(0), r.GetFieldValue<DateTimeOffset>(1), r.GetString(2))); }
+        var count = 0;
+        foreach (var row in rows)
+        {
+            var until = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(row.Until, "Asia/Ho_Chi_Minh");
+            foreach (var r in await Roles([row.User], t)) count += await sql.Emit(r.Id, r.Role, null, row.Key, "ACCOUNT_LOCKED", "Account", "Tài khoản tạm khóa đăng nhập",
+                $"Tài khoản tạm khóa theo cơ chế bảo mật đăng nhập hiện có đến {until:HH:mm dd/MM/yyyy} (giờ Việt Nam). Nếu không phải bạn, hãy liên hệ Owner.", "Account", r.Id, t, channels: ["IN_APP", "EMAIL"]);
         }
         return count;
     }

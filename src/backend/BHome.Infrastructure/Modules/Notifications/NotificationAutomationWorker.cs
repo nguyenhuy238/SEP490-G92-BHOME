@@ -23,6 +23,7 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
             {
                 await using var scope = scopes.CreateAsyncScope();
                 if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(stoppingToken);
+                else await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>().PublishAuthenticationAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken, authenticationOnly);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }

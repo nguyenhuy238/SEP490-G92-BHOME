@@ -55,3 +55,25 @@ cho mọi tài khoản đang tồn tại. Accept vẫn dùng Identity token purp
 password validator, EmailConfirmed và revoke sessions như trước.
 Web/Mobile accept tự đọc link; thao tác gửi invitation trên Owner Web giữ nguyên API có sẵn.
 Không tự gửi một email thứ hai từ frontend khi account đã được provision bởi job.
+
+Kiểm chứng giai đoạn 2: API build 0 warning/error; 38 test backend passed trước hardening stamp,
+28 notification test + 2 test invitation mục tiêu passed sau hardening; Web invitation 4 passed,
+Mobile recovery/invitation 4 passed; lint/typecheck hai client passed.
+
+## Giai đoạn 3
+
+Audit đã commit → security notice có thời gian Việt Nam và hướng dẫn liên hệ Owner:
+PASSWORD_CHANGED, PASSWORD_RESET_COMPLETED, ACCOUNT_ACTIVATED/DEACTIVATED,
+ACCOUNT_SETUP_COMPLETED, ACCOUNT_ACCESS_CHANGED. Giữ PASSWORD_CHANGED cho change flow cũ;
+reset dùng event riêng để tránh email hai lần cho một thao tác. StaffCreated chỉ tạo in-app,
+lời mời role-aware đã chịu trách nhiệm email thiết lập tài khoản.
+Lockout lấy từ lockout_end thực tế do Identity thiết lập; dedup theo user + lockout window,
+không thêm thuật toán suspicious-login hoặc thay ngưỡng lockout hiện tại.
+Đã sửa đọc audit Succeeded (PascalCase lẫn camelCase), bảo đảm PasswordChange thất bại không phát email.
+Auth-only worker cũng publish/send các security notice này, không đợi bật business automation.
+Tất cả vẫn qua channel outbox/retry; lỗi SMTP không rollback thay đổi mật khẩu/trạng thái đã commit.
+Không thêm mandatory email verification; invitation acceptance vẫn xác nhận email theo quy trình sẵn có.
+
+Kiểm chứng: API build 0 warning/error; 40 test auth/notification backend passed;
+Application UT 450 passed, Domain UT 106 passed. Lượt compile test đầu giai đoạn 3 bị xUnit2031
+chặn vì dùng Where trước Assert.Single; đã sửa đúng overload, không tắt analyzer và rerun passed.

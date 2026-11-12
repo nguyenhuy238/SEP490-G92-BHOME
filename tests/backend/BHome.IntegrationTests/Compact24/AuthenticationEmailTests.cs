@@ -111,8 +111,9 @@ public sealed partial class Compact24NotificationMvpTests
         using var client = host.CreateClient();
         (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = w.Tenants[0].Email })).EnsureSuccessStatusCode();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        while (probe.Messages.Count == 0) await Task.Delay(100, deadline.Token);
-        Assert.Equal("PASSWORD_RESET_REQUESTED", Assert.Single(probe.Messages).EventType);
+        while (!probe.Messages.Any(m => m.Destination == w.Tenants[0].Email && m.EventType == "PASSWORD_RESET_REQUESTED")) await Task.Delay(100, deadline.Token);
+        Assert.Single(probe.Messages, m => m.Destination == w.Tenants[0].Email && m.EventType == "PASSWORD_RESET_REQUESTED");
+        Assert.DoesNotContain(probe.Messages, m => m.EventType.StartsWith("INVOICE_") || m.EventType.StartsWith("INCIDENT_") || m.EventType.StartsWith("CONTRACT_"));
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM contracts WHERE room_id={w.Room} AND status=3").SingleAsync());
     }
@@ -166,5 +167,49 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new AcceptInvitationRequest(q["userName"].ToString(), q["token"].ToString(), "Synthetic!Invited-725"))).StatusCode);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         await SendEmail(host, delivery); Assert.Single(probe.Messages);
+    }
+
+    [CompactPostgresFact]
+    public async Task AuthenticationSecurityNoticesIgnoreFailedChangesDeduplicateAndDoNotRollbackPasswordOnSmtpFailure()
+    {
+        var w = await Seed(); var probe = new SmtpProbe { Failure = new("email_smtp_450", retryable: true) }; using var host = AuthenticationHost(probe);
+        using var client = await Client(w.Tenants[0], host);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = "Wrong!Password-725", newPassword = "Synthetic!Changed-725" })).StatusCode);
+        await using var scope = host.Services.CreateAsyncScope(); var publisher = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+        await publisher.PublishAuthenticationAsync(default);
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.False(await db.Set<BHome.Domain.Notifications.UserNotification>().AnyAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_CHANGED"));
+        (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = Password, newPassword = "Synthetic!Changed-725" })).EnsureSuccessStatusCode();
+        await publisher.PublishAuthenticationAsync(default); await publisher.PublishAuthenticationAsync(default);
+        var notice = await db.Set<BHome.Domain.Notifications.UserNotification>().SingleAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_CHANGED");
+        Assert.Contains("giờ Việt Nam", notice.Summary); Assert.DoesNotContain("Synthetic!Changed-725", notice.Summary);
+        await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(default, true);
+        Assert.Single(probe.Messages, m => m.EventType == "PASSWORD_CHANGED" && m.Destination == w.Tenants[0].Email);
+        using var anonymous = host.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Tenants[0].Email, password = "Synthetic!Changed-725" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task AuthenticationStatusAndExistingIdentityLockoutNotifyOnlyAffectedAccountOnce()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        using var anonymous = host.CreateClient();
+        for (var n = 0; n < 5; n++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Tenants[0].Email, password = "Wrong!Password-725" })).StatusCode);
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={w.Tenants[1].Id}");
+        var publisher = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+        await publisher.PublishAuthenticationAsync(default); await publisher.PublishAuthenticationAsync(default);
+        var locked = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "ACCOUNT_LOCKED").ToArrayAsync();
+        Assert.Single(locked);
+        await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(default, true);
+        Assert.Single(probe.Messages, m => m.EventType == "ACCOUNT_LOCKED" && m.Destination == w.Tenants[0].Email);
+        Assert.Single(probe.Messages, m => m.EventType == "ACCOUNT_DEACTIVATED" && m.Destination == w.Tenants[1].Email);
+        Assert.DoesNotContain(probe.Messages, m => m.Destination == w.Tenants[2].Email);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=true WHERE id={w.Tenants[1].Id}");
+        await publisher.PublishAuthenticationAsync(default);
+        await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(default, true);
+        Assert.Single(probe.Messages, m => m.EventType == "ACCOUNT_ACTIVATED" && m.Destination == w.Tenants[1].Email);
     }
 }
