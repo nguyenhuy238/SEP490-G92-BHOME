@@ -36,7 +36,7 @@ public sealed class LoginApiTests
         if (web)
         {
             request.Headers.Add("X-BHome-Client", "web");
-            request.Headers.Add("Origin", "https://localhost");
+            request.Headers.Add("Origin", "http://localhost");
         }
 
         var response = await client.SendAsync(request);
