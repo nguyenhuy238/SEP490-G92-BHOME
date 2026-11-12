@@ -420,7 +420,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         if (existing >= 0 && templates[existing].Version != input.Version) throw OperationsException.Conflict("stale_recurring_template_version");
         if (!id.HasValue && input.Version != 0) throw OperationsException.Invalid("invalid_recurring_template_version");
         var next = new RecurringTaskTemplateView(templateId, input.LocationId, input.Title, input.Requirements, input.Priority,
-            input.EvidenceRequired, input.IntervalDays, input.NextRunAt, input.DueAfterHours, input.IsActive, existing < 0 ? 1 : templates[existing].Version + 1);
+            input.EvidenceRequired, input.IntervalDays, input.NextRunAt, input.DueAfterHours, input.IsActive,
+            existing < 0 ? 1 : templates[existing].Version + 1, input.ScheduleType, input.DayOfWeek, input.DayOfMonth);
         if (existing < 0) templates.Add(next); else templates[existing] = next;
         await SaveTemplates(input.LocationId, templates, actorId, now, "RecurringTemplateSaved", t);
         await tx.CommitAsync(t); return next;
@@ -449,7 +450,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
                 var template = templates[i]; if (!template.IsActive || template.NextRunAt > now) continue;
                 var scheduled = template.NextRunAt; var assignment = await CurrentResponsible(location, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime), t);
                 if (await InsertRecurringTask(template, scheduled, assignment, now, t)) created++;
-                do { scheduled = scheduled.AddDays(template.IntervalDays); } while (scheduled <= now);
+                do { scheduled = RecurringTaskSchedule.Next(template, scheduled); } while (scheduled <= now);
                 templates[i] = template with { NextRunAt = scheduled, Version = template.Version + 1 }; changed = true;
             }
             if (changed) await SaveTemplates(location, templates, Guid.Empty, now, "RecurringTasksGenerated", t);

@@ -1,5 +1,17 @@
 import { useRef, useState } from 'react';
-import { Alert, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Button,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import type {
@@ -59,9 +71,16 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
                 <Paper key={template.id} sx={{ p: 2 }}>
                   <Stack spacing={1}>
                     <Typography variant="h6">{template.data.name}</Typography>
-                    <Typography>
-                      {template.status} · Phiên bản {template.version}
-                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Chip
+                        size="small"
+                        label={template.status === 'Draft' ? 'Bản nháp' : 'Đã công bố'}
+                        color={template.status === 'Draft' ? 'default' : 'success'}
+                      />
+                      <Typography variant="body2" color="text.secondary">
+                        Phiên bản {template.version} · {template.data.items.length} loại thiết bị
+                      </Typography>
+                    </Stack>
                     {template.data.items.map((item) => (
                       <Typography key={item.id}>
                         {item.name} · {item.category} · {item.quantity} ·{' '}
@@ -114,14 +133,19 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
           )}
         </>
       )}
-      {editing !== undefined && (
-        <LocalTemplateEditor
-          key={editing?.id ?? 'new'}
-          locationId={locationId}
-          value={editing}
-          onClose={() => setEditing(undefined)}
-        />
-      )}
+      <Dialog open={editing !== undefined} fullWidth maxWidth="md">
+        <DialogTitle>{editing ? 'Chỉnh sửa bộ mẫu nháp' : 'Tạo bộ mẫu trang bị'}</DialogTitle>
+        <DialogContent>
+          {editing !== undefined && (
+            <LocalTemplateEditor
+              key={editing?.id ?? 'new'}
+              locationId={locationId}
+              value={editing}
+              onClose={() => setEditing(undefined)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       {run && (
         <Paper sx={{ p: 2 }}>
           <Typography variant="h6">Kết quả đồng bộ</Typography>
@@ -205,7 +229,19 @@ function LocalTemplateEditor({
           onChange={(event) => setName(event.target.value)}
         />
         {items.map((item, index) => (
-          <Stack key={item.id} spacing={1}>
+          <Stack
+            key={item.id}
+            spacing={1}
+            sx={{
+              p: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr 1fr' },
+              gap: 2,
+            }}
+          >
             <TextField
               required
               label={`Tên tài sản ${index + 1}`}
@@ -406,6 +442,7 @@ function AssetVerificationForm({
     <Stack
       component="form"
       spacing={2}
+      sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}
       onSubmit={(event) => {
         event.preventDefault();
         if (!file) return;
